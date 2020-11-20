@@ -12,6 +12,7 @@ DATA_SUMMARY = os.path.join(DATA_ROOT, 'summary')
 # Parse args.
 parser = argparse.ArgumentParser(description='Get dataset summary')
 parser.add_argument('-o', '--overwrite', required=False, default=False, action='store_true', help='overwrite existing summary data')
+parser.add_argument('-t', '--test', required=False, default=False, action='store_true', help='use 5 samples only' )
 args = parser.parse_args()
 
 if args.overwrite:
@@ -41,7 +42,8 @@ if args.overwrite:
     # Load patients.
     pat_dirs = np.sort(os.listdir(DATA_SOURCE))
     pat_paths = [os.path.join(DATA_SOURCE, d) for d in pat_dirs]
-    pat_paths = pat_paths[:5] # For testing.
+    if args.test:
+        pat_paths = pat_paths[:5]
 
     for pat_path in tqdm(pat_paths):
         # Load dicoms and extract info.
