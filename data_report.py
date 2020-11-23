@@ -39,6 +39,14 @@ if args.overwrite:
     info_df = pd.DataFrame(columns=np.sort(list(info_cols.keys())))
     info_df = info_df.astype(info_cols)
 
+    # Create label table.
+    label_info_cols = {
+        'roi-label': 'object',
+        'count': np.uint16
+    }
+    label_info_df = pd.DataFrame(columns=np.sort(list(label_info_cols.keys())))
+    label_info_df = label_info_df.astype(label_info_cols)
+
     # Load patients.
     pat_dirs = np.sort(os.listdir(DATA_SOURCE))
     pat_paths = [os.path.join(DATA_SOURCE, d) for d in pat_dirs]
@@ -84,13 +92,19 @@ if args.overwrite:
         } 
 
         # Summary RTSTRUCT data.
-        rtstruct_info = {
+        rtstruct_summary_info = {
             'roi-num': len(rtstruct_info)
         }
 
         # Add info to summary.
-        merged_info = {'pat-id': pat_id, **ct_info, **rtstruct_info}
+        merged_info = {'pat-id': pat_id, **ct_info, **rtstruct_summary_info}
         info_df = info_df.append(merged_info, ignore_index=True)
+
+        # Add label counts.
+        rtstruct_info['count'] = 1
+        label_info_df = label_info_df.merge(rtstruct_info, how='outer', on='roi-label')
+        label_info_df['count'] = (label_info_df['count_x'].fillna(0) + label_info_df['count_y'].fillna(0)).astype(np.uint16)
+        label_info_df = label_info_df.drop(['count_x', 'count_y'], axis=1)
         
     # Add field-of-view columns.
     info_df['fov-x'] = info_df['dim-x'] * info_df['res-x']
@@ -102,7 +116,15 @@ if args.overwrite:
     summary_path = os.path.join(DATA_SUMMARY, 'summary.csv')
     info_df.to_csv(summary_path)
 
+    # Create label summary.
+    label_summary_path = os.path.join(DATA_SUMMARY, 'label_summary.csv')
+    label_info_df.to_csv(label_summary_path)
+
 # Load and print summary.
 summary_path = os.path.join(DATA_SUMMARY, 'summary.csv') 
 info_df = pd.read_csv(summary_path, index_col=0)
 print(info_df.describe())
+
+label_summary_path = os.path.join(DATA_SUMMARY, 'label_summary.csv') 
+label_info_df = pd.read_csv(label_summary_path, index_col=0)
+print(label_info_df)
