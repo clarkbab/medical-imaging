@@ -111,13 +111,17 @@ if args.overwrite:
     info_df['fov-y'] = info_df['dim-y'] * info_df['res-y']
     info_df['fov-z'] = info_df['dim-z'] * info_df['res-z']
 
+    # Set index.
+    info_df = info_df.set_index('pat-id')
+
     # Save info.
     os.makedirs(DATA_SUMMARY, exist_ok=True)
     summary_path = os.path.join(DATA_SUMMARY, 'summary.csv')
     info_df.to_csv(summary_path)
 
-    # Create label summary.
+    # Save label summary.
     label_summary_path = os.path.join(DATA_SUMMARY, 'label_summary.csv')
+    label_info_df = label_info_df.sort_values('count', ascending=False).reset_index().drop('index', axis=1)
     label_info_df.to_csv(label_summary_path)
 
 # Load and print summary.
