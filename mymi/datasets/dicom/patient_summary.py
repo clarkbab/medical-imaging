@@ -68,8 +68,8 @@ class PatientSummary:
             hus = ct_dicom.pixel_array * ct_dicom.RescaleSlope + ct_dicom.RescaleIntercept
 
             row_data = {
-               'dim-x': ct_dicom.pixel_array.shape[0],
-               'dim-y': ct_dicom.pixel_array.shape[1],
+               'dim-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
+               'dim-y': ct_dicom.pixel_array.shape[0],
                'offset-x': ct_dicom.ImagePositionPatient[0], 
                'offset-y': ct_dicom.ImagePositionPatient[1], 
                'offset-z': ct_dicom.ImagePositionPatient[2], 

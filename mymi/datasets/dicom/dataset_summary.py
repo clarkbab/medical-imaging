@@ -118,11 +118,11 @@ class DatasetSummary:
 
             # Calculate fov-z and dim-z.
             fov_z = ct_details_df['offset-z'].max() - ct_details_df['offset-z'].min()
-            dim_z = int(fov_z / res_z)
+            dim_z = int(fov_z / res_z) + 1
 
             # Calculate number of empty slices.
             num_slices = len(ct_details_df)
-            num_empty = dim_z - num_slices + 1
+            num_empty = dim_z - num_slices
 
             # Get patient RTSTRUCT info.
             rtstruct_details_df = pat_sum.rtstruct_details()
