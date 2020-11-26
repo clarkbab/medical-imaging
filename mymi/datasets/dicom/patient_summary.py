@@ -45,25 +45,29 @@ class PatientSummary:
         returns: dataframe with info for each CT slice. 
         """
         # Load from cache if present.
-        key = f"patient_summary:{self.pat_id}:ct_details"
+        key = {
+            'class': 'patient_summary',
+            'method': 'ct_details',
+            'patient_id': self.pat_id
+        }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key '{key}'.")
+                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
             
         # Define dataframe structure.
         detail_cols = {
-            'dim-x': np.uint16,
-            'dim-y': np.uint16,
             'hu-min': 'float64',
             'hu-max': 'float64',
             'offset-x': 'float64',
             'offset-y': 'float64',
             'offset-z': 'float64',
-            'res-x': 'float64',
-            'res-y': 'float64',
+            'res-x': np.uint16,
+            'res-y': np.uint16,
             'scale-int': 'float64',
-            'scale-slope': 'float64'
+            'scale-slope': 'float64',
+            'spacing-x': 'float64',
+            'spacing-y': 'float64',
         }
         details_df = pd.DataFrame(columns=detail_cols.keys())
 
@@ -75,17 +79,17 @@ class PatientSummary:
             hus = ct_dicom.pixel_array * ct_dicom.RescaleSlope + ct_dicom.RescaleIntercept
 
             row_data = {
-               'dim-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
-               'dim-y': ct_dicom.pixel_array.shape[0],
+               'hu-min': hus.min(),
+               'hu-max': hus.max(),
                'offset-x': ct_dicom.ImagePositionPatient[0], 
                'offset-y': ct_dicom.ImagePositionPatient[1], 
                'offset-z': ct_dicom.ImagePositionPatient[2], 
-               'res-x': ct_dicom.PixelSpacing[0],
-               'res-y': ct_dicom.PixelSpacing[1],
+               'res-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
+               'res-y': ct_dicom.pixel_array.shape[0],
                'scale-int': ct_dicom.RescaleIntercept,
                'scale-slope': ct_dicom.RescaleSlope,
-               'hu-min': hus.min(),
-               'hu-max': hus.max() 
+               'spacing-x': ct_dicom.PixelSpacing[0],
+               'spacing-y': ct_dicom.PixelSpacing[1]
             }
             details_df = details_df.append(row_data, ignore_index=True)
 
@@ -97,7 +101,7 @@ class PatientSummary:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key '{key}'.")
+            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, details_df, 'dataframe')
 
         return details_df
@@ -109,10 +113,14 @@ class PatientSummary:
         returns: dataframe with info for each region-of-interest.
         """
         # Load from cache if present.
-        key = f"patient_summary:{self.pat_id}:rtstruct_details"
+        key = {
+            'class': 'patient_summary',
+            'method': 'rtstruct_details',
+            'patient_id': self.pat_id
+        }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key '{key}'.")
+                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
         
         # Define table structure.
@@ -138,7 +146,7 @@ class PatientSummary:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key '{key}'.")
+            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, details_df, 'dataframe')
 
         return details_df

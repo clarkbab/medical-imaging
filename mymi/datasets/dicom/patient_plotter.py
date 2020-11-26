@@ -34,7 +34,7 @@ class PatientPlotter:
         self.dataset = dataset
         self.pat_id = pat_id
 
-    def plot_ct(self, slice_idx, contours=None, figsize=(8, 8), plane='axial'):
+    def plot_ct(self, slice_idx, contours=None, figsize=(8, 8), plane='axial', transform=False):
         """
         effect: plots a CT slice with contours.
         contours: the contours to plot.
@@ -42,8 +42,8 @@ class PatientPlotter:
         plane: the viewing plane.
         """
         # Load CT data and labels.
-        pat_ext = PatientDataExtractor.from_id(self.pat_id)
-        ct_data = pat_ext.get_data()
+        pat_ext = PatientDataExtractor(self.pat_id, dataset=self.dataset)
+        ct_data = pat_ext.get_data(transform=transform)
 
         # Load labels.
         labels = pat_ext.list_labels()
@@ -69,6 +69,7 @@ class PatientPlotter:
         ]
         ct_slice_data = ct_data[data_index]
         plt.figure(figsize=figsize)
+        # TODO: Handle pixel aspect.
         plt.imshow(np.transpose(ct_slice_data), cmap='gray')
 
         if len(labels) != 0:

@@ -82,17 +82,20 @@ class DatasetSummary:
         write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
-        key = f"dataset_summary:patient_summary"
+        key = {
+            'class': 'dataset_summary',
+            'method': 'patient_summary'
+        }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key '{key}'.")
+                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
                 
         # Define table structure.
         patient_summary_cols = {
-            'dim-x': np.uint16,
-            'dim-y': np.uint16,
-            'dim-z': np.uint16,
+            'res-x': np.uint16,
+            'res-y': np.uint16,
+            'res-z': np.uint16,
             'fov-x': 'float64',
             'fov-y': 'float64',
             'fov-z': 'float64',
@@ -102,8 +105,8 @@ class DatasetSummary:
             'offset-x': 'float64',
             'offset-y': 'float64',
             'pat-id': 'object',
-            'res-x': 'float64',
-            'res-y': 'float64',
+            'spacing-x': 'float64',
+            'spacing-y': 'float64',
             'res-z': 'float64',
             'roi-num': np.uint16,
             'scale-int': 'float64',
@@ -126,47 +129,47 @@ class DatasetSummary:
             ct_details_df = pat_sum.ct_details(read_cache=read_cache, write_cache=write_cache)
 
             # Check for consistency among scans.
-            assert len(ct_details_df['dim-x'].unique()) == 1
-            assert len(ct_details_df['dim-y'].unique()) == 1
-            assert len(ct_details_df['offset-x'].unique()) == 1
-            assert len(ct_details_df['offset-y'].unique()) == 1
             assert len(ct_details_df['res-x'].unique()) == 1
             assert len(ct_details_df['res-y'].unique()) == 1
+            assert len(ct_details_df['offset-x'].unique()) == 1
+            assert len(ct_details_df['offset-y'].unique()) == 1
+            assert len(ct_details_df['spacing-x'].unique()) == 1
+            assert len(ct_details_df['spacing-y'].unique()) == 1
             assert len(ct_details_df['scale-int'].unique()) == 1
             assert len(ct_details_df['scale-slope'].unique()) == 1
 
-            # Calculate res-z - this will be the smallest available diff.
-            res_zs = np.sort([round(i, FLOAT_DP) for i in np.diff(ct_details_df['offset-z'])])
-            res_z = res_zs[0]
+            # Calculate spacing-z - this will be the smallest available diff.
+            spacings_z = np.sort([round(i, FLOAT_DP) for i in np.diff(ct_details_df['offset-z'])])
+            spacing_z = spacings_z[0]
 
-            # Calculate fov-z and dim-z.
+            # Calculate fov-z and res-z.
             fov_z = ct_details_df['offset-z'].max() - ct_details_df['offset-z'].min()
-            dim_z = int(fov_z / res_z) + 1
+            res_z = int(round(fov_z / spacing_z, 0) + 1)
 
             # Calculate number of empty slices.
             num_slices = len(ct_details_df)
-            num_empty = dim_z - num_slices
+            num_empty = res_z - num_slices
 
             # Get patient RTSTRUCT info.
             rtstruct_details_df = pat_sum.rtstruct_details(read_cache=read_cache, write_cache=write_cache)
 
             # Add table row.
             row_data = {
-                'dim-x': ct_details_df['dim-x'][0],
-                'dim-y': ct_details_df['dim-y'][0],
-                'dim-z': dim_z,
-                'fov-x': ct_details_df['dim-x'][0] * ct_details_df['res-x'][0],
-                'fov-y': ct_details_df['dim-y'][0] * ct_details_df['res-y'][0],
-                'fov-z': dim_z * res_z,
+                'res-x': ct_details_df['res-x'][0],
+                'res-y': ct_details_df['res-y'][0],
+                'res-z': res_z,
+                'fov-x': ct_details_df['res-x'][0] * ct_details_df['spacing-x'][0],
+                'fov-y': ct_details_df['res-y'][0] * ct_details_df['spacing-y'][0],
+                'fov-z': res_z * spacing_z,
                 'hu-min': ct_details_df['hu-min'].min(),
                 'hu-max': ct_details_df['hu-max'].max(),
                 'num-empty': num_empty,
                 'offset-x': ct_details_df['offset-x'][0],
                 'offset-y': ct_details_df['offset-y'][0],
                 'pat-id': pat_id,
-                'res-x': ct_details_df['res-x'][0],
-                'res-y': ct_details_df['res-y'][0],
-                'res-z': res_z, 
+                'spacing-x': ct_details_df['spacing-x'][0],
+                'spacing-y': ct_details_df['spacing-y'][0],
+                'spacing-z': spacing_z, 
                 'roi-num': len(rtstruct_details_df),
                 'scale-int': ct_details_df['scale-int'][0],
                 'scale-slope': ct_details_df['scale-slope'][0],
@@ -178,7 +181,7 @@ class DatasetSummary:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key '{key}'.")
+            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, patient_summary_df, 'dataframe')
 
         return patient_summary_df
