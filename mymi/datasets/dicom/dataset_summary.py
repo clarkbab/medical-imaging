@@ -8,16 +8,20 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.datasets.dicom import DicomDataset as ds
+from mymi.cache import DataCache
 from mymi.datasets.dicom import PatientSummary
 
+CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 FLOAT_DP = 2
 
 class DatasetSummary:
-    def __init__(self, dataset=ds):
+    def __init__(self, dataset=ds, verbose=False):
         """
         dataset: a DicomDataset object.
         """
         self.dataset = ds
+        self.cache = DataCache(CACHE_ROOT)
+        self.verbose = verbose
 
     def label_summary(self, num_pats='all', read_cache=True, write_cache=True):
         """
@@ -26,6 +30,13 @@ class DatasetSummary:
         read_cache: reads from cache if present.
         write_cache: writes results to cache, unless read from cache.
         """
+        # Load from cache if present.
+        key = f"dataset_summary:label_summary"
+        if read_cache:
+            if self.cache.exists(key):
+                if self.verbose: print(f"Reading cache key '{key}'.")
+                return self.cache.read(key, 'dataframe')
+
         # Define table structure.
         label_summary_cols = {
             'count': np.uint16,
@@ -42,10 +53,10 @@ class DatasetSummary:
 
         for pat_id in tqdm(pat_ids):
             # Create patient summary.
-            pat_sum = PatientSummary.from_id(pat_id, dataset=self.dataset)
+            pat_sum = PatientSummary(pat_id, dataset=self.dataset, verbose=self.verbose)
 
             # Get RTSTRUCT details.
-            rtstruct_details_df = pat_sum.rtstruct_details()
+            rtstruct_details_df = pat_sum.rtstruct_details(read_cache=read_cache, write_cache=write_cache)
 
             # Add label counts.
             rtstruct_details_df['count'] = 1
@@ -56,6 +67,11 @@ class DatasetSummary:
         # Sort by 'roi-label'.
         label_summary_df = label_summary_df.sort_values('roi-label').reset_index(drop=True)
 
+        # Write data to cache.
+        if write_cache:
+            if self.verbose: print(f"Writing cache key '{key}'.")
+            self.cache.write(key, label_summary_df, 'dataframe')
+
         return label_summary_df
 
     def patient_summary(self, num_pats='all', read_cache=True, write_cache=True):
@@ -65,6 +81,13 @@ class DatasetSummary:
         read_cache: reads from cache if present.
         write_cache: writes results to cache, unless read from cache.
         """
+        # Load from cache if present.
+        key = f"dataset_summary:patient_summary"
+        if read_cache:
+            if self.cache.exists(key):
+                if self.verbose: print(f"Reading cache key '{key}'.")
+                return self.cache.read(key, 'dataframe')
+                
         # Define table structure.
         patient_summary_cols = {
             'dim-x': np.uint16,
@@ -97,10 +120,10 @@ class DatasetSummary:
 
         for pat_id in tqdm(pat_ids):
             # Create patient summary.
-            pat_sum = PatientSummary.from_id(pat_id, dataset=self.dataset)
+            pat_sum = PatientSummary(pat_id, dataset=ds, verbose=self.verbose)
 
             # Get patient scan info.
-            ct_details_df = pat_sum.ct_details()
+            ct_details_df = pat_sum.ct_details(read_cache=read_cache, write_cache=write_cache)
 
             # Check for consistency among scans.
             assert len(ct_details_df['dim-x'].unique()) == 1
@@ -125,7 +148,7 @@ class DatasetSummary:
             num_empty = dim_z - num_slices
 
             # Get patient RTSTRUCT info.
-            rtstruct_details_df = pat_sum.rtstruct_details()
+            rtstruct_details_df = pat_sum.rtstruct_details(read_cache=read_cache, write_cache=write_cache)
 
             # Add table row.
             row_data = {
@@ -152,6 +175,11 @@ class DatasetSummary:
 
         # Set index.
         patient_summary_df = patient_summary_df.set_index('pat-id')
+
+        # Write data to cache.
+        if write_cache:
+            if self.verbose: print(f"Writing cache key '{key}'.")
+            self.cache.write(key, patient_summary_df, 'dataframe')
 
         return patient_summary_df
 

@@ -7,6 +7,9 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.datasets.dicom import DicomDataset as ds
+from mymi.cache import DataCache
+
+CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 
 class PatientSummary:
     @staticmethod
@@ -24,13 +27,16 @@ class PatientSummary:
         
         return PatientSummary(pat_id, dataset=dataset)
 
-    def __init__(self, pat_id, dataset=ds):
+    def __init__(self, pat_id, dataset=ds, verbose=False):
         """
         pat_id: a patient ID string.
         dataset: a DICOM dataset.
         """
+        self.cache = DataCache(CACHE_ROOT)
         self.dataset = dataset
         self.pat_id = pat_id
+        # TODO: Add logger class.
+        self.verbose = verbose
 
     def ct_details(self, read_cache=True, write_cache=True):
         """
@@ -38,11 +44,12 @@ class PatientSummary:
         write_cache: writes results to cache, unless read from cache.
         returns: dataframe with info for each CT slice. 
         """
-        # TODO: Add caching.
-        # if read_cache:
-            # Check if cache exists using SummaryCache object.
-            # If present, return as is, else progress with calculation.
-            # return details_df
+        # Load from cache if present.
+        key = f"patient_summary:{self.pat_id}:ct_details"
+        if read_cache:
+            if self.cache.exists(key):
+                if self.verbose: print(f"Reading cache key '{key}'.")
+                return self.cache.read(key, 'dataframe')
             
         # Define dataframe structure.
         detail_cols = {
@@ -88,9 +95,10 @@ class PatientSummary:
         # Sort by 'offset-z'.
         details_df = details_df.sort_values('offset-z').reset_index(drop=True)
 
-        # TODO: Add cache writing using SummaryCache object.
-        # if write_cache and not cache_was_read:
-        #   # Write to the cache.
+        # Write data to cache.
+        if write_cache:
+            if self.verbose: print(f"Writing cache key '{key}'.")
+            self.cache.write(key, details_df, 'dataframe')
 
         return details_df
 
@@ -100,6 +108,13 @@ class PatientSummary:
         write_cache: writes results to cache, unless read from cache.
         returns: dataframe with info for each region-of-interest.
         """
+        # Load from cache if present.
+        key = f"patient_summary:{self.pat_id}:rtstruct_details"
+        if read_cache:
+            if self.cache.exists(key):
+                if self.verbose: print(f"Reading cache key '{key}'.")
+                return self.cache.read(key, 'dataframe')
+        
         # Define table structure.
         details_cols = {
             'roi-label': 'object'
@@ -121,37 +136,9 @@ class PatientSummary:
         # Sort by label.
         details_df = details_df.sort_values('roi-label').reset_index(drop=True)
 
-        return details_df
+        # Write data to cache.
+        if write_cache:
+            if self.verbose: print(f"Writing cache key '{key}'.")
+            self.cache.write(key, details_df, 'dataframe')
 
-    def full_summary(self, read_cache=True, write_cache=True):
-        """
-        read_cache: reads from cache if present.
-        write_cache: writes results to cache, unless read from cache.
-        returns: dataframe with info for each CT slice. 
-        """
-        # TODO: Add caching.
-        # if read_cache:
-            # Check if cache exists using SummaryCache object.
-            # If present, return as is, else progress with calculation.
-            # return details_df
-        
-        # Define table structure.
-        full_summary_info = {
-            'dim-x': np.uint16,
-            'dim-y': np.uint16,
-            'dim-z': np.uint16,
-            'fov-x': 'float64',
-            'fov-y': 'float64',
-            'fov-z': 'float64',
-            'hu-min': 'float',
-            'hu-max': 'float',
-            'num-empty': np.uint16,
-            'offset-x': 'float',
-            'offset-y': 'float',
-            'res-x': 'float',
-            'res-y': 'float',
-            'res-z': 'float',
-            'roi-num': np.uint16,
-            'scale-int': 'float',
-            'scale-slope': 'float'
-        }
+        return details_df
