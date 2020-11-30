@@ -9,27 +9,13 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.datasets.dicom import DicomDataset as ds
-from mymi.datasets.dicom import PatientSummary
+from mymi.datasets.dicom import PatientInfo
 from mymi.cache import DataCache
 
 CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 FLOAT_DP = 2
 
 class PatientDataExtractor:
-    @staticmethod
-    def from_id(pat_id, dataset=ds):
-        """
-        pat_id: an identifier for the patient.
-        returns: PatientSummary object.
-        """
-        # TODO: flesh out.
-        if not dataset.has_id(pat_id):
-            print(f"Patient ID '{pat_id}' not found in dataset.")
-            # raise error
-            exit(0)
-
-        return PatientDataExtractor(pat_id, dataset=dataset)
-
     def __init__(self, pat_id, dataset=ds, verbose=False):
         """
         pat_id: a patient ID string.
@@ -40,7 +26,7 @@ class PatientDataExtractor:
         self.pat_id = pat_id
         self.verbose = verbose
 
-    def get_data(self, read_cache=True, write_cache=True, transform=False):
+    def get_data(self, read_cache=True, write_cache=True, transforms=[]):
         """
         returns: a numpy array of pixel data in HU.
         read_cache: reads from cache if present.
@@ -51,7 +37,7 @@ class PatientDataExtractor:
             'class': 'patient_data_extractor',
             'method': 'get_data',
             'patient_id': self.pat_id,
-            'transform': transform,
+            'transforms': [t.cache_id() for t in transforms]
         }
         if read_cache:
             if self.cache.exists(key):
@@ -60,21 +46,12 @@ class PatientDataExtractor:
 
         # Load patient CT dicoms.
         ct_dicoms = self.dataset.list_ct(self.pat_id)
-        pat_sum = PatientSummary(self.pat_id, dataset=self.dataset)
-        ct_details_df = pat_sum.ct_details(read_cache=read_cache, write_cache=write_cache) 
-
-        # Ensure that CT slice dimensions are consistent.
-        assert len(ct_details_df['res-x'].unique()) == 1
-        assert len(ct_details_df['res-y'].unique()) == 1
-
-        # Calculate 'res-z'.
-        spacing_zs = np.sort([round(i, FLOAT_DP) for i in np.diff(ct_details_df['offset-z'])])
-        spacing_z = spacing_zs[0]   # Take smallest resolution.
-        fov_z = ct_details_df['offset-z'].max() - ct_details_df['offset-z'].min()
-        res_z = int(round(fov_z / spacing_z, 0)) + 1
+        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        full_info_df = pi.full_info(read_cache=read_cache, write_cache=write_cache)
+        full_info = full_info_df.iloc[0].to_dict()
 
         # Create placeholder array.
-        data_shape = (ct_details_df['res-x'][0], ct_details_df['res-y'][0], res_z)
+        data_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
         data = np.zeros(shape=data_shape)
         
         # Add CT data.
@@ -87,46 +64,15 @@ class PatientDataExtractor:
             pixel_data = np.transpose(pixel_data)
 
             # Get z index.
-            offset_z =  ct_dicom.ImagePositionPatient[2] - ct_details_df['offset-z'][0]
-            z_idx = int(round(offset_z / spacing_z))
+            offset_z =  ct_dicom.ImagePositionPatient[2] - full_info['offset-z']
+            z_idx = int(round(offset_z / full_info['spacing-z']))
 
             # Add data.
             data[:, :, z_idx] = pixel_data
 
-
-        # Perform resampling.
-        if transform:
-            # Ensure that CT slice resolutions are consisent.
-            assert len(ct_details_df['spacing-x'].unique()) == 1
-            assert len(ct_details_df['spacing-y'].unique()) == 1
-
-            new_spacing = (0.976562, 0.976562, 3.0)     # TODO: pass in.
-            old_spacing = np.array([ct_details_df['spacing-x'][0], ct_details_df['spacing-y'][0], spacing_z])
-
-            # No resampling to be performed.
-            if np.array_equal(new_spacing, old_spacing):
-                # Write data to cache.
-                if write_cache:
-                    if self.verbose: print(f"Writing cache key {key}.")
-                    self.cache.write(key, data, 'array') 
-            
-                return data
-
-            # Calculate shape resize factor - the ratio of new to old pixel numbers.
-            resize_factor = old_spacing / new_spacing
-            print(old_spacing)
-
-            # Calculate new shape - rounded to nearest integer.
-            new_shape = np.round(data.shape * resize_factor)
-
-            # Our real spacing will be different from 'new spacing' due to shape
-            # consisting of integers. The field-of-view (shape * spacing) must be
-            # maintained throughout.
-            real_resize_factor = new_shape / data.shape
-            new_spacing = old_spacing / real_resize_factor
-
-            # Perform resampling.
-            data = scipy.ndimage.zoom(data, real_resize_factor)
+        # Transform the data.
+        for transform in transforms:
+            data = transform.run(data, full_info)
 
         # Write data to cache.
         if write_cache:
@@ -135,9 +81,10 @@ class PatientDataExtractor:
 
         return data
 
-    def list_labels(self):
+    def get_labels(self, transform=False):
         """
         returns: a list of (<label name>, <label data>) pairs.
+        transform: transform the labels using the pre-defined transformation.
         """
         # Load all regions-of-interest.
         rtstruct_dicom = self.dataset.get_rtstruct(self.pat_id)
@@ -145,27 +92,18 @@ class PatientDataExtractor:
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pat_sum = PatientSummary.from_id(self.pat_id, dataset=self.dataset)
-        ct_details_df = pat_sum.ct_details()
-
-        # Check for consistency among scans.
-        assert len(ct_details_df['res-x'].unique()) == 1
-        assert len(ct_details_df['res-y'].unique()) == 1
-
-        # Calculate spacing-z - this will be the smallest available diff.
-        spacing_zs = np.sort([round(i, FLOAT_DP) for i in np.diff(ct_details_df['offset-z'])])
-        spacing_z = spacing_zs[0]
-
-        # Calculate fov-z and res-z.
-        fov_z = ct_details_df['offset-z'].max() - ct_details_df['offset-z'].min()
-        res_z = int(fov_z / spacing_z) + 1
+        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        full_info_df = pi.full_info()
+        full_info = full_info_df.iloc[0].to_dict()
 
         labels = []
 
         # Create and add labels.
         for roi, roi_info in zip(rois, roi_infos):
             # Create label placeholder.
-            label_shape = (ct_details_df['res-x'][0], ct_details_df['res-y'][0], res_z)
+            label_shape = None
+            label_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
+
             label = np.zeros(shape=label_shape, dtype=np.uint8)
 
             roi_coords = [c.ContourData for c in roi.ContourSequence]
@@ -176,12 +114,12 @@ class PatientDataExtractor:
                 coords = np.array(roi_slice_coords).reshape(-1, 3)
 
                 # Convert from "real" space to pixel space using affine transformation.
-                corner_pixels_x = (coords[:, 0] - ct_details_df['offset-x'].min()) / ct_details_df['res-x'][0]
-                corner_pixels_y = (coords[:, 1] - ct_details_df['offset-y'].min()) / ct_details_df['res-y'][0]
+                corner_pixels_x = (coords[:, 0] - full_info['offset-x']) / full_info['spacing-x']
+                corner_pixels_y = (coords[:, 1] - full_info['offset-y']) / full_info['spacing-y']
 
                 # Get contour z pixel.
-                offset_z = coords[0, 2] - ct_details_df['offset-z'].min()
-                pixel_z = int(offset_z / res_z)
+                offset_z = coords[0, 2] - full_info['offset-z']
+                pixel_z = int(offset_z / full_info['spacing-z'])
 
                 # Get 2D coords of polygon boundary and interior described by corner
                 # points.

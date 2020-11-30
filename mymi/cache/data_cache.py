@@ -99,7 +99,7 @@ class DataCache:
         data_filename = 'data.npy'
         cache_path = os.path.join(self.root, self.cache_key(key))
         data_path = os.path.join(cache_path, data_filename)
-        os.makedirs(cache_path) # TODO: exist ok? The cache key shouldn't exist if we're writing it.
+        os.makedirs(cache_path, exist_ok=True)
         np.save(data_path, array)
 
         # Write out write date.
@@ -118,7 +118,7 @@ class DataCache:
         data_filename = 'data.csv'
         cache_path = os.path.join(self.root, self.cache_key(key))
         data_path = os.path.join(cache_path, data_filename)
-        os.makedirs(cache_path) # TODO: exist ok? The cache key shouldn't exist if we're writing it.
+        os.makedirs(cache_path, exist_ok=True)
         df.to_csv(data_path)
 
         # Write out write date.

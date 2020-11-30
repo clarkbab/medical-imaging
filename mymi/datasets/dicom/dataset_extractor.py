@@ -12,15 +12,17 @@ from mymi.datasets.dicom import PatientDataExtractor
 PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed')
 
 class DatasetExtractor:
-    def __init__(self, dataset=ds):
+    def __init__(self, dataset=ds, verbose=False):
         """
         dataset: a DicomDataset object.
         """
         self.dataset = dataset
+        self.verbose = verbose
 
-    def extract(self):
+    def extract(self, transform=False):
         """
         effect: stores processed patient data.
+        transform: apply the pre-defined transformation.
         """
         # Load patients.
         pat_ids = self.dataset.list_patients()
@@ -28,8 +30,8 @@ class DatasetExtractor:
         # Process data for each patient.
         for pat_id in tqdm(pat_ids):
             # Process and store input data.
-            pde = PatientDataExtractor.from_id(pat_id, dataset=self.dataset)
-            input_data = pde.get_data()
+            pde = PatientDataExtractor(pat_id, verbose=self.verbose)
+            input_data = pde.get_data(transform=transform)
             input_path = os.path.join(PROCESSED_ROOT, pat_id, 'input.npy')
             np.save(input_path, input_data)
 

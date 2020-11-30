@@ -11,21 +11,6 @@ from mymi.datasets.dicom import DicomDataset as ds
 from mymi.datasets.dicom import PatientDataExtractor
 
 class PatientPlotter:
-    @staticmethod
-    def from_id(pat_id, dataset=ds):
-        """
-        pat_id: an identifier for the patient.
-        returns: PatientSummary object.
-        """
-        if not dataset.has_id(pat_id):
-            print(f"Patient ID '{pat_id}' not found in dataset.")
-            # raise error
-            exit(0)
-
-        # TODO: Read an env var or something to make dataset implicit.
-        
-        return PatientPlotter(pat_id, dataset=dataset)
-
     def __init__(self, pat_id, dataset=ds):
         """
         pat_id: a patient ID string.
@@ -34,19 +19,18 @@ class PatientPlotter:
         self.dataset = dataset
         self.pat_id = pat_id
 
-    def plot_ct(self, slice_idx, contours=None, figsize=(8, 8), plane='axial', transform=False):
+    def plot_ct(self, slice_idx, contours=None, figsize=(8, 8), plane='axial', read_cache=True, transforms=[], write_cache=True):
         """
         effect: plots a CT slice with contours.
         contours: the contours to plot.
         figsize: the size of the plot in inches.
-        plane: the viewing plane.
-        """
+        plane: the viewing plane. """
         # Load CT data and labels.
         pat_ext = PatientDataExtractor(self.pat_id, dataset=self.dataset)
-        ct_data = pat_ext.get_data(transform=transform)
+        ct_data = pat_ext.get_data(transforms=transforms, read_cache=read_cache, write_cache=write_cache)
 
         # Load labels.
-        labels = pat_ext.list_labels()
+        labels = pat_ext.get_labels()
         label_names = [l[0] for l in labels] 
 
         # Filter unwanted labels.
@@ -85,4 +69,5 @@ class PatientPlotter:
                 plt.plot(0, 0, c=colour_gen(i), label=label_name)
 
         plt.legend(loc=(1.05, 0.8))
+        plt.axis('off')
         plt.show()
