@@ -104,9 +104,10 @@ class DatasetInfo:
             'fov-z': 'float64',
             'hu-min': 'float64',
             'hu-max': 'float64',
-            'num-empty': np.uint16,
+            'num-missing': np.uint16,
             'offset-x': 'float64',
             'offset-y': 'float64',
+            'offset-z': 'float64',
             'pat-id': 'object',
             'spacing-x': 'float64',
             'spacing-y': 'float64',
@@ -127,7 +128,7 @@ class DatasetInfo:
         for pat_id in tqdm(pat_ids):
             # Get patient info.
             pat_info = PatientInfo(pat_id, dataset=ds, verbose=self.verbose)
-            info_df = pat_info.full_info()
+            info_df = pat_info.full_info(read_cache=read_cache, write_cache=write_cache)
             patient_info_df = patient_info_df.append(info_df)
 
         # Set index.

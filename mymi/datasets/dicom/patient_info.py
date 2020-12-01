@@ -119,7 +119,7 @@ class PatientInfo:
             'fov-z': 'float64',
             'hu-min': 'float64',
             'hu-max': 'float64',
-            'num-empty': np.uint16,
+            'num-missing': np.uint16,
             'offset-x': 'float64',
             'offset-y': 'float64',
             'offset-z': 'float64',

@@ -1,5 +1,6 @@
 from datetime import datetime
 import glob
+import gzip
 import hashlib
 import json
 import numpy as np
@@ -33,6 +34,8 @@ class DataCache:
             return self.read_array(key)
         elif type == 'dataframe':
             return self.read_dataframe(key)
+        elif type == 'name-array-pairs':
+            return self.read_name_array_pairs(key)
         else:
             # TODO: raise error.
             print('unrecognised cache type')
@@ -48,6 +51,8 @@ class DataCache:
             self.write_array(key, obj)
         elif type == 'dataframe':
             self.write_dataframe(key, obj)
+        elif type == 'name-array-pairs':
+            self.write_name_array_pairs(key, obj)
         else:
             # TODO: raise error.
             print('unrecognised cache type')
@@ -57,17 +62,9 @@ class DataCache:
         key: the cache key string.
         """
         # Read data.
-        data_filename = 'data.npy'
-        cache_path = os.path.join(self.root, self.cache_key(key))
-        data_path = os.path.join(cache_path, data_filename)
-        data = np.load(data_path)
-
-        # Write last read date.
-        read_filename = 'read.txt'
-        read_path = os.path.join(cache_path, read_filename)
-        read_file = open(read_path, 'w')
-        read_file.write(str(datetime.now()))
-        read_file.close()
+        filepath = os.path.join(self.root, self.cache_key(key))
+        f = gzip.GzipFile(filepath, 'r')
+        data = np.load(f)
 
         return data
 
@@ -76,19 +73,27 @@ class DataCache:
         key: the cache key string.
         """
         # Read data.
-        data_filename = 'data.csv'
-        cache_path = os.path.join(self.root, self.cache_key(key))
-        data_path = os.path.join(cache_path, data_filename)
-        data = pd.read_csv(data_path, index_col=0)
-
-        # Write last read date.
-        read_filename = 'read.txt'
-        read_path = os.path.join(cache_path, read_filename)
-        read_file = open(read_path, 'w')
-        read_file.write(str(datetime.now()))
-        read_file.close()
+        filepath = os.path.join(self.root, self.cache_key(key))
+        data = pd.read_parquet(filepath)
 
         return data
+
+    def read_name_array_pairs(self, key):
+        """
+        returns: a list of (name, array) pairs.
+        key: the cache key string.
+        """
+        # Read data.
+        folder_path = os.path.join(self.root, self.cache_key(key))
+
+        name_array_pairs = []
+        for name in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, name)
+            f = gzip.GzipFile(filepath, 'r')
+            data = np.load(f)
+            name_array_pairs.append((name, data))
+
+        return name_array_pairs
 
     def write_array(self, key, array):
         """
@@ -96,18 +101,10 @@ class DataCache:
         df: the dataframe.
         """
         # Write data.
-        data_filename = 'data.npy'
-        cache_path = os.path.join(self.root, self.cache_key(key))
-        data_path = os.path.join(cache_path, data_filename)
-        os.makedirs(cache_path, exist_ok=True)
-        np.save(data_path, array)
-
-        # Write out write date.
-        write_filename = 'write.txt'
-        write_path = os.path.join(cache_path, write_filename)
-        write_file = open(write_path, 'w')
-        write_file.write(str(datetime.now()))
-        write_file.close()
+        filepath = os.path.join(self.root, self.cache_key(key))
+        f = gzip.GzipFile(filepath, 'w')
+        np.save(f, array)
+        f.close()
 
     def write_dataframe(self, key, df):
         """
@@ -115,18 +112,22 @@ class DataCache:
         df: the dataframe.
         """
         # Write data.
-        data_filename = 'data.csv'
-        cache_path = os.path.join(self.root, self.cache_key(key))
-        data_path = os.path.join(cache_path, data_filename)
-        os.makedirs(cache_path, exist_ok=True)
-        df.to_csv(data_path)
+        filename = os.path.join(self.root, self.cache_key(key))
+        df.to_parquet(filename)
 
-        # Write out write date.
-        write_filename = 'write.txt'
-        write_path = os.path.join(cache_path, write_filename)
-        write_file = open(write_path, 'w')
-        write_file.write(str(datetime.now()))
-        write_file.close()
+    def write_name_array_pairs(self, key, pairs):
+        """
+        key: the cache key string.
+        pairs: the list of (name, array) pairs.
+        """
+        # Write data.
+        folder_path = os.path.join(self.root, self.cache_key(key))
+        os.makedirs(folder_path, exist_ok=True)
+
+        for name, data in pairs:
+            filename = os.path.join(folder_path, name)
+            f = gzip.GzipFile(filename, 'w')
+            np.save(f, data)
 
     def cache_key(self, key):
         """

@@ -1,1 +1,1 @@
-from .test import Test
+from .image_dataset import ImageDataset

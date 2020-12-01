@@ -24,6 +24,10 @@ class ResampleTransform:
         returns: resampled data.
         data: the data to resample.
         info: information required by the resampling method.
+            order: the order of the interpolation method.
+            spacing-x: the spacing between voxels in x-direction.
+            spacing-y: the spacing between voxels in y-direction.
+            spacing-z: the spacing between voxels in z-direction.
         """
         new_spacing = np.array([1.0, 1.0, 3.0])
         old_spacing = np.array([info['spacing-x'], info['spacing-y'], info['spacing-z']])
@@ -45,6 +49,7 @@ class ResampleTransform:
         new_spacing = old_spacing / real_resize_factor
 
         # Perform resampling.
-        data = scipy.ndimage.zoom(data, real_resize_factor)
+        order = info['order'] if 'order' in info.keys() else 3
+        data = scipy.ndimage.zoom(data, real_resize_factor, order=order)
 
         return data

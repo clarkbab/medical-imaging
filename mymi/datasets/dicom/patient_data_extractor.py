@@ -26,11 +26,11 @@ class PatientDataExtractor:
         self.pat_id = pat_id
         self.verbose = verbose
 
-    def get_data(self, read_cache=True, write_cache=True, transforms=[]):
+    def get_data(self, read_cache=True, transforms=[], write_cache=True):
         """
         returns: a numpy array of pixel data in HU.
         read_cache: reads from cache if present.
-        resolution: the resampling resolution. 
+        transforms: a list of transforms to apply to the data.
         write_cache: writes results to cache, unless read from cache.
         """
         key = {
@@ -46,13 +46,13 @@ class PatientDataExtractor:
 
         # Load patient CT dicoms.
         ct_dicoms = self.dataset.list_ct(self.pat_id)
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        pi = PatientInfo(self.pat_id, dataset=self.dataset, verbose=self.verbose)
         full_info_df = pi.full_info(read_cache=read_cache, write_cache=write_cache)
         full_info = full_info_df.iloc[0].to_dict()
 
         # Create placeholder array.
         data_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
-        data = np.zeros(shape=data_shape)
+        data = np.zeros(shape=data_shape, dtype=np.int16)
         
         # Add CT data.
         for ct_dicom in ct_dicoms:
@@ -81,30 +81,51 @@ class PatientDataExtractor:
 
         return data
 
-    def get_labels(self, transform=False):
+    def get_labels(self, read_cache=True, regions='all', transforms=[], write_cache=True):
         """
         returns: a list of (<label name>, <label data>) pairs.
-        transform: transform the labels using the pre-defined transformation.
+        regions: the desired regions.
+        read_cache: reads from cache if present.
+        transforms: a list of transforms to apply to the labels.
+        write_cache: writes results to cache, unless read from cache.
         """
+        key = {
+            'class': 'patient_data_extractor',
+            'method': 'get_labels',
+            'patient_id': self.pat_id,
+            'regions': regions,
+            'transforms': [t.cache_id() for t in transforms]
+        }
+        if read_cache:
+            if self.cache.exists(key):
+                if self.verbose: print(f"Reading cache for key {key}.")
+                return self.cache.read(key, 'name-array-pairs')
+
         # Load all regions-of-interest.
         rtstruct_dicom = self.dataset.get_rtstruct(self.pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
-        full_info_df = pi.full_info()
+        pi = PatientInfo(self.pat_id, dataset=self.dataset, verbose=self.verbose)
+        full_info_df = pi.full_info(read_cache=read_cache, write_cache=write_cache)
         full_info = full_info_df.iloc[0].to_dict()
 
         labels = []
 
         # Create and add labels.
         for roi, roi_info in zip(rois, roi_infos):
-            # Create label placeholder.
-            label_shape = None
-            label_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
+            name = roi_info.ROIName
 
-            label = np.zeros(shape=label_shape, dtype=np.uint8)
+            # Check if we should skip.
+            if not (regions == 'all' or
+                (type(regions) == list and name in regions) or
+                (type(regions) == str and name == regions)):
+                continue
+
+            # Create label placeholder.
+            data_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
+            data = np.zeros(shape=data_shape, dtype=np.uint8)
 
             roi_coords = [c.ContourData for c in roi.ContourSequence]
 
@@ -126,11 +147,21 @@ class PatientDataExtractor:
                 pixels_x, pixels_y = polygon(corner_pixels_x, corner_pixels_y)
 
                 # Set labelled pixels in slice.
-                label[pixels_x, pixels_y, pixel_z] = 1
+                data[pixels_x, pixels_y, pixel_z] = 1
 
-            labels.append((roi_info.ROIName, label))
+            labels.append((name, data))
 
         # Sort by label name.
         labels = sorted(labels, key=lambda l: l[0])
+
+        # Transform the labels.
+        full_info['order'] = 0      # Perform nearest-neighbour interpolation.
+        for transform in transforms:
+            labels = [(name, transform.run(data, full_info)) for name, data in labels]
+
+        # Write data to cache.
+        if write_cache:
+            if self.verbose: print(f"Writing cache key {key}.")
+            self.cache.write(key, labels, 'name-array-pairs') 
 
         return labels

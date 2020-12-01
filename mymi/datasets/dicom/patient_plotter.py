@@ -11,41 +11,30 @@ from mymi.datasets.dicom import DicomDataset as ds
 from mymi.datasets.dicom import PatientDataExtractor
 
 class PatientPlotter:
-    def __init__(self, pat_id, dataset=ds):
+    def __init__(self, pat_id, dataset=ds, verbose=False):
         """
         pat_id: a patient ID string.
         dataset: a DICOM dataset.
         """
         self.dataset = dataset
         self.pat_id = pat_id
+        self.verbose = verbose
 
-    def plot_ct(self, slice_idx, contours=None, figsize=(8, 8), plane='axial', read_cache=True, transforms=[], write_cache=True):
+    def plot_ct(self, slice_idx, axis='on', figsize=(8, 8), plane='axial', read_cache=True, regions=None, transforms=[], write_cache=True):
         """
         effect: plots a CT slice with contours.
-        contours: the contours to plot.
         figsize: the size of the plot in inches.
-        plane: the viewing plane. """
+        plane: the viewing plane.
+        regions: the regions-of-interest to plot.
+        """
         # Load CT data and labels.
-        pat_ext = PatientDataExtractor(self.pat_id, dataset=self.dataset)
-        ct_data = pat_ext.get_data(transforms=transforms, read_cache=read_cache, write_cache=write_cache)
+        pat_ext = PatientDataExtractor(self.pat_id, dataset=self.dataset, verbose=self.verbose)
+        ct_data = pat_ext.get_data(read_cache=read_cache, transforms=transforms, write_cache=write_cache)
 
         # Load labels.
-        labels = pat_ext.get_labels()
-        label_names = [l[0] for l in labels] 
+        labels = pat_ext.get_labels(read_cache=read_cache, regions=regions, transforms=transforms, write_cache=write_cache)
 
-        # Filter unwanted labels.
-        def should_contour(label):
-            label_name = label[0]
-            return ((type(contours) == str and contours == 'all' or contours == label_name) or
-                (type(contours) == list and label_name in contours))
-        labels = list(filter(should_contour, labels))
-
-        # Someone probably typed the wrong label name.
-        if len(labels) == 0 and contours != None:
-            print(f"No label matching '{contours}'.")
-            print(f"Available contours: {label_names}.")
-
-        # Plot data slice.
+        # Plot CT slice.
         data_index = [
             slice_idx if plane == 'sagittal' else slice(ct_data.shape[0]),
             slice_idx if plane == 'coronal' else slice(ct_data.shape[1]),
@@ -56,8 +45,8 @@ class PatientPlotter:
         # TODO: Handle pixel aspect.
         plt.imshow(np.transpose(ct_slice_data), cmap='gray')
 
+        # Plot labels.
         if len(labels) != 0:
-            # Create colour generator. 
             colour_gen = plt.cm.tab10
 
             # Plot each label.
@@ -68,6 +57,8 @@ class PatientPlotter:
                 plt.imshow(np.transpose(label_data), cmap=label_cmap, alpha=0.5)
                 plt.plot(0, 0, c=colour_gen(i), label=label_name)
 
-        plt.legend(loc=(1.05, 0.8))
-        plt.axis('off')
+            # Turn on legend.
+            plt.legend(loc=(1.05, 0.8))
+
+        plt.axis(axis)
         plt.show()
