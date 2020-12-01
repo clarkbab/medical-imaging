@@ -1,7 +1,0 @@
-README.md
-setup.py
-mymi/__init__.py
-mymi.egg-info/PKG-INFO
-mymi.egg-info/SOURCES.txt
-mymi.egg-info/dependency_links.txt
-mymi.egg-info/top_level.txt
