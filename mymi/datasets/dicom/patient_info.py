@@ -38,7 +38,6 @@ class PatientInfo:
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
             
         # Define dataframe structure.
@@ -87,7 +86,6 @@ class PatientInfo:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, info_df, 'dataframe')
 
         return info_df
@@ -106,7 +104,6 @@ class PatientInfo:
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
 
         # Define table structure.
@@ -156,10 +153,10 @@ class PatientInfo:
 
         # Calculate number of empty slices.
         num_slices = len(ct_info_df)
-        num_empty = res_z - num_slices
+        num_missing = res_z - num_slices
 
         # Get patient RTSTRUCT info.
-        rtstruct_info_df = self.rtstruct_info(read_cache=read_cache, write_cache=write_cache)
+        region_info_df = self.region_info(read_cache=read_cache, write_cache=write_cache)
 
         # Add table row.
         row_data = {
@@ -171,7 +168,7 @@ class PatientInfo:
             'fov-z': res_z * spacing_z,
             'hu-min': ct_info_df['hu-min'].min(),
             'hu-max': ct_info_df['hu-max'].max(),
-            'num-empty': num_empty,
+            'num-missing': num_missing,
             'offset-x': ct_info_df['offset-x'][0],
             'offset-y': ct_info_df['offset-y'][0],
             'offset-z': ct_info_df['offset-z'][0],
@@ -179,7 +176,7 @@ class PatientInfo:
             'spacing-x': ct_info_df['spacing-x'][0],
             'spacing-y': ct_info_df['spacing-y'][0],
             'spacing-z': spacing_z, 
-            'roi-num': len(rtstruct_info_df),
+            'roi-num': len(region_info_df),
             'scale-int': ct_info_df['scale-int'][0],
             'scale-slope': ct_info_df['scale-slope'][0],
         }
@@ -190,52 +187,49 @@ class PatientInfo:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, full_info_df, 'dataframe')
 
         return full_info_df
 
-    def rtstruct_info(self, read_cache=True, write_cache=True):
+    def region_info(self, read_cache=True, write_cache=True):
         """
-        returns: dataframe with row for each region-of-interest.
+        returns: dataframe with row for each region.
         read_cache: reads from cache if present.
         write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
         key = {
             'class': 'patient_info',
-            'method': 'rtstruct_info',
+            'method': 'region_info',
             'patient_id': self.pat_id
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
         
         # Define table structure.
-        info_cols = {
-            'roi-label': 'object'
+        region_info_cols = {
+            'region': 'object'
         }
-        info_df = pd.DataFrame(columns=info_cols.keys())
+        region_info_df = pd.DataFrame(columns=region_info_cols.keys())
 
         rois = self.dataset.get_rtstruct(self.pat_id).StructureSetROISequence
         
         # Add info for each region-of-interest.
         for roi in rois:
             row_data = {
-                'roi-label': roi.ROIName
+                'region': roi.ROIName
             }
-            info_df = info_df.append(row_data, ignore_index=True)
+            region_info_df = region_info_df.append(row_data, ignore_index=True)
 
         # Set column type.
-        info_df = info_df.astype(info_cols)
+        region_info_df = region_info_df.astype(region_info_cols)
 
         # Sort by label.
-        info_df = info_df.sort_values('roi-label').reset_index(drop=True)
+        region_info_df = region_info_df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
-            self.cache.write(key, info_df, 'dataframe')
+            self.cache.write(key, region_info_df, 'dataframe')
 
-        return info_df
+        return region_info_df

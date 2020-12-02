@@ -23,59 +23,57 @@ class DatasetInfo:
         self.cache = DataCache(CACHE_ROOT)
         self.verbose = verbose
 
-    def label_info(self, num_pats='all', read_cache=True, write_cache=True):
+    def region_count(self, num_patients='all', read_cache=True, write_cache=True):
         """
-        returns: a dataframe containing rows of label summaries.
-        num_pats: the number of patients to summarise.
+        returns: a dataframe containing regions and num patients with region.
+        num_patients: the number of patients to summarise.
         read_cache: reads from cache if present.
         write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
         key = {
             'class': 'dataset_info',
-            'method': 'label_info'
+            'method': 'region_count'
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
 
         # Define table structure.
-        label_info_cols = {
-            'count': np.uint16,
-            'roi-label': 'object'
+        region_count_cols = {
+            'num-patients': np.uint16,
+            'region': 'object'
         }
-        label_info_df = pd.DataFrame(columns=label_info_cols.keys())
+        region_count_df = pd.DataFrame(columns=region_count_cols.keys())
 
         # List patients.
         pat_ids = self.dataset.list_patients()
 
         # Run on subset of patients.
-        if num_pats != 'all':
-            pat_ids = pat_ids[:num_pats]
+        if num_patients != 'all':
+            pat_ids = pat_ids[:num_patients]
 
         for pat_id in tqdm(pat_ids):
             # Get patient info.
             pat_info = PatientInfo(pat_id, dataset=self.dataset, verbose=self.verbose)
 
             # Get RTSTRUCT info.
-            rtstruct_info_df = pat_info.rtstruct_info(read_cache=read_cache, write_cache=write_cache)
+            region_info_df = pat_info.region_info(read_cache=read_cache, write_cache=write_cache)
 
             # Add label counts.
-            rtstruct_info_df['count'] = 1
-            label_info_df = label_info_df.merge(rtstruct_info_df, how='outer', on='roi-label')
-            label_info_df['count'] = (label_info_df['count_x'].fillna(0) + label_info_df['count_y'].fillna(0)).astype(np.uint16)
-            label_info_df = label_info_df.drop(['count_x', 'count_y'], axis=1)
+            region_info_df['num-patients'] = 1
+            region_count_df = region_count_df.merge(region_info_df, how='outer', on='region')
+            region_count_df['num-patients'] = (region_count_df['num-patients_x'].fillna(0) + region_count_df['num-patients_y'].fillna(0)).astype(np.uint16)
+            region_count_df = region_count_df.drop(['num-patients_x', 'num-patients_y'], axis=1)
 
         # Sort by 'roi-label'.
-        label_info_df = label_info_df.sort_values('roi-label').reset_index(drop=True)
+        region_count_df = region_count_df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
-            self.cache.write(key, label_info_df, 'dataframe')
+            self.cache.write(key, region_count_df, 'dataframe')
 
-        return label_info_df
+        return region_count_df
 
     def patient_info(self, num_pats='all', read_cache=True, write_cache=True):
         """
@@ -91,7 +89,6 @@ class DatasetInfo:
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache key {key}.")
                 return self.cache.read(key, 'dataframe')
                 
         # Define table structure.
@@ -137,9 +134,50 @@ class DatasetInfo:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, patient_info_df, 'dataframe')
 
         return patient_info_df
 
-        
+    def patient_regions(self, read_cache=True, write_cache=True):
+        """
+        returns: a dataframe linking patients to contoured regions.
+        read_cache: reads from cache if present.
+        write_cache: writes results to cache, unless read from cache.
+        """
+        # Load from cache if present.
+        key = {
+            'class': 'dataset_info',
+            'method': 'patient_regions'
+        }
+        if read_cache:
+            if self.cache.exists(key):
+                return self.cache.read(key, 'dataframe')
+                
+        # Define table structure.
+        patient_regions_cols = {
+            'patient-id': 'object',
+            'region': 'object'
+        }
+        patient_regions_df = pd.DataFrame(columns=patient_regions_cols.keys())
+
+        # Load each patient.
+        pat_ids = self.dataset.list_patients()
+
+        for pat_id in tqdm(pat_ids):
+            # Get rtstruct info.
+            pat_info = PatientInfo(pat_id, dataset=ds, verbose=self.verbose)
+            region_info_df = pat_info.region_info(read_cache=read_cache, write_cache=write_cache)
+
+            # Add rows.
+            for _, row in region_info_df.iterrows():
+                row_data = {
+                    'patient-id': pat_id,
+                    'region': row['region']
+                }
+                patient_regions_df = patient_regions_df.append(row_data, ignore_index=True)
+
+        # Write data to cache.
+        if write_cache:
+            self.cache.write(key, patient_regions_df, 'dataframe')
+
+        return patient_regions_df

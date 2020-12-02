@@ -21,7 +21,7 @@ class PatientDataExtractor:
         pat_id: a patient ID string.
         dataset: a DICOM dataset.
         """
-        self.cache = DataCache(CACHE_ROOT)
+        self.cache = DataCache(CACHE_ROOT, verbose=verbose)
         self.dataset = dataset
         self.pat_id = pat_id
         self.verbose = verbose
@@ -41,7 +41,6 @@ class PatientDataExtractor:
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache for key {key}.")
                 return self.cache.read(key, 'array')
 
         # Load patient CT dicoms.
@@ -76,7 +75,6 @@ class PatientDataExtractor:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, data, 'array') 
 
         return data
@@ -98,7 +96,6 @@ class PatientDataExtractor:
         }
         if read_cache:
             if self.cache.exists(key):
-                if self.verbose: print(f"Reading cache for key {key}.")
                 return self.cache.read(key, 'name-array-pairs')
 
         # Load all regions-of-interest.
@@ -161,7 +158,6 @@ class PatientDataExtractor:
 
         # Write data to cache.
         if write_cache:
-            if self.verbose: print(f"Writing cache key {key}.")
             self.cache.write(key, labels, 'name-array-pairs') 
 
         return labels

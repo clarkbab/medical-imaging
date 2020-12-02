@@ -6,13 +6,15 @@ import json
 import numpy as np
 import os
 import pandas as pd
+import time
 
 class DataCache:
-    def __init__(self, root):
+    def __init__(self, root, verbose=False):
         """
         root: the root folder for the cache.
         """
         self.root = root
+        self.verbose = verbose
 
     def exists(self, key):
         """
@@ -30,32 +32,60 @@ class DataCache:
         key: the cache key string.
         type: the object type.
         """
+        # Log cache read start.
+        start = time.time()
+        if self.verbose:
+            print(f"Reading {type} from cache with key '{key}'.")
+
+        # Read data.
+        data, size = None, None
         if type == 'array':
-            return self.read_array(key)
+            data, size = self.read_array(key)
         elif type == 'dataframe':
-            return self.read_dataframe(key)
+            data, size = self.read_dataframe(key)
         elif type == 'name-array-pairs':
-            return self.read_name_array_pairs(key)
+            data, size = self.read_name_array_pairs(key)
         else:
             # TODO: raise error.
             print('unrecognised cache type')
-            return None
+
+        # Log cache finish time.
+        if self.verbose:
+            # Convert size to megabytes.
+            size_mb = size / (2 ** 20)
+            print(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
+
+        return data
 
     def write(self, key, obj, type):
         """
+        effect: creates cached data on disk.
         key: a dict of terms that define a unique cache item.
         obj: the object to cache.
         type: the object type.
         """
+        # Log cache write start.
+        start = time.time()
+        if self.verbose:
+            print(f"Writing {type} to cache with key '{key}'.")
+
+        # Write data.
+        size = None
         if type == 'array':
-            self.write_array(key, obj)
+            size = self.write_array(key, obj)
         elif type == 'dataframe':
-            self.write_dataframe(key, obj)
+            size = self.write_dataframe(key, obj)
         elif type == 'name-array-pairs':
-            self.write_name_array_pairs(key, obj)
+            size = self.write_name_array_pairs(key, obj)
         else:
             # TODO: raise error.
             print('unrecognised cache type')
+
+        # Log cache finish time.
+        if self.verbose:
+            # Convert size to megabytes.
+            size_mb = size / (2 ** 20)
+            print(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
     def read_array(self, key):
         """
@@ -63,10 +93,13 @@ class DataCache:
         """
         # Read data.
         filepath = os.path.join(self.root, self.cache_key(key))
-        f = gzip.GzipFile(filepath, 'r')
+        f = open(filepath, 'rb')
         data = np.load(f)
 
-        return data
+        # Get file size.
+        size = os.path.getsize(filepath)
+
+        return data, size
 
     def read_dataframe(self, key):
         """
@@ -76,7 +109,10 @@ class DataCache:
         filepath = os.path.join(self.root, self.cache_key(key))
         data = pd.read_parquet(filepath)
 
-        return data
+        # Get file size.
+        size = os.path.getsize(filepath)
+
+        return data, size
 
     def read_name_array_pairs(self, key):
         """
@@ -86,25 +122,30 @@ class DataCache:
         # Read data.
         folder_path = os.path.join(self.root, self.cache_key(key))
 
+        # Load data.
         name_array_pairs = []
+        size = 0
         for name in os.listdir(folder_path):
             filepath = os.path.join(folder_path, name)
-            f = gzip.GzipFile(filepath, 'r')
+            f = open(filepath, 'rb')
             data = np.load(f)
             name_array_pairs.append((name, data))
+            size += os.path.getsize(filepath)
 
-        return name_array_pairs
+        return name_array_pairs, size
 
     def write_array(self, key, array):
         """
+        returns: the size of the cached data.
         key: the cache key string.
         df: the dataframe.
         """
         # Write data.
         filepath = os.path.join(self.root, self.cache_key(key))
-        f = gzip.GzipFile(filepath, 'w')
+        f = open(filepath, 'wb')
         np.save(f, array)
-        f.close()
+
+        return os.path.getsize(filepath) 
 
     def write_dataframe(self, key, df):
         """
@@ -112,8 +153,10 @@ class DataCache:
         df: the dataframe.
         """
         # Write data.
-        filename = os.path.join(self.root, self.cache_key(key))
-        df.to_parquet(filename)
+        filepath = os.path.join(self.root, self.cache_key(key))
+        df.to_parquet(filepath)
+
+        return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
         """
@@ -124,10 +167,15 @@ class DataCache:
         folder_path = os.path.join(self.root, self.cache_key(key))
         os.makedirs(folder_path, exist_ok=True)
 
+        # Save cache files.
+        size = 0
         for name, data in pairs:
-            filename = os.path.join(folder_path, name)
-            f = gzip.GzipFile(filename, 'w')
+            filepath = os.path.join(folder_path, name)
+            f = open(filepath, 'wb')
             np.save(f, data)
+            size += os.path.getsize(filepath)
+
+        return size
 
     def cache_key(self, key):
         """
