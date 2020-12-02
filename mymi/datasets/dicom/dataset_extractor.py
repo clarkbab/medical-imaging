@@ -32,10 +32,14 @@ class DatasetExtractor:
         pat_ids = self.dataset.list_patients()
 
         # Maintain global sample index.
-        sample_idx = 0
+        pos_sample_idx = 0
+        neg_sample_idx = 0
 
         # Process data for each patient.
         for pat_id in tqdm(pat_ids):
+            if self.verbose:
+                print(f"Extracting data for patient {pat_id}.")
+
             # Check if there are missing slices.
             pi = PatientInfo(pat_id, verbose=self.verbose)
             patient_info_df = pi.full_info(read_cache=read_cache, write_cache=write_cache)
@@ -49,7 +53,7 @@ class DatasetExtractor:
             data = pde.get_data(read_cache=read_cache, transforms=transforms, write_cache=write_cache)
 
             # Load label data.
-            labels = pde.get_labels(read_cache=read_cache, regions=regions, write_cache=write_cache)
+            labels = pde.get_labels(read_cache=read_cache, regions=regions, transforms=transforms, write_cache=write_cache)
 
             for lname, ldata in labels:
                 # Find slices that are labelled.
@@ -58,8 +62,6 @@ class DatasetExtractor:
                 # Write positive input and label data.
                 label_path = os.path.join(PROCESSED_ROOT, lname)
                 for pos_idx in pos_indices: 
-                    if self.verbose: print(f"Writing positive input and label data for patient '{pat_id}', slice '{pos_idx}'.")
-
                     # Get input and label data.
                     input_data = data[:, :, pos_idx]
                     label_data = ldata[:, :, pos_idx]
@@ -67,27 +69,25 @@ class DatasetExtractor:
                     # Save input data.
                     pos_path = os.path.join(label_path, 'positive')
                     os.makedirs(pos_path, exist_ok=True)
-                    filename = f"{sample_idx:05}-data.npy.gzip"
-                    data_path = os.path.join(pos_path, filename)
-                    f = gzip.GzipFile(data_path, 'w')
+                    filename = f"{pos_sample_idx:05}-input"
+                    filepath = os.path.join(pos_path, filename)
+                    f = open(filepath, 'wb')
                     np.save(f, input_data)
 
                     # Save label.
-                    filename = f"{sample_idx:05}-label.npy.gzip"
-                    data_path = os.path.join(pos_path, filename)
-                    f = gzip.GzipFile(data_path, 'w')
+                    filename = f"{pos_sample_idx:05}-label"
+                    filepath = os.path.join(pos_path, filename)
+                    f = open(filepath, 'wb')
                     np.save(f, label_data)
 
                     # Increment sample index.
-                    sample_idx += 1
+                    pos_sample_idx += 1
 
                 # Find slices that aren't labelled.
-                neg_indices = np.setdiff1d(range(147), pos_indices) 
+                neg_indices = np.setdiff1d(range(ldata.shape[2]), pos_indices) 
 
                 # Write negative input and label data.
                 for neg_idx in neg_indices:
-                    if self.verbose: print(f"Writing negative input and label data for patient '{pat_id}', slice '{neg_idx}'.")
-
                     # Get input and label data.
                     input_data = data[:, :, neg_idx]
                     label_data = ldata[:, :, neg_idx]
@@ -95,19 +95,19 @@ class DatasetExtractor:
                     # Save input data.
                     neg_path = os.path.join(label_path, 'negative')
                     os.makedirs(neg_path, exist_ok=True)
-                    filename = f"{sample_idx:05}-data.npy.gzip"
-                    data_path = os.path.join(neg_path, filename)
-                    f = gzip.GzipFile(data_path, 'w')
+                    filename = f"{neg_sample_idx:05}-input"
+                    filepath = os.path.join(neg_path, filename)
+                    f = open(filepath, 'wb')
                     np.save(f, input_data)
 
                     # Save label.
-                    filename = f"{sample_idx:05}-label.npy.gzip"
-                    data_path = os.path.join(neg_path, filename)
-                    f = gzip.GzipFile(data_path, 'w')
+                    filename = f"{neg_sample_idx:05}-label"
+                    filepath = os.path.join(neg_path, filename)
+                    f = open(filepath, 'wb')
                     np.save(f, label_data)
 
                     # Increment sample index.
-                    sample_idx += 1
+                    neg_sample_idx += 1
                     
 
 
