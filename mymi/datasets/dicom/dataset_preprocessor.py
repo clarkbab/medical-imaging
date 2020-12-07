@@ -1,8 +1,10 @@
 import gzip
 import logging
+import math
 import numpy as np
 import os
 from skimage.draw import polygon
+import shutil
 import sys
 from tqdm import tqdm
 
@@ -23,14 +25,20 @@ class DatasetPreprocessor:
         """
         self.dataset = dataset
 
-    def extract(self, drop_missing_slices=True, regions='all', transforms=[]):
+    def extract(self, drop_missing_slices=True, num_pats='all', regions='all', transforms=[]):
         """
         effect: stores processed patient data.
         drop_missing_slices: drops patients that have missing slices.
+        num_pats: operate on subset of patients.
         transform: apply the pre-defined transformation.
         """
         # Load patients.
         pat_ids = self.dataset.list_patients()
+
+        # Get patient subset.
+        if num_pats != 'all':
+            assert isinstance(num_pats, int)
+            pat_ids = pat_ids[:num_pats]
 
         # Maintain global sample index.
         pos_sample_idx = 0
@@ -108,6 +116,36 @@ class DatasetPreprocessor:
 
                     # Increment sample index.
                     neg_sample_idx += 1
+
+        # Write to train, validate and test folders.
+        label_path = os.path.join(PROCESSED_ROOT, 'Parotid-Left')
+        folders = ['positive', 'negative']
+        new_folders = ['train', 'validate', 'test']
+
+        for folder in folders:
+            folder_path = os.path.join(label_path, folder)
+            samples = np.sort(os.listdir(folder_path)).reshape((-1, 2))
+            shuffled_idx = np.random.permutation(len(samples))
+
+            # Get train/test/validate numbers.
+            num_train = math.floor(0.6 * len(shuffled_idx))
+            num_validate = math.floor(0.2 * len(shuffled_idx))
+            num_test = math.floor(0.2 * len(shuffled_idx))
+
+            ranges = [range(num_train), range(num_train, num_validate + num_train), range(num_train + num_validate, num_train + num_validate + num_test)]
+
+            for new_folder, rnge in zip(new_folders, ranges):
+                path = os.path.join(label_path, new_folder)
+                print(os.path.join(path, folder))
+                os.makedirs(os.path.join(path, folder), exist_ok=True)
+
+                for input_file, label_file in samples[rnge]:
+                    os.rename(os.path.join(folder_path, input_file), os.path.join(path, folder, input_file))
+                    os.rename(os.path.join(folder_path, label_file), os.path.join(path, folder, label_file))
+
+        # Clean up initial folders.
+        for folder in folders:
+            shutil.rmtree(os.path.join(label_path, folder))
 
     def get_patient_data(self, pat_id, transforms=[]):
         """

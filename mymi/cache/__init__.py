@@ -13,9 +13,9 @@ def config(**kwargs):
     disabled_write: disables cache write.
     """
     # Configure enabled.
-    disabled_read = kwargs.pop('disabled_read', True)
+    disabled_read = kwargs.pop('disabled-read', False)
     cache.disabled_read = disabled_read
-    disabled_write = kwargs.pop('disabled_write', True)
+    disabled_write = kwargs.pop('disabled-write', False)
     cache.disabled_write = disabled_write
 
     # Configure path.
