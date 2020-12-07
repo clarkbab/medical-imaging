@@ -35,7 +35,7 @@ class PatientDataExtractor:
             'patient_id': self.pat_id,
             'transforms': [t.cache_id() for t in transforms]
         }
-        if cache.enabled_read and cache.exists(key):
+        if cache.read_enabled() and cache.exists(key):
             return cache.read(key, 'array')
 
         # Load patient CT dicoms.
@@ -69,7 +69,7 @@ class PatientDataExtractor:
             data = transform(data, full_info)
 
         # Write data to cache.
-        if cache.enabled_write:
+        if cache.write_enabled():
             cache.write(key, data, 'array')
 
         return data
@@ -87,7 +87,7 @@ class PatientDataExtractor:
             'regions': regions,
             'transforms': [t.cache_id() for t in transforms]
         }
-        if cache.enabled_read and cache.exists(key):
+        if cache.read_enabled() and cache.exists(key):
             return cache.read(key, 'name-array-pairs')
 
         # Load all regions-of-interest.
@@ -149,7 +149,7 @@ class PatientDataExtractor:
             labels = [(name, transform(data, full_info)) for name, data in labels]
 
         # Write data to cache.
-        if cache.enabled_write:
+        if cache.write_enabled():
             cache.write(key, labels, 'name-array-pairs')
 
         return labels

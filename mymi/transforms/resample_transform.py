@@ -2,6 +2,7 @@ import hashlib
 import json
 import numpy as np
 import scipy
+from scipy.ndimage import zoom
 
 class ResampleTransform:
     def __init__(self, spacing):
@@ -53,6 +54,6 @@ class ResampleTransform:
 
         # TODO: Look into using skimage.transform.resize method.
         # https://scikit-image.org/docs/dev/api/skimage.transform.html#skimage.transform.resize
-        data = scipy.ndimage.zoom(data, real_resize_factor, order=order)
+        data = zoom(data, real_resize_factor, order=order)
 
         return data

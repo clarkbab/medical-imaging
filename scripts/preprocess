@@ -10,7 +10,7 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi.datasets.dicom import DatasetPreprocessor
-from mymi.transforms import TransformParser
+from mymi import transforms as ts
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
@@ -46,8 +46,10 @@ cache.config(**cache_config)
 # Determine regions.
 regions = 'all' if args.regions_all else args.region
 
-# Load transforms.
-transforms = TransformParser(args.transforms_path) if arg.transforms_path is not None else []
+# Create transforms.
+transforms = [
+    ts.ResampleTransform((1.0, 1.0, 3.0))
+]
 
 # Perform extraction.
 dp = DatasetPreprocessor()

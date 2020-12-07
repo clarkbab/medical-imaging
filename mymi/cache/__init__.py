@@ -55,3 +55,9 @@ def write(key, obj, type):
         config()
 
     return cache.write(key, obj, type)
+
+def read_enabled():
+    return cache.enabled_read
+
+def write_enabled():
+    return cache.enabled_write

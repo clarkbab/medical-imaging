@@ -1,6 +1,6 @@
 import yaml
 
-import transforms
+from .. import transforms
 
 class TransformParser:
     @staticmethod

@@ -30,7 +30,7 @@ class PatientInfo:
             'method': 'ct_info',
             'patient_id': self.pat_id
         }
-        if cache.read_enabled and cache.exists(key):
+        if cache.read_enabled() and cache.exists(key):
             return cache.read(key, 'dataframe')
             
         # Define dataframe structure.
@@ -77,7 +77,7 @@ class PatientInfo:
         # Sort by 'offset-z'.
         info_df = info_df.sort_values('offset-z').reset_index(drop=True)
 
-        if cache.write_enabled:
+        if cache.write_enabled():
             cache.write(key, info_df, 'dataframe')
 
         return info_df
@@ -92,7 +92,7 @@ class PatientInfo:
             'method': 'full_info',
             'patient_id': self.pat_id
         }
-        if cache.read_enabled and cache.exists(key):
+        if cache.read_enabled() and cache.exists(key):
             return cache.read(key, 'dataframe')
 
         # Define table structure.
@@ -175,7 +175,7 @@ class PatientInfo:
         full_info_df = full_info_df.set_index('pat-id')
 
         # Write data to cache.
-        if cache.write_enabled:
+        if cache.write_enabled():
             cache.write(key, full_info_df, 'dataframe')
 
         return full_info_df
@@ -190,7 +190,7 @@ class PatientInfo:
             'method': 'region_info',
             'patient_id': self.pat_id
         }
-        if cache.read_enabled and cache.exists(key):
+        if cache.read_enabled() and cache.exists(key):
             return cache.read(key, 'dataframe')
         
         # Define table structure.
@@ -215,7 +215,7 @@ class PatientInfo:
         region_info_df = region_info_df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
-        if cache.write_enabled:
+        if cache.write_enabled():
             cache.write(key, region_info_df, 'dataframe')
 
         return region_info_df
