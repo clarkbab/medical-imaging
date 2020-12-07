@@ -7,9 +7,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.datasets.dicom import DicomDataset as ds
-from mymi.cache import DataCache
+from mymi import cache
 
-CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 FLOAT_DP = 2
 
 class PatientInfo:
@@ -18,17 +17,12 @@ class PatientInfo:
         pat_id: a patient ID string.
         dataset: a DICOM dataset.
         """
-        self.cache = DataCache(CACHE_ROOT)
         self.dataset = dataset
         self.pat_id = pat_id
-        # TODO: Add logger class.
-        self.verbose = verbose
 
-    def ct_info(self, read_cache=True, write_cache=True):
+    def ct_info(self):
         """
         returns: dataframe with rows containing CT info.
-        read_cache: reads from cache if present.
-        write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
         key = {
@@ -36,9 +30,8 @@ class PatientInfo:
             'method': 'ct_info',
             'patient_id': self.pat_id
         }
-        if read_cache:
-            if self.cache.exists(key):
-                return self.cache.read(key, 'dataframe')
+        if cache.read_enabled and cache.exists(key):
+            return cache.read(key, 'dataframe')
             
         # Define dataframe structure.
         detail_cols = {
@@ -84,17 +77,14 @@ class PatientInfo:
         # Sort by 'offset-z'.
         info_df = info_df.sort_values('offset-z').reset_index(drop=True)
 
-        # Write data to cache.
-        if write_cache:
-            self.cache.write(key, info_df, 'dataframe')
+        if cache.write_enabled:
+            cache.write(key, info_df, 'dataframe')
 
         return info_df
 
-    def full_info(self, read_cache=True, write_cache=True):
+    def full_info(self):
         """
         returns: dataframe with single row summary of CT images.
-        read_cache: reads from cache if present.
-        write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
         key = {
@@ -102,9 +92,8 @@ class PatientInfo:
             'method': 'full_info',
             'patient_id': self.pat_id
         }
-        if read_cache:
-            if self.cache.exists(key):
-                return self.cache.read(key, 'dataframe')
+        if cache.read_enabled and cache.exists(key):
+            return cache.read(key, 'dataframe')
 
         # Define table structure.
         full_info_cols = {
@@ -131,7 +120,7 @@ class PatientInfo:
         full_info_df = pd.DataFrame(columns=full_info_cols.keys())
 
         # Get patient scan info.
-        ct_info_df = self.ct_info(read_cache=read_cache, write_cache=write_cache)
+        ct_info_df = self.ct_info()
 
         # Check for consistency among scans.
         assert len(ct_info_df['res-x'].unique()) == 1
@@ -156,7 +145,7 @@ class PatientInfo:
         num_missing = res_z - num_slices
 
         # Get patient RTSTRUCT info.
-        region_info_df = self.region_info(read_cache=read_cache, write_cache=write_cache)
+        region_info_df = self.region_info()
 
         # Add table row.
         row_data = {
@@ -186,16 +175,14 @@ class PatientInfo:
         full_info_df = full_info_df.set_index('pat-id')
 
         # Write data to cache.
-        if write_cache:
-            self.cache.write(key, full_info_df, 'dataframe')
+        if cache.write_enabled:
+            cache.write(key, full_info_df, 'dataframe')
 
         return full_info_df
 
-    def region_info(self, read_cache=True, write_cache=True):
+    def region_info(self):
         """
         returns: dataframe with row for each region.
-        read_cache: reads from cache if present.
-        write_cache: writes results to cache, unless read from cache.
         """
         # Load from cache if present.
         key = {
@@ -203,9 +190,8 @@ class PatientInfo:
             'method': 'region_info',
             'patient_id': self.pat_id
         }
-        if read_cache:
-            if self.cache.exists(key):
-                return self.cache.read(key, 'dataframe')
+        if cache.read_enabled and cache.exists(key):
+            return cache.read(key, 'dataframe')
         
         # Define table structure.
         region_info_cols = {
@@ -229,7 +215,7 @@ class PatientInfo:
         region_info_df = region_info_df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
-        if write_cache:
-            self.cache.write(key, region_info_df, 'dataframe')
+        if cache.write_enabled:
+            cache.write(key, region_info_df, 'dataframe')
 
         return region_info_df

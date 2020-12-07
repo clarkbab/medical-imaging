@@ -1,46 +1,132 @@
-import os
+import gzip
+import logging
 import numpy as np
-import pandas as pd
-import scipy
+import os
 from skimage.draw import polygon
 import sys
+from tqdm import tqdm
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import cache
 from mymi.datasets.dicom import DicomDataset as ds
-from mymi.datasets.dicom import PatientInfo
+from mymi.datasets.dicom import PatientDataExtractor, PatientInfo
 
 CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
-FLOAT_DP = 2
+PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
-class PatientDataExtractor:
-    def __init__(self, pat_id, dataset=ds):
+class DatasetPreprocessor:
+    def __init__(self, dataset=ds):
         """
-        pat_id: a patient ID string.
-        dataset: a DICOM dataset.
+        dataset: a DicomDataset object.
         """
         self.dataset = dataset
-        self.pat_id = pat_id
 
-    def get_data(self, transforms=[]):
+    def extract(self, drop_missing_slices=True, regions='all', transforms=[]):
+        """
+        effect: stores processed patient data.
+        drop_missing_slices: drops patients that have missing slices.
+        transform: apply the pre-defined transformation.
+        """
+        # Load patients.
+        pat_ids = self.dataset.list_patients()
+
+        # Maintain global sample index.
+        pos_sample_idx = 0
+        neg_sample_idx = 0
+
+        # Process data for each patient.
+        for pat_id in tqdm(pat_ids):
+            logging.info(f"Extracting data for patient {pat_id}.")
+
+            # Check if there are missing slices.
+            pi = PatientInfo(pat_id)
+            patient_info_df = pi.full_info()
+
+            if drop_missing_slices and patient_info_df['num-missing'][0] != 0:
+                logging.info(f"Dropping patient '{pat_id}' with missing slices.")
+                continue
+
+            # Load input data.
+            pde = PatientDataExtractor(pat_id)
+            data = pde.get_data(transforms=transforms)
+
+            # Load label data.
+            labels = pde.get_labels(regions=regions, transforms=transforms)
+
+            for lname, ldata in labels:
+                # Find slices that are labelled.
+                pos_indices = ldata.sum(axis=(0, 1)).nonzero()[0]
+
+                # Write positive input and label data.
+                label_path = os.path.join(PROCESSED_ROOT, lname)
+                for pos_idx in pos_indices: 
+                    # Get input and label data.
+                    input_data = data[:, :, pos_idx]
+                    label_data = ldata[:, :, pos_idx]
+
+                    # Save input data.
+                    pos_path = os.path.join(label_path, 'positive')
+                    os.makedirs(pos_path, exist_ok=True)
+                    filename = f"{pos_sample_idx:05}-input"
+                    filepath = os.path.join(pos_path, filename)
+                    f = open(filepath, 'wb')
+                    np.save(f, input_data)
+
+                    # Save label.
+                    filename = f"{pos_sample_idx:05}-label"
+                    filepath = os.path.join(pos_path, filename)
+                    f = open(filepath, 'wb')
+                    np.save(f, label_data)
+
+                    # Increment sample index.
+                    pos_sample_idx += 1
+
+                # Find slices that aren't labelled.
+                neg_indices = np.setdiff1d(range(ldata.shape[2]), pos_indices) 
+
+                # Write negative input and label data.
+                for neg_idx in neg_indices:
+                    # Get input and label data.
+                    input_data = data[:, :, neg_idx]
+                    label_data = ldata[:, :, neg_idx]
+
+                    # Save input data.
+                    neg_path = os.path.join(label_path, 'negative')
+                    os.makedirs(neg_path, exist_ok=True)
+                    filename = f"{neg_sample_idx:05}-input"
+                    filepath = os.path.join(neg_path, filename)
+                    f = open(filepath, 'wb')
+                    np.save(f, input_data)
+
+                    # Save label.
+                    filename = f"{neg_sample_idx:05}-label"
+                    filepath = os.path.join(neg_path, filename)
+                    f = open(filepath, 'wb')
+                    np.save(f, label_data)
+
+                    # Increment sample index.
+                    neg_sample_idx += 1
+
+    def get_patient_data(self, pat_id, transforms=[]):
         """
         returns: a numpy array of pixel data in HU.
+        pat_id: the patient ID.
         transforms: a list of transforms to apply to the data.
         """
         key = {
             'class': 'patient_data_extractor',
             'method': 'get_data',
-            'patient_id': self.pat_id,
+            'patient_id': pat_id,
             'transforms': [t.cache_id() for t in transforms]
         }
         if cache.enabled_read and cache.exists(key):
-            return cache.read(key, 'array')
+            cache.read(key, 'array')
 
         # Load patient CT dicoms.
-        ct_dicoms = self.dataset.list_ct(self.pat_id)
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        ct_dicoms = self.dataset.list_ct(pat_id)
+        pi = PatientInfo(pat_id, dataset=self.dataset)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 
@@ -73,30 +159,31 @@ class PatientDataExtractor:
             cache.write(key, data, 'array')
 
         return data
-
-    def get_labels(self, regions='all', transforms=[]):
+                    
+    def get_patient_labels(self, pat_id, regions='all', transforms=[]):
         """
         returns: a list of (<label name>, <label data>) pairs.
+        pat_id: the patient ID.
         regions: the desired regions.
         transforms: a list of transforms to apply to the labels.
         """
         key = {
             'class': 'patient_data_extractor',
             'method': 'get_labels',
-            'patient_id': self.pat_id,
+            'patient_id': pat_id,
             'regions': regions,
             'transforms': [t.cache_id() for t in transforms]
         }
         if cache.enabled_read and cache.exists(key):
-            return cache.read(key, 'name-array-pairs')
+            cache.read(key, 'name-array-pairs')
 
         # Load all regions-of-interest.
-        rtstruct_dicom = self.dataset.get_rtstruct(self.pat_id)
+        rtstruct_dicom = self.dataset.get_rtstruct(pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        pi = PatientInfo(pat_id, dataset=self.dataset)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 

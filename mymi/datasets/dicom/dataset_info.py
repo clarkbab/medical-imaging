@@ -7,8 +7,8 @@ from tqdm import tqdm
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
+from mymi import cache
 from mymi.datasets.dicom import DicomDataset as ds
-from mymi.cache import DataCache
 from mymi.datasets.dicom import PatientInfo
 
 CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')

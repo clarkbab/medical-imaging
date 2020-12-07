@@ -1,0 +1,56 @@
+#! /usr/bin/env python
+import argparse
+from colorlog import ColoredFormatter
+import logging
+import os
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
+
+from mymi import cache
+from mymi.datasets.dicom import DatasetPreprocessor
+from mymi.transforms import TransformParser
+
+# Parse args.
+parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
+parser.add_argument('-c', '--cache-path', action='store', help='path to cache root')
+parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
+parser.add_argument('-n', '--no-cache', action='store_true', default=False, help='disables the cache')
+parser.add_argument('-nr', '--no-cache-read', action='store_true', default=False, help='disables cache read')
+parser.add_argument('-nw', '--no-cache-write', action='store_true', default=False, help='disables cache write')
+parser.add_argument('-r', '--region', action='append', help='regions to include')
+parser.add_argument('-ra', '--regions-all', action='store_true', default=False, help='include all regions')
+parser.add_argument('-t', '--transforms-path', action='store', help='path to transforms')
+args = parser.parse_args()
+
+# Create logger.
+log_level = getattr(logging, args.log_level.upper(), None)
+if not isinstance(log_level, int):
+    raise ValueError(f"Invalid log level: {args.log_level}.")
+log_format = "%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
+formatter = ColoredFormatter(log_format)
+stream = logging.StreamHandler()
+stream.setFormatter(formatter)
+logging.basicConfig(handlers=[stream], level=log_level)
+
+# Set cache configuration.
+cache_config = {
+   'path': args.cache_path,
+   'disabled': args.no_cache,
+   'disabled-read': args.no_cache_read,
+   'disabled-write': args.no_cache_write
+}
+cache.config(**cache_config)
+
+# Determine regions.
+regions = 'all' if args.regions_all else args.region
+
+# Load transforms.
+transforms = TransformParser(args.transforms_path) if arg.transforms_path is not None else []
+
+# Perform extraction.
+dp = DatasetPreprocessor()
+dp.extract(regions=regions, transforms=transforms)
+
+print(regions)

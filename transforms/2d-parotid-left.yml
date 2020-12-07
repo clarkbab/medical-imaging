@@ -1,0 +1,14 @@
+- name: random_rotation
+  fill: -1000
+  range:
+    - -45.0
+    - 45.0
+- name: random_translation
+  fill: = -1000
+  x-range:
+    - -100.0
+    - 100.0
+  y-range:
+    - -100.0
+    - 100.0
+

@@ -19,7 +19,7 @@ class ResampleTransform:
         }
         return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()
 
-    def run(self, data, info):
+    def __call__(self, data, info):
         """
         returns: resampled data.
         data: the data to resample.
@@ -50,6 +50,9 @@ class ResampleTransform:
 
         # Perform resampling.
         order = info['order'] if 'order' in info.keys() else 3
+
+        # TODO: Look into using skimage.transform.resize method.
+        # https://scikit-image.org/docs/dev/api/skimage.transform.html#skimage.transform.resize
         data = scipy.ndimage.zoom(data, real_resize_factor, order=order)
 
         return data

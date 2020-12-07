@@ -19,20 +19,7 @@ class ResizeTransform:
         }
         return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()
 
-    def crop_image(self, data):
-        """
-        returns: an image centre-cropped to the desired resolution.
-        data: the image to crop.
-        """
-        half_ranges = np.array(self.resolution) / 2
-        centres = (np.array(data.shape) / 2).astype(int)
-        lower_bounds = [np.max([b, 0]) for b in centres - list(map(math.floor, half_ranges))]
-        upper_bounds = centres + list(map(math.ceil, half_ranges))
-        ranges = [slice(l, u) for l, u in zip(lower_bounds, upper_bounds)]
-
-        return data[ranges]
-
-    def run(self, data, info):
+    def __call__(self, data, info):
         """
         data: the data to transform.
         info: information required by the crop method.
