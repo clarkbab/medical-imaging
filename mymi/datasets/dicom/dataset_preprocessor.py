@@ -128,18 +128,19 @@ class DatasetPreprocessor:
             shuffled_idx = np.random.permutation(len(samples))
 
             # Get train/test/validate numbers.
-            num_train = math.floor(0.6 * len(shuffled_idx))
-            num_validate = math.floor(0.2 * len(shuffled_idx))
-            num_test = math.floor(0.2 * len(shuffled_idx))
+            num_train = math.floor(0.6 * len(samples))
+            num_validate = math.floor(0.2 * len(samples))
+            num_test = math.floor(0.2 * len(samples))
+            logging.info(f"Found {len(samples)} samples in folder '{folder}'.")
+            logging.info(f"Using train/validate/test split {num_train}/{num_validate}/{num_test}.")
 
-            ranges = [range(num_train), range(num_train, num_validate + num_train), range(num_train + num_validate, num_train + num_validate + num_test)]
+            indices = [shuffled_idx[:num_train], shuffled_idx[num_train:num_validate + num_train], shuffled_idx[num_train + num_validate:num_train + num_validate + num_test]]
 
-            for new_folder, rnge in zip(new_folders, ranges):
+            for new_folder, idx in zip(new_folders, indices):
                 path = os.path.join(label_path, new_folder)
-                print(os.path.join(path, folder))
                 os.makedirs(os.path.join(path, folder), exist_ok=True)
 
-                for input_file, label_file in samples[rnge]:
+                for input_file, label_file in samples[idx]:
                     os.rename(os.path.join(folder_path, input_file), os.path.join(path, folder, input_file))
                     os.rename(os.path.join(folder_path, label_file), os.path.join(path, folder, label_file))
 
