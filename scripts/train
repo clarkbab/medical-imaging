@@ -1,0 +1,39 @@
+#! /usr/bin/env python
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
+
+from mymi.augmentation import transforms as ts
+from mymi.loaders import DataLoader, ImageDataset
+
+# Define transforms.
+p = 0.5
+fill = -1000
+angle = 10
+translation = 50
+scale = (0.8, 1.2)
+res = (512, 512) 
+transforms = [
+    ts.RandomRotation((-angle, angle), fill=fill, p=p),
+    ts.RandomTranslation(((-translation, translation), (-translation, translation)), fill=fill, p=p),
+    ts.RandomResample((scale, scale), p=p),
+    ts.CropOrPad(res)
+]
+
+# Get data loaders.
+batch_size = 32
+train_loader = DataLoader.build('train', batch_size=batch_size, transforms=transforms)
+validate_loader = DataLoader.build('validate', batch_size=batch_size)
+test_loader = DataLoader.build('test', batch_size=batch_size)
+
+# Pull sample batch.
+for i, m in train_loader:
+    input, mask = i, m
+    break
+
+plt.imshow(np.transpose(input[0]), cmap='gray')
+plt.show()
