@@ -1,7 +1,5 @@
 #! /usr/bin/env python
 import argparse
-from colorlog import ColoredFormatter
-import logging
 import os
 import sys
 
@@ -9,6 +7,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from mymi import cache
+from mymi import utils
 from mymi.datasets.dicom import DatasetPreprocessor
 from mymi import transforms as ts
 
@@ -28,13 +27,7 @@ args = parser.parse_args()
 
 # Create logger.
 log_level = getattr(logging, args.log_level.upper(), None)
-if not isinstance(log_level, int):
-    raise ValueError(f"Invalid log level: {args.log_level}.")
-log_format = "%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
-formatter = ColoredFormatter(log_format)
-stream = logging.StreamHandler()
-stream.setFormatter(formatter)
-logging.basicConfig(handlers=[stream], level=log_level)
+utils.configure_logging(log_level)
 
 # Set cache configuration.
 cache_config = {

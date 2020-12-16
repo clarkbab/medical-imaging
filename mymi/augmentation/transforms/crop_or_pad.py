@@ -40,7 +40,7 @@ class CropOrPad:
         read_range = [slice(l, l + r) for l, r in zip(read_lower_bound, write_shape)]
 
         # Add data to placeholder.
-        new_data[write_range] = data[read_range]
+        new_data[tuple(write_range)] = data[tuple(read_range)]
 
         # Reset data type.
         new_data = new_data.astype(data_type)

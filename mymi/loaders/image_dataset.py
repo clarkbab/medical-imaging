@@ -15,7 +15,6 @@ class ImageDataset(Dataset):
         self.neg_dir = os.path.join(self.root_dir, 'negative')
         pos_samples = np.reshape([os.path.join(self.pos_dir, p) for p in sorted(os.listdir(self.pos_dir))], (-1, 2))
         neg_samples = np.reshape([os.path.join(self.neg_dir, p) for p in sorted(os.listdir(self.neg_dir))], (-1, 2))
-        print(len(pos_samples))
         self.num_pos = len(pos_samples)
         self.num_neg = len(neg_samples)
         self.samples = np.concatenate((pos_samples, neg_samples))
@@ -41,12 +40,8 @@ class ImageDataset(Dataset):
         f = open(label_path, 'rb')
         label = np.load(f)
 
-        print(input.dtype, label.dtype)
-
         # Perform transforms.
         for transform in self.transforms:
             input, label = transform(input, label)
-
-        print(input.dtype, label.dtype)
 
         return input, label

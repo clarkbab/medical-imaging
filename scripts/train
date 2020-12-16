@@ -1,14 +1,34 @@
 #! /usr/bin/env python
+import argparse
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
+from mymi import models
+from mymi import training
+from mymi import utils
 from mymi.augmentation import transforms as ts
 from mymi.loaders import DataLoader, ImageDataset
+
+# Parse options.
+parser = argparse.ArgumentParser(description='Train the segmentation model')
+parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
+args = parser.parse_args()
+
+# Create logger.
+log_level = getattr(logging, args.log_level.upper(), None)
+utils.configure_logging(log_level)
+
+# Configure device.
+device = utils.configure_device()
 
 # Define transforms.
 p = 0.5
@@ -25,15 +45,23 @@ transforms = [
 ]
 
 # Get data loaders.
-batch_size = 32
+batch_size = 2
 train_loader = DataLoader.build('train', batch_size=batch_size, transforms=transforms)
-validate_loader = DataLoader.build('validate', batch_size=batch_size)
+validation_loader = DataLoader.build('validate', batch_size=batch_size)
 test_loader = DataLoader.build('test', batch_size=batch_size)
 
-# Pull sample batch.
-for i, m in train_loader:
-    input, mask = i, m
-    break
+# Create model.
+model = models.ParotidNet()
+model = model.to(device)
 
-plt.imshow(np.transpose(input[0]), cmap='gray')
-plt.show()
+# Define loss.
+class_weights = torch.Tensor((1, 4315)).to(device)
+loss_fn = nn.NLLLoss(weight=class_weights)
+
+# Define optimiser.
+optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+# Create model trainer.
+trainer = training.ModelTrainer(train_loader, validation_loader, optimiser, loss_fn,
+    device=device, print_interval=100)
+trainer(model)
