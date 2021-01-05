@@ -41,6 +41,66 @@ def plot_ct(*args):
         ax2.imshow(np.transpose(data), cmap='gray')
         ax2.imshow(np.transpose(pred), cmap=mask_cmap)
 
+def plot_batch(*args, **kwargs):
+    """
+    effect: plots a batch of images.
+    """
+    # Get image data.
+    data = image_data(*args, **kwargs)
+    num_images = len(data)
+
+    # Get keyword arguments.
+    axis = 'on' if 'axis' in kwargs and kwargs['axis'] else 'off'
+
+    figsize = (8, num_images * 8)
+    fig, axs = plt.subplots(num_images, figsize=figsize)
+    if num_images == 1: axs = [axs]
+
+    for i in range(num_images):
+        axs[i].axis(axis)
+        axs[i].imshow(np.transpose(data[i]))
+        
+    plt.show()
+
+def image_data(*args, **kwargs):
+    """
+    returns: an array of image data.
+    """
+    # Parse arguments.
+    input = args[0].cpu().float()
+    mask = args[1].cpu() if len(args) > 1 else None
+    pred = args[2].detach().cpu().argmax(dim=1) if len(args) > 2 else None
+    num_images = kwargs['num_images'] if 'num_images' in kwargs else input.shape[0]
+
+    # Check if input has 'channel' dimension.
+    if len(input.shape) == 4:
+        input = input.squeeze(1)
+
+    # Scale CT data.
+    image_data = input[:num_images]
+    min, max = torch.amin(image_data, dim=(1, 2)), torch.amax(image_data, dim=(1, 2))
+    denom = max - min
+    denom[denom == 0] = 1e-10
+    image_data = (image_data - min.view(len(min), 1, 1)) / denom.view(len(denom), 1, 1)
+    image_data = torch.cat(3 * [image_data.unsqueeze(1)], dim=1)
+
+    # Add prediction.
+    if pred is not None:
+        pred_data = pred[:num_images]
+        color = (0.12, 0.47, 0.7)
+        pred_data = torch.stack([c * pred_data for c in color], dim=1)
+        image_data[pred_data != 0] = pred_data[pred_data != 0]
+
+    # Add mask data.
+    if mask is not None:
+        mask_data = mask[:num_images]
+        color = (1., 1., 1e-5)
+        mask_data = binary_perimeter(mask_data).float()
+        mask_data = torch.stack([c * mask_data for c in color], dim=1)
+        image_data[mask_data != 0] = mask_data[mask_data != 0]
+
+    return image_data
+
 def pretty_size(size):
     assert isinstance(size, torch.Size)
     return ' x '.join(map(str, size))
@@ -74,10 +134,26 @@ def configure_device():
 
 def configure_logging(log_level):
     if not isinstance(log_level, int):
-        raise ValueError(f"Invalid log level: {args.log_level}.")
+        raise ValueError(f"Invalid log level: {log_level}.")
     log_format = "%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
     formatter = ColoredFormatter(log_format)
     stream = logging.StreamHandler()
     stream.setFormatter(formatter)
     logging.basicConfig(handlers=[stream], level=log_level)
 
+def binary_perimeter(mask):
+    mask_perimeter = torch.zeros_like(mask, dtype=bool)
+    b_dim, x_dim, y_dim = mask.shape
+    for b in range(b_dim):
+        for i in range(x_dim):
+            for j in range(y_dim):
+                # Check if edge pixel.
+                if (mask[b, i, j] == 1 and 
+                    ((i == 0 or i == x_dim - 1) or
+                    (j == 0 or j == y_dim - 1) or
+                    i != 0 and mask[b, i - 1, j] == 0 or 
+                    i != x_dim - 1 and mask[b, i + 1, j] == 0 or
+                    j != 0 and mask[b, i, j - 1] == 0 or
+                    j != y_dim - 1 and mask[b, i, j + 1] == 0)):
+                    mask_perimeter[b, i, j] = 1
+    return mask_perimeter
