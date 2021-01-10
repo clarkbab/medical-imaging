@@ -6,18 +6,16 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.datasets.dicom import DicomDataset as ds
 from mymi import cache
+from mymi import dataset
 
 FLOAT_DP = 2
 
 class PatientInfo:
-    def __init__(self, pat_id, dataset=ds, verbose=False):
+    def __init__(self, pat_id):
         """
         pat_id: a patient ID string.
-        dataset: a DICOM dataset.
         """
-        self.dataset = dataset
         self.pat_id = pat_id
 
     def ct_info(self):
@@ -49,7 +47,7 @@ class PatientInfo:
         }
         info_df = pd.DataFrame(columns=detail_cols.keys())
 
-        ct_dicoms = self.dataset.list_ct(self.pat_id)
+        ct_dicoms = dataset.list_ct(self.pat_id)
         
         # Add info.
         for ct_dicom in ct_dicoms:
@@ -199,7 +197,7 @@ class PatientInfo:
         }
         region_info_df = pd.DataFrame(columns=region_info_cols.keys())
 
-        rois = self.dataset.get_rtstruct(self.pat_id).StructureSetROISequence
+        rois = dataset.get_rtstruct(self.pat_id).StructureSetROISequence
         
         # Add info for each region-of-interest.
         for roi in rois:

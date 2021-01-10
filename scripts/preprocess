@@ -8,7 +8,7 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import utils
-from mymi.datasets.dicom import DatasetPreprocessor
+from mymi.dataset.dicom import DatasetPreprocessor
 from mymi import transforms as ts
 
 # Parse args.

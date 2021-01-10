@@ -1,22 +1,23 @@
 import os
 import pydicom as pdcm
 
-DATA_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'raw')
-
 class DicomDataset:
-    # TODO: Flesh out.
-    @staticmethod
-    def has_id(pat_id):
+    @classmethod
+    def root_dir(cls):
+        raise NotImplementedError("Method 'root_dir' not implemented in overriding class.")
+    
+    @classmethod
+    def has_id(cls, pat_id):
         return True
 
-    @staticmethod
-    def list_ct(pat_id):
+    @classmethod
+    def list_ct(cls, pat_id):
         """
         returns: a list of CT dicoms.
         pat_id: the patient ID string.
         """
         # Get dated subfolder path.
-        pat_path = os.path.join(DATA_ROOT, pat_id)
+        pat_path = os.path.join(cls.root_dir(), pat_id)
         date_path = os.path.join(pat_path, os.listdir(pat_path)[0])
         dicom_paths = [os.path.join(date_path, p) for p in os.listdir(date_path)]
 
@@ -33,21 +34,21 @@ class DicomDataset:
         # TODO: raise an error.
         return None
 
-    @staticmethod
-    def list_patients():
+    @classmethod
+    def list_patients(cls):
         """
         returns: a list of patient IDs.
         """
-        return sorted(os.listdir(DATA_ROOT))
+        return sorted(os.listdir(cls.root_dir()))
 
-    @staticmethod
-    def get_rtstruct(pat_id):
+    @classmethod
+    def get_rtstruct(cls, pat_id):
         """
         returns: the RTSTRUCT dicom.
         pat_id: the patient ID string.
         """
         # Get dated subfolder path.
-        pat_path = os.path.join(DATA_ROOT, pat_id)
+        pat_path = os.path.join(cls.root_dir(), pat_id)
         date_path = os.path.join(pat_path, os.listdir(pat_path)[0])
         dicom_paths = [os.path.join(date_path, p) for p in os.listdir(date_path)]
 
@@ -61,4 +62,3 @@ class DicomDataset:
 
         # TODO: raise an error.
         return None
-

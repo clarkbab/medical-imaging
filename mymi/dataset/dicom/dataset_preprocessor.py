@@ -12,8 +12,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import cache
-from mymi.datasets.dicom import DicomDataset as ds
-from mymi.datasets.dicom import PatientDataExtractor, PatientInfo
+from mymi.dataset.dicom import DicomDataset as ds
+from mymi.dataset.dicom import PatientDataExtractor, PatientInfo
 
 CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')

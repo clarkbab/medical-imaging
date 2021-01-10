@@ -45,6 +45,9 @@ def plot_batch(*args, **kwargs):
     """
     effect: plots a batch of images.
     """
+    # Get options.
+    figsize_mul = kwargs['figsize'] if 'figsize' in kwargs else 8
+
     # Get image data.
     data = image_data(*args, **kwargs)
     num_images = len(data)
@@ -52,8 +55,8 @@ def plot_batch(*args, **kwargs):
     # Get keyword arguments.
     axis = 'on' if 'axis' in kwargs and kwargs['axis'] else 'off'
 
-    figsize = (8, num_images * 8)
-    fig, axs = plt.subplots(num_images, figsize=figsize)
+    figsize = (figsize_mul, num_images * figsize_mul)
+    _, axs = plt.subplots(num_images, figsize=figsize)
     if num_images == 1: axs = [axs]
 
     for i in range(num_images):

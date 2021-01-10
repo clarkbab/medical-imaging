@@ -7,20 +7,18 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.datasets.dicom import DicomDataset as ds
-from mymi.datasets.dicom import PatientDataExtractor
+from mymi import cache
+from mymi import dataset
+from mymi.dataset.dicom import PatientDataExtractor
 
 class PatientPlotter:
-    def __init__(self, pat_id, dataset=ds, verbose=False):
+    def __init__(self, pat_id):
         """
         pat_id: a patient ID string.
-        dataset: a DICOM dataset.
         """
-        self.dataset = dataset
         self.pat_id = pat_id
-        self.verbose = verbose
 
-    def plot_ct(self, slice_idx, axis='on', figsize=(8, 8), plane='axial', read_cache=True, regions=None, transforms=[], write_cache=True):
+    def plot_ct(self, slice_idx, axis='on', figsize=(8, 8), plane='axial', regions=None, transforms=[]):
         """
         effect: plots a CT slice with contours.
         figsize: the size of the plot in inches.
@@ -28,11 +26,11 @@ class PatientPlotter:
         regions: the regions-of-interest to plot.
         """
         # Load CT data and labels.
-        pat_ext = PatientDataExtractor(self.pat_id, dataset=self.dataset, verbose=self.verbose)
-        ct_data = pat_ext.get_data(read_cache=read_cache, transforms=transforms, write_cache=write_cache)
+        pat_ext = PatientDataExtractor(self.pat_id)
+        ct_data = pat_ext.get_data()
 
         # Load labels.
-        labels = pat_ext.get_labels(read_cache=read_cache, regions=regions, transforms=transforms, write_cache=write_cache)
+        labels = pat_ext.get_labels()
 
         # Plot CT slice.
         data_index = [

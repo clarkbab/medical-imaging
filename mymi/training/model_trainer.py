@@ -108,7 +108,7 @@ class ModelTrainer:
     def validate_model(self, model, epoch, iteration):
         model.eval()
 
-        # Plot first 5 validation images.
+        # Plot validation images for visual indication of improvement.
         for loader, label in [(self.positive_loader, 'Positive'), (self.negative_loader, 'Negative')]:
             for batch, (input, mask) in enumerate(loader):
                 input, mask = input.float(), mask.long()
@@ -140,15 +140,6 @@ class ModelTrainer:
                 dice = dice_metric(pred, mask)
                 self.running_scores['validation-record']['dice'] += dice.item()
                 self.running_scores['validation-print']['dice'] += dice.item()
-
-            # Show first n batches of images.
-            # if val_batch < self.num_validation_images:
-            #     image_data = utils.image_data(input, mask=mask, pred=pred)
-            #     tag = f"Epoch: {epoch}, Training batch: {iteration}, Validation batch: {val_batch}"
-            #     self.writer.add_images(tag, image_data, dataformats='NCWH')
-
-            # Add pre-defined validation images.
-
 
             # Print results.
             if self.should_print(val_batch, len(self.validation_loader)):

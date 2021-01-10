@@ -9,19 +9,16 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import cache
-from mymi.datasets.dicom import DicomDataset as ds
-from mymi.datasets.dicom import PatientInfo
+from mymi import dataset
+from mymi.dataset.dicom import PatientInfo
 
-CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 FLOAT_DP = 2
 
 class PatientDataExtractor:
-    def __init__(self, pat_id, dataset=ds):
+    def __init__(self, pat_id):
         """
         pat_id: a patient ID string.
-        dataset: a DICOM dataset.
         """
-        self.dataset = dataset
         self.pat_id = pat_id
 
     def get_data(self, transforms=[]):
@@ -39,8 +36,8 @@ class PatientDataExtractor:
             return cache.read(key, 'array')
 
         # Load patient CT dicoms.
-        ct_dicoms = self.dataset.list_ct(self.pat_id)
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        ct_dicoms = dataset.list_ct(self.pat_id)
+        pi = PatientInfo(self.pat_id)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 
@@ -91,12 +88,12 @@ class PatientDataExtractor:
             return cache.read(key, 'name-array-pairs')
 
         # Load all regions-of-interest.
-        rtstruct_dicom = self.dataset.get_rtstruct(self.pat_id)
+        rtstruct_dicom = dataset.get_rtstruct(self.pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pi = PatientInfo(self.pat_id, dataset=self.dataset)
+        pi = PatientInfo(self.pat_id)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 

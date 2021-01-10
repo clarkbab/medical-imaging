@@ -9,14 +9,12 @@ def config(**kwargs):
     """
     effect: configures the cache.
     path: path to the cache.
-    disabled_read: disables cache read.
-    disabled_write: disables cache write.
+    read_enabled: enables cache read.
+    write_enabled: enables cache write.
     """
     # Configure enabled.
-    disabled_read = kwargs.pop('disabled-read', False)
-    cache.disabled_read = disabled_read
-    disabled_write = kwargs.pop('disabled-write', False)
-    cache.disabled_write = disabled_write
+    cache.read_enabled = kwargs.pop('read_enabled', True)
+    cache.write_enabled = kwargs.pop('write_enabled', True)
 
     # Configure path.
     path = kwargs.pop('path', None)
@@ -57,7 +55,13 @@ def write(key, obj, type):
     return cache.write(key, obj, type)
 
 def read_enabled():
-    return cache.enabled_read
+    if cache.path is None:
+        config()
+
+    return cache.read_enabled
 
 def write_enabled():
-    return cache.enabled_write
+    if cache.path is None:
+        config()
+
+    return cache.write_enabled

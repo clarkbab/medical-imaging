@@ -12,32 +12,32 @@ import time
 class Cache:
     def __init__(self):
         self._path = None
-        self._disabled_read = False
-        self._disabled_write = False
+        self._read_enabled = None
+        self._write_enabled = None
 
     @property
-    def disabled_read(self):
-        return self._disabled_read
+    def read_enabled(self):
+        return self._read_enabled
 
-    @disabled_read.setter
-    def disabled_read(self, disabled):
-        self._disabled_read = disabled
+    @read_enabled.setter
+    def read_enabled(self, enabled):
+        self._read_enabled = enabled
 
     @property
     def enabled_read(self):
-        return not self._disabled_read
+        return self._read_enabled
 
     @property
-    def disabled_write(self):
-        return self._disabled_write
+    def write_enabled(self):
+        return self._write_enabled
 
-    @disabled_write.setter
-    def disabled_write(self, disabled):
-        self._disabled_write = disabled
+    @write_enabled.setter
+    def write_enabled(self, enabled):
+        self._write_enabled = enabled
 
     @property
     def enabled_write(self):
-        return not self._disabled_write
+        return self._write_enabled
 
     @property
     def path(self):
