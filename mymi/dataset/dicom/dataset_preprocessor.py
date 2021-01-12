@@ -12,28 +12,23 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import cache
-from mymi.dataset.dicom import DicomDataset as ds
-from mymi.dataset.dicom import PatientDataExtractor, PatientInfo
+from mymi import dataset
+from mymi.dataset.dicom import PatientDataExtractor, PatientInfo, DatasetInfo
 
-CACHE_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'cache')
 PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class DatasetPreprocessor:
-    def __init__(self, dataset=ds):
-        """
-        dataset: a DicomDataset object.
-        """
-        self.dataset = dataset
-
-    def extract(self, drop_missing_slices=True, num_pats='all', regions='all', transforms=[]):
+    def extract(self, drop_missing_slices=True, num_pats='all', transforms=[]):
         """
         effect: stores processed patient data.
         drop_missing_slices: drops patients that have missing slices.
         num_pats: operate on subset of patients.
         transform: apply the pre-defined transformation.
         """
-        # Load patients.
-        pat_ids = self.dataset.list_patients()
+        # Load patients who have 'Parotid-Left' contours.
+        info = DatasetInfo() 
+        regions = info.patient_regions()
+        pat_ids = regions.query("`region` == 'Parotid-Left'")['patient-id'].unique()
 
         # Get patient subset.
         if num_pats != 'all':
@@ -61,7 +56,7 @@ class DatasetPreprocessor:
             data = pde.get_data(transforms=transforms)
 
             # Load label data.
-            labels = pde.get_labels(regions=regions, transforms=transforms)
+            labels = pde.get_labels(regions='Parotid-Left', transforms=transforms)
 
             for lname, ldata in labels:
                 # Find slices that are labelled.
@@ -164,8 +159,8 @@ class DatasetPreprocessor:
             cache.read(key, 'array')
 
         # Load patient CT dicoms.
-        ct_dicoms = self.dataset.list_ct(pat_id)
-        pi = PatientInfo(pat_id, dataset=self.dataset)
+        ct_dicoms = dataset.list_ct(pat_id)
+        pi = PatientInfo(pat_id)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 
@@ -217,12 +212,12 @@ class DatasetPreprocessor:
             cache.read(key, 'name-array-pairs')
 
         # Load all regions-of-interest.
-        rtstruct_dicom = self.dataset.get_rtstruct(pat_id)
+        rtstruct_dicom = dataset.get_rtstruct(pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pi = PatientInfo(pat_id, dataset=self.dataset)
+        pi = PatientInfo(pat_id)
         full_info_df = pi.full_info()
         full_info = full_info_df.iloc[0].to_dict()
 
