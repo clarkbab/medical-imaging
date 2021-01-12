@@ -39,7 +39,7 @@ class DatasetPreprocessor2D:
         pos_sample_idx = 0
         neg_sample_idx = 0
 
-        # Write patient CT slices to temp folder.
+        # Write patient CT slices to tmp folder.
         tmp_path = os.path.join(PROCESSED_ROOT, 'tmp')
         os.makedirs(tmp_path, exist_ok=True)
         for pat_id in tqdm(pat_ids):
@@ -113,7 +113,6 @@ class DatasetPreprocessor2D:
                 # Increment sample index.
                 neg_sample_idx += 1
 
-        # Write to train, validate and test folders.
         tmp_folders = ['positive', 'negative']
         new_folders = ['train', 'validate', 'test']
 
@@ -123,6 +122,7 @@ class DatasetPreprocessor2D:
             if os.path.exists(folder_path):
                 shutil.rmtree(os.path.join(PROCESSED_ROOT, folder))
 
+        # Write shuffled data to new folders.
         for folder in tmp_folders:
             # Shuffle samples for train/validation/test split.
             folder_path = os.path.join(tmp_path, folder)

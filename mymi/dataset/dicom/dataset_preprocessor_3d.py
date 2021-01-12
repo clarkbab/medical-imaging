@@ -13,9 +13,9 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import dataset
-from mymi.dataset.dicom import PatientDataExtractor, PatientInfo
+from mymi.dataset.dicom import PatientDataExtractor, PatientInfo, DatasetInfo
 
-PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '3d-parotid-left')
 
 class DatasetPreprocessor3D:
     def extract(self, drop_missing_slices=True, num_pats='all', transforms=[]):
@@ -38,7 +38,9 @@ class DatasetPreprocessor3D:
         # Maintain global sample index.
         sample_idx = 0
 
-        # Write volumes for each patient to temporary folder.
+        # Write patient CT volumes to tmp folder.
+        tmp_path = os.path.join(PROCESSED_ROOT, 'tmp')
+        os.makedirs(tmp_path, exist_ok=True)
         for pat_id in tqdm(pat_ids):
             logging.info(f"Extracting data for patient {pat_id}.")
 
@@ -52,27 +54,58 @@ class DatasetPreprocessor3D:
 
             # Load input data.
             pde = PatientDataExtractor(pat_id)
-            data = pde.get_data(transforms=transforms)
+            input_data = pde.get_data(transforms=transforms)
 
             # Load label data.
             labels = pde.get_labels(regions=['Parotid-Left'], transforms=transforms)
             _, label_data = labels[0]
 
             # Save input volume.
-            assert data.shape == label_data.shape
-            path = os.path.join(PROCESSED_ROOT, 'temp')
-            os.makedirs(path)
+            assert input_data.shape == label_data.shape
             filename = f"{sample_idx:05}-input"
-            filepath = os.path.join(path, filename)
+            filepath = os.path.join(tmp_path, filename)
             f = open(filepath, 'wb')
             np.save(f, input_data)
 
             # Save volume label.
-            filename = f"{sample_idx:05}-input"
-            filepath = os.path.join(path, filename)
+            filename = f"{sample_idx:05}-label"
+            filepath = os.path.join(tmp_path, filename)
             f = open(filepath, 'wb')
             np.save(f, label_data)
 
             # Increment sample index.
             sample_idx += 1
+
+        # Shuffle volumes and write to train, validate and test folders.
+        new_folders = ['train', 'validate', 'test']
                 
+        # Remove processed data from previous run.
+        for folder in new_folders:
+            folder_path = os.path.join(PROCESSED_ROOT, folder)
+            if os.path.exists(folder_path):
+                shutil.rmtree(os.path.join(PROCESSED_ROOT, folder))
+
+        # Shuffle samples.
+        samples = np.sort(os.listdir(tmp_path)).reshape((-1, 2))
+        shuffled_idx = np.random.permutation(len(samples))
+
+        num_train = math.floor(0.6 * len(samples))
+        num_validate = math.floor(0.2 * len(samples))
+        num_test = math.floor(0.2 * len(samples))
+        logging.info(f"Found {len(samples)} samples in folder '{folder}'.")
+        logging.info(f"Using train/validate/test split {num_train}/{num_validate}/{num_test}.")
+
+        # Get train/validate/test indices. 
+        indices = [shuffled_idx[:num_train], shuffled_idx[num_train:num_validate + num_train], shuffled_idx[num_train + num_validate:num_train + num_validate + num_test]]
+
+        # Copy data to new folders.
+        for new_folder, idx in zip(new_folders, indices):
+            folder_path = os.path.join(PROCESSED_ROOT, new_folder)
+            os.makedirs(folder_path)
+
+            for input_file, label_file in samples[idx]:
+                os.rename(os.path.join(tmp_path, input_file), os.path.join(folder_path, input_file))
+                os.rename(os.path.join(tmp_path, label_file), os.path.join(folder_path, label_file))
+
+        # Clean up tmp folder.
+        shutil.rmtree(tmp_path)
