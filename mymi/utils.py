@@ -142,7 +142,7 @@ def configure_logging(log_level):
     formatter = ColoredFormatter(log_format)
     stream = logging.StreamHandler()
     stream.setFormatter(formatter)
-    logging.basicConfig(handlers=[stream], level=log_level)
+    logging.basicConfig(handlers=[stream], level=log_level, force=True)
 
 def binary_perimeter(mask):
     mask_perimeter = torch.zeros_like(mask, dtype=bool)

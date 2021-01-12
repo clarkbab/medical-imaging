@@ -17,13 +17,13 @@ from mymi.dataset.dicom import PatientDataExtractor, PatientInfo, DatasetInfo
 
 PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
-class DatasetPreprocessor:
+class DatasetPreprocessor2D:
     def extract(self, drop_missing_slices=True, num_pats='all', transforms=[]):
         """
         effect: stores processed patient data.
         drop_missing_slices: drops patients that have missing slices.
         num_pats: operate on subset of patients.
-        transform: apply the pre-defined transformation.
+        transforms: apply the transforms on all patient data.
         """
         # Load patients who have 'Parotid-Left' contours.
         info = DatasetInfo() 
@@ -39,7 +39,9 @@ class DatasetPreprocessor:
         pos_sample_idx = 0
         neg_sample_idx = 0
 
-        # Process data for each patient.
+        # Write patient CT slices to temp folder.
+        tmp_path = os.path.join(PROCESSED_ROOT, 'tmp')
+        os.makedirs(tmp_path, exist_ok=True)
         for pat_id in tqdm(pat_ids):
             logging.info(f"Extracting data for patient {pat_id}.")
 
@@ -57,68 +59,73 @@ class DatasetPreprocessor:
 
             # Load label data.
             labels = pde.get_labels(regions='Parotid-Left', transforms=transforms)
+            _, label_data = labels[0]
 
-            for lname, ldata in labels:
-                # Find slices that are labelled.
-                pos_indices = ldata.sum(axis=(0, 1)).nonzero()[0]
+            # Find slices that are labelled.
+            pos_indices = label_data.sum(axis=(0, 1)).nonzero()[0]
 
-                # Write positive input and label data.
-                label_path = os.path.join(PROCESSED_ROOT, lname)
-                for pos_idx in pos_indices: 
-                    # Get input and label data.
-                    input_data = data[:, :, pos_idx]
-                    label_data = ldata[:, :, pos_idx]
+            # Write positive input and label data.
+            for pos_idx in pos_indices: 
+                # Get input and label data.
+                input_data = data[:, :, pos_idx]
+                ldata = label_data[:, :, pos_idx]
 
-                    # Save input data.
-                    pos_path = os.path.join(label_path, 'positive')
-                    os.makedirs(pos_path, exist_ok=True)
-                    filename = f"{pos_sample_idx:05}-input"
-                    filepath = os.path.join(pos_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, input_data)
+                # Save input data.
+                pos_path = os.path.join(tmp_path, 'positive')
+                os.makedirs(pos_path, exist_ok=True)
+                filename = f"{pos_sample_idx:05}-input"
+                filepath = os.path.join(pos_path, filename)
+                f = open(filepath, 'wb')
+                np.save(f, input_data)
 
-                    # Save label.
-                    filename = f"{pos_sample_idx:05}-label"
-                    filepath = os.path.join(pos_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, label_data)
+                # Save label.
+                filename = f"{pos_sample_idx:05}-label"
+                filepath = os.path.join(pos_path, filename)
+                f = open(filepath, 'wb')
+                np.save(f, ldata)
 
-                    # Increment sample index.
-                    pos_sample_idx += 1
+                # Increment sample index.
+                pos_sample_idx += 1
 
-                # Find slices that aren't labelled.
-                neg_indices = np.setdiff1d(range(ldata.shape[2]), pos_indices) 
+            # Find slices that aren't labelled.
+            neg_indices = np.setdiff1d(range(label_data.shape[2]), pos_indices) 
 
-                # Write negative input and label data.
-                for neg_idx in neg_indices:
-                    # Get input and label data.
-                    input_data = data[:, :, neg_idx]
-                    label_data = ldata[:, :, neg_idx]
+            # Write negative input and label data.
+            for neg_idx in neg_indices:
+                # Get input and label data.
+                input_data = data[:, :, neg_idx]
+                ldata = label_data[:, :, neg_idx]
 
-                    # Save input data.
-                    neg_path = os.path.join(label_path, 'negative')
-                    os.makedirs(neg_path, exist_ok=True)
-                    filename = f"{neg_sample_idx:05}-input"
-                    filepath = os.path.join(neg_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, input_data)
+                # Save input data.
+                neg_path = os.path.join(tmp_path, 'negative')
+                os.makedirs(neg_path, exist_ok=True)
+                filename = f"{neg_sample_idx:05}-input"
+                filepath = os.path.join(neg_path, filename)
+                f = open(filepath, 'wb')
+                np.save(f, input_data)
 
-                    # Save label.
-                    filename = f"{neg_sample_idx:05}-label"
-                    filepath = os.path.join(neg_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, label_data)
+                # Save label.
+                filename = f"{neg_sample_idx:05}-label"
+                filepath = os.path.join(neg_path, filename)
+                f = open(filepath, 'wb')
+                np.save(f, ldata)
 
-                    # Increment sample index.
-                    neg_sample_idx += 1
+                # Increment sample index.
+                neg_sample_idx += 1
 
         # Write to train, validate and test folders.
-        label_path = os.path.join(PROCESSED_ROOT, 'Parotid-Left')
-        folders = ['positive', 'negative']
+        tmp_folders = ['positive', 'negative']
         new_folders = ['train', 'validate', 'test']
 
-        for folder in folders:
-            folder_path = os.path.join(label_path, folder)
+        # Remove processed data from previous run.
+        for folder in new_folders:
+            folder_path = os.path.join(PROCESSED_ROOT, folder)
+            if os.path.exists(folder_path):
+                shutil.rmtree(os.path.join(PROCESSED_ROOT, folder))
+
+        for folder in tmp_folders:
+            # Shuffle samples for train/validation/test split.
+            folder_path = os.path.join(tmp_path, folder)
             samples = np.sort(os.listdir(folder_path)).reshape((-1, 2))
             shuffled_idx = np.random.permutation(len(samples))
 
@@ -129,19 +136,19 @@ class DatasetPreprocessor:
             logging.info(f"Found {len(samples)} samples in folder '{folder}'.")
             logging.info(f"Using train/validate/test split {num_train}/{num_validate}/{num_test}.")
 
+            # Get train/test/validate indices. 
             indices = [shuffled_idx[:num_train], shuffled_idx[num_train:num_validate + num_train], shuffled_idx[num_train + num_validate:num_train + num_validate + num_test]]
 
             for new_folder, idx in zip(new_folders, indices):
-                path = os.path.join(label_path, new_folder)
+                path = os.path.join(PROCESSED_ROOT, new_folder)
                 os.makedirs(os.path.join(path, folder), exist_ok=True)
 
                 for input_file, label_file in samples[idx]:
                     os.rename(os.path.join(folder_path, input_file), os.path.join(path, folder, input_file))
                     os.rename(os.path.join(folder_path, label_file), os.path.join(path, folder, label_file))
 
-        # Clean up initial folders.
-        for folder in folders:
-            shutil.rmtree(os.path.join(label_path, folder))
+        # Clean up tmp folder.
+        shutil.rmtree(tmp_path)
 
     def get_patient_data(self, pat_id, transforms=[]):
         """
