@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 
@@ -15,6 +16,7 @@ class DoubleConv(nn.Module):
         )
 
     def forward(self, x):
+        logging.info(x.shape) 
         return self.double_conv(x)
 
 class Down(nn.Module):

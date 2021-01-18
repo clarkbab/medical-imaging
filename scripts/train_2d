@@ -42,9 +42,6 @@ args = parser.parse_args()
 log_level = getattr(logging, args.log_level.upper(), None)
 utils.configure_logging(log_level)
 
-# Configure device.
-device = utils.configure_device()
-
 # Define transforms.
 p = 0.5
 fill = -1000
@@ -68,13 +65,16 @@ train_loader = DataLoader.build('train', batch_size=batch_size, transforms=trans
 validation_loader = DataLoader.build('validate', batch_size=batch_size, transforms=validation_transforms)
 test_loader = DataLoader.build('test', batch_size=batch_size, transforms=validation_transforms)
 
+# Configure device.
+device = utils.configure_device()
+
 # Create model.
 model = models.ParotidNet()
 num_devices = torch.cuda.device_count()
 if num_devices > 1:
-    print(f"Using {num_devices} GPUs")
+    logging.info(f"Using {num_devices" GPUs.")
     model = nn.DataParallel(model)
-model = model.to(device)
+model.to(device)
 
 # Define loss.
 class_weights = torch.Tensor((1, 4315)).to(device)
