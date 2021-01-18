@@ -2,7 +2,8 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-ROOT_DIR = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
+ROOT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
+ROOT_DIR = os.environ['TRAIN_DATA'] if 'TRAIN_DATA' in os.environ else ROOT_DIR_DEFAULT
 
 class NegativeImageDataset(Dataset):
     def __init__(self, type, transforms=[]):
