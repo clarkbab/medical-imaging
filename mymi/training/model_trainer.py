@@ -11,6 +11,8 @@ from mymi.metrics import dice as dice_metric
 
 TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
 TENSORBOARD_DIR = os.environ['TENSORBOARD_DIR'] if 'TENSORBOARD_DIR' in os.environ else TENSORBOARD_DIR_DEFAULT
+CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
+CHECKPOINT_DIR = os.environ['CHECKPOINT_DIR'] if 'CHECKPOINT_DIR' in os.environ else CHECKPOINT_DIR_DEFAULT
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, max_epochs=100, run_name=None, metrics=('dice'),
@@ -171,7 +173,7 @@ class ModelTrainer:
 
     def save_model(self, model, iteration, loss):
         logging.info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
-        filepath = os.path.join(os.sep, 'media', 'brett', 'models', 'checkpoints', self.run_name, 'best.pt') 
+        filepath = os.path.join(CHECKPOINT_DIR, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
             'loss': loss,
