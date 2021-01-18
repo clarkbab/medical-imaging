@@ -9,6 +9,9 @@ from mymi import utils
 from mymi.augmentation import transforms as ts
 from mymi.metrics import dice as dice_metric
 
+TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
+TENSORBOARD_DIR = os.environ['TENSORBOARD_DIR'] if 'TENSORBOARD_DIR' in os.environ else TENSORBOARD_DIR_DEFAULT
+
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, max_epochs=100, run_name=None, metrics=('dice'),
         device=torch.device('cpu'), print_interval='epoch', record_interval='epoch', validation_interval='epoch',
@@ -32,7 +35,7 @@ class ModelTrainer:
         self.max_epochs_without_improvement = 5
         self.num_epochs_without_improvement = 0
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
-        self.writer = SummaryWriter(os.path.join(os.sep, 'media', 'brett', 'tensorboard', self.run_name))
+        self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name)
         self.running_scores = {
             'print': {
                 'loss': 0
