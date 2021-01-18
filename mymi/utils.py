@@ -129,9 +129,9 @@ def dump_tensors(gpu_only=True):
 
 def configure_device():
     num_devices = torch.cuda.device_count()
-    logging.info(f"num devices: {num_devices}")
+    logging.info(f"Found {num_devices} device/s:")
     for i in range(num_devices):
-        logging.info(f"device: {torch.cuda.get_device_name(i)}")
+        logging.info(f"\t{torch.cuda.get_device_name(i)}")
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if device.type == 'cuda':
