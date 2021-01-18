@@ -7,6 +7,7 @@
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
+SCRIPT_DIR=/home/baclark/code/medical-imaging/scripts
 PROJECT_DIR=/data/gpfs/projects/punim1413
 CHECKPOINT_DIR=$PROJECT_DIR/checkpoints
 TENSORBOARD_DIR=$PROJECT_DIR/tensorboard
@@ -18,8 +19,5 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-# Set current directory to find 'train_2d' script.
-current_dir=$(dirname "$(realpath "$0")")""
-
-CHECKPOINT_DIR=$CHECKPOINT_DIR TRAIN_DATA=$TRAIN_DATA_DIR TENSORBOARD_DIR=$TENSORBOARD_DIR python $current_dir/train_2d --print-interval 200 --record-interval 200 --validation-interval epoch
+CHECKPOINT_DIR=$CHECKPOINT_DIR TRAIN_DATA=$TRAIN_DATA_DIR TENSORBOARD_DIR=$TENSORBOARD_DIR python $SCRIPT_DIR/train_2d --print-interval 200 --record-interval 200 --validation-interval epoch
 
