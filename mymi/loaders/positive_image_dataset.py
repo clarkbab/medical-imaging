@@ -2,7 +2,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-ROOT_DIR = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left', 'Parotid-Left')
+ROOT_DIR = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class PositiveImageDataset(Dataset):
     def __init__(self, type, transforms=[]):

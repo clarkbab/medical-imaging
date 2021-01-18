@@ -141,7 +141,7 @@ class DatasetPreprocessor2D:
 
             for new_folder, idx in zip(new_folders, indices):
                 path = os.path.join(PROCESSED_ROOT, new_folder)
-                os.makedirs(os.path.join(path, folder), exist_ok=True)
+                os.makedirs(os.path.join(path, folder))
 
                 for input_file, label_file in samples[idx]:
                     os.rename(os.path.join(folder_path, input_file), os.path.join(path, folder, input_file))

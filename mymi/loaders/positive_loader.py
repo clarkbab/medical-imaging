@@ -14,7 +14,6 @@ class PositiveSampler(data.Sampler):
         np.random.seed(self.seed)           # Same indices should be returned each epoch.
         np.random.shuffle(indices)
         indices = indices[:self.num_images]
-        print(f"Positive indices: {indices}")
         return iter(indices)
 
     def __len__(self):
