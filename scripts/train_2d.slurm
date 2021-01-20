@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --gres=gpu:p100:1
-#SBATCH --time 24:00:00
-#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:p100:4
+#SBATCH --time 1-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -19,5 +18,6 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-CHECKPOINT_DIR=$CHECKPOINT_DIR TRAIN_DATA=$TRAIN_DATA_DIR TENSORBOARD_DIR=$TENSORBOARD_DIR python $SCRIPT_DIR/train_2d --print-interval 200 --record-interval 200 --validation-interval epoch
-
+python $SCRIPT_DIR/train_2d --print-interval 200 --record-interval 200 --validation-interval epoch \
+    --checkpoint-dir $CHECKPOINT_DIR --tensorboard_dir $TENSORBOARD_DIR --data-dir $TRAIN_DATA_DIR \
+    --num-nodes 1 --num-gpus 4

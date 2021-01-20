@@ -1,0 +1,156 @@
+#! /usr/bin/env python
+import argparse
+from argparse import ArgumentParser, ArgumentTypeError
+import logging
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import sys
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch.nn as nn
+import torch.optim as optim
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
+
+from mymi import models
+from mymi import training
+from mymi import utils
+from mymi.augmentation import transforms as ts
+from mymi.loaders import DataLoader, ImageDataset
+
+print(f"starting process: {os.getpid()}")
+
+# Parse options.
+def interval_type(s):
+    if s == 'epoch':
+        return s
+    elif s.isdigit():
+        return int(s)
+    else:
+        raise ArgumentTypeError(f"Should be 'epoch' or integer, got '{s}'.")
+
+parser = ArgumentParser(description="""
+Train the segmentation model on a single node. Spins up a separate process for each GPU on the node (--num-gpus).
+""")
+parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
+parser.add_argument('-c', '--checkpoint-dir', action='store', help='sets the checkpoint directory')
+parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
+parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
+parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
+parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')
+parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
+parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
+parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
+parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
+parser.add_argument('-t', '--tensorboard-dir', action='store', help='sets the tensorboard directory')
+parser.add_argument('-u', '--use-gpu', action='store_true', default=False, help='use GPU for training')
+parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
+args = parser.parse_args()
+
+# Define single GPU/process training method.
+def train(args):
+    if args.use_gpu and args.num_gpus > 1:
+        # Register the process. This action blocks until all processes in 'world_size' have registered.
+        rank = args.node_rank * args.num_gpus + args.gpu_idx
+        logging.info(f"Initialising process group {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
+        dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
+
+    # Define transforms.
+    p = 0.5
+    fill = -1000
+    angle = 10
+    translation = 50
+    scale = (0.8, 1.2)
+    res = (512, 512) 
+    transforms = [
+        ts.RandomRotation((-angle, angle), fill=fill, p=p),
+        ts.RandomTranslation(((-translation, translation), (-translation, translation)), fill=fill, p=p),
+        ts.RandomResample((scale, scale), p=p),
+        ts.CropOrPad(res, fill=fill)
+    ]
+    validation_transforms = [
+        ts.CropOrPad(res, fill=fill)
+    ]
+
+    # Get data loaders.
+    batch_size = args.batch_size
+    train_loader = DataLoader.build('train', batch_size=batch_size, transforms=transforms)
+    validation_loader = DataLoader.build('validate', batch_size=batch_size, transforms=validation_transforms)
+
+    # Configure device.
+    if args.use_gpu:
+        assert torch.cuda.is_available()
+        if args.num_gpus > 1:
+            device = torch.device(f"cuda:{args.gpu_idx}")
+            logging.info(prepend(f"Using GPU ({device})."))
+        else:
+            device = torch.device('cuda:0')
+            logging.info(prepend(f"Using GPU ({device})."))
+    else:
+        logging.info(prepend('Using CPU.'))
+        device = torch.device('cpu')
+
+    # Create model.
+    model = models.ParotidNet()
+    model = model.to(device)
+
+    # Wrap for distributed training.
+    if args.use_gpu and args.num_gpus > 1:
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
+
+    # Define loss.
+    class_weights = torch.Tensor((1, 4315)).to(device)
+    loss_fn = nn.NLLLoss(weight=class_weights)
+
+    # Define optimiser.
+    optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+    # Create model trainer keyword arguments.
+    kwargs = {
+        'device': device
+    }
+    if args.checkpoint_dir is not None: kwargs['checkpoint_dir'] = args.checkpoint_dir
+    if args.data_dir is not None: kwargs['data_dir'] = args.data_dir
+    if args.max_epochs is not None: kwargs['max_epochs'] = args.max_epochs
+    if args.print_interval is not None: kwargs['print_interval'] = args.print_interval
+    if args.record_interval is not None: kwargs['record_interval'] = args.record_interval
+    if args.tensorboard_dir is not None: kwargs['tensorboard_dir'] = args.tensorboard_dir
+    if args.validation_interval is not None: kwargs['validation_interval'] = args.validation_interval
+
+    # Train the model.
+    trainer = training.ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, **kwargs)
+    trainer(model)
+
+# Wrap 'train' function to fit multi-processing API.
+def train_process(gpu_idx, args):
+    args.gpu_idx = gpu_idx
+    train(args)
+
+# Configure logging.
+log_level = getattr(logging, args.log_level.upper(), None)
+utils.configure_logging(log_level)
+
+def prepend(s):
+    if __name__ == '__main__':
+        return '[Main] ' + s
+    else:
+        return '[PID]' + s
+
+if __name__ == '__main__':
+    if args.use_gpu:
+        # Print GPU info.
+        num_devices = torch.cuda.device_count()
+        logging.info(prepend(f"Requested {args.num_gpus} GPUs, found {num_devices} GPUs."))
+        assert args.num_gpus <= num_devices
+
+    if args.use_gpu and args.num_gpus > 1:
+        # Spawn a process for each requested GPU.
+        logging.info(prepend(f"Spawning {args.num_gpus} process/es from parent '{__name__}'."))
+        args.world_size = args.num_nodes * args.num_gpus
+        mp.spawn(train_process, nprocs=args.num_gpus, args=(args, ))
+    else:
+        train(args)

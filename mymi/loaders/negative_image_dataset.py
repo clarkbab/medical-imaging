@@ -2,16 +2,15 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-ROOT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
-ROOT_DIR = os.environ['TRAIN_DATA'] if 'TRAIN_DATA' in os.environ else ROOT_DIR_DEFAULT
+DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class NegativeImageDataset(Dataset):
-    def __init__(self, type, transforms=[]):
+    def __init__(self, type, transforms=[], data_dir=DATA_DIR_DEFAULT):
         """
         verbose: print information.
         type: train, validate or test.
         """
-        self.root_dir = os.path.join(ROOT_DIR, type)
+        self.root_dir = os.path.join(data_dir, type)
         self.neg_dir = os.path.join(self.root_dir, 'negative')
         neg_samples = np.reshape([os.path.join(self.neg_dir, p) for p in sorted(os.listdir(self.neg_dir))], (-1, 2))
         self.num_neg = len(neg_samples)

@@ -10,14 +10,12 @@ from mymi.augmentation import transforms as ts
 from mymi.metrics import dice as dice_metric
 
 TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
-TENSORBOARD_DIR = os.environ['TENSORBOARD_DIR'] if 'TENSORBOARD_DIR' in os.environ else TENSORBOARD_DIR_DEFAULT
 CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
-CHECKPOINT_DIR = os.environ['CHECKPOINT_DIR'] if 'CHECKPOINT_DIR' in os.environ else CHECKPOINT_DIR_DEFAULT
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, max_epochs=100, run_name=None, metrics=('dice'),
         device=torch.device('cpu'), print_interval='epoch', record_interval='epoch', validation_interval='epoch',
-        print_format='.10f', num_validation_images=3):
+        print_format='.10f', num_validation_images=3, checkpoint_dir=CHECKPOINT_DIR_DEFAULT, tensorboard_dir=TENSORBOARD_DIR_DEFAULT):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         transforms = [ts.CropOrPad((512, 512), fill=-1000)]
@@ -37,7 +35,9 @@ class ModelTrainer:
         self.max_epochs_without_improvement = 5
         self.num_epochs_without_improvement = 0
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
-        self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name))
+        self.checkpoint_dir = checkpoint_dir
+        self.tensorboard_dir = tensorboard_dir
+        self.writer = SummaryWriter(os.path.join(self.tensorboard_dir, self.run_name))
         self.running_scores = {
             'print': {
                 'loss': 0
@@ -91,12 +91,12 @@ class ModelTrainer:
                 # Record info to Tensorboard.
                 iteration = epoch * len(self.train_loader) + batch
                 if self.should_record(iteration):
-                    self.record_results(epoch, iteration)
+                    self.record_training_results(epoch, iteration)
                     self.reset_record_scores()
                 
                 # Print results.
                 if self.should_print(iteration, len(self.train_loader)):
-                    self.print_results(epoch, iteration)
+                    self.print_training_results(epoch, iteration)
                     self.reset_print_scores()
 
                 # Perform validation and checkpointing.
@@ -173,7 +173,7 @@ class ModelTrainer:
 
     def save_model(self, model, iteration, loss):
         logging.info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
-        filepath = os.path.join(CHECKPOINT_DIR, self.run_name, 'best.pt')
+        filepath = os.path.join(self.checkpoint_dir, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
             'loss': loss,
@@ -204,37 +204,41 @@ class ModelTrainer:
         else:
             return False
 
-    def print_results(self, epoch, batch):
+    def print_training_results(self, epoch, batch):
         """
         effect: logs an update to STDOUT.
         """
-        message = f"[{epoch}, {batch}] Loss: {self.running_scores['print']['loss'] / self.print_interval:{self.print_format}}"
+        print_interval = len(self.train_loader) if self.print_interval == 'epoch' else self.print_interval
+        message = f"[{epoch}, {batch}] Loss: {self.running_scores['print']['loss'] / print_interval:{self.print_format}}"
 
         if 'dice' in self.metrics:
-            message += f", Dice: {self.running_scores['print']['dice'] / self.print_interval:{self.print_format}}"
+            message += f", Dice: {self.running_scores['print']['dice'] / print_interval:{self.print_format}}"
 
+        print('results logged')
         logging.info(message)
         
     def print_validation_results(self, epoch, batch):
         """
         effect: logs an update to STDOUT.
         """
-        message = f"Validation - [{epoch}, {batch}] Loss: {self.running_scores['validation-print']['loss'] / self.print_interval:{self.print_format}}"
+        print_interval = len(self.validation_loader) if self.print_interval == 'epoch' else self.print_interval
+        message = f"Validation - [{epoch}, {batch}] Loss: {self.running_scores['validation-print']['loss'] / print_interval:{self.print_format}}"
 
         if 'dice' in self.metrics:
-            message += f", Dice: {self.running_scores['validation-print']['dice'] / self.print_interval:{self.print_format}}"
+            message += f", Dice: {self.running_scores['validation-print']['dice'] / print_interval:{self.print_format}}"
 
         logging.info(message)
 
-    def record_results(self, epoch, iteration):
+    def record_training_results(self, epoch, iteration):
         """
         returns: True if results recorded, false otherwise.
         """
-        avg_loss = self.running_scores['record']['loss'] / self.record_interval
+        record_interval = len(self.train_loader) if self.record_interval == 'epoch' else self.record_interval
+        avg_loss = self.running_scores['record']['loss'] / record_interval
         self.writer.add_scalar('Loss/train', avg_loss, iteration)
         
         if 'dice' in self.metrics:
-            avg_dice = self.running_scores['record']['dice'] / self.record_interval
+            avg_dice = self.running_scores['record']['dice'] / record_interval
             self.writer.add_scalar('Dice/train', avg_dice, iteration)
 
     def record_validation_results(self, *args, **kwargs):
