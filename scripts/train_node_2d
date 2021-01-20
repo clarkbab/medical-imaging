@@ -56,7 +56,7 @@ def train(args):
     if args.use_gpu and args.num_gpus > 1:
         # Register the process. This action blocks until all processes in 'world_size' have registered.
         rank = args.node_rank * args.num_gpus + args.gpu_idx
-        logging.info(f"Initialising process group {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
+        log_info(f"Initialising process group {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
         dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
 
     # Define transforms.
@@ -86,12 +86,12 @@ def train(args):
         assert torch.cuda.is_available()
         if args.num_gpus > 1:
             device = torch.device(f"cuda:{args.gpu_idx}")
-            logging.info(prepend(f"Using GPU ({device})."))
+            log_info(f"Using GPU ({device}).")
         else:
             device = torch.device('cuda:0')
-            logging.info(prepend(f"Using GPU ({device})."))
+            log_info(f"Using GPU ({device}).")
     else:
-        logging.info(prepend('Using CPU.'))
+        log_info('Using CPU.')
         device = torch.device('cpu')
 
     # Create model.
@@ -140,16 +140,20 @@ def prepend(s):
     else:
         return '[PID]' + s
 
+def log_info(s):
+    s = prepend(s) if args.use_gpu and args.num_gpus > 1 else s
+    logging.info(s)
+
 if __name__ == '__main__':
     if args.use_gpu:
         # Print GPU info.
         num_devices = torch.cuda.device_count()
-        logging.info(prepend(f"Requested {args.num_gpus} GPUs, found {num_devices} GPUs."))
+        log_info(f"Requested {args.num_gpus} GPUs, found {num_devices} GPUs.")
         assert args.num_gpus <= num_devices
 
     if args.use_gpu and args.num_gpus > 1:
         # Spawn a process for each requested GPU.
-        logging.info(prepend(f"Spawning {args.num_gpus} process/es from parent '{__name__}'."))
+        log_info(f"Spawning {args.num_gpus} process/es from parent '{__name__}'.")
         args.world_size = args.num_nodes * args.num_gpus
         mp.spawn(train_process, nprocs=args.num_gpus, args=(args, ))
     else:
