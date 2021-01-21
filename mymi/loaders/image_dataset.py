@@ -2,10 +2,8 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
-
 class ImageDataset(Dataset):
-    def __init__(self, type, transforms=[], data_dir=DATA_DIR_DEFAULT):
+    def __init__(self, type, data_dir, transforms=[]):
         """
         verbose: print information.
         type: train, validate or test.

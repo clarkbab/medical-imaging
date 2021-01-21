@@ -1,7 +1,10 @@
 import numpy as np
+import os
 from torch.utils import data
 
 from ..loaders import NegativeImageDataset
+
+DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class NegativeSampler(data.Sampler):
     def __init__(self, dataset, num_images, seed=42):
@@ -21,13 +24,13 @@ class NegativeSampler(data.Sampler):
 
 class NegativeLoader:
     @staticmethod
-    def build(batch_size=32, transforms=[]):
+    def build(batch_size=32, transforms=[], data_dir=DATA_DIR_DEFAULT):
         """
         returns: a data loader.
         transforms: an array of augmentation transforms.
         """
         # Create dataset object.
-        dataset = NegativeImageDataset('validate', transforms)
+        dataset = NegativeImageDataset('validate', data_dir, transforms=transforms)
 
         # Create sampler.
         sampler = NegativeSampler(dataset, 5 * batch_size)

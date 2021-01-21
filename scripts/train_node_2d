@@ -19,9 +19,7 @@ from mymi import models
 from mymi import training
 from mymi import utils
 from mymi.augmentation import transforms as ts
-from mymi.loaders import DataLoader, ImageDataset
-
-print(f"starting process: {os.getpid()}")
+from mymi.loaders import DataLoader, ImageDataset, NegativeLoader, PositiveLoader
 
 # Parse options.
 def interval_type(s):
@@ -51,12 +49,26 @@ parser.add_argument('-u', '--use-gpu', action='store_true', default=False, help=
 parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
 args = parser.parse_args()
 
+# Returns a logging function for the process.
+def get_log_info(args):
+    def log_info(s):
+        if is_multi_process(args):
+            if is_lead_process(args):
+                s = f"[Leader - {os.getpid()}] {s}"
+            else:
+                s = f"[{os.getpid()}] {s}" 
+        logging.info(s)
+    return log_info
+
 # Define single GPU/process training method.
 def train(args):
-    if args.use_gpu and args.num_gpus > 1:
+    # Get log function for process.
+    log_info = get_log_info(args)
+
+    if is_multi_process(args):
         # Register the process. This action blocks until all processes in 'world_size' have registered.
         rank = args.node_rank * args.num_gpus + args.gpu_idx
-        log_info(f"Initialising process group {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
+        log_info(f"Initialising process {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
         dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
 
     # Define transforms.
@@ -78,8 +90,12 @@ def train(args):
 
     # Get data loaders.
     batch_size = args.batch_size
-    train_loader = DataLoader.build('train', batch_size=batch_size, transforms=transforms)
-    validation_loader = DataLoader.build('validate', batch_size=batch_size, transforms=validation_transforms)
+    opt_kwargs = {}
+    if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
+    train_loader = DataLoader.build('train', batch_size=batch_size, transforms=transforms, **opt_kwargs)
+    validation_loader = DataLoader.build('validate', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
+    positive_loader = PositiveLoader.build(batch_size=batch_size, transforms=validation_transforms, **opt_kwargs) 
+    negative_loader = NegativeLoader.build(batch_size=batch_size, transforms=validation_transforms, **opt_kwargs) 
 
     # Configure device.
     if args.use_gpu:
@@ -99,7 +115,7 @@ def train(args):
     model = model.to(device)
 
     # Wrap for distributed training.
-    if args.use_gpu and args.num_gpus > 1:
+    if is_multi_process(args):
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
 
     # Define loss.
@@ -110,50 +126,54 @@ def train(args):
     optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     # Create model trainer keyword arguments.
-    kwargs = {
-        'device': device
-    }
-    if args.checkpoint_dir is not None: kwargs['checkpoint_dir'] = args.checkpoint_dir
-    if args.data_dir is not None: kwargs['data_dir'] = args.data_dir
-    if args.max_epochs is not None: kwargs['max_epochs'] = args.max_epochs
-    if args.print_interval is not None: kwargs['print_interval'] = args.print_interval
-    if args.record_interval is not None: kwargs['record_interval'] = args.record_interval
-    if args.tensorboard_dir is not None: kwargs['tensorboard_dir'] = args.tensorboard_dir
-    if args.validation_interval is not None: kwargs['validation_interval'] = args.validation_interval
+    opt_kwargs = {}
+    if args.checkpoint_dir is not None: opt_kwargs['checkpoint_dir'] = args.checkpoint_dir
+    if is_reporter(args): opt_kwargs['is_reporter'] = True
+    if args.max_epochs is not None: opt_kwargs['max_epochs'] = args.max_epochs
+    if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
+    if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
+    if args.tensorboard_dir is not None: opt_kwargs['tensorboard_dir'] = args.tensorboard_dir
+    if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.
-    trainer = training.ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, **kwargs)
+    trainer = training.ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, positive_loader, 
+        negative_loader, device=device, log_info=log_info, **opt_kwargs)
     trainer(model)
+
+def is_multi_process(args):
+    return args.use_gpu and args.num_gpus > 1
+
+def is_lead_process(args):
+    return args.gpu_idx == 0
+
+def is_reporter(args):
+    return not is_multi_process(args) or is_lead_process(args)
 
 # Wrap 'train' function to fit multi-processing API.
 def train_process(gpu_idx, args):
     args.gpu_idx = gpu_idx
     train(args)
 
+def prepend(s):
+    if __name__ == '__main__':
+        return f"[Main - {os.getpid()}] {s}"
+    else:
+        return f"[{os.getpid()}] {s}"
+
 # Configure logging.
 log_level = getattr(logging, args.log_level.upper(), None)
 utils.configure_logging(log_level)
-
-def prepend(s):
-    if __name__ == '__main__':
-        return '[Main] ' + s
-    else:
-        return '[PID]' + s
-
-def log_info(s):
-    s = prepend(s) if args.use_gpu and args.num_gpus > 1 else s
-    logging.info(s)
 
 if __name__ == '__main__':
     if args.use_gpu:
         # Print GPU info.
         num_devices = torch.cuda.device_count()
-        log_info(f"Requested {args.num_gpus} GPUs, found {num_devices} GPUs.")
+        logging.info(f"[Main] Requested {args.num_gpus} GPUs, found {num_devices} GPUs.")
         assert args.num_gpus <= num_devices
 
-    if args.use_gpu and args.num_gpus > 1:
+    if is_multi_process(args):
         # Spawn a process for each requested GPU.
-        log_info(f"Spawning {args.num_gpus} process/es from parent '{__name__}'.")
+        logging.info(f"[Main] Spawning {args.num_gpus} process/es.")
         args.world_size = args.num_nodes * args.num_gpus
         mp.spawn(train_process, nprocs=args.num_gpus, args=(args, ))
     else:

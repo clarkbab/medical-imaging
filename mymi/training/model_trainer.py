@@ -11,16 +11,18 @@ from mymi.metrics import dice as dice_metric
 
 TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
 CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
+DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class ModelTrainer:
-    def __init__(self, train_loader, validation_loader, optimiser, loss_fn, max_epochs=100, run_name=None, metrics=('dice'),
-        device=torch.device('cpu'), print_interval='epoch', record_interval='epoch', validation_interval='epoch',
-        print_format='.10f', num_validation_images=3, checkpoint_dir=CHECKPOINT_DIR_DEFAULT, tensorboard_dir=TENSORBOARD_DIR_DEFAULT):
+    def __init__(self, train_loader, validation_loader, optimiser, loss_fn, positive_loader, negative_loader, 
+        max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
+        record_interval='epoch', validation_interval='epoch', print_format='.10f', num_validation_images=3, 
+        checkpoint_dir=CHECKPOINT_DIR_DEFAULT, tensorboard_dir=TENSORBOARD_DIR_DEFAULT, is_reporter=False,
+        log_info=logging.info):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
-        transforms = [ts.CropOrPad((512, 512), fill=-1000)]
-        self.positive_loader = loaders.PositiveLoader.build(batch_size=self.validation_loader.batch_size, transforms=transforms)
-        self.negative_loader = loaders.NegativeLoader.build(batch_size=self.validation_loader.batch_size, transforms=transforms)
+        self.positive_loader = positive_loader
+        self.negative_loader = negative_loader
         self.optimiser = optimiser
         self.loss_fn = loss_fn
         self.max_epochs = max_epochs
@@ -37,7 +39,10 @@ class ModelTrainer:
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
         self.checkpoint_dir = checkpoint_dir
         self.tensorboard_dir = tensorboard_dir
-        self.writer = SummaryWriter(os.path.join(self.tensorboard_dir, self.run_name))
+        self.is_reporter = is_reporter
+        self.log_info = log_info
+        if is_reporter:
+            self.writer = SummaryWriter(os.path.join(self.tensorboard_dir, self.run_name))
         self.running_scores = {
             'print': {
                 'loss': 0
@@ -70,7 +75,7 @@ class ModelTrainer:
                 input, mask = input.float(), mask.long()
                 input = input.unsqueeze(1)
                 input, mask = input.to(self.device), mask.to(self.device)
-                if epoch == 0 and batch == 0:
+                if self.is_reporter and epoch == 0 and batch == 0:
                     self.writer.add_graph(model, input)
 
                 # Perform forward/backward pass.
@@ -88,9 +93,9 @@ class ModelTrainer:
                     self.running_scores['print']['dice'] += dice.item()
                     self.running_scores['record']['dice'] += dice.item()
 
-                # Record info to Tensorboard.
+                # Record training info to Tensorboard.
                 iteration = epoch * len(self.train_loader) + batch
-                if self.should_record(iteration):
+                if self.is_reporter and self.should_record(iteration):
                     self.record_training_results(epoch, iteration)
                     self.reset_record_scores()
                 
@@ -100,15 +105,15 @@ class ModelTrainer:
                     self.reset_print_scores()
 
                 # Perform validation and checkpointing.
-                if self.should_validate(iteration):
+                if self.is_reporter and self.should_validate(iteration):
                     self.validate_model(model, epoch, iteration)
 
                 # Check early stopping.
                 if self.num_epochs_without_improvement >= self.max_epochs_without_improvement:
-                    logging.info(f"Stopping early due to {self.num_epochs_without_improvement} epochs without improved validation score.")
+                    self.log_info(f"Stopping early due to {self.num_epochs_without_improvement} epochs without improved validation score.")
                     return
 
-        logging.info(f"Maximum epochs ({self.max_epochs} reached.")
+        self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
 
     def validate_model(self, model, epoch, iteration):
         model.eval()
@@ -172,7 +177,7 @@ class ModelTrainer:
         model.train()
 
     def save_model(self, model, iteration, loss):
-        logging.info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
+        self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
         filepath = os.path.join(self.checkpoint_dir, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
@@ -214,8 +219,7 @@ class ModelTrainer:
         if 'dice' in self.metrics:
             message += f", Dice: {self.running_scores['print']['dice'] / print_interval:{self.print_format}}"
 
-        print('results logged')
-        logging.info(message)
+        self.log_info(message)
         
     def print_validation_results(self, epoch, batch):
         """
@@ -227,7 +231,7 @@ class ModelTrainer:
         if 'dice' in self.metrics:
             message += f", Dice: {self.running_scores['validation-print']['dice'] / print_interval:{self.print_format}}"
 
-        logging.info(message)
+        self.log_info(message)
 
     def record_training_results(self, epoch, iteration):
         """
