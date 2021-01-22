@@ -143,8 +143,9 @@ def configure_device():
 def configure_logging(log_level):
     if not isinstance(log_level, int):
         raise ValueError(f"Invalid log level: {log_level}.")
-    log_format = "%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
-    formatter = ColoredFormatter(log_format)
+    log_format = "%(log_color)s%(asctime)s | %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+    formatter = ColoredFormatter(log_format, date_format)
     stream = logging.StreamHandler()
     stream.setFormatter(formatter)
     logging.basicConfig(handlers=[stream], level=log_level, force=True)
