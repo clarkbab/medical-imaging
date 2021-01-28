@@ -6,7 +6,7 @@ from skimage import transform
 class RandomTranslation:
     def __init__(self, translation, fill=0, p=1.0):
         """
-        translation: an (x, y) tuple of translation ranges.
+        translation: an (x, y) tuple of translation ranges in voxels.
         fill: value to use for new pixels.
         p: the probability that the transform is applied.
         """
