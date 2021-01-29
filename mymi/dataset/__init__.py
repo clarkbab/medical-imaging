@@ -1,5 +1,6 @@
 import logging
 from .dataset import Dataset
+from .patient_data_extractor import PatientDataExtractor
 
 # Create dataset.
 dataset = None

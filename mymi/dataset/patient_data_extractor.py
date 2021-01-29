@@ -10,9 +10,6 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import dataset
-from mymi.dataset.dicom import PatientInfo
-
-FLOAT_DP = 2
 
 class PatientDataExtractor:
     def __init__(self, pat_id):
@@ -37,12 +34,11 @@ class PatientDataExtractor:
 
         # Load patient CT dicoms.
         ct_dicoms = dataset.list_ct(self.pat_id)
-        pi = PatientInfo(self.pat_id)
-        full_info_df = pi.full_info()
-        full_info = full_info_df.iloc[0].to_dict()
+        summary_df = dataset.patient_summary(self.pat_id)
+        summary = summary_df.iloc[0].to_dict()
 
         # Create placeholder array.
-        data_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
+        data_shape = (int(summary['res-x']), int(summary['res-y']), int(summary['res-z']))
         data = np.zeros(shape=data_shape, dtype=np.int16)
         
         # Add CT data.
@@ -55,15 +51,15 @@ class PatientDataExtractor:
             pixel_data = np.transpose(pixel_data)
 
             # Get z index.
-            offset_z =  ct_dicom.ImagePositionPatient[2] - full_info['offset-z']
-            z_idx = int(round(offset_z / full_info['spacing-z']))
+            offset_z =  ct_dicom.ImagePositionPatient[2] - summary['offset-z']
+            z_idx = int(round(offset_z / summary['spacing-z']))
 
             # Add data.
             data[:, :, z_idx] = pixel_data
 
         # Transform the data.
         for transform in transforms:
-            data = transform(data, full_info)
+            data = transform(data, summary)
 
         # Write data to cache.
         if cache.write_enabled():
@@ -93,9 +89,8 @@ class PatientDataExtractor:
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        pi = PatientInfo(self.pat_id)
-        full_info_df = pi.full_info()
-        full_info = full_info_df.iloc[0].to_dict()
+        summary_df = dataset.patient_summary(self.pat_id)
+        summary = summary_df.iloc[0].to_dict()
 
         labels = []
 
@@ -110,7 +105,7 @@ class PatientDataExtractor:
                 continue
 
             # Create label placeholder.
-            data_shape = (int(full_info['res-x']), int(full_info['res-y']), int(full_info['res-z']))
+            data_shape = (int(summary['res-x']), int(summary['res-y']), int(summary['res-z']))
             data = np.zeros(shape=data_shape, dtype=np.bool)
 
             roi_coords = [c.ContourData for c in roi.ContourSequence]
@@ -121,12 +116,12 @@ class PatientDataExtractor:
                 coords = np.array(roi_slice_coords).reshape(-1, 3)
 
                 # Convert from "real" space to pixel space using affine transformation.
-                corner_pixels_x = (coords[:, 0] - full_info['offset-x']) / full_info['spacing-x']
-                corner_pixels_y = (coords[:, 1] - full_info['offset-y']) / full_info['spacing-y']
+                corner_pixels_x = (coords[:, 0] - summary['offset-x']) / summary['spacing-x']
+                corner_pixels_y = (coords[:, 1] - summary['offset-y']) / summary['spacing-y']
 
                 # Get contour z pixel.
-                offset_z = coords[0, 2] - full_info['offset-z']
-                pixel_z = int(offset_z / full_info['spacing-z'])
+                offset_z = coords[0, 2] - summary['offset-z']
+                pixel_z = int(offset_z / summary['spacing-z'])
 
                 # Get 2D coords of polygon boundary and interior described by corner
                 # points.
@@ -141,9 +136,9 @@ class PatientDataExtractor:
         labels = sorted(labels, key=lambda l: l[0])
 
         # Transform the labels.
-        full_info['order'] = 0      # Perform nearest-neighbour interpolation.
+        summary['order'] = 0      # Perform nearest-neighbour interpolation.
         for transform in transforms:
-            labels = [(name, transform(data, full_info)) for name, data in labels]
+            labels = [(name, transform(data, summary)) for name, data in labels]
 
         # Write data to cache.
         if cache.write_enabled():

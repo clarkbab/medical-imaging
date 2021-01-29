@@ -8,9 +8,10 @@ cache = Cache()
 def config(**kwargs):
     """
     effect: configures the cache.
-    path: path to the cache.
-    read_enabled: enables cache read.
-    write_enabled: enables cache write.
+    kwargs:
+        path: path to the cache.
+        read_enabled: enables cache read.
+        write_enabled: enables cache write.
     """
     # Configure enabled.
     cache.read_enabled = kwargs.pop('read_enabled', True)
@@ -22,19 +23,22 @@ def config(**kwargs):
         if os.path.exists(path):
             cache.path = path
         else:
-            logging.warning(f"Cache path '{path}', set via config doesn't exist.")
+            raise ValueError(f"Cache path '{path}', set via config doesn't exist.")
     if cache.path is None and 'MYMI_CACHE' in os.environ:
         env_path = os.environ['MYMI_CACHE']
         if os.path.exists(env_path):
             cache.path = env_path
         else:
-            logging.warning(f"Cache path '{env_path}', set via env var doesn't exist.")
+            raise ValueError(f"Cache path '{env_path}', set via env var doesn't exist.")
     if cache.path is None:
         default_path = os.path.join(os.sep, 'tmp', 'mymi', 'cache')
-        os.makedirs(default_path, exist_ok=True)
-        cache.path = default_path
-        if path is not None or 'MYMI_CACHE' in os.environ:
-            logging.warning(f"Cache using default path '{default_path}'.")
+        if os.path.exists(default_path):
+            os.makedirs(default_path, exist_ok=True)
+            cache.path = default_path
+            if path is not None or 'MYMI_CACHE' in os.environ:
+                logging.warning(f"Cache using default path '{default_path}'.")
+        else:
+            raise ValueError(f"Default cache path '{default_path}' doesn't exist.")
 
 def exists(key):
     if cache.path is None:
