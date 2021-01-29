@@ -9,7 +9,7 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import utils
-from mymi.dataset.dicom import DatasetPreprocessor2D
+from mymi.preprocessing import ParotidLeft2DPreprocessor
 from mymi import transforms as ts
 
 # Parse args.
@@ -46,5 +46,5 @@ transforms = [
 ]
 
 # Perform extraction.
-dp = DatasetPreprocessor2D()
+dp = ParotidLeft2DPreprocessor()
 dp.extract(num_pats=num_pats, transforms=transforms)
