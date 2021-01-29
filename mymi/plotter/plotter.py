@@ -6,7 +6,6 @@ import sys
 
 from mymi import cache
 from mymi import dataset
-from mymi.dataset import PatientDataExtractor
 
 class Plotter:
     @classmethod

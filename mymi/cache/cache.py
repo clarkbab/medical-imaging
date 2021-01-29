@@ -61,7 +61,43 @@ class Cache:
         if not isinstance(key, dict):
             raise ValueError(f"Cache key should be dict, got '{type(key)}'.")
 
+        # Handle unserialisable types.
+        key = self.make_serialisable(key)
+
         return hashlib.sha1(json.dumps(key).encode('utf-8')).hexdigest() 
+
+    def is_serialisable(self, obj):
+        """
+        returns: True if the object is JSON serialisable, False otherwise.
+        obj: the object to convert.
+        """
+        try:
+            json.dumps(obj)
+            return True
+        except TypeError:
+            return False
+
+    def make_serialisable(self, obj):
+        """
+        returns: an object that is JSON serialisable.
+        obj: the object to convert.
+        """
+        # Check serialisability.
+        if not self.is_serialisable(obj):
+            # Handle dict.
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    obj[k] = self.make_serialisable(v) 
+            # Handle known types.
+            elif isinstance(obj, list) or isinstance(obj, np.ndarray):
+                obj = [self.make_serialisable(o) for o in obj]
+            # Handle custom types.
+            elif hasattr(obj, 'cache_key'):
+                obj = obj.cache_key()
+            else:
+                raise ValueError(f"Object {obj} can't be passed as cache key, must be serialisable or implement 'cache_key' method.")
+
+        return obj
 
     def exists(self, key):
         """
@@ -95,7 +131,7 @@ class Cache:
             raise ValueError(f"Unrecognised cache type '{type}'.")
 
         # Log cache finish time and data size.
-        logging.info(f"Complete - {time.time() - start:.3f}s].")
+        logging.info(f"Complete [{time.time() - start:.3f}s].")
 
         return data
 

@@ -10,7 +10,7 @@ class ResizeTransform:
         """
         self.resolution = resolution
 
-    def cache_id(self):
+    def cache_key(self):
         """
         returns: an ID that is unique based upon transform parameters.
         """

@@ -11,7 +11,7 @@ class ResampleTransform:
         """
         self.spacing = spacing
 
-    def cache_id(self):
+    def cache_key(self):
         """
         returns: an ID that is unique based upon transform parameters.
         """

@@ -104,7 +104,7 @@ class Dataset:
                 'pat_id': pat_id
             },
             'kwargs': {
-                'transforms': [t.cache_id() for t in transforms]
+                'transforms': transforms
             }
         }
         if cache.read_enabled() and cache.exists(key):
@@ -162,7 +162,7 @@ class Dataset:
             },
             'kwargs': {
                 'regions': regions,
-                'transforms': [t.cache_id() for t in transforms]
+                'transforms': transforms
             }
         }
         if cache.read_enabled() and cache.exists(key):
