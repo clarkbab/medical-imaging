@@ -19,12 +19,13 @@ PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIO
 FILENAME_NUM_DIGITS = 5
 
 class ParotidLeft2DPreprocessor:
-    def extract(self, drop_missing_slices=True, num_pats='all', transforms=[]):
+    def extract(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
         """
         effect: stores processed patient data.
         kwargs:
             drop_missing_slices: drops patients that have missing slices.
             num_pats: operate on subset of patients.
+            seed: the random number generator seed.
             transforms: apply the transforms on all patient data.
         """
         # Define region.
@@ -53,6 +54,7 @@ class ParotidLeft2DPreprocessor:
         logging.info(f"Splitting dataset using proportions: {p_train}/{p_validate}/{p_test}.")
 
         # Split the patient IDs.
+        np.random.seed(seed) 
         np.random.shuffle(pat_ids)
         num_train = int(np.floor(p_train * len(pat_ids)))
         num_validate = int(np.floor(p_validate * len(pat_ids)))
