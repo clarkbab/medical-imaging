@@ -33,3 +33,6 @@ class RandomResample:
         input, label = input.astype(input_dtype), label.astype(label_dtype)
 
         return input, label
+
+    def cache_key(self):
+        raise ValueError("Random transformations aren't cacheable.")

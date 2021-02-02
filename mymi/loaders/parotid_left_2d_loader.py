@@ -76,6 +76,8 @@ class ParotidLeft2DDataset(Dataset):
 
         # Perform transforms.
         for transform in self.transforms:
+            input = transform(input)
+            label = transform
             input, label = transform(input, label)
 
         return input, label

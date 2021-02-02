@@ -15,10 +15,10 @@ import torch.optim as optim
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
-from mymi.augmentation import transforms as ts
 from mymi.loaders import ParotidLeft2DLoader, ParotidLeft2DSubsetLoader
 from mymi.models import ParotidLeft2DNet
 from mymi.training import ModelTrainer
+from mymi import transforms as ts
 from mymi import utils
 
 # Parse options.

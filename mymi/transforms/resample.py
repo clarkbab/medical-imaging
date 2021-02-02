@@ -4,23 +4,14 @@ import numpy as np
 import scipy
 from scipy.ndimage import zoom
 
-class ResampleTransform:
+class Resample:
     def __init__(self, spacing):
         """
         spacing: a list of desired (x, y, z) spacings.
         """
         self.spacing = spacing
 
-    def cache_key(self):
-        """
-        returns: an ID that is unique based upon transform parameters.
-        """
-        params = {
-            'spacing': self.spacing
-        }
-        return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()
-
-    def __call__(self, data, info):
+    def __call__(self, data, binary=False, info=None):
         """
         returns: resampled data.
         data: the data to resample.
@@ -57,3 +48,12 @@ class ResampleTransform:
         data = zoom(data, real_resize_factor, order=order)
 
         return data
+
+    def cache_key(self):
+        """
+        returns: an ID that is unique based upon transform parameters.
+        """
+        params = {
+            'spacing': self.spacing
+        }
+        return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()

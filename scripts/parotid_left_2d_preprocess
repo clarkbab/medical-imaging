@@ -9,7 +9,7 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import utils
-from mymi.preprocessing import ParotidLeft2DPreprocessor
+from mymi.preprocessing import ParotidLeft3DPreprocessor
 from mymi import transforms as ts
 
 # Parse args.
@@ -42,9 +42,9 @@ num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
 
 # Create transforms.
 transforms = [
-    ts.ResampleTransform((1.0, 1.0, 3.0))
+    ts.Resample((1.0, 1.0, 3.0))
 ]
 
 # Perform extraction.
-dp = ParotidLeft2DPreprocessor()
+dp = ParotidLeft3DPreprocessor()
 dp.extract(num_pats=num_pats, transforms=transforms)

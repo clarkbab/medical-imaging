@@ -3,28 +3,23 @@ import json
 import math
 import numpy as np
 
-class CropOrPad:
-    def __init__(self, resolution, fill=0):
+class Resize:
+    def __init__(self, resolution):
         """
-        resolution: an (x, y) tuple of the new resolution.
-        fill: value to use for new pixels.
-        p: the probability that the transform is applied.
+        resolution: the desired image resolution.
         """
         self.resolution = resolution
-        self.fill = fill
 
-    def __call__(self, input, label):
-        return self.crop_or_pad(input, self.fill), self.crop_or_pad(label, 0)
-
-    def crop_or_pad(self, data, fill):
-        # Preserve data type.
-        data_type = data.dtype
-
+    def __call__(self, data, info):
+        """
+        data: the data to transform.
+        info: information required by the crop method.
+        """
         # Determine which dimensions to reshape.
         resolution = [r if r is not None else d for r, d in zip(self.resolution, data.shape)]
 
         # Create placeholder array.
-        new_data = np.full(shape=resolution, fill_value=fill, dtype=data.dtype)
+        new_data = np.zeros(shape=resolution, dtype=data.dtype)
 
         # Find data centres as we will perform centred cropping and padding.
         data_centre = (np.array(data.shape) - 1) / 2
@@ -40,9 +35,15 @@ class CropOrPad:
         read_range = [slice(l, l + r) for l, r in zip(read_lower_bound, write_shape)]
 
         # Add data to placeholder.
-        new_data[tuple(write_range)] = data[tuple(read_range)]
-
-        # Reset data type.
-        new_data = new_data.astype(data_type)
+        new_data[write_range] = data[read_range]
 
         return new_data
+
+    def cache_key(self):
+        """
+        returns: an ID that is unique based upon transform parameters.
+        """
+        params = {
+            'resolution': self.resolution
+        }
+        return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()

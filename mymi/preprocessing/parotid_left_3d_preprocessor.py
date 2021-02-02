@@ -21,7 +21,8 @@ FILENAME_NUM_DIGITS = 5
 class ParotidLeft3DPreprocessor:
     def extract(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
         """
-        effect: stores processed patient data.
+        effect: stores 3D patient volumes in 'train', 'validate' and 'test' folders
+            by random split.
         kwargs:
             drop_missing_slices: drops patients that have missing slices.
             num_pats: operate on subset of patients.
@@ -77,8 +78,7 @@ class ParotidLeft3DPreprocessor:
             os.makedirs(folder_path)
 
             # Maintain index per subfolder.
-            pos_sample_i = 0
-            neg_sample_i = 0
+            sample_idx = 0
 
             # Write each patient to folder.
             for pat_id in tqdm(pat_ids):
@@ -88,52 +88,17 @@ class ParotidLeft3DPreprocessor:
                 data = dataset.patient_data(pat_id, transforms=transforms)
                 _, label_data = dataset.patient_labels(pat_id, regions=region, transforms=transforms)[0]
 
-                # Find slices with and without 'Parotid-Left' label.
-                pos_slice_indices = label_data.sum(axis=(0, 1)).nonzero()[0]
-                neg_slice_indices = np.setdiff1d(range(label_data.shape[2]), pos_slice_indices) 
-
-                # Write positive input and label data.
-                for pos_slice_i in pos_slice_indices: 
-                    # Get input and label data axial slices.
-                    d, l = data[:, :, pos_slice_i], label_data[:, :, pos_slice_i]
-
-                    # Save input data.
-                    pos_path = os.path.join(folder_path, 'positive')
-                    if not os.path.exists(pos_path):
-                        os.makedirs(pos_path)
-                    filename = f"{pos_sample_i:0{FILENAME_NUM_DIGITS}}-input"
-                    filepath = os.path.join(pos_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, d)
-
-                    # Save label.
-                    filename = f"{pos_sample_i:0{FILENAME_NUM_DIGITS}}-label"
-                    filepath = os.path.join(pos_path, filename)
-                    f = open(filepath, 'wb')
-                    np.save(f, l)
-
-                    # Increment sample index.
-                    pos_sample_i += 1
-
-            # Write negative input and label data.
-            for neg_slice_i in neg_slice_indices:
-                # Get input and label data axial slices.
-                d, l = data[:, :, neg_slice_i], label_data[:, :, neg_slice_i]
-
                 # Save input data.
-                neg_path = os.path.join(folder_path, 'negative')
-                if not os.path.exists(neg_path):
-                    os.makedirs(neg_path)
-                filename = f"{neg_sample_i:0{FILENAME_NUM_DIGITS}}-input"
-                filepath = os.path.join(neg_path, filename)
+                filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
+                filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
-                np.save(f, d)
+                np.save(f, data)
 
                 # Save label.
-                filename = f"{neg_sample_i:0{FILENAME_NUM_DIGITS}}-label"
-                filepath = os.path.join(neg_path, filename)
+                filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-label"
+                filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
-                np.save(f, l)
+                np.save(f, label_data)
 
                 # Increment sample index.
-                neg_sample_i += 1
+                sample_idx += 1

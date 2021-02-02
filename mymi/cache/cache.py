@@ -54,17 +54,17 @@ class Cache:
             raise ValueError(f"Cache path doesn't exist '{path}'.")
         self._path = path
 
-    def cache_key(self, key):
+    def cache_key(self, params):
         """
-        key: a dict of cache parameters.
+        params: a dict of cache parameters.
         """
-        if not isinstance(key, dict):
-            raise ValueError(f"Cache key should be dict, got '{type(key)}'.")
+        if not isinstance(params, dict):
+            raise ValueError(f"Cache params should be dict, got '{type(params)}'.")
 
-        # Handle unserialisable types.
-        key = self.make_serialisable(key)
+        # Handle special types so that dict is serialisable.
+        params = self.make_serialisable(params)
 
-        return hashlib.sha1(json.dumps(key).encode('utf-8')).hexdigest() 
+        return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest() 
 
     def is_serialisable(self, obj):
         """
@@ -104,20 +104,36 @@ class Cache:
         key: cache key to look for.
         """
         # Search for file by key.
-        cache_path = os.path.join(self._path, self.cache_key(key))
+        cache_path = os.path.join(self._path, key) 
         if os.path.exists(cache_path):
             return True
         else:
             return False
 
-    def read(self, key, type):
+    def read(self, params, type):
         """
-        key: the cache key string.
+        params: the cache key dict.
         type: the object type.
         """
+        # Check if cache read is enabled.
+        if not self.read_enabled:
+            return None
+        
+        # Get cache key string.
+        try:
+            key = self.cache_key(params)
+        except ValueError as e:
+            # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
+            logging.info(e)
+            return None
+
+        # Check if cache key exists.
+        if not self.exists(key):
+            return None
+
         # Log cache read start.
         start = time.time()
-        logging.info(f"Reading {type} from cache with key '{key}'.")
+        logging.info(f"Reading {type} from cache with params '{params}'.")
 
         # Read data.
         data = None
@@ -135,16 +151,28 @@ class Cache:
 
         return data
 
-    def write(self, key, obj, type):
+    def write(self, params, obj, type):
         """
         effect: creates cached data on disk.
-        key: a dict of terms that define a unique cache item.
+        params: a dict of terms that define a unique cache item.
         obj: the object to cache.
         type: the object type.
         """
+        # Check if cache read is enabled.
+        if not self.write_enabled:
+            return None
+        
+        # Get cache key string.
+        try:
+            key = self.cache_key(params)
+        except ValueError as e:
+            # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
+            logging.info(e)
+            return None
+
         # Log cache write start.
         start = time.time()
-        logging.info(f"Writing {type} to cache with key '{key}'.")
+        logging.info(f"Writing {type} to cache with params '{params}'.")
 
         # Write data.
         size = None
@@ -162,16 +190,16 @@ class Cache:
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
     def read_array(self, key):
-        filepath = os.path.join(self._path, self.cache_key(key))
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
     def read_dataframe(self, key):
-        filepath = os.path.join(self._path, self.cache_key(key))
+        filepath = os.path.join(self._path, key)
         return pd.read_parquet(filepath)
 
     def read_name_array_pairs(self, key):
-        folder_path = os.path.join(self._path, self.cache_key(key))
+        folder_path = os.path.join(self._path, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
             filepath = os.path.join(folder_path, name)
@@ -182,18 +210,18 @@ class Cache:
         return name_array_pairs
 
     def write_array(self, key, array):
-        filepath = os.path.join(self._path, self.cache_key(key))
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
     def write_dataframe(self, key, df):
-        filepath = os.path.join(self._path, self.cache_key(key))
+        filepath = os.path.join(self._path, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
-        folder_path = os.path.join(self._path, self.cache_key(key))
+        folder_path = os.path.join(self._path, key)
         os.makedirs(folder_path, exist_ok=True)
 
         size = 0

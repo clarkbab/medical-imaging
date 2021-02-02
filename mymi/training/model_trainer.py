@@ -6,7 +6,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from mymi import loaders
 from mymi import utils
-from mymi.augmentation import transforms as ts
 from mymi.metrics import dice as dice_metric
 
 TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 

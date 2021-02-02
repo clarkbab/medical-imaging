@@ -97,7 +97,7 @@ class Dataset:
         kwargs:
             transforms: a list of transforms to apply to the data.
         """
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'patient_data',
             'args': {
@@ -107,8 +107,9 @@ class Dataset:
                 'transforms': transforms
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'array')
+        result = cache.read(params, 'array')
+        if result is not None:
+            return result
 
         # Load patient CT dicoms.
         ct_dicoms = dataset.list_ct(pat_id)
@@ -134,13 +135,12 @@ class Dataset:
             # Add data.
             data[:, :, z_idx] = pixel_data
 
-        # Transform the data.
+        # Perform deterministic or random transform on the data.
         for transform in transforms:
-            data = transform(data, summary)
+            data = transform(data, info=summary)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, data, 'array')
+        cache.write(params, data, 'array')
 
         return data
 
@@ -154,7 +154,7 @@ class Dataset:
             regions: the desired regions.
             transforms: a list of transforms to apply to the labels.
         """
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'patient_labels',
             'args': {
@@ -165,8 +165,9 @@ class Dataset:
                 'transforms': transforms
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'name-array-pairs')
+        result = cache.read(params, 'name-array-pairs')
+        if result is not None:
+            return result
 
         # Load all regions-of-interest.
         rtstruct_dicom = dataset.get_rtstruct(pat_id)
@@ -223,14 +224,12 @@ class Dataset:
         # Transform the labels.
         summary['order'] = 0      # Perform nearest-neighbour interpolation.
         for transform in transforms:
-            labels = [(name, transform(data, summary)) for name, data in labels]
+            labels = [(name, transform(data, binary=True, info=summary)) for name, data in labels]
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, labels, 'name-array-pairs')
+        cache.write(params, labels, 'name-array-pairs')
 
         return labels
-        print('not implemented')
 
     ###
     # Summaries of data.
@@ -245,7 +244,7 @@ class Dataset:
             pat_id: a string or list of patient IDs.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'summary',
             'kwargs': {
@@ -253,8 +252,9 @@ class Dataset:
                 'pat_id': pat_id
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
                 
         # Define table structure.
         cols = {
@@ -313,8 +313,7 @@ class Dataset:
         df = df.set_index('pat-id')
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -326,13 +325,14 @@ class Dataset:
             pat_id: the patient ID.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'patient_summary',
             'args': args
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
 
         # Define table structure.
         cols = {
@@ -421,8 +421,7 @@ class Dataset:
         df = df.astype(cols)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -435,7 +434,7 @@ class Dataset:
             pat_id: a string or list of patient IDs.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'regions',
             'kwargs': {
@@ -443,8 +442,9 @@ class Dataset:
                 'pat_id': pat_id
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
                 
         # Define table structure.
         cols = {
@@ -484,8 +484,7 @@ class Dataset:
                 df = df.append(data, ignore_index=True)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -497,13 +496,14 @@ class Dataset:
             pat_id: the patient ID.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'patient_regions',
             'args': args
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
         
         # Define table structure.
         cols = {
@@ -529,8 +529,7 @@ class Dataset:
         df = df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -542,15 +541,16 @@ class Dataset:
             num_pats: the number of patients to summarise.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'region_count',
             'kwargs': {
                 'num_pats': num_pat
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
 
         # Define table structure.
         cols = {
@@ -581,8 +581,7 @@ class Dataset:
         df = df.sort_values('region').reset_index(drop=True)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -595,7 +594,7 @@ class Dataset:
             pat_id: a string or list of patient IDs.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'ct',
             'kwargs': {
@@ -603,8 +602,9 @@ class Dataset:
                 'pat_id': pat_id
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
                 
         # Define dataframe structure.
         cols = {
@@ -664,8 +664,7 @@ class Dataset:
                 df = df.append(data, ignore_index=True)
 
         # Write data to cache.
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -677,15 +676,16 @@ class Dataset:
             pat_id: the patient ID.
         """
         # Load from cache if present.
-        key = {
+        params = {
             'class': 'dataset',
             'method': 'patient_ct',
             'args': {
                 'pat_id': pat_id
             }
         }
-        if cache.read_enabled() and cache.exists(key):
-            return cache.read(key, 'dataframe')
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
             
         # Define dataframe structure.
         cols = {
@@ -732,7 +732,7 @@ class Dataset:
         # Sort by 'offset-z'.
         df = df.sort_values('offset-z').reset_index(drop=True)
 
-        if cache.write_enabled():
-            cache.write(key, df, 'dataframe')
+        # Write data to cache.
+        cache.write(params, df, 'dataframe')
 
         return df

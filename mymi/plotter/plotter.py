@@ -23,13 +23,16 @@ class Plotter:
             regions: the regions-of-interest to plot.
             transforms: the transforms to apply before plotting.
         """
+        # Create deterministic transforms so they're consistently applied to data
+        # and labels. 
+        det_transforms = [t.deterministic() for t in transforms]
+
         # Load CT data.
-        pat_ext = PatientDataExtractor(pat_id)
-        ct_data = pat_ext.get_data()
+        ct_data = dataset.patient_data(pat_id, transforms=det_transforms)
 
         # Load labels.
         if labels:
-            label_data = pat_ext.get_labels()
+            label_data = dataset.patient_labels(pat_id, transforms=det_transforms)
 
         # Find slice in correct plane.
         data_index = [
@@ -63,6 +66,7 @@ class Plotter:
                 palette = plt.cm.tab20
 
                 # Plot each label.
+                show_legend = False
                 for i, (lname, ldata) in enumerate(label_data):
                     # Convert data to 'imshow' co-ordinate system.
                     ldata = ldata[data_index]
@@ -71,6 +75,7 @@ class Plotter:
                     # Skip label if not present on this slice.
                     if ldata.max() == 0:
                         continue
+                    show_legend = True
                     
                     # Create binary colormap for each label.
                     colours = [(1.0, 1.0, 1.0, 0), palette(i)]
@@ -81,9 +86,10 @@ class Plotter:
                     plt.plot(0, 0, c=palette(i), label=lname)
 
                 # Turn on legend.
-                legend = plt.legend(loc=(1.05, 0.8))
-                for l in legend.get_lines():
-                    l.set_linewidth(8)
+                if show_legend: 
+                    legend = plt.legend(loc=(1.05, 0.8))
+                    for l in legend.get_lines():
+                        l.set_linewidth(8)
 
         # Show axis markers.
         axes = 'on' if axes else 'off'
@@ -91,11 +97,11 @@ class Plotter:
 
         # Determine number of slices.
         if plane == 'axial':
-            num_slices = summary['res-z']
+            num_slices = ct_data.shape[2]
         elif plane == 'coronal':
-            num_slices = summary['res-y']
+            num_slices = ct_data.shape[1]
         elif plane == 'sagittal':
-            num_slices = summary['res-x'] 
+            num_slices = ct_data.shape[0]
 
         # Add title.
         plt.title(f"{plane.capitalize()} slice: {slice_idx}/{num_slices - 1}")

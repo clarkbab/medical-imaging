@@ -21,7 +21,9 @@ FILENAME_NUM_DIGITS = 5
 class ParotidLeft2DPreprocessor:
     def extract(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
         """
-        effect: stores processed patient data.
+        effect: stores 2D slice data in 'train', 'validate' and 'test' folders by 
+            random split and 'positive' and 'negative' subfolders by presence of 
+            'Parotid-Left' gland.
         kwargs:
             drop_missing_slices: drops patients that have missing slices.
             num_pats: operate on subset of patients.
@@ -77,8 +79,8 @@ class ParotidLeft2DPreprocessor:
             os.makedirs(folder_path)
 
             # Maintain index per subfolder.
-            pos_sample_i = 0
-            neg_sample_i = 0
+            pos_sample_idx = 0
+            neg_sample_idx = 0
 
             # Write each patient to folder.
             for pat_id in tqdm(pat_ids):
@@ -101,19 +103,19 @@ class ParotidLeft2DPreprocessor:
                     pos_path = os.path.join(folder_path, 'positive')
                     if not os.path.exists(pos_path):
                         os.makedirs(pos_path)
-                    filename = f"{pos_sample_i:0{FILENAME_NUM_DIGITS}}-input"
+                    filename = f"{pos_sample_idx:0{FILENAME_NUM_DIGITS}}-input"
                     filepath = os.path.join(pos_path, filename)
                     f = open(filepath, 'wb')
                     np.save(f, d)
 
                     # Save label.
-                    filename = f"{pos_sample_i:0{FILENAME_NUM_DIGITS}}-label"
+                    filename = f"{pos_sample_idx:0{FILENAME_NUM_DIGITS}}-label"
                     filepath = os.path.join(pos_path, filename)
                     f = open(filepath, 'wb')
                     np.save(f, l)
 
                     # Increment sample index.
-                    pos_sample_i += 1
+                    pos_sample_idx += 1
 
             # Write negative input and label data.
             for neg_slice_i in neg_slice_indices:
@@ -124,16 +126,16 @@ class ParotidLeft2DPreprocessor:
                 neg_path = os.path.join(folder_path, 'negative')
                 if not os.path.exists(neg_path):
                     os.makedirs(neg_path)
-                filename = f"{neg_sample_i:0{FILENAME_NUM_DIGITS}}-input"
+                filename = f"{neg_sample_idx:0{FILENAME_NUM_DIGITS}}-input"
                 filepath = os.path.join(neg_path, filename)
                 f = open(filepath, 'wb')
                 np.save(f, d)
 
                 # Save label.
-                filename = f"{neg_sample_i:0{FILENAME_NUM_DIGITS}}-label"
+                filename = f"{neg_sample_idx:0{FILENAME_NUM_DIGITS}}-label"
                 filepath = os.path.join(neg_path, filename)
                 f = open(filepath, 'wb')
                 np.save(f, l)
 
                 # Increment sample index.
-                neg_sample_i += 1
+                neg_sample_idx += 1
