@@ -11,7 +11,6 @@ from mymi.metrics import dice as dice_metric
 
 TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
 CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
-DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'HEAD-NECK-RADIOMICS-HN1', 'processed', '2d-parotid-left')
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, positive_loader, negative_loader, 

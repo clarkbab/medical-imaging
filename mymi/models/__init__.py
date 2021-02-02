@@ -1,1 +1,1 @@
-from .parotid_net import ParotidNet
+from .parotid_left_2d_net import ParotidLeft2DNet

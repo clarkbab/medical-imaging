@@ -56,7 +56,7 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-class ParotidNet(nn.Module):
+class ParotidLeft2DNet(nn.Module):
     def __init__(self):
         super().__init__()
 

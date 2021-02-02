@@ -10,7 +10,7 @@ SCRIPT_DIR=/home/baclark/code/medical-imaging/scripts
 PROJECT_DIR=/data/gpfs/projects/punim1413
 CHECKPOINT_DIR=$PROJECT_DIR/checkpoints
 TENSORBOARD_DIR=$PROJECT_DIR/tensorboard
-DATA_DIR=$PROJECT_DIR/HEAD-NECK-RADIOMICS-HN1/processed/2d-parotid-left
+DATA_DIR=$PROJECT_DIR/HEAD-NECK-RADIOMICS-HN1/processed/parotid-left-2d
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -18,6 +18,6 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-python $SCRIPT_DIR/train_node_2d --print-interval 200 --record-interval 200 --validation-interval epoch \
+python $SCRIPT_DIR/parotid_left_2d_train_node --print-interval 200 --record-interval 200 --validation-interval epoch \
     --checkpoint-dir $CHECKPOINT_DIR --tensorboard-dir $TENSORBOARD_DIR --data-dir $DATA_DIR \
     --num-nodes 1 --use-gpu --num-gpus 1
