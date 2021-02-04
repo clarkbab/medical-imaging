@@ -31,9 +31,9 @@ utils.configure_logging(log_level)
 # Set cache configuration.
 cache_config = {
    'path': args.cache_path,
-   'disabled': args.no_cache,
-   'disabled-read': args.no_cache_read,
-   'disabled-write': args.no_cache_write
+   'enabled': not args.no_cache,
+   'enabled-read': not args.no_cache_read,
+   'enabled-write': not args.no_cache_write
 }
 cache.config(**cache_config)
 

@@ -14,8 +14,13 @@ def config(**kwargs):
         write_enabled: enables cache write.
     """
     # Configure enabled.
-    cache.read_enabled = kwargs.pop('read_enabled', True)
-    cache.write_enabled = kwargs.pop('write_enabled', True)
+    enabled = kwargs.pop('enabled', True)
+    if not enabled:
+        cache.read_enabled = False
+        cache.write_enabled = False
+    else:
+        cache.read_enabled = kwargs.pop('read_enabled', True)
+        cache.write_enabled = kwargs.pop('write_enabled', True)
 
     # Configure path.
     path = kwargs.pop('path', None)

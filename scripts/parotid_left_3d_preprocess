@@ -9,8 +9,8 @@ sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import utils
-from mymi.preprocessing import ParotidLeft2DPreprocessor
-from mymi import transforms as ts
+from mymi.preprocessing import ParotidLeft3DPreprocessor
+from mymi.transforms import Resample
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
@@ -31,9 +31,9 @@ utils.configure_logging(log_level)
 # Set cache configuration.
 cache_config = {
    'path': args.cache_path,
-   'disabled': args.no_cache,
-   'disabled-read': args.no_cache_read,
-   'disabled-write': args.no_cache_write
+   'enabled': not args.no_cache,
+   'enabled-read': not args.no_cache_read,
+   'enabled-write': not args.no_cache_write
 }
 cache.config(**cache_config)
 
@@ -42,9 +42,9 @@ num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
 
 # Create transforms.
 transforms = [
-    ts.ResampleTransform((1.0, 1.0, 3.0))
+    Resample((1.0, 1.0, 3.0))
 ]
 
 # Perform extraction.
-dp = ParotidLeft2DPreprocessor()
+dp = ParotidLeft3DPreprocessor()
 dp.extract(num_pats=num_pats, transforms=transforms)
