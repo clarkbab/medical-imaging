@@ -18,7 +18,6 @@ class Plotter:
         kwargs:
             axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
-            labels: display contours.
             plane: the viewing plane.
             regions: the regions-of-interest to plot.
             transforms: the transforms to apply before plotting.
@@ -35,7 +34,7 @@ class Plotter:
         ct_data = dataset.patient_data(pat_id, transforms=det_transforms)
 
         # Load labels.
-        if labels:
+        if regions is not None:
             label_data = dataset.patient_labels(pat_id, regions=regions, transforms=det_transforms)
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
@@ -51,20 +50,24 @@ class Plotter:
         # that required by 'imshow'.
         ct_slice_data = cls.to_image_coords(ct_slice_data, plane)
 
-        # Determine aspect ratio.
-        summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
-        if plane == 'axial':
-            aspect = summary['spacing-y'] / summary['spacing-x']
-        elif plane == 'coronal':
-            aspect = summary['spacing-z'] / summary['spacing-x']
-        elif plane == 'sagittal':
-            aspect = summary['spacing-z'] / summary['spacing-y']
+        # Only apply aspect ratio if no transforms are being presented otherwise
+        # we'll end up with skewed images.
+        if len(transforms) == 0:
+            summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
+            if plane == 'axial':
+                aspect = summary['spacing-y'] / summary['spacing-x']
+            elif plane == 'coronal':
+                aspect = summary['spacing-z'] / summary['spacing-x']
+            elif plane == 'sagittal':
+                aspect = summary['spacing-z'] / summary['spacing-y']
+        else:
+            aspect = 1
 
         # Plot CT data.
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect)
 
-        if labels:
+        if regions is not None:
             # Plot labels.
             if len(label_data) != 0:
                 # Define color pallete.
