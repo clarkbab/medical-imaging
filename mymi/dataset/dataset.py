@@ -49,7 +49,7 @@ class Dataset:
             
             if dicom.Modality == 'CT':
                 ct_dicoms = [pdcm.read_file(os.path.join(p, d)) for d in os.listdir(p)]
-                ct_dicoms = sorted(ct_dicoms, key=lambda d: d.ImagePositionPatient[2])
+                ct_dicoms = sorted(ct_dicoms, key=lambda d: float(d.ImagePositionPatient[2]))
                 return ct_dicoms
 
         # TODO: raise an error.
@@ -121,12 +121,10 @@ class Dataset:
         
         # Add CT data.
         for ct_dicom in ct_dicoms:
-            # Convert stored data to HU.
-            pixel_data = ct_dicom.pixel_array
+            # Convert stored data to HU. Transpose to anatomical co-ordinates as
+            # pixel data is stored image row-first.
+            pixel_data = np.transpose(ct_dicom.pixel_array)
             pixel_data = ct_dicom.RescaleSlope * pixel_data + ct_dicom.RescaleIntercept
-
-            # Transpose to put in the form (x, y) where x is the table axis.
-            pixel_data = np.transpose(pixel_data)
 
             # Get z index.
             offset_z =  ct_dicom.ImagePositionPatient[2] - summary['offset-z']
@@ -185,7 +183,7 @@ class Dataset:
             name = roi_info.ROIName
 
             # Check if we should skip.
-            if not (regions == 'all' or
+            if not (regions == 'all' or 
                 (type(regions) == list and name in regions) or
                 (type(regions) == str and name == regions)):
                 continue

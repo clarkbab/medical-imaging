@@ -9,7 +9,7 @@ from mymi import dataset
 
 class Plotter:
     @classmethod
-    def plot_ct(cls, pat_id, slice_idx, axes=True, figsize=(8, 8), labels=True, plane='axial', regions=None, transforms=[]):
+    def plot_ct(cls, pat_id, slice_idx, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
         """
         effect: plots a CT slice with contours.
         args:
@@ -22,6 +22,10 @@ class Plotter:
             plane: the viewing plane.
             regions: the regions-of-interest to plot.
             transforms: the transforms to apply before plotting.
+        viewplanes:
+            axial: viewed from the cranium (slice_idx=0) to the caudal region.
+            coronal: viewed from the anterior (slice_idx=0) to the posterior.
+            sagittal: viewed from the 
         """
         # Create deterministic transforms so they're consistently applied to data
         # and labels. 
@@ -32,9 +36,10 @@ class Plotter:
 
         # Load labels.
         if labels:
-            label_data = dataset.patient_labels(pat_id, transforms=det_transforms)
+            label_data = dataset.patient_labels(pat_id, regions=regions, transforms=det_transforms)
 
-        # Find slice in correct plane.
+        # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
+        assert plane in ('axial', 'coronal', 'sagittal')
         data_index = [
             slice_idx if plane == 'sagittal' else slice(ct_data.shape[0]),
             slice_idx if plane == 'coronal' else slice(ct_data.shape[1]),
@@ -112,7 +117,7 @@ class Plotter:
     def to_image_coords(cls, data, plane):
         if plane == 'axial':
             data = np.transpose(data)
-        elif plane == 'coronal' or plane == 'sagittal':
-            data = np.rot90(np.transpose(data), k=2)
+        elif plane in ('coronal', 'sagittal'):
+            data = np.rot90(data)
 
         return data
