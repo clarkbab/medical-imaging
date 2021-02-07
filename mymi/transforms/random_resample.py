@@ -3,36 +3,72 @@ import numpy as np
 from skimage import transform
 
 class RandomResample:
-    def __init__(self, stretch, p=1.0):
-        self.stretch = stretch
+    def __init__(self, range, p=1.0):
+        self.range = range
         self.p = p
 
-    def __call__(self, input, label):
-        if np.random.binomial(1, self.p):
-            input, label = self.resample(input, label)
+    def __call__(self, data, binary=False, info=None):
+        """
+        returns: the input data.
+        args:
+            data: the input data.
+        kwargs:
+            binary: indicates that input was binary data.
+            info: optional info that the transform may require.
+        """
+        # Get deterministic function.
+        det_fn = self.deterministic()
+        
+        # Process result.
+        result = det_fn(data, binary=binary, info=info) 
+        return result
 
-        return input, label
+    def deterministic(self):
+        """
+        returns: a deterministic function with same signature as '__call__'.
+        """
+        # Realise randomness.
+        applied, stretch = self.realise_randomness()
 
-    def resample(self, input, label):
+        # Create function that can be called to produce consistent results.
+        def fn(data, binary=False, info=None):
+            if applied:
+                data = self.resample(data, stretch, binary)
+
+            return data
+
+        return fn
+
+    def realise_randomness(self):
+        """
+        returns: all realisations of random processes in the transformation.
+        """
+        # Determine if rotation is applied.
+        applied = True if np.random.binomial(1, self.p) else False
+
+        # Determine angles.
+        stretch = np.random.uniform(*self.range)
+        
+        return applied, stretch 
+
+    def resample(self, data, stretch, binary):
         # Preserve data types - important as some input/label pairs in a batch
         # won't be transformed and need the same data type for collation.
-        input_dtype, label_dtype = input.dtype, label.dtype
-
-        # Sample the stretch 
-        rand_stretch = [np.random.uniform(*s) for s in self.stretch]
+        dtype = data.dtype 
 
         # Get new resolution.
-        assert input.shape == label.shape
-        new_res = [math.floor(s * input.shape[i]) for i, s in enumerate(rand_stretch)]
+        new_res = [math.floor(stretch * data.shape[i]) for i in range(2)] 
 
         # Perform resample.
-        input = transform.resize(input, new_res, order=3, preserve_range=True)
-        label = transform.resize(label, new_res, order=0, preserve_range=True)
+        if binary:
+            data = transform.resize(data, new_res, order=0, preserve_range=True)
+        else:
+            data = transform.resize(data, new_res, order=3, preserve_range=True)
 
         # Reset types.
-        input, label = input.astype(input_dtype), label.astype(label_dtype)
+        data = data.astype(dtype)
 
-        return input, label
+        return data
 
     def cache_key(self):
         raise ValueError("Random transformations aren't cacheable.")
