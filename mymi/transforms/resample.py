@@ -49,6 +49,16 @@ class Resample:
 
         return data
 
+    def deterministic(self):
+        """
+        returns: a deterministic function with same signature as '__call__'.
+        """
+        # No randomness, just return function identical to '__call__'.
+        def fn(data, binary=False, info=None):
+            return self.__call__(data, binary=binary, info=info)
+
+        return fn
+
     def cache_key(self):
         """
         returns: an ID that is unique based upon transform parameters.

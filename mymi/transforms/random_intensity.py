@@ -32,8 +32,6 @@ class RandomIntensity:
     def deterministic(self):
         """
         returns: a deterministic function with same signature as '__call__'.
-        args:
-            shape: the noise shape to generate.
         """
         # Realise randomness.
         applied, seed = self.realise_randomness()
