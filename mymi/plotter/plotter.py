@@ -9,13 +9,14 @@ from mymi import dataset
 
 class Plotter:
     @classmethod
-    def plot_ct(cls, pat_id, slice_idx, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
+    def plot_ct(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
         """
         effect: plots a CT slice with contours.
         args:
             pat_id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
+            aspect: use a hard-coded aspect ratio, useful for viewing transforms.
             axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
             plane: the viewing plane.
@@ -50,18 +51,19 @@ class Plotter:
         # that required by 'imshow'.
         ct_slice_data = cls.to_image_coords(ct_slice_data, plane)
 
-        # Only apply aspect ratio if no transforms are being presented otherwise
-        # we'll end up with skewed images.
-        if len(transforms) == 0:
-            summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
-            if plane == 'axial':
-                aspect = summary['spacing-y'] / summary['spacing-x']
-            elif plane == 'coronal':
-                aspect = summary['spacing-z'] / summary['spacing-x']
-            elif plane == 'sagittal':
-                aspect = summary['spacing-z'] / summary['spacing-y']
-        else:
-            aspect = 1
+        if aspect is None:
+            # Only apply aspect ratio if no transforms are being presented otherwise
+            # we'll end up with skewed images.
+            if len(transforms) == 0:
+                summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
+                if plane == 'axial':
+                    aspect = summary['spacing-y'] / summary['spacing-x']
+                elif plane == 'coronal':
+                    aspect = summary['spacing-z'] / summary['spacing-x']
+                elif plane == 'sagittal':
+                    aspect = summary['spacing-z'] / summary['spacing-y']
+            else:
+                aspect = 1
 
         # Plot CT data.
         plt.figure(figsize=figsize)

@@ -31,7 +31,8 @@ class CropOrPad:
         resolution = [r if r is not None else d for r, d in zip(self.resolution, data.shape)]
 
         # Create placeholder array.
-        new_data = np.full(shape=resolution, fill_value=self.fill, dtype=data.dtype)
+        fill = 0 if binary else self.fill
+        new_data = np.full(shape=resolution, fill_value=fill, dtype=data.dtype)
 
         # Find data centres as we will perform centred cropping and padding.
         data_centre = (np.array(data.shape) - 1) / 2
