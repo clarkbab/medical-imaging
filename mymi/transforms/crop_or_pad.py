@@ -6,17 +6,24 @@ import numpy as np
 class CropOrPad:
     def __init__(self, resolution, fill=0):
         """
-        resolution: an (x, y) tuple of the new resolution.
-        fill: value to use for new pixels.
-        p: the probability that the transform is applied.
+        args:
+            resolution: an (x, y) tuple of the new resolution.
+        kwargs:
+            fill: value to use for new pixels.
+            p: the probability that the transform is applied.
         """
         self.resolution = resolution
         self.fill = fill
 
-    def __call__(self, input, label):
-        return self.crop_or_pad(input, self.fill), self.crop_or_pad(label, 0)
-
-    def crop_or_pad(self, data, fill):
+    def __call__(self, data, binary=False, info=None):
+        """
+        returns: transformed data.
+        args:
+            the data to transform.
+        kwargs:
+            binary: is the data binary data.
+            info: extra info.
+        """
         # Preserve data type.
         data_type = data.dtype
 
@@ -24,7 +31,7 @@ class CropOrPad:
         resolution = [r if r is not None else d for r, d in zip(self.resolution, data.shape)]
 
         # Create placeholder array.
-        new_data = np.full(shape=resolution, fill_value=fill, dtype=data.dtype)
+        new_data = np.full(shape=resolution, fill_value=self.fill, dtype=data.dtype)
 
         # Find data centres as we will perform centred cropping and padding.
         data_centre = (np.array(data.shape) - 1) / 2
@@ -46,6 +53,16 @@ class CropOrPad:
         new_data = new_data.astype(data_type)
 
         return new_data
+
+    def deterministic(self):
+        """
+        returns: a deterministic function with same signature as '__call__'.
+        """
+        # No randomness, just return function identical to '__call__'.
+        def fn(data, binary=False, info=None):
+            return self.__call__(data, binary=binary, info=info)
+
+        return fn
 
     def cache_key(self):
         """
