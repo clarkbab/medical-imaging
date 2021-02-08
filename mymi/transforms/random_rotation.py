@@ -77,8 +77,6 @@ class RandomRotation:
         # Preserve data types - important as some input/label pairs in a batch
         # won't be transformed and need the same data type for collation.
         dtype = data.dtype
-        print('rotating')
-        print(f"binary: {binary}")
 
         # Sample the range uniformly.
         axes = [(1, 2), (0, 2), (0, 1)]
