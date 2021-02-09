@@ -12,15 +12,14 @@ TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard')
 CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
 
 class ModelTrainer:
-    def __init__(self, train_loader, validation_loader, optimiser, loss_fn, positive_loader, negative_loader, 
+    def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
         record_interval='epoch', validation_interval='epoch', print_format='.10f', num_validation_images=3, 
         checkpoint_dir=CHECKPOINT_DIR_DEFAULT, tensorboard_dir=TENSORBOARD_DIR_DEFAULT, is_reporter=False,
         log_info=logging.info):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
-        self.positive_loader = positive_loader
-        self.negative_loader = negative_loader
+        self.visual_loader = visual_loader
         self.optimiser = optimiser
         self.loss_fn = loss_fn
         self.max_epochs = max_epochs
@@ -117,20 +116,19 @@ class ModelTrainer:
         model.eval()
 
         # Plot validation images for visual indication of improvement.
-        for loader, label in [(self.positive_loader, 'Positive'), (self.negative_loader, 'Negative')]:
-            for batch, (input, mask) in enumerate(loader):
-                input, mask = input.float(), mask.long()
-                input = input.unsqueeze(1)
-                input, mask = input.to(self.device), mask.to(self.device)
+        # for batch, (input, mask) in enumerate(self.visual_loader):
+        #     input, mask = input.float(), mask.long()
+        #     input = input.unsqueeze(1)
+        #     input, mask = input.to(self.device), mask.to(self.device)
 
-                # Perform forward pass.
-                pred = model(input)
-                loss = self.loss_fn(pred, mask)
+        #     # Perform forward pass.
+        #     pred = model(input)
+        #     loss = self.loss_fn(pred, mask)
 
-                # Add image data.
-                image_data = utils.image_data(input, mask, pred)
-                tag = f"{label} image batch {batch}"
-                self.writer.add_images(tag, image_data, dataformats='NCWH', global_step=iteration)
+        #     # Add image data.
+        #     image_data = utils.image_data(input, mask, pred)
+        #     tag = f"Visual validation batch {batch}"
+        #     self.writer.add_images(tag, image_data, dataformats='NCWH', global_step=iteration)
 
         # Calculate validation score.
         for val_batch, (input, mask) in enumerate(self.validation_loader):

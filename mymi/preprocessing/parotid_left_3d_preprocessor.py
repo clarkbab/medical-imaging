@@ -84,7 +84,8 @@ class ParotidLeft3DPreprocessor:
             for pat_id in tqdm(pat_ids):
                 logging.info(f"Extracting data for patient {pat_id}.")
 
-                # Load data.
+                # Load data. Don't need to load 'deterministic' transforms as
+                # no random transforms should be applied when preprocessing.
                 data = dataset.patient_data(pat_id, transforms=transforms)
                 _, label_data = dataset.patient_labels(pat_id, regions=region, transforms=transforms)[0]
 

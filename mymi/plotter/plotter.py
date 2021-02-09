@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
+import torch
 
 from mymi import cache
 from mymi import dataset
 
 class Plotter:
     @classmethod
-    def plot_ct(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
         """
         effect: plots a CT slice with contours.
         args:
@@ -126,3 +127,94 @@ class Plotter:
             data = np.rot90(data)
 
         return data
+
+    @classmethod
+    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', plane='axial'):
+        """
+        effect: plots a training batch.
+        args:
+            input: the input data.
+            slice_idx: the slice to show.
+        kwargs:
+            label: the label data.
+            num_images: number of images from the batch to plot.
+            pred: the predicted segmentation mask.
+            figsize: the plot figure size.
+            full_label: should we should full label mask or perimeter?
+            plane: the viewing plane.
+        """
+        # Get input data.
+        assert plane in ('axial', 'coronal', 'sagittal')
+        num_images = len(input) if num_images == 'all' else num_images
+        input_data = input[:num_images]
+
+        # Add prediction.
+
+        # Add label.
+        if label is not None:
+            # Get subset of images.
+            label_data = label[:num_images]
+
+        # Plot data.
+        _, axs = plt.subplots(num_images, figsize=figsize)
+        if num_images == 1: axs = [axs]
+
+        for i in range(num_images):
+            # Plot input slice data.
+            if plane == 'axial':
+                slice_input_data = np.transpose(input_data[i, :, :, slice_idx])
+            elif plane == 'coronal':
+                slice_input_data = np.rot90(input_data[i, :, slice_idx, :])
+            elif plane == 'sagittal':
+                slice_input_data = np.rot90(input_data[i, slice_idx, :, :])
+
+            axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
+
+            # Get pred slice data.
+
+            # Plot label slice data.
+            if label is not None:
+                if plane == 'axial':
+                    slice_label_data = np.transpose(label_data[i, :, :, slice_idx])
+                elif plane == 'coronal':
+                    slice_label_data = np.rot90(label_data[i, :, slice_idx, :])
+                elif plane == 'sagittal':
+                    slice_label_data = np.rot90(label_data[i, slice_idx, :, :])
+
+                # Get binary perimeter.
+                if full_label:
+                    colour = (0.12, 0.47, 0.7, 1.0)
+                else:
+                    colour = (1.0, 1.0, 1.0e-5, 1.0)
+                    slice_label_data = cls.binary_perimeter(slice_label_data)
+
+                # Create binary colormap.
+                colours = [(1.0, 1.0, 1.0, 0), colour]
+                label_cmap = ListedColormap(colours)
+
+                axs[i].imshow(slice_label_data, aspect=aspect, cmap=label_cmap)
+        
+        plt.show()
+
+    @classmethod
+    def binary_perimeter(cls, mask):
+        """
+        returns: the edge pixels of the mask.
+        args:
+            mask: a 2D image mask.
+        """
+        mask_perimeter = torch.zeros_like(mask, dtype=bool)
+        x_dim, y_dim = mask.shape
+        for i in range(x_dim):
+            for j in range(y_dim):
+                # Check if edge pixel.
+                if (mask[i, j] == 1 and 
+                    ((i == 0 or i == x_dim - 1) or
+                    (j == 0 or j == y_dim - 1) or
+                    i != 0 and mask[i - 1, j] == 0 or 
+                    i != x_dim - 1 and mask[i + 1, j] == 0 or
+                    j != 0 and mask[i, j - 1] == 0 or
+                    j != y_dim - 1 and mask[i, j + 1] == 0)):
+                    mask_perimeter[i, j] = 1
+
+        return mask_perimeter

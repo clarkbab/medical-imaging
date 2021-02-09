@@ -18,6 +18,7 @@ sys.path.append(root_dir)
 from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DSubsetLoader
 from mymi.models import ParotidLeft3DNet
 from mymi.training import ModelTrainer
+from mymi.transforms import CropOrPad, RandomIntensity, RandomResample, RandomRotation, RandomTranslation
 from mymi import transforms as ts
 from mymi import utils
 
@@ -72,30 +73,30 @@ def train(args):
         dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
 
     # Define transforms.
-    p = 0.5
     fill = -1000
-    angle = 10
-    translation = 50
+    rotation = (-5, 5)
+    translation = (-50, 50)
     scale = (0.8, 1.2)
-    res = (512, 512) 
+    lam = 1.0
+    resolution = (512, 512, 212)
     transforms = [
-        ts.RandomRotation((-angle, angle), fill=fill, p=p),
-        ts.RandomTranslation(((-translation, translation), (-translation, translation)), fill=fill, p=p),
-        ts.RandomResample((scale, scale), p=p),
-        ts.CropOrPad(res, fill=fill)
+        RandomTranslation(range_x=translation, range_y=translation, range_z=translation, fill=fill),
+        RandomRotation(range_x=rotation, range_y=rotation, range_z=rotation, fill=fill),
+        RandomResample(scale),
+        RandomIntensity(lam=lam),
+        CropOrPad(resolution, fill=fill)
     ]
     validation_transforms = [
-        ts.CropOrPad(res, fill=fill)
+        CropOrPad(resolution, fill=fill)
     ]
 
     # Get data loaders.
     batch_size = args.batch_size
     opt_kwargs = {}
     if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
-    train_loader = ParotidLeft2DLoader.build('train', batch_size=batch_size, transforms=transforms, **opt_kwargs)
-    validation_loader = ParotidLeft2DLoader.build('validate', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
-    positive_loader = ParotidLeft2DSubsetLoader.build('positive', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
-    negative_loader = ParotidLeft2DSubsetLoader.build('negative', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
+    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transforms=transforms, **opt_kwargs)
+    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
+    visual_loader = ParotidLeft3DSubsetLoader.build(batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
 
     # Configure device.
     if args.use_gpu:
@@ -111,7 +112,7 @@ def train(args):
         device = torch.device('cpu')
 
     # Create model.
-    model = ParotidLeft2DNet()
+    model = ParotidLeft3DNet()
     model = model.to(device)
 
     # Wrap for distributed training.
@@ -136,8 +137,8 @@ def train(args):
     if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.
-    trainer = ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, positive_loader, 
-        negative_loader, device=device, log_info=log_info, **opt_kwargs)
+    trainer = ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
+        device=device, log_info=log_info, **opt_kwargs)
     trainer(model)
 
 def is_multi_process(args):

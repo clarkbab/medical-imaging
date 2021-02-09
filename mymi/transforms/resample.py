@@ -5,10 +5,15 @@ import scipy
 from scipy.ndimage import zoom
 
 class Resample:
-    def __init__(self, spacing):
+    def __init__(self, resolution=None, spacing=None):
         """
-        spacing: a list of desired (x, y, z) spacings.
+        kwargs:
+            resolution: the desired resolution.
+            spacing: a list of desired (x, y, z) spacings.
         """
+        assert resolution == None or spacing == None, 'Only resolution or spacing may be specified.'
+
+        self.resolution = resolution
         self.spacing = spacing
 
     def __call__(self, data, binary=False, info=None):
@@ -38,14 +43,12 @@ class Resample:
         # consisting of integers. The field-of-view (shape * spacing) must be
         # maintained throughout.
         real_resize_factor = new_shape / data.shape
-        new_spacing = old_spacing / real_resize_factor
 
         # Perform resampling.
-        order = info['order'] if 'order' in info.keys() else 3
-
-        # TODO: Look into using skimage.transform.resize method.
-        # https://scikit-image.org/docs/dev/api/skimage.transform.html#skimage.transform.resize
-        data = zoom(data, real_resize_factor, order=order)
+        if binary:
+            data = zoom(data, real_resize_factor, order=0)
+        else:
+            data = zoom(data, real_resize_factor, order=3)
 
         return data
 

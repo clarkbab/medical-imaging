@@ -10,7 +10,7 @@ sys.path.append(root_dir)
 from mymi import cache
 from mymi import utils
 from mymi.preprocessing import ParotidLeft3DPreprocessor
-from mymi.transforms import Resample
+from mymi.transforms import CropOrPad, Resample
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
@@ -41,8 +41,14 @@ cache.config(**cache_config)
 num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
 
 # Create transforms.
+fill = -1000
+spacing = (1.0, 1.0, 3.0)
+resolution = (512, 512, 212)
+low_resolution = (256, 256, 128)
 transforms = [
-    Resample((1.0, 1.0, 3.0))
+    Resample(spacing=spacing),
+    CropOrPad(resolution, fill=fill),
+    # Resample(resolution=low_resolution)
 ]
 
 # Perform extraction.
