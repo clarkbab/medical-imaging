@@ -1,3 +1,4 @@
 from .parotid_left_2d_loader import ParotidLeft2DLoader
 from .parotid_left_2d_subset_loader import ParotidLeft2DSubsetLoader
 from .parotid_left_3d_loader import ParotidLeft3DLoader
+from .parotid_left_3d_subset_loader import ParotidLeft3DSubsetLoader

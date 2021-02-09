@@ -48,7 +48,7 @@ low_resolution = (256, 256, 128)
 transforms = [
     Resample(spacing=spacing),
     CropOrPad(resolution, fill=fill),
-    # Resample(resolution=low_resolution)
+    Resample(resolution=low_resolution)
 ]
 
 # Perform extraction.

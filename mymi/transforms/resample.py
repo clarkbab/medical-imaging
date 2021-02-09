@@ -26,29 +26,21 @@ class Resample:
             spacing-y: the spacing between voxels in y-direction.
             spacing-z: the spacing between voxels in z-direction.
         """
-        new_spacing = np.array([1.0, 1.0, 3.0])
+        # Get old spacing and shape.
         old_spacing = np.array([info['spacing-x'], info['spacing-y'], info['spacing-z']])
+        old_shape = data.shape
 
-        # Check if resampling is needed.
-        if np.array_equal(new_spacing, old_spacing):
-            return data
-
-        # Calculate shape resize factor - the ratio of new to old pixel numbers.
-        resize_factor = old_spacing / new_spacing
-
-        # Calculate new shape - rounded to nearest integer.
-        new_shape = np.round(data.shape * resize_factor)
-
-        # Our real spacing will be different from 'new spacing' due to shape
-        # consisting of integers. The field-of-view (shape * spacing) must be
-        # maintained throughout.
-        real_resize_factor = new_shape / data.shape
+        # Get resize factor - multiplier for resolution required by 'zoom'.
+        if self.spacing is not None:
+            resize_factor = self.spacing_resize_factor(old_shape, old_spacing)
+        elif self.resolution is not None:
+            resize_factor = self.resolution_resize_factor(old_shape)
 
         # Perform resampling.
         if binary:
-            data = zoom(data, real_resize_factor, order=0)
+            data = zoom(data, resize_factor, order=0)
         else:
-            data = zoom(data, real_resize_factor, order=3)
+            data = zoom(data, resize_factor, order=3)
 
         return data
 
@@ -61,6 +53,29 @@ class Resample:
             return self.__call__(data, binary=binary, info=info)
 
         return fn
+
+    def spacing_resize_factor(self, old_shape, old_spacing): 
+        # Check if resampling is needed.
+        if np.array_equal(self.spacing, old_spacing):
+            return data
+
+        # Calculate shape resize factor - the ratio of old to new pixel spacings.
+        resize_factor = old_spacing / self.spacing
+
+        # Calculate new shape - rounded to nearest integer.
+        new_shape = np.round(old_shape * resize_factor)
+
+        # 'Real' resize factor will be different from desired resize factor as
+        # we must maintain integer values for number of pixels.
+        resize_factor = new_shape / old_shape
+
+        return resize_factor
+
+    def resolution_resize_factor(self, old_shape):
+        # Calculate ratio of new to old shapes.
+        resize_factor = np.array(self.resolution) / old_shape
+
+        return resize_factor
 
     def cache_key(self):
         """
