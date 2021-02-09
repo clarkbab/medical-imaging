@@ -14,7 +14,13 @@ sys.path.append(root_dir)
 from mymi import cache
 from mymi import dataset
 
-PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+host = os.uname()[1]
+if 'spartan-login' in host:
+    data_path = os.path.join(os.sep, 'data', 'gpfs', 'projects', 'punim1413')
+else:
+    data_path = os.path.join(os.sep, 'media', 'brett', 'data')
+
+PROCESSED_ROOT = os.path.join(data_path, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 FILENAME_NUM_DIGITS = 5
 
