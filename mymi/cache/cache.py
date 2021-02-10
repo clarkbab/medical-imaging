@@ -9,11 +9,21 @@ import os
 import pandas as pd
 import time
 
+data_dir = os.environ['MYMI_DATA']
+CACHE_ROOT = os.path.join(data_dir, 'cache') 
+
 class Cache:
     def __init__(self):
-        self._path = None
+        self._configured = False
         self._read_enabled = None
         self._write_enabled = None
+
+    @property
+    def configured(self):
+        return self._configured
+
+    def set_configured(self):
+        self._configured = True
 
     @property
     def read_enabled(self):
@@ -38,21 +48,6 @@ class Cache:
     @property
     def enabled_write(self):
         return self._write_enabled
-
-    @property
-    def path(self):
-        return self._path
-
-    @path.setter
-    def path(self, path):
-        """
-        path: path to the cache, should be a string and should exist.
-        """
-        if not isinstance(path, str):
-            raise ValueError(f"Cache path should be string, got '{type(path)}'.")
-        if not os.path.exists(path):
-            raise ValueError(f"Cache path doesn't exist '{path}'.")
-        self._path = path
 
     def cache_key(self, params):
         """
@@ -104,7 +99,7 @@ class Cache:
         key: cache key to look for.
         """
         # Search for file by key.
-        cache_path = os.path.join(self._path, key) 
+        cache_path = os.path.join(CACHE_ROOT, key) 
         if os.path.exists(cache_path):
             return True
         else:
@@ -190,16 +185,16 @@ class Cache:
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
     def read_array(self, key):
-        filepath = os.path.join(self._path, key)
+        filepath = os.path.join(CACHE_ROOT, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
     def read_dataframe(self, key):
-        filepath = os.path.join(self._path, key)
+        filepath = os.path.join(CACHE_ROOT, key)
         return pd.read_parquet(filepath)
 
     def read_name_array_pairs(self, key):
-        folder_path = os.path.join(self._path, key)
+        folder_path = os.path.join(CACHE_ROOT, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
             filepath = os.path.join(folder_path, name)
@@ -210,18 +205,18 @@ class Cache:
         return name_array_pairs
 
     def write_array(self, key, array):
-        filepath = os.path.join(self._path, key)
+        filepath = os.path.join(CACHE_ROOT, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
     def write_dataframe(self, key, df):
-        filepath = os.path.join(self._path, key)
+        filepath = os.path.join(CACHE_ROOT, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
-        folder_path = os.path.join(self._path, key)
+        folder_path = os.path.join(CACHE_ROOT, key)
         os.makedirs(folder_path, exist_ok=True)
 
         size = 0

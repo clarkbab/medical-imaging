@@ -2,11 +2,12 @@ import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 
-DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+data_path = os.environ['MYMI_DATA']
+DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 class ParotidLeft3DLoader:
     @staticmethod
-    def build(folder, batch_size=32, data_dir=DATA_DIR_DEFAULT, transforms=[]):
+    def build(folder, batch_size=32, data_dir=DATA_DIR, transforms=[]):
         """
         returns: a data loader.
         args:

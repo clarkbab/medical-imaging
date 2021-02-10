@@ -8,15 +8,15 @@ from mymi import loaders
 from mymi import utils
 from mymi.metrics import dice as dice_metric
 
-TENSORBOARD_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'tensorboard') 
-CHECKPOINT_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'checkpoints')
+data_dir = os.environ['MYMI_DATA']
+TENSORBOARD_DIR = os.path.join(data_dir, 'tensorboard')
+CHECKPOINT_DIR = os.path.join(data_dir, 'checkpoints')
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
         record_interval='epoch', validation_interval='epoch', print_format='.10f', num_validation_images=3, 
-        checkpoint_dir=CHECKPOINT_DIR_DEFAULT, tensorboard_dir=TENSORBOARD_DIR_DEFAULT, is_reporter=False,
-        log_info=logging.info):
+        is_reporter=False, half_precision=True, log_info=logging.info):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.visual_loader = visual_loader
@@ -34,12 +34,10 @@ class ModelTrainer:
         self.max_epochs_without_improvement = 5
         self.num_epochs_without_improvement = 0
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
-        self.checkpoint_dir = checkpoint_dir
-        self.tensorboard_dir = tensorboard_dir
         self.is_reporter = is_reporter
         self.log_info = log_info
         if is_reporter:
-            self.writer = SummaryWriter(os.path.join(self.tensorboard_dir, self.run_name))
+            self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name))
         self.running_scores = {
             'print': {
                 'loss': 0
@@ -65,6 +63,8 @@ class ModelTrainer:
         effect: updates the model parameters.
         model: the model to train.
         """
+        # Convert model to half precision if necessary.
+        # Put in training mode.
         model.train()
 
         for epoch in range(self.max_epochs):
@@ -174,7 +174,7 @@ class ModelTrainer:
 
     def save_model(self, model, iteration, loss):
         self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
-        filepath = os.path.join(self.checkpoint_dir, self.run_name, 'best.pt')
+        filepath = os.path.join(CHECKPOINT_DIR, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
             'loss': loss,

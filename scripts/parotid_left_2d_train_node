@@ -34,8 +34,6 @@ parser = ArgumentParser(description="""
 Train the segmentation model on a single node. Spins up a separate process for each GPU on the node (--num-gpus).
 """)
 parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
-parser.add_argument('-c', '--checkpoint-dir', action='store', help='sets the checkpoint directory')
-parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
 parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
 parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
@@ -44,7 +42,6 @@ parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, h
 parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
 parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
 parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
-parser.add_argument('-t', '--tensorboard-dir', action='store', help='sets the tensorboard directory')
 parser.add_argument('-u', '--use-gpu', action='store_true', default=False, help='use GPU for training')
 parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
 args = parser.parse_args()
@@ -91,7 +88,6 @@ def train(args):
     # Get data loaders.
     batch_size = args.batch_size
     opt_kwargs = {}
-    if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
     train_loader = ParotidLeft2DLoader.build('train', batch_size=batch_size, transforms=transforms, **opt_kwargs)
     validation_loader = ParotidLeft2DLoader.build('validate', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
     positive_loader = ParotidLeft2DSubsetLoader.build('positive', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
@@ -127,12 +123,10 @@ def train(args):
 
     # Create model trainer keyword arguments.
     opt_kwargs = {}
-    if args.checkpoint_dir is not None: opt_kwargs['checkpoint_dir'] = args.checkpoint_dir
     if is_reporter(args): opt_kwargs['is_reporter'] = True
     if args.max_epochs is not None: opt_kwargs['max_epochs'] = args.max_epochs
     if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
     if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
-    if args.tensorboard_dir is not None: opt_kwargs['tensorboard_dir'] = args.tensorboard_dir
     if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.

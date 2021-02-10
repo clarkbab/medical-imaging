@@ -14,13 +14,8 @@ sys.path.append(root_dir)
 from mymi import cache
 from mymi import dataset
 
-host = os.uname()[1]
-if 'spartan-login' in host:
-    data_path = os.path.join(os.sep, 'data', 'gpfs', 'projects', 'punim1413')
-else:
-    data_path = os.path.join(os.sep, 'media', 'brett', 'data')
-
-PROCESSED_ROOT = os.path.join(data_path, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+data_path = os.environ['MYMI_DATA']
+PROCESSED_ROOT = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 FILENAME_NUM_DIGITS = 5
 
@@ -48,7 +43,7 @@ class ParotidLeft3DPreprocessor:
         # Load patients who have 'Parotid-Left' contours.
         regions_df = dataset.regions(pat_id=pat_ids)
         pat_ids = regions_df.query(f"`region` == '{region}'")['patient-id'].unique()
-        logging.info(f"Found {len(pat_ids)} with '{region}' contours.")
+        logging.info(f"Found {len(pat_ids)} patients with '{region}' contours.")
 
         # Get patient subset for testing.
         if num_pats != 'all':

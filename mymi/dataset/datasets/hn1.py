@@ -5,7 +5,8 @@ import pandas as pd
 from mymi import dataset
 from mymi.dataset import Dataset
 
-ROOT_DIR = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1')
+data_path = os.environ['MYMI_DATA']
+ROOT_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1')
 
 class HN1(Dataset):
     @classmethod

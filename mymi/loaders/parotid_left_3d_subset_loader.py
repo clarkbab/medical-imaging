@@ -2,11 +2,12 @@ import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, Sampler
 
-DATA_DIR_DEFAULT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+data_path = os.environ['MYMI_DATA']
+DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 class ParotidLeft3DSubsetLoader:
     @staticmethod
-    def build(batch_size=32, data_dir=DATA_DIR_DEFAULT, num_batches=5, seed=42, transforms=[]):
+    def build(batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transforms=[]):
         """
         returns: a data loader.
         kwargs:
