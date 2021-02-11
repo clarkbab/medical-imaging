@@ -34,6 +34,7 @@ def interval_type(s):
 parser = ArgumentParser(description="""
 Train the segmentation model on a single node. Spins up a separate process for each GPU on the node (--num-gpus).
 """)
+parser.add_argument('-a', '--use-aug', action='store_true', default=False, help='use data augmentations when training')
 parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
 parser.add_argument('-c', '--checkpoint-dir', action='store', help='sets the checkpoint directory')
 parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
@@ -82,25 +83,27 @@ def train(args):
     high_res = (512, 512, 212)
     low_res = (128, 128, 96)
     transforms = [
-        RandomTranslation(range_x=translation, range_y=translation, range_z=translation, fill=fill),
-        RandomRotation(range_x=rotation, range_y=rotation, range_z=rotation, fill=fill),
-        RandomResample(scale),
-        RandomIntensity(lam=lam),
         CropOrPad(high_res, fill=fill),
         Resample(resolution=low_res)
     ]
-    validation_transforms = [
-        CropOrPad(high_res, fill=fill),
-        Resample(resolution=low_res)
-    ]
+    if args.use_aug:
+        aug_transforms = [
+            RandomTranslation(range_x=translation, range_y=translation, range_z=translation, fill=fill),
+            RandomRotation(range_x=rotation, range_y=rotation, range_z=rotation, fill=fill),
+            RandomResample(scale),
+            RandomIntensity(lam=lam)
+        ]
+        train_transforms = aug_transforms + transforms
+    else:
+        train_transforms = transforms
 
     # Get data loaders.
     batch_size = args.batch_size
     opt_kwargs = {}
     if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
-    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transforms=transforms, **opt_kwargs)
-    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
-    visual_loader = ParotidLeft3DSubsetLoader.build(batch_size=batch_size, transforms=validation_transforms, **opt_kwargs)
+    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transforms=train_transforms, **opt_kwargs)
+    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transforms=transforms, **opt_kwargs)
+    visual_loader = ParotidLeft3DSubsetLoader.build(batch_size=batch_size, transforms=transforms, **opt_kwargs)
 
     # Configure device.
     if args.use_gpu:

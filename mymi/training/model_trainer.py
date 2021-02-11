@@ -143,13 +143,15 @@ class ModelTrainer:
 
         # Calculate validation score.
         for val_batch, (input, mask) in enumerate(self.validation_loader):
+            # Convert input data.
             input, mask = input.float(), mask.long()
             input = input.unsqueeze(1)
             input, mask = input.to(self.device), mask.to(self.device)
 
             # Perform forward pass.
-            pred = model(input)
-            loss = self.loss_fn(pred, mask)
+            with autocast(enabled=self.mixed_precision):
+                pred = model(input)
+                loss = self.loss_fn(pred, mask)
             self.running_scores['validation-record']['loss'] += loss.item()
             self.running_scores['validation-print']['loss'] += loss.item()
 
