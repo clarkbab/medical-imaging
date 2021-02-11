@@ -44,11 +44,9 @@ num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
 fill = -1000
 spacing = (1.0, 1.0, 3.0)
 resolution = (512, 512, 212)
-low_resolution = (256, 256, 128)
 transforms = [
     Resample(spacing=spacing),
-    CropOrPad(resolution, fill=fill),
-    Resample(resolution=low_resolution)
+    CropOrPad(resolution, fill=fill)
 ]
 
 # Perform extraction.

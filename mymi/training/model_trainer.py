@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 import os
 import torch
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from mymi import loaders
@@ -16,7 +17,7 @@ class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
         record_interval='epoch', validation_interval='epoch', print_format='.10f', num_validation_images=3, 
-        is_reporter=False, half_precision=True, log_info=logging.info):
+        is_reporter=False, mixed_precision=False, log_info=logging.info):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.visual_loader = visual_loader
@@ -36,6 +37,8 @@ class ModelTrainer:
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
         self.is_reporter = is_reporter
         self.log_info = log_info
+        self.mixed_precision = mixed_precision
+        self.scaler = GradScaler(enabled=mixed_precision)
         if is_reporter:
             self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name))
         self.running_scores = {
@@ -63,24 +66,30 @@ class ModelTrainer:
         effect: updates the model parameters.
         model: the model to train.
         """
-        # Convert model to half precision if necessary.
         # Put in training mode.
         model.train()
 
         for epoch in range(self.max_epochs):
             for batch, (input, mask) in enumerate(self.train_loader):
+                # Conver input and mask.
                 input, mask = input.float(), mask.long()
                 input = input.unsqueeze(1)
                 input, mask = input.to(self.device), mask.to(self.device)
+
+                # Add model structure.
                 if self.is_reporter and epoch == 0 and batch == 0:
-                    self.writer.add_graph(model, input)
+                    with autocast(enabled=self.mixed_precision):
+                        self.writer.add_graph(model, input)
 
                 # Perform forward/backward pass.
+                with autocast(enabled=self.mixed_precision):
+                    logging.info(f"Using mixed precision: {self.mixed_precision}.")
+                    pred = model(input)
+                    loss = self.loss_fn(pred, mask)
+                self.scaler(loss).backward()
+                self.scaler.step(self.optimiser)
+                self.scaler.update()
                 self.optimiser.zero_grad()
-                pred = model(input)
-                loss = self.loss_fn(pred, mask)
-                loss.backward()
-                self.optimiser.step()
                 self.running_scores['print']['loss'] += loss.item()
                 self.running_scores['record']['loss'] += loss.item()
 

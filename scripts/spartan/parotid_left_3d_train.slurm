@@ -15,4 +15,4 @@ version=$(python --version)
 echo $version
 
 python $SCRIPT_DIR/parotid_left_3d_train_node --print-interval 200 --record-interval 200 --validation-interval epoch \
-    --num-nodes 1 --use-gpu --num-gpus 1
+    --num-nodes 1 --use-gpu --num-gpus 1 --use-mixed
