@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
@@ -59,12 +60,15 @@ class ParotidLeft3DDataset(Dataset):
         label = np.load(f)
 
         # Perform transforms.
+        logging.info(f"Transforming sample: {idx}.")
         for transform in self.transforms:
+            logging.info(f"Transforms: {transform}.")
             # Get deterministic transform.
             det_transform = transform.deterministic()
 
             # Apply to input and label.
             input = det_transform(input)
             label = det_transform(label, binary=True)
+        logging.info('Finished transform.')
 
         return input, label

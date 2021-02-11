@@ -5,7 +5,6 @@ def dice(pred, label):
     pred: a batch of network predictions, e.g. shape (n, 2, 512, 512, 212).
     label: a batch of labels, e.g. shape (n, 512, 512, 212).
     """
-    print(pred.shape, label.shape)
     # Get binary predictions for network.
     pred_bin = pred.argmax(dim=1)
 
