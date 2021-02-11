@@ -11,7 +11,7 @@ class Resample:
             resolution: the desired resolution.
             spacing: a list of desired (x, y, z) spacings.
         """
-        assert resolution == None or spacing == None, 'Only resolution or spacing may be specified.'
+        assert resolution == None or spacing == None, "Either resolution or spacing must be 'None'."
 
         self.resolution = resolution
         self.spacing = spacing
@@ -26,12 +26,14 @@ class Resample:
             spacing-y: the spacing between voxels in y-direction.
             spacing-z: the spacing between voxels in z-direction.
         """
-        # Get old spacing and shape.
-        old_spacing = np.array([info['spacing-x'], info['spacing-y'], info['spacing-z']])
+        # Get old shape.
         old_shape = data.shape
 
         # Get resize factor - multiplier for resolution required by 'zoom'.
         if self.spacing is not None:
+            # Get old spacing from info.
+            old_spacing = np.array([info['spacing-x'], info['spacing-y'], info['spacing-z']])
+
             resize_factor = self.spacing_resize_factor(old_shape, old_spacing)
         elif self.resolution is not None:
             resize_factor = self.resolution_resize_factor(old_shape)
@@ -55,10 +57,6 @@ class Resample:
         return fn
 
     def spacing_resize_factor(self, old_shape, old_spacing): 
-        # Check if resampling is needed.
-        if np.array_equal(self.spacing, old_spacing):
-            return data
-
         # Calculate shape resize factor - the ratio of old to new pixel spacings.
         resize_factor = old_spacing / self.spacing
 

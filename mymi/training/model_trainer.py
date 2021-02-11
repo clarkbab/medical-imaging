@@ -71,6 +71,7 @@ class ModelTrainer:
 
         for epoch in range(self.max_epochs):
             for batch, (input, mask) in enumerate(self.train_loader):
+                print(f"Batch: {batch}")
                 # Conver input and mask.
                 input, mask = input.float(), mask.long()
                 input = input.unsqueeze(1)
@@ -83,10 +84,9 @@ class ModelTrainer:
 
                 # Perform forward/backward pass.
                 with autocast(enabled=self.mixed_precision):
-                    logging.info(f"Using mixed precision: {self.mixed_precision}.")
                     pred = model(input)
                     loss = self.loss_fn(pred, mask)
-                self.scaler(loss).backward()
+                self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimiser)
                 self.scaler.update()
                 self.optimiser.zero_grad()
