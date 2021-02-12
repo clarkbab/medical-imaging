@@ -2,7 +2,10 @@ from datetime import datetime
 import logging
 import os
 import torch
+from torch.autograd import profiler
 from torch.cuda.amp import autocast, GradScaler
+# from torch.autograd.profiler import profile, tensorboard_trace_handler
+from torch.autograd.profiler import profile
 from torch.utils.tensorboard import SummaryWriter
 
 from mymi import loaders
@@ -78,17 +81,15 @@ class ModelTrainer:
 
                 # Add model structure.
                 if self.is_reporter and epoch == 0 and batch == 0:
-                    with autocast(enabled=self.mixed_precision):
+                    # Error when adding graph with 'mixed-precision' training.
+                    if not self.mixed_precision:
                         self.writer.add_graph(model, input)
 
                 # Perform forward/backward pass.
-                logging.info(f"Forward pass for batch: {batch}.")
                 with autocast(enabled=self.mixed_precision):
                     pred = model(input)
                     loss = self.loss_fn(pred, mask)
-                logging.info(f"Backward pass for batch: {batch}.")
                 self.scaler.scale(loss).backward()
-                logging.info(f"Optimiser step for batch: {batch}.")
                 self.scaler.step(self.optimiser)
                 self.scaler.update()
                 self.optimiser.zero_grad()

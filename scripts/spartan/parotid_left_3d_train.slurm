@@ -14,5 +14,5 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-python $SCRIPT_DIR/parotid_left_3d_train_node --print-interval 50 --record-interval 50 --validation-interval 50 \
-    --num-nodes 1 --use-gpu --num-gpus 1
+python $SCRIPT_DIR/parotid_left_3d_train_node --print-interval 10 --record-interval 50 --validation-interval epoch \
+    --num-nodes 1 --use-gpu --num-gpus 1 --use-mixed

@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 
@@ -40,7 +41,7 @@ class Up(nn.Module):
         x = self.upsample(x)
 
         # Concatenate feature vectors.
-        assert x_res.shape == x.shape
+        assert x_res.shape == x.shape, f"Residual '{x_res.shape}' has different shape to input '{x.shape}'."
         x = torch.cat((x, x_res), dim=1)
 
         x = self.double_conv(x)
