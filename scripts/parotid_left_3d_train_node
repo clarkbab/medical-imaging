@@ -93,7 +93,7 @@ def train(args):
             RandomResample(scale),
             RandomIntensity(lam=lam)
         ]
-        logging.info("Using augmentations: {aug_transforms}.")
+        logging.info(f"Using augmentations: {aug_transforms}.")
         train_transforms = aug_transforms + transforms
     else:
         train_transforms = transforms
