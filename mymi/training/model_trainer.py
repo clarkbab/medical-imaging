@@ -155,11 +155,15 @@ class ModelTrainer:
                 loss = self.loss_fn(pred, mask)
             self.running_scores['validation-record']['loss'] += loss.item()
             self.running_scores['validation-print']['loss'] += loss.item()
+            self.log_info(f"Validation loss result: {loss.item()}.")
+            self.log_info(f"Validation loss running result: {self.running_scores['validation-record']['loss']}.")
 
             if 'dice' in self.metrics:
                 dice = dice_metric(pred, mask)
                 self.running_scores['validation-record']['dice'] += dice.item()
                 self.running_scores['validation-print']['dice'] += dice.item()
+                self.log_info(f"Validation dice result: {dice.item()}.")
+                self.log_info(f"Validation dice running result: {self.running_scores['validation-record']['dice']}.")
 
             # Print results.
             if self.should_print(val_batch, len(self.validation_loader)):
@@ -167,14 +171,7 @@ class ModelTrainer:
                 self.reset_validation_print_scores()
         
         # Record validation results on Tensorboard.
-        interval = len(self.validation_loader)
-        loss = self.running_scores['validation-record']['loss'] / interval
-        
-        kwargs = {}
-        if 'dice' in self.metrics:
-            kwargs['dice'] = self.running_scores['validation-record']['dice'] / interval
-
-        self.record_validation_results(loss, iteration, **kwargs)
+        self.record_validation_results(iteration)
         self.reset_validation_record_scores()
 
         # Check for validation improvement.
@@ -224,44 +221,57 @@ class ModelTrainer:
         effect: logs an update to STDOUT.
         """
         print_interval = len(self.train_loader) if self.print_interval == 'epoch' else self.print_interval
-        message = f"[{epoch}, {batch}] Loss: {self.running_scores['print']['loss'] / print_interval:{self.print_format}}"
+        loss = self.running_scores['print']['loss'] / print_interval
+        message = f"[{epoch}, {batch}] Loss: {loss:{self.print_format}}"
 
         if 'dice' in self.metrics:
-            message += f", Dice: {self.running_scores['print']['dice'] / print_interval:{self.print_format}}"
+            dice = self.running_scores['print']['dice'] / print_interval
+            message += f", Dice: {dice:{self.print_format}}"
 
         self.log_info(message)
         
     def print_validation_results(self, epoch, batch):
         """
         effect: logs an update to STDOUT.
+        args:
+            epoch: the epoch we're up to.
+            batch: the batch we're up to.
         """
         print_interval = len(self.validation_loader) if self.print_interval == 'epoch' else self.print_interval
-        message = f"Validation - [{epoch}, {batch}] Loss: {self.running_scores['validation-print']['loss'] / print_interval:{self.print_format}}"
+        loss = self.running_scores['validation-print']['loss'] / print_interval
+        message = f"Validation - [{epoch}, {batch}] Loss: {loss:{self.print_format}}"
 
         if 'dice' in self.metrics:
-            message += f", Dice: {self.running_scores['validation-print']['dice'] / print_interval:{self.print_format}}"
+            dice = self.running_scores['validation-print']['dice'] / print_interval
+            message += f", Dice: {dice:{self.print_format}}"
 
         self.log_info(message)
 
-    def record_training_results(self, epoch, iteration):
+    def record_training_results(self, iteration):
         """
-        returns: True if results recorded, false otherwise.
+        effect: sends training results to Tensorboard.
+        args:
+            epoch: the epoch we're up to.
+            iteration: the iteration we're up to.
         """
         record_interval = len(self.train_loader) if self.record_interval == 'epoch' else self.record_interval
-        avg_loss = self.running_scores['record']['loss'] / record_interval
-        self.writer.add_scalar('Loss/train', avg_loss, iteration)
+        loss = self.running_scores['record']['loss'] / record_interval
+        self.writer.add_scalar('Loss/train', loss, iteration)
         
         if 'dice' in self.metrics:
-            avg_dice = self.running_scores['record']['dice'] / record_interval
-            self.writer.add_scalar('Dice/train', avg_dice, iteration)
+            dice = self.running_scores['record']['dice'] / record_interval
+            self.writer.add_scalar('Dice/train', dice, iteration)
 
-    def record_validation_results(self, *args, **kwargs):
-        loss = args[0]
-        iteration = args[1]
-        dice = kwargs['dice'] if 'dice' in kwargs else None
+    def record_validation_results(self, iteration):
+        """
+        effect: sends validation results to Tensorboard.
+        """
+        record_interval = len(self.validation_loader)
+        loss = self.running_scores['validation-record']['loss'] / record_interval
         self.writer.add_scalar('Loss/validation', loss, iteration)
 
-        if dice is not None:
+        if 'dice' in self.metrics:
+            dice = self.running_scores['validation-record']['dice'] / record_interval
             self.writer.add_scalar('Dice/validation', dice, iteration)
 
     def reset_print_scores(self):
