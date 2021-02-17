@@ -105,7 +105,7 @@ class ModelTrainer:
                 # Record training info to Tensorboard.
                 iteration = epoch * len(self.train_loader) + batch
                 if self.is_reporter and self.should_record(iteration):
-                    self.record_training_results(epoch, iteration)
+                    self.record_training_results(iteration)
                     self.reset_record_scores()
                 
                 # Print results.
