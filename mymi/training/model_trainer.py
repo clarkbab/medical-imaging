@@ -155,15 +155,11 @@ class ModelTrainer:
                 loss = self.loss_fn(pred, mask)
             self.running_scores['validation-record']['loss'] += loss.item()
             self.running_scores['validation-print']['loss'] += loss.item()
-            self.log_info(f"Validation loss result: {loss.item()}.")
-            self.log_info(f"Validation loss running result: {self.running_scores['validation-record']['loss']}.")
 
             if 'dice' in self.metrics:
                 dice = dice_metric(pred, mask)
                 self.running_scores['validation-record']['dice'] += dice.item()
                 self.running_scores['validation-print']['dice'] += dice.item()
-                self.log_info(f"Validation dice result: {dice.item()}.")
-                self.log_info(f"Validation dice running result: {self.running_scores['validation-record']['dice']}.")
 
             # Print results.
             if self.should_print(val_batch, len(self.validation_loader)):
