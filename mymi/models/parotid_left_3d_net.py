@@ -71,7 +71,6 @@ class ParotidLeft3DNet(nn.Module):
         self.up3 = Up(256, 128)
         self.up4 = Up(128, 64)
         self.out = OutConv(64, 2)
-        self.prob = nn.LogSoftmax(dim=1)
 
     def count_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -87,6 +86,5 @@ class ParotidLeft3DNet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         x = self.out(x)
-        x = self.prob(x)
 
         return x

@@ -16,6 +16,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DSubsetLoader
+from mymi.losses import DiceLoss
 from mymi.models import ParotidLeft3DNet
 from mymi.training import ModelTrainer
 from mymi.transforms import CropOrPad, RandomIntensity, RandomResample, RandomRotation, RandomTranslation, Resample
@@ -128,8 +129,9 @@ def train(args):
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
 
     # Define loss.
-    class_weights = torch.Tensor((1, 4315)).to(device)
-    loss_fn = nn.NLLLoss(weight=class_weights)
+    # class_weights = torch.Tensor((1, 4315)).to(device)
+    # loss_fn = nn.NLLLoss(weight=class_weights)
+    loss_fn = DiceLoss()
 
     # Define optimiser.
     optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
