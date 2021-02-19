@@ -6,7 +6,8 @@
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
-SCRIPT_DIR=/home/baclark/code/medical-imaging/scripts
+PROJECT_DIR="/data/projects/punim1413/"
+SCRIPT_DIR="$PROJECT_DIR/medical-imaging/scripts"
 
 module load gcccore/8.3.0
 module load python/3.8.2
