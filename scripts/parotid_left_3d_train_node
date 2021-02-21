@@ -190,3 +190,4 @@ if __name__ == '__main__':
         mp.spawn(train_process, nprocs=args.num_gpus, args=(args, ))
     else:
         train(args)
+
