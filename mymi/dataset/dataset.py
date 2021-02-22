@@ -116,7 +116,7 @@ class Dataset:
         summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
 
         # Create placeholder array.
-        data_shape = (int(summary['res-x']), int(summary['res-y']), int(summary['res-z']))
+        data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
         data = np.zeros(shape=data_shape, dtype=np.int16)
         
         # Add CT data.
@@ -189,7 +189,7 @@ class Dataset:
                 continue
 
             # Create label placeholder.
-            data_shape = (int(summary['res-x']), int(summary['res-y']), int(summary['res-z']))
+            data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
             data = np.zeros(shape=data_shape, dtype=np.bool)
 
             roi_coords = [c.ContourData for c in roi.ContourSequence]
@@ -267,9 +267,9 @@ class Dataset:
             'offset-y': 'float64',
             'offset-z': 'float64',
             'pat-id': 'object',
-            'res-x': np.uint16,
-            'res-y': np.uint16,
-            'res-z': np.uint16,
+            'size-x': np.uint16,
+            'size-y': np.uint16,
+            'size-z': np.uint16,
             'roi-num': np.uint16,
             'sex': 'object',
             'spacing-x': 'float64',
@@ -344,9 +344,9 @@ class Dataset:
             'offset-x': 'float64',
             'offset-y': 'float64',
             'offset-z': 'float64',
-            'res-x': np.uint16,
-            'res-y': np.uint16,
-            'res-z': np.uint16,
+            'size-x': np.uint16,
+            'size-y': np.uint16,
+            'size-z': np.uint16,
             'roi-num': np.uint16,
             'sex': 'object',
             'spacing-x': 'float64',
@@ -363,8 +363,8 @@ class Dataset:
         ct_df = cls.patient_ct(pat_id)
 
         # Check for consistency among scans.
-        assert len(ct_df['res-x'].unique()) == 1
-        assert len(ct_df['res-y'].unique()) == 1
+        assert len(ct_df['size-x'].unique()) == 1
+        assert len(ct_df['size-y'].unique()) == 1
         assert len(ct_df['offset-x'].unique()) == 1
         assert len(ct_df['offset-y'].unique()) == 1
         assert len(ct_df['spacing-x'].unique()) == 1
@@ -376,13 +376,13 @@ class Dataset:
         spacings_z = np.sort([round(i, Z_SPACING_ROUND_DP) for i in np.diff(ct_df['offset-z'])])
         spacing_z = spacings_z[0]
 
-        # Calculate fov-z and res-z.
+        # Calculate fov-z and size-z.
         fov_z = ct_df['offset-z'].max() - ct_df['offset-z'].min()
-        res_z = int(round(fov_z / spacing_z, 0) + 1)
+        size_z = int(round(fov_z / spacing_z, 0) + 1)
 
         # Calculate number of empty slices.
         num_slices = len(ct_df)
-        num_missing = res_z - num_slices
+        num_missing = size_z - num_slices
 
         # Get patient RTSTRUCT info.
         region_df = cls.patient_regions(pat_id)
@@ -393,18 +393,18 @@ class Dataset:
         # Add table row.
         data = {
             'age': clinical_df.loc[pat_id]['age_at_diagnosis'], 
-            'fov-x': ct_df['res-x'][0] * ct_df['spacing-x'][0],
-            'fov-y': ct_df['res-y'][0] * ct_df['spacing-y'][0],
-            'fov-z': res_z * spacing_z,
+            'fov-x': ct_df['size-x'][0] * ct_df['spacing-x'][0],
+            'fov-y': ct_df['size-y'][0] * ct_df['spacing-y'][0],
+            'fov-z': size_z * spacing_z,
             'hu-min': ct_df['hu-min'].min(),
             'hu-max': ct_df['hu-max'].max(),
             'num-missing': num_missing,
             'offset-x': ct_df['offset-x'][0],
             'offset-y': ct_df['offset-y'][0],
             'offset-z': ct_df['offset-z'][0],
-            'res-x': ct_df['res-x'][0],
-            'res-y': ct_df['res-y'][0],
-            'res-z': res_z,
+            'size-x': ct_df['size-x'][0],
+            'size-y': ct_df['size-y'][0],
+            'size-z': size_z,
             'roi-num': len(region_df),
             'sex': clinical_df.loc[pat_id]['biological_sex'], 
             'spacing-x': ct_df['spacing-x'][0],
@@ -612,8 +612,8 @@ class Dataset:
             'offset-x': 'float64',
             'offset-y': 'float64',
             'offset-z': 'float64',
-            'res-x': np.uint16,
-            'res-y': np.uint16,
+            'size-x': np.uint16,
+            'size-y': np.uint16,
             'scale-int': 'float64',
             'scale-slope': 'float64',
             'spacing-x': 'float64',
@@ -652,8 +652,8 @@ class Dataset:
                     'offset-x': row['offset-x'],
                     'offset-y': row['offset-y'],
                     'offset-z': row['offset-z'],
-                    'res-x': row['res-x'],
-                    'res-y': row['res-y'],
+                    'size-x': row['size-x'],
+                    'size-y': row['size-y'],
                     'scale-int': row['scale-int'],
                     'scale-slope': row['scale-slope'],
                     'spacing-x': row['spacing-x'],
@@ -692,8 +692,8 @@ class Dataset:
             'offset-x': 'float64',
             'offset-y': 'float64',
             'offset-z': 'float64',
-            'res-x': np.uint16,
-            'res-y': np.uint16,
+            'size-x': np.uint16,
+            'size-y': np.uint16,
             'scale-int': 'float64',
             'scale-slope': 'float64',
             'spacing-x': 'float64',
@@ -715,8 +715,8 @@ class Dataset:
                'offset-x': ct_dicom.ImagePositionPatient[0], 
                'offset-y': ct_dicom.ImagePositionPatient[1], 
                'offset-z': ct_dicom.ImagePositionPatient[2], 
-               'res-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
-               'res-y': ct_dicom.pixel_array.shape[0],
+               'size-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
+               'size-y': ct_dicom.pixel_array.shape[0],
                'scale-int': ct_dicom.RescaleIntercept,
                'scale-slope': ct_dicom.RescaleSlope,
                'spacing-x': ct_dicom.PixelSpacing[0],

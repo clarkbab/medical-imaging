@@ -285,4 +285,3 @@ class ModelTrainer:
     def reset_validation_record_scores(self):
         self.running_scores['validation-record']['loss'] = 0
         self.running_scores['validation-record']['dice'] = 0
-
