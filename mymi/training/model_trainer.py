@@ -192,21 +192,21 @@ class ModelTrainer:
         torch.save(info, filepath)
         
     def should_print(self, iteration, loader_length):
-        if ((self.print_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) and
+        if ((self.print_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
             (self.print_interval != 'epoch' and (iteration + 1) % self.print_interval == 0)):
             return True
         else:
             return False
 
     def should_record(self, iteration):
-        if ((self.record_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) and
+        if ((self.record_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
             (self.record_interval != 'epoch' and (iteration + 1) % self.record_interval == 0)):
             return True
         else:
             return False
 
     def should_validate(self, iteration):
-        if ((self.validation_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) and
+        if ((self.validation_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
             (self.validation_interval != 'epoch' and (iteration + 1) % self.validation_interval == 0)):
             return True
         else:
