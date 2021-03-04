@@ -4,40 +4,66 @@ import numpy as np
 import os
 import sys
 import torch
+from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import cache
 from mymi import dataset
 
 class Plotter:
     @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transforms=[]):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transform=None):
         """
         effect: plots a CT slice with contours.
         args:
             pat_id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
-            aspect: use a hard-coded aspect ratio, useful for viewing transforms.
+            aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
             axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
             plane: the viewing plane.
+                axial: viewed from the cranium (slice_idx=0) to the caudal region.
+                coronal: viewed from the anterior (slice_idx=0) to the posterior.
+                sagittal: viewed from the 
             regions: the regions-of-interest to plot.
-            transforms: the transforms to apply before plotting.
-        viewplanes:
-            axial: viewed from the cranium (slice_idx=0) to the caudal region.
-            coronal: viewed from the anterior (slice_idx=0) to the posterior.
-            sagittal: viewed from the 
         """
-        # Create deterministic transforms so they're consistently applied to data
-        # and labels. 
-        det_transforms = [t.deterministic() for t in transforms]
+        # Load patient summary.
+        summary = dataset.patient_summary(pat_id)
 
         # Load CT data.
-        ct_data = dataset.patient_data(pat_id, transforms=det_transforms)
+        ct_data = dataset.patient_data(pat_id)
 
         # Load labels.
         if regions is not None:
-            label_data = dataset.patient_labels(pat_id, regions=regions, transforms=det_transforms)
+            label_data = dataset.patient_labels(pat_id, regions=regions)
+
+        # Transform data.
+        if transform:
+            # Add 'batch' dimension.
+            ct_data = np.expand_dims(ct_data, axis=0)
+            label_data = [(name, np.expand_dims(data, axis=0)) for name, data in label_data]
+
+            # Create 'subject'.
+            affine = np.array([
+                [summary['spacing-x'].item(), 0, 0, 0],
+                [0, summary['spacing-y'].item(), 0, 0],
+                [0, 0, summary['spacing-z'].item(), 0],
+                [0, 0, 0, 1]
+            ])
+            ct_data = ScalarImage(tensor=ct_data, affine=affine)
+            label_data = [(name, LabelMap(tensor=data, affine=affine)) for name, data in label_data]
+
+            # Transform CT data.
+            subject = Subject(one_image=ct_data, a_segmentation=label_data)
+            output = transform(subject)
+
+            # Transform label data.
+            det_transform = output.get_composed_history()
+            label_data = [(name, det_transform(Subject(a_segmentation=image))) for name, image in label_data]
+
+            # Extract results.
+            ct_data = output['one_image'].data.squeeze(0)
+            label_data = [(name, out['a_segmentation'].data.squeeze(0)) for name, out in label_data]
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert plane in ('axial', 'coronal', 'sagittal')
@@ -52,19 +78,17 @@ class Plotter:
         # that required by 'imshow'.
         ct_slice_data = cls.to_image_coords(ct_slice_data, plane)
 
-        if aspect is None:
-            # Only apply aspect ratio if no transforms are being presented otherwise
-            # we'll end up with skewed images.
-            if len(transforms) == 0:
-                summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
-                if plane == 'axial':
-                    aspect = summary['spacing-y'] / summary['spacing-x']
-                elif plane == 'coronal':
-                    aspect = summary['spacing-z'] / summary['spacing-x']
-                elif plane == 'sagittal':
-                    aspect = summary['spacing-z'] / summary['spacing-y']
-            else:
-                aspect = 1
+        # Only apply aspect ratio if no transforms are being presented otherwise
+        # we might end up with skewed images.
+        if not transform:
+            if plane == 'axial':
+                aspect = summary['spacing-y'] / summary['spacing-x']
+            elif plane == 'coronal':
+                aspect = summary['spacing-z'] / summary['spacing-x']
+            elif plane == 'sagittal':
+                aspect = summary['spacing-z'] / summary['spacing-y']
+        else:
+            aspect = 1
 
         # Plot CT data.
         plt.figure(figsize=figsize)
@@ -148,8 +172,6 @@ class Plotter:
         num_images = len(input) if num_images == 'all' else num_images
         input_data = input[:num_images]
 
-        # Add prediction.
-
         # Add label.
         if label is not None:
             # Get subset of images.
@@ -169,8 +191,6 @@ class Plotter:
                 slice_input_data = np.rot90(input_data[i, slice_idx, :, :])
 
             axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
-
-            # Get pred slice data.
 
             # Plot label slice data.
             if label is not None:

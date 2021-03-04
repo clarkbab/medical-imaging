@@ -1,13 +1,14 @@
 import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, Sampler
+from torchio import Compose, LabelMap, ScalarImage, Subject
 
 data_path = os.environ['MYMI_DATA']
 DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 class ParotidLeft3DSubsetLoader:
     @staticmethod
-    def build(batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transforms=[]):
+    def build(batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transform=None):
         """
         returns: a data loader.
         kwargs:
@@ -18,7 +19,7 @@ class ParotidLeft3DSubsetLoader:
             transforms: an array of augmentation transforms.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DSubsetDataset(data_dir, transforms=transforms)
+        dataset = ParotidLeft3DSubsetDataset(data_dir, transform=transform)
 
         # Create sampler.
         sampler = ParotidLeft3DSubsetSampler(dataset, num_batches * batch_size, seed)
@@ -27,7 +28,7 @@ class ParotidLeft3DSubsetLoader:
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
 class ParotidLeft3DSubsetDataset(Dataset):
-    def __init__(self, data_dir, transforms=[]):
+    def __init__(self, data_dir, transform=None):
         """
         returns: a dataset.
         args:
@@ -41,7 +42,7 @@ class ParotidLeft3DSubsetDataset(Dataset):
 
         self.num_samples = len(samples)
         self.samples = samples
-        self.transforms = transforms
+        self.transform = transform
 
     def __len__(self):
         """
@@ -63,14 +64,29 @@ class ParotidLeft3DSubsetDataset(Dataset):
         f = open(label_path, 'rb')
         label = np.load(f)
 
-        # Perform transforms.
-        for transform in self.transforms:
-            # Get deterministic transform.
-            det_transform = transform.deterministic()
+        # Perform transform.
+        if self.transform:
+            # Add 'batch' dimension.
+            input = np.expand_dims(input, axis=0)
+            label = np.expand_dims(label, axis=0)
 
-            # Apply transforms to data.
-            input = det_transform(input)
-            label = det_transform(label, binary=True)
+            # Create 'subject'.
+            affine = np.array([
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 3, 1],
+                [0, 0, 0, 1]
+            ])
+            input = ScalarImage(tensor=input, affine=affine)
+            label = LabelMap(tensor=label, affine=affine)
+            subject = Subject(one_image=input, a_segmentation=label)
+
+            # Transform the subject.
+            output = self.transform(subject)
+
+            # Extract results.
+            input = output['one_image'].data.squeeze(0)
+            label = output['a_segmentation'].data.squeeze(0)
 
         return input, label
 

@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import pydicom as pdcm
 from skimage.draw import polygon
+from torchio import ScalarImage, Subject
 from tqdm import tqdm
 
 from mymi import cache
@@ -89,22 +90,17 @@ class Dataset:
     ###
 
     @classmethod
-    def patient_data(cls, pat_id, transforms=[]):
+    def patient_data(cls, pat_id):
         """
         returns: a numpy array of pixel data in HU.
         args:
             pat_id: the patient ID.
-        kwargs:
-            transforms: a list of transforms to apply to the data.
         """
         params = {
             'class': 'dataset',
             'method': 'patient_data',
             'args': {
                 'pat_id': pat_id
-            },
-            'kwargs': {
-                'transforms': transforms
             }
         }
         result = cache.read(params, 'array')
@@ -133,24 +129,19 @@ class Dataset:
             # Add data.
             data[:, :, z_idx] = pixel_data
 
-        # Perform deterministic or random transform on the data.
-        for transform in transforms:
-            data = transform(data, info=summary)
-
         # Write data to cache.
         cache.write(params, data, 'array')
 
         return data
 
     @classmethod
-    def patient_labels(cls, pat_id, regions='all', transforms=[]):
+    def patient_labels(cls, pat_id, regions='all'):
         """
         returns: a list of (<label name>, <label data>) pairs.
         args:
             pat_id: the patient ID.
         kwargs:
             regions: the desired regions.
-            transforms: a list of transforms to apply to the labels.
         """
         params = {
             'class': 'dataset',
@@ -160,7 +151,6 @@ class Dataset:
             },
             'kwargs': {
                 'regions': regions,
-                'transforms': transforms
             }
         }
         result = cache.read(params, 'name-array-pairs')
@@ -218,11 +208,6 @@ class Dataset:
 
         # Sort by label name.
         labels = sorted(labels, key=lambda l: l[0])
-
-        # Transform the labels.
-        summary['order'] = 0      # Perform nearest-neighbour interpolation.
-        for transform in transforms:
-            labels = [(name, transform(data, binary=True, info=summary)) for name, data in labels]
 
         # Write data to cache.
         cache.write(params, labels, 'name-array-pairs')

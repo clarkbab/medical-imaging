@@ -73,11 +73,11 @@ class ModelTrainer:
         model.train()
 
         for epoch in range(self.max_epochs):
-            for batch, (input, mask) in enumerate(self.train_loader):
-                # Convert input and mask.
-                input, mask = input.float(), mask.long()
+            for batch, (input, label) in enumerate(self.train_loader):
+                # Convert input and label.
+                input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
-                input, mask = input.to(self.device), mask.to(self.device)
+                input, label = input.to(self.device), label.to(self.device)
 
                 # Add model structure.
                 if self.is_reporter and epoch == 0 and batch == 0:
@@ -88,7 +88,7 @@ class ModelTrainer:
                 # Perform forward/backward pass.
                 with autocast(enabled=self.mixed_precision):
                     pred = model(input)
-                    loss = self.loss_fn(pred, mask)
+                    loss = self.loss_fn(pred, label)
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimiser)
                 self.scaler.update()
@@ -98,7 +98,7 @@ class ModelTrainer:
 
                 # Calculate other metrics.
                 if 'dice' in self.metrics:
-                    dice = dice_metric(pred, mask)
+                    dice = dice_metric(pred, label)
                     self.running_scores['print']['dice'] += dice.item()
                     self.running_scores['record']['dice'] += dice.item()
 
@@ -128,36 +128,36 @@ class ModelTrainer:
         model.eval()
 
         # Plot validation images for visual indication of improvement.
-        # for batch, (input, mask) in enumerate(self.visual_loader):
-        #     input, mask = input.float(), mask.long()
+        # for batch, (input, label) in enumerate(self.visual_loader):
+        #     input, label = input.float(), label.long()
         #     input = input.unsqueeze(1)
-        #     input, mask = input.to(self.device), mask.to(self.device)
+        #     input, label = input.to(self.device), label.to(self.device)
 
         #     # Perform forward pass.
         #     pred = model(input)
-        #     loss = self.loss_fn(pred, mask)
+        #     loss = self.loss_fn(pred, label)
 
         #     # Add image data.
-        #     image_data = utils.image_data(input, mask, pred)
+        #     image_data = utils.image_data(input, label, pred)
         #     tag = f"Visual validation batch {batch}"
         #     self.writer.add_images(tag, image_data, dataformats='NCWH', global_step=iteration)
 
         # Calculate validation score.
-        for val_batch, (input, mask) in enumerate(self.validation_loader):
+        for val_batch, (input, label) in enumerate(self.validation_loader):
             # Convert input data.
-            input, mask = input.float(), mask.long()
+            input, label = input.float(), label.long()
             input = input.unsqueeze(1)
-            input, mask = input.to(self.device), mask.to(self.device)
+            input, label = input.to(self.device), label.to(self.device)
 
             # Perform forward pass.
             with autocast(enabled=self.mixed_precision):
                 pred = model(input)
-                loss = self.loss_fn(pred, mask)
+                loss = self.loss_fn(pred, label)
             self.running_scores['validation-record']['loss'] += loss.item()
             self.running_scores['validation-print']['loss'] += loss.item()
 
             if 'dice' in self.metrics:
-                dice = dice_metric(pred, mask)
+                dice = dice_metric(pred, label)
                 self.running_scores['validation-record']['dice'] += dice.item()
                 self.running_scores['validation-print']['dice'] += dice.item()
 
