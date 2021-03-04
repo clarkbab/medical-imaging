@@ -92,6 +92,7 @@ def train(args: dict):
     ]
     augmentations = [                                               # Only applied when augmenting.
         RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill),
+        RandomElasticDeformation()
     ]
     if args.use_aug:
         transforms = augmentations + base_transforms
