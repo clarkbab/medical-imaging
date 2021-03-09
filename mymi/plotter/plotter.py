@@ -173,9 +173,13 @@ class Plotter:
         if label is not None: label = label.cpu()
         if pred is not None: pred = pred.cpu()
 
-        # Remove 'channel' dimension.
+        # Remove input 'channel' dimension.
         if input.dim() == 5:
             input = input.squeeze(1)
+
+        # Convert output 'channel' to prediction.
+        if pred.dim() == 5:
+            pred = pred.argmax(1)  
 
         # Get input data.
         assert plane in ('axial', 'coronal', 'sagittal')
@@ -221,7 +225,11 @@ class Plotter:
                 elif plane == 'sagittal':
                     slice_pred_data = np.rot90(pred_data[i, slice_idx[i], :, :])
 
-                axs[i].imshow(slice_pred_data, aspect=aspect, color='blue')
+                # Create binary colormap.
+                colours = [(1.0, 1.0, 1.0, 0), (0.12, 0.47, 0.7, 1.0)]
+                label_cmap = ListedColormap(colours)
+
+                axs[i].imshow(slice_pred_data, aspect=aspect, cmap=label_cmap)
 
             # Plot label slice data.
             if label is not None:
@@ -233,14 +241,11 @@ class Plotter:
                     slice_label_data = np.rot90(label_data[i, slice_idx[i], :, :])
 
                 # Get binary perimeter.
-                if full_label:
-                    colour = (0.12, 0.47, 0.7, 1.0)
-                else:
-                    colour = (1.0, 1.0, 1.0e-5, 1.0)
+                if not full_label:
                     slice_label_data = cls.binary_perimeter(slice_label_data)
 
                 # Create binary colormap.
-                colours = [(1.0, 1.0, 1.0, 0), colour]
+                colours = [(1.0, 1.0, 1.0, 0), (1.0, 1.0, 1.0e-5, 1.0)]
                 label_cmap = ListedColormap(colours)
 
                 axs[i].imshow(slice_label_data, aspect=aspect, cmap=label_cmap)
