@@ -305,6 +305,9 @@ class ModelTrainer:
         """
         assert plane in ('axial', 'coronal', 'sagittal')
 
+        # Move data to CPU.
+        label_b = label_b.cpu()
+
         # Determine axes to sum over.
         if plane == 'axial':
             axes = (0, 1)
