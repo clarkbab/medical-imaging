@@ -242,7 +242,7 @@ class Plotter:
         args:
             mask: a 2D image mask.
         """
-        mask_perimeter = torch.zeros_like(mask, dtype=bool)
+        mask_perimeter = np.zeros_like(mask, dtype=bool)
         x_dim, y_dim = mask.shape
         for i in range(x_dim):
             for j in range(y_dim):

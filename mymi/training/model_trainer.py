@@ -136,7 +136,8 @@ class ModelTrainer:
             input, label = input.to(self.device), label.to(self.device)
 
             # Perform forward pass.
-            pred = model(input)
+            with autocast(enabled=self.mixed_precision):
+              pred = model(input)
 
             # For each of the planes, plot a batch of images.
             planes = ('sagittal', 'coronal', 'axial')
@@ -145,7 +146,7 @@ class ModelTrainer:
                 centroids = self.get_batch_centroids(label, plane)
 
                 # Get figure.
-                figure = plotter.plot_batch(input, centroids, label=label, pred=pred, return_figure=True)
+                figure = plotter.plot_batch(input, centroids, label=label, pred=pred, plane=plane, return_figure=True)
 
                 # Write figure to tensorboard.
                 tag = f"Validation - batch={batch}, plane={plane}"
