@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import numpy as np
 import os
 import torch
 from torch.autograd import profiler
@@ -9,6 +10,7 @@ from torch.autograd.profiler import profile
 from torch.utils.tensorboard import SummaryWriter
 
 from mymi import loaders
+from mymi import plotter
 from mymi import utils
 from mymi.metrics import dice as dice_metric
 
@@ -128,19 +130,26 @@ class ModelTrainer:
         model.eval()
 
         # Plot validation images for visual indication of improvement.
-        # for batch, (input, label) in enumerate(self.visual_loader):
-        #     input, label = input.float(), label.long()
-        #     input = input.unsqueeze(1)
-        #     input, label = input.to(self.device), label.to(self.device)
+        for batch, (input, label) in enumerate(self.visual_loader):
+            input, label = input.float(), label.long()
+            input = input.unsqueeze(1)
+            input, label = input.to(self.device), label.to(self.device)
 
-        #     # Perform forward pass.
-        #     pred = model(input)
-        #     loss = self.loss_fn(pred, label)
+            # Perform forward pass.
+            pred = model(input)
 
-        #     # Add image data.
-        #     image_data = utils.image_data(input, label, pred)
-        #     tag = f"Visual validation batch {batch}"
-        #     self.writer.add_images(tag, image_data, dataformats='NCWH', global_step=iteration)
+            # For each of the planes, plot a batch of images.
+            planes = ('sagittal', 'coronal', 'axial')
+            for plane in planes:
+                # Get the centroid plane for each image in batch.
+                centroids = self.get_batch_centroids(label, plane)
+
+                # Get figure.
+                figure = plotter.plot_batch(input, centroids, label=label, pred=pred, return_figure=True)
+
+                # Write figure to tensorboard.
+                tag = f"Validation - batch={batch}, plane={plane}"
+                self.writer.add_figure(tag, figure, global_step=iteration)
 
         # Calculate validation score.
         for val_batch, (input, label) in enumerate(self.validation_loader):
@@ -285,3 +294,38 @@ class ModelTrainer:
     def reset_validation_record_scores(self):
         self.running_scores['validation-record']['loss'] = 0
         self.running_scores['validation-record']['dice'] = 0
+
+    def get_batch_centroids(self, label_b, plane):
+        """
+        returns: the centroid location of the label along the plane axis, for each
+            image in the batch.
+        args:
+            label_b: the batch of labels.
+            plane: the plane along which to find the centroid.
+        """
+        assert plane in ('axial', 'coronal', 'sagittal')
+
+        # Determine axes to sum over.
+        if plane == 'axial':
+            axes = (0, 1)
+        elif plane == 'coronal':
+            axes = (0, 2)
+        elif plane == 'sagittal':
+            axes = (1, 2)
+
+        centroids = np.array([], dtype=np.int)
+
+        # Loop through batch and get centroid for each label.
+        for label_i in label_b:
+            # Get weighting along 'plane' axis.
+            weights = label_i.sum(axes)
+
+            # Get average weighted sum.
+            indices = np.arange(len(weights))
+            avg_weighted_sum = (weights * indices).sum() /  weights.sum()
+
+            # Get centroid index.
+            centroid = np.round(avg_weighted_sum).long()
+            centroids = np.append(centroids, centroid)
+
+        return centroids

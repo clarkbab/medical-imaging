@@ -153,24 +153,38 @@ class Plotter:
         return data
 
     @classmethod
-    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', plane='axial'):
+    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', plane='axial', return_figure=False):
         """
         effect: plots a training batch.
         args:
             input: the input data.
-            slice_idx: the slice to show.
+            slice_idx: the slice to show. Can be list-like if batch has more than one element.
         kwargs:
+            figsize: the plot figure size.
+            full_label: should we should full label mask or perimeter?
             label: the label data.
             num_images: number of images from the batch to plot.
             pred: the predicted segmentation mask.
-            figsize: the plot figure size.
-            full_label: should we should full label mask or perimeter?
             plane: the viewing plane.
+            return_figure: whether we return or plot the figure.
         """
+        # Convert to CPU.
+        input = input.cpu()
+        if label is not None: label = label.cpu()
+        if pred is not None: pred = pred.cpu()
+
+        # Remove 'channel' dimension.
+        if input.dim() == 5:
+            input = input.squeeze(1)
+
         # Get input data.
         assert plane in ('axial', 'coronal', 'sagittal')
         num_images = len(input) if num_images == 'all' else num_images
         input_data = input[:num_images]
+
+        # Handle 'slice_idx'.
+        if isinstance(slice_idx, int):
+            slice_idx = [slice_idx] * num_images
 
         # Add label.
         if label is not None:
@@ -178,28 +192,29 @@ class Plotter:
             label_data = label[:num_images]
 
         # Plot data.
-        _, axs = plt.subplots(num_images, figsize=figsize)
+        fig, axs = plt.subplots(num_images, figsize=figsize)
         if num_images == 1: axs = [axs]
+        if return_figure: plt.close(fig)
 
         for i in range(num_images):
             # Plot input slice data.
             if plane == 'axial':
-                slice_input_data = np.transpose(input_data[i, :, :, slice_idx])
+                slice_input_data = np.transpose(input_data[i, :, :, slice_idx[i]])
             elif plane == 'coronal':
-                slice_input_data = np.rot90(input_data[i, :, slice_idx, :])
+                slice_input_data = np.rot90(input_data[i, :, slice_idx[i], :])
             elif plane == 'sagittal':
-                slice_input_data = np.rot90(input_data[i, slice_idx, :, :])
+                slice_input_data = np.rot90(input_data[i, slice_idx[i], :, :])
 
             axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
 
             # Plot label slice data.
             if label is not None:
                 if plane == 'axial':
-                    slice_label_data = np.transpose(label_data[i, :, :, slice_idx])
+                    slice_label_data = np.transpose(label_data[i, :, :, slice_idx[i]])
                 elif plane == 'coronal':
-                    slice_label_data = np.rot90(label_data[i, :, slice_idx, :])
+                    slice_label_data = np.rot90(label_data[i, :, slice_idx[i], :])
                 elif plane == 'sagittal':
-                    slice_label_data = np.rot90(label_data[i, slice_idx, :, :])
+                    slice_label_data = np.rot90(label_data[i, slice_idx[i], :, :])
 
                 # Get binary perimeter.
                 if full_label:
@@ -214,7 +229,11 @@ class Plotter:
 
                 axs[i].imshow(slice_label_data, aspect=aspect, cmap=label_cmap)
         
-        plt.show()
+        # Return or plot the figure.
+        if return_figure:
+            return fig
+        else:
+            plt.show()
 
     @classmethod
     def binary_perimeter(cls, mask):
