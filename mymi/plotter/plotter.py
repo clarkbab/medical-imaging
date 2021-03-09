@@ -191,6 +191,11 @@ class Plotter:
             # Get subset of images.
             label_data = label[:num_images]
 
+        # Add prediction.
+        if pred is not None:
+            # Get subset of images.
+            pred_data = pred[:num_images]
+
         # Plot data.
         fig, axs = plt.subplots(num_images, figsize=figsize)
         if num_images == 1: axs = [axs]
@@ -206,6 +211,17 @@ class Plotter:
                 slice_input_data = np.rot90(input_data[i, slice_idx[i], :, :])
 
             axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
+
+            # Plot prediction slice data.
+            if pred is not None:
+                if plane == 'axial':
+                    slice_pred_data = np.transpose(pred_data[i, :, :, slice_idx[i]])
+                elif plane == 'coronal':
+                    slice_pred_data = np.rot90(pred_data[i, :, slice_idx[i], :])
+                elif plane == 'sagittal':
+                    slice_pred_data = np.rot90(pred_data[i, slice_idx[i], :, :])
+
+                axs[i].imshow(slice_pred_data, aspect=aspect, color='blue')
 
             # Plot label slice data.
             if label is not None:
