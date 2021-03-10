@@ -26,13 +26,12 @@ class ParotidLeft3DLoader:
         return DataLoader(batch_size=batch_size, dataset=dataset)
 
 class ParotidLeft3DDataset(Dataset):
-    def __init__(self, folder, data_dir, input_only_transform=None, transform=None):
+    def __init__(self, folder, data_dir, transform=None):
         """
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
             data_dir: the location of the data.
         kwargs:
-            input_only_transform: transformation for the input only.
             transform: transformations to apply.
         """
         # Load up samples into 2D arrays of (input_path, label_path) pairs.

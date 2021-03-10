@@ -21,8 +21,8 @@ CHECKPOINT_DIR = os.path.join(data_dir, 'checkpoints')
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
-        record_interval='epoch', validation_interval='epoch', print_format='.10f', num_validation_images=3, 
-        is_reporter=False, mixed_precision=False, log_info=logging.info):
+        record_interval='epoch', validation_interval='epoch', print_format='.10f', is_reporter=False,
+        mixed_precision=False, log_info=logging.info):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.visual_loader = visual_loader
@@ -34,7 +34,6 @@ class ModelTrainer:
         self.print_interval = print_interval
         self.record_interval = record_interval
         self.validation_interval = validation_interval
-        self.num_validation_images = num_validation_images
         self.print_format = print_format
         self.best_loss = None
         self.max_epochs_without_improvement = 5
@@ -46,6 +45,18 @@ class ModelTrainer:
         self.scaler = GradScaler(enabled=mixed_precision)
         if is_reporter:
             self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name))
+
+            # Add hyperparameters.
+            hparams = {
+                'run-name': self.run_name,
+                'loss-function': str(self.loss_fn),
+                'max-epochs': str(self.max_epochs),
+                'mixed-precision': str(self.mixed_precision),
+                'optimiser': str(self.optimiser),
+                'transform': str(self.train_loader.dataset.transform),
+            }
+            self.writer.add_hparams(hparams, {})
+
         self.running_scores = {
             'print': {
                 'loss': 0

@@ -134,9 +134,11 @@ def train(args: dict):
     # class_weights = torch.Tensor((1, 4315)).to(device)
     # loss_fn = nn.NLLLoss(weight=class_weights)
     loss_fn = DiceLoss()
+    log_info(f"Using loss function: {loss_fn}.")
 
     # Define optimiser.
     optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    log_info(f"Using optimiser: {optimiser}.")
 
     # Create model trainer keyword arguments.
     opt_kwargs = {}
@@ -144,6 +146,8 @@ def train(args: dict):
     if is_reporter(args): opt_kwargs['is_reporter'] = True
     if args.max_epochs is not None: opt_kwargs['max_epochs'] = args.max_epochs
     opt_kwargs['mixed_precision'] = args.use_mixed
+    if args.use_mixed:
+        log_info('Using mixed precision.')
     if args.name is not None: opt_kwargs['run_name'] = args.name
     if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
     if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
