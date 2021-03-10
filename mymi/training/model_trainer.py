@@ -55,7 +55,7 @@ class ModelTrainer:
                 'optimiser': str(self.optimiser),
                 'transform': str(self.train_loader.dataset.transform),
             }
-            self.writer.add_hparams(hparams, {})
+            self.writer.add_hparams(hparams, {}, run_name='hparams')
 
         self.running_scores = {
             'print': {
@@ -148,7 +148,7 @@ class ModelTrainer:
 
             # Perform forward pass.
             with autocast(enabled=self.mixed_precision):
-              pred = model(input)
+                pred = model(input)
 
             # For each of the planes, plot a batch of images.
             planes = ('sagittal', 'coronal', 'axial')
