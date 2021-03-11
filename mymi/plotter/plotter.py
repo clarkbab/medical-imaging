@@ -11,7 +11,7 @@ from mymi import dataset
 
 class Plotter:
     @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), labels=True, plane='axial', regions='all', transform=None):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, plane='axial', regions='all', transform=None, window=None):
         """
         effect: plots a CT slice with contours.
         args:
@@ -21,11 +21,13 @@ class Plotter:
             aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
             axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
+            full_label: should we should full label mask or perimeter?
             plane: the viewing plane.
                 axial: viewed from the cranium (slice_idx=0) to the caudal region.
                 coronal: viewed from the anterior (slice_idx=0) to the posterior.
                 sagittal: viewed from the 
             regions: the regions-of-interest to plot.
+            window: the HU window to apply.
         """
         # Load patient summary.
         summary = dataset.patient_summary(pat_id)
@@ -54,7 +56,7 @@ class Plotter:
             label_data = [(name, LabelMap(tensor=data, affine=affine)) for name, data in label_data]
 
             # Transform CT data.
-            subject = Subject(one_image=ct_data, a_segmentation=label_data)
+            subject = Subject(one_image=ct_data)
             output = transform(subject)
 
             # Transform label data.
@@ -67,11 +69,11 @@ class Plotter:
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert plane in ('axial', 'coronal', 'sagittal')
-        data_index = [
+        data_index = (
             slice_idx if plane == 'sagittal' else slice(ct_data.shape[0]),
             slice_idx if plane == 'coronal' else slice(ct_data.shape[1]),
             slice_idx if plane == 'axial' else slice(ct_data.shape[2]),
-        ]
+        )
         ct_slice_data = ct_data[data_index]
 
         # Convert from our co-ordinate system (frontal, sagittal, longitudinal) to 
@@ -90,9 +92,15 @@ class Plotter:
         else:
             aspect = 1
 
+        # Determine plotting window.
+        if window is not None:
+            vmin, vmax = window
+        else:
+            vmin, vmax = ct_data.min(), ct_data.max()
+
         # Plot CT data.
         plt.figure(figsize=figsize)
-        plt.imshow(ct_slice_data, cmap='gray', aspect=aspect)
+        plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
         if regions is not None:
             # Plot labels.
@@ -111,6 +119,10 @@ class Plotter:
                     if ldata.max() == 0:
                         continue
                     show_legend = True
+
+                    # Get binary perimeter.
+                    if not full_label:
+                        ldata = cls.binary_perimeter(ldata)
                     
                     # Create binary colormap for each label.
                     colours = [(1.0, 1.0, 1.0, 0), palette(i)]

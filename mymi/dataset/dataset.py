@@ -174,7 +174,7 @@ class Dataset:
 
             # Check if we should skip.
             if not (regions == 'all' or 
-                (type(regions) == list and name in regions) or
+                ((type(regions) == tuple or type(regions) == list) and name in regions) or
                 (type(regions) == str and name == regions)):
                 continue
 
