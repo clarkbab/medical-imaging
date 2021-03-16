@@ -78,6 +78,11 @@ class ParotidLeft3DPreprocessor:
                 shutil.rmtree(folder_path)
             os.makedirs(folder_path)
 
+            # Load dataset statistics for normalisation.
+            if normalise:
+                stats_df = dataset.data_statistics(regions=region)
+                mean, std_dev = stats_df['hu-mean'].item(), stats_df['hu-std-dev'].item() 
+
             # Maintain index per subfolder.
             sample_idx = 0
 
@@ -89,6 +94,10 @@ class ParotidLeft3DPreprocessor:
                 # no random transforms should be applied when preprocessing.
                 data = dataset.patient_data(pat_id, transforms=transforms)
                 _, label_data = dataset.patient_labels(pat_id, regions=region, transforms=transforms)[0]
+
+                # Normalise data.
+                if normalise:
+                    data = (data - mean) / std_dev
 
                 # Save input data.
                 filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
