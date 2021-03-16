@@ -1,106 +1,68 @@
 import logging
-from .dataset import Dataset
+import sys
+
+from .dicom import HN1 as default
 
 # Create dataset.
-dataset = None
+active = default
 
-def config(**kwargs):
+def config(dataset=None):
     """
-    effect: configures the dataset.
+    effect: configures the dataset module.
     kwargs:
-        dataset: the dataset to read from.
+        dataset: the dataset to use.
     """
-    global dataset
-    dataset = kwargs.pop('dataset', None)
-    if dataset is None:
-        from mymi.dataset.datasets import HN1  # Importing sets HN1 as default.
+    global active
+    if dataset:
+        active = dataset
 
 ###
 # Basic queries.
 ###
 
 def has_id(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.has_id(*args, **kwargs)
+    return active.has_id(*args, **kwargs)
 
 def list_ct(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.list_ct(*args, **kwargs)
+    return active.list_ct(*args, **kwargs)
 
 def list_patients():
-    if dataset is None:
-        config()
-
-    return dataset.list_patients()
+    return active.list_patients()
 
 def get_rtstruct(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.get_rtstruct(*args, **kwargs)
+    return active.get_rtstruct(*args, **kwargs)
 
 ###
 # Raw data.
 ###
 
 def patient_data(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.patient_data(*args, **kwargs)
+    return active.patient_data(*args, **kwargs)
 
 def patient_labels(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.patient_labels(*args, **kwargs)
+    return active.patient_labels(*args, **kwargs)
 
 ###
 # Summaries.
 ###
 
 def ct(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.ct(*args, **kwargs)
+    return active.ct(*args, **kwargs)
 
 def patient_ct(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.patient_ct(*args, **kwargs)
+    return active.patient_ct(*args, **kwargs)
     
 def regions(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.regions(*args, **kwargs)
+    return active.regions(*args, **kwargs)
 
 def patient_regions(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.patient_regions(*args, **kwargs)
+    return active.patient_regions(*args, **kwargs)
 
 def region_count(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.region_count(*args, **kwargs)
+    return active.region_count(*args, **kwargs)
 
 def summary(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.summary(*args, **kwargs)
+    return active.summary(*args, **kwargs)
 
 def patient_summary(*args, **kwargs):
-    if dataset is None:
-        config()
-
-    return dataset.patient_summary(*args, **kwargs)
+    return active.patient_summary(*args, **kwargs)

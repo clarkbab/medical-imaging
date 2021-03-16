@@ -11,19 +11,19 @@ from mymi import dataset
 
 Z_SPACING_ROUND_DP = 2
 
-class Dataset:
+class DicomDataset:
     ###
     # Subclasses must implement.
     ###
 
     @classmethod
+    def clinical_data(cls):
+        raise NotImplementedError("Method 'clinical_data' not implemented in subclass.")
+
+    @classmethod
     def data_dir(cls):
         raise NotImplementedError("Method 'data_dir' not implemented in subclass.")
 
-    @classmethod
-    def clinical_data(cls):
-        raise NotImplementedError("Method 'clinical_data' not implemented in subclass.")
-    
     ###
     # Basic queries (returns DICOMs, raw DataFrames and boolean values).
     ###
