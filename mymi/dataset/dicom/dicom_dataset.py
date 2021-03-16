@@ -719,3 +719,76 @@ class DicomDataset:
         cache.write(params, df, 'dataframe')
 
         return df
+
+    @classmethod
+    def data_statistics(cls, regions='all'):
+        """
+        returns: a dataframe of statistics for the data.
+        kwargs:
+            regions: only include data for patients with the region.
+        """
+        # Load from cache if present.
+        params = {
+            'class': 'dataset',
+            'method': 'data_statistics',
+            'kwargs': {
+                'regions': regions
+            }
+        }
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
+
+        # Convert 'regions'.
+        if isinstance(regions, str) and regions != 'all':
+            regions = [regions]
+
+        # Define dataframe structure.
+        cols = {
+            'hu-mean': 'float64',
+            'hu-std-dev': 'float64'
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Get patients IDs.
+        pat_ids = cls.list_patients()
+
+        # Calculate mean.
+        total = 0
+        num_voxels = 0
+        for pat_id in pat_ids:
+            # Get patient regions.
+            pat_regions = list(dataset.patient_regions(pat_id)['region'])
+            
+            # Skip if patient has no regions, or doesn't have the specified regions.
+            if len(pat_regions) == 0 or (regions != 'all' and not np.array_equal(np.intersect1d(regions, pat_regions), regions)):
+                continue
+
+            # Add data for this patient.
+            data = dataset.patient_data(pat_id)
+            total += data.sum()
+            num_voxels += data.shape[0] * data.shape[1] * data.shape[2]
+        mean = total / num_voxels
+
+        # Calculate standard dev.
+        total = 0
+        for pat_id in pat_ids:
+            # Add data for the patient.
+            data = dataset.patient_data(pat_id)
+            total += ((data - mean) ** 2).sum()
+        std_dev = np.sqrt(total / num_voxels)
+
+        # Add data.
+        data = {
+            'hu-mean': mean,
+            'hu-std-dev': std_dev
+        }
+        df = df.append(data, ignore_index=True)
+
+        # Set column types as 'append' crushes them.
+        df = df.astype(cols)
+
+        # Write data to cache.
+        cache.write(params, df, 'dataframe')
+
+        return df
