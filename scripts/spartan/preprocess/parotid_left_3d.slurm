@@ -3,7 +3,8 @@
 #SBATCH --time 1-0:00:00
 #SBATCH -A punim1413
 
-SCRIPT_DIR=/home/baclark/code/medical-imaging/scripts
+PROJECT_DIR="/data/projects/punim1413/"
+SCRIPT_DIR="$PROJECT_DIR/medical-imaging/scripts"
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -11,4 +12,4 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-python $SCRIPT_DIR/parotid_left_3d_preprocess
+python $SCRIPT_DIR/preprocess/parotid_left_3d
