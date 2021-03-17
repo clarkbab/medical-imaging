@@ -98,7 +98,7 @@ def train(args: dict):
     else:
         train_transforms = required_transforms
 
-    logging.info(f"Using training transforms '{train_transforms}'.")
+    logging.info(f"Using transforms '{train_transforms}'.")
     train_transform = Compose(train_transforms)
     validation_transform = Compose(required_transforms)
 
