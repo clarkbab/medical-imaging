@@ -4,13 +4,13 @@ import logging
 import os
 import sys
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import cache
 from mymi import utils
 from mymi.preprocessing import ParotidLeft3DPreprocessor
-from mymi.transforms import CropOrPad, Resample
+from mymi import transforms as ts
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
@@ -41,12 +41,8 @@ cache.config(**cache_config)
 num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
 
 # Create transforms.
-fill = -1000
-spacing = (1.0, 1.0, 3.0)
-resolution = (512, 512, 212)
 transforms = [
-    Resample(spacing=spacing),
-    CropOrPad(resolution, fill=fill)
+    ts.Resample((1.0, 1.0, 3.0))
 ]
 
 # Perform extraction.

@@ -12,7 +12,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi.loaders import ParotidLeft2DLoader, ParotidLeft2DSubsetLoader

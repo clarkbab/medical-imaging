@@ -11,6 +11,15 @@ from mymi import dataset
 
 class Plotter:
     @classmethod
+    def plot_distribution(cls, region='all'):
+        """
+        effect: plots the distribution of data in the dataset.
+        kwargs:
+            region: only include patients who have a particular region/s.
+        """
+        pass
+
+    @classmethod
     def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, plane='axial', regions='all', transform=None, window=None):
         """
         effect: plots a CT slice with contours.

@@ -14,7 +14,7 @@ import torch.optim as optim
 from torchio.transforms import Compose, CropOrPad, RandomAffine, RandomElasticDeformation, RandomNoise, Resample
 from typing import *
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DSubsetLoader

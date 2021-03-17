@@ -49,6 +49,9 @@ def patient_labels(*args, **kwargs):
 def ct(*args, **kwargs):
     return active.ct(*args, **kwargs)
 
+def data_statistics(*args, **kwargs):
+    return active.data_statistics(*args, **kwargs)
+
 def patient_ct(*args, **kwargs):
     return active.patient_ct(*args, **kwargs)
     

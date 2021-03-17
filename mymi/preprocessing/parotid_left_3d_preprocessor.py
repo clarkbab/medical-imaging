@@ -6,6 +6,7 @@ import os
 from skimage.draw import polygon
 import shutil
 import sys
+from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -20,12 +21,13 @@ PROCESSED_ROOT = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 
 FILENAME_NUM_DIGITS = 5
 
 class ParotidLeft3DPreprocessor:
-    def extract(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
+    def extract(self, drop_missing_slices=True, normalise=True, num_pats='all', seed=42, transform=None):
         """
         effect: stores 3D patient volumes in 'train', 'validate' and 'test' folders
             by random split.
         kwargs:
             drop_missing_slices: drops patients that have missing slices.
+            normalise: normalise the input data.
             num_pats: operate on subset of patients.
             seed: the random number generator seed.
             transforms: apply the transforms on all patient data.
@@ -90,26 +92,52 @@ class ParotidLeft3DPreprocessor:
             for pat_id in tqdm(pat_ids):
                 logging.info(f"Extracting data for patient {pat_id}.")
 
-                # Load data. Don't need to load 'deterministic' transforms as
-                # no random transforms should be applied when preprocessing.
-                data = dataset.patient_data(pat_id, transforms=transforms)
-                _, label_data = dataset.patient_labels(pat_id, regions=region, transforms=transforms)[0]
+                # Load data.
+                input = dataset.patient_data(pat_id)
+                _, label = dataset.patient_labels(pat_id, regions=region)[0]
 
                 # Normalise data.
                 if normalise:
-                    data = (data - mean) / std_dev
+                    input = (input - mean) / std_dev
+
+                # Perform transform.
+                if transform:
+                    # Load patient summary.
+                    summary_df = dataset.patient_summary(pat_id)
+
+                    # Add 'batch' dimension.
+                    input = np.expand_dims(input, axis=0)
+                    label = np.expand_dims(label, axis=0)
+
+                    # Create 'subject'.
+                    affine = np.array([
+                        [summary_df['spacing-x'], 0, 0, 0],
+                        [0, summary_df['spacing-y'], 0, 0],
+                        [0, 0, summary_df['spacing-z'], 1],
+                        [0, 0, 0, 1]
+                    ])
+                    input = ScalarImage(tensor=input, affine=affine)
+                    label = LabelMap(tensor=label, affine=affine)
+                    subject = Subject(one_image=input, a_segmentation=label)
+
+                    # Transform the subject.
+                    output = transform(subject)
+
+                    # Extract results.
+                    input = output['one_image'].data.squeeze(0)
+                    label = output['a_segmentation'].data.squeeze(0)
 
                 # Save input data.
                 filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
                 filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
-                np.save(f, data)
+                np.save(f, input)
 
                 # Save label.
                 filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-label"
                 filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
-                np.save(f, label_data)
+                np.save(f, label)
 
                 # Increment sample index.
                 sample_idx += 1
