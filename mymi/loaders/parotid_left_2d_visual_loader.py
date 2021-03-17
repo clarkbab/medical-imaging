@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader, Sampler
 data_path = os.environ['MYMI_DATA']
 DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-2d')
 
-class ParotidLeft2DSubsetLoader:
+class ParotidLeft2DVisualLoader:
     @staticmethod
     def build(subfolder, batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transforms=[]):
         """
@@ -20,15 +20,15 @@ class ParotidLeft2DSubsetLoader:
             transforms: an array of augmentation transforms.
         """
         # Create dataset object.
-        dataset = ParotidLeft2DSubsetDataset(subfolder, data_dir, transforms=transforms)
+        dataset = ParotidLeft2DVisualDataset(subfolder, data_dir, transforms=transforms)
 
         # Create sampler.
-        sampler = ParotidLeft2dSubsetSampler(dataset, num_batches * batch_size, seed)
+        sampler = ParotidLeft2dVisualSampler(dataset, num_batches * batch_size, seed)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
-class ParotidLeft2DSubsetDataset(Dataset):
+class ParotidLeft2DVisualDataset(Dataset):
     def __init__(self, subfolder, data_dir, transforms=[]):
         """
         returns: a dataset.
@@ -73,7 +73,7 @@ class ParotidLeft2DSubsetDataset(Dataset):
 
         return input, label
 
-class ParotidLeft2dSubsetSampler(Sampler):
+class ParotidLeft2dVisualSampler(Sampler):
     def __init__(self, dataset, num_images, seed):
         self.dataset_length = len(dataset)
         self.num_images = num_images

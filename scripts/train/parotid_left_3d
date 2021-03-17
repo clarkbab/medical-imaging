@@ -17,7 +17,7 @@ from typing import *
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DSubsetLoader
+from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DVisualLoader
 from mymi.losses import DiceLoss
 from mymi.models import ParotidLeft3DNet
 from mymi.training import ModelTrainer
@@ -86,27 +86,29 @@ def train(args: dict):
     low_res = (128, 128, 96)
     spacing = (1, 1, 3)
     low_res_spacing = tuple((np.array(high_res) / low_res) * spacing)
-    base_transforms = [                                             # Applied to all images to satisfy network architecture constraints.
+    aug_transforms = [                                               # Only applied when augmenting.
+        RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill)
+    ]
+    required_transforms = [                                             # Applied to all images to satisfy network architecture constraints.
         CropOrPad(high_res, padding_mode=fill),
         Resample(low_res_spacing)
     ]
-    augmentations = [                                               # Only applied when augmenting.
-        RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill)
-    ]
     if args.use_aug:
-        transforms = augmentations + base_transforms
+        train_transforms = aug_transforms + required_transforms
     else:
-        transforms = base_transforms
-    logging.info(f"Using transforms '{transforms}'.")
-    transform = Compose(transforms)
+        train_transforms = required_transforms
+
+    logging.info(f"Using training transforms '{train_transforms}'.")
+    train_transform = Compose(train_transforms)
+    validation_transform = Compose(required_transforms)
 
     # Get data loaders.
     batch_size = args.batch_size
     opt_kwargs = {}
     if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
-    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transform=transform, **opt_kwargs)
-    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transform=transform, **opt_kwargs)
-    visual_loader = ParotidLeft3DSubsetLoader.build(batch_size=batch_size, **opt_kwargs)
+    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transform=train_transform, **opt_kwargs)
+    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transform=validation_transform, **opt_kwargs)
+    visual_loader = ParotidLeft3DVisualLoader.build(batch_size=batch_size, transform=validation_transform, **opt_kwargs)
 
     # Configure device.
     if args.use_gpu:

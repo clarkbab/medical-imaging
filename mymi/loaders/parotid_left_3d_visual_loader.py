@@ -6,7 +6,7 @@ from torchio import Compose, LabelMap, ScalarImage, Subject
 data_path = os.environ['MYMI_DATA']
 DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
-class ParotidLeft3DSubsetLoader:
+class ParotidLeft3DVisualLoader:
     @staticmethod
     def build(batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transform=None):
         """
@@ -16,18 +16,18 @@ class ParotidLeft3DSubsetLoader:
             num_batches: how many batches this loader should generate.
             data_dir: the location of the data.
             seed: random number generator seed.
-            transforms: an array of augmentation transforms.
+            transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DSubsetDataset(data_dir, transform=transform)
+        dataset = ParotidLeft3DVisualDataset(data_dir, transform=transform)
 
         # Create sampler.
-        sampler = ParotidLeft3DSubsetSampler(dataset, num_batches * batch_size, seed)
+        sampler = ParotidLeft3DVisualSampler(dataset, num_batches * batch_size, seed)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
-class ParotidLeft3DSubsetDataset(Dataset):
+class ParotidLeft3DVisualDataset(Dataset):
     def __init__(self, data_dir, transform=None):
         """
         returns: a dataset.
@@ -90,7 +90,7 @@ class ParotidLeft3DSubsetDataset(Dataset):
 
         return input, label
 
-class ParotidLeft3DSubsetSampler(Sampler):
+class ParotidLeft3DVisualSampler(Sampler):
     def __init__(self, dataset, num_images, seed):
         self.dataset_length = len(dataset)
         self.num_images = num_images
