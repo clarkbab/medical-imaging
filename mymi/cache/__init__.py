@@ -18,7 +18,7 @@ def config(**kwargs):
 
     # Configure enabled.
     enabled = kwargs.pop('enabled', None)
-    if not enabled:
+    if enabled is not None:
         cache.read_enabled = False
         cache.write_enabled = False
     else:
