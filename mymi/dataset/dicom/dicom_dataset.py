@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -12,9 +13,7 @@ from mymi import dataset
 Z_SPACING_ROUND_DP = 2
 
 class DicomDataset:
-    ###
     # Subclasses must implement.
-    ###
 
     @classmethod
     def clinical_data(cls):
@@ -24,9 +23,82 @@ class DicomDataset:
     def data_dir(cls):
         raise NotImplementedError("Method 'data_dir' not implemented in subclass.")
 
-    ###
-    # Basic queries (returns DICOMs, raw DataFrames and boolean values).
-    ###
+    # Queries.
+
+    @classmethod
+    def plot_ct_histogram(cls, bin_width=10, end=None, figsize=(10, 10), pat_ids='all', regions=None, start=None):
+        """
+        effect: plots the CT intensity distribution for each patient with the specified region.
+        kwargs:
+            bin_width: the width of the histogram bins.
+            end: the highest bin to include.
+            figsize: the size of the figure.
+            pat_ids: the patients to include.
+            regions: only include patients with the specified regions.
+            start: the lowest bin to include.
+        """
+        # Load all patients.
+        pats = dataset.list_patients()
+
+        # Calculate the frequencies.
+        freqs = {}
+        for pat in pats:
+            # Skip patient if not specified by 'pat_ids'.
+            if (pat_ids != 'all' and
+                ((isinstance(pat_ids, str) and pat_ids != pat) or
+                 ((isinstance(pat_ids, list) or isinstance(pat_ids, tuple)) and pat not in pat_ids))):
+                continue
+
+            # Skip patient if they don't have the correct region.
+            if regions:
+                pat_regions = dataset.patient_regions(pat).region.to_numpy()
+                if ((isinstance(regions, str) and regions not in pat_regions) or
+                    ((isinstance(regions, list) or isinstance(regions, tuple)) and not np.array_equal(np.intersect1d(regions, pat_regions), regions))):
+                    continue
+            
+            # Load patient volume.
+            data = dataset.patient_ct_data(pat)
+
+            # Bin the data.
+            binned_data = bin_width * np.floor(data / bin_width)
+
+            # Get values and their frequencies.
+            values, frequencies = np.unique(binned_data, return_counts=True)
+
+            # Add values to frequencies dict.
+            for v, f in zip(values, frequencies):
+                # Check if value has already been added.
+                if v in freqs:
+                    freqs[v] += f
+                else:
+                    freqs[v] = f
+
+        # Fill in empty bins.
+        values = np.fromiter(freqs.keys(), dtype=np.float)
+        min, max = values.min(), values.max() + 2 * bin_width
+        bins = np.arange(min, max, bin_width)
+        for b in bins:
+            if b not in freqs:
+                freqs[b] = 0            
+
+        # Remove bins we're not interested in.
+        new_bins = bins
+        print(f"new bins before: {len(new_bins)}")
+        print(f"freqs before: {len(freqs.values())}")
+        if start is not None or end is not None:
+            for b in bins:
+                # Remove or break.
+                if (start is not None and b < start) or (end is not None and b > end):
+                    new_bins = new_bins[new_bins != b]
+                    freqs.pop(b)
+
+        print(f"new bins after: {len(new_bins)}")
+        print(f"freqs after: {len(freqs.values())}")
+
+        # Plot the histogram.
+        plt.figure(figsize=figsize)
+        plt.hist(new_bins[:-1], new_bins, weights=list(freqs.values())[:-1])
+        plt.show()
 
     @classmethod
     def has_id(cls, pat_id):
@@ -90,9 +162,9 @@ class DicomDataset:
     ###
 
     @classmethod
-    def patient_data(cls, pat_id):
+    def patient_ct_data(cls, pat_id):
         """
-        returns: a numpy array of pixel data in HU.
+        returns: a numpy array of CT data in HU.
         args:
             pat_id: the patient ID.
         """
@@ -345,7 +417,7 @@ class DicomDataset:
         # Get patient scan info.
         assert len(args) == 1
         pat_id = args[0]
-        ct_df = cls.patient_ct(pat_id)
+        ct_df = cls.patient_ct_summary(pat_id)
 
         # Check for consistency among scans.
         assert len(ct_df['size-x'].unique()) == 1
@@ -652,7 +724,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_ct(cls, pat_id):
+    def patient_ct_summary(cls, pat_id):
         """
         returns: dataframe with rows containing CT info.
         args:

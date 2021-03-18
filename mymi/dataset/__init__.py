@@ -38,11 +38,11 @@ def list_ct(*args, **kwargs):
 def list_patients():
     return active.list_patients()
 
-def patient_ct(*args, **kwargs):
-    return active.patient_ct(*args, **kwargs)
+def patient_ct_summary(*args, **kwargs):
+    return active.patient_ct_summary(*args, **kwargs)
 
-def patient_data(*args, **kwargs):
-    return active.patient_data(*args, **kwargs)
+def patient_ct_data(*args, **kwargs):
+    return active.patient_ct_data(*args, **kwargs)
 
 def patient_labels(*args, **kwargs):
     return active.patient_labels(*args, **kwargs)
@@ -52,6 +52,9 @@ def patient_regions(*args, **kwargs):
 
 def patient_summary(*args, **kwargs):
     return active.patient_summary(*args, **kwargs)
+
+def plot_ct_histogram(*args, **kwargs):
+    return active.plot_ct_histogram(*args, **kwargs)
     
 def regions(*args, **kwargs):
     return active.regions(*args, **kwargs)
