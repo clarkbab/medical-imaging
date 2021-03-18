@@ -55,9 +55,6 @@ def patient_summary(*args, **kwargs):
 
 def patient_summaries(*args, **kwargs):
     return active.patient_summaries(*args, **kwargs)
-
-def plot_ct_histogram(*args, **kwargs):
-    return active.plot_ct_histogram(*args, **kwargs)
     
 def regions(*args, **kwargs):
     return active.regions(*args, **kwargs)

@@ -8,6 +8,7 @@ from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import cache
 from mymi import dataset
+from mymi.utils import filterOnPatID, filterOnRegion, stringOrSorted
 
 class Plotter:
     @classmethod
@@ -15,16 +16,84 @@ class Plotter:
         pass
 
     @classmethod
-    def plot_distribution(cls, region='all'):
+    def plot_ct_distribution(cls, bin_width=10, end=None, figsize=(10, 10), pat_id='all', region='all', start=None):
         """
-        effect: plots the distribution of data in the dataset.
+        effect: plots the CT intensity distribution for each patient with the specified region.
         kwargs:
-            region: only include patients who have a particular region/s.
+            bin_width: the width of the histogram bins.
+            end: the highest bin to include.
+            figsize: the size of the figure.
+            pat_id: the patients to include.
+            region: include patients with any of the listed regions (behaves like an OR).
+            start: the lowest bin to include.
         """
-        pass
+        params = {
+            'class': 'dataset',
+            'method': 'plot_ct_histogram',
+            'kwargs': {
+                'pat_id': stringOrSorted(pat_id),
+                'region': stringOrSorted(region)
+            }
+        }
+        result = cache.read(params, 'dict')
+        if result is None:
+            # Load all patients.
+            pat_ids = dataset.list_patients()
+            
+            # Filter patients.
+            pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
+            pat_ids = list(filter(filterOnRegion(region), pat_ids))
+
+            # Calculate the frequencies.
+            freqs = {}
+            for pat in pat_ids:
+                # Load patient volume.
+                data = dataset.patient_ct_data(pat)
+
+                # Bin the data.
+                binned_data = bin_width * np.floor(data / bin_width)
+
+                # Get values and their frequencies.
+                values, frequencies = np.unique(binned_data, return_counts=True)
+
+                # Add values to frequencies dict.
+                for v, f in zip(values, frequencies):
+                    # Check if value has already been added.
+                    if v in freqs:
+                        freqs[v] += f
+                    else:
+                        freqs[v] = f
+
+            # Write frequencies 'dict' to cache.
+            cache.write(params, freqs, 'dict')
+        else:
+            freqs = result
+
+        # Fill in empty bins.
+        values = np.fromiter(freqs.keys(), dtype=np.float)
+        min, max = values.min(), values.max() + 2 * bin_width
+        bins = np.arange(min, max, bin_width)
+        for b in bins:
+            if b not in freqs:
+                freqs[b] = 0            
+
+        # Remove bins we're not interested in.
+        new_bins = bins
+        if start is not None or end is not None:
+            for b in bins:
+                # Remove or break.
+                if (start is not None and b < start) or (end is not None and b > end):
+                    new_bins = new_bins[new_bins != b]
+                    freqs.pop(b)
+
+        # Plot the histogram.
+        plt.figure(figsize=figsize)
+        plt.hist(new_bins[:-1], new_bins, weights=list(freqs.values())[:-1])
+        plt.show()
+
 
     @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', regions='all', transform=None, window=None):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', region='all', transform=None, window=None):
         """
         effect: plots a CT slice with contours.
         args:
@@ -39,18 +108,18 @@ class Plotter:
                 axial: viewed from the cranium (slice_idx=0) to the caudal region.
                 coronal: viewed from the anterior (slice_idx=0) to the posterior.
                 sagittal: viewed from the 
-            regions: the regions-of-interest to plot.
+            region: the regions-of-interest to plot.
             window: the HU window to apply.
         """
         # Load patient summary.
         summary = dataset.patient_summary(pat_id)
 
         # Load CT data.
-        ct_data = dataset.patient_data(pat_id)
+        ct_data = dataset.patient_ct_data(pat_id)
 
         # Load labels.
-        if regions is not None:
-            label_data = dataset.patient_labels(pat_id, regions=regions)
+        if region is not None:
+            label_data = dataset.patient_labels(pat_id, region=region)
 
         # Transform data.
         if transform:
@@ -115,7 +184,7 @@ class Plotter:
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
-        if regions is not None:
+        if region is not None:
             # Plot labels.
             if len(label_data) != 0:
                 # Define color pallete.

@@ -6,103 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-def plot_ct(*args):
-    """
-    input: required.
-    mask: optional.
-    """
-    # Get data.
-    data = args[0]
-    mask = args[1] if len(args) >= 2 else None
-    pred = args[2] if len(args) >= 3 else None
-
-    # Define first plotting axis.
-    if pred is None:
-        plt.figure(figsize=(8, 8))
-    else:
-        f, (ax1, ax2) = plt.subplots(1, 2, figsize=(26, 16), sharey=True)
-
-    # Remove "channel" dimension if present.
-    if data.shape[0] == 1:
-        data = data.squeeze(0)
-
-    # Plot CT.
-    ax = ax1 if pred is not None else plt
-    ax.imshow(np.transpose(data), cmap='gray')
-    
-    # Plot mask.
-    colours = [(1.0, 1.0, 1.0, 0), (0.12, 0.47, 0.70, 1.0)]
-    mask_cmap = ListedColormap(colours)
-    if mask is not None:
-        ax.imshow(np.transpose(mask), cmap=mask_cmap)
-
-    # Plot prediction.
-    if pred is not None:
-        ax2.imshow(np.transpose(data), cmap='gray')
-        ax2.imshow(np.transpose(pred), cmap=mask_cmap)
-
-def plot_batch(*args, **kwargs):
-    """
-    effect: plots a batch of images.
-    """
-    # Get options.
-    figsize_mul = kwargs['figsize'] if 'figsize' in kwargs else 8
-
-    # Get image data.
-    data = image_data(*args, **kwargs)
-    num_images = len(data)
-
-    # Get keyword arguments.
-    axis = 'on' if 'axis' in kwargs and kwargs['axis'] else 'off'
-
-    figsize = (figsize_mul, num_images * figsize_mul)
-    _, axs = plt.subplots(num_images, figsize=figsize)
-    if num_images == 1: axs = [axs]
-
-    for i in range(num_images):
-        axs[i].axis(axis)
-        axs[i].imshow(np.transpose(data[i]))
-        
-    plt.show()
-
-def image_data(*args, **kwargs):
-    """
-    returns: an array of image data.
-    """
-    # Parse arguments.
-    input = args[0].cpu().float()
-    mask = args[1].cpu() if len(args) > 1 else None
-    pred = args[2].detach().cpu().argmax(dim=1) if len(args) > 2 else None
-    num_images = kwargs['num_images'] if 'num_images' in kwargs else input.shape[0]
-
-    # Check if input has 'channel' dimension.
-    if len(input.shape) == 4:
-        input = input.squeeze(1)
-
-    # Scale CT data.
-    image_data = input[:num_images]
-    min, max = torch.amin(image_data, dim=(1, 2)), torch.amax(image_data, dim=(1, 2))
-    denom = max - min
-    denom[denom == 0] = 1e-10
-    image_data = (image_data - min.view(len(min), 1, 1)) / denom.view(len(denom), 1, 1)
-    image_data = torch.cat(3 * [image_data.unsqueeze(1)], dim=1)
-
-    # Add prediction.
-    if pred is not None:
-        pred_data = pred[:num_images]
-        color = (0.12, 0.47, 0.7)
-        pred_data = torch.stack([c * pred_data for c in color], dim=1)
-        image_data[pred_data != 0] = pred_data[pred_data != 0]
-
-    # Add mask data.
-    if mask is not None:
-        mask_data = mask[:num_images]
-        color = (1., 1., 1e-5)
-        mask_data = binary_perimeter(mask_data).float()
-        mask_data = torch.stack([c * mask_data for c in color], dim=1)
-        image_data[mask_data != 0] = mask_data[mask_data != 0]
-
-    return image_data
+from mymi import dataset
 
 def pretty_size(size):
     assert isinstance(size, torch.Size)
@@ -166,3 +70,46 @@ def binary_perimeter(mask):
                     j != y_dim - 1 and mask[b, i, j + 1] == 0)):
                     mask_perimeter[b, i, j] = 1
     return mask_perimeter
+
+def filterOnPatID(pat_id):
+    """
+    returns: a function to filter based on 'pat_id' kwarg.
+    args:
+        pat_id: the passed 'pat_id' kwarg.
+    """
+    def fn(id):
+        if (pat_id == 'all' or 
+            (isinstance(pat_id, str) and id == pat_id) or
+            ((isinstance(pat_id, list) or isinstance(pat_id, tuple)) and id in pat_id)):
+            return True
+        else:
+            return False
+
+    return fn
+
+def filterOnRegion(region):
+    """
+    returns: a function to filter based on 'regions' kwarg.
+    args:
+        region: the passed 'region' kwarg.
+    """
+    def fn(id):
+        # Load patient regions.
+        pat_regions = dataset.patient_regions(id).region.to_numpy()
+
+        if (region == 'all' or
+            (isinstance(region, str) and region in pat_regions) or
+            ((isinstance(region, list) or isinstance(region, tuple)) and len(np.intersect1d(region, pat_regions)) != 0)):
+            return True
+        else:
+            return False
+
+    return fn
+
+def stringOrSorted(obj):
+    """
+    returns: no-op if obj is a string, else sorted tuple.
+    args:
+        obj: a string or iterable.
+    """
+    return obj if isinstance(obj, str) else tuple(sorted(obj))

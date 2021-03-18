@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from mymi import cache
 from mymi import dataset
+from mymi.utils import filterOnPatID, filterOnRegion, stringOrSorted
 
 Z_SPACING_ROUND_DP = 2
 
@@ -26,101 +27,27 @@ class DicomDataset:
     # Queries.
 
     @classmethod
-    def generate_report(cls, name, regions='all'):
+    def generate_report(cls, name, region='all'):
         """
         effect: generates a PDF report for the dataset.
         args:
             name: the report name.
         kwargs:
-            regions: include patients with any of the listed regions (behaves like an OR).
+            region: include patients with any of the listed regions (behaves like an OR).
         """
-        # Add CT summary.
+        # Load patient summaries.
+        summary = dataset.patient_summaries(region=region)
 
+        # Create CT section.
 
-    @classmethod
-    def plot_ct_histogram(cls, bin_width=10, end=None, figsize=(10, 10), pat_ids='all', regions='all', start=None):
-        """
-        effect: plots the CT intensity distribution for each patient with the specified region.
-        kwargs:
-            bin_width: the width of the histogram bins.
-            end: the highest bin to include.
-            figsize: the size of the figure.
-            pat_ids: the patients to include.
-            regions: include patients with any of the listed regions (behaves like an OR).
-            start: the lowest bin to include.
-        """
-        params = {
-            'class': 'dataset',
-            'method': 'plot_ct_histogram',
-            'kwargs': {
-                'pat_ids': pat_ids,
-                'regions': regions
-            }
-        }
-        result = cache.read(params, 'dict')
-        if result is None:
-            # Load all patients.
-            pats = dataset.list_patients()
+        # Plot acquisition parameters and show table of outliers.
+        cols = ['spacing-x', 'spacing-y', 'spacing-z']
+        cols = ['size-x', 'size-y', 'size-z']
+        cols = ['fov-x', 'fov-y', 'fov-z']
+        
+        # Display central 'sagittal' slice of those 5 patients that have smallest 'fov-z'.
 
-            # Calculate the frequencies.
-            freqs = {}
-            for pat in pats:
-                # Skip patient if not specified by 'pat_ids'.
-                if (pat_ids != 'all' and
-                    ((isinstance(pat_ids, str) and pat_ids != pat) or
-                    ((isinstance(pat_ids, list) or isinstance(pat_ids, tuple)) and pat not in pat_ids))):
-                    continue
-
-                # Skip patient if they don't have one of the listed regions.
-                pat_regions = dataset.patient_regions(pat).region.to_numpy()
-                if (regions != 'all' and
-                    ((isinstance(regions, str) and regions not in pat_regions) or
-                    ((isinstance(regions, list) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) == 0))):
-                    continue
-
-                # Load patient volume.
-                data = dataset.patient_ct_data(pat)
-
-                # Bin the data.
-                binned_data = bin_width * np.floor(data / bin_width)
-
-                # Get values and their frequencies.
-                values, frequencies = np.unique(binned_data, return_counts=True)
-
-                # Add values to frequencies dict.
-                for v, f in zip(values, frequencies):
-                    # Check if value has already been added.
-                    if v in freqs:
-                        freqs[v] += f
-                    else:
-                        freqs[v] = f
-
-            # Write frequencies 'dict' to cache.
-            cache.write(params, freqs, 'dict')
-        else:
-            freqs = result
-
-        # Fill in empty bins.
-        values = np.fromiter(freqs.keys(), dtype=np.float)
-        min, max = values.min(), values.max() + 2 * bin_width
-        bins = np.arange(min, max, bin_width)
-        for b in bins:
-            if b not in freqs:
-                freqs[b] = 0            
-
-        # Remove bins we're not interested in.
-        new_bins = bins
-        if start is not None or end is not None:
-            for b in bins:
-                # Remove or break.
-                if (start is not None and b < start) or (end is not None and b > end):
-                    new_bins = new_bins[new_bins != b]
-                    freqs.pop(b)
-
-        # Plot the histogram.
-        plt.figure(figsize=figsize)
-        plt.hist(new_bins[:-1], new_bins, weights=list(freqs.values())[:-1])
-        plt.show()
+        # Plot CT HU distribution. 
 
     @classmethod
     def has_id(cls, pat_id):
@@ -229,13 +156,13 @@ class DicomDataset:
         return data
 
     @classmethod
-    def patient_labels(cls, pat_id, regions='all'):
+    def patient_labels(cls, pat_id, region='all'):
         """
         returns: a list of (<label name>, <label data>) pairs.
         args:
             pat_id: the patient ID.
         kwargs:
-            regions: the desired regions.
+            region: the desired regions.
         """
         params = {
             'class': 'dataset',
@@ -244,7 +171,7 @@ class DicomDataset:
                 'pat_id': pat_id
             },
             'kwargs': {
-                'regions': regions,
+                'region': region,
             }
         }
         result = cache.read(params, 'name-array-pairs')
@@ -267,9 +194,9 @@ class DicomDataset:
             name = roi_info.ROIName
 
             # Check if we should skip.
-            if not (regions == 'all' or 
-                ((type(regions) == tuple or type(regions) == list) and name in regions) or
-                (type(regions) == str and name == regions)):
+            if not (region == 'all' or 
+                ((type(region) == tuple or type(region) == list) and name in region) or
+                (type(region) == str and name == region)):
                 continue
 
             # Create label placeholder.
@@ -313,13 +240,13 @@ class DicomDataset:
     ###
 
     @classmethod
-    def patient_summaries(cls, num_pats='all', pat_id='all', regions='all'):
+    def patient_summaries(cls, num_pats='all', pat_id='all', region='all'):
         """
         returns: a dataframe containing rows of patient summaries.
         kwargs:
             num_pats: the number of patients to summarise.
             pat_id: only include patients who are listed.
-            regions: only include patients who have at least one of the listed regions (behaves like an OR).
+            region: only include patients who have at least one of the listed regions (behaves like an OR).
         """
         # Load from cache if present.
         params = {
@@ -328,7 +255,7 @@ class DicomDataset:
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': stringOrSorted(pat_id),
-                'regions': stringOrSorted(regions)
+                'region': stringOrSorted(region)
             }
         }
         result = cache.read(params, 'dataframe')
@@ -366,7 +293,7 @@ class DicomDataset:
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnRegions(regions), pat_ids))
+        pat_ids = list(filter(filterOnRegion(region), pat_ids))
 
         # Run on subset of patients.
         if num_pats != 'all':
@@ -812,18 +739,18 @@ class DicomDataset:
         return df
 
     @classmethod
-    def data_statistics(cls, regions='all'):
+    def data_statistics(cls, region='all'):
         """
         returns: a dataframe of statistics for the data.
         kwargs:
-            regions: only include data for patients with the region.
+            region: only include data for patients with the region.
         """
         # Load from cache if present.
         params = {
             'class': 'dataset',
             'method': 'data_statistics',
             'kwargs': {
-                'regions': regions
+                'region': region
             }
         }
         result = cache.read(params, 'dataframe')
@@ -831,8 +758,8 @@ class DicomDataset:
             return result
 
         # Convert 'regions'.
-        if isinstance(regions, str) and regions != 'all':
-            regions = [regions]
+        if isinstance(region, str) and region != 'all':
+            region = [region]
 
         # Define dataframe structure.
         cols = {
@@ -852,7 +779,7 @@ class DicomDataset:
             pat_regions = list(dataset.patient_regions(pat_id)['region'])
             
             # Skip if patient has no regions, or doesn't have the specified regions.
-            if len(pat_regions) == 0 or (regions != 'all' and not np.array_equal(np.intersect1d(regions, pat_regions), regions)):
+            if len(pat_regions) == 0 or (region != 'all' and not np.array_equal(np.intersect1d(region, pat_regions), region)):
                 continue
 
             # Add data for this patient.
@@ -883,33 +810,3 @@ class DicomDataset:
         cache.write(params, df, 'dataframe')
 
         return df
-
-# Utility functions.
-
-def filterOnPatID(pat_id):
-    def fn(id):
-        if (pat_id == 'all' or 
-            (isinstance(pat_id, str) and id == pat_id) or
-            ((isinstance(pat_id, list) or isinstance(pat_id, tuple)) and id in pat_id)):
-            return True
-        else:
-            return False
-
-    return fn
-
-def filterOnRegions(regions):
-    def fn(id):
-        # Load patient regions.
-        pat_regions = dataset.patient_regions(id).region.to_numpy()
-
-        if (regions == 'all' or
-            (isinstance(regions, str) and regions in pat_regions) or
-            ((isinstance(regions, list) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) != 0)):
-            return True
-        else:
-            return False
-
-    return fn
-
-def stringOrSorted(obj):
-    return obj if isinstance(obj, str) else tuple(sorted(obj))
