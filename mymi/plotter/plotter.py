@@ -11,6 +11,10 @@ from mymi import dataset
 
 class Plotter:
     @classmethod
+    def plot_acquisition_params_boxplot(cls):
+        pass
+
+    @classmethod
     def plot_distribution(cls, region='all'):
         """
         effect: plots the distribution of data in the dataset.
@@ -20,7 +24,7 @@ class Plotter:
         pass
 
     @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, plane='axial', regions='all', transform=None, window=None):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', regions='all', transform=None, window=None):
         """
         effect: plots a CT slice with contours.
         args:
@@ -31,7 +35,7 @@ class Plotter:
             axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
             full_label: should we should full label mask or perimeter?
-            plane: the viewing plane.
+            view: the viewing plane.
                 axial: viewed from the cranium (slice_idx=0) to the caudal region.
                 coronal: viewed from the anterior (slice_idx=0) to the posterior.
                 sagittal: viewed from the 
@@ -77,26 +81,26 @@ class Plotter:
             label_data = [(name, out['a_segmentation'].data.squeeze(0)) for name, out in label_data]
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
-        assert plane in ('axial', 'coronal', 'sagittal')
+        assert view in ('axial', 'coronal', 'sagittal')
         data_index = (
-            slice_idx if plane == 'sagittal' else slice(ct_data.shape[0]),
-            slice_idx if plane == 'coronal' else slice(ct_data.shape[1]),
-            slice_idx if plane == 'axial' else slice(ct_data.shape[2]),
+            slice_idx if view == 'sagittal' else slice(ct_data.shape[0]),
+            slice_idx if view == 'coronal' else slice(ct_data.shape[1]),
+            slice_idx if view == 'axial' else slice(ct_data.shape[2]),
         )
         ct_slice_data = ct_data[data_index]
 
         # Convert from our co-ordinate system (frontal, sagittal, longitudinal) to 
         # that required by 'imshow'.
-        ct_slice_data = cls.to_image_coords(ct_slice_data, plane)
+        ct_slice_data = cls.to_image_coords(ct_slice_data, view)
 
         # Only apply aspect ratio if no transforms are being presented otherwise
         # we might end up with skewed images.
         if not transform:
-            if plane == 'axial':
+            if view == 'axial':
                 aspect = summary['spacing-y'] / summary['spacing-x']
-            elif plane == 'coronal':
+            elif view == 'coronal':
                 aspect = summary['spacing-z'] / summary['spacing-x']
-            elif plane == 'sagittal':
+            elif view == 'sagittal':
                 aspect = summary['spacing-z'] / summary['spacing-y']
         else:
             aspect = 1
@@ -122,7 +126,7 @@ class Plotter:
                 for i, (lname, ldata) in enumerate(label_data):
                     # Convert data to 'imshow' co-ordinate system.
                     ldata = ldata[data_index]
-                    ldata = cls.to_image_coords(ldata, plane)
+                    ldata = cls.to_image_coords(ldata, view)
 
                     # Skip label if not present on this slice.
                     if ldata.max() == 0:
@@ -152,29 +156,29 @@ class Plotter:
         plt.axis(axes)
 
         # Determine number of slices.
-        if plane == 'axial':
+        if view == 'axial':
             num_slices = ct_data.shape[2]
-        elif plane == 'coronal':
+        elif view == 'coronal':
             num_slices = ct_data.shape[1]
-        elif plane == 'sagittal':
+        elif view == 'sagittal':
             num_slices = ct_data.shape[0]
 
         # Add title.
-        plt.title(f"{plane.capitalize()} slice: {slice_idx}/{num_slices - 1}")
+        plt.title(f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}")
 
         plt.show()
 
     @classmethod
-    def to_image_coords(cls, data, plane):
-        if plane == 'axial':
+    def to_image_coords(cls, data, view):
+        if view == 'axial':
             data = np.transpose(data)
-        elif plane in ('coronal', 'sagittal'):
+        elif view in ('coronal', 'sagittal'):
             data = np.rot90(data)
 
         return data
 
     @classmethod
-    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', plane='axial', return_figure=False):
+    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', view='axial', return_figure=False):
         """
         effect: plots a training batch.
         args:
@@ -186,7 +190,7 @@ class Plotter:
             label: the label data.
             num_images: number of images from the batch to plot.
             pred: the predicted segmentation mask.
-            plane: the viewing plane.
+            view: the viewing plane.
             return_figure: whether we return or plot the figure.
         """
         # Convert to CPU.
@@ -203,7 +207,7 @@ class Plotter:
             pred = pred.argmax(1)  
 
         # Get input data.
-        assert plane in ('axial', 'coronal', 'sagittal')
+        assert view in ('axial', 'coronal', 'sagittal')
         num_images = len(input) if num_images == 'all' else num_images
         input_data = input[:num_images]
 
@@ -228,22 +232,22 @@ class Plotter:
 
         for i in range(num_images):
             # Plot input slice data.
-            if plane == 'axial':
+            if view == 'axial':
                 slice_input_data = np.transpose(input_data[i, :, :, slice_idx[i]])
-            elif plane == 'coronal':
+            elif view == 'coronal':
                 slice_input_data = np.rot90(input_data[i, :, slice_idx[i], :])
-            elif plane == 'sagittal':
+            elif view == 'sagittal':
                 slice_input_data = np.rot90(input_data[i, slice_idx[i], :, :])
 
             axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
 
             # Plot prediction slice data.
             if pred is not None:
-                if plane == 'axial':
+                if view == 'axial':
                     slice_pred_data = np.transpose(pred_data[i, :, :, slice_idx[i]])
-                elif plane == 'coronal':
+                elif view == 'coronal':
                     slice_pred_data = np.rot90(pred_data[i, :, slice_idx[i], :])
-                elif plane == 'sagittal':
+                elif view == 'sagittal':
                     slice_pred_data = np.rot90(pred_data[i, slice_idx[i], :, :])
 
                 # Create binary colormap.
@@ -254,11 +258,11 @@ class Plotter:
 
             # Plot label slice data.
             if label is not None:
-                if plane == 'axial':
+                if view == 'axial':
                     slice_label_data = np.transpose(label_data[i, :, :, slice_idx[i]])
-                elif plane == 'coronal':
+                elif view == 'coronal':
                     slice_label_data = np.rot90(label_data[i, :, slice_idx[i], :])
-                elif plane == 'sagittal':
+                elif view == 'sagittal':
                     slice_label_data = np.rot90(label_data[i, slice_idx[i], :, :])
 
                 # Get binary perimeter.

@@ -53,6 +53,9 @@ def patient_regions(*args, **kwargs):
 def patient_summary(*args, **kwargs):
     return active.patient_summary(*args, **kwargs)
 
+def patient_summaries(*args, **kwargs):
+    return active.patient_summaries(*args, **kwargs)
+
 def plot_ct_histogram(*args, **kwargs):
     return active.plot_ct_histogram(*args, **kwargs)
     
@@ -61,9 +64,6 @@ def regions(*args, **kwargs):
 
 def region_count(*args, **kwargs):
     return active.region_count(*args, **kwargs)
-
-def summary(*args, **kwargs):
-    return active.summary(*args, **kwargs)
 
 ##
 # Processed dataset API.

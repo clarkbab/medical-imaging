@@ -26,7 +26,19 @@ class DicomDataset:
     # Queries.
 
     @classmethod
-    def plot_ct_histogram(cls, bin_width=10, end=None, figsize=(10, 10), pat_ids='all', regions=None, start=None):
+    def generate_report(cls, name, regions='all'):
+        """
+        effect: generates a PDF report for the dataset.
+        args:
+            name: the report name.
+        kwargs:
+            regions: include patients with any of the listed regions (behaves like an OR).
+        """
+        # Add CT summary.
+
+
+    @classmethod
+    def plot_ct_histogram(cls, bin_width=10, end=None, figsize=(10, 10), pat_ids='all', regions='all', start=None):
         """
         effect: plots the CT intensity distribution for each patient with the specified region.
         kwargs:
@@ -34,7 +46,7 @@ class DicomDataset:
             end: the highest bin to include.
             figsize: the size of the figure.
             pat_ids: the patients to include.
-            regions: only include patients with the specified regions.
+            regions: include patients with any of the listed regions (behaves like an OR).
             start: the lowest bin to include.
         """
         params = {
@@ -59,12 +71,12 @@ class DicomDataset:
                     ((isinstance(pat_ids, list) or isinstance(pat_ids, tuple)) and pat not in pat_ids))):
                     continue
 
-                # Skip patient if they don't have the correct region.
-                if regions:
-                    pat_regions = dataset.patient_regions(pat).region.to_numpy()
-                    if ((isinstance(regions, str) and regions not in pat_regions) or
-                        ((isinstance(regions, list) or isinstance(regions, tuple)) and not np.array_equal(np.intersect1d(regions, pat_regions), regions))):
-                        continue
+                # Skip patient if they don't have one of the listed regions.
+                pat_regions = dataset.patient_regions(pat).region.to_numpy()
+                if (regions != 'all' and
+                    ((isinstance(regions, str) and regions not in pat_regions) or
+                    ((isinstance(regions, list) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) == 0))):
+                    continue
 
                 # Load patient volume.
                 data = dataset.patient_ct_data(pat)
@@ -301,12 +313,13 @@ class DicomDataset:
     ###
 
     @classmethod
-    def summary(cls, num_pats='all', pat_id=None):
+    def patient_summaries(cls, num_pats='all', pat_id='all', regions='all'):
         """
         returns: a dataframe containing rows of patient summaries.
         kwargs:
             num_pats: the number of patients to summarise.
-            pat_id: a string or list of patient IDs.
+            pat_id: only include patients who are listed.
+            regions: only include patients who have at least one of the listed regions (behaves like an OR).
         """
         # Load from cache if present.
         params = {
@@ -314,7 +327,8 @@ class DicomDataset:
             'method': 'summary',
             'kwargs': {
                 'num_pats': num_pats,
-                'pat_id': pat_id
+                'pat_id': stringOrSorted(pat_id),
+                'regions': stringOrSorted(regions)
             }
         }
         result = cache.read(params, 'dataframe')
@@ -350,15 +364,9 @@ class DicomDataset:
         # List patients.
         pat_ids = dataset.list_patients()
 
-        # Retain only patients specified.
-        if pat_id is not None:
-            if isinstance(pat_id, str):
-                assert pat_id in pat_ids
-                pat_ids = [pat_id]
-            else:
-                for id in pat_id:
-                    assert id in pat_ids
-                pat_ids = pat_id
+        # Filter patients.
+        pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
+        pat_ids = list(filter(filterOnRegions(regions), pat_ids))
 
         # Run on subset of patients.
         if num_pats != 'all':
@@ -383,7 +391,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_summary(cls, *args):
+    def patient_summary(cls, pat_id):
         """
         returns: dataframe with single row summary of CT images.
         args:
@@ -393,7 +401,9 @@ class DicomDataset:
         params = {
             'class': 'dataset',
             'method': 'patient_summary',
-            'args': args
+            'args': {
+                'pat_id': pat_id
+            }
         }
         result = cache.read(params, 'dataframe')
         if result is not None:
@@ -425,8 +435,6 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # Get patient scan info.
-        assert len(args) == 1
-        pat_id = args[0]
         ct_df = cls.patient_ct_summary(pat_id)
 
         # Check for consistency among scans.
@@ -554,7 +562,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_regions(cls, *args):
+    def patient_regions(cls, pat_id):
         """
         returns: dataframe with row for each region.
         args:
@@ -564,7 +572,9 @@ class DicomDataset:
         params = {
             'class': 'dataset',
             'method': 'patient_regions',
-            'args': args
+            'args': {
+                'pat_id': pat_id
+            }
         }
         result = cache.read(params, 'dataframe')
         if result is not None:
@@ -576,8 +586,7 @@ class DicomDataset:
         }
         df = pd.DataFrame(columns=cols.keys())
 
-        assert len(args) == 1, 'No patient ID passed'
-        pat_id = args[0]
+        # Get contours.
         rois = dataset.get_rtstruct(pat_id).StructureSetROISequence
         
         # Add info for each region-of-interest.
@@ -874,3 +883,33 @@ class DicomDataset:
         cache.write(params, df, 'dataframe')
 
         return df
+
+# Utility functions.
+
+def filterOnPatID(pat_id):
+    def fn(id):
+        if (pat_id == 'all' or 
+            (isinstance(pat_id, str) and id == pat_id) or
+            ((isinstance(pat_id, list) or isinstance(pat_id, tuple)) and id in pat_id)):
+            return True
+        else:
+            return False
+
+    return fn
+
+def filterOnRegions(regions):
+    def fn(id):
+        # Load patient regions.
+        pat_regions = dataset.patient_regions(id).region.to_numpy()
+
+        if (regions == 'all' or
+            (isinstance(regions, str) and regions in pat_regions) or
+            ((isinstance(regions, list) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) != 0)):
+            return True
+        else:
+            return False
+
+    return fn
+
+def stringOrSorted(obj):
+    return obj if isinstance(obj, str) else tuple(sorted(obj))
