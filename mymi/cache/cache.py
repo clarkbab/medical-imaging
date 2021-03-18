@@ -7,6 +7,7 @@ import logging
 import numpy as np
 import os
 import pandas as pd
+import pickle
 import time
 
 data_dir = os.environ['MYMI_DATA']
@@ -136,6 +137,8 @@ class Cache:
             data = self.read_array(key)
         elif type == 'dataframe':
             data = self.read_dataframe(key)
+        elif type == 'dict':
+            data = self.read_dict(key)
         elif type == 'name-array-pairs':
             data = self.read_name_array_pairs(key)
         else:
@@ -175,6 +178,8 @@ class Cache:
             size = self.write_array(key, obj)
         elif type == 'dataframe':
             size = self.write_dataframe(key, obj)
+        elif type == 'dict':
+            size = self.write_dict(key, obj)
         elif type == 'name-array-pairs':
             size = self.write_name_array_pairs(key, obj)
         else:
@@ -192,6 +197,11 @@ class Cache:
     def read_dataframe(self, key):
         filepath = os.path.join(CACHE_ROOT, key)
         return pd.read_parquet(filepath)
+
+    def read_dict(self, key):
+        filepath = os.path.join(CACHE_ROOT, key)
+        f = open(filepath, 'rb')
+        return pickle.load(f)
 
     def read_name_array_pairs(self, key):
         folder_path = os.path.join(CACHE_ROOT, key)
@@ -213,6 +223,12 @@ class Cache:
     def write_dataframe(self, key, df):
         filepath = os.path.join(CACHE_ROOT, key)
         df.to_parquet(filepath)
+        return os.path.getsize(filepath) 
+
+    def write_dict(self, key, dictionary):
+        filepath = os.path.join(CACHE_ROOT, key)
+        f = open(filepath, 'wb')
+        pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
