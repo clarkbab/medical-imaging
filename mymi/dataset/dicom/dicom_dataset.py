@@ -37,41 +37,56 @@ class DicomDataset:
             regions: only include patients with the specified regions.
             start: the lowest bin to include.
         """
-        # Load all patients.
-        pats = dataset.list_patients()
+        params = {
+            'class': 'dataset',
+            'method': 'plot_ct_histogram',
+            'kwargs': {
+                'pat_ids': pat_ids,
+                'regions': regions
+            }
+        }
+        result = cache.read(params, 'dict')
+        if result is None:
+            # Load all patients.
+            pats = dataset.list_patients()
 
-        # Calculate the frequencies.
-        freqs = {}
-        for pat in pats:
-            # Skip patient if not specified by 'pat_ids'.
-            if (pat_ids != 'all' and
-                ((isinstance(pat_ids, str) and pat_ids != pat) or
-                 ((isinstance(pat_ids, list) or isinstance(pat_ids, tuple)) and pat not in pat_ids))):
-                continue
-
-            # Skip patient if they don't have the correct region.
-            if regions:
-                pat_regions = dataset.patient_regions(pat).region.to_numpy()
-                if ((isinstance(regions, str) and regions not in pat_regions) or
-                    ((isinstance(regions, list) or isinstance(regions, tuple)) and not np.array_equal(np.intersect1d(regions, pat_regions), regions))):
+            # Calculate the frequencies.
+            freqs = {}
+            for pat in pats:
+                # Skip patient if not specified by 'pat_ids'.
+                if (pat_ids != 'all' and
+                    ((isinstance(pat_ids, str) and pat_ids != pat) or
+                    ((isinstance(pat_ids, list) or isinstance(pat_ids, tuple)) and pat not in pat_ids))):
                     continue
-            
-            # Load patient volume.
-            data = dataset.patient_ct_data(pat)
 
-            # Bin the data.
-            binned_data = bin_width * np.floor(data / bin_width)
+                # Skip patient if they don't have the correct region.
+                if regions:
+                    pat_regions = dataset.patient_regions(pat).region.to_numpy()
+                    if ((isinstance(regions, str) and regions not in pat_regions) or
+                        ((isinstance(regions, list) or isinstance(regions, tuple)) and not np.array_equal(np.intersect1d(regions, pat_regions), regions))):
+                        continue
 
-            # Get values and their frequencies.
-            values, frequencies = np.unique(binned_data, return_counts=True)
+                # Load patient volume.
+                data = dataset.patient_ct_data(pat)
 
-            # Add values to frequencies dict.
-            for v, f in zip(values, frequencies):
-                # Check if value has already been added.
-                if v in freqs:
-                    freqs[v] += f
-                else:
-                    freqs[v] = f
+                # Bin the data.
+                binned_data = bin_width * np.floor(data / bin_width)
+
+                # Get values and their frequencies.
+                values, frequencies = np.unique(binned_data, return_counts=True)
+
+                # Add values to frequencies dict.
+                for v, f in zip(values, frequencies):
+                    # Check if value has already been added.
+                    if v in freqs:
+                        freqs[v] += f
+                    else:
+                        freqs[v] = f
+
+            # Write frequencies 'dict' to cache.
+            cache.write(params, freqs, 'dict')
+        else:
+            freqs = result
 
         # Fill in empty bins.
         values = np.fromiter(freqs.keys(), dtype=np.float)
@@ -83,17 +98,12 @@ class DicomDataset:
 
         # Remove bins we're not interested in.
         new_bins = bins
-        print(f"new bins before: {len(new_bins)}")
-        print(f"freqs before: {len(freqs.values())}")
         if start is not None or end is not None:
             for b in bins:
                 # Remove or break.
                 if (start is not None and b < start) or (end is not None and b > end):
                     new_bins = new_bins[new_bins != b]
                     freqs.pop(b)
-
-        print(f"new bins after: {len(new_bins)}")
-        print(f"freqs after: {len(freqs.values())}")
 
         # Plot the histogram.
         plt.figure(figsize=figsize)
