@@ -38,23 +38,23 @@ def list_ct(*args, **kwargs):
 def list_patients():
     return active.list_patients()
 
+def patient_ct_data(*args, **kwargs):
+    return active.patient_ct_data(*args, **kwargs)
+
+def patient_ct_slice_summary(*args, **kwargs):
+    return active.patient_ct_slice_summary(*args, **kwargs)
+
 def patient_ct_summary(*args, **kwargs):
     return active.patient_ct_summary(*args, **kwargs)
 
-def patient_ct_data(*args, **kwargs):
-    return active.patient_ct_data(*args, **kwargs)
+def patient_ct_summaries(*args, **kwargs):
+    return active.patient_ct_summaries(*args, **kwargs)
 
 def patient_label_data(*args, **kwargs):
     return active.patient_label_data(*args, **kwargs)
 
-def patient_labels(*args, **kwargs):
-    return active.patient_labels(*args, **kwargs)
-
-def patient_summary(*args, **kwargs):
-    return active.patient_summary(*args, **kwargs)
-
-def patient_summaries(*args, **kwargs):
-    return active.patient_summaries(*args, **kwargs)
+def patient_label_summary(*args, **kwargs):
+    return active.patient_label_summary(*args, **kwargs)
     
 def labels(*args, **kwargs):
     return active.labels(*args, **kwargs)

@@ -1,8 +1,10 @@
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 import pydicom as pdcm
+from scipy.ndimage import center_of_mass
 from skimage.draw import polygon
 from torchio import ScalarImage, Subject
 from tqdm import tqdm
@@ -118,8 +120,8 @@ class DicomDataset:
             pat_id: the patient ID.
         """
         params = {
-            'class': 'dataset',
-            'method': 'patient_data',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'args': {
                 'pat_id': pat_id
             }
@@ -130,7 +132,7 @@ class DicomDataset:
 
         # Load patient CT dicoms.
         ct_dicoms = dataset.list_ct(pat_id)
-        summary = dataset.patient_summary(pat_id).iloc[0].to_dict()
+        summary = dataset.patient_ct_summary(pat_id).iloc[0].to_dict()
 
         # Create placeholder array.
         data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
@@ -165,8 +167,8 @@ class DicomDataset:
             label: the desired labels.
         """
         params = {
-            'class': 'dataset',
-            'method': 'patient_labels',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'args': {
                 'pat_id': pat_id
             },
@@ -184,12 +186,11 @@ class DicomDataset:
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        summary_df = dataset.patient_summary(pat_id)
+        summary_df = dataset.patient_ct_summary(pat_id)
         summary = summary_df.iloc[0].to_dict()
 
-        labels = []
-
         # Create and add labels.
+        labels = []
         for roi, roi_info in zip(rois, roi_infos):
             name = roi_info.ROIName
 
@@ -240,7 +241,7 @@ class DicomDataset:
     ###
 
     @classmethod
-    def patient_summaries(cls, num_pats='all', pat_id='all', label='all'):
+    def patient_ct_summaries(cls, num_pats='all', pat_id='all', label='all'):
         """
         returns: a dataframe containing rows of patient summaries.
         kwargs:
@@ -250,8 +251,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'summary',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': stringOrSorted(pat_id),
@@ -264,7 +265,6 @@ class DicomDataset:
                 
         # Define table structure.
         cols = {
-            'age': np.uint16,
             'fov-x': 'float64',
             'fov-y': 'float64',
             'fov-z': 'float64',
@@ -278,8 +278,6 @@ class DicomDataset:
             'size-x': np.uint16,
             'size-y': np.uint16,
             'size-z': np.uint16,
-            'roi-num': np.uint16,
-            'sex': 'object',
             'spacing-x': 'float64',
             'spacing-y': 'float64',
             'spacing-z': 'float64',
@@ -302,7 +300,7 @@ class DicomDataset:
 
         # Add patient info.
         for pat_id in tqdm(pat_ids):
-            patient_df = dataset.patient_summary(pat_id)
+            patient_df = dataset.patient_ct_summary(pat_id)
             patient_df['pat-id'] = pat_id
             df = df.append(patient_df)
 
@@ -318,7 +316,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_summary(cls, pat_id):
+    def patient_ct_summary(cls, pat_id):
         """
         returns: dataframe with single row summary of CT images.
         args:
@@ -326,8 +324,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'patient_summary',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'args': {
                 'pat_id': pat_id
             }
@@ -338,7 +336,6 @@ class DicomDataset:
 
         # Define table structure.
         cols = {
-            'age': np.uint16,
             'fov-x': 'float64',
             'fov-y': 'float64',
             'fov-z': 'float64',
@@ -351,8 +348,6 @@ class DicomDataset:
             'size-x': np.uint16,
             'size-y': np.uint16,
             'size-z': np.uint16,
-            'roi-num': np.uint16,
-            'sex': 'object',
             'spacing-x': 'float64',
             'spacing-y': 'float64',
             'spacing-z': 'float64',
@@ -362,7 +357,7 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # Get patient scan info.
-        ct_df = cls.patient_ct_summary(pat_id)
+        ct_df = cls.patient_ct_slice_summary(pat_id)
 
         # Check for consistency among scans.
         assert len(ct_df['size-x'].unique()) == 1
@@ -386,15 +381,11 @@ class DicomDataset:
         num_slices = len(ct_df)
         num_missing = size_z - num_slices
 
-        # Get patient RTSTRUCT info.
-        label_df = cls.patient_labels(pat_id)
-
         # Load clinical data.
         clinical_df = cls.clinical_data()
 
         # Add table row.
         data = {
-            'age': clinical_df.loc[pat_id]['age_at_diagnosis'], 
             'fov-x': ct_df['size-x'][0] * ct_df['spacing-x'][0],
             'fov-y': ct_df['size-y'][0] * ct_df['spacing-y'][0],
             'fov-z': size_z * spacing_z,
@@ -407,8 +398,6 @@ class DicomDataset:
             'size-x': ct_df['size-x'][0],
             'size-y': ct_df['size-y'][0],
             'size-z': size_z,
-            'roi-num': len(label_df),
-            'sex': clinical_df.loc[pat_id]['biological_sex'], 
             'spacing-x': ct_df['spacing-x'][0],
             'spacing-y': ct_df['spacing-y'][0],
             'spacing-z': spacing_z, 
@@ -426,6 +415,75 @@ class DicomDataset:
         return df
 
     @classmethod
+    def patient_ct_slice_summary(cls, pat_id):
+        """
+        returns: dataframe with rows containing CT slice info.
+        args:
+            pat_id: the patient ID.
+        """
+        # Load from cache if present.
+        params = {
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
+            'args': {
+                'pat_id': pat_id
+            }
+        }
+        result = cache.read(params, 'dataframe')
+        if result is not None:
+            return result
+            
+        # Define dataframe structure.
+        cols = {
+            'hu-min': 'float64',
+            'hu-max': 'float64',
+            'offset-x': 'float64',
+            'offset-y': 'float64',
+            'offset-z': 'float64',
+            'size-x': np.uint16,
+            'size-y': np.uint16,
+            'scale-int': 'float64',
+            'scale-slope': 'float64',
+            'spacing-x': 'float64',
+            'spacing-y': 'float64',
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Load CT DICOMS.
+        ct_dicoms = dataset.list_ct(pat_id)
+        
+        # Add info.
+        for ct_dicom in ct_dicoms:
+            # Perform scaling from stored values to HU.
+            hus = ct_dicom.pixel_array * ct_dicom.RescaleSlope + ct_dicom.RescaleIntercept
+
+            data = {
+               'hu-min': hus.min(),
+               'hu-max': hus.max(),
+               'offset-x': ct_dicom.ImagePositionPatient[0], 
+               'offset-y': ct_dicom.ImagePositionPatient[1], 
+               'offset-z': ct_dicom.ImagePositionPatient[2], 
+               'size-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
+               'size-y': ct_dicom.pixel_array.shape[0],
+               'scale-int': ct_dicom.RescaleIntercept,
+               'scale-slope': ct_dicom.RescaleSlope,
+               'spacing-x': ct_dicom.PixelSpacing[0],
+               'spacing-y': ct_dicom.PixelSpacing[1]
+            }
+            df = df.append(data, ignore_index=True)
+
+        # Set column types as 'append' crushes them.
+        df = df.astype(cols)
+
+        # Sort by 'offset-z'.
+        df = df.sort_values('offset-z').reset_index(drop=True)
+
+        # Write data to cache.
+        cache.write(params, df, 'dataframe')
+
+        return df
+
+    @classmethod
     def labels(cls, num_pats='all', pat_id=None):
         """
         returns: a dataframe linking patients to contoured labels.
@@ -435,8 +493,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'labels',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': pat_id
@@ -489,7 +547,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_labels(cls, pat_id):
+    def patient_label_summary(cls, pat_id):
         """
         returns: dataframe with row for each label.
         args:
@@ -497,8 +555,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'patient_labels',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'args': {
                 'pat_id': pat_id
             }
@@ -509,17 +567,26 @@ class DicomDataset:
         
         # Define table structure.
         cols = {
-            'label': 'object'
+            'label': 'object',
+            'com-x': np.uint16,
+            'com-y': np.uint16,
+            'com-z': np.uint16
         }
         df = pd.DataFrame(columns=cols.keys())
 
-        # Get contours.
-        rois = dataset.get_rtstruct(pat_id).StructureSetROISequence
+        # Get label data.
+        label_data = dataset.patient_label_data(pat_id)
         
         # Add info for each label.
-        for roi in rois:
+        for name, ldata in label_data:
+            # Find centre-of-mass.
+            coms = np.round(center_of_mass(ldata)).astype(np.uint16)
+
             data = {
-                'label': roi.ROIName
+                'label': name,
+                'com-x': coms[0],
+                'com-y': coms[1],
+                'com-z': coms[2]
             }
             df = df.append(data, ignore_index=True)
 
@@ -543,8 +610,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'label_count',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'num_pats': num_pat
             }
@@ -596,8 +663,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'ct',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': pat_id
@@ -670,75 +737,6 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_ct_summary(cls, pat_id):
-        """
-        returns: dataframe with rows containing CT info.
-        args:
-            pat_id: the patient ID.
-        """
-        # Load from cache if present.
-        params = {
-            'class': 'dataset',
-            'method': 'patient_ct',
-            'args': {
-                'pat_id': pat_id
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-            
-        # Define dataframe structure.
-        cols = {
-            'hu-min': 'float64',
-            'hu-max': 'float64',
-            'offset-x': 'float64',
-            'offset-y': 'float64',
-            'offset-z': 'float64',
-            'size-x': np.uint16,
-            'size-y': np.uint16,
-            'scale-int': 'float64',
-            'scale-slope': 'float64',
-            'spacing-x': 'float64',
-            'spacing-y': 'float64',
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Load CT DICOMS.
-        ct_dicoms = dataset.list_ct(pat_id)
-        
-        # Add info.
-        for ct_dicom in ct_dicoms:
-            # Perform scaling from stored values to HU.
-            hus = ct_dicom.pixel_array * ct_dicom.RescaleSlope + ct_dicom.RescaleIntercept
-
-            data = {
-               'hu-min': hus.min(),
-               'hu-max': hus.max(),
-               'offset-x': ct_dicom.ImagePositionPatient[0], 
-               'offset-y': ct_dicom.ImagePositionPatient[1], 
-               'offset-z': ct_dicom.ImagePositionPatient[2], 
-               'size-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
-               'size-y': ct_dicom.pixel_array.shape[0],
-               'scale-int': ct_dicom.RescaleIntercept,
-               'scale-slope': ct_dicom.RescaleSlope,
-               'spacing-x': ct_dicom.PixelSpacing[0],
-               'spacing-y': ct_dicom.PixelSpacing[1]
-            }
-            df = df.append(data, ignore_index=True)
-
-        # Set column types as 'append' crushes them.
-        df = df.astype(cols)
-
-        # Sort by 'offset-z'.
-        df = df.sort_values('offset-z').reset_index(drop=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
     def data_statistics(cls, label='all'):
         """
         returns: a dataframe of statistics for the data.
@@ -747,8 +745,8 @@ class DicomDataset:
         """
         # Load from cache if present.
         params = {
-            'class': 'dataset',
-            'method': 'data_statistics',
+            'class': cls.__name__,
+            'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'label': label
             }
