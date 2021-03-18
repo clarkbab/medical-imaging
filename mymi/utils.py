@@ -87,19 +87,19 @@ def filterOnPatID(pat_id):
 
     return fn
 
-def filterOnRegion(region):
+def filterOnLabel(label):
     """
-    returns: a function to filter based on 'regions' kwarg.
+    returns: a function to filter based on 'label' kwarg.
     args:
-        region: the passed 'region' kwarg.
+        label: the passed 'label' kwarg.
     """
     def fn(id):
-        # Load patient regions.
-        pat_regions = dataset.patient_regions(id).region.to_numpy()
+        # Load patient labels.
+        pat_labels = dataset.patient_labels(id).label.to_numpy()
 
-        if (region == 'all' or
-            (isinstance(region, str) and region in pat_regions) or
-            ((isinstance(region, list) or isinstance(region, tuple)) and len(np.intersect1d(region, pat_regions)) != 0)):
+        if (label == 'all' or
+            (isinstance(label, str) and label in pat_labels) or
+            ((isinstance(label, list) or isinstance(label, tuple)) and len(np.intersect1d(label, pat_labels)) != 0)):
             return True
         else:
             return False

@@ -32,8 +32,8 @@ class ParotidLeft3DPreprocessor:
             seed: the random number generator seed.
             transforms: apply the transforms on all patient data.
         """
-        # Define region.
-        region = 'Parotid-Left'
+        # Define label.
+        label = 'Parotid-Left'
 
         # Load patients.
         pat_ids = dataset.list_patients()
@@ -43,9 +43,9 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Removed {len(pat_missing_ids)} patients with missing slices.")
 
         # Load patients who have 'Parotid-Left' contours.
-        regions_df = dataset.regions(pat_id=pat_ids)
-        pat_ids = regions_df.query(f"`region` == '{region}'")['patient-id'].unique()
-        logging.info(f"Found {len(pat_ids)} patients with '{region}' contours.")
+        labels_df = dataset.labels(pat_id=pat_ids)
+        pat_ids = labels_df.query(f"`label` == '{label}'")['patient-id'].unique()
+        logging.info(f"Found {len(pat_ids)} patients with '{label}' contours.")
 
         # Get patient subset for testing.
         if num_pats != 'all':
@@ -82,7 +82,7 @@ class ParotidLeft3DPreprocessor:
 
             # Load dataset statistics for normalisation.
             if normalise:
-                stats_df = dataset.data_statistics(regions=region)
+                stats_df = dataset.data_statistics(label=label)
                 mean, std_dev = stats_df['hu-mean'].item(), stats_df['hu-std-dev'].item() 
 
             # Maintain index per subfolder.
@@ -94,7 +94,7 @@ class ParotidLeft3DPreprocessor:
 
                 # Load data.
                 input = dataset.patient_data(pat_id)
-                _, label = dataset.patient_labels(pat_id, regions=region)[0]
+                _, label = dataset.patient_labels(pat_id, label=label)[0]
 
                 # Normalise data.
                 if normalise:

@@ -8,7 +8,7 @@ from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import cache
 from mymi import dataset
-from mymi.utils import filterOnPatID, filterOnRegion, stringOrSorted
+from mymi.utils import filterOnPatID, filterOnLabel, stringOrSorted
 
 class Plotter:
     @classmethod
@@ -16,15 +16,15 @@ class Plotter:
         pass
 
     @classmethod
-    def plot_ct_distribution(cls, bin_width=10, end=None, figsize=(10, 10), pat_id='all', region='all', start=None):
+    def plot_ct_distribution(cls, bin_width=10, end=None, figsize=(10, 10), pat_id='all', label='all', start=None):
         """
-        effect: plots the CT intensity distribution for each patient with the specified region.
+        effect: plots the CT intensity distribution for each patient with the specified label.
         kwargs:
             bin_width: the width of the histogram bins.
             end: the highest bin to include.
             figsize: the size of the figure.
             pat_id: the patients to include.
-            region: include patients with any of the listed regions (behaves like an OR).
+            label: include patients with any of the listed labels (behaves like an OR).
             start: the lowest bin to include.
         """
         params = {
@@ -32,7 +32,7 @@ class Plotter:
             'method': 'plot_ct_histogram',
             'kwargs': {
                 'pat_id': stringOrSorted(pat_id),
-                'region': stringOrSorted(region)
+                'label': stringOrSorted(label)
             }
         }
         result = cache.read(params, 'dict')
@@ -42,7 +42,7 @@ class Plotter:
             
             # Filter patients.
             pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-            pat_ids = list(filter(filterOnRegion(region), pat_ids))
+            pat_ids = list(filter(filterOnLabel(label), pat_ids))
 
             # Calculate the frequencies.
             freqs = {}
@@ -93,7 +93,7 @@ class Plotter:
 
 
     @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', region='all', transform=None, window=None):
+    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', label='all', transform=None, window=None):
         """
         effect: plots a CT slice with contours.
         args:
@@ -108,7 +108,7 @@ class Plotter:
                 axial: viewed from the cranium (slice_idx=0) to the caudal region.
                 coronal: viewed from the anterior (slice_idx=0) to the posterior.
                 sagittal: viewed from the 
-            region: the regions-of-interest to plot.
+            label: the label to plot.
             window: the HU window to apply.
         """
         # Load patient summary.
@@ -118,8 +118,8 @@ class Plotter:
         ct_data = dataset.patient_ct_data(pat_id)
 
         # Load labels.
-        if region is not None:
-            label_data = dataset.patient_labels(pat_id, region=region)
+        if label is not None:
+            label_data = dataset.patient_label_data(pat_id, label=label)
 
         # Transform data.
         if transform:
@@ -184,7 +184,7 @@ class Plotter:
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
-        if region is not None:
+        if label is not None:
             # Plot labels.
             if len(label_data) != 0:
                 # Define color pallete.

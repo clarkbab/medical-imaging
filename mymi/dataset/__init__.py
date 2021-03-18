@@ -44,11 +44,11 @@ def patient_ct_summary(*args, **kwargs):
 def patient_ct_data(*args, **kwargs):
     return active.patient_ct_data(*args, **kwargs)
 
+def patient_label_data(*args, **kwargs):
+    return active.patient_label_data(*args, **kwargs)
+
 def patient_labels(*args, **kwargs):
     return active.patient_labels(*args, **kwargs)
-
-def patient_regions(*args, **kwargs):
-    return active.patient_regions(*args, **kwargs)
 
 def patient_summary(*args, **kwargs):
     return active.patient_summary(*args, **kwargs)
@@ -56,11 +56,11 @@ def patient_summary(*args, **kwargs):
 def patient_summaries(*args, **kwargs):
     return active.patient_summaries(*args, **kwargs)
     
-def regions(*args, **kwargs):
-    return active.regions(*args, **kwargs)
+def labels(*args, **kwargs):
+    return active.labels(*args, **kwargs)
 
-def region_count(*args, **kwargs):
-    return active.region_count(*args, **kwargs)
+def label_count(*args, **kwargs):
+    return active.label_count(*args, **kwargs)
 
 ##
 # Processed dataset API.

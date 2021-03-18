@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from mymi import cache
 from mymi import dataset
-from mymi.utils import filterOnPatID, filterOnRegion, stringOrSorted
+from mymi.utils import filterOnPatID, filterOnLabel, stringOrSorted
 
 Z_SPACING_ROUND_DP = 2
 
@@ -27,16 +27,16 @@ class DicomDataset:
     # Queries.
 
     @classmethod
-    def generate_report(cls, name, region='all'):
+    def generate_report(cls, name, label='all'):
         """
         effect: generates a PDF report for the dataset.
         args:
             name: the report name.
         kwargs:
-            region: include patients with any of the listed regions (behaves like an OR).
+            label: include patients with any of the listed labels (behaves like an OR).
         """
         # Load patient summaries.
-        summary = dataset.patient_summaries(region=region)
+        summary = dataset.patient_summaries(label=label)
 
         # Create CT section.
 
@@ -156,13 +156,13 @@ class DicomDataset:
         return data
 
     @classmethod
-    def patient_labels(cls, pat_id, region='all'):
+    def patient_label_data(cls, pat_id, label='all'):
         """
         returns: a list of (<label name>, <label data>) pairs.
         args:
             pat_id: the patient ID.
         kwargs:
-            region: the desired regions.
+            label: the desired labels.
         """
         params = {
             'class': 'dataset',
@@ -171,14 +171,14 @@ class DicomDataset:
                 'pat_id': pat_id
             },
             'kwargs': {
-                'region': region,
+                'label': label,
             }
         }
         result = cache.read(params, 'name-array-pairs')
         if result is not None:
             return result
 
-        # Load all regions-of-interest.
+        # Load all labels.
         rtstruct_dicom = dataset.get_rtstruct(pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
@@ -194,9 +194,9 @@ class DicomDataset:
             name = roi_info.ROIName
 
             # Check if we should skip.
-            if not (region == 'all' or 
-                ((type(region) == tuple or type(region) == list) and name in region) or
-                (type(region) == str and name == region)):
+            if not (label == 'all' or
+                ((type(label) == tuple or type(label) == list) and name in label) or
+                (type(label) == str and name == label)):
                 continue
 
             # Create label placeholder.
@@ -240,13 +240,13 @@ class DicomDataset:
     ###
 
     @classmethod
-    def patient_summaries(cls, num_pats='all', pat_id='all', region='all'):
+    def patient_summaries(cls, num_pats='all', pat_id='all', label='all'):
         """
         returns: a dataframe containing rows of patient summaries.
         kwargs:
             num_pats: the number of patients to summarise.
             pat_id: only include patients who are listed.
-            region: only include patients who have at least one of the listed regions (behaves like an OR).
+            label: only include patients who have at least one of the listed labels (behaves like an OR).
         """
         # Load from cache if present.
         params = {
@@ -255,7 +255,7 @@ class DicomDataset:
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': stringOrSorted(pat_id),
-                'region': stringOrSorted(region)
+                'label': stringOrSorted(label)
             }
         }
         result = cache.read(params, 'dataframe')
@@ -293,7 +293,7 @@ class DicomDataset:
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnRegion(region), pat_ids))
+        pat_ids = list(filter(filterOnLabel(label), pat_ids))
 
         # Run on subset of patients.
         if num_pats != 'all':
@@ -387,7 +387,7 @@ class DicomDataset:
         num_missing = size_z - num_slices
 
         # Get patient RTSTRUCT info.
-        region_df = cls.patient_regions(pat_id)
+        label_df = cls.patient_labels(pat_id)
 
         # Load clinical data.
         clinical_df = cls.clinical_data()
@@ -407,7 +407,7 @@ class DicomDataset:
             'size-x': ct_df['size-x'][0],
             'size-y': ct_df['size-y'][0],
             'size-z': size_z,
-            'roi-num': len(region_df),
+            'roi-num': len(label_df),
             'sex': clinical_df.loc[pat_id]['biological_sex'], 
             'spacing-x': ct_df['spacing-x'][0],
             'spacing-y': ct_df['spacing-y'][0],
@@ -426,9 +426,9 @@ class DicomDataset:
         return df
 
     @classmethod
-    def regions(cls, num_pats='all', pat_id=None):
+    def labels(cls, num_pats='all', pat_id=None):
         """
-        returns: a dataframe linking patients to contoured regions.
+        returns: a dataframe linking patients to contoured labels.
         kwargs:
             num_pats: number of patients to summarise.
             pat_id: a string or list of patient IDs.
@@ -436,7 +436,7 @@ class DicomDataset:
         # Load from cache if present.
         params = {
             'class': 'dataset',
-            'method': 'regions',
+            'method': 'labels',
             'kwargs': {
                 'num_pats': num_pats,
                 'pat_id': pat_id
@@ -449,7 +449,7 @@ class DicomDataset:
         # Define table structure.
         cols = {
             'patient-id': 'object',
-            'region': 'object'
+            'label': 'object'
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -473,13 +473,13 @@ class DicomDataset:
 
         for pat_id in tqdm(pat_ids):
             # Get rtstruct info.
-            region_info_df = cls.patient_regions(pat_id)
+            label_df = cls.patient_labels(pat_id)
 
             # Add rows.
-            for _, row in region_info_df.iterrows():
+            for _, row in label_df.iterrows():
                 data = {
                     'patient-id': pat_id,
-                    'region': row['region']
+                    'label': row['label']
                 }
                 df = df.append(data, ignore_index=True)
 
@@ -489,16 +489,16 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_regions(cls, pat_id):
+    def patient_labels(cls, pat_id):
         """
-        returns: dataframe with row for each region.
+        returns: dataframe with row for each label.
         args:
             pat_id: the patient ID.
         """
         # Load from cache if present.
         params = {
             'class': 'dataset',
-            'method': 'patient_regions',
+            'method': 'patient_labels',
             'args': {
                 'pat_id': pat_id
             }
@@ -509,17 +509,17 @@ class DicomDataset:
         
         # Define table structure.
         cols = {
-            'region': 'object'
+            'label': 'object'
         }
         df = pd.DataFrame(columns=cols.keys())
 
         # Get contours.
         rois = dataset.get_rtstruct(pat_id).StructureSetROISequence
         
-        # Add info for each region-of-interest.
+        # Add info for each label.
         for roi in rois:
             data = {
-                'region': roi.ROIName
+                'label': roi.ROIName
             }
             df = df.append(data, ignore_index=True)
 
@@ -527,7 +527,7 @@ class DicomDataset:
         df = df.astype(cols)
 
         # Sort by label.
-        df = df.sort_values('region').reset_index(drop=True)
+        df = df.sort_values('label').reset_index(drop=True)
 
         # Write data to cache.
         cache.write(params, df, 'dataframe')
@@ -535,16 +535,16 @@ class DicomDataset:
         return df
 
     @classmethod
-    def region_count(cls, num_pats='all'):
+    def label_count(cls, num_pats='all'):
         """
-        returns: a dataframe containing regions and num patients with region.
+        returns: a dataframe containing labels and num patients with label.
         kwargs:
             num_pats: the number of patients to summarise.
         """
         # Load from cache if present.
         params = {
             'class': 'dataset',
-            'method': 'region_count',
+            'method': 'label_count',
             'kwargs': {
                 'num_pats': num_pat
             }
@@ -556,7 +556,7 @@ class DicomDataset:
         # Define table structure.
         cols = {
             'num-patients': np.uint16,
-            'region': 'object'
+            'label': 'object'
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -570,16 +570,16 @@ class DicomDataset:
 
         for pat_id in tqdm(pat_ids):
             # Get RTSTRUCT info.
-            region_info_df = cls.patient_regions(pat_id)
+            label_df = cls.patient_labels(pat_id)
 
             # Add label counts.
-            region_info_df['num-patients'] = 1
-            df = df.merge(region_info_df, how='outer', on='region')
+            label_df['num-patients'] = 1
+            df = df.merge(label_df, how='outer', on='label')
             df['num-patients'] = (df['num-patients_x'].fillna(0) + df['num-patients_y'].fillna(0)).astype(np.uint16)
             df = df.drop(['num-patients_x', 'num-patients_y'], axis=1)
 
         # Sort by 'roi-label'.
-        df = df.sort_values('region').reset_index(drop=True)
+        df = df.sort_values('label').reset_index(drop=True)
 
         # Write data to cache.
         cache.write(params, df, 'dataframe')
@@ -589,7 +589,7 @@ class DicomDataset:
     @classmethod
     def ct(cls, num_pats='all', pat_id=None):
         """
-        returns: a dataframe linking patients to contoured regions.
+        returns: a dataframe linking patients to contoured labels.
         kwargs:
             num_pats: number of patients to summarise.
             pat_id: a string or list of patient IDs.
@@ -739,27 +739,27 @@ class DicomDataset:
         return df
 
     @classmethod
-    def data_statistics(cls, region='all'):
+    def data_statistics(cls, label='all'):
         """
         returns: a dataframe of statistics for the data.
         kwargs:
-            region: only include data for patients with the region.
+            label: only include data for patients with the label.
         """
         # Load from cache if present.
         params = {
             'class': 'dataset',
             'method': 'data_statistics',
             'kwargs': {
-                'region': region
+                'label': label
             }
         }
         result = cache.read(params, 'dataframe')
         if result is not None:
             return result
 
-        # Convert 'regions'.
-        if isinstance(region, str) and region != 'all':
-            region = [region]
+        # Convert 'labels'.
+        if isinstance(label, str) and label != 'all':
+            label = [label]
 
         # Define dataframe structure.
         cols = {
@@ -775,11 +775,11 @@ class DicomDataset:
         total = 0
         num_voxels = 0
         for pat_id in pat_ids:
-            # Get patient regions.
-            pat_regions = list(dataset.patient_regions(pat_id)['region'])
+            # Get patient labels.
+            pat_labels = list(dataset.patient_labels(pat_id)['label'])
             
-            # Skip if patient has no regions, or doesn't have the specified regions.
-            if len(pat_regions) == 0 or (region != 'all' and not np.array_equal(np.intersect1d(region, pat_regions), region)):
+            # Skip if patient has no labels, or doesn't have the specified labels.
+            if len(pat_labels) == 0 or (label != 'all' and not np.array_equal(np.intersect1d(label, pat_labels), label)):
                 continue
 
             # Add data for this patient.
