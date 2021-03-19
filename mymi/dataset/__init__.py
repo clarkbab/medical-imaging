@@ -66,11 +66,17 @@ def label_count(*args, **kwargs):
 # Processed dataset API.
 ##
 
+def class_frequencies(*args, **kwargs):
+    return active.class_frequencies(*args, **kwargs)
+
 def input(*args, **kwargs):
     return active.input(*args, **kwargs)
 
 def label(*args, **kwargs):
     return active.label(*args, **kwargs)
+
+def list_samples(*args, **kwargs):
+    return active.list_samples(*args, **kwargs)
 
 def sample(*args, **kwargs):
     return active.sample(*args, **kwargs)

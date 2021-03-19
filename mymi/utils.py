@@ -95,7 +95,7 @@ def filterOnLabel(label):
     """
     def fn(id):
         # Load patient labels.
-        pat_labels = dataset.patient_labels(id).label.to_numpy()
+        pat_labels = dataset.patient_label_summary(id).label.to_numpy()
 
         if (label == 'all' or
             (isinstance(label, str) and label in pat_labels) or

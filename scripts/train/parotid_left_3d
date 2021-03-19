@@ -43,6 +43,7 @@ parser.add_argument('-d', '--data-dir', action='store', help='sets the data dire
 parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
 parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('-ls', '--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
 parser.add_argument('-m', '--use-mixed', action='store_true', default=False, help='use mixed precision for training')
 parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')
 parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
@@ -132,10 +133,13 @@ def train(args: dict):
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
 
     # Define loss.
-    # class_weights = torch.Tensor((1, 4315)).to(device)
-    # loss_fn = nn.NLLLoss(weight=class_weights)
-    loss_fn = DiceLoss()
-    log_info(f"Using loss function: {loss_fn}.")
+    if args.loss == 'cross-entropy':
+        class_weights = torch.Tensor((1, 6767.77)).to(device)      # Calculated from 'dataset.class_frequencies'.
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+        log_info(f"Using cross-entropy loss.")
+    elif args.loss == 'dice':
+        loss_fn = DiceLoss()
+        log_info(f"Using dice loss.")
 
     # Define optimiser.
     optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
