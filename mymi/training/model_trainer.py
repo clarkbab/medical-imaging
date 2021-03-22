@@ -35,9 +35,9 @@ class ModelTrainer:
         self.record_interval = record_interval
         self.validation_interval = validation_interval
         self.print_format = print_format
-        self.best_loss = None
-        self.max_epochs_without_improvement = 5
-        self.num_epochs_without_improvement = 0
+        self.lowest_validation_loss = None
+        self.max_epochs_since_improvement = 10
+        self.num_epochs_since_improvement = 0
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
         self.is_reporter = is_reporter
         self.log_info = log_info
@@ -131,8 +131,8 @@ class ModelTrainer:
                     self.validate_model(model, epoch, iteration)
 
                 # Check early stopping.
-                if self.num_epochs_without_improvement >= self.max_epochs_without_improvement:
-                    self.log_info(f"Stopping early due to {self.num_epochs_without_improvement} epochs without improved validation score.")
+                if self.num_epochs_since_improvement >= self.max_epochs_since_improvement:
+                    self.log_info(f"Stopping early due to {self.num_epochs_since_improvement} epochs without improved validation score.")
                     return
 
         self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
@@ -186,17 +186,23 @@ class ModelTrainer:
             if self.should_print(val_batch, len(self.validation_loader)):
                 self.print_validation_results(epoch, val_batch)
                 self.reset_validation_print_scores()
+
+        # Check for validation improvement.
+        record_interval = len(self.validation_loader)
+        loss = self.running_scores['validation-record']['loss'] / record_interval
+
+        # Save model checkpoint if necessary.
+        if self.lowest_validation_loss is None or loss < self.lowest_validation_loss:
+            self.lowest_validation_loss = loss
+            self.save_model(model, iteration, loss)
+            self.num_epochs_since_improvement = 0
+        else:
+            self.num_epochs_since_improvement += 1
         
         # Record validation results on Tensorboard.
         self.record_validation_results(iteration)
         self.reset_validation_record_scores()
 
-        # Check for validation improvement.
-        if self.best_loss is None or loss < self.best_loss:
-            self.save_model(model, iteration, loss)
-            self.num_epochs_without_improvement = 0
-        else:
-            self.num_epochs_without_improvement += 1
 
         model.train()
 
