@@ -150,17 +150,17 @@ class ModelTrainer:
             with autocast(enabled=self.mixed_precision):
                 pred = model(input)
 
-            # For each of the planes, plot a batch of images.
-            planes = ('sagittal', 'coronal', 'axial')
-            for plane in planes:
+            # For each of the views, plot a batch of images.
+            views = ('sagittal', 'coronal', 'axial')
+            for view in views:
                 # Get the centroid plane for each image in batch.
-                centroids = self.get_batch_centroids(label, plane)
+                centroids = self.get_batch_centroids(label, view)
 
                 # Get figure.
-                figure = plotter.plot_batch(input, centroids, label=label, pred=pred, plane=plane, return_figure=True)
+                figure = plotter.plot_batch(input, centroids, label=label, pred=pred, view=view, return_figure=True)
 
                 # Write figure to tensorboard.
-                tag = f"Validation - batch={batch}, plane={plane}"
+                tag = f"Validation - batch={batch}, view={view}"
                 self.writer.add_figure(tag, figure, global_step=iteration)
 
         # Calculate validation score.
