@@ -36,7 +36,7 @@ class ModelTrainer:
         self.validation_interval = validation_interval
         self.print_format = print_format
         self.lowest_validation_loss = None
-        self.max_epochs_since_improvement = 10
+        self.max_epochs_since_improvement = 20
         self.num_epochs_since_improvement = 0
         self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
         self.is_reporter = is_reporter
