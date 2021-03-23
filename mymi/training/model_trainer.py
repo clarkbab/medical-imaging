@@ -22,7 +22,7 @@ class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
         record_interval='epoch', validation_interval='epoch', print_format='.10f', is_reporter=False,
-        mixed_precision=False, log_info=logging.info):
+        mixed_precision=False, log_info=logging.info, early_stopping=False):
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.visual_loader = visual_loader
@@ -131,9 +131,10 @@ class ModelTrainer:
                     self.validate_model(model, epoch, iteration)
 
                 # Check early stopping.
-                if self.num_epochs_since_improvement >= self.max_epochs_since_improvement:
-                    self.log_info(f"Stopping early due to {self.num_epochs_since_improvement} epochs without improved validation score.")
-                    return
+                if self.early_stopping:
+                    if self.num_epochs_since_improvement >= self.max_epochs_since_improvement:
+                        self.log_info(f"Stopping early due to {self.num_epochs_since_improvement} epochs without improved validation score.")
+                        return
 
         self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
 

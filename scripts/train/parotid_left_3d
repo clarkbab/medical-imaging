@@ -50,6 +50,7 @@ parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, h
 parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
 parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
 parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
+parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
 parser.add_argument('-t', '--tensorboard-dir', action='store', help='sets the tensorboard directory')
 parser.add_argument('-u', '--use-gpu', action='store_true', default=False, help='use GPU for training')
 parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
@@ -145,19 +146,22 @@ def train(args: dict):
     optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     log_info(f"Using optimiser: {optimiser}.")
 
-    # Create model trainer keyword arguments.
+    # Create model trainer kwargs.
     opt_kwargs = {}
     if args.checkpoint_dir is not None: opt_kwargs['checkpoint_dir'] = args.checkpoint_dir
     if is_reporter(args): opt_kwargs['is_reporter'] = True
     if args.max_epochs is not None: opt_kwargs['max_epochs'] = args.max_epochs
     opt_kwargs['mixed_precision'] = args.use_mixed
-    if args.use_mixed:
-        log_info('Using mixed precision.')
     if args.name is not None:
-        log_info(f"Run name: {args.name}.")
         opt_kwargs['run_name'] = args.name
+        log_info(f"Run name: {args.name}.")
     if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
     if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
+    if args.use_early_stopping:
+        opt_kwargs['early_stopping'] = True
+        log_info('Using early stopping.')
+    if args.use_mixed:
+        log_info('Using mixed precision.')
     if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.
