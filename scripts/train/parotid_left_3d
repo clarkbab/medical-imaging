@@ -43,7 +43,7 @@ parser.add_argument('-d', '--data-dir', action='store', help='sets the data dire
 parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
 parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
-parser.add_argument('-lr', '--learning-rate', action='store', help="sets the learning rate")
+parser.add_argument('-lr', '--learning-rate', action='store', type=float, help="sets the learning rate")
 parser.add_argument('-ls', '--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
 parser.add_argument('-m', '--use-mixed', action='store_true', default=False, help='use mixed precision for training')
 parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')

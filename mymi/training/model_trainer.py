@@ -23,6 +23,7 @@ class ModelTrainer:
         max_epochs=100, run_name=None, metrics=('dice'), device=torch.device('cpu'), print_interval='epoch', 
         record_interval='epoch', validation_interval='epoch', print_format='.10f', is_reporter=False,
         mixed_precision=False, log_info=logging.info, early_stopping=False):
+        self.early_stopping = early_stopping
         self.train_loader = train_loader
         self.validation_loader = validation_loader
         self.visual_loader = visual_loader
