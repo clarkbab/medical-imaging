@@ -153,7 +153,9 @@ def train(args: dict):
     opt_kwargs['mixed_precision'] = args.use_mixed
     if args.use_mixed:
         log_info('Using mixed precision.')
-    if args.name is not None: opt_kwargs['run_name'] = args.name
+    if args.name is not None:
+        log_info(f"Run name: {args.name}.")
+        opt_kwargs['run_name'] = args.name
     if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
     if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
     if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
