@@ -10,21 +10,19 @@ import pandas as pd
 import pickle
 import time
 
-data_dir = os.environ['MYMI_DATA']
-CACHE_ROOT = os.path.join(data_dir, 'cache') 
-
 class Cache:
     def __init__(self):
-        self._configured = False
-        self._read_enabled = None
-        self._write_enabled = None
+        self._read_enabled = True
+        self._write_enabled = True
+        data_dir = os.environ['MYMI_DATA']
+        self._path = os.path.join(data_dir, 'cache')
 
     @property
-    def configured(self):
-        return self._configured
+    def path(self):
+        return self._path
 
-    def set_configured(self):
-        self._configured = True
+    def set_path(self, path):
+        self._path = path
 
     @property
     def read_enabled(self):
@@ -35,20 +33,12 @@ class Cache:
         self._read_enabled = enabled
 
     @property
-    def enabled_read(self):
-        return self._read_enabled
-
-    @property
     def write_enabled(self):
         return self._write_enabled
 
     @write_enabled.setter
     def write_enabled(self, enabled):
         self._write_enabled = enabled
-
-    @property
-    def enabled_write(self):
-        return self._write_enabled
 
     def cache_key(self, params):
         """
@@ -100,8 +90,8 @@ class Cache:
         key: cache key to look for.
         """
         # Search for file by key.
-        cache_path = os.path.join(CACHE_ROOT, key) 
-        if os.path.exists(cache_path):
+        key_path = os.path.join(self._path, key) 
+        if os.path.exists(key_path):
             return True
         else:
             return False
@@ -190,21 +180,21 @@ class Cache:
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
     def read_array(self, key):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
     def read_dataframe(self, key):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         return pd.read_parquet(filepath)
 
     def read_dict(self, key):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'rb')
         return pickle.load(f)
 
     def read_name_array_pairs(self, key):
-        folder_path = os.path.join(CACHE_ROOT, key)
+        folder_path = os.path.join(self._path, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
             filepath = os.path.join(folder_path, name)
@@ -215,24 +205,24 @@ class Cache:
         return name_array_pairs
 
     def write_array(self, key, array):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
     def write_dataframe(self, key, df):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
     def write_dict(self, key, dictionary):
-        filepath = os.path.join(CACHE_ROOT, key)
+        filepath = os.path.join(self._path, key)
         f = open(filepath, 'wb')
         pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
-        folder_path = os.path.join(CACHE_ROOT, key)
+        folder_path = os.path.join(self._path, key)
         os.makedirs(folder_path, exist_ok=True)
 
         size = 0

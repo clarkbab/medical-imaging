@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from mymi import dataset
-
 def pretty_size(size):
     assert isinstance(size, torch.Size)
     return ' x '.join(map(str, size))
@@ -73,7 +71,7 @@ def binary_perimeter(mask):
 
 def filterOnPatID(pat_id):
     """
-    returns: a function to filter based on 'pat_id' kwarg.
+    returns: a function to filter patients based on a 'pat_id' string or list/tuple.
     args:
         pat_id: the passed 'pat_id' kwarg.
     """
@@ -87,11 +85,12 @@ def filterOnPatID(pat_id):
 
     return fn
 
-def filterOnLabel(label):
+def filterOnLabel(label, dataset):
     """
-    returns: a function to filter based on 'label' kwarg.
+    returns: a function to filter patients on whether they have that label.
     args:
         label: the passed 'label' kwarg.
+        dataset: the dataset to query.
     """
     def fn(id):
         # Load patient labels.
@@ -108,7 +107,7 @@ def filterOnLabel(label):
 
 def stringOrSorted(obj):
     """
-    returns: no-op if obj is a string, else sorted tuple.
+    returns: obj if obj is a string, else sorted tuple.
     args:
         obj: a string or iterable.
     """

@@ -1,0 +1,66 @@
+#! /usr/bin/env python
+from argparse import ArgumentParser
+import logging
+import numpy as np
+import os
+import sys
+import torch
+from torchio.transforms import Compose, Resample
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.evaluation import ModelEvaluator
+from mymi.loaders import ParotidLeft3DLoader
+from mymi.models import ParotidLeft3DNet
+from mymi.training import checkpoint
+from mymi import utils
+
+# Parse arguments.
+parser = ArgumentParser(description="""
+    Evaluate the segmentation model.
+""")
+parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('-m', '--model', action='store', help='the model to evaluate', required=True)
+args = parser.parse_args()
+
+# Configure logging.
+log_level = getattr(logging, args.log_level.upper(), None)
+utils.configure_logging(log_level)
+
+# Configure device.
+device = torch.device('cuda:0')
+
+# Create model.
+model = ParotidLeft3DNet()
+model = model.to(device)
+
+# Load model params.
+cp = checkpoint.load(args.model)
+model.load_state_dict(cp['model_state_dict'])
+
+# Create input transforms.
+high_res = (512, 512, 212)
+low_res = (128, 128, 96)
+spacing = (1, 1, 3)
+low_res_spacing = tuple((np.array(high_res) / low_res) * spacing)
+input_transforms = [
+    Resample(low_res_spacing)
+]
+logging.info(f"Using input transforms '{input_transforms}'.")
+input_transform = Compose(input_transforms)
+
+# Create pred transform - applied to pred before calculating loss, e.g. upsample.
+pred_transforms = [
+    Resample(spacing)
+]
+logging.info(f"Using prediction transforms: '{pred_transforms}'.")
+pred_transform = Compose(pred_transforms)
+
+# Create test loader.
+test_loader = ParotidLeft3DLoader.build('test', transform=input_transform)
+
+# Run evaluator.
+evaluator = ModelEvaluator(test_loader, device=device, pred_spacing=low_res_spacing, pred_transform=pred_transform)
+evaluator(model)
+    

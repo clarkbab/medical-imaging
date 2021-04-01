@@ -93,7 +93,6 @@ def train(args: dict):
         RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill)
     ]
     required_transforms = [                                             # Applied to all images to satisfy network architecture constraints.
-        CropOrPad(high_res, padding_mode=fill),
         Resample(low_res_spacing)
     ]
     if args.use_aug:
@@ -101,7 +100,7 @@ def train(args: dict):
     else:
         train_transforms = required_transforms
 
-    logging.info(f"Using transforms '{train_transforms}'.")
+    log_info(f"Using transforms '{train_transforms}'.")
     train_transform = Compose(train_transforms)
     validation_transform = Compose(required_transforms)
 

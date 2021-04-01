@@ -21,7 +21,7 @@ PROCESSED_ROOT = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 
 FILENAME_NUM_DIGITS = 5
 
 class ParotidLeft3DPreprocessor:
-    def extract(self, drop_missing_slices=True, normalise=True, num_pats='all', seed=42, transform=None):
+    def __call__(self, drop_missing_slices=True, normalise=False, num_pats='all', seed=42, transform=None):
         """
         effect: stores 3D patient volumes in 'train', 'validate' and 'test' folders
             by random split.
@@ -38,7 +38,7 @@ class ParotidLeft3DPreprocessor:
         # Load patients.
         pat_ids = dataset.list_patients()
         if drop_missing_slices:
-            pat_missing_ids = dataset.summary().query('`num-missing` > 0').index.to_numpy()
+            pat_missing_ids = dataset.patient_ct_summaries().query('`num-missing` > 0').index.to_numpy()
             pat_ids = np.setdiff1d(pat_ids, pat_missing_ids)
             logging.info(f"Removed {len(pat_missing_ids)} patients with missing slices.")
 

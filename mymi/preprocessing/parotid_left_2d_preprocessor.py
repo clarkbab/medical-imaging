@@ -19,7 +19,7 @@ PROCESSED_ROOT = os.path.join(os.sep, 'media', 'brett', 'data', 'HEAD-NECK-RADIO
 FILENAME_NUM_DIGITS = 5
 
 class ParotidLeft2DPreprocessor:
-    def extract(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
+    def __call__(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
         """
         effect: stores 2D slice data in 'train', 'validate' and 'test' folders by 
             random split and 'positive' and 'negative' subfolders by presence of 

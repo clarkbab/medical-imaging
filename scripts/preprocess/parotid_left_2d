@@ -46,5 +46,5 @@ transforms = [
 ]
 
 # Perform extraction.
-dp = ParotidLeft3DPreprocessor()
-dp.extract(num_pats=num_pats, transforms=transforms)
+preprocessor = ParotidLeft3DPreprocessor()
+preprocessor(num_pats=num_pats, transforms=transforms)

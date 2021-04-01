@@ -291,7 +291,7 @@ class DicomDataset:
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnLabel(label), pat_ids))
+        pat_ids = list(filter(filterOnLabel(label, dataset), pat_ids))
 
         # Run on subset of patients.
         if num_pats != 'all':
