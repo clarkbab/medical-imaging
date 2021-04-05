@@ -531,7 +531,7 @@ class DicomDataset:
 
         for pat_id in tqdm(pat_ids):
             # Get rtstruct info.
-            label_df = cls.patient_labels(pat_id)
+            label_df = cls.patient_label_summary(pat_id)
 
             # Add rows.
             for _, row in label_df.iterrows():

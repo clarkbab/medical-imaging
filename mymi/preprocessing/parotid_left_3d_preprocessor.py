@@ -93,8 +93,8 @@ class ParotidLeft3DPreprocessor:
                 logging.info(f"Extracting data for patient {pat_id}.")
 
                 # Load data.
-                input = dataset.patient_data(pat_id)
-                _, label = dataset.patient_labels(pat_id, label=label)[0]
+                input = dataset.patient_ct_data(pat_id)
+                _, label_data = dataset.patient_label_data(pat_id, label=label)[0]
 
                 # Normalise data.
                 if normalise:
@@ -103,11 +103,11 @@ class ParotidLeft3DPreprocessor:
                 # Perform transform.
                 if transform:
                     # Load patient summary.
-                    summary_df = dataset.patient_summary(pat_id)
+                    summary_df = dataset.patient_ct_summary(pat_id)
 
                     # Add 'batch' dimension.
                     input = np.expand_dims(input, axis=0)
-                    label = np.expand_dims(label, axis=0)
+                    label_data = np.expand_dims(label_data, axis=0)
 
                     # Create 'subject'.
                     affine = np.array([
@@ -117,15 +117,15 @@ class ParotidLeft3DPreprocessor:
                         [0, 0, 0, 1]
                     ])
                     input = ScalarImage(tensor=input, affine=affine)
-                    label = LabelMap(tensor=label, affine=affine)
-                    subject = Subject(one_image=input, a_segmentation=label)
+                    label_data = LabelMap(tensor=label_data, affine=affine)
+                    subject = Subject(one_image=input, a_segmentation=label_data)
 
                     # Transform the subject.
                     output = transform(subject)
 
                     # Extract results.
                     input = output['one_image'].data.squeeze(0)
-                    label = output['a_segmentation'].data.squeeze(0)
+                    label_data = output['a_segmentation'].data.squeeze(0)
 
                 # Save input data.
                 filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
@@ -137,7 +137,7 @@ class ParotidLeft3DPreprocessor:
                 filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-label"
                 filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
-                np.save(f, label)
+                np.save(f, label_data)
 
                 # Increment sample index.
                 sample_idx += 1
