@@ -156,7 +156,7 @@ class ModelTrainer:
             views = ('sagittal', 'coronal', 'axial')
             for view in views:
                 # Get the centroid plane for each image in batch.
-                centroids = self.get_batch_centroids(label, view)
+                centroids = utils.get_batch_centroids(label, view)
 
                 # Get figure.
                 figure = plotter.plot_batch(input, centroids, label=label, pred=pred, view=view, return_figure=True)

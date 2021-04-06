@@ -9,7 +9,7 @@ DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'proce
 
 class ParotidLeft3DLoader:
     @staticmethod
-    def build(folder, batch_size=1, spacing=(1, 1, 3), transform=None):
+    def build(folder, batch_size=1, spacing=(1, 1, 3), transform=None, raw_input=False, raw_label=False):
         """
         returns: a data loader.
         args:
@@ -20,25 +20,26 @@ class ParotidLeft3DLoader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DDataset(folder, spacing, transform=transform)
+        dataset = ParotidLeft3DDataset(folder, spacing, raw_input=raw_input, raw_label=raw_label, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset)
 
 class ParotidLeft3DDataset(Dataset):
-    def __init__(self, folder, spacing, transform=None):
+    def __init__(self, folder, spacing, transform=None, raw_input=False, raw_label=False):
         """
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
             spacing: the voxel spacing of the data.
         kwargs:
+            raw_input: return the non-transformed input also.
+            raw_label: return the non-transformed label also.
             transform: transformations to apply.
         """
-        self.transform = transform
+        self.raw_input = raw_input
+        self.raw_label = raw_label
         self.spacing = spacing
-
-        # Labels shouldn't be transformed when evaluating.
-        self.transform_label = False if folder == 'test' else True
+        self.transform = transform
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
         folder_path = os.path.join(DATA_DIR, folder)
@@ -68,9 +69,8 @@ class ParotidLeft3DDataset(Dataset):
         # Perform transform.
         if self.transform:
             # Add 'batch' dimension.
-            input = np.expand_dims(input, axis=0)
-            if self.transform_label:
-                label = np.expand_dims(label, axis=0)
+            input_t = np.expand_dims(input, axis=0)
+            label_t = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
@@ -79,19 +79,22 @@ class ParotidLeft3DDataset(Dataset):
                 [0, 0, self.spacing[2], 1],
                 [0, 0, 0, 1]
             ])
-            input = ScalarImage(tensor=input, affine=affine)
-            if self.transform_label:
-                label = LabelMap(tensor=label, affine=affine)
-                subject = Subject(one_image=input, a_segmentation=label)
-            else:
-                subject = Subject(one_image=input)
+            input_t = ScalarImage(tensor=input_t, affine=affine)
+            label_t = LabelMap(tensor=label_t, affine=affine)
+            subject = Subject(one_image=input_t, a_segmentation=label_t)
 
             # Transform the subject.
             output = self.transform(subject)
 
             # Extract results.
-            input = output['one_image'].data.squeeze(0)
-            if self.transform_label:
-                label = output['a_segmentation'].data.squeeze(0)
+            input_t = output['one_image'].data.squeeze(0)
+            label_t = output['a_segmentation'].data.squeeze(0)
 
-        return input, label
+        # Determine result.
+        result = (input_t, label_t)
+        if self.raw_input:
+            result += (input,)
+        if self.raw_label:
+            result += (label,)
+
+        return result
