@@ -34,7 +34,8 @@ class ModelEvaluator:
         self.running_scores = {}
         if 'dice' in metrics:
             self.running_scores['dice'] = 0
-            self.running_scores['dice-downsampled'] = 0
+            if self.pred_transform is not None:
+                self.running_scores['dice-pretransform'] = 0
 
     def __call__(self, model):
         """
@@ -62,9 +63,9 @@ class ModelEvaluator:
             pred = pred.argmax(axis=1)
 
             # Calculate downsampled DSC.
-            if 'dice' in self.metrics:
+            if 'dice' in self.metrics and self.pred_transform is not None:
                 dice = dice_metric(pred, label)
-                self.running_scores['dice-downsampled'] += dice.item()
+                self.running_scores['dice-pretransform'] += dice.item()
 
             # Transform prediction before comparing to label.
             if self.pred_transform:
@@ -97,7 +98,8 @@ class ModelEvaluator:
 
         # Print final scores.
         if 'dice' in self.metrics:
+            if self.pred_transform is not None:
+                mean_dice_pretransform = self.running_scores['dice-pretransform'] / len(self.test_loader)
+                print(f"Mean downsampled DSC={mean_dice_pretransform:.6f}")
             mean_dice = self.running_scores['dice'] / len(self.test_loader)
             print(f"Mean DSC={mean_dice:.6f}")
-            mean_downsampled_dice = self.running_scores['dice-downsampled'] / len(self.test_loader)
-            print(f"Mean downsampled DSC={mean_downsampled_dice:.6f}")
