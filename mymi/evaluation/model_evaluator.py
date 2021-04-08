@@ -98,6 +98,6 @@ class ModelEvaluator:
         # Print final scores.
         if 'dice' in self.metrics:
             mean_dice = self.running_scores['dice'] / len(self.test_loader)
-            print(f"Mean DSC={mean_dice:.2f}")
+            print(f"Mean DSC={mean_dice:.6f}")
             mean_downsampled_dice = self.running_scores['dice-downsampled'] / len(self.test_loader)
             print(f"Mean downsampled DSC={mean_downsampled_dice:.6f}")
