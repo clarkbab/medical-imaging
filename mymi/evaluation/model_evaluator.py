@@ -1,10 +1,16 @@
 import numpy as np
+import os
 import torch
 from torch.cuda.amp import autocast
-from torchio import ScalarImage, Subject
+from torchio import LabelMap, Subject
 from tqdm import tqdm
 
 from mymi.metrics import dice as dice_metric
+from mymi import plotter
+from mymi import utils
+
+mymi_dir = os.environ['MYMI_DATA']
+FIGURE_DIR = os.path.join(mymi_dir, 'figures')
 
 class ModelEvaluator:
     def __init__(self, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, pred_spacing=(1, 1, 3), pred_transform=None):
@@ -28,6 +34,7 @@ class ModelEvaluator:
         self.running_scores = {}
         if 'dice' in metrics:
             self.running_scores['dice'] = 0
+            self.running_scores['dice-downsampled'] = 0
 
     def __call__(self, model):
         """
@@ -38,7 +45,6 @@ class ModelEvaluator:
         # Put model in evaluation mode.
         model.eval()
 
-        count = 0
         for input, label, input_raw, label_raw in tqdm(self.test_loader):
             # Convert input and label.
             input, label = input.float(), label.long()
@@ -52,8 +58,13 @@ class ModelEvaluator:
             # Move data back to cpu for calculations.
             pred, label = pred.cpu(), label.cpu()
 
-            # Convert prediction into binary values.
+            # Convert prediction into label values.
             pred = pred.argmax(axis=1)
+
+            # Calculate downsampled DSC.
+            if 'dice' in self.metrics:
+                dice = dice_metric(pred, label)
+                self.running_scores['dice-downsampled'] += dice.item()
 
             # Transform prediction before comparing to label.
             if self.pred_transform:
@@ -64,31 +75,29 @@ class ModelEvaluator:
                     [0, 0, self.pred_spacing[2], 1],
                     [0, 0, 0, 1]
                 ])
-                pred = ScalarImage(tensor=pred, affine=affine)
-                subject = Subject(one_image=pred)
+                pred = LabelMap(tensor=pred, affine=affine)
+                subject = Subject(a_segmentation=pred)
 
                 # Transform the subject.
                 output = self.pred_transform(subject)
 
                 # Extract results.
-                pred = output['one_image'].data
+                pred = output['a_segmentation'].data
 
             # Plot the predictions.
             views = ('sagittal', 'coronal', 'axial')
             for view in views:
-                centroids = utils.get_batch_centroids(label, 
-                plotter.plot_batch(input_raw, centroids, label=label_raw, pred=pred, view=view)
+                centroids = utils.get_batch_centroids(label_raw, view) 
+                plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view)
 
             # Calculate metrics.
             if 'dice' in self.metrics:
                 dice = dice_metric(pred, label_raw)
                 self.running_scores['dice'] += dice.item()
 
-            count += 1
-            if count > 5:
-                break
-
         # Print final scores.
         if 'dice' in self.metrics:
             mean_dice = self.running_scores['dice'] / len(self.test_loader)
             print(f"Mean DSC={mean_dice:.2f}")
+            mean_downsampled_dice = self.running_scores['downsampled-dice'] / len(self.test_loader)
+            print(f"Mean downsampled DSC={mean_downsampled_dice:.2f}")

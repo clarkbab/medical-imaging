@@ -58,7 +58,7 @@ logging.info(f"Using prediction transforms: '{pred_transforms}'.")
 pred_transform = Compose(pred_transforms)
 
 # Create test loader.
-test_loader = ParotidLeft3DLoader.build('test', transform=input_transform)
+test_loader = ParotidLeft3DLoader.build('test', raw_input=True, raw_label=True, transform=input_transform)
 
 # Run evaluator.
 evaluator = ModelEvaluator(test_loader, device=device, pred_spacing=low_res_spacing, pred_transform=pred_transform)

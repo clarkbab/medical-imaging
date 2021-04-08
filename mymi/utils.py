@@ -50,7 +50,7 @@ def configure_logging(log_level):
     formatter = ColoredFormatter(log_format, date_format)
     stream = logging.StreamHandler()
     stream.setFormatter(formatter)
-    logging.basicConfig(handlers=[stream], level=log_level, force=True)
+    logging.basicConfig(handlers=[stream], level=log_level)
 
 def binary_perimeter(mask):
     mask_perimeter = torch.zeros_like(mask, dtype=bool)
@@ -124,7 +124,7 @@ def get_batch_centroids(label_batch, plane):
     assert plane in ('axial', 'coronal', 'sagittal')
 
     # Move data to CPU.
-    label_b = label_b.cpu()
+    label_batch = label_batch.cpu()
 
     # Determine axes to sum over.
     if plane == 'axial':
@@ -137,7 +137,7 @@ def get_batch_centroids(label_batch, plane):
     centroids = np.array([], dtype=np.int)
 
     # Loop through batch and get centroid for each label.
-    for label_i in label_b:
+    for label_i in label_batch:
         # Get weighting along 'plane' axis.
         weights = label_i.sum(axes)
 
