@@ -13,10 +13,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import cache
+from mymi import config
 from mymi import dataset
-
-data_path = os.environ['MYMI_DATA']
-PROCESSED_ROOT = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
 
 FILENAME_NUM_DIGITS = 5
 
@@ -75,7 +73,7 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Writing data to '{folder}' folder.")
 
             # Recreate folder.
-            folder_path = os.path.join(PROCESSED_ROOT, folder)
+            folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', folder)
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
             os.makedirs(folder_path)

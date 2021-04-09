@@ -4,8 +4,7 @@ import os
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torchio import LabelMap, ScalarImage, Subject
 
-data_path = os.environ['MYMI_DATA']
-DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+from mymi import config
 
 class ParotidLeft3DLoader:
     @staticmethod
@@ -42,7 +41,7 @@ class ParotidLeft3DDataset(Dataset):
         self.transform = transform
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
-        folder_path = os.path.join(DATA_DIR, folder)
+        folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', folder)
         self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
         self.num_samples = len(self.samples)
 

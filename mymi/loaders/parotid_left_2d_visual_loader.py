@@ -2,12 +2,11 @@ import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, Sampler
 
-data_path = os.environ['MYMI_DATA']
-DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-2d')
+from mymi import config
 
 class ParotidLeft2DVisualLoader:
     @staticmethod
-    def build(subfolder, batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transforms=[]):
+    def build(subfolder, batch_size=32, num_batches=5, seed=42, transforms=[]):
         """
         returns: a data loader.
         args:
@@ -15,12 +14,11 @@ class ParotidLeft2DVisualLoader:
         kwargs:
             batch_size: the number of images in a batch.
             num_batches: how many batches this loader should generate.
-            data_dir: the location of the data.
             seed: random number generator seed.
             transforms: an array of augmentation transforms.
         """
         # Create dataset object.
-        dataset = ParotidLeft2DVisualDataset(subfolder, data_dir, transforms=transforms)
+        dataset = ParotidLeft2DVisualDataset(subfolder, transforms=transforms)
 
         # Create sampler.
         sampler = ParotidLeft2dVisualSampler(dataset, num_batches * batch_size, seed)
@@ -29,18 +27,17 @@ class ParotidLeft2DVisualLoader:
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
 class ParotidLeft2DVisualDataset(Dataset):
-    def __init__(self, subfolder, data_dir, transforms=[]):
+    def __init__(self, subfolder, transforms=[]):
         """
         returns: a dataset.
         args:
             subfolder: the subfolder to load from - 'positive' or 'negative'
         kwargs:
-            data_dir: the location of the data.
             transforms: an array of augmentation transforms.
         """
         # Load paths to all samples.
+        self.data_dir = os.path.join(config.dataset_dir, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-2d', 'validate', subfolder)
         self.subfolder = subfolder
-        self.data_dir = os.path.join(data_dir, 'validate', subfolder)
         samples = np.reshape([os.path.join(self.data_dir, p) for p in sorted(os.listdir(self.data_dir))], (-1, 2))
 
         self.num_samples = len(samples)

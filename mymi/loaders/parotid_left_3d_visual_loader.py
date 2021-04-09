@@ -3,23 +3,21 @@ import os
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchio import Compose, LabelMap, ScalarImage, Subject
 
-data_path = os.environ['MYMI_DATA']
-DATA_DIR = os.path.join(data_path, 'datasets', 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d')
+from mymi import config
 
 class ParotidLeft3DVisualLoader:
     @staticmethod
-    def build(batch_size=32, data_dir=DATA_DIR, num_batches=5, seed=42, transform=None):
+    def build(batch_size=32, num_batches=5, seed=42, transform=None):
         """
         returns: a data loader.
         kwargs:
             batch_size: the number of images in a batch.
             num_batches: how many batches this loader should generate.
-            data_dir: the location of the data.
             seed: random number generator seed.
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DVisualDataset(data_dir, transform=transform)
+        dataset = ParotidLeft3DVisualDataset(transform=transform)
 
         # Create sampler.
         sampler = ParotidLeft3DVisualSampler(dataset, num_batches * batch_size, seed)
@@ -28,16 +26,14 @@ class ParotidLeft3DVisualLoader:
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
 class ParotidLeft3DVisualDataset(Dataset):
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, transform=None):
         """
         returns: a dataset.
-        args:
-            data_dir: the location of the data.
         kwargs:
             transforms: an array of augmentation transforms.
         """
         # Load paths to all samples.
-        self.data_dir = os.path.join(data_dir, 'validate')
+        self.data_dir = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', 'validate')
         samples = np.reshape([os.path.join(self.data_dir, p) for p in sorted(os.listdir(self.data_dir))], (-1, 2))
 
         self.num_samples = len(samples)

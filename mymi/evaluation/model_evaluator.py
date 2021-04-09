@@ -5,12 +5,12 @@ from torch.cuda.amp import autocast
 from torchio import LabelMap, Subject
 from tqdm import tqdm
 
+from mymi import config
 from mymi.metrics import dice as dice_metric
 from mymi import plotter
 from mymi import utils
 
-mymi_dir = os.environ['MYMI_DATA']
-FIGURE_DIR = os.path.join(mymi_dir, 'figures')
+FILENAME_NUM_DIGITS = 5
 
 class ModelEvaluator:
     def __init__(self, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, pred_spacing=(1, 1, 3), pred_transform=None):
@@ -46,7 +46,7 @@ class ModelEvaluator:
         # Put model in evaluation mode.
         model.eval()
 
-        for input, label, input_raw, label_raw in tqdm(self.test_loader):
+        for batch, (input, label, input_raw, label_raw) in enumerate(tqdm(self.test_loader)):
             # Convert input and label.
             input, label = input.float(), label.long()
             input = input.unsqueeze(1)
@@ -89,7 +89,9 @@ class ModelEvaluator:
             views = ('sagittal', 'coronal', 'axial')
             for view in views:
                 centroids = utils.get_batch_centroids(label_raw, view) 
-                plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view)
+                fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
+                filename = f"batch-{batch:0{FILENAME_NUM_DIGITS}}-{view}.png"
+                fig.savefig(os.path.join(config.figure_dir, filename))
 
             # Calculate metrics.
             if 'dice' in self.metrics:

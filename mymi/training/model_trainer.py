@@ -9,14 +9,11 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.autograd.profiler import profile
 from torch.utils.tensorboard import SummaryWriter
 
+from mymi import config
 from mymi import loaders
 from mymi import plotter
 from mymi import utils
 from mymi.metrics import dice as dice_metric
-
-data_dir = os.environ['MYMI_DATA']
-TENSORBOARD_DIR = os.path.join(data_dir, 'tensorboard')
-CHECKPOINT_DIR = os.path.join(data_dir, 'checkpoints')
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
@@ -45,7 +42,7 @@ class ModelTrainer:
         self.mixed_precision = mixed_precision
         self.scaler = GradScaler(enabled=mixed_precision)
         if is_reporter:
-            self.writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, self.run_name))
+            self.writer = SummaryWriter(os.path.join(config.tensorboard_dir, self.run_name))
 
             # Add hyperparameters.
             hparams = {
@@ -210,7 +207,7 @@ class ModelTrainer:
 
     def save_model(self, model, iteration, loss):
         self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{self.print_format}}")
-        filepath = os.path.join(CHECKPOINT_DIR, self.run_name, 'best.pt')
+        filepath = os.path.join(config.checkpoint_dir, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
             'loss': loss,

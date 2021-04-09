@@ -1,5 +1,6 @@
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import numpy as np
 import os
 import sys
@@ -7,6 +8,7 @@ import torch
 from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import cache
+from mymi import config
 from mymi import dataset
 from mymi.utils import filterOnPatID, filterOnLabel, stringOrSorted
 
@@ -372,3 +374,34 @@ class Plotter:
                     mask_perimeter[i, j] = 1
 
         return mask_perimeter
+
+    @classmethod
+    def list_saved_figures(cls):
+        """
+        returns: a list of the files in the MYMI 'figures' directory.
+        """
+        return os.listdir(config.figure_dir) 
+
+    @classmethod
+    def plot_saved_figure(cls, batch, view, aspect=1.0, figsize=(15, 15)):
+        """
+        effect: plots the saved figure.
+        args:
+            batch: the batch number.
+            view: the view.
+        kwargs:
+            aspect: the aspect ratio.
+            figsize: the figure size.
+        """
+        # Check the view.
+        assert view in ('axial', 'coronal', 'sagittal')
+
+        # Load the image.
+        filename = f"batch-{batch:05}-{view}.png"
+        img = mpimg.imread(os.path.join(config.figure_dir, filename))
+
+        # Plot the image.
+        plt.figure(figsize=figsize)
+        plt.imshow(img, aspect=aspect)
+        plt.axis('off')
+        plt.show()

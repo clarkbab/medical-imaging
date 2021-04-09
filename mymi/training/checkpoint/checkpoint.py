@@ -1,8 +1,7 @@
 import os
 import torch
 
-data_dir = os.environ['MYMI_DATA']
-CHECKPOINT_DIR = os.path.join(data_dir, 'checkpoints')
+from mymi import config
 
 class Checkpoint:
     @classmethod
@@ -13,7 +12,7 @@ class Checkpoint:
             name: the name of the model to load.
         """
         # Load data.
-        filepath = os.path.join(CHECKPOINT_DIR, name, 'best.pt')
+        filepath = os.path.join(config.checkpoint_dir, name, 'best.pt')
         f = open(filepath, 'rb')
         data = torch.load(f)
 
@@ -35,6 +34,6 @@ class Checkpoint:
         }
 
         # Save data.
-        filepath = os.path.join(CHECKPOINT_DIR, name, 'best.pt')
+        filepath = os.path.join(config.checkpoint_dir, name, 'best.pt')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         torch.save(data, filepath)
