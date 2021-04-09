@@ -94,7 +94,7 @@ class ModelEvaluator:
                 # Create and save figures.
                 fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
                 filename = f"batch-{batch:0{FILENAME_NUM_DIGITS}}-{view}.png"
-                os.makedirs(filename, exist_ok=True)
+                os.makedirs(config.figure_dir, exist_ok=True)
                 fig.savefig(os.path.join(config.figure_dir, filename))
 
             # Calculate metrics.
