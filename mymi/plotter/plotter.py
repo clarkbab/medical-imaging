@@ -273,10 +273,6 @@ class Plotter:
         if input.dim() == 5:
             input = input.squeeze(1)
 
-        # Convert output 'channel' to prediction.
-        if pred.dim() == 5:
-            pred = pred.argmax(1)  
-
         # Get input data.
         assert view in ('axial', 'coronal', 'sagittal')
         num_images = len(input) if num_images == 'all' else num_images

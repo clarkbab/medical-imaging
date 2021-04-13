@@ -13,7 +13,7 @@ from mymi import config
 from mymi import loaders
 from mymi import plotter
 from mymi import utils
-from mymi.metrics import dice as dice_metric
+from mymi.metrics import batch_dice
 
 class ModelTrainer:
     def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
@@ -107,9 +107,12 @@ class ModelTrainer:
                 self.running_scores['print']['loss'] += loss.item()
                 self.running_scores['record']['loss'] += loss.item()
 
+                # Convert to binary prediction.
+                pred = pred.argmax(axis=1)
+
                 # Calculate other metrics.
                 if 'dice' in self.metrics:
-                    dice = dice_metric(pred, label)
+                    dice = batch_dice(pred, label)
                     self.running_scores['print']['dice'] += dice.item()
                     self.running_scores['record']['dice'] += dice.item()
 
@@ -149,6 +152,9 @@ class ModelTrainer:
             with autocast(enabled=self.mixed_precision):
                 pred = model(input)
 
+            # Convert prediction to binary values.
+            pred = pred.argmax(axis=1)
+
             # For each of the views, plot a batch of images.
             views = ('sagittal', 'coronal', 'axial')
             for view in views:
@@ -177,7 +183,7 @@ class ModelTrainer:
             self.running_scores['validation-print']['loss'] += loss.item()
 
             if 'dice' in self.metrics:
-                dice = dice_metric(pred, label)
+                dice = batch_dice(pred, label)
                 self.running_scores['validation-record']['dice'] += dice.item()
                 self.running_scores['validation-print']['dice'] += dice.item()
 

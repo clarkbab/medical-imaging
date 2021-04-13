@@ -10,10 +10,10 @@ from torchio.transforms import Compose, Resample
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
+from mymi import checkpoint
 from mymi.evaluation import ModelEvaluator
 from mymi.loaders import ParotidLeft3DLoader
 from mymi.models import ParotidLeft3DNet
-from mymi.training import checkpoint
 from mymi import utils
 
 # Parse arguments.

@@ -6,7 +6,7 @@ from torchio import LabelMap, Subject
 from tqdm import tqdm
 
 from mymi import config
-from mymi.metrics import dice as dice_metric
+from mymi.metrics import batch_dice
 from mymi import plotter
 from mymi import utils
 
@@ -59,12 +59,12 @@ class ModelEvaluator:
             # Move data back to cpu for calculations.
             pred, label = pred.cpu(), label.cpu()
 
-            # Convert prediction into label values.
+            # Convert prediction into binary values.
             pred = pred.argmax(axis=1)
 
             # Calculate downsampled DSC.
             if 'dice' in self.metrics and self.pred_transform is not None:
-                dice = dice_metric(pred, label)
+                dice = batch_dice(pred, label)
                 self.running_scores['dice-pretransform'] += dice.item()
 
             # Transform prediction before comparing to label.
@@ -99,7 +99,7 @@ class ModelEvaluator:
 
             # Calculate metrics.
             if 'dice' in self.metrics:
-                dice = dice_metric(pred, label_raw)
+                dice = batch_dice(pred, label_raw)
                 self.running_scores['dice'] += dice.item()
 
         # Print final scores.
