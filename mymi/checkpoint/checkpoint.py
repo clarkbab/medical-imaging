@@ -7,7 +7,7 @@ class Checkpoint:
     @classmethod
     def load(cls, name):
         """
-        returns: the loaded model and optimiser data.
+        returns: the checkpoint data.
         args:
             name: the name of the model to load.
         """
