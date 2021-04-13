@@ -4,8 +4,8 @@ def batch_dice(pred, label):
     """
     returns: the mean dice similarity coefficient (DSC) for the batch.
     args:
-        pred: a batch of network predictions, e.g. shape (n, 2, 512, 512, 212).
-        label: a batch of labels, e.g. shape (n, 512, 512, 212).
+        pred: the batch of binary network predictions, e.g. shape (n, 512, 512, 212).
+        label: the batch of labels, e.g. shape (n, 512, 512, 212).
     """
     # If pred hasn't been binarised, then do so.
     if len(pred.shape) == 5:

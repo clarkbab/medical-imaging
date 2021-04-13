@@ -1,3 +1,4 @@
 import torch
 
-from .dice import dice
+from .dice import batch_dice
+from .hausdorff_distance import batch_hausdorff_distance
