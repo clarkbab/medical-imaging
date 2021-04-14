@@ -7,17 +7,18 @@ from mymi import config
 
 class ParotidLeft3DVisualLoader:
     @staticmethod
-    def build(batch_size=32, num_batches=5, seed=42, transform=None):
+    def build(batch_size=1, num_batches=5, seed=42, spacing=None, transform=None):
         """
         returns: a data loader.
         kwargs:
             batch_size: the number of images in a batch.
             num_batches: how many batches this loader should generate.
             seed: random number generator seed.
+            spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DVisualDataset(transform=transform)
+        dataset = ParotidLeft3DVisualDataset(spacing=spacing, transform=transform)
 
         # Create sampler.
         sampler = ParotidLeft3DVisualSampler(dataset, num_batches * batch_size, seed)
@@ -26,19 +27,24 @@ class ParotidLeft3DVisualLoader:
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
 class ParotidLeft3DVisualDataset(Dataset):
-    def __init__(self, transform=None):
+    def __init__(self, spacing=None, transform=None):
         """
         returns: a dataset.
         kwargs:
+            spacing: the voxel spacing.
             transforms: an array of augmentation transforms.
         """
+        self.spacing = spacing
+        self.transform = transform
+        if transform:
+            assert spacing, 'Spacing is required when transform applied to dataloader.'
+
         # Load paths to all samples.
         self.data_dir = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', 'validate')
         samples = np.reshape([os.path.join(self.data_dir, p) for p in sorted(os.listdir(self.data_dir))], (-1, 2))
 
         self.num_samples = len(samples)
         self.samples = samples
-        self.transform = transform
 
     def __len__(self):
         """
@@ -68,9 +74,9 @@ class ParotidLeft3DVisualDataset(Dataset):
 
             # Create 'subject'.
             affine = np.array([
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 3, 1],
+                [self.spacing[0], 0, 0, 0],
+                [0, self.spacing[1], 0, 0],
+                [0, 0, self.spacing[2], 1],
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)

@@ -8,24 +8,26 @@ from mymi import config
 
 class ParotidLeft3DLoader:
     @staticmethod
-    def build(folder, batch_size=1, spacing=(1, 1, 3), transform=None, raw_input=False, raw_label=False):
+    def build(folder, batch_size=1, raw_input=False, raw_label=False, spacing=None, transform=None):
         """
         returns: a data loader.
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
         kwargs:
             batch_size: the number of images in the batch.
+            raw_input: return the non-transformed input also.
+            raw_label: return the non-transformed label also.
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DDataset(folder, spacing, raw_input=raw_input, raw_label=raw_label, transform=transform)
+        dataset = ParotidLeft3DDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset)
 
 class ParotidLeft3DDataset(Dataset):
-    def __init__(self, folder, spacing, transform=None, raw_input=False, raw_label=False):
+    def __init__(self, folder, raw_input=False, raw_label=False, spacing=None, transform=None):
         """
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
@@ -33,15 +35,18 @@ class ParotidLeft3DDataset(Dataset):
         kwargs:
             raw_input: return the non-transformed input also.
             raw_label: return the non-transformed label also.
+            spacing: the voxel spacing.
             transform: transformations to apply.
         """
         self.raw_input = raw_input
         self.raw_label = raw_label
         self.spacing = spacing
         self.transform = transform
+        if transform:
+            assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
-        folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', folder)
+        folder_path = os.path.join(config.directories.dataset, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', folder)
         self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
         self.num_samples = len(self.samples)
 

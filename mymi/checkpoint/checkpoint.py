@@ -5,14 +5,16 @@ from mymi import config
 
 class Checkpoint:
     @classmethod
-    def load(cls, name):
+    def load(cls, model_name, checkpoint_name='checkpoint'):
         """
-        returns: the checkpoint data.
+        returns: the saved checkpoint data.
         args:
             name: the name of the model to load.
+        kwargs:
+            checkpoint_name: the name of the checkpoint.
         """
         # Load data.
-        filepath = os.path.join(config.checkpoint_dir, name, 'best.pt')
+        filepath = os.path.join(config.directories.checkpoint, model_name, f"{checkpoint_name}.pt")
         f = open(filepath, 'rb')
         data = torch.load(f)
 

@@ -2,8 +2,8 @@ from .checkpoint import Checkpoint
 
 checkpoint = Checkpoint
 
-def load(name):
-    return checkpoint.load(name)
+def load(*args, **kwargs):
+    return checkpoint.load(*args, **kwargs)
 
-def save(model, optimiser):
-    checkpoint.save(model, optimiser)
+def save(*args, **kwargs):
+    checkpoint.save(*args, **kwargs)

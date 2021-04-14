@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import argparse
 from argparse import ArgumentParser, ArgumentTypeError
+from datetime import datetime
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,22 +39,20 @@ Train the segmentation model on a single node. Spins up a separate process for e
 """)
 parser.add_argument('-a', '--use-aug', action='store_true', default=False, help='use data augmentations when training')
 parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
-parser.add_argument('-c', '--checkpoint-dir', action='store', help='sets the checkpoint directory')
 parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
 parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
 parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
 parser.add_argument('-lr', '--learning-rate', action='store', type=float, help="sets the learning rate")
 parser.add_argument('-ls', '--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
-parser.add_argument('-m', '--use-mixed', action='store_true', default=False, help='use mixed precision for training')
 parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')
+parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='use CPU for training')
+parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
 parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
 parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
 parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
 parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
 parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
-parser.add_argument('-t', '--tensorboard-dir', action='store', help='sets the tensorboard directory')
-parser.add_argument('-u', '--use-gpu', action='store_true', default=False, help='use GPU for training')
 parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
 args = parser.parse_args()
 
@@ -78,22 +77,67 @@ def train(args: dict):
         rank = args.node_rank * args.num_gpus + args.gpu_idx
         log_info(f"Initialising process {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
         dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
+    
+    # Determine run name.
+    if args.name:
+        run_name = args.name
+    else:
+        run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+    log_info(f"Run name: {run_name}.")
 
-    # Define transforms.
+    # Configure device.
+    if args.no_gpu:
+        device = torch.device('cpu')
+    else:
+        if torch.cuda.is_available():
+            if args.num_gpus > 1:
+                device = torch.device(f"cuda:{args.gpu_idx}")
+            else:
+                device = torch.device('cuda:0')
+        else:
+            device = torch.device('cpu')
+            log_info('CUDA not available.')
+    log_info(f"Using device: {device}.")
+
+    # Create model.
+    model = ParotidLeft3DNet()
+    model = model.to(device)
+    log_info(f"Using model: {model.__class__}.")
+
+    # Wrap model for distributed training.
+    if is_multi_process(args):
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
+
+    # Define loss function.
+    if args.loss == 'cross-entropy':
+        class_weights = torch.Tensor((1, 6767.77)).to(device)      # Calculated from 'dataset.class_frequencies'.
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    elif args.loss == 'dice':
+        loss_fn = DiceLoss()
+    log_info(f"Using loss function: {loss_fn.__class__}.")
+
+    # Define optimiser.
+    if args.learning_rate is not None:
+        lr = args.learning_rate
+    else:
+        lr = 0.001
+    optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    log_info(f"Using optimiser: {optimiser}.")
+
+    # Define data transforms..
     fill = 'minimum'
     rotation = (-5, 5)
     translation = (-50, 50)
     scale = (0.8, 1.2)
-    lam = 1.0
-    high_res = (512, 512, 212)
-    low_res = (128, 128, 96)
-    spacing = (1, 1, 3)
-    low_res_spacing = tuple((np.array(high_res) / low_res) * spacing)
+    init_res = (512, 512, 212)
+    new_res = (128, 128, 96)
+    init_spacing = (1, 1, 3)
+    new_spacing = tuple((np.array(init_res) / new_res) * init_spacing)
     aug_transforms = [                                               # Only applied when augmenting.
         RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill)
     ]
     required_transforms = [                                             # Applied to all images to satisfy network architecture constraints.
-        Resample(low_res_spacing)
+        Resample(new_spacing)
     ]
     if args.use_aug:
         train_transforms = aug_transforms + required_transforms
@@ -104,77 +148,44 @@ def train(args: dict):
     train_transform = Compose(train_transforms)
     validation_transform = Compose(required_transforms)
 
-    # Get data loaders.
+    # Create data loaders.
     batch_size = args.batch_size
-    opt_kwargs = {}
-    if args.data_dir is not None: opt_kwargs['data_dir'] = args.data_dir
-    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, transform=train_transform, **opt_kwargs)
-    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, transform=validation_transform, **opt_kwargs)
-    visual_loader = ParotidLeft3DVisualLoader.build(batch_size=batch_size, transform=validation_transform, **opt_kwargs)
-
-    # Configure device.
-    if args.use_gpu:
-        assert torch.cuda.is_available()
-        if args.num_gpus > 1:
-            device = torch.device(f"cuda:{args.gpu_idx}")
-            log_info(f"Using GPU ({device}).")
-        else:
-            device = torch.device('cuda:0')
-            log_info(f"Using GPU ({device}).")
-    else:
-        log_info('Using CPU.')
-        device = torch.device('cpu')
-
-    # Create model.
-    model = ParotidLeft3DNet()
-    model = model.to(device)
-
-    # Wrap for distributed training.
-    if is_multi_process(args):
-        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
-
-    # Define loss.
-    if args.loss == 'cross-entropy':
-        class_weights = torch.Tensor((1, 6767.77)).to(device)      # Calculated from 'dataset.class_frequencies'.
-        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-        log_info(f"Using cross-entropy loss.")
-    elif args.loss == 'dice':
-        loss_fn = DiceLoss()
-        log_info(f"Using dice loss.")
-
-    # Define optimiser.
-    if args.learning_rate is not None:
-        lr = args.learning_rate
-    else:
-        lr = 0.001
-    optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    log_info(f"Using optimiser: {optimiser}.")
+    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, spacing=init_spacing, transform=train_transform)
+    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, spacing=init_spacing, transform=validation_transform)
+    visual_loader = ParotidLeft3DVisualLoader.build(batch_size=batch_size, spacing=init_spacing, transform=validation_transform)
 
     # Create model trainer kwargs.
-    opt_kwargs = {}
-    if args.checkpoint_dir is not None: opt_kwargs['checkpoint_dir'] = args.checkpoint_dir
-    if is_reporter(args): opt_kwargs['is_reporter'] = True
-    if args.max_epochs is not None: opt_kwargs['max_epochs'] = args.max_epochs
-    opt_kwargs['mixed_precision'] = args.use_mixed
-    if args.name is not None:
-        opt_kwargs['run_name'] = args.name
-        log_info(f"Run name: {args.name}.")
-    if args.print_interval is not None: opt_kwargs['print_interval'] = args.print_interval
-    if args.record_interval is not None: opt_kwargs['record_interval'] = args.record_interval
-    if args.use_early_stopping:
-        opt_kwargs['early_stopping'] = True
-        log_info('Using early stopping.')
-    if args.use_mixed:
+    kwargs = {}
+    kwargs['device'] = device
+    if is_reporter(args):
+        kwargs['is_reporter'] = True
+    kwargs['log_info'] = log_info
+    if args.max_epochs:
+        kwargs['max_epochs'] = args.max_epochs
+    if args.no_mixed:
+        kwargs['mixed_precision'] = False
+        log_info('Using full precision.')
+    else:
         log_info('Using mixed precision.')
-    if args.validation_interval is not None: opt_kwargs['validation_interval'] = args.validation_interval
+    if args.print_interval:
+        kwargs['print_interval'] = args.print_interval
+    if args.record_interval:
+        kwargs['record_interval'] = args.record_interval
+    kwargs['spacing'] = (1., 1., 3.)
+    if args.use_early_stopping:
+        kwargs['early_stopping'] = True
+        log_info('Using early stopping.')
+    else:
+        log_info('Not using early stopping.')
+    if args.validation_interval:
+        kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.
-    trainer = ModelTrainer(train_loader, validation_loader, optimiser, loss_fn, visual_loader, 
-        device=device, log_info=log_info, **opt_kwargs)
+    trainer = ModelTrainer(loss_fn, optimiser, run_name, train_loader, validation_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):
-    return args.use_gpu and args.num_gpus > 1
+    return (not args.no_gpu) and args.num_gpus > 1
 
 def is_lead_process(args: dict):
     return args.gpu_idx == 0
@@ -198,7 +209,7 @@ log_level = getattr(logging, args.log_level.upper(), None)
 utils.configure_logging(log_level)
 
 if __name__ == '__main__':
-    if args.use_gpu:
+    if not args.no_gpu:
         # Print GPU info.
         num_devices = torch.cuda.device_count()
         logging.info(f"[Main] Requested {args.num_gpus} GPUs, found {num_devices} GPUs.")

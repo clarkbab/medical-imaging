@@ -1,18 +1,39 @@
+from collections import namedtuple
 import os
 
-root_dir = os.environ['MYMI_DATA']
+class Directories:
+    @property
+    def cache(self):
+        return os.path.join(self.root, 'cache')
 
-# Cache.
-cache_dir = os.path.join(root_dir, 'cache')
+    @property
+    def checkpoint(self):
+        return os.path.join(self.root, 'checkpoints')
 
-# Checkpoints.
-checkpoint_dir = os.path.join(root_dir, 'checkpoints')
+    @property
+    def dataset(self):
+        return os.path.join(self.root, 'datasets')
+    
+    @property
+    def evaluation(self):
+        return os.path.join(self.root, 'evaluation')
 
-# Datasets.
-dataset_dir = os.path.join(root_dir, 'datasets')
+    @property
+    def root(self):
+        return os.environ['MYMI_DATA']
 
-# Figures.
-figure_dir = os.path.join(root_dir, 'figures')
+    @property
+    def tensorboard(self):
+        return os.path.join(self.root, 'tensorboard')
 
-# Tensorboard.
-tensorboard_dir = os.path.join(root_dir, 'tensorboard')
+class Formatting:
+    @property
+    def metrics(self):
+        return '.6f'
+
+    @property
+    def sample_digits(self):
+        return 5
+
+directories = Directories()
+formatting = Formatting()

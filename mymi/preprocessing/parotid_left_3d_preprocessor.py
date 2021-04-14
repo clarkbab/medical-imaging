@@ -16,8 +16,6 @@ from mymi import cache
 from mymi import config
 from mymi import dataset
 
-FILENAME_NUM_DIGITS = 5
-
 class ParotidLeft3DPreprocessor:
     def __call__(self, drop_missing_slices=True, normalise=False, num_pats='all', seed=42, transform=None):
         """
@@ -126,13 +124,13 @@ class ParotidLeft3DPreprocessor:
                     label_data = output['a_segmentation'].data.squeeze(0)
 
                 # Save input data.
-                filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
+                filename = f"{sample_idx:0{config.formatting.sample_digits}}-input"
                 filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
                 np.save(f, input)
 
                 # Save label.
-                filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-label"
+                filename = f"{sample_idx:0{config.formatting.sample_digits}}-label"
                 filepath = os.path.join(folder_path, filename)
                 f = open(filepath, 'wb')
                 np.save(f, label_data)

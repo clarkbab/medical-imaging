@@ -38,36 +38,42 @@ def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1
         spacing: the spacing between voxels.
     """
     # Get coordinates of non-zero voxels.
-    a_coords, b_coords = np.argwhere(a != 0), np.argwhere(b != 0)
+    a_coords = np.argwhere(a != 0)
+    b_coords = np.argwhere(b != 0)
+
+    # Shuffle coordinates, as this increases likelihood of early stopping.
+    np.random.shuffle(a_coords)
+    np.random.shuffle(b_coords)
     
     # Store the max distance (max) from a voxel in p to the closest point in l.
-    max_min_dist = None
+    max_min_dist = -np.inf
     
     for a_i in a_coords:
         # Convert to true spacing.
-        a_true_i = a_i * spacing
+        a_true_i = a_i * np.array(spacing)
         
         # Store the minimum distance from a_true to any voxel in b.
-        min_dist = None
+        min_dist = np.inf
         
         for b_j in b_coords:
             # Convert to true spacing.
-            b_true_j = b_j * spacing
+            b_true_j = b_j * np.array(spacing)
             
             # Find the distance between a_i and b_j.
             if distance == 'euclidean':
                 dist = euclidean_distance(a_true_i, b_true_j)
 
             # Update the minimum distance if necessary.
-            if min_dist is None or dist < min_dist:
+            if dist < min_dist:
                 min_dist = dist
 
-        # Update the maximum minimum distance if necessary.
-        if max_min_dist is None or min_dist > max_min_dist:
-            max_min_dist = min_dist
+                # Perform early stopping if we can't beat outer max.
+                if min_dist < max_min_dist:
+                    break
 
-        # Reset the minimum distance.
-        min_dist = None
+        # Update the maximum minimum distance if necessary.
+        if min_dist > max_min_dist:
+            max_min_dist = min_dist
         
     return max_min_dist
 
@@ -78,4 +84,11 @@ def euclidean_distance(a, b):
         a: the first 3D point.
         b: the second 3D point.
     """
-    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+    assert len(a) == len(b)
+
+    # Loop over elements.
+    sum = 0
+    for i in range(len(a)):
+        sum += (a[i] - b[i]) ** 2
+
+    return np.sqrt(sum)

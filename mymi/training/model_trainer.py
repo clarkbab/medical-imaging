@@ -1,4 +1,3 @@
-from datetime import datetime
 import logging
 import numpy as np
 import os
@@ -9,70 +8,71 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.autograd.profiler import profile
 from torch.utils.tensorboard import SummaryWriter
 
+from mymi import checkpoint
 from mymi import config
 from mymi import loaders
 from mymi import plotter
 from mymi import utils
 from mymi.metrics import batch_dice, batch_hausdorff_distance
 
-PRINT_DP = 10
+PRINT_DP = '.10f'
 
 class ModelTrainer:
-    def __init__(self, train_loader, validation_loader, optimiser, loss_fn, visual_validation_loader, 
-        device=torch.device('cpu'), early_stopping=False, log_info=logging.info, max_epochs=500, mixed_precision=True,
-        metrics=('dice', 'hausdorff'), print_interval='epoch', record_interval='epoch', reporter=False, run_name=None,
-        spacing=None, validation_interval='epoch')
+    def __init__(self, loss_fn, optimiser, run_name, train_loader, validation_loader, visual_validation_loader,
+        device=torch.device('cpu'), early_stopping=False, is_reporter=False, log_info=logging.info, max_epochs=500,
+        mixed_precision=True, metrics=('dice', 'hausdorff'), print_interval='epoch', record_interval='epoch',
+        spacing=None, validation_interval='epoch'):
         """
         effect: sets the initial trainer values.
         args:
+            loss_fn: objective function of the training.
+            optimiser: updates the model parameters in response to gradients.
+            run_name: the name of the run to show in reporting.
             train_loader: provides the training input and label batches.
             validation_loader: provides the validation input and label batches.
-            optimiser: updates the model parameters in response to gradients.
-            loss_fn: objective function of the training.
             visual_validation_loader: provides the visual validation input and label batches.
         kwargs:
             device: the device to train on.
             early_stopping: if the training should use early stopping or not.
+            is_reporter: if this process should report or not.
             log_info: the logging function. Allows us to include multi-process info if required.
             max_epochs: the maximum number of epochs to run training.
             mixed_precision: run the training using PyTorch mixed precision training.
             metrics: the metrics to print and record during training.
             print_interval: how often to print results during training.
             record_interval: how often to record results during training.
-            reporter: if this process should report or not.
-            run_name: the name of the run to show in reporting.
             spacing: the voxel spacing. Required for calculating Hausdorff distance.
             validation_interval: how often to run the validation.
         """
         self.device = device
         self.early_stopping = early_stopping
-        self.log_info = log_info
-        self.loss_fn = loss_fn
-        self.lowest_validation_loss = None
-        self.max_epochs = max_epochs
-        self.max_epochs_since_improvement = 20
-        self.metrics = metrics
-        self.mixed_precision = mixed_precision
-        self.num_epochs_since_improvement = 0
-        self.optimiser = optimiser
-        self.print_format = print_format
-        self.print_interval = print_interval
-        self.record_interval = record_interval
-        self.reporter = reporter
-        if reporter:
-            self.writer = SummaryWriter(os.path.join(config.tensorboard_dir, self.run_name))
+        self.is_reporter = is_reporter
+        if is_reporter:
+            # Create tensorboard writer.
+            self.writer = SummaryWriter(os.path.join(config.tensorboard_dir, run_name))
 
             # Add hyperparameters.
             hparams = {
-                'run-name': self.run_name,
-                'loss-function': str(self.loss_fn),
-                'max-epochs': str(self.max_epochs),
-                'mixed-precision': str(self.mixed_precision),
-                'optimiser': str(self.optimiser),
-                'transform': str(self.train_loader.dataset.transform),
+                'run-name': run_name,
+                'loss-function': str(loss_fn),
+                'max-epochs': max_epochs,
+                'mixed-precision': mixed_precision,
+                'optimiser': str(optimiser),
+                'transform': str(train_loader.dataset.transform),
             }
             self.writer.add_hparams(hparams, {}, run_name='hparams')
-        self.run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') if run_name is None else run_name
+        self.log_info = log_info
+        self.loss_fn = loss_fn
+        self.max_epochs = max_epochs
+        self.max_epochs_since_improvement = 20
+        self.metrics = metrics
+        self.min_validation_loss = np.inf
+        self.mixed_precision = mixed_precision
+        self.num_epochs_since_improvement = 0
+        self.optimiser = optimiser
+        self.print_interval = print_interval
+        self.record_interval = record_interval
+        self.run_name = run_name
         self.scaler = GradScaler(enabled=mixed_precision)
         self.spacing = spacing
         if 'hausdorff' in metrics:
@@ -99,13 +99,15 @@ class ModelTrainer:
 
         for epoch in range(self.max_epochs):
             for batch, (input, label) in enumerate(self.train_loader):
+                iteration = epoch * len(self.train_loader) + batch
                 # Convert input and label.
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
                 input, label = input.to(self.device), label.to(self.device)
+                print(batch)
 
                 # Add model structure.
-                if self.reporter and epoch == 0 and batch == 0:
+                if self.is_reporter and epoch == 0 and batch == 0:
                     # Error when adding graph with 'mixed-precision' training.
                     if not self.mixed_precision:
                         self.writer.add_graph(model, input)
@@ -134,13 +136,14 @@ class ModelTrainer:
                     self.running_scores['record']['dice'] += dice.item()
 
                 if 'hausdorff' in self.metrics:
-                    hausdorff = batch_hausdorff_distance(pred, label, spacing=spacing))
+                    print('starting hausdorff')
+                    hausdorff = batch_hausdorff_distance(pred, label, spacing=self.spacing)
                     self.running_scores['print']['hausdorff'] += hausdorff.item()
                     self.running_scores['record']['hausdorff'] += hausdorff.item()
+                    print('finished hausdorff')
 
                 # Record training info to Tensorboard.
-                iteration = epoch * len(self.train_loader) + batch
-                if self.reporter and self.should_record(iteration):
+                if self.is_reporter and self.should_record(iteration):
                     self.record_training_results(iteration)
                     self.reset_running_scores('record')
                 
@@ -150,7 +153,7 @@ class ModelTrainer:
                     self.reset_running_scores('print')
 
                 # Perform validation and checkpointing.
-                if self.reporter and self.should_validate(iteration):
+                if self.is_reporter and self.should_validate(iteration):
                     self.validate_model(model, epoch, iteration)
 
                 # Check early stopping.
@@ -210,7 +213,7 @@ class ModelTrainer:
                 self.running_scores['validation-print']['dice'] += dice.item()
 
             if 'hausdorff' in self.metrics:
-                hausdorff = batch_hausdorff_distance(pred, label, spacing=spacing)
+                hausdorff = batch_hausdorff_distance(pred, label, spacing=self.spacing)
                 self.running_scores['print']['hausdorff'] += hausdorff.item()
                 self.running_scores['record']['hausdorff'] += hausdorff.item()
 
@@ -243,7 +246,7 @@ class ModelTrainer:
         model.train()
 
     def save_model(self, model, iteration, loss):
-        self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{.{PRINT_DP}f}}")
+        self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{PRINT_DP}}")
         filepath = os.path.join(config.checkpoint_dir, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
@@ -281,15 +284,15 @@ class ModelTrainer:
         """
         print_interval = len(self.train_loader) if self.print_interval == 'epoch' else self.print_interval
         loss = self.running_scores['print']['loss'] / print_interval
-        message = f"[{epoch}, {batch}] Loss: {loss:{.{PRINT_DP}f}}"
+        message = f"[{epoch}, {batch}] Loss: {loss:{PRINT_DP}}"
 
         if 'dice' in self.metrics:
             dice = self.running_scores['print']['dice'] / print_interval
-            message += f", Dice: {dice:{.{PRINT_DP}f}"
+            message += f", Dice: {dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics:
             hausdorff = self.running_scores['print']['hausdorff'] / print_interval
-            message += f", Hausdorff: {hausdorff:{.{PRINT_DP}f}"
+            message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
         
@@ -302,15 +305,15 @@ class ModelTrainer:
         """
         print_interval = len(self.validation_loader) if self.print_interval == 'epoch' else self.print_interval
         loss = self.running_scores['validation-print']['loss'] / print_interval
-        message = f"Validation - [{epoch}, {batch}] Loss: {loss:{.{PRINT_DP}f}"
+        message = f"Validation - [{epoch}, {batch}] Loss: {loss:{PRINT_DP}}"
 
         if 'dice' in self.metrics:
             dice = self.running_scores['validation-print']['dice'] / print_interval
-            message += f", Dice: {dice:{.{PRINT_DP}f}"
+            message += f", Dice: {dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics:
             hausdorff = self.running_scores['validation-print']['hausdorff'] / print_interval
-            message += f", Hausdorff: {hausdorff:{.{PRINT_DP}f}"
+            message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
 

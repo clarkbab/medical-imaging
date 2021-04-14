@@ -10,32 +10,35 @@ from mymi.metrics import batch_dice
 from mymi import plotter
 from mymi import utils
 
-FILENAME_NUM_DIGITS = 5
-
 class ModelEvaluator:
-    def __init__(self, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, pred_spacing=(1, 1, 3), pred_transform=None):
+    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None):
         """
         args:
+            run_name: the name of the run.
             test_loader: the loader for the test data.
         kwargs:
             device: the device to train on.
             metrics: the metrics to calculate.
             mixed_precision: whether to use PyTorch mixed precision training.
-            pred_spacing: the spacing of the prediction voxels.
-            pred_transform: a transform to apply before comparing prediction to the label.
-            spacing: the voxel spacing of the data.
+            output_spacing: the voxel spacing of the input data.
+            output_transform: the transform to apply before comparing prediction to label.
         """
         self.device = device
         self.metrics = metrics
         self.mixed_precision = mixed_precision
-        self.pred_spacing = pred_spacing
-        self.pred_transform = pred_transform
+        self.output_spacing = output_spacing
+        self.output_transform = output_transform
+        if output_transform:
+            assert output_spacing, 'Output spacing must be specified if output transform applied.'
+        self.run_name = run_name
         self.test_loader = test_loader
+
+        # Initialise running scores.
         self.running_scores = {}
         if 'dice' in metrics:
             self.running_scores['dice'] = 0
-            if self.pred_transform is not None:
-                self.running_scores['dice-pretransform'] = 0
+            if self.output_transform is not None:
+                self.running_scores['output-dice'] = 0
 
     def __call__(self, model):
         """
@@ -62,28 +65,41 @@ class ModelEvaluator:
             # Convert prediction into binary values.
             pred = pred.argmax(axis=1)
 
-            # Calculate downsampled DSC.
-            if 'dice' in self.metrics and self.pred_transform is not None:
+            # Save prediction and transformed label.
+            filepath = os.path.join(config.directories.evaluation, self.run_name, predictions', 'transformed', f"batch-{batch}")
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            np.save(filepath, pred.numpy())
+            filepath = os.path.join(config.directories.evaluation, self.run_name, labels', 'transformed', f"batch-{batch}")
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            np.save(filepath, label.numpy())
+
+            # Calculate output DSC.
+            if 'dice' in self.metrics and self.output_transform:
                 dice = batch_dice(pred, label)
-                self.running_scores['dice-pretransform'] += dice.item()
+                self.running_scores['output-dice'] += dice.item()
 
             # Transform prediction before comparing to label.
-            if self.pred_transform:
+            if self.output_transform:
                 # Create torchio 'subject'.
                 affine = np.array([
-                    [self.pred_spacing[0], 0, 0, 0],
-                    [0, self.pred_spacing[1], 0, 0],
-                    [0, 0, self.pred_spacing[2], 1],
+                    [self.output_spacing[0], 0, 0, 0],
+                    [0, self.output_spacing[1], 0, 0],
+                    [0, 0, self.output_spacing[2], 1],
                     [0, 0, 0, 1]
                 ])
                 pred = LabelMap(tensor=pred, affine=affine)
                 subject = Subject(a_segmentation=pred)
 
                 # Transform the subject.
-                output = self.pred_transform(subject)
+                output = self.output_transform(subject)
 
                 # Extract results.
                 pred = output['a_segmentation'].data
+
+                # Save output predictions.
+                filepath = os.path.join(config.directories.evaluation, self.run_name, predictions', 'output', f"batch-{batch}.np")
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.save(filepath, pred.numpy())
 
             # Plot the predictions.
             views = ('sagittal', 'coronal', 'axial')
@@ -93,9 +109,9 @@ class ModelEvaluator:
 
                 # Create and save figures.
                 fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
-                filename = f"batch-{batch:0{FILENAME_NUM_DIGITS}}-{view}.png"
-                os.makedirs(config.figure_dir, exist_ok=True)
-                fig.savefig(os.path.join(config.figure_dir, filename))
+                filepath = os.path.join(config.directories.evaluation, self.run_name, figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                fig.savefig(filepath)
 
             # Calculate metrics.
             if 'dice' in self.metrics:
@@ -104,8 +120,8 @@ class ModelEvaluator:
 
         # Print final scores.
         if 'dice' in self.metrics:
-            if self.pred_transform is not None:
-                mean_dice_pretransform = self.running_scores['dice-pretransform'] / len(self.test_loader)
-                print(f"Mean downsampled DSC={mean_dice_pretransform:.6f}")
+            if self.output_transform is not None:
+                mean_output_dice = self.running_scores['output-dice'] / len(self.test_loader)
+                print(f"Mean output DSC={mean_output_dice:{config.formatting.metrics}}")
             mean_dice = self.running_scores['dice'] / len(self.test_loader)
-            print(f"Mean DSC={mean_dice:.6f}")
+            print(f"Mean DSC={mean_dice:{config.formatting.metrics}}")

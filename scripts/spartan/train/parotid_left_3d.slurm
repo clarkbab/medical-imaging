@@ -6,9 +6,6 @@
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
-PROJECT_DIR="/data/projects/punim1413/"
-SCRIPT_DIR="$PROJECT_DIR/medical-imaging/scripts"
-
 module load gcccore/8.3.0
 module load python/3.8.2
 
@@ -18,5 +15,4 @@ echo $version
 RUN_NAME="with_input_normalisation"
 
 python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --print-interval 10 --record-interval 50 \
-    --validation-interval epoch --num-nodes 1 --use-gpu --num-gpus 1 --use-mixed --max-epochs 500 \
-    --use-aug
+    --validation-interval epoch --num-nodes 1 --num-gpus 1
