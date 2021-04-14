@@ -223,10 +223,15 @@ class ModelTrainer:
         record_interval = len(self.validation_loader)
         loss = self.running_scores['validation-record']['loss'] / record_interval
 
-        # Save model checkpoint if necessary.
-        if self.lowest_validation_loss is None or loss < self.lowest_validation_loss:
-            self.lowest_validation_loss = loss
-            self.save_model(model, iteration, loss)
+        # Save model checkpoint.
+        if loss < self.min_validation_loss:
+            info = {
+                'epoch': epoch,
+                'iteration': iteration,
+                'loss': loss
+            }
+            checkpoint.save(model, self.run_name, self.optimiser, info=info)
+            self.min_validation_loss = loss
             self.num_epochs_since_improvement = 0
         else:
             self.num_epochs_since_improvement += 1
