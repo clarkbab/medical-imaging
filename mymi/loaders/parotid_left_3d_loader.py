@@ -33,8 +33,8 @@ class ParotidLeft3DDataset(Dataset):
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
             spacing: the voxel spacing of the data.
         kwargs:
-            raw_input: return the non-transformed input also.
-            raw_label: return the non-transformed label also.
+            raw_input: return the raw input data loaded from disk, in addition to transformed data.
+            raw_label: return the raw label data loaded from disk, in addition to transformed data.
             spacing: the voxel spacing.
             transform: transformations to apply.
         """

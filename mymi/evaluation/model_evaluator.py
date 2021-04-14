@@ -11,7 +11,7 @@ from mymi import plotter
 from mymi import utils
 
 class ModelEvaluator:
-    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None):
+    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None, save_data=False):
         """
         args:
             run_name: the name of the run.
@@ -22,6 +22,7 @@ class ModelEvaluator:
             mixed_precision: whether to use PyTorch mixed precision training.
             output_spacing: the voxel spacing of the input data.
             output_transform: the transform to apply before comparing prediction to label.
+            save_data: whether to save predictions, figures, etc. to disk.
         """
         self.device = device
         self.metrics = metrics
@@ -65,13 +66,14 @@ class ModelEvaluator:
             # Convert prediction into binary values.
             pred = pred.argmax(axis=1)
 
-            # Save prediction and transformed label.
-            filepath = os.path.join(config.directories.evaluation, self.run_name, predictions', 'transformed', f"batch-{batch}")
+            # Save output predictions and labels.
+            folder = 'output' if self.output_transform else 'raw'
+            filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', folder, f"batch-{batch}")
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.save(filepath, pred.numpy())
-            filepath = os.path.join(config.directories.evaluation, self.run_name, labels', 'transformed', f"batch-{batch}")
+            np.save(filepath, pred.numpy().astype(np.bool))
+            filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', folder, f"batch-{batch}")
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.save(filepath, label.numpy())
+            np.save(filepath, label.numpy().astype(np.bool))
 
             # Calculate output DSC.
             if 'dice' in self.metrics and self.output_transform:
@@ -96,10 +98,13 @@ class ModelEvaluator:
                 # Extract results.
                 pred = output['a_segmentation'].data
 
-                # Save output predictions.
-                filepath = os.path.join(config.directories.evaluation, self.run_name, predictions', 'output', f"batch-{batch}.np")
+                # Save transformed predictions and labels.
+                filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', 'raw', f"batch-{batch}")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.save(filepath, pred.numpy())
+                np.save(filepath, pred.numpy().astype(bool))
+                filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', 'raw', f"batch-{batch}")
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.save(filepath, label_raw.numpy().astype(bool))
 
             # Plot the predictions.
             views = ('sagittal', 'coronal', 'axial')
@@ -109,7 +114,7 @@ class ModelEvaluator:
 
                 # Create and save figures.
                 fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
-                filepath = os.path.join(config.directories.evaluation, self.run_name, figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
+                filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 fig.savefig(filepath)
 
