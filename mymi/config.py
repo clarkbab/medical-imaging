@@ -7,11 +7,11 @@ class Directories:
         return os.path.join(self.root, 'cache')
 
     @property
-    def checkpoint(self):
+    def checkpoints(self):
         return os.path.join(self.root, 'checkpoints')
 
     @property
-    def dataset(self):
+    def datasets(self):
         return os.path.join(self.root, 'datasets')
     
     @property

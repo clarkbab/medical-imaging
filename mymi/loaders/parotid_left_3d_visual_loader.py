@@ -40,7 +40,7 @@ class ParotidLeft3DVisualDataset(Dataset):
             assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load paths to all samples.
-        self.data_dir = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', 'validate')
+        self.data_dir = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', 'validate')
         samples = np.reshape([os.path.join(self.data_dir, p) for p in sorted(os.listdir(self.data_dir))], (-1, 2))
 
         self.num_samples = len(samples)

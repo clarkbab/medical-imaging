@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
+import torch
 
 def batch_hausdorff_distance(pred, label, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
     """
@@ -40,6 +41,12 @@ def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1
     # Get coordinates of non-zero voxels.
     a_coords = np.argwhere(a != 0)
     b_coords = np.argwhere(b != 0)
+
+    # 'np.argwhere' results in different shapes depending upon 'torch.Tensor' vs 'numpy.ndarray'.
+    assert type(a) == type(b)
+    if type(a) == torch.Tensor:
+        a_coords = np.transpose(a_coords)
+        b_coords = np.transpose(b_coords)
 
     # Shuffle coordinates, as this increases likelihood of early stopping.
     np.random.shuffle(a_coords)

@@ -49,7 +49,7 @@ class ModelTrainer:
         self.is_reporter = is_reporter
         if is_reporter:
             # Create tensorboard writer.
-            self.writer = SummaryWriter(os.path.join(config.tensorboard_dir, run_name))
+            self.writer = SummaryWriter(os.path.join(config.directories.tensorboard, run_name))
 
             # Add hyperparameters.
             hparams = {
@@ -247,7 +247,7 @@ class ModelTrainer:
 
     def save_model(self, model, iteration, loss):
         self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{PRINT_DP}}")
-        filepath = os.path.join(config.checkpoint_dir, self.run_name, 'best.pt')
+        filepath = os.path.join(config.directories.checkpoints, self.run_name, 'best.pt')
         info = {
             'iteration': iteration,
             'loss': loss,
