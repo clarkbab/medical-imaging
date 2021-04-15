@@ -14,7 +14,7 @@ class Checkpoint:
             checkpoint_name: the name of the checkpoint.
         """
         # Load data.
-        filepath = os.path.join(config.directories.checkpoint, model_name, f"{checkpoint_name}.pt")
+        filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.pt")
         f = open(filepath, 'rb')
         data = torch.load(f)
 
@@ -39,13 +39,13 @@ class Checkpoint:
         }
 
         # Save model and optimiser data.
-        filepath = os.path.join(config.checkpoint_dir, model_name, f"{checkpoint_name}.pt")
+        filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.pt")
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         torch.save(data, filepath)
 
         # Save additional info.
         if info:
-            filepath = os.path.join(config.checkpoint_dir, model_name, f"{checkpoint_name}.csv")
+            filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.csv")
             with open(filepath, 'w') as f:
                 for key in info.keys():
                     f.write(f"{key},{info[key]}")
