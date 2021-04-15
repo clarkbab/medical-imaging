@@ -22,11 +22,15 @@ def batch_largest_connected_component(a):
     args:
         a: a batch of 3D arrays with binary values.
     """
-    a_new = np.ndarray()
+    # Copy existing array.
+    new_a = np.copy(a)
+
     for i in range(len(a)):
         # Get the largest connected component.
         largest_cc = largest_connected_component(a[i])
-        a_new[i] = largest_cc
 
-    return a
+        # Overwrite new array.
+        new_a[i] = largest_cc
+
+    return new_a
         

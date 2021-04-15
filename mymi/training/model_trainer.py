@@ -12,6 +12,7 @@ from mymi import checkpoint
 from mymi import config
 from mymi import loaders
 from mymi import plotter
+from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
 from mymi.metrics import batch_dice, batch_hausdorff_distance
 
@@ -136,8 +137,11 @@ class ModelTrainer:
                     self.running_scores['record']['dice'] += dice.item()
 
                 if 'hausdorff' in self.metrics:
+                    # Get largest connected component in each prediction, this will speed up Hausdorff calculation.
+                    pred_cc = batch_largest_connected_component(pred)
+
                     print('starting hausdorff')
-                    hausdorff = batch_hausdorff_distance(pred, label, spacing=self.spacing)
+                    hausdorff = batch_hausdorff_distance(pred_cc, label, spacing=self.spacing)
                     self.running_scores['print']['hausdorff'] += hausdorff.item()
                     self.running_scores['record']['hausdorff'] += hausdorff.item()
                     print('finished hausdorff')

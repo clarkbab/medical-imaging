@@ -8,10 +8,12 @@ from tqdm import tqdm
 from mymi import config
 from mymi.metrics import batch_dice
 from mymi import plotter
+from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
 
 class ModelEvaluator:
-    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None, save_data=False):
+    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None,
+        postprocessing=('largest-connected-component'), save_data=False):
         """
         args:
             run_name: the name of the run.
@@ -22,6 +24,7 @@ class ModelEvaluator:
             mixed_precision: whether to use PyTorch mixed precision training.
             output_spacing: the voxel spacing of the input data.
             output_transform: the transform to apply before comparing prediction to label.
+            postprocessing: post-processing steps to run on prediction.
             save_data: whether to save predictions, figures, etc. to disk.
         """
         self.device = device
@@ -65,6 +68,10 @@ class ModelEvaluator:
 
             # Convert prediction into binary values.
             pred = pred.argmax(axis=1)
+
+            # Run post-processing.
+            if 'largest-connected-component' in self.postprocessing:
+                pred = batch_largest_connected_component(pred)
 
             # Save output predictions and labels.
             folder = 'output' if self.output_transform else 'raw'
