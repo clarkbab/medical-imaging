@@ -50,6 +50,7 @@ parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help=
 parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
 parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
 parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
+parser.add_argument('-nrc', '--no-record', action='store_true', default=False, help="don't send run records")
 parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
 parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
 parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
@@ -60,7 +61,7 @@ args = parser.parse_args()
 def get_log_info(args: dict):
     def log_info(s: str):
         if is_multi_process(args):
-            if is_lead_process(args):
+            if is_primary_process(args):
                 s = f"[Leader - {os.getpid()}] {s}"
             else:
                 s = f"[{os.getpid()}] {s}" 
@@ -157,8 +158,8 @@ def train(args: dict):
     # Create model trainer kwargs.
     kwargs = {}
     kwargs['device'] = device
-    if is_reporter(args):
-        kwargs['is_reporter'] = True
+    if is_primary(args):
+        kwargs['is_primary'] = True
     kwargs['log_info'] = log_info
     if args.max_epochs:
         kwargs['max_epochs'] = args.max_epochs
@@ -167,6 +168,11 @@ def train(args: dict):
         log_info('Using full precision.')
     else:
         log_info('Using mixed precision.')
+    if args.no_record:
+        kwargs['record'] = False
+        log_info('Not recording training results.')
+    else:
+        log_info('Recording training results.')
     if args.print_interval:
         kwargs['print_interval'] = args.print_interval
     if args.record_interval:
@@ -187,11 +193,11 @@ def train(args: dict):
 def is_multi_process(args: dict):
     return (not args.no_gpu) and args.num_gpus > 1
 
-def is_lead_process(args: dict):
+def is_primary_process(args: dict):
     return args.gpu_idx == 0
 
-def is_reporter(args: dict):
-    return not is_multi_process(args) or is_lead_process(args)
+def is_primary(args: dict):
+    return not is_multi_process(args) or is_primary_process(args)
 
 # Wrap 'train' function to fit multi-processing API.
 def train_process(gpu_idx: int, args: dict):

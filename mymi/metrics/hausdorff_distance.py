@@ -35,12 +35,9 @@ def batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)
 
     # Calculate Hausdorff distance for each item in batch.
     hd_dists = []
-    for i in range(len(pred)):
-        # Get item from batch.
-        p, l = pred[i], label[i]
-
+    for i in range(len(a)):
         # Get symmetric Hausdorff distance.
-        hd_dist = hausdorff_distance(a, b, distance=distance, spacing=spacing)
+        hd_dist = hausdorff_distance(a[i], b[i], distance=distance, spacing=spacing)
         hd_dists.append(hd_dist)
 
     return np.mean(hd_dists)
@@ -60,10 +57,11 @@ def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1
     b_coords = np.argwhere(b != 0)
 
     # 'np.argwhere' results in different shapes depending upon 'torch.Tensor' vs 'numpy.ndarray'.
-    assert type(a) == type(b)
     if type(a) == torch.Tensor:
         a_coords = np.transpose(a_coords)
+    if type(b) == torch.Tensor:
         b_coords = np.transpose(b_coords)
+    print(a_coords.shape, b_coords.shape)
 
     # Shuffle coordinates, as this increases likelihood of early stopping.
     np.random.shuffle(a_coords)

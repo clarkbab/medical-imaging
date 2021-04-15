@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import os
 import torch
@@ -6,14 +7,14 @@ from torchio import LabelMap, Subject
 from tqdm import tqdm
 
 from mymi import config
-from mymi.metrics import batch_dice
+from mymi.metrics import batch_dice, batch_hausdorff_distance
 from mymi import plotter
 from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
 
 class ModelEvaluator:
-    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice'), mixed_precision=True, output_spacing=None, output_transform=None,
-        postprocessing=('largest-connected-component'), save_data=False):
+    def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice', 'hausdorff'), mixed_precision=True, output_spacing=None,
+        output_transform=None, print_interval='epoch', record=True, save_data=False):
         """
         args:
             run_name: the name of the run.
@@ -24,7 +25,8 @@ class ModelEvaluator:
             mixed_precision: whether to use PyTorch mixed precision training.
             output_spacing: the voxel spacing of the input data.
             output_transform: the transform to apply before comparing prediction to label.
-            postprocessing: post-processing steps to run on prediction.
+            print_interval: the interval in which to print the results.
+            record: whether to save figures, predictions, labels, etc. or not.
             save_data: whether to save predictions, figures, etc. to disk.
         """
         self.device = device
@@ -34,15 +36,17 @@ class ModelEvaluator:
         self.output_transform = output_transform
         if output_transform:
             assert output_spacing, 'Output spacing must be specified if output transform applied.'
+        self.print_interval = len(test_loader) if print_interval == 'epoch' else print_interval
+        self.record = record
         self.run_name = run_name
         self.test_loader = test_loader
 
         # Initialise running scores.
         self.running_scores = {}
-        if 'dice' in metrics:
-            self.running_scores['dice'] = 0
-            if self.output_transform is not None:
-                self.running_scores['output-dice'] = 0
+        keys = ['print', 'total']
+        for key in keys:
+            self.running_scores[key] = {}
+            self.reset_running_scores(key)
 
     def __call__(self, model):
         """
@@ -53,7 +57,7 @@ class ModelEvaluator:
         # Put model in evaluation mode.
         model.eval()
 
-        for batch, (input, label, input_raw, label_raw) in enumerate(tqdm(self.test_loader)):
+        for batch, (input, label, input_raw, label_raw) in enumerate(self.test_loader):
             # Convert input and label.
             input, label = input.float(), label.long()
             input = input.unsqueeze(1)
@@ -69,23 +73,26 @@ class ModelEvaluator:
             # Convert prediction into binary values.
             pred = pred.argmax(axis=1)
 
-            # Run post-processing.
-            if 'largest-connected-component' in self.postprocessing:
-                pred = batch_largest_connected_component(pred)
-
             # Save output predictions and labels.
-            folder = 'output' if self.output_transform else 'raw'
-            filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', folder, f"batch-{batch}")
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.save(filepath, pred.numpy().astype(np.bool))
-            filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', folder, f"batch-{batch}")
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.save(filepath, label.numpy().astype(np.bool))
+            if self.record:
+                folder = 'output' if self.output_transform else 'raw'
+                filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', folder, f"batch-{batch}")
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.save(filepath, pred.numpy().astype(np.bool))
+                filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', folder, f"batch-{batch}")
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.save(filepath, label.numpy().astype(np.bool))
 
-            # Calculate output DSC.
+            # Calculate output metrics.
             if 'dice' in self.metrics and self.output_transform:
                 dice = batch_dice(pred, label)
-                self.running_scores['output-dice'] += dice.item()
+                self.running_scores['print']['output-dice'] += dice.item()
+                self.running_scores['total']['output-dice'] += dice.item()
+
+            if 'hausdorff' in self.metrics and self.output_transform:
+                hausdorff = batch_hausdorff_distance(pred, label, spacing=self.output_spacing)
+                self.running_scores['print']['output-hausdorff'] += hausdorff.item()
+                self.running_scores['total']['output-hausdorff'] += hausdorff.item()
 
             # Transform prediction before comparing to label.
             if self.output_transform:
@@ -106,34 +113,114 @@ class ModelEvaluator:
                 pred = output['a_segmentation'].data
 
                 # Save transformed predictions and labels.
-                filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', 'raw', f"batch-{batch}")
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.save(filepath, pred.numpy().astype(bool))
-                filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', 'raw', f"batch-{batch}")
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.save(filepath, label_raw.numpy().astype(bool))
+                if self.record:
+                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', 'raw', f"batch-{batch}")
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    np.save(filepath, pred.numpy().astype(bool))
+                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', 'raw', f"batch-{batch}")
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    np.save(filepath, label_raw.numpy().astype(bool))
 
             # Plot the predictions.
-            views = ('sagittal', 'coronal', 'axial')
-            for view in views:
-                # Find central slices.
-                centroids = utils.get_batch_centroids(label_raw, view) 
+            if self.record:
+                views = ('sagittal', 'coronal', 'axial')
+                for view in views:
+                    # Find central slices.
+                    centroids = utils.get_batch_centroids(label_raw, view) 
 
-                # Create and save figures.
-                fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
-                filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                fig.savefig(filepath)
+                    # Create and save figures.
+                    fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
+                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    fig.savefig(filepath)
 
             # Calculate metrics.
             if 'dice' in self.metrics:
                 dice = batch_dice(pred, label_raw)
-                self.running_scores['dice'] += dice.item()
+                self.running_scores['print']['dice'] += dice.item()
+                self.running_scores['total']['dice'] += dice.item()
 
-        # Print final scores.
+            if 'hausdorff' in self.metrics:
+                hausdorff = batch_hausdorff_distance(pred, label_raw, spacing=self.output_spacing)
+                self.running_scores['print']['hausdorff'] += hausdorff.item()
+                self.running_scores['total']['hausdorff'] += hausdorff.item()
+
+            # Print metric results.
+            if self.should_print(batch):
+                self.print_results(batch)
+                self.reset_running_scores('print')
+
+        # Print the averaged results.
+        self.print_final_results()
+
+    def should_print(self, batch):
+        """
+        returns: true if the metric results should be printed, else false.
+        args:
+            batch: the batch number.
+        """
+        if (batch + 1) % self.print_interval == 0:
+            return True
+        else:
+            return False
+
+    def print_results(self, batch):
+        """
+        effect: logs metrics to STDOUT.
+        args:
+            batch: the batch number.
+        """
+        message = f"Evaluation - [{batch}]"
+
+        if 'dice' in self.metrics:
+            if self.output_transform:
+                output_dice = self.running_scores['print']['output-dice'] / self.print_interval
+                message += f", Output DSC: {output_dice:{config.formatting.metrics}}"
+            dice = self.running_scores['print']['dice'] / self.print_interval
+            message += f", DSC: {dice:{config.formatting.metrics}}"
+
+        if 'hausdorff' in self.metrics:
+            if self.output_transform:
+                output_hd = self.running_scores['print']['output-hausdorff'] / self.print_interval
+                message += f", Output HD: {output_hd:{config.formatting.metrics}}"
+            hd = self.running_scores['print']['hausdorff'] / self.print_interval
+            message += f", HD: {hd:{config.formatting.metrics}}"
+
+        logging.info(message)
+
+    def print_final_results(self):
+        """
+        effect: logs averaged metrics to STDOUT.
+        """
+        message = 'Evaluation [mean]'
+
         if 'dice' in self.metrics:
             if self.output_transform is not None:
-                mean_output_dice = self.running_scores['output-dice'] / len(self.test_loader)
-                print(f"Mean output DSC={mean_output_dice:{config.formatting.metrics}}")
-            mean_dice = self.running_scores['dice'] / len(self.test_loader)
-            print(f"Mean DSC={mean_dice:{config.formatting.metrics}}")
+                mean_output_dice = self.running_scores['total']['output-dice'] / len(self.test_loader)
+                message += f", Mean output DSC={mean_output_dice:{config.formatting.metrics}}"
+            mean_dice = self.running_scores['total']['dice'] / len(self.test_loader)
+            message += f"Mean DSC={mean_dice:{config.formatting.metrics}}"
+
+        if 'hausdorff' in self.metrics:
+            if self.output_transform is not None:
+                mean_output_hausdorff = self.running_scores['total']['output-hausdorff'] / len(self.test_loader)
+                message += f"Mean output HD={mean_output_hausdorff:{config.formatting.metrics}}"
+            mean_hausdorff = self.running_scores['total']['hausdorff'] / len(self.test_loader)
+            message += f"Mean HD={mean_hausdorff:{config.formatting.metrics}}"
+
+        logging.info(message)
+
+    def reset_running_scores(self, key):
+        """
+        effect: initialises the metrics under the key namespace.
+        args:
+            key: the metric namespace, e.g. print, record, etc.
+        """
+        if 'dice' in self.metrics:
+            self.running_scores[key]['dice'] = 0
+            if self.output_transform:
+                self.running_scores[key]['output-dice'] = 0
+        if 'hausdorff' in self.metrics:
+            self.running_scores[key]['hausdorff'] = 0
+            if self.output_transform:
+                self.running_scores[key]['output-hausdorff'] = 0

@@ -20,8 +20,8 @@ PRINT_DP = '.10f'
 
 class ModelTrainer:
     def __init__(self, loss_fn, optimiser, run_name, train_loader, validation_loader, visual_validation_loader,
-        device=torch.device('cpu'), early_stopping=False, is_reporter=False, log_info=logging.info, max_epochs=500,
-        mixed_precision=True, metrics=('dice', 'hausdorff'), print_interval='epoch', record_interval='epoch',
+        device=torch.device('cpu'), early_stopping=False, is_primary=False, log_info=logging.info, max_epochs=500,
+        mixed_precision=True, metrics=('dice', 'hausdorff'), print_interval='epoch', record=True, record_interval='epoch',
         spacing=None, validation_interval='epoch'):
         """
         effect: sets the initial trainer values.
@@ -35,22 +35,23 @@ class ModelTrainer:
         kwargs:
             device: the device to train on.
             early_stopping: if the training should use early stopping or not.
-            is_reporter: if this process should report or not.
+            is_primary: is this process the primary in the pool, i.e. responsible for validation and reporting.
             log_info: the logging function. Allows us to include multi-process info if required.
             max_epochs: the maximum number of epochs to run training.
             mixed_precision: run the training using PyTorch mixed precision training.
             metrics: the metrics to print and record during training.
             print_interval: how often to print results during training.
+            record: turns recording on and off.
             record_interval: how often to record results during training.
             spacing: the voxel spacing. Required for calculating Hausdorff distance.
             validation_interval: how often to run the validation.
         """
         self.device = device
         self.early_stopping = early_stopping
-        self.is_reporter = is_reporter
-        if is_reporter:
+        self.is_primary = is_primary
+        if is_primary and record:
             # Create tensorboard writer.
-            self.writer = SummaryWriter(os.path.join(config.directories.tensorboard, run_name))
+            self.recorder = SummaryWriter(os.path.join(config.directories.tensorboard, run_name))
 
             # Add hyperparameters.
             hparams = {
@@ -61,7 +62,7 @@ class ModelTrainer:
                 'optimiser': str(optimiser),
                 'transform': str(train_loader.dataset.transform),
             }
-            self.writer.add_hparams(hparams, {}, run_name='hparams')
+            self.recorder.add_hparams(hparams, {}, run_name='hparams')
         self.log_info = log_info
         self.loss_fn = loss_fn
         self.max_epochs = max_epochs
@@ -71,15 +72,18 @@ class ModelTrainer:
         self.mixed_precision = mixed_precision
         self.num_epochs_since_improvement = 0
         self.optimiser = optimiser
-        self.print_interval = print_interval
-        self.record_interval = record_interval
+        self.train_print_interval = len(train_loader) if print_interval == 'epoch' else print_interval
+        self.validation_print_interval = len(validation_loader) if print_interval == 'epoch' else print_interval
+        self.record = record
+        self.train_record_interval = len(train_loader) if record_interval == 'epoch' else record_interval
+        self.validation_record_interval = len(validation_loader)
         self.run_name = run_name
         self.scaler = GradScaler(enabled=mixed_precision)
         self.spacing = spacing
         if 'hausdorff' in metrics:
             assert spacing is not None, 'Voxel spacing must be provided when calculating Hausdorff distance.'
         self.train_loader = train_loader
-        self.validation_interval = validation_interval
+        self.validation_interval = len(validation_loader) if validation_interval == 'epoch' else validation_interval
         self.validation_loader = validation_loader
         self.visual_validation_loader = visual_validation_loader
 
@@ -108,10 +112,10 @@ class ModelTrainer:
                 print(batch)
 
                 # Add model structure.
-                if self.is_reporter and epoch == 0 and batch == 0:
+                if self.is_primary and epoch == 0 and batch == 0:
                     # Error when adding graph with 'mixed-precision' training.
                     if not self.mixed_precision:
-                        self.writer.add_graph(model, input)
+                        self.recorder.add_graph(model, input)
 
                 # Perform forward/backward pass.
                 with autocast(enabled=self.mixed_precision):
@@ -147,17 +151,17 @@ class ModelTrainer:
                     print('finished hausdorff')
 
                 # Record training info to Tensorboard.
-                if self.is_reporter and self.should_record(iteration):
+                if self.is_primary and self.should_record(iteration):
                     self.record_training_results(iteration)
                     self.reset_running_scores('record')
                 
                 # Print results.
-                if self.should_print(iteration, len(self.train_loader)):
+                if self.should_print(self.train_print_interval, iteration):
                     self.print_training_results(epoch, iteration)
                     self.reset_running_scores('print')
 
                 # Perform validation and checkpointing.
-                if self.is_reporter and self.should_validate(iteration):
+                if self.is_primary and self.should_validate(iteration):
                     self.validate_model(model, epoch, iteration)
 
                 # Check early stopping.
@@ -194,8 +198,9 @@ class ModelTrainer:
                 figure = plotter.plot_batch(input, centroids, label=label, pred=pred, view=view, return_figure=True)
 
                 # Write figure to tensorboard.
-                tag = f"Validation - batch={batch}, view={view}"
-                self.writer.add_figure(tag, figure, global_step=iteration)
+                if self.record:
+                    tag = f"Validation - batch={batch}, view={view}"
+                    self.recorder.add_figure(tag, figure, global_step=iteration)
 
         # Calculate validation score.
         for val_batch, (input, label) in enumerate(self.validation_loader):
@@ -222,16 +227,14 @@ class ModelTrainer:
                 self.running_scores['record']['hausdorff'] += hausdorff.item()
 
             # Print results.
-            if self.should_print(val_batch, len(self.validation_loader)):
+            if self.should_print(self.validation_print_interval, val_batch):
                 self.print_validation_results(epoch, val_batch)
                 self.reset_running_scores('validation-print')
 
-        # Check for validation improvement.
-        record_interval = len(self.validation_loader)
-        loss = self.running_scores['validation-record']['loss'] / record_interval
-
-        # Save model checkpoint.
+        # Check for validation loss improvement.
+        loss = self.running_scores['validation-record']['loss'] / self.validation_record_interval
         if loss < self.min_validation_loss:
+            # Save model checkpoint.
             info = {
                 'epoch': epoch,
                 'iteration': iteration,
@@ -243,8 +246,9 @@ class ModelTrainer:
         else:
             self.num_epochs_since_improvement += 1
         
-        # Record validation results on Tensorboard.
-        self.record_validation_results(iteration)
+        # Record validation results.
+        if self.record:
+            self.record_validation_results(iteration)
         self.reset_running_scores('validation-record')
 
         model.train()
@@ -261,16 +265,16 @@ class ModelTrainer:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         torch.save(info, filepath)
         
-    def should_print(self, iteration, loader_length):
-        if ((self.print_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
-            (self.print_interval != 'epoch' and (iteration + 1) % self.print_interval == 0)):
+    def should_print(self, interval, iteration):
+        if (iteration + 1) % interval == 0:
             return True
         else:
             return False
 
     def should_record(self, iteration):
-        if ((self.record_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
-            (self.record_interval != 'epoch' and (iteration + 1) % self.record_interval == 0)):
+        if not self.record:
+            return False
+        elif (iteration + 1) % self.train_record_interval == 0:
             return True
         else:
             return False
@@ -330,15 +334,15 @@ class ModelTrainer:
         """
         record_interval = len(self.train_loader) if self.record_interval == 'epoch' else self.record_interval
         loss = self.running_scores['record']['loss'] / record_interval
-        self.writer.add_scalar('Loss/train', loss, iteration)
+        self.recorder.add_scalar('Loss/train', loss, iteration)
         
         if 'dice' in self.metrics:
             dice = self.running_scores['record']['dice'] / record_interval
-            self.writer.add_scalar('Dice/train', dice, iteration)
+            self.recorder.add_scalar('Dice/train', dice, iteration)
 
         if 'hausdorff' in self.metrics:
             hausdorff = self.running_scores['record']['hausdorff'] / record_interval
-            self.writer.add_scalar('Hausdorff/train', hausdorff, iteration)
+            self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
     def record_validation_results(self, iteration):
         """
@@ -346,17 +350,22 @@ class ModelTrainer:
         """
         record_interval = len(self.validation_loader)
         loss = self.running_scores['validation-record']['loss'] / record_interval
-        self.writer.add_scalar('Loss/validation', loss, iteration)
+        self.recorder.add_scalar('Loss/validation', loss, iteration)
 
         if 'dice' in self.metrics:
             dice = self.running_scores['validation-record']['dice'] / record_interval
-            self.writer.add_scalar('Dice/validation', dice, iteration)
+            self.recorder.add_scalar('Dice/validation', dice, iteration)
 
         if 'hausdorff' in self.metrics:
             hausdorff = self.running_scores['record']['hausdorff'] / record_interval
-            self.writer.add_scalar('Hausdorff/train', hausdorff, iteration)
+            self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
     def reset_running_scores(self, key):
+        """
+        effect: initialises the metrics under the key namespace.
+        args:
+            key: the metric namespace, e.g. print, record, etc.
+        """
         self.running_scores[key]['loss'] = 0
         if 'dice' in self.metrics:
             self.running_scores[key]['dice'] = 0

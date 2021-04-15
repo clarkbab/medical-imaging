@@ -17,6 +17,15 @@ from mymi.loaders import ParotidLeft3DLoader
 from mymi.models import ParotidLeft3DNet
 from mymi import utils
 
+# Parse options.
+def interval_type(s: str):
+    if s == 'epoch':
+        return s
+    elif s.isdigit():
+        return int(s)
+    else:
+        raise ArgumentTypeError(f"Should be 'epoch' or integer, got '{s}'.")
+
 # Parse arguments.
 parser = ArgumentParser(description="""
     Evaluate the segmentation model.
@@ -24,8 +33,11 @@ parser = ArgumentParser(description="""
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
 parser.add_argument('-mc', '--model-checkpoint', action='store', default='checkpoint', help='the checkpoint name')
 parser.add_argument('-mn', '--model-name', action='store', help='the model name', required=True)
+parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='how often to print the results')
 parser.add_argument('-n', '--name', action='store', help='the run name')
 parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='turn off GPU use')
+parser.add_argument('-nh', '--no-hausdorff', action='store_true', default=False, help='turn off the HD metric')
+parser.add_argument('-nr', '--no-record', action='store_true', default=False, help="don't record labels, predictions, figures, etc.")
 args = parser.parse_args()
 
 # Configure logging.
@@ -81,7 +93,23 @@ output_transform = Compose(output_transforms)
 # Create test loader.
 test_loader = ParotidLeft3DLoader.build('test', raw_input=True, raw_label=True, spacing=data_spacing, transform=transform)
 
+# Set evaluator kwargs.
+kwargs = {}
+kwargs['device'] = device
+kwargs['metrics'] = ['dice']
+if not args.no_hausdorff:
+    append(kwargs['metrics'], 'hausdorff')
+kwargs['output_spacing'] = input_spacing
+kwargs['output_transform'] = output_transform
+if args.no_record:
+    kwargs['record'] = False
+    logging.info('Not recording evaluation data.')
+else:
+    logging.info('Recording evaluation data.')
+if args.print_interval:
+    kwargs['print_interval'] = args.print_interval
+
 # Run evaluator.
-evaluator = ModelEvaluator(run_name, test_loader, device=device, output_spacing=input_spacing, output_transform=output_transform)
+evaluator = ModelEvaluator(run_name, test_loader, **kwargs)
 evaluator(model)
     
