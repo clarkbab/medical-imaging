@@ -2,17 +2,36 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import torch
 
-def batch_hausdorff_distance(pred, label, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
+def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
     """
-    returns: the mean Hausdorff distance across the batch.
+    returns: the Hausdorff distance between pred and label.
     args:
-        pred: the batch of binary network predictions, e.g. shape (n, 512, 512, 212).
-        label: the batch of labels, e.g. shape (n, 512, 512, 212)
+        a: a 3D array of binary values.
+        b: a 3D array of binary values.
     kwargs:
         distance: the distance metric to use.
         spacing: the voxel spacing used.
     """
-    assert pred.shape == label.shape
+    assert a.shape == b.shape
+
+    # Get symmetric Hausdorff distance.
+    dist_a = directed_hausdorff_distance(a, b, distance=distance, spacing=spacing)
+    dist_b = directed_hausdorff_distance(b, a, distance=distance, spacing=spacing)
+    hd_dist = max(dist_a, dist_b)
+
+    return hd_dist
+
+def batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
+    """
+    returns: the mean Hausdorff distance across the batch.
+    args:
+        a: a batch of 3D arrays with binary values.
+        b: a batch of 3D arrays with binary values.
+    kwargs:
+        distance: the distance metric to use.
+        spacing: the voxel spacing used.
+    """
+    assert a.shape == b.shape
 
     # Calculate Hausdorff distance for each item in batch.
     hd_dists = []
@@ -21,9 +40,7 @@ def batch_hausdorff_distance(pred, label, distance='euclidean', spacing=(1.0, 1.
         p, l = pred[i], label[i]
 
         # Get symmetric Hausdorff distance.
-        hd_dist_a = directed_hausdorff_distance(p, l, distance=distance, spacing=spacing)
-        hd_dist_b = directed_hausdorff_distance(l, p, distance=distance, spacing=spacing)
-        hd_dist = max(hd_dist_a, hd_dist_b)
+        hd_dist = hausdorff_distance(a, b, distance=distance, spacing=spacing)
         hd_dists.append(hd_dist)
 
     return np.mean(hd_dists)

@@ -1,1 +1,1 @@
-from .cca import largest_connected_component
+from .cca import batch_largest_connected_component, largest_connected_component
