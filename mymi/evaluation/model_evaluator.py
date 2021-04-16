@@ -199,14 +199,14 @@ class ModelEvaluator:
                 mean_output_dice = self.running_scores['total']['output-dice'] / len(self.test_loader)
                 message += f", Mean output DSC={mean_output_dice:{config.formatting.metrics}}"
             mean_dice = self.running_scores['total']['dice'] / len(self.test_loader)
-            message += f"Mean DSC={mean_dice:{config.formatting.metrics}}"
+            message += f", Mean DSC={mean_dice:{config.formatting.metrics}}"
 
         if 'hausdorff' in self.metrics:
             if self.output_transform is not None:
                 mean_output_hausdorff = self.running_scores['total']['output-hausdorff'] / len(self.test_loader)
-                message += f"Mean output HD={mean_output_hausdorff:{config.formatting.metrics}}"
+                message += f", Mean output HD={mean_output_hausdorff:{config.formatting.metrics}}"
             mean_hausdorff = self.running_scores['total']['hausdorff'] / len(self.test_loader)
-            message += f"Mean HD={mean_hausdorff:{config.formatting.metrics}}"
+            message += f", Mean HD={mean_hausdorff:{config.formatting.metrics}}"
 
         logging.info(message)
 

@@ -98,7 +98,7 @@ kwargs = {}
 kwargs['device'] = device
 kwargs['metrics'] = ['dice']
 if not args.no_hausdorff:
-    append(kwargs['metrics'], 'hausdorff')
+    kwargs['metrics'].append('hausdorff')
 kwargs['output_spacing'] = input_spacing
 kwargs['output_transform'] = output_transform
 if args.no_record:
