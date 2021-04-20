@@ -74,19 +74,19 @@ class ModelTrainer:
         self.mixed_precision = mixed_precision
         self.num_epochs_since_improvement = 0
         self.optimiser = optimiser
-        self.train_print_interval = len(train_loader) if print_interval == 'epoch' else print_interval
-        self.validation_print_interval = len(validation_loader) if print_interval == 'epoch' else print_interval
         self.record = record
-        self.train_record_interval = len(train_loader) if record_interval == 'epoch' else record_interval
-        self.validation_record_interval = len(validation_loader)
         self.run_name = run_name
         self.scaler = GradScaler(enabled=mixed_precision)
         self.spacing = spacing
         if 'hausdorff' in metrics:
             assert spacing is not None, 'Voxel spacing must be provided when calculating Hausdorff distance.'
         self.train_loader = train_loader
-        self.validation_interval = len(validation_loader) if validation_interval == 'epoch' else validation_interval
+        self.train_print_interval = len(train_loader) if print_interval == 'epoch' else print_interval
+        self.train_record_interval = len(train_loader) if record_interval == 'epoch' else record_interval
+        self.validation_interval = len(train_loader) if validation_interval == 'epoch' else validation_interval
         self.validation_loader = validation_loader
+        self.validation_print_interval = len(validation_loader) if print_interval == 'epoch' else print_interval
+        self.validation_record_interval = len(validation_loader)
         self.visual_validation_loader = visual_validation_loader
 
         # Initialise running scores.
@@ -201,6 +201,12 @@ class ModelTrainer:
             self.running_scores['validation-record']['loss'] += loss.item()
             self.running_scores['validation-print']['loss'] += loss.item()
 
+            # Convert to binary prediction.
+            pred = pred.argmax(axis=1)
+
+            # Move data to CPU for metric calculations.
+            pred, label = pred.cpu(), label.cpu()
+
             if 'dice' in self.metrics:
                 dice = batch_dice(pred, label)
                 self.running_scores['validation-record']['dice'] += dice.item()
@@ -310,16 +316,17 @@ class ModelTrainer:
             batch: the current training batch.
             iteration: the current training iteration.
         """
-        print_interval = len(self.train_loader) if self.print_interval == 'epoch' else self.print_interval
-        loss = self.running_scores['print']['loss'] / print_interval
+        # Get average training loss.
+        loss = self.running_scores['print']['loss'] / self.train_print_interval
         message = f"[{epoch}, {batch}] Loss: {loss:{PRINT_DP}}"
 
+        # Get additional metrics.
         if 'dice' in self.metrics:
-            dice = self.running_scores['print']['dice'] / print_interval
+            dice = self.running_scores['print']['dice'] / self.train_print_interval
             message += f", Dice: {dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
-            hausdorff = self.running_scores['print']['hausdorff'] / print_interval
+            hausdorff = self.running_scores['print']['hausdorff'] / self.train_print_interval
             message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
@@ -332,16 +339,17 @@ class ModelTrainer:
             batch: the current validation batch.
             iteration: the current training iteration.
         """
-        print_interval = len(self.validation_loader) if self.print_interval == 'epoch' else self.print_interval
-        loss = self.running_scores['validation-print']['loss'] / print_interval
+        # Get average validation loss.
+        loss = self.running_scores['validation-print']['loss'] / self.validation_print_interval
         message = f"Validation - [{epoch}, {batch}] Loss: {loss:{PRINT_DP}}"
 
+        # Get additional metrics.
         if 'dice' in self.metrics:
-            dice = self.running_scores['validation-print']['dice'] / print_interval
+            dice = self.running_scores['validation-print']['dice'] / self.validation_print_interval
             message += f", Dice: {dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
-            hausdorff = self.running_scores['validation-print']['hausdorff'] / print_interval
+            hausdorff = self.running_scores['validation-print']['hausdorff'] / self.validation_print_interval
             message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
         self.log_info(message)

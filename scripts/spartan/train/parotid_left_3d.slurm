@@ -12,7 +12,8 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-RUN_NAME="with_input_normalisation"
+RUN_NAME="with_hd"
+SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --print-interval 10 --record-interval 50 \
     --validation-interval epoch --num-nodes 1 --num-gpus 1
