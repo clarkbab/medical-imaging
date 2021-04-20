@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
+import SimpleITK as sitk
 import torch
 
 def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
@@ -14,12 +15,34 @@ def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
     """
     assert a.shape == b.shape
 
-    # Get symmetric Hausdorff distance.
+    # Get Hausdorff distance.
     dist_a = directed_hausdorff_distance(a, b, distance=distance, spacing=spacing)
     dist_b = directed_hausdorff_distance(b, a, distance=distance, spacing=spacing)
     hd_dist = max(dist_a, dist_b)
 
     return hd_dist
+
+def sitk_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
+    # Convert to SimpleITK images.
+    img_a = sitk.GetImageFromArray(a)
+    img_a.SetSpacing(spacing)
+    img_b = sitk.GetImageFromArray(b)
+    img_b.SetSpacing(spacing)
+
+    # Calculate Hausdorff distance.
+    hd_filter = sitk.HausdorffDistanceImageFilter()
+    hd_filter.Execute(img_a, img_b)
+    hd_dist = hd_filter.GetHausdorffDistance()
+
+    return hd_dist
+
+def sitk_batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
+    hd_dists = []
+    for i in range(len(a)):
+        hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing=spacing)
+        hd_dists.append(hd_dist)
+    print(hd_dists)
+    return np.mean(hd_dists)
 
 def batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
     """
@@ -61,7 +84,6 @@ def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1
         a_coords = np.transpose(a_coords)
     if type(b) == torch.Tensor:
         b_coords = np.transpose(b_coords)
-    print(a_coords.shape, b_coords.shape)
 
     # Shuffle coordinates, as this increases likelihood of early stopping.
     np.random.shuffle(a_coords)

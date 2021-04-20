@@ -1,0 +1,38 @@
+#! /usr/bin/env python
+
+import numpy as np
+import os
+import sys
+import time
+
+sys.path.append('/data/projects/punim1413/medical-imaging')
+from mymi.metrics import batch_dice, sitk_batch_dice, batch_hausdorff_distance, sitk_batch_hausdorff_distance
+
+type = 'raw'
+predpath = f"/data/projects/punim1413/mymi/evaluation/testing_eval/predictions/{type}/batch-0.npy"
+labelpath = f"/data/projects/punim1413/mymi/evaluation/testing_eval/labels/{type}/batch-0.npy"
+pred = np.load(predpath).astype(np.uint8)
+label = np.load(labelpath).astype(np.uint8)
+
+print('Dice')
+s = time.time()
+dice = batch_dice(pred, label) 
+e = time.time()
+print(dice, e - s)
+
+s = time.time()
+dice = sitk_batch_dice(pred, label)
+e = time.time()
+print(dice, e - s)
+
+print('HD')
+spacing = (1., 1., 3.)
+s = time.time()
+hd_dist = batch_hausdorff_distance(pred, label, spacing=spacing) 
+e = time.time()
+print(hd_dist, e - s)
+
+s = time.time()
+hd_dist = sitk_batch_hausdorff_distance(pred, label, spacing=spacing)
+e = time.time()
+print(hd_dist, e - s)

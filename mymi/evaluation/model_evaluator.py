@@ -74,7 +74,7 @@ class ModelEvaluator:
             pred = pred.argmax(axis=1)
 
             # Save output predictions and labels.
-            if self.record:
+            if self.output_transform and self.record:
                 folder = 'output' if self.output_transform else 'raw'
                 filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', folder, f"batch-{batch}")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -84,15 +84,29 @@ class ModelEvaluator:
                 np.save(filepath, label.numpy().astype(np.bool))
 
             # Calculate output metrics.
-            if 'dice' in self.metrics and self.output_transform:
-                dice = batch_dice(pred, label)
-                self.running_scores['print']['output-dice'] += dice.item()
-                self.running_scores['total']['output-dice'] += dice.item()
+            if self.output_transform:
+                if 'dice' in self.metrics:
+                    dice = batch_dice(pred, label)
+                    self.running_scores['print']['output-dice'] += dice.item()
+                    self.running_scores['total']['output-dice'] += dice.item()
 
-            if 'hausdorff' in self.metrics and self.output_transform:
-                hausdorff = batch_hausdorff_distance(pred, label, spacing=self.output_spacing)
-                self.running_scores['print']['output-hausdorff'] += hausdorff.item()
-                self.running_scores['total']['output-hausdorff'] += hausdorff.item()
+                if 'hausdorff' in self.metrics:
+                    hausdorff = batch_hausdorff_distance(pred, label, spacing=self.output_spacing)
+                    self.running_scores['print']['output-hausdorff'] += hausdorff.item()
+                    self.running_scores['total']['output-hausdorff'] += hausdorff.item()
+
+            # Save output prediction plots.
+            if self.output_transform and self.record:
+                views = ('sagittal', 'coronal', 'axial')
+                for view in views:
+                    # Find central slices.
+                    centroids = utils.get_batch_centroids(label, view) 
+
+                    # Create and save figures.
+                    fig = plotter.plot_batch(input, centroids, figsize=(12, 12), label=label, pred=pred, view=view, return_figure=True)
+                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', 'output', f"batch-{batch}-{view}.png")
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    fig.savefig(filepath)
 
             # Transform prediction before comparing to label.
             if self.output_transform:
@@ -121,7 +135,7 @@ class ModelEvaluator:
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     np.save(filepath, label_raw.numpy().astype(bool))
 
-            # Plot the predictions.
+            # Save prediction plots.
             if self.record:
                 views = ('sagittal', 'coronal', 'axial')
                 for view in views:
@@ -130,7 +144,7 @@ class ModelEvaluator:
 
                     # Create and save figures.
                     fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
-                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
+                    filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', 'raw', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     fig.savefig(filepath)
 

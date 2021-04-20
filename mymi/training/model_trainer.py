@@ -14,15 +14,15 @@ from mymi import loaders
 from mymi import plotter
 from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
-from mymi.metrics import batch_dice, batch_hausdorff_distance
+from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
 
 PRINT_DP = '.10f'
 
 class ModelTrainer:
     def __init__(self, loss_fn, optimiser, run_name, train_loader, validation_loader, visual_validation_loader,
-        device=torch.device('cpu'), early_stopping=False, is_primary=False, log_info=logging.info, max_epochs=500,
-        mixed_precision=True, metrics=('dice', 'hausdorff'), print_interval='epoch', record=True, record_interval='epoch',
-        spacing=None, validation_interval='epoch'):
+        device=torch.device('cpu'), early_stopping=False, hausdorff_delay=200, is_primary=False, log_info=logging.info,
+        max_epochs=500, mixed_precision=True, metrics=('dice', 'hausdorff'), print_interval='epoch', record=True,
+        record_interval='epoch', spacing=None, validation_interval='epoch'):
         """
         effect: sets the initial trainer values.
         args:
@@ -35,6 +35,7 @@ class ModelTrainer:
         kwargs:
             device: the device to train on.
             early_stopping: if the training should use early stopping or not.
+            hausdorff_delay: calculate HD after this many iterations due to HD expense.
             is_primary: is this process the primary in the pool, i.e. responsible for validation and reporting.
             log_info: the logging function. Allows us to include multi-process info if required.
             max_epochs: the maximum number of epochs to run training.
@@ -48,6 +49,7 @@ class ModelTrainer:
         """
         self.device = device
         self.early_stopping = early_stopping
+        self.hausdorff_delay = hausdorff_delay
         self.is_primary = is_primary
         if is_primary and record:
             # Create tensorboard writer.
@@ -96,15 +98,18 @@ class ModelTrainer:
 
     def __call__(self, model):
         """
-        effect: updates the model parameters.
-        model: the model to train.
+        effect: performs training to update model parameters whilst validating model performance.
+        args:
+            model: the model to train.
         """
         # Put in training mode.
         model.train()
 
         for epoch in range(self.max_epochs):
             for batch, (input, label) in enumerate(self.train_loader):
+                # Calculate iteration.
                 iteration = epoch * len(self.train_loader) + batch
+
                 # Convert input and label.
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
@@ -140,12 +145,12 @@ class ModelTrainer:
                     self.running_scores['print']['dice'] += dice.item()
                     self.running_scores['record']['dice'] += dice.item()
 
-                if 'hausdorff' in self.metrics:
+                if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
                     # Get largest connected component in each prediction, this will speed up Hausdorff calculation.
-                    pred_cc = batch_largest_connected_component(pred)
+                    # pred_cc = batch_largest_connected_component(pred)
 
                     print('starting hausdorff')
-                    hausdorff = batch_hausdorff_distance(pred_cc, label, spacing=self.spacing)
+                    hausdorff = sitk_batch_hausdorff_distance(pred_cc, label, spacing=self.spacing)
                     self.running_scores['print']['hausdorff'] += hausdorff.item()
                     self.running_scores['record']['hausdorff'] += hausdorff.item()
                     print('finished hausdorff')
@@ -157,7 +162,7 @@ class ModelTrainer:
                 
                 # Print results.
                 if self.should_print(self.train_print_interval, iteration):
-                    self.print_training_results(epoch, iteration)
+                    self.print_training_results(epoch, batch, iteration)
                     self.reset_running_scores('print')
 
                 # Perform validation and checkpointing.
@@ -173,7 +178,63 @@ class ModelTrainer:
         self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
 
     def validate_model(self, model, epoch, iteration):
+        """
+        effect: evaluates the model on the validation and visual validation sets.
+        args:
+            model: the model to evaluate.
+            epoch: the current training epoch.
+            iteration: the current training iteration.
+        """
         model.eval()
+
+        # Calculate validation score.
+        for val_batch, (input, label) in enumerate(self.validation_loader):
+            # Convert input data.
+            input, label = input.float(), label.long()
+            input = input.unsqueeze(1)
+            input, label = input.to(self.device), label.to(self.device)
+
+            # Perform forward pass.
+            with autocast(enabled=self.mixed_precision):
+                pred = model(input)
+                loss = self.loss_fn(pred, label)
+            self.running_scores['validation-record']['loss'] += loss.item()
+            self.running_scores['validation-print']['loss'] += loss.item()
+
+            if 'dice' in self.metrics:
+                dice = batch_dice(pred, label)
+                self.running_scores['validation-record']['dice'] += dice.item()
+                self.running_scores['validation-print']['dice'] += dice.item()
+
+            if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
+                hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
+                self.running_scores['print']['hausdorff'] += hausdorff.item()
+                self.running_scores['record']['hausdorff'] += hausdorff.item()
+
+            # Print results.
+            if self.should_print(self.validation_print_interval, val_batch):
+                self.print_validation_results(epoch, val_batch, iteration)
+                self.reset_running_scores('validation-print')
+
+        # Check for validation loss improvement.
+        loss = self.running_scores['validation-record']['loss'] / self.validation_record_interval
+        if loss < self.min_validation_loss:
+            # Save model checkpoint.
+            info = {
+                'training-epoch': epoch,
+                'training-iteration': iteration,
+                'validation-loss': loss
+            }
+            checkpoint.save(model, self.run_name, self.optimiser, info=info)
+            self.min_validation_loss = loss
+            self.num_epochs_since_improvement = 0
+        else:
+            self.num_epochs_since_improvement += 1
+        
+        # Record validation results.
+        if self.record:
+            self.record_validation_results(iteration)
+        self.reset_running_scores('validation-record')
 
         # Plot validation images for visual indication of improvement.
         for batch, (input, label) in enumerate(self.visual_validation_loader):
@@ -202,76 +263,26 @@ class ModelTrainer:
                     tag = f"Validation - batch={batch}, view={view}"
                     self.recorder.add_figure(tag, figure, global_step=iteration)
 
-        # Calculate validation score.
-        for val_batch, (input, label) in enumerate(self.validation_loader):
-            # Convert input data.
-            input, label = input.float(), label.long()
-            input = input.unsqueeze(1)
-            input, label = input.to(self.device), label.to(self.device)
-
-            # Perform forward pass.
-            with autocast(enabled=self.mixed_precision):
-                pred = model(input)
-                loss = self.loss_fn(pred, label)
-            self.running_scores['validation-record']['loss'] += loss.item()
-            self.running_scores['validation-print']['loss'] += loss.item()
-
-            if 'dice' in self.metrics:
-                dice = batch_dice(pred, label)
-                self.running_scores['validation-record']['dice'] += dice.item()
-                self.running_scores['validation-print']['dice'] += dice.item()
-
-            if 'hausdorff' in self.metrics:
-                hausdorff = batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                self.running_scores['print']['hausdorff'] += hausdorff.item()
-                self.running_scores['record']['hausdorff'] += hausdorff.item()
-
-            # Print results.
-            if self.should_print(self.validation_print_interval, val_batch):
-                self.print_validation_results(epoch, val_batch)
-                self.reset_running_scores('validation-print')
-
-        # Check for validation loss improvement.
-        loss = self.running_scores['validation-record']['loss'] / self.validation_record_interval
-        if loss < self.min_validation_loss:
-            # Save model checkpoint.
-            info = {
-                'epoch': epoch,
-                'iteration': iteration,
-                'loss': loss
-            }
-            checkpoint.save(model, self.run_name, self.optimiser, info=info)
-            self.min_validation_loss = loss
-            self.num_epochs_since_improvement = 0
-        else:
-            self.num_epochs_since_improvement += 1
-        
-        # Record validation results.
-        if self.record:
-            self.record_validation_results(iteration)
-        self.reset_running_scores('validation-record')
-
         model.train()
-
-    def save_model(self, model, iteration, loss):
-        self.log_info(f"Saving model at iteration {iteration}, achieved best loss: {loss:{PRINT_DP}}")
-        filepath = os.path.join(config.directories.checkpoints, self.run_name, 'best.pt')
-        info = {
-            'iteration': iteration,
-            'loss': loss,
-            'model_state_dict': model.state_dict(),
-            'optimiser_state_dict': self.optimiser.state_dict(),
-        }
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        torch.save(info, filepath)
         
     def should_print(self, interval, iteration):
+        """
+        returns: whether the training or validation score should be printed.
+        args:
+            interval: the interval between printing.
+            iteration: the current training or validation iteration.
+        """
         if (iteration + 1) % interval == 0:
             return True
         else:
             return False
 
     def should_record(self, iteration):
+        """
+        returns: whether the training score should be recorded.
+        args:
+            iteration: the current training iteration.
+        """
         if not self.record:
             return False
         elif (iteration + 1) % self.train_record_interval == 0:
@@ -280,15 +291,24 @@ class ModelTrainer:
             return False
 
     def should_validate(self, iteration):
+        """
+        returns: whether the validation should be performed.
+        args:
+            iteration: the current training iteration.
+        """
         if ((self.validation_interval == 'epoch' and (iteration + 1) % len(self.train_loader) == 0) or
             (self.validation_interval != 'epoch' and (iteration + 1) % self.validation_interval == 0)):
             return True
         else:
             return False
 
-    def print_training_results(self, epoch, batch):
+    def print_training_results(self, epoch, batch, iteration):
         """
-        effect: logs an update to STDOUT.
+        effect: logs averaged training results over the last print interval.
+        args:
+            epoch: the current training epoch.
+            batch: the current training batch.
+            iteration: the current training iteration.
         """
         print_interval = len(self.train_loader) if self.print_interval == 'epoch' else self.print_interval
         loss = self.running_scores['print']['loss'] / print_interval
@@ -298,18 +318,19 @@ class ModelTrainer:
             dice = self.running_scores['print']['dice'] / print_interval
             message += f", Dice: {dice:{PRINT_DP}}"
 
-        if 'hausdorff' in self.metrics:
+        if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['print']['hausdorff'] / print_interval
             message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
         
-    def print_validation_results(self, epoch, batch):
+    def print_validation_results(self, epoch, batch, iteration):
         """
-        effect: logs an update to STDOUT.
+        effect: logs the averaged validation results.
         args:
-            epoch: the epoch we're up to.
-            batch: the batch we're up to.
+            epoch: the current training epoch.
+            batch: the current validation batch.
+            iteration: the current training iteration.
         """
         print_interval = len(self.validation_loader) if self.print_interval == 'epoch' else self.print_interval
         loss = self.running_scores['validation-print']['loss'] / print_interval
@@ -319,7 +340,7 @@ class ModelTrainer:
             dice = self.running_scores['validation-print']['dice'] / print_interval
             message += f", Dice: {dice:{PRINT_DP}}"
 
-        if 'hausdorff' in self.metrics:
+        if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['validation-print']['hausdorff'] / print_interval
             message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
 
@@ -327,10 +348,9 @@ class ModelTrainer:
 
     def record_training_results(self, iteration):
         """
-        effect: sends training results to Tensorboard.
+        effect: records averaged training results.
         args:
-            epoch: the epoch we're up to.
-            iteration: the iteration we're up to.
+            iteration: the current training iteration.
         """
         record_interval = len(self.train_loader) if self.record_interval == 'epoch' else self.record_interval
         loss = self.running_scores['record']['loss'] / record_interval
@@ -340,13 +360,15 @@ class ModelTrainer:
             dice = self.running_scores['record']['dice'] / record_interval
             self.recorder.add_scalar('Dice/train', dice, iteration)
 
-        if 'hausdorff' in self.metrics:
+        if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['record']['hausdorff'] / record_interval
             self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
     def record_validation_results(self, iteration):
         """
-        effect: sends validation results to Tensorboard.
+        effect: records averaged validation results.
+        args:
+            iteration: the current training iteration. 
         """
         record_interval = len(self.validation_loader)
         loss = self.running_scores['validation-record']['loss'] / record_interval
@@ -356,7 +378,7 @@ class ModelTrainer:
             dice = self.running_scores['validation-record']['dice'] / record_interval
             self.recorder.add_scalar('Dice/validation', dice, iteration)
 
-        if 'hausdorff' in self.metrics:
+        if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['record']['hausdorff'] / record_interval
             self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
