@@ -13,6 +13,7 @@ from mymi import config
 from mymi import loaders
 from mymi import plotter
 from mymi.postprocessing import batch_largest_connected_component
+from mymi.recording import Recorder
 from mymi import utils
 from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
 
@@ -53,7 +54,7 @@ class ModelTrainer:
         self.is_primary = is_primary
         if is_primary and record:
             # Create tensorboard writer.
-            self.recorder = SummaryWriter(os.path.join(config.directories.tensorboard, run_name))
+            self.recorder = Recorder(run_name)
 
             # Add hyperparameters.
             hparams = {
@@ -64,7 +65,7 @@ class ModelTrainer:
                 'optimiser': str(optimiser),
                 'transform': str(train_loader.dataset.transform),
             }
-            self.recorder.add_hparams(hparams, {}, run_name='hparams')
+            self.recorder.record_training_params(hparams)
         self.log_info = log_info
         self.loss_fn = loss_fn
         self.max_epochs = max_epochs
@@ -120,7 +121,7 @@ class ModelTrainer:
                 if self.is_primary and epoch == 0 and batch == 0:
                     # Error when adding graph with 'mixed-precision' training.
                     if not self.mixed_precision:
-                        self.recorder.add_graph(model, input)
+                        self.recorder.record_model_graph(model, input)
 
                 # Perform forward/backward pass.
                 with autocast(enabled=self.mixed_precision):
@@ -264,7 +265,7 @@ class ModelTrainer:
                 # Write figure to tensorboard.
                 if self.record:
                     tag = f"Validation - batch={batch}, view={view}"
-                    self.recorder.add_figure(tag, figure, global_step=iteration)
+                    self.recorder.record_figure(tag, figure, iteration)
 
         model.train()
         
@@ -358,15 +359,15 @@ class ModelTrainer:
             iteration: the current training iteration.
         """
         loss = self.running_scores['record']['loss'] / self.train_record_interval
-        self.recorder.add_scalar('Loss/train', loss, iteration)
+        self.recorder.record_metric('Loss/train', loss, iteration)
         
         if 'dice' in self.metrics:
             dice = self.running_scores['record']['dice'] / self.train_record_interval
-            self.recorder.add_scalar('Dice/train', dice, iteration)
+            self.recorder.record_metric('Dice/train', dice, iteration)
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['record']['hausdorff'] / self.train_record_interval
-            self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
+            self.recorder.record_metric('Hausdorff/train', hausdorff, iteration)
 
     def record_validation_results(self, iteration):
         """
@@ -375,15 +376,15 @@ class ModelTrainer:
             iteration: the current training iteration. 
         """
         loss = self.running_scores['validation-record']['loss'] / self.validation_record_interval
-        self.recorder.add_scalar('Loss/validation', loss, iteration)
+        self.recorder.record_metric('Loss/validation', loss, iteration)
 
         if 'dice' in self.metrics:
             dice = self.running_scores['validation-record']['dice'] / self.validation_record_interval
-            self.recorder.add_scalar('Dice/validation', dice, iteration)
+            self.recorder.record_metric('Dice/validation', dice, iteration)
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
             hausdorff = self.running_scores['record']['hausdorff'] / self.validation_record_interval
-            self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
+            self.recorder.record_metric('Hausdorff/train', hausdorff, iteration)
 
     def reset_running_scores(self, key):
         """
