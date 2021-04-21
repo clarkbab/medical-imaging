@@ -360,16 +360,15 @@ class ModelTrainer:
         args:
             iteration: the current training iteration.
         """
-        record_interval = len(self.train_loader) if self.record_interval == 'epoch' else self.record_interval
-        loss = self.running_scores['record']['loss'] / record_interval
+        loss = self.running_scores['record']['loss'] / self.train_record_interval
         self.recorder.add_scalar('Loss/train', loss, iteration)
         
         if 'dice' in self.metrics:
-            dice = self.running_scores['record']['dice'] / record_interval
+            dice = self.running_scores['record']['dice'] / self.train_record_interval
             self.recorder.add_scalar('Dice/train', dice, iteration)
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
-            hausdorff = self.running_scores['record']['hausdorff'] / record_interval
+            hausdorff = self.running_scores['record']['hausdorff'] / self.train_record_interval
             self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
     def record_validation_results(self, iteration):
@@ -378,16 +377,15 @@ class ModelTrainer:
         args:
             iteration: the current training iteration. 
         """
-        record_interval = len(self.validation_loader)
-        loss = self.running_scores['validation-record']['loss'] / record_interval
+        loss = self.running_scores['validation-record']['loss'] / self.validation_record_interval
         self.recorder.add_scalar('Loss/validation', loss, iteration)
 
         if 'dice' in self.metrics:
-            dice = self.running_scores['validation-record']['dice'] / record_interval
+            dice = self.running_scores['validation-record']['dice'] / self.validation_record_interval
             self.recorder.add_scalar('Dice/validation', dice, iteration)
 
         if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
-            hausdorff = self.running_scores['record']['hausdorff'] / record_interval
+            hausdorff = self.running_scores['record']['hausdorff'] / self.validation_record_interval
             self.recorder.add_scalar('Hausdorff/train', hausdorff, iteration)
 
     def reset_running_scores(self, key):
