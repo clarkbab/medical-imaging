@@ -147,13 +147,10 @@ class ModelTrainer:
 
                 if 'hausdorff' in self.metrics and iteration > self.hausdorff_delay:
                     # Get largest connected component in each prediction, this will speed up Hausdorff calculation.
-                    # pred_cc = batch_largest_connected_component(pred)
-
-                    print('starting hausdorff')
-                    hausdorff = sitk_batch_hausdorff_distance(pred_cc, label, spacing=self.spacing)
+                    # pred = batch_largest_connected_component(pred)
+                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
                     self.running_scores['print']['hausdorff'] += hausdorff.item()
                     self.running_scores['record']['hausdorff'] += hausdorff.item()
-                    print('finished hausdorff')
 
                 # Record training info to Tensorboard.
                 if self.is_primary and self.should_record(iteration):
@@ -318,7 +315,7 @@ class ModelTrainer:
         """
         # Get average training loss.
         loss = self.running_scores['print']['loss'] / self.train_print_interval
-        message = f"[{epoch}, {batch}] Loss: {loss:{PRINT_DP}}"
+        message = f"[{iteration} - ({epoch}, {batch})] Loss: {loss:{PRINT_DP}}"
 
         # Get additional metrics.
         if 'dice' in self.metrics:
