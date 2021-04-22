@@ -50,9 +50,9 @@ parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help=
 parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
 parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
 parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
-parser.add_argument('-nrc', '--no-record', action='store_true', default=False, help="don't send run records")
+parser.add_argument('-nrc', '--no-report', action='store_true', default=False, help="don't send run reports")
 parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='iterations between printing')
-parser.add_argument('-r', '--record-interval', action='store', type=interval_type, help='iterations between recording')
+parser.add_argument('-r', '--report-interval', action='store', type=interval_type, help='iterations between reporting')
 parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
 parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
 args = parser.parse_args()
@@ -168,15 +168,15 @@ def train(args: dict):
         log_info('Using full precision.')
     else:
         log_info('Using mixed precision.')
-    if args.no_record:
-        kwargs['record'] = False
-        log_info('Not recording training results.')
+    if args.no_report:
+        kwargs['report'] = False
+        log_info('Not reporting training results.')
     else:
-        log_info('Recording training results.')
+        log_info('Reporting training results.')
     if args.print_interval:
         kwargs['print_interval'] = args.print_interval
-    if args.record_interval:
-        kwargs['record_interval'] = args.record_interval
+    if args.report_interval:
+        kwargs['report_interval'] = args.report_interval
     kwargs['spacing'] = (1., 1., 3.)
     if args.use_early_stopping:
         kwargs['early_stopping'] = True
@@ -187,7 +187,8 @@ def train(args: dict):
         kwargs['validation_interval'] = args.validation_interval
 
     # Train the model.
-    trainer = ModelTrainer(loss_fn, optimiser, run_name, train_loader, validation_loader, visual_loader, **kwargs)
+    project_name = 'parotid-left-3d'
+    trainer = ModelTrainer(loss_fn, optimiser, project_name, run_name, train_loader, validation_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):

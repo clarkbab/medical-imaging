@@ -24,7 +24,11 @@ class Directories:
 
     @property
     def tensorboard(self):
-        return os.path.join(self.root, 'tensorboard')
+        return os.path.join(self.root, 'reporting', 'tensorboard')
+
+    @property
+    def wandb(self):
+        return os.path.join(self.root, 'reporting')
 
 class Formatting:
     @property
