@@ -25,9 +25,9 @@ def batch_dice(a, b):
     # For each prediction in batch, handle case where dice is 'nan'. This
     # occurs when no foreground label or predictions are made, e.g. for
     # unlabelled volumes.
-    for i, d in enumerate(dice):
-        if np.isnan(d):
-            dice[i] = 1
+    # for i, d in enumerate(dice):
+    #     if np.isnan(d):
+    #         dice[i] = 1
 
     # Average dice score across batch.
     mean_dice = dice.mean()
