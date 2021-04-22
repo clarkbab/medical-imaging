@@ -15,5 +15,4 @@ echo $version
 RUN_NAME="with_hausdorff"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --print-interval 10 --record-interval 50 \
-    --validation-interval epoch --num-nodes 1 --num-gpus 1
+python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --print-interval 50 --record-interval 50
