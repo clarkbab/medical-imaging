@@ -19,7 +19,7 @@ from mymi.reporting import WandbReporter
 from mymi import utils
 from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
 
-PRINT_DP = '.10f'
+PRINT_DP = '.6f'
 
 class ModelTrainer:
     def __init__(self,
