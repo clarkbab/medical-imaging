@@ -2,8 +2,13 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
 import torch
+from typing import *
 
-def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
+def hausdorff_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: str = 'euclidean',
+    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
     """
     returns: the Hausdorff distance between pred and label.
     args:
@@ -22,7 +27,11 @@ def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
 
     return hd_dist
 
-def sitk_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
+def sitk_hausdorff_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: str = 'euclidean',
+    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
     print(f"hd a: {a.sum()}, b: {b.sum()}")
     # Convert to SimpleITK images.
     img_a = sitk.GetImageFromArray(a)
@@ -37,15 +46,11 @@ def sitk_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
 
     return hd_dist
 
-def sitk_batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
-    hd_dists = []
-    for i in range(len(a)):
-        hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing=spacing)
-        hd_dists.append(hd_dist)
-    print(hd_dists)
-    return np.mean(hd_dists)
-
-def batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
+def batch_hausdorff_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: str = 'euclidean',
+    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
     """
     returns: the mean Hausdorff distance across the batch.
     args:
@@ -66,7 +71,11 @@ def batch_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)
 
     return np.mean(hd_dists)
 
-def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1.0)):
+def directed_hausdorff_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: str = 'euclidean',
+    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
     """
     returns: the directed Hausdorff distance from volumes a to b.
     args:
@@ -122,7 +131,21 @@ def directed_hausdorff_distance(a, b, distance='euclidean', spacing=(1.0, 1.0, 1
         
     return max_min_dist
 
-def euclidean_distance(a, b):
+def sitk_batch_hausdorff_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: str = 'euclidean',
+    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
+    hd_dists = []
+    for i in range(len(a)):
+        hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing=spacing)
+        hd_dists.append(hd_dist)
+    print(hd_dists)
+    return np.mean(hd_dists)
+
+def euclidean_distance(
+    a: torch.Tensor,
+    b: torch.Tensor):
     """
     returns: the Euclidean distance between 3-dimensional points a and b.
     args:

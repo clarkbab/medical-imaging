@@ -272,7 +272,6 @@ class ModelTrainer:
         # Plot validation images for visual indication of improvement.
         if self.report:
             for batch, (input, label) in enumerate(self.visual_validation_loader):
-                print(f"vis batch: {batch}")
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
                 input, label = input.to(self.device), label.to(self.device)
@@ -288,24 +287,40 @@ class ModelTrainer:
                 input, pred, label = input.squeeze(1).cpu(), pred.cpu(), label.cpu()
 
                 # Loop through batch.
-                for i in range(len(pred)):
-                    print(f"batch index: {i}")
+                for sample_idx in range(len(pred)):
                     # Load the label centroid.
-                    label_centroid = np.round(np.argwhere(label[i] == 1).sum(1) / label[i].sum()).long()
-                    print(f"centroid: {label_centroid}")
+                    label_centroid = np.round(np.argwhere(label[sample_idx] == 1).sum(1) / label[sample_idx].sum()).long()
 
                     # Report centroid slices for each view. 
                     for j, c in enumerate(label_centroid):
-                        print('reporting')
-                        print(j, c)
                         # Create index.
                         index = [slice(None), slice(None), slice(None)]
                         index[j] = c.item()
-                        print(index)
 
                         # Add figure.
                         class_labels = { 1: 'Parotid-Left' }
-                        self.reporter.add_figure(input[i][index], label[i][index], pred[i][index], step, i, class_labels)
+                        input_data = input[sample_idx][index]
+                        label_data = label[sample_idx][index]
+                        pred_data = pred[sample_idx][index]
+
+                        # Rotate data and get axis name.
+                        if j == 0:
+                            input_data = input_data.rot90()
+                            label_data = label_data.rot90()
+                            pred_data = pred_data.rot90()
+                            axis = 'sagittal'
+                        elif j == 1:
+                            input_data = input_data.rot90()
+                            label_data = label_data.rot90()
+                            pred_data = pred_data.rot90()
+                            axis = 'coronal'
+                        elif j == 2:
+                            input_data = input_data.rot90(-1)
+                            label_data = label_data.rot90(-1)
+                            pred_data = pred_data.rot90(-1)
+                            axis = 'axial'
+
+                        self.reporter.add_figure(input_data, label_data, pred_data, batch, sample_idx, axis, step, class_labels)
 
         model.train()
         

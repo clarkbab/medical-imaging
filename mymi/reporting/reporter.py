@@ -7,8 +7,10 @@ class Reporter:
         input_data: torch.Tensor,
         label_data: torch.Tensor,
         prediction_data: torch.Tensor,
-        iteration: int,
-        index: int,
+        batch: int,
+        sample_index: int,
+        axis: int,
+        step: int,
         class_labels: dict) -> None:
         """
         effect: adds a figure.
@@ -16,8 +18,10 @@ class Reporter:
             input_data: the 3D input data, e.g. CT volume.
             label_data: the 3D binary label.
             prediction_data: the 3D binary prediction.
-            iteration: the current training iteration.
-            index: the index of the sample within the batch.
+            batch: the current visual validation batch.
+            sample_index: the index of the sample within the batch.
+            axis: the axis of view.
+            step: the current training step.
             class_labels: the map of predictions to class labels.
         """
         raise NotImplementedError("Method 'add_figure' not implemented in subclass.")
@@ -25,13 +29,13 @@ class Reporter:
     def add_metric(self,
         tag: str,
         value: float,
-        iteration: int) -> None:
+        step: int) -> None:
         """
         effect: adds a metric.
         args:
             tag: the metric tag.
             value: the metric value.
-            iteration: the training iteration - to track changes to the metric over time.
+            step: the training step - to track changes to the metric over time.
         """
         raise NotImplementedError("Method 'add_metric' not implemented in subclass.")
 
