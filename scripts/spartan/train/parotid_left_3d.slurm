@@ -12,7 +12,7 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
-RUN_NAME="with_hausdorff"
+RUN_NAME="testing_wandb"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --print-interval 50 --report-interval 50

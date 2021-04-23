@@ -33,7 +33,7 @@ class ModelTrainer:
         visual_validation_loader: torch.utils.data.DataLoader,
         device: torch.device = torch.device('cpu'),
         early_stopping: bool = False,
-        hausdorff_delay: int = 200,
+        hausdorff_delay: int = 500,
         is_primary: bool = False,
         log_info: Callable[[str], None] = logging.info,
         max_epochs: int = 500,
@@ -362,8 +362,7 @@ class ModelTrainer:
         args:
             step: the current training step.
         """
-        if ((self.validation_interval == 'epoch' and (step + 1) % len(self.train_loader) == 0) or
-            (self.validation_interval != 'epoch' and (step + 1) % self.validation_interval == 0)):
+        if (step + 1) % self.validation_interval == 0:
             return True
         else:
             return False
