@@ -23,6 +23,7 @@ def hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
     return hd_dist
 
 def sitk_hausdorff_distance(a, b, distance='euclidean', spacing=(1., 1., 1.)):
+    print(f"hd a: {a.sum()}, b: {b.sum()}")
     # Convert to SimpleITK images.
     img_a = sitk.GetImageFromArray(a)
     img_a.SetSpacing(spacing)

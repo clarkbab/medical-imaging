@@ -1,8 +1,11 @@
 import numpy as np
 import SimpleITK as sitk
 import torch
+from typing import *
 
-def batch_dice(a, b):
+def batch_dice(
+        a: torch.Tensor,
+        b: torch.Tensor) -> torch.Tensor:
     """
     returns: the mean dice similarity coefficient (DSC) for the batch.
     args:
@@ -19,7 +22,7 @@ def batch_dice(a, b):
     int_card = (a * b).sum((1, 2, 3)) 
 
     # Calculate dice score.
-    dice = 2. * int_card / (a_card + b_card)
+    dice_scores = 2. * int_card / (a_card + b_card)
 
     # Handle nan cases.
     # For each prediction in batch, handle case where dice is 'nan'. This
@@ -27,20 +30,19 @@ def batch_dice(a, b):
     # unlabelled volumes.
     # for i, d in enumerate(dice):
     #     if np.isnan(d):
-    #         dice[i] = 1
+    #         dice_scores[i] = 1
 
-    # Average dice score across batch.
-    mean_dice = dice.mean()
+    return dice_scores.mean()
 
-    return mean_dice
-
-def sitk_batch_dice(a, b):
-    dices = []
+def sitk_batch_dice(
+        a: torch.Tensor,
+        b: torch.Tensor) -> torch.Tensor:
+    dice_scores = []
     for i in range(len(a)):
         img_a_i = sitk.GetImageFromArray(a[i])
         img_b_i = sitk.GetImageFromArray(b[i])
         ol_filter = sitk.LabelOverlapMeasuresImageFilter()
         ol_filter.Execute(img_a_i, img_b_i)
         dice = ol_filter.GetDiceCoefficient()
-        dices.append(dice)
-    return np.mean(dices)
+        dice_scores.append(dice)
+    return torch.Tensor(np.mean(dice_scores))

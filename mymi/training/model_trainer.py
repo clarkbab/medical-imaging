@@ -19,10 +19,11 @@ from mymi.reporting import WandbReporter
 from mymi import utils
 from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
 
-PRINT_DP = '.6f'
+PRINT_DP = '.10f'
 
 class ModelTrainer:
-    def __init__(self,
+    def __init__(
+        self,
         loss_fn: torch.nn.Module,
         optimiser: torch.optim.Optimizer,
         project_name: str,
@@ -106,7 +107,6 @@ class ModelTrainer:
         self.validation_interval = len(train_loader) if validation_interval == 'epoch' else validation_interval
         self.validation_loader = validation_loader
         self.validation_print_interval = len(validation_loader) if print_interval == 'epoch' else print_interval
-        self.validation_report_interval = len(validation_loader)
         self.visual_validation_loader = visual_validation_loader
 
         # Initialise running scores.
@@ -116,7 +116,8 @@ class ModelTrainer:
             self.running_scores[key] = {}
             self.reset_running_scores(key)
 
-    def __call__(self,
+    def __call__(
+        self,
         model: torch.nn.Module) -> None:
         """
         effect: performs training to update model parameters whilst validating model performance.
@@ -150,8 +151,8 @@ class ModelTrainer:
                 self.scaler.step(self.optimiser)
                 self.scaler.update()
                 self.optimiser.zero_grad()
-                self.running_scores['print']['loss'] += loss.item()
-                self.running_scores['report']['loss'] += loss.item()
+                self.running_scores['print']['loss'] += [loss.item()]
+                self.running_scores['report']['loss'] += [loss.item()]
 
                 # Convert to binary prediction.
                 pred = pred.argmax(axis=1)
@@ -162,15 +163,15 @@ class ModelTrainer:
                 # Calculate other metrics.
                 if 'dice' in self.metrics:
                     dice = batch_dice(pred, label)
-                    self.running_scores['print']['dice'] += dice.item()
-                    self.running_scores['report']['dice'] += dice.item()
+                    self.running_scores['print']['dice'] += [dice.item()]
+                    self.running_scores['report']['dice'] += [dice.item()]
 
                 if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-                    # Get largest connected component in each prediction, this will speed up Hausdorff calculation.
-                    # pred = batch_largest_connected_component(pred)
-                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                    self.running_scores['print']['hausdorff'] += hausdorff.item()
-                    self.running_scores['report']['hausdorff'] += hausdorff.item()
+                    # Can't calculate HD if prediction is empty.
+                    if pred.sum() > 0:
+                        hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
+                        self.running_scores['print']['hausdorff'] += [hausdorff.item()]
+                        self.running_scores['report']['hausdorff'] += [hausdorff.item()]
                 
                 # Print results.
                 if self.should_print(self.train_print_interval, step):
@@ -194,7 +195,8 @@ class ModelTrainer:
 
         self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
 
-    def validate_model(self,
+    def validate_model(
+        self,
         model: torch.nn.Module,
         epoch: int,
         batch: int,
@@ -220,8 +222,8 @@ class ModelTrainer:
             with autocast(enabled=self.mixed_precision):
                 pred = model(input)
                 loss = self.loss_fn(pred, label)
-            self.running_scores['validation-report']['loss'] += loss.item()
-            self.running_scores['validation-print']['loss'] += loss.item()
+            self.running_scores['validation-report']['loss'] += [loss.item()]
+            self.running_scores['validation-print']['loss'] += [loss.item()]
 
             # Convert to binary prediction.
             pred = pred.argmax(axis=1)
@@ -231,13 +233,15 @@ class ModelTrainer:
 
             if 'dice' in self.metrics:
                 dice = batch_dice(pred, label)
-                self.running_scores['validation-report']['dice'] += dice.item()
-                self.running_scores['validation-print']['dice'] += dice.item()
+                self.running_scores['validation-report']['dice'] += [dice.item()]
+                self.running_scores['validation-print']['dice'] += [dice.item()]
 
             if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-                hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                self.running_scores['print']['hausdorff'] += hausdorff.item()
-                self.running_scores['report']['hausdorff'] += hausdorff.item()
+                # Can't calculate HD if prediction is empty.
+                if pred.sum() > 0:
+                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
+                    self.running_scores['print']['hausdorff'] += [hausdorff.item()]
+                    self.running_scores['report']['hausdorff'] += [hausdorff.item()]
 
             # Print results.
             if self.should_print(self.validation_print_interval, val_batch):
@@ -245,7 +249,7 @@ class ModelTrainer:
                 self.reset_running_scores('validation-print')
 
         # Check for validation loss improvement.
-        loss = self.running_scores['validation-report']['loss'] / self.validation_report_interval
+        loss = np.mean(self.running_scores['validation-report']['loss'])
         if loss < self.min_validation_loss:
             # Save model checkpoint.
             info = {
@@ -263,11 +267,12 @@ class ModelTrainer:
         # Report validation results.
         if self.report:
             self.report_validation_results(step)
-        self.reset_running_scores('validation-report')
+            self.reset_running_scores('validation-report')
 
         # Plot validation images for visual indication of improvement.
         if self.report:
             for batch, (input, label) in enumerate(self.visual_validation_loader):
+                print(f"vis batch: {batch}")
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
                 input, label = input.to(self.device), label.to(self.device)
@@ -284,14 +289,19 @@ class ModelTrainer:
 
                 # Loop through batch.
                 for i in range(len(pred)):
+                    print(f"batch index: {i}")
                     # Load the label centroid.
                     label_centroid = np.round(np.argwhere(label[i] == 1).sum(1) / label[i].sum()).long()
+                    print(f"centroid: {label_centroid}")
 
                     # Report centroid slices for each view. 
                     for j, c in enumerate(label_centroid):
+                        print('reporting')
+                        print(j, c)
                         # Create index.
                         index = [slice(None), slice(None), slice(None)]
                         index[j] = c.item()
+                        print(index)
 
                         # Add figure.
                         class_labels = { 1: 'Parotid-Left' }
@@ -299,7 +309,8 @@ class ModelTrainer:
 
         model.train()
         
-    def should_print(self,
+    def should_print(
+        self,
         interval: int,
         step: int) -> bool:
         """
@@ -313,7 +324,8 @@ class ModelTrainer:
         else:
             return False
 
-    def should_report(self,
+    def should_report(
+        self,
         step: int) -> bool:
         """
         returns: whether the training score should be reported.
@@ -327,7 +339,8 @@ class ModelTrainer:
         else:
             return False
 
-    def should_validate(self,
+    def should_validate(
+        self,
         step: int) -> bool:
         """
         returns: whether the validation should be performed.
@@ -340,7 +353,8 @@ class ModelTrainer:
         else:
             return False
 
-    def print_training_results(self,
+    def print_training_results(
+        self,
         epoch: int,
         batch: int,
         step: int) -> None:
@@ -352,21 +366,22 @@ class ModelTrainer:
             step: the current training step.
         """
         # Get average training loss.
-        loss = self.running_scores['print']['loss'] / self.train_print_interval
-        message = f"[E:{epoch}, B:{batch}, I:{step}] Loss: {loss:{PRINT_DP}}"
+        mean_loss = np.mean(self.running_scores['print']['loss'])
+        message = f"[E:{epoch}, B:{batch}, I:{step}] Loss: {mean_loss:{PRINT_DP}}"
 
         # Get additional metrics.
         if 'dice' in self.metrics:
-            dice = self.running_scores['print']['dice'] / self.train_print_interval
-            message += f", Dice: {dice:{PRINT_DP}}"
+            mean_dice = np.mean(self.running_scores['print']['dice'])
+            message += f", Dice: {mean_dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            hausdorff = self.running_scores['print']['hausdorff'] / self.train_print_interval
-            message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
+            mean_hausdorff = np.mean(self.running_scores['print']['hausdorff'])
+            message += f", Hausdorff: {mean_hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
         
-    def print_validation_results(self,
+    def print_validation_results(
+        self,
         epoch: int,
         batch: int,
         step: int,
@@ -380,70 +395,74 @@ class ModelTrainer:
             validation_batch: the current validation batch.
         """
         # Get average validation loss.
-        loss = self.running_scores['validation-print']['loss'] / self.validation_print_interval
-        message = f"Validation - [E:{epoch}, B:{batch}, I:{step}, VB:{validation_batch}] Loss: {loss:{PRINT_DP}}"
+        mean_loss = np.mean(self.running_scores['validation-print']['loss'])
+        message = f"Validation - [E:{epoch}, B:{batch}, I:{step}, VB:{validation_batch}] Loss: {mean_loss:{PRINT_DP}}"
 
         # Get additional metrics.
         if 'dice' in self.metrics:
-            dice = self.running_scores['validation-print']['dice'] / self.validation_print_interval
-            message += f", Dice: {dice:{PRINT_DP}}"
+            mean_dice = np.mean(self.running_scores['validation-print']['dice'])
+            message += f", Dice: {mean_dice:{PRINT_DP}}"
 
         if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            hausdorff = self.running_scores['validation-print']['hausdorff'] / self.validation_print_interval
-            message += f", Hausdorff: {hausdorff:{PRINT_DP}}"
+            mean_hausdorff = np.mean(self.running_scores['validation-print']['hausdorff'])
+            message += f", Hausdorff: {mean_hausdorff:{PRINT_DP}}"
 
         self.log_info(message)
 
-    def report_training_results(self,
+    def report_training_results(
+        self,
         step: int) -> None:
         """
         effect: reports averaged training results.
         args:
             step: the current training step.
         """
-        loss = self.running_scores['report']['loss'] / self.train_report_interval
-        self.reporter.add_metric('Loss/train', loss, step)
+        mean_loss = np.mean(self.running_scores['report']['loss'])
+        self.reporter.add_metric('Loss/train', mean_loss, step)
         
         if 'dice' in self.metrics:
-            dice = self.running_scores['report']['dice'] / self.train_report_interval
-            self.reporter.add_metric('Dice/train', dice, step)
+            mean_dice = np.mean(self.running_scores['report']['dice'])
+            self.reporter.add_metric('Dice/train', mean_dice, step)
 
         if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            hausdorff = self.running_scores['report']['hausdorff'] / self.train_report_interval
-            self.reporter.add_metric('Hausdorff/train', hausdorff, step)
+            mean_hausdorff = np.mean(self.running_scores['report']['hausdorff'])
+            self.reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
 
-    def report_validation_results(self,
+    def report_validation_results(
+        self,
         step: int) -> None:
         """
         effect: reports averaged validation results.
         args:
             step: the current training step. 
         """
-        loss = self.running_scores['validation-report']['loss'] / self.validation_report_interval
-        self.reporter.add_metric('Loss/validation', loss, step)
+        mean_loss = np.mean(self.running_scores['validation-report']['loss'])
+        self.reporter.add_metric('Loss/validation', mean_loss, step)
 
         if 'dice' in self.metrics:
-            dice = self.running_scores['validation-report']['dice'] / self.validation_report_interval
-            self.reporter.add_metric('Dice/validation', dice, step)
+            mean_dice = np.mean(self.running_scores['validation-report']['dice'])
+            self.reporter.add_metric('Dice/validation', mean_dice, step)
 
         if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            hausdorff = self.running_scores['report']['hausdorff'] / self.validation_report_interval
-            self.reporter.add_metric('Hausdorff/train', hausdorff, step)
+            mean_hausdorff = np.mean(self.running_scores['report']['hausdorff'])
+            self.reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
 
-    def reset_running_scores(self,
+    def reset_running_scores(
+        self,
         key: str) -> None:
         """
         effect: initialises the metrics under the key namespace.
         args:
             key: the metric namespace, e.g. print, report, etc.
         """
-        self.running_scores[key]['loss'] = 0
+        self.running_scores[key]['loss'] = []
         if 'dice' in self.metrics:
-            self.running_scores[key]['dice'] = 0
+            self.running_scores[key]['dice'] = []
         if 'hausdorff' in self.metrics:
-            self.running_scores[key]['hausdorff'] = 0
+            self.running_scores[key]['hausdorff'] = []
 
-    def get_batch_centroids(self,
+    def get_batch_centroids(
+        self,
         label_b: torch.Tensor,
         plane: str) -> Iterable[int]:
         """
