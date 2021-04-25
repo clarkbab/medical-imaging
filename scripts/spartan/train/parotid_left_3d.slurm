@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --gres=gpu:p100:4
-#SBATCH --time 2-0:00:00
+#SBATCH --time 7-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 

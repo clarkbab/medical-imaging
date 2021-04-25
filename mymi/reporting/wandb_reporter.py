@@ -19,7 +19,7 @@ class WandbReporter(Reporter):
         """
         # Configure wandb.
         os.environ['WANDB_MODE'] = 'dryrun'
-        wandb.init(dir=config.directories.wandb, project=project_name, )
+        wandb.init(dir=config.directories.wandb, project=project_name, run_name=run_name)
 
     """
     For method doc strings, see parent class.
