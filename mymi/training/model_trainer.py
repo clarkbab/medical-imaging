@@ -459,7 +459,7 @@ class ModelTrainer:
 
         if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
             mean_hausdorff = np.mean(self.running_scores['report']['hausdorff'])
-            self.reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
+            self.reporter.add_metric('Hausdorff/validation', mean_hausdorff, step)
 
     def reset_running_scores(
         self,
