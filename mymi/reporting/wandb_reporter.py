@@ -49,7 +49,7 @@ class WandbReporter(Reporter):
         image = wandb.Image(input_data.numpy(), masks=mask_data)
 
         # Log the image.
-        tag = f"batch_{batch}_sample_{sample_index}_axis_{axis}"
+        tag = f"batch_{step}_sample_{sample_index}_axis_{axis}"
         data = { tag: image }
         wandb.log(data, step=step) 
 

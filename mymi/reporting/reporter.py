@@ -19,7 +19,7 @@ class Reporter:
             label_data: the 3D binary label.
             prediction_data: the 3D binary prediction.
             train_step: the current training step.
-            step: the current visual validation step.
+            step: the current visual validation batch/step.
             sample_index: the index of the sample within the batch.
             axis: the axis of view.
             class_labels: the map of predictions to class labels.
