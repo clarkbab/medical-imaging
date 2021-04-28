@@ -7,10 +7,10 @@ class Reporter:
         input_data: torch.Tensor,
         label_data: torch.Tensor,
         prediction_data: torch.Tensor,
-        batch: int,
-        sample_index: int,
-        axis: int,
+        train_step: int,
         step: int,
+        sample_index: int,
+        axis: str,
         class_labels: dict) -> None:
         """
         effect: adds a figure.
@@ -18,10 +18,10 @@ class Reporter:
             input_data: the 3D input data, e.g. CT volume.
             label_data: the 3D binary label.
             prediction_data: the 3D binary prediction.
-            batch: the current visual validation batch.
+            train_step: the current training step.
+            step: the current visual validation step.
             sample_index: the index of the sample within the batch.
             axis: the axis of view.
-            step: the current training step.
             class_labels: the map of predictions to class labels.
         """
         raise NotImplementedError("Method 'add_figure' not implemented in subclass.")

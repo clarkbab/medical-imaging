@@ -19,7 +19,7 @@ class WandbReporter(Reporter):
         """
         # Configure wandb.
         os.environ['WANDB_MODE'] = 'dryrun'
-        wandb.init(dir=config.directories.wandb, project=project_name, run_name=run_name)
+        wandb.init(dir=config.directories.wandb, project=project_name, name=run_name)
 
     """
     For method doc strings, see parent class.
@@ -27,16 +27,16 @@ class WandbReporter(Reporter):
     def add_figure(self,
         input_data: torch.Tensor,
         label_data: torch.Tensor,
-        prediction_data: torch.Tensor,
-        batch: int,
-        sample_index: int,
-        axis: int,
+        pred_data: torch.Tensor,
+        train_step: int,
         step: int,
+        sample_index: int,
+        axis: str,
         class_labels: dict) -> None:
         # Create mask data.
         mask_data = {
             'prediction': {
-                'mask_data': prediction_data.numpy(),
+                'mask_data': pred_data.numpy(),
                 'class_labels': class_labels
             },
             'label': {
