@@ -83,7 +83,7 @@ class Cache:
         key: cache key to look for.
         """
         # Search for file by key.
-        key_path = os.path.join(config.cache_dir, key)
+        key_path = os.path.join(config.directories.cache, key)
         if os.path.exists(key_path):
             return True
         else:
@@ -173,21 +173,21 @@ class Cache:
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
     def read_array(self, key):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
     def read_dataframe(self, key):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         return pd.read_parquet(filepath)
 
     def read_dict(self, key):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return pickle.load(f)
 
     def read_name_array_pairs(self, key):
-        folder_path = os.path.join(config.cache_dir, key)
+        folder_path = os.path.join(config.directories.cache, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
             filepath = os.path.join(folder_path, name)
@@ -198,24 +198,24 @@ class Cache:
         return name_array_pairs
 
     def write_array(self, key, array):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
     def write_dataframe(self, key, df):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
     def write_dict(self, key, dictionary):
-        filepath = os.path.join(config.cache_dir, key)
+        filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
 
     def write_name_array_pairs(self, key, pairs):
-        folder_path = os.path.join(config.cache_dir, key)
+        folder_path = os.path.join(config.directories.cache, key)
         os.makedirs(folder_path, exist_ok=True)
 
         size = 0
