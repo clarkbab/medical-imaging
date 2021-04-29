@@ -114,7 +114,7 @@ class Plotter:
             window: the HU window to apply.
         """
         # Load patient summary.
-        summary = dataset.patient_summary(pat_id)
+        summary = dataset.patient_ct_summary(pat_id)
 
         # Load CT data.
         ct_data = dataset.patient_ct_data(pat_id)

@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from mymi import dataset
+
 def pretty_size(size):
     assert isinstance(size, torch.Size)
     return ' x '.join(map(str, size))
@@ -69,6 +71,24 @@ def binary_perimeter(mask):
                     mask_perimeter[b, i, j] = 1
     return mask_perimeter
 
+def filterOnNumPats(num_pats):
+    """
+    returns: a function to filter patients by number of patients allowed.
+    args:
+        num_pats: the number of patients to keep.
+    """
+    def fn(id):
+        if num_pats == 'all' or fn.num_included < num_pats:
+            fn.num_included += 1
+            return True
+        else:
+            return False
+
+    # Assign state to the function.
+    fn.num_included = 0
+
+    return fn
+
 def filterOnPatID(pat_id):
     """
     returns: a function to filter patients based on a 'pat_id' string or list/tuple.
@@ -85,16 +105,15 @@ def filterOnPatID(pat_id):
 
     return fn
 
-def filterOnLabel(label, dataset):
+def filterOnLabel(label):
     """
     returns: a function to filter patients on whether they have that label.
     args:
         label: the passed 'label' kwarg.
-        dataset: the dataset to query.
     """
     def fn(id):
         # Load patient labels.
-        pat_labels = dataset.patient_label_summary(id).label.to_numpy()
+        pat_labels = dataset.patient_labels(id).label.to_numpy()
 
         if (label == 'all' or
             (isinstance(label, str) and label in pat_labels) or

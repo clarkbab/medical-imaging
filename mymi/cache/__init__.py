@@ -22,11 +22,14 @@ def config(**kwargs):
     cache.read_enabled = kwargs.pop('read_enabled', True)
     cache.write_enabled = kwargs.pop('write_enabled', True)
 
-def exists(key):
-    return cache.exists(key)
+def delete(*args):
+    return cache.delete(*args)
 
-def read(key, type):
-    return cache.read(key, type)
+def exists(*args):
+    return cache.exists(*args)
 
-def write(key, obj, type):
-    return cache.write(key, obj, type)
+def read(*args):
+    return cache.read(*args)
+
+def write(*args):
+    return cache.write(*args)

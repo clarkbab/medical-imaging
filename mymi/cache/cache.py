@@ -8,6 +8,7 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
+import shutil
 import time
 
 from mymi import config
@@ -78,7 +79,41 @@ class Cache:
 
         return obj
 
-    def exists(self, key):
+    def delete(self, params):
+        """
+        effect: deletes the cached object.
+        args:
+            params: the params of the cached object.
+        """
+        # Get cache key string.
+        try:
+            key = self.cache_key(params)
+        except ValueError as e:
+            # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
+            logging.info(e)
+            return
+
+        # Check if cache key exists.
+        if not self.key_exists(key):
+            return
+
+        # Delete the key.
+        self.delete_key(key)
+
+    def delete_key(self, key):
+        """
+        effect: deletes the file/folder with the key name.
+        args:
+            key: the name of the folder to delete.
+        """
+        # Delete the file/folder.
+        key_path = os.path.join(config.directories.cache, key)
+        if os.path.isdir(key_path):
+            shutil.rmtree(key_path)
+        else:
+            os.remove(key_path)
+
+    def key_exists(self, key):
         """
         key: cache key to look for.
         """
@@ -96,7 +131,7 @@ class Cache:
         """
         # Check if cache read is enabled.
         if not self.read_enabled:
-            return None
+            return
         
         # Get cache key string.
         try:
@@ -104,11 +139,11 @@ class Cache:
         except ValueError as e:
             # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
             logging.info(e)
-            return None
+            return
 
         # Check if cache key exists.
-        if not self.exists(key):
-            return None
+        if not self.key_exists(key):
+            return
 
         # Log cache read start.
         start = time.time()
@@ -141,7 +176,7 @@ class Cache:
         """
         # Check if cache read is enabled.
         if not self.write_enabled:
-            return None
+            return
         
         # Get cache key string.
         try:
@@ -149,7 +184,7 @@ class Cache:
         except ValueError as e:
             # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
             logging.info(e)
-            return None
+            return
 
         # Log cache write start.
         start = time.time()

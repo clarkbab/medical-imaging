@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from mymi import cache
 from mymi import dataset
-from mymi.utils import filterOnPatID, filterOnLabel, stringOrSorted
+from mymi.utils import filterOnNumPats, filterOnPatID, filterOnLabel, stringOrSorted
 
 Z_SPACING_ROUND_DP = 2
 
@@ -241,7 +241,7 @@ class DicomDataset:
     ###
 
     @classmethod
-    def patient_ct_summaries(cls, num_pats='all', pat_id='all', label='all'):
+    def ct_summaries(cls, num_pats='all', pat_id='all', label='all'):
         """
         returns: a dataframe containing rows of patient summaries.
         kwargs:
@@ -291,12 +291,8 @@ class DicomDataset:
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnLabel(label, dataset), pat_ids))
-
-        # Run on subset of patients.
-        if num_pats != 'all':
-            assert isinstance(num_pats, int)
-            pat_ids = pat_ids[:num_pats]
+        pat_ids = list(filter(filterOnLabel(label), pat_ids))
+        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
 
         # Add patient info.
         for pat_id in tqdm(pat_ids):
@@ -380,9 +376,6 @@ class DicomDataset:
         # Calculate number of empty slices.
         num_slices = len(ct_df)
         num_missing = size_z - num_slices
-
-        # Load clinical data.
-        clinical_df = cls.clinical_data()
 
         # Add table row.
         data = {
@@ -484,7 +477,7 @@ class DicomDataset:
         return df
 
     @classmethod
-    def labels(cls, num_pats='all', pat_id=None):
+    def labels(cls, num_pats='all', pat_id='all'):
         """
         returns: a dataframe linking patients to contoured labels.
         kwargs:
@@ -497,7 +490,7 @@ class DicomDataset:
             'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
                 'num_pats': num_pats,
-                'pat_id': pat_id
+                'pat_id': stringOrSorted(pat_id)
             }
         }
         result = cache.read(params, 'dataframe')
@@ -514,24 +507,13 @@ class DicomDataset:
         # Load each patient.
         pat_ids = dataset.list_patients()
 
-        # Retain only patients specified.
-        if pat_id is not None:
-            if isinstance(pat_id, str):
-                assert pat_id in pat_ids
-                pat_ids = [pat_id]
-            else:
-                for id in pat_id:
-                    assert id in pat_ids
-                pat_ids = pat_id
-
-        # Run on subset of patients.
-        if num_pats != 'all':
-            assert isinstance(num_pats, int)
-            pat_ids = pat_ids[:num_pats]
+        # Filter patients.
+        pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
+        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
 
         for pat_id in tqdm(pat_ids):
             # Get rtstruct info.
-            label_df = cls.patient_label_summary(pat_id)
+            label_df = cls.patient_labels(pat_id)
 
             # Add rows.
             for _, row in label_df.iterrows():
@@ -547,13 +529,15 @@ class DicomDataset:
         return df
 
     @classmethod
-    def patient_label_summary(cls, pat_id):
+    def patient_labels(cls, pat_id, clear_cache=False):
         """
-        returns: dataframe with row for each label.
+        returns: dataframe with row for each label present for the patient.
         args:
             pat_id: the patient ID.
+        kwargs:
+            clear_cache: whether to clear the cache or not.
         """
-        # Load from cache if present.
+        # Create cache params.
         params = {
             'class': cls.__name__,
             'method': inspect.currentframe().f_code.co_name,
@@ -561,6 +545,12 @@ class DicomDataset:
                 'pat_id': pat_id
             }
         }
+
+        # Clear cache.
+        if clear_cache:
+            cache.delete(params)
+        
+        # Read from cache.
         result = cache.read(params, 'dataframe')
         if result is not None:
             return result
@@ -570,7 +560,10 @@ class DicomDataset:
             'label': 'object',
             'com-x': np.uint16,
             'com-y': np.uint16,
-            'com-z': np.uint16
+            'com-z': np.uint16,
+            'width-x': np.uint16,
+            'width-y': np.uint16,
+            'width-z': np.uint16
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -582,11 +575,20 @@ class DicomDataset:
             # Find centre-of-mass.
             coms = np.round(center_of_mass(ldata)).astype(np.uint16)
 
+            # Find bounding box co-ordinates.
+            non_zero = np.argwhere(ldata != 0)
+            mins = non_zero.min(axis=0)
+            maxs = non_zero.max(axis=0)
+            widths = maxs - mins
+
             data = {
                 'label': name,
                 'com-x': coms[0],
                 'com-y': coms[1],
-                'com-z': coms[2]
+                'com-z': coms[2],
+                'width-x': widths[0],
+                'width-y': widths[1],
+                'width-z': widths[2]
             }
             df = df.append(data, ignore_index=True)
 
@@ -613,7 +615,7 @@ class DicomDataset:
             'class': cls.__name__,
             'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
-                'num_pats': num_pat
+                'num_pats': num_pats
             }
         }
         result = cache.read(params, 'dataframe')
@@ -630,14 +632,12 @@ class DicomDataset:
         # List patients.
         pat_ids = dataset.list_patients()
 
-        # Run on subset of patients.
-        if num_pats != 'all':
-            assert isinstance(num_pats, int)
-            pat_ids = pat_ids[:num_pats]
+        # Filter patients.
+        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
 
         for pat_id in tqdm(pat_ids):
             # Get RTSTRUCT info.
-            label_df = cls.patient_labels(pat_id)
+            label_df = cls.patient_labels(pat_id=pat_id)
 
             # Add label counts.
             label_df['num-patients'] = 1
@@ -654,92 +654,9 @@ class DicomDataset:
         return df
 
     @classmethod
-    def ct(cls, num_pats='all', pat_id=None):
+    def ct_statistics(cls, label='all'):
         """
-        returns: a dataframe linking patients to contoured labels.
-        kwargs:
-            num_pats: number of patients to summarise.
-            pat_id: a string or list of patient IDs.
-        """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'kwargs': {
-                'num_pats': num_pats,
-                'pat_id': pat_id
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-                
-        # Define dataframe structure.
-        cols = {
-            'patient-id': 'object',
-            'hu-min': 'float64',
-            'hu-max': 'float64',
-            'offset-x': 'float64',
-            'offset-y': 'float64',
-            'offset-z': 'float64',
-            'size-x': np.uint16,
-            'size-y': np.uint16,
-            'scale-int': 'float64',
-            'scale-slope': 'float64',
-            'spacing-x': 'float64',
-            'spacing-y': 'float64',
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Load each patient.
-        pat_ids = dataset.list_patients()
-
-        # Retain only patients specified.
-        if pat_id is not None:
-            if isinstance(pat_id, str):
-                assert pat_id in pat_ids
-                pat_ids = [pat_id]
-            else:
-                for id in pat_id:
-                    assert id in pat_ids
-                pat_ids = pat_id
-
-        # Run on subset of patients.
-        if num_pats != 'all':
-            assert isinstance(num_pats, int)
-            pat_ids = pat_ids[:num_pats]
-
-        for pat_id in tqdm(pat_ids):
-            # Get rtstruct info.
-            ct_df = cls.patient_ct(pat_id)
-
-            # Add rows.
-            for _, row in ct_df.iterrows():
-                data = {
-                    'patient-id': pat_id,
-                    'hu-min': row['hu-min'],
-                    'hu-max': row['hu-max'],
-                    'offset-x': row['offset-x'],
-                    'offset-y': row['offset-y'],
-                    'offset-z': row['offset-z'],
-                    'size-x': row['size-x'],
-                    'size-y': row['size-y'],
-                    'scale-int': row['scale-int'],
-                    'scale-slope': row['scale-slope'],
-                    'spacing-x': row['spacing-x'],
-                    'spacing-y': row['spacing-y']
-                }
-                df = df.append(data, ignore_index=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
-    def data_statistics(cls, label='all'):
-        """
-        returns: a dataframe of statistics for the data.
+        returns: a dataframe of CT statistics for the entire dataset.
         kwargs:
             label: only include data for patients with the label.
         """

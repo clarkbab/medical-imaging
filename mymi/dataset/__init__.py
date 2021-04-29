@@ -20,17 +20,20 @@ def config(dataset=None):
 # Dicom dataset API.
 ##
 
-def ct(*args, **kwargs):
-    return active.ct(*args, **kwargs)
+def ct_summaries(*args, **kwargs):
+    return active.ct_summaries(*args, **kwargs)
 
-def data_statistics(*args, **kwargs):
-    return active.data_statistics(*args, **kwargs)
+def ct_statistics(*args, **kwargs):
+    return active.ct_statistics(*args, **kwargs)
 
 def get_rtstruct(*args, **kwargs):
     return active.get_rtstruct(*args, **kwargs)
 
 def has_id(*args, **kwargs):
     return active.has_id(*args, **kwargs)
+
+def labels(*args, **kwargs):
+    return active.labels(*args, **kwargs)
 
 def list_ct(*args, **kwargs):
     return active.list_ct(*args, **kwargs)
@@ -47,17 +50,11 @@ def patient_ct_slice_summary(*args, **kwargs):
 def patient_ct_summary(*args, **kwargs):
     return active.patient_ct_summary(*args, **kwargs)
 
-def patient_ct_summaries(*args, **kwargs):
-    return active.patient_ct_summaries(*args, **kwargs)
-
 def patient_label_data(*args, **kwargs):
     return active.patient_label_data(*args, **kwargs)
-
-def patient_label_summary(*args, **kwargs):
-    return active.patient_label_summary(*args, **kwargs)
     
-def labels(*args, **kwargs):
-    return active.labels(*args, **kwargs)
+def patient_labels(*args, **kwargs):
+    return active.patient_labels(*args, **kwargs)
 
 def label_count(*args, **kwargs):
     return active.label_count(*args, **kwargs)
