@@ -32,7 +32,6 @@ def sitk_hausdorff_distance(
     b: torch.Tensor,
     distance: str = 'euclidean',
     spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
-    print(f"hd a: {a.sum()}, b: {b.sum()}")
     # Convert to SimpleITK images.
     img_a = sitk.GetImageFromArray(a)
     img_a.SetSpacing(spacing)
@@ -140,7 +139,6 @@ def sitk_batch_hausdorff_distance(
     for i in range(len(a)):
         hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing=spacing)
         hd_dists.append(hd_dist)
-    print(hd_dists)
     return np.mean(hd_dists)
 
 def euclidean_distance(

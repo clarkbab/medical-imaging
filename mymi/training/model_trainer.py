@@ -255,7 +255,7 @@ class ModelTrainer:
 
             # Report results.
             if self.report and self.is_report_step(self.validation_report_interval, step):
-                self.report_validation_results(step)
+                self.report_validation_results(train_step)
                 self.reset_running_scores('validation-report')
 
         # Check for validation loss improvement.
