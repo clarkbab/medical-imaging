@@ -205,8 +205,9 @@ def train(args: dict):
         kwargs['validation_report_interval'] = args.validation_report_interval
 
     # Train the model.
+    model_name = 'parotid-left-3d-segmenter'
     project_name = 'parotid-left-3d'
-    trainer = ModelTrainer(loss_fn, optimiser, project_name, run_name, train_loader, validation_loader, visual_loader, **kwargs)
+    trainer = ModelTrainer(loss_fn, model_name, optimiser, project_name, run_name, train_loader, validation_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):

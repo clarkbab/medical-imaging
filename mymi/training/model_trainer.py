@@ -25,6 +25,7 @@ class ModelTrainer:
     def __init__(
         self,
         loss_fn: torch.nn.Module,
+        model_name: str,
         optimiser: torch.optim.Optimizer,
         project_name: str,
         run_name: str,
@@ -50,6 +51,7 @@ class ModelTrainer:
         effect: sets the initial trainer values.
         args:
             loss_fn: objective function of the training.
+            model_name: the name of the model, e.g. 'Parotid-Left-3D-Localiser'.
             optimiser: updates the model parameters in response to gradients.
             run_name: the name of the run to show in reporting.
             train_loader: provides the training input and label batches.
@@ -268,7 +270,7 @@ class ModelTrainer:
                 'training-step': train_step,
                 'validation-loss': loss
             }
-            checkpoint.save(model, self.run_name, self.optimiser, info=info)
+            checkpoint.save(model, self.model_name, self.run_name, self.optimiser, info=info)
             self.min_validation_loss = loss
             self.num_epochs_since_improvement = 0
         else:

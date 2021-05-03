@@ -21,13 +21,14 @@ class Checkpoint:
         return data
 
     @classmethod
-    def save(cls, model, model_name, optimiser, checkpoint_name='checkpoint', info=None):
+    def save(cls, model, model_name, optimiser, run_name, checkpoint_name='checkpoint', info=None):
         """
         effect: saves a copy of the model and optimiser state.
         args:
             model: the model to save.
             model_name: the name of the model.
             optimiser: the optimiser used for training.
+            run_name: the name of the training run.
         kwargs:
             checkpoint_name: the name of the checkpoint.
             info: additional info to save.
@@ -39,13 +40,14 @@ class Checkpoint:
         }
 
         # Save model and optimiser data.
-        filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.pt")
+        dirpath = os.path.join(config.directories.checkpoints, model_name, run_name)
+        filepath = os.path.join(dirpath, f"{checkpoint_name}.pt")
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         torch.save(data, filepath)
 
         # Save additional info.
         if info:
-            filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.csv")
+            filepath = os.path.join(dirpath, f"{checkpoint_name}.csv")
             with open(filepath, 'w') as f:
                 for key in info.keys():
                     f.write(f"{key},{info[key]}")

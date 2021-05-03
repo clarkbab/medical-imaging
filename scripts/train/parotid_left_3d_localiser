@@ -1,0 +1,247 @@
+#! /usr/bin/env python
+import argparse
+from argparse import ArgumentParser, ArgumentTypeError
+from datetime import datetime
+import logging
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import sys
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch.nn as nn
+import torch.optim as optim
+from torchio.transforms import Compose, CropOrPad, RandomAffine, RandomElasticDeformation, RandomNoise, Resample
+from typing import *
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.loaders import ParotidLeft3DLoader, ParotidLeft3DVisualLoader
+from mymi.losses import DiceLoss
+from mymi.models import ParotidLeft3DNet
+from mymi.training import ModelTrainer
+from mymi import transforms as ts
+from mymi import utils
+
+# Parse options.
+def interval_type(s: str):
+    if s == 'epoch':
+        return s
+    elif s.isdigit():
+        return int(s)
+    else:
+        raise ArgumentTypeError(f"Should be 'epoch' or integer, got '{s}'.")
+
+parser = ArgumentParser(description="""
+Train the segmentation model on a single node. Spins up a separate process for each GPU on the node (--num-gpus).
+""")
+parser.add_argument('-a', '--use-aug', action='store_true', default=False, help='use data augmentations when training')
+parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
+parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
+parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
+parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
+parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('-lr', '--learning-rate', action='store', type=float, help="sets the learning rate")
+parser.add_argument('-ls', '--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
+parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')
+parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='use CPU for training')
+parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
+parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
+parser.add_argument('-nrp', '--no-report', action='store_true', default=False, help="don't send run reports")
+parser.add_argument('-nv', '--no-validate', action='store_true', default=False, help="don't validate the model during training")
+parser.add_argument('-tpi', '--train-print-interval', action='store', type=interval_type, help='iterations between printing during training')
+parser.add_argument('-tri', '--train-report-interval', action='store', type=interval_type, help='iterations between recording during training')
+parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
+parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
+parser.add_argument('-vpi', '--validation-print-interval', action='store', type=interval_type, help='iterations between printing during validation')
+parser.add_argument('-vri', '--validation-report-interval', action='store', type=interval_type, help='iterations between reporting during validation')
+args = parser.parse_args()
+
+# Returns a logging function for the process.
+def get_log_info(args: dict):
+    def log_info(s: str):
+        if is_multi_process(args):
+            if is_lead_process(args):
+                s = f"[Leader - {os.getpid()}] {s}"
+            else:
+                s = f"[{os.getpid()}] {s}" 
+        logging.info(s)
+    return log_info
+
+# Define single GPU/process training method.
+def train(args: dict):
+    # Get log function for process.
+    log_info = get_log_info(args)
+
+    if is_multi_process(args):
+        # Register the process. This action blocks until all processes in 'world_size' have registered.
+        rank = args.node_rank * args.num_gpus + args.gpu_idx
+        log_info(f"Initialising process {args.gpu_idx}, with rank {rank} and world size {args.world_size}.")
+        dist.init_process_group(backend='nccl', init_method='file:///tmp/dist', world_size=args.world_size, rank=rank)
+    
+    # Determine run name.
+    if args.name:
+        run_name = args.name
+    else:
+        run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+    log_info(f"Run name: {run_name}.")
+
+    # Configure device.
+    if args.no_gpu:
+        device = torch.device('cpu')
+    else:
+        if torch.cuda.is_available():
+            if args.num_gpus > 1:
+                device = torch.device(f"cuda:{args.gpu_idx}")
+            else:
+                device = torch.device('cuda:0')
+        else:
+            device = torch.device('cpu')
+            log_info('CUDA not available.')
+    log_info(f"Using device: {device}.")
+
+    # Create model.
+    model = ParotidLeft3DNet()
+    model = model.to(device)
+    log_info(f"Using model: {model.__class__}.")
+
+    # Wrap model for distributed training.
+    if is_multi_process(args):
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
+
+    # Define loss function.
+    if args.loss == 'cross-entropy':
+        class_weights = torch.Tensor((1, 6767.77)).to(device)      # Calculated from 'dataset.class_frequencies'.
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    elif args.loss == 'dice':
+        loss_fn = DiceLoss()
+    log_info(f"Using loss function: {loss_fn.__class__}.")
+
+    # Define optimiser.
+    if args.learning_rate is not None:
+        lr = args.learning_rate
+    else:
+        lr = 0.001
+    optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    log_info(f"Using optimiser: {optimiser}.")
+
+    # Define data transforms..
+    fill = 'minimum'
+    rotation = (-5, 5)
+    translation = (-50, 50)
+    scale = (0.8, 1.2)
+    init_res = (512, 512, 212)
+    new_res = (128, 128, 96)
+    init_spacing = (1, 1, 3)
+    new_spacing = tuple((np.array(init_res) / new_res) * init_spacing)
+    aug_transforms = [                                               # Only applied when augmenting.
+        RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value=fill)
+    ]
+    required_transforms = [                                             # Applied to all images to satisfy network architecture constraints.
+        Resample(new_spacing)
+    ]
+    if args.use_aug:
+        train_transforms = aug_transforms + required_transforms
+    else:
+        train_transforms = required_transforms
+
+    log_info(f"Using transforms '{train_transforms}'.")
+    train_transform = Compose(train_transforms)
+    validation_transform = Compose(required_transforms)
+
+    # Create data loaders.
+    batch_size = args.batch_size
+    train_loader = ParotidLeft3DLoader.build('train', batch_size=batch_size, spacing=init_spacing, transform=train_transform)
+    validation_loader = ParotidLeft3DLoader.build('validate', batch_size=batch_size, spacing=init_spacing, transform=validation_transform)
+    visual_loader = ParotidLeft3DVisualLoader.build(batch_size=batch_size, spacing=init_spacing, transform=validation_transform)
+
+    # Create model trainer kwargs.
+    kwargs = {}
+    kwargs['device'] = device
+    kwargs['log_info'] = log_info
+    if args.max_epochs:
+        kwargs['max_epochs'] = args.max_epochs
+    if args.no_mixed:
+        kwargs['mixed_precision'] = False
+        log_info('Using full precision.')
+    else:
+        log_info('Using mixed precision.')
+    if args.no_report:
+        kwargs['report'] = False
+        log_info('Not reporting results.')
+    else:
+        if is_lead_process(args):
+            kwargs['report'] = True
+            log_info('Reporting results.')
+        else:
+            kwargs['report'] = False
+    if args.no_validate:
+        kwargs['validate'] = False
+        log_info('Not validating.')
+    else:
+        if is_lead_process(args):
+            kwargs['validate'] = True
+            log_info('Validating.')
+        else:
+            kwargs['validate'] = False
+    if args.train_print_interval:
+        kwargs['train_print_interval'] = args.train_print_interval
+    if args.train_report_interval:
+        kwargs['train_report_interval'] = args.train_report_interval
+    kwargs['spacing'] = (1., 1., 3.)
+    if args.use_early_stopping:
+        kwargs['early_stopping'] = True
+        log_info('Using early stopping.')
+    else:
+        log_info('Not using early stopping.')
+    if args.validation_interval:
+        kwargs['validation_interval'] = args.validation_interval
+    if args.validation_print_interval:
+        kwargs['validation_print_interval'] = args.validation_print_interval
+    if args.validation_report_interval:
+        kwargs['validation_report_interval'] = args.validation_report_interval
+
+    # Train the model.
+    model_name = 'parotid-left-3d-localiser'
+    project_name = 'parotid-left-3d'
+    trainer = ModelTrainer(loss_fn, model_name, optimiser, project_name, run_name, train_loader, validation_loader, visual_loader, **kwargs)
+    trainer(model)
+
+def is_multi_process(args: dict):
+    return (not args.no_gpu) and args.num_gpus > 1
+
+def is_lead_process(args: dict):
+    return not is_multi_process(args) or args.gpu_idx == 0
+
+# Wrap 'train' function to fit multi-processing API.
+def train_process(gpu_idx: int, args: dict):
+    args.gpu_idx = gpu_idx
+    train(args)
+
+def prepend(s: str):
+    if __name__ == '__main__':
+        return f"[Main - {os.getpid()}] {s}"
+    else:
+        return f"[{os.getpid()}] {s}"
+
+# Configure logging.
+log_level = getattr(logging, args.log_level.upper(), None)
+utils.configure_logging(log_level)
+
+if __name__ == '__main__':
+    if not args.no_gpu:
+        # Print GPU info.
+        num_devices = torch.cuda.device_count()
+        logging.info(f"[Main] Requested {args.num_gpus} GPUs, found {num_devices} GPUs.")
+        assert args.num_gpus <= num_devices
+
+    if is_multi_process(args):
+        # Spawn a process for each requested GPU.
+        logging.info(f"[Main] Spawning {args.num_gpus} process/es.")
+        args.world_size = args.num_nodes * args.num_gpus
+        mp.spawn(train_process, nprocs=args.num_gpus, args=(args, ))
+    else:
+        train(args)
