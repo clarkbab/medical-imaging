@@ -15,4 +15,4 @@ echo $version
 RUN_NAME="baseline_run"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/train/parotid_left_3d --name $RUN_NAME --train-print-interval 50 --train-report-interval 50
+python $SCRIPT_DIR/train/parotid_left_3d_localiser --name $RUN_NAME --train-print-interval 50 --train-report-interval 50
