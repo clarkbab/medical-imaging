@@ -217,7 +217,6 @@ class ModelTrainer:
             train_batch: the current training batch.
             train_step: the current training step.
         """
-        print('beginning validation')
         model.eval()
 
         # Calculate validation score.
@@ -265,8 +264,6 @@ class ModelTrainer:
 
         # Check for validation loss improvement.
         loss = np.mean(self.running_scores['validation-checkpoint']['loss'])
-        print('min validation loss: ', self.min_validation_loss)
-        print('mean validation loss: ', loss)
         if loss < self.min_validation_loss:
             # Save model checkpoint.
             info = {
@@ -276,7 +273,6 @@ class ModelTrainer:
                 'validation-loss': loss
             }
             checkpoint.save(model, self.model_name, self.optimiser, self.run_name, info=info)
-            print('saved checkpoint')
             self.min_validation_loss = loss
             self.num_epochs_since_improvement = 0
         else:
