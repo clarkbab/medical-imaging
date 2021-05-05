@@ -38,6 +38,7 @@ parser.add_argument('-n', '--name', action='store', help='the run name')
 parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='turn off GPU use')
 parser.add_argument('-nh', '--no-hausdorff', action='store_true', default=False, help='turn off the HD metric')
 parser.add_argument('-nr', '--no-record', action='store_true', default=False, help="don't record labels, predictions, figures, etc.")
+parser.add_argument('-r', '--run-name', action='store', help='the run name', required=True)
 args = parser.parse_args()
 
 # Configure logging.
@@ -65,12 +66,12 @@ logging.info(f"Using device: {device}.")
 # Create model.
 model = ParotidLeft3DNet()
 model = model.to(device)
-logging.info(f"Using model: {model.__class__}.")
+logging.info(f"Using model arch: {model.__class__}.")
 
 # Load model params.
-cp = checkpoint.load(args.model_name, checkpoint_name=args.model_checkpoint)
+cp = checkpoint.load(args.model_name, args.run_name, checkpoint_name=args.model_checkpoint)
 model.load_state_dict(cp['model_state_dict'])
-logging.info(f"Loaded model name: {args.name}.")
+logging.info(f"Loaded model with name '{args.name}' from training run '{args.run_name}'.")
 
 # Create input transforms.
 data_res = (512, 512, 212)
@@ -83,7 +84,7 @@ transforms = [
 logging.info(f"Using transforms '{transforms}'.")
 transform = Compose(transforms)
 
-# Create pred transform - applied to pred before calculating loss, e.g. upsample.
+# Create output transform - applied to pred before calculating loss, e.g. upsample.
 output_transforms = [
     Resample(data_spacing)
 ]

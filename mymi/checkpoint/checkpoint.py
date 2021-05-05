@@ -9,12 +9,13 @@ class Checkpoint:
         """
         returns: the saved checkpoint data.
         args:
-            name: the name of the model to load.
+            model_name: the name of the model to load.
+            run_name: the name of the training run.
         kwargs:
             checkpoint_name: the name of the checkpoint.
         """
         # Load data.
-        filepath = os.path.join(config.directories.checkpoints, model_name, f"{checkpoint_name}.pt")
+        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint_name}.pt")
         f = open(filepath, 'rb')
         data = torch.load(f)
 

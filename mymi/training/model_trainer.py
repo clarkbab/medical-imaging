@@ -98,6 +98,7 @@ class ModelTrainer:
         self.metrics = metrics
         self.min_validation_loss = np.inf
         self.mixed_precision = mixed_precision
+        self.model_name = model_name
         self.num_epochs_since_improvement = 0
         self.optimiser = optimiser
         self.report = report
@@ -118,7 +119,7 @@ class ModelTrainer:
 
         # Initialise running scores.
         self.running_scores = {}
-        keys = ['print', 'report', 'validation-print', 'validation-report']
+        keys = ['print', 'report', 'validation-print', 'validation-report', 'validation-checkpoint']
         for key in keys:
             self.running_scores[key] = {}
             self.reset_running_scores(key)
@@ -216,6 +217,7 @@ class ModelTrainer:
             train_batch: the current training batch.
             train_step: the current training step.
         """
+        print('beginning validation')
         model.eval()
 
         # Calculate validation score.
@@ -229,8 +231,9 @@ class ModelTrainer:
             with autocast(enabled=self.mixed_precision):
                 pred = model(input)
                 loss = self.loss_fn(pred, label)
-            self.running_scores['validation-report']['loss'] += [loss.item()]
+            self.running_scores['validation-checkpoint']['loss'] += [loss.item()]
             self.running_scores['validation-print']['loss'] += [loss.item()]
+            self.running_scores['validation-report']['loss'] += [loss.item()]
 
             # Convert to binary prediction.
             pred = pred.argmax(axis=1)
@@ -240,15 +243,15 @@ class ModelTrainer:
 
             if 'dice' in self.metrics:
                 dice = batch_dice(pred, label)
-                self.running_scores['validation-report']['dice'] += [dice.item()]
                 self.running_scores['validation-print']['dice'] += [dice.item()]
+                self.running_scores['validation-report']['dice'] += [dice.item()]
 
             if 'hausdorff' in self.metrics and train_step > self.hausdorff_delay:
                 # Can't calculate HD if prediction is empty.
                 if pred.sum() > 0:
                     hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                    self.running_scores['print']['hausdorff'] += [hausdorff.item()]
-                    self.running_scores['report']['hausdorff'] += [hausdorff.item()]
+                    self.running_scores['validation-print']['hausdorff'] += [hausdorff.item()]
+                    self.running_scores['validation-report']['hausdorff'] += [hausdorff.item()]
 
             # Print results.
             if self.is_print_step(self.validation_print_interval, step):
@@ -261,7 +264,9 @@ class ModelTrainer:
                 self.reset_running_scores('validation-report')
 
         # Check for validation loss improvement.
-        loss = np.mean(self.running_scores['validation-report']['loss'])
+        loss = np.mean(self.running_scores['validation-checkpoint']['loss'])
+        print('min validation loss: ', self.min_validation_loss)
+        print('mean validation loss: ', loss)
         if loss < self.min_validation_loss:
             # Save model checkpoint.
             info = {
@@ -270,11 +275,13 @@ class ModelTrainer:
                 'training-step': train_step,
                 'validation-loss': loss
             }
-            checkpoint.save(model, self.model_name, self.run_name, self.optimiser, info=info)
+            checkpoint.save(model, self.model_name, self.optimiser, self.run_name, info=info)
+            print('saved checkpoint')
             self.min_validation_loss = loss
             self.num_epochs_since_improvement = 0
         else:
             self.num_epochs_since_improvement += 1
+        self.reset_running_scores('validation-checkpoint')
 
         # Plot validation images for visual indication of improvement.
         if self.report:

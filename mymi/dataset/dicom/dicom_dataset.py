@@ -10,7 +10,6 @@ from torchio import ScalarImage, Subject
 from tqdm import tqdm
 
 from mymi import cache
-from mymi import dataset
 from mymi.utils import filterOnNumPats, filterOnPatID, filterOnLabel, stringOrSorted
 
 Z_SPACING_ROUND_DP = 2
@@ -38,7 +37,7 @@ class DicomDataset:
             label: include patients with any of the listed labels (behaves like an OR).
         """
         # Load patient summaries.
-        summary = dataset.patient_summaries(label=label)
+        summary = cls.patient_summaries(label=label)
 
         # Create CT section.
 
@@ -131,8 +130,8 @@ class DicomDataset:
             return result
 
         # Load patient CT dicoms.
-        ct_dicoms = dataset.list_ct(pat_id)
-        summary = dataset.patient_ct_summary(pat_id).iloc[0].to_dict()
+        ct_dicoms = cls.list_ct(pat_id)
+        summary = cls.patient_ct_summary(pat_id).iloc[0].to_dict()
 
         # Create placeholder array.
         data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
@@ -181,12 +180,12 @@ class DicomDataset:
             return result
 
         # Load all labels.
-        rtstruct_dicom = dataset.get_rtstruct(pat_id)
+        rtstruct_dicom = cls.get_rtstruct(pat_id)
         rois = rtstruct_dicom.ROIContourSequence
         roi_infos = rtstruct_dicom.StructureSetROISequence
 
         # Load CT data for label shape.
-        summary_df = dataset.patient_ct_summary(pat_id)
+        summary_df = cls.patient_ct_summary(pat_id)
         summary = summary_df.iloc[0].to_dict()
 
         # Create and add labels.
@@ -287,7 +286,7 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # List patients.
-        pat_ids = dataset.list_patients()
+        pat_ids = cls.list_patients()
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
@@ -296,7 +295,7 @@ class DicomDataset:
 
         # Add patient info.
         for pat_id in tqdm(pat_ids):
-            patient_df = dataset.patient_ct_summary(pat_id)
+            patient_df = cls.patient_ct_summary(pat_id)
             patient_df['pat-id'] = pat_id
             df = df.append(patient_df)
 
@@ -443,7 +442,7 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # Load CT DICOMS.
-        ct_dicoms = dataset.list_ct(pat_id)
+        ct_dicoms = cls.list_ct(pat_id)
         
         # Add info.
         for ct_dicom in ct_dicoms:
@@ -477,10 +476,12 @@ class DicomDataset:
         return df
 
     @classmethod
-    def labels(cls, num_pats='all', pat_id='all'):
+    def labels(cls, clear_cache=False, label='all', num_pats='all', pat_id='all'):
         """
         returns: a dataframe linking patients to contoured labels.
         kwargs:
+            clear_cache: whether to clear the cache or not.
+            label: only include patients with this label.
             num_pats: number of patients to summarise.
             pat_id: a string or list of patient IDs.
         """
@@ -489,10 +490,16 @@ class DicomDataset:
             'class': cls.__name__,
             'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
+                'label': label,
                 'num_pats': num_pats,
                 'pat_id': stringOrSorted(pat_id)
             }
         }
+        # Clear cache.
+        if clear_cache:
+            cache.delete(params)
+
+        # Read from cache.
         result = cache.read(params, 'dataframe')
         if result is not None:
             return result
@@ -500,26 +507,45 @@ class DicomDataset:
         # Define table structure.
         cols = {
             'patient-id': 'object',
-            'label': 'object'
+            'label': 'object',
+            'com-x': np.uint16,
+            'com-y': np.uint16,
+            'com-z': np.uint16,
+            'min-x': np.uint16,
+            'min-y': np.uint16,
+            'min-z': np.uint16,
+            'width-x': np.uint16,
+            'width-y': np.uint16,
+            'width-z': np.uint16
         }
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
-        pat_ids = dataset.list_patients()
+        pat_ids = cls.list_patients()
 
         # Filter patients.
         pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
         pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
+        pat_ids = list(filter(filterOnLabel(label), pat_ids))
 
         for pat_id in tqdm(pat_ids):
             # Get rtstruct info.
-            label_df = cls.patient_labels(pat_id)
+            label_df = cls.patient_labels(pat_id, clear_cache=clear_cache)
 
             # Add rows.
             for _, row in label_df.iterrows():
                 data = {
                     'patient-id': pat_id,
-                    'label': row['label']
+                    'label': row['label'],
+                    'com-x': row['com-x'],
+                    'com-y': row['com-y'],
+                    'com-z': row['com-z'],
+                    'min-x': row['min-x'],
+                    'min-y': row['min-y'],
+                    'min-z': row['min-z'],
+                    'width-x': row['width-x'],
+                    'width-y': row['width-y'],
+                    'width-z': row['width-z']
                 }
                 df = df.append(data, ignore_index=True)
 
@@ -568,7 +594,10 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # Get label data.
-        label_data = dataset.patient_label_data(pat_id)
+        label_data = cls.patient_label_data(pat_id)
+
+        # Get voxel spacings.
+        spacings = cls.patient_ct_summary(pat_id)[['spacing-x', 'spacing-y', 'spacing-z']].loc[0].to_numpy()
         
         # Add info for each label.
         for name, ldata in label_data:
@@ -579,7 +608,10 @@ class DicomDataset:
             non_zero = np.argwhere(ldata != 0)
             mins = non_zero.min(axis=0)
             maxs = non_zero.max(axis=0)
-            widths = maxs - mins
+            voxel_widths = maxs - mins
+
+            # Convert voxel widths to millimetres.
+            widths = voxel_widths * spacings
 
             data = {
                 'label': name,
@@ -587,8 +619,8 @@ class DicomDataset:
                 'com-y': coms[1],
                 'com-z': coms[2],
                 'width-x': widths[0],
-                'width-y': widths[1],
-                'width-z': widths[2]
+                'width-y': widths[0],
+                'width-z': widths[0]
             }
             df = df.append(data, ignore_index=True)
 
@@ -630,7 +662,7 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # List patients.
-        pat_ids = dataset.list_patients()
+        pat_ids = cls.list_patients()
 
         # Filter patients.
         pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
@@ -691,14 +723,14 @@ class DicomDataset:
         num_voxels = 0
         for pat_id in pat_ids:
             # Get patient labels.
-            pat_labels = list(dataset.patient_labels(pat_id)['label'])
+            pat_labels = list(cls.patient_labels(pat_id)['label'])
             
             # Skip if patient has no labels, or doesn't have the specified labels.
             if len(pat_labels) == 0 or (label != 'all' and not np.array_equal(np.intersect1d(label, pat_labels), label)):
                 continue
 
             # Add data for this patient.
-            data = dataset.patient_data(pat_id)
+            data = cls.patient_data(pat_id)
             total += data.sum()
             num_voxels += data.shape[0] * data.shape[1] * data.shape[2]
         mean = total / num_voxels
@@ -707,7 +739,7 @@ class DicomDataset:
         total = 0
         for pat_id in pat_ids:
             # Add data for the patient.
-            data = dataset.patient_data(pat_id)
+            data = cls.patient_data(pat_id)
             total += ((data - mean) ** 2).sum()
         std_dev = np.sqrt(total / num_voxels)
 

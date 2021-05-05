@@ -1,1 +1,2 @@
-from .cca import batch_largest_connected_component, largest_connected_component
+from .bounding_box import bounding_box
+from .connected_component_analysis import batch_largest_connected_component, largest_connected_component
