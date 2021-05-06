@@ -13,7 +13,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-RUN_NAME="test_checkpoint"
+RUN_NAME="baseline_run"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/train/parotid_left_3d_localiser --name $RUN_NAME --train-print-interval 50 --train-report-interval 50 --use-aug
+python $SCRIPT_DIR/train/parotid_left_3d_localiser --name $RUN_NAME --train-print-interval 50 --train-report-interval 50

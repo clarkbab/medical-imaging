@@ -1,24 +1,39 @@
 import logging
+import os
 import sys
 
-from .dicom import HN1 as default
+from .dicom import DicomDataset
+
+MYMI_DATA = os.environ['MYMI_DATA']
+DATASETS_PATH = os.path.join(MYMI_DATA, 'datasets')
+DEFAULT_ACTIVE = 'HEAD-NECK-RADIOMICS-HN1'
 
 # Create dataset.
-active = default
+active = DicomDataset(DEFAULT_ACTIVE)
 
-def config(dataset=None):
+def select(
+    name: str):
     """
-    effect: configures the dataset module.
-    kwargs:
-        dataset: the dataset to use.
+    effect: sets the new dataset as active.
+    args:
+        name: the name of the new dataset.
     """
-    global active
-    if dataset:
-        active = dataset
+    # Check if the dataset exists.
+    dataset_path = os.path.join(DATASETS_PATH, name)
+    if os.path.exists(dataset_path):
+        global active
+        active = DicomDataset(name)
+    else:
+        raise ValueError(f"Dataset '{name}' not found.")
 
-##
-# Dicom dataset API.
-##
+def ct_summary(*args, **kwargs):
+    return active.ct_summary(*args, **kwargs)
+
+def list_patient(*args, **kwargs):
+    return active.list_patients(*args, **kwargs)
+    
+def patient(*args, **kwargs):
+    return active.patient(*args, **kwargs)
 
 def ct_summaries(*args, **kwargs):
     return active.ct_summaries(*args, **kwargs)
@@ -29,9 +44,6 @@ def ct_statistics(*args, **kwargs):
 def get_rtstruct(*args, **kwargs):
     return active.get_rtstruct(*args, **kwargs)
 
-def has_id(*args, **kwargs):
-    return active.has_id(*args, **kwargs)
-
 def labels(*args, **kwargs):
     return active.labels(*args, **kwargs)
 
@@ -40,21 +52,6 @@ def list_ct(*args, **kwargs):
 
 def list_patients():
     return active.list_patients()
-
-def patient_ct_data(*args, **kwargs):
-    return active.patient_ct_data(*args, **kwargs)
-
-def patient_ct_slice_summary(*args, **kwargs):
-    return active.patient_ct_slice_summary(*args, **kwargs)
-
-def patient_ct_summary(*args, **kwargs):
-    return active.patient_ct_summary(*args, **kwargs)
-
-def patient_label_data(*args, **kwargs):
-    return active.patient_label_data(*args, **kwargs)
-    
-def patient_labels(*args, **kwargs):
-    return active.patient_labels(*args, **kwargs)
 
 def label_count(*args, **kwargs):
     return active.label_count(*args, **kwargs)

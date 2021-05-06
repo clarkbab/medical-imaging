@@ -89,7 +89,7 @@ def filterOnNumPats(num_pats):
 
     return fn
 
-def filterOnPatID(pat_id):
+def filterOnPatIDs(pat_id):
     """
     returns: a function to filter patients based on a 'pat_id' string or list/tuple.
     args:
@@ -105,7 +105,7 @@ def filterOnPatID(pat_id):
 
     return fn
 
-def filterOnLabel(label):
+def filterOnLabels(label):
     """
     returns: a function to filter patients on whether they have that label.
     args:

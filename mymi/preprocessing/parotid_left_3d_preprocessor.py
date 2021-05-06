@@ -71,7 +71,7 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Writing data to '{folder}' folder.")
 
             # Recreate folder.
-            folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'processed', folder)
+            folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'training', folder)
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
             os.makedirs(folder_path)

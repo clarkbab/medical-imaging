@@ -1,477 +1,130 @@
 import inspect
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import pydicom as pdcm
+from pandas import DataFrame
+import pydicom as dicom
 from scipy.ndimage import center_of_mass
 from skimage.draw import polygon
 from torchio import ScalarImage, Subject
 from tqdm import tqdm
+from typing import *
 
 from mymi import cache
-from mymi.utils import filterOnNumPats, filterOnPatID, filterOnLabel, stringOrSorted
+from mymi.cache import cached_method
+from mymi import config
+from mymi.utils import filterOnNumPats, filterOnPatIDs, filterOnLabels, stringOrSorted
+
+from .hierarchical import require_hierarchical
+from .patient import Patient
 
 Z_SPACING_ROUND_DP = 2
 
 class DicomDataset:
-    # Subclasses must implement.
-
-    @classmethod
-    def clinical_data(cls):
-        raise NotImplementedError("Method 'clinical_data' not implemented in subclass.")
-
-    @classmethod
-    def data_dir(cls):
-        raise NotImplementedError("Method 'data_dir' not implemented in subclass.")
-
-    # Queries.
-
-    @classmethod
-    def generate_report(cls, name, label='all'):
+    def __init__(
+        self,
+        name: str):
         """
-        effect: generates a PDF report for the dataset.
         args:
-            name: the report name.
-        kwargs:
-            label: include patients with any of the listed labels (behaves like an OR).
+            name: the name of the dataset.
         """
-        # Load patient summaries.
-        summary = cls.patient_summaries(label=label)
+        self._name = name
+        self._path = os.path.join(config.directories.datasets, name)
 
-        # Create CT section.
+    @property
+    def name(self) -> str:
+        return self._name
 
-        # Plot acquisition parameters and show table of outliers.
-        cols = ['spacing-x', 'spacing-y', 'spacing-z']
-        cols = ['size-x', 'size-y', 'size-z']
-        cols = ['fov-x', 'fov-y', 'fov-z']
-        
-        # Display central 'sagittal' slice of those 5 patients that have smallest 'fov-z'.
+    @property
+    def path(self) -> str:
+        return self._path
 
-        # Plot CT HU distribution. 
-
-    @classmethod
-    def has_id(cls, pat_id):
-        return True
-
-    @classmethod
-    def list_ct(cls, pat_id):
-        """
-        returns: a list of CT dicoms.
-        pat_id: the patient ID string.
-        """
-        # Get dated subfolder path.
-        pat_path = os.path.join(cls.data_dir(), pat_id)
-        date_path = os.path.join(pat_path, os.listdir(pat_path)[0])
-        dicom_paths = [os.path.join(date_path, p) for p in os.listdir(date_path)]
-
-        # Find first folder containing CT scans.
-        for p in dicom_paths:
-            file_path = os.path.join(p, os.listdir(p)[0])
-            dicom = pdcm.read_file(file_path)
-            
-            if dicom.Modality == 'CT':
-                ct_dicoms = [pdcm.read_file(os.path.join(p, d)) for d in os.listdir(p)]
-                ct_dicoms = sorted(ct_dicoms, key=lambda d: float(d.ImagePositionPatient[2]))
-                return ct_dicoms
-
-        # TODO: raise an error.
-        return None
-
-    @classmethod
-    def list_patients(cls):
+    @require_hierarchical
+    def list_patients(self) -> Sequence[str]:
         """
         returns: a list of patient IDs.
         """
-        return sorted(os.listdir(cls.data_dir()))
+        # Return top-level folders from 'hierarchical' dataset.
+        hier_path = os.path.join(self._path, 'hierarchical')
+        return list(sorted(os.listdir(hier_path)))
 
-    @classmethod
-    def get_rtstruct(cls, pat_id):
+    @require_hierarchical
+    def patient(
+        self,
+        id: str) -> Patient:
         """
-        returns: the RTSTRUCT dicom.
-        pat_id: the patient ID string.
-        """
-        # Get dated subfolder path.
-        pat_path = os.path.join(cls.data_dir(), pat_id)
-        date_path = os.path.join(pat_path, os.listdir(pat_path)[0])
-        dicom_paths = [os.path.join(date_path, p) for p in os.listdir(date_path)]
-
-        # Find first folder containing CT scans.
-        for p in dicom_paths:
-            file_path = os.path.join(p, os.listdir(p)[0])
-            dicom = pdcm.read_file(file_path)
-            
-            if dicom.Modality == 'RTSTRUCT':
-                return dicom
-
-        # TODO: raise an error.
-        return None
-
-    ###
-    # Raw patient data.
-    ###
-
-    @classmethod
-    def patient_ct_data(cls, pat_id):
-        """
-        returns: a numpy array of CT data in HU.
+        returns: a Patient object.
         args:
-            pat_id: the patient ID.
+            id: the patient ID.
         """
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'args': {
-                'pat_id': pat_id
-            }
-        }
-        result = cache.read(params, 'array')
-        if result is not None:
-            return result
+        # Check that patient ID exists.
+        pat_path = os.path.join(self._path, 'hierarchical', id)
+        if not os.path.isdir(pat_path):
+            raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
-        # Load patient CT dicoms.
-        ct_dicoms = cls.list_ct(pat_id)
-        summary = cls.patient_ct_summary(pat_id).iloc[0].to_dict()
+        # Create patient.
+        pat = Patient(self._name, id)
 
-        # Create placeholder array.
-        data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
-        data = np.zeros(shape=data_shape, dtype=np.int16)
-        
-        # Add CT data.
-        for ct_dicom in ct_dicoms:
-            # Convert stored data to HU. Transpose to anatomical co-ordinates as
-            # pixel data is stored image row-first.
-            pixel_data = np.transpose(ct_dicom.pixel_array)
-            pixel_data = ct_dicom.RescaleSlope * pixel_data + ct_dicom.RescaleIntercept
+        return pat
 
-            # Get z index.
-            offset_z =  ct_dicom.ImagePositionPatient[2] - summary['offset-z']
-            z_idx = int(round(offset_z / summary['spacing-z']))
-
-            # Add data.
-            data[:, :, z_idx] = pixel_data
-
-        # Write data to cache.
-        cache.write(params, data, 'array')
-
-        return data
-
-    @classmethod
-    def patient_label_data(cls, pat_id, label='all'):
+    @require_hierarchical
+    @cached_method('_name')
+    def ct_summary(
+        self, 
+        clear_cache: bool = False,
+        labels: Union[str, Sequence[str]] = 'all',
+        num_pats: Union[str, int] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all') -> DataFrame:
         """
-        returns: a list of (<label name>, <label data>) pairs.
-        args:
-            pat_id: the patient ID.
+        returns: a DataFrame with patient CT summaries.
         kwargs:
-            label: the desired labels.
-        """
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'args': {
-                'pat_id': pat_id
-            },
-            'kwargs': {
-                'label': label,
-            }
-        }
-        result = cache.read(params, 'name-array-pairs')
-        if result is not None:
-            return result
-
-        # Load all labels.
-        rtstruct_dicom = cls.get_rtstruct(pat_id)
-        rois = rtstruct_dicom.ROIContourSequence
-        roi_infos = rtstruct_dicom.StructureSetROISequence
-
-        # Load CT data for label shape.
-        summary_df = cls.patient_ct_summary(pat_id)
-        summary = summary_df.iloc[0].to_dict()
-
-        # Create and add labels.
-        labels = []
-        for roi, roi_info in zip(rois, roi_infos):
-            name = roi_info.ROIName
-
-            # Check if we should skip.
-            if not (label == 'all' or
-                ((type(label) == tuple or type(label) == list) and name in label) or
-                (type(label) == str and name == label)):
-                continue
-
-            # Create label placeholder.
-            data_shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
-            data = np.zeros(shape=data_shape, dtype=np.bool)
-
-            roi_coords = [c.ContourData for c in roi.ContourSequence]
-
-            # Label each slice of the ROI.
-            for roi_slice_coords in roi_coords:
-                # Coords are stored in flat array.
-                coords = np.array(roi_slice_coords).reshape(-1, 3)
-
-                # Convert from "real" space to pixel space using affine transformation.
-                corner_pixels_x = (coords[:, 0] - summary['offset-x']) / summary['spacing-x']
-                corner_pixels_y = (coords[:, 1] - summary['offset-y']) / summary['spacing-y']
-
-                # Get contour z pixel.
-                offset_z = coords[0, 2] - summary['offset-z']
-                pixel_z = int(offset_z / summary['spacing-z'])
-
-                # Get 2D coords of polygon boundary and interior described by corner
-                # points.
-                pixels_x, pixels_y = polygon(corner_pixels_x, corner_pixels_y)
-
-                # Set labelled pixels in slice.
-                data[pixels_x, pixels_y, pixel_z] = 1
-
-            labels.append((name, data))
-
-        # Sort by label name.
-        labels = sorted(labels, key=lambda l: l[0])
-
-        # Write data to cache.
-        cache.write(params, labels, 'name-array-pairs')
-
-        return labels
-
-    ###
-    # Summaries of data.
-    ###
-
-    @classmethod
-    def ct_summaries(cls, num_pats='all', pat_id='all', label='all'):
-        """
-        returns: a dataframe containing rows of patient summaries.
-        kwargs:
+            clear_cache: force the cache to clear.
+            labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to summarise.
-            pat_id: only include patients who are listed.
-            label: only include patients who have at least one of the listed labels (behaves like an OR).
+            pat_ids: include listed patients.
         """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'kwargs': {
-                'num_pats': num_pats,
-                'pat_id': stringOrSorted(pat_id),
-                'label': stringOrSorted(label)
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-                
         # Define table structure.
         cols = {
-            'fov-x': 'float64',
-            'fov-y': 'float64',
-            'fov-z': 'float64',
-            'hu-min': 'float64',
-            'hu-max': 'float64',
-            'num-missing': np.uint16,
-            'offset-x': 'float64',
-            'offset-y': 'float64',
-            'offset-z': 'float64',
-            'pat-id': 'object',
-            'size-x': np.uint16,
-            'size-y': np.uint16,
-            'size-z': np.uint16,
-            'spacing-x': 'float64',
-            'spacing-y': 'float64',
-            'spacing-z': 'float64',
-            'scale-int': 'float64',
-            'scale-slope': 'float64'
+            'fov-x': float,
+            'fov-y': float,
+            'fov-z': float,
+            'hu-max': float,
+            'hu-min': float,
+            'num-missing': int,
+            'offset-x': float,
+            'offset-y': float,
+            'offset-z': float,
+            'pat-id': str,
+            'size-x': int,
+            'size-y': int,
+            'size-z': int,
+            'spacing-x': float,
+            'spacing-y': float,
+            'spacing-z': float,
         }
         df = pd.DataFrame(columns=cols.keys())
 
         # List patients.
-        pat_ids = cls.list_patients()
+        pats = cls.list_patients()
 
         # Filter patients.
-        pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnLabel(label), pat_ids))
-        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
+        pats = list(filter(filterOnPatIDs(pat_id), pats))
+        pats = list(filter(filterOnLabels(label), pats))
+        pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
-        for pat_id in tqdm(pat_ids):
-            patient_df = cls.patient_ct_summary(pat_id)
-            patient_df['pat-id'] = pat_id
-            df = df.append(patient_df)
+        for pat in tqdm(pats):
+            pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
+            pat_df['pat-id'] = pat
+            df = df.append(pat_df)
 
         # Set column type.
         df = df.astype(cols)
         
         # Set index.
         df = df.set_index('pat-id')
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
-    def patient_ct_summary(cls, pat_id):
-        """
-        returns: dataframe with single row summary of CT images.
-        args:
-            pat_id: the patient ID.
-        """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'args': {
-                'pat_id': pat_id
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-
-        # Define table structure.
-        cols = {
-            'fov-x': 'float64',
-            'fov-y': 'float64',
-            'fov-z': 'float64',
-            'hu-min': 'float64',
-            'hu-max': 'float64',
-            'num-missing': np.uint16,
-            'offset-x': 'float64',
-            'offset-y': 'float64',
-            'offset-z': 'float64',
-            'size-x': np.uint16,
-            'size-y': np.uint16,
-            'size-z': np.uint16,
-            'spacing-x': 'float64',
-            'spacing-y': 'float64',
-            'spacing-z': 'float64',
-            'scale-int': 'float64',
-            'scale-slope': 'float64'
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Get patient scan info.
-        ct_df = cls.patient_ct_slice_summary(pat_id)
-
-        # Check for consistency among scans.
-        assert len(ct_df['size-x'].unique()) == 1
-        assert len(ct_df['size-y'].unique()) == 1
-        assert len(ct_df['offset-x'].unique()) == 1
-        assert len(ct_df['offset-y'].unique()) == 1
-        assert len(ct_df['spacing-x'].unique()) == 1
-        assert len(ct_df['spacing-y'].unique()) == 1
-        assert len(ct_df['scale-int'].unique()) == 1
-        assert len(ct_df['scale-slope'].unique()) == 1
-
-        # Calculate spacing-z - this will be the smallest available diff.
-        spacings_z = np.sort([round(i, Z_SPACING_ROUND_DP) for i in np.diff(ct_df['offset-z'])])
-        spacing_z = spacings_z[0]
-
-        # Calculate fov-z and size-z.
-        fov_z = ct_df['offset-z'].max() - ct_df['offset-z'].min()
-        size_z = int(round(fov_z / spacing_z, 0) + 1)
-
-        # Calculate number of empty slices.
-        num_slices = len(ct_df)
-        num_missing = size_z - num_slices
-
-        # Add table row.
-        data = {
-            'fov-x': ct_df['size-x'][0] * ct_df['spacing-x'][0],
-            'fov-y': ct_df['size-y'][0] * ct_df['spacing-y'][0],
-            'fov-z': size_z * spacing_z,
-            'hu-min': ct_df['hu-min'].min(),
-            'hu-max': ct_df['hu-max'].max(),
-            'num-missing': num_missing,
-            'offset-x': ct_df['offset-x'][0],
-            'offset-y': ct_df['offset-y'][0],
-            'offset-z': ct_df['offset-z'][0],
-            'size-x': ct_df['size-x'][0],
-            'size-y': ct_df['size-y'][0],
-            'size-z': size_z,
-            'spacing-x': ct_df['spacing-x'][0],
-            'spacing-y': ct_df['spacing-y'][0],
-            'spacing-z': spacing_z, 
-            'scale-int': ct_df['scale-int'][0],
-            'scale-slope': ct_df['scale-slope'][0],
-        }
-        df = df.append(data, ignore_index=True)
-
-        # Set type.
-        df = df.astype(cols)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
-    def patient_ct_slice_summary(cls, pat_id):
-        """
-        returns: dataframe with rows containing CT slice info.
-        args:
-            pat_id: the patient ID.
-        """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'args': {
-                'pat_id': pat_id
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-            
-        # Define dataframe structure.
-        cols = {
-            'hu-min': 'float64',
-            'hu-max': 'float64',
-            'offset-x': 'float64',
-            'offset-y': 'float64',
-            'offset-z': 'float64',
-            'size-x': np.uint16,
-            'size-y': np.uint16,
-            'scale-int': 'float64',
-            'scale-slope': 'float64',
-            'spacing-x': 'float64',
-            'spacing-y': 'float64',
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Load CT DICOMS.
-        ct_dicoms = cls.list_ct(pat_id)
-        
-        # Add info.
-        for ct_dicom in ct_dicoms:
-            # Perform scaling from stored values to HU.
-            hus = ct_dicom.pixel_array * ct_dicom.RescaleSlope + ct_dicom.RescaleIntercept
-
-            data = {
-               'hu-min': hus.min(),
-               'hu-max': hus.max(),
-               'offset-x': ct_dicom.ImagePositionPatient[0], 
-               'offset-y': ct_dicom.ImagePositionPatient[1], 
-               'offset-z': ct_dicom.ImagePositionPatient[2], 
-               'size-x': ct_dicom.pixel_array.shape[1],  # Pixel array is stored (y, x) for plotting.
-               'size-y': ct_dicom.pixel_array.shape[0],
-               'scale-int': ct_dicom.RescaleIntercept,
-               'scale-slope': ct_dicom.RescaleSlope,
-               'spacing-x': ct_dicom.PixelSpacing[0],
-               'spacing-y': ct_dicom.PixelSpacing[1]
-            }
-            df = df.append(data, ignore_index=True)
-
-        # Set column types as 'append' crushes them.
-        df = df.astype(cols)
-
-        # Sort by 'offset-z'.
-        df = df.sort_values('offset-z').reset_index(drop=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
 
         return df
 
@@ -540,95 +193,11 @@ class DicomDataset:
                     'com-x': row['com-x'],
                     'com-y': row['com-y'],
                     'com-z': row['com-z'],
-                    'min-x': row['min-x'],
-                    'min-y': row['min-y'],
-                    'min-z': row['min-z'],
                     'width-x': row['width-x'],
                     'width-y': row['width-y'],
                     'width-z': row['width-z']
                 }
                 df = df.append(data, ignore_index=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
-    def patient_labels(cls, pat_id, clear_cache=False):
-        """
-        returns: dataframe with row for each label present for the patient.
-        args:
-            pat_id: the patient ID.
-        kwargs:
-            clear_cache: whether to clear the cache or not.
-        """
-        # Create cache params.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'args': {
-                'pat_id': pat_id
-            }
-        }
-
-        # Clear cache.
-        if clear_cache:
-            cache.delete(params)
-        
-        # Read from cache.
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-        
-        # Define table structure.
-        cols = {
-            'label': 'object',
-            'com-x': np.uint16,
-            'com-y': np.uint16,
-            'com-z': np.uint16,
-            'width-x': np.uint16,
-            'width-y': np.uint16,
-            'width-z': np.uint16
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Get label data.
-        label_data = cls.patient_label_data(pat_id)
-
-        # Get voxel spacings.
-        spacings = cls.patient_ct_summary(pat_id)[['spacing-x', 'spacing-y', 'spacing-z']].loc[0].to_numpy()
-        
-        # Add info for each label.
-        for name, ldata in label_data:
-            # Find centre-of-mass.
-            coms = np.round(center_of_mass(ldata)).astype(np.uint16)
-
-            # Find bounding box co-ordinates.
-            non_zero = np.argwhere(ldata != 0)
-            mins = non_zero.min(axis=0)
-            maxs = non_zero.max(axis=0)
-            voxel_widths = maxs - mins
-
-            # Convert voxel widths to millimetres.
-            widths = voxel_widths * spacings
-
-            data = {
-                'label': name,
-                'com-x': coms[0],
-                'com-y': coms[1],
-                'com-z': coms[2],
-                'width-x': widths[0],
-                'width-y': widths[0],
-                'width-z': widths[0]
-            }
-            df = df.append(data, ignore_index=True)
-
-        # Set column type.
-        df = df.astype(cols)
-
-        # Sort by label.
-        df = df.sort_values('label').reset_index(drop=True)
 
         # Write data to cache.
         cache.write(params, df, 'dataframe')
