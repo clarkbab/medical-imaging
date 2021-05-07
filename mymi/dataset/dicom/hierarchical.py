@@ -1,5 +1,6 @@
 import os
 import pydicom as dicom
+from typing import *
 
 def hierarchical_exists(self) -> bool:
     """
@@ -41,14 +42,14 @@ def build_hierarchical(self) -> None:
         # Save dicom.
         dcm.save_as(filepath)
 
-def require_hierarchical(fn):
+def require_hierarchical(fn: Callable) -> Callable:
     """
-    effect: ensures that the hierarchical data
+    effect: returns a wrapped function, ensuring hierarchical data has been built.
     args:
         fn: the wrapped function.
     """
-    def wrapper_fn(self, *args, **kwargs):
+    def wrapper(self, *args, **kwargs):
         if not hierarchical_exists(self):
             build_hierarchical(self)
         return fn(self, *args, **kwargs)
-    return wrapper_fn
+    return wrapper

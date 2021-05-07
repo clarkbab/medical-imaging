@@ -128,35 +128,22 @@ class DicomDataset:
 
         return df
 
-    @classmethod
-    def labels(cls, clear_cache=False, label='all', num_pats='all', pat_id='all'):
+    @require_hierarchical
+    @cached_method('_name')
+    def label_summary(
+        self, 
+        clear_cache: bool = False,
+        labels: Union[str, Sequence[str]] = 'all',
+        num_pats: Union[str, int] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all') -> DataFrame:
         """
-        returns: a dataframe linking patients to contoured labels.
+        returns: a DataFrame with patient labels and information.
         kwargs:
-            clear_cache: whether to clear the cache or not.
-            label: only include patients with this label.
-            num_pats: number of patients to summarise.
-            pat_id: a string or list of patient IDs.
+            clear_cache: force the cache to clear.
+            labels: include patients with (at least) on of the labels.
+            num_pats: the number of patients to summarise.
+            pat_ids: include listed patients.
         """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'kwargs': {
-                'label': label,
-                'num_pats': num_pats,
-                'pat_id': stringOrSorted(pat_id)
-            }
-        }
-        # Clear cache.
-        if clear_cache:
-            cache.delete(params)
-
-        # Read from cache.
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-                
         # Define table structure.
         cols = {
             'patient-id': 'object',
@@ -164,9 +151,6 @@ class DicomDataset:
             'com-x': np.uint16,
             'com-y': np.uint16,
             'com-z': np.uint16,
-            'min-x': np.uint16,
-            'min-y': np.uint16,
-            'min-z': np.uint16,
             'width-x': np.uint16,
             'width-y': np.uint16,
             'width-z': np.uint16
@@ -174,21 +158,21 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
-        pat_ids = cls.list_patients()
+        pats = self.list_patients()
 
         # Filter patients.
-        pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
-        pat_ids = list(filter(filterOnLabel(label), pat_ids))
+        pats = list(filter(filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(filterOnNumPats(num_pats), pats))
+        pats = list(filter(filterOnLabels(labels), pats))
 
-        for pat_id in tqdm(pat_ids):
-            # Get rtstruct info.
-            label_df = cls.patient_labels(pat_id, clear_cache=clear_cache)
+        # Add patient labels.
+        for pat in tqdm(pats):
+            summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
 
             # Add rows.
-            for _, row in label_df.iterrows():
+            for _, row in summary_df.iterrows():
                 data = {
-                    'patient-id': pat_id,
+                    'patient-id': pat,
                     'label': row['label'],
                     'com-x': row['com-x'],
                     'com-y': row['com-y'],
@@ -198,59 +182,6 @@ class DicomDataset:
                     'width-z': row['width-z']
                 }
                 df = df.append(data, ignore_index=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
-
-        return df
-
-    @classmethod
-    def label_count(cls, num_pats='all'):
-        """
-        returns: a dataframe containing labels and num patients with label.
-        kwargs:
-            num_pats: the number of patients to summarise.
-        """
-        # Load from cache if present.
-        params = {
-            'class': cls.__name__,
-            'method': inspect.currentframe().f_code.co_name,
-            'kwargs': {
-                'num_pats': num_pats
-            }
-        }
-        result = cache.read(params, 'dataframe')
-        if result is not None:
-            return result
-
-        # Define table structure.
-        cols = {
-            'num-patients': np.uint16,
-            'label': 'object'
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # List patients.
-        pat_ids = cls.list_patients()
-
-        # Filter patients.
-        pat_ids = list(filter(filterOnNumPats(num_pats), pat_ids))
-
-        for pat_id in tqdm(pat_ids):
-            # Get RTSTRUCT info.
-            label_df = cls.patient_labels(pat_id=pat_id)
-
-            # Add label counts.
-            label_df['num-patients'] = 1
-            df = df.merge(label_df, how='outer', on='label')
-            df['num-patients'] = (df['num-patients_x'].fillna(0) + df['num-patients_y'].fillna(0)).astype(np.uint16)
-            df = df.drop(['num-patients_x', 'num-patients_y'], axis=1)
-
-        # Sort by 'roi-label'.
-        df = df.sort_values('label').reset_index(drop=True)
-
-        # Write data to cache.
-        cache.write(params, df, 'dataframe')
 
         return df
 

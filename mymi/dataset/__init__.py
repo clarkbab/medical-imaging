@@ -29,32 +29,14 @@ def select(
 def ct_summary(*args, **kwargs):
     return active.ct_summary(*args, **kwargs)
 
-def list_patient(*args, **kwargs):
+def label_summary(*args, **kwargs):
+    return active.label_summary(*args, **kwargs)
+
+def list_patients(*args, **kwargs):
     return active.list_patients(*args, **kwargs)
     
 def patient(*args, **kwargs):
     return active.patient(*args, **kwargs)
-
-def ct_summaries(*args, **kwargs):
-    return active.ct_summaries(*args, **kwargs)
-
-def ct_statistics(*args, **kwargs):
-    return active.ct_statistics(*args, **kwargs)
-
-def get_rtstruct(*args, **kwargs):
-    return active.get_rtstruct(*args, **kwargs)
-
-def labels(*args, **kwargs):
-    return active.labels(*args, **kwargs)
-
-def list_ct(*args, **kwargs):
-    return active.list_ct(*args, **kwargs)
-
-def list_patients():
-    return active.list_patients()
-
-def label_count(*args, **kwargs):
-    return active.label_count(*args, **kwargs)
 
 ##
 # Processed dataset API.

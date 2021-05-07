@@ -2,31 +2,38 @@ from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+from numpy import ndarray
 import os
 import sys
 import torch
 from torchio import LabelMap, ScalarImage, Subject
+from typing import *
 
 from mymi import cache
 from mymi import config
 from mymi import dataset
-from mymi.utils import filterOnPatID, filterOnLabel, stringOrSorted
+from mymi.utils import filterOnPatIDs, filterOnLabels, stringOrSorted
 
-class Plotter:
+class Plotting:
     @classmethod
-    def plot_acquisition_params_boxplot(cls):
-        pass
-
-    @classmethod
-    def plot_ct_distribution(cls, bin_width=10, end=None, figsize=(10, 10), pat_id='all', label='all', start=None):
+    def plot_ct_distribution(
+        cls, 
+        bin_width: int = 10,
+        clear_cache: bool = False,
+        end: int = None,
+        figsize: Tuple[int, int] = (10, 10),
+        labels: Union[str, Sequence[str]] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all',
+        start: int = None) -> None:
         """
         effect: plots the CT intensity distribution for each patient with the specified label.
         kwargs:
             bin_width: the width of the histogram bins.
+            clear_cache: forces the cache to clear.
             end: the highest bin to include.
             figsize: the size of the figure.
-            pat_id: the patients to include.
-            label: include patients with any of the listed labels (behaves like an OR).
+            labels: include patients with any of the listed labels (behaves like an OR).
+            pat_ids: the patients to include.
             start: the lowest bin to include.
         """
         params = {
@@ -93,35 +100,42 @@ class Plotter:
         plt.hist(new_bins[:-1], new_bins, weights=list(freqs.values())[:-1])
         plt.show()
 
-
-    @classmethod
-    def plot_patient(cls, pat_id, slice_idx, aspect=None, axes=True, figsize=(8, 8), full_label=False, labels=True, view='axial', label='all', transform=None, window=None):
+    def plot_patient(
+        self,
+        id: str,
+        slice_idx: int,
+        aspect: float = 1,
+        figsize: Tuple[int, int] = (8, 8),
+        labels: Union[str, Sequence[str]] = 'all',
+        perimeter_only: bool = False,
+        show_axes: bool = True,
+        transform: str = None,
+        view: Union['axial', 'coronal', 'sagittal'] = 'axial',
+        window: Tuple[float, float] = None) -> None:
         """
         effect: plots a CT slice with contours.
         args:
-            pat_id: the patient ID.
+            id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
             aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
-            axes: display the pixel values on the axes.
             figsize: the size of the plot in inches.
-            full_label: should we should full label mask or perimeter?
-            view: the viewing plane.
-                axial: viewed from the cranium (slice_idx=0) to the caudal region.
-                coronal: viewed from the anterior (slice_idx=0) to the posterior.
-                sagittal: viewed from the 
-            label: the label to plot.
+            labels: the labels to display.
+            perimeter_only: show the label perimeter only.
+            show_axes: display the pixel values on the axes.
+            transform: apply the transform before plotting.
+            view: the viewing axis.
             window: the HU window to apply.
         """
         # Load patient summary.
-        summary = dataset.patient_ct_summary(pat_id)
+        summary = dataset.patient(id).ct_summary().iloc[0].to_dict()
 
         # Load CT data.
-        ct_data = dataset.patient_ct_data(pat_id)
+        ct_data = dataset.patient(id).ct_data()
 
         # Load labels.
-        if label is not None:
-            label_data = dataset.patient_label_data(pat_id, label=label)
+        if labels:
+            label_data = dataset.patient(id).label_data(labels=labels)
 
         # Transform data.
         if transform:
@@ -131,9 +145,9 @@ class Plotter:
 
             # Create 'subject'.
             affine = np.array([
-                [summary['spacing-x'].item(), 0, 0, 0],
-                [0, summary['spacing-y'].item(), 0, 0],
-                [0, 0, summary['spacing-z'].item(), 0],
+                [summary['spacing-x'], 0, 0, 0],
+                [0, summary['spacing-y'], 0, 0],
+                [0, 0, summary['spacing-z'], 0],
                 [0, 0, 0, 1]
             ])
             ct_data = ScalarImage(tensor=ct_data, affine=affine)
@@ -162,7 +176,7 @@ class Plotter:
 
         # Convert from our co-ordinate system (frontal, sagittal, longitudinal) to 
         # that required by 'imshow'.
-        ct_slice_data = cls.to_image_coords(ct_slice_data, view)
+        ct_slice_data = self.to_image_coords(ct_slice_data, view)
 
         # Only apply aspect ratio if no transforms are being presented otherwise
         # we might end up with skewed images.
@@ -173,11 +187,9 @@ class Plotter:
                 aspect = summary['spacing-z'] / summary['spacing-x']
             elif view == 'sagittal':
                 aspect = summary['spacing-z'] / summary['spacing-y']
-        else:
-            aspect = 1
 
         # Determine plotting window.
-        if window is not None:
+        if window:
             vmin, vmax = window
         else:
             vmin, vmax = ct_data.min(), ct_data.max()
@@ -186,7 +198,7 @@ class Plotter:
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
-        if label is not None:
+        if labels:
             # Plot labels.
             if len(label_data) != 0:
                 # Define color pallete.
@@ -197,7 +209,7 @@ class Plotter:
                 for i, (lname, ldata) in enumerate(label_data):
                     # Convert data to 'imshow' co-ordinate system.
                     ldata = ldata[data_index]
-                    ldata = cls.to_image_coords(ldata, view)
+                    ldata = self.to_image_coords(ldata, view)
 
                     # Skip label if not present on this slice.
                     if ldata.max() == 0:
@@ -205,8 +217,8 @@ class Plotter:
                     show_legend = True
 
                     # Get binary perimeter.
-                    if not full_label:
-                        ldata = cls.binary_perimeter(ldata)
+                    if perimeter_only:
+                        ldata = self.binary_perimeter(ldata)
                     
                     # Create binary colormap for each label.
                     colours = [(1.0, 1.0, 1.0, 0), palette(i)]
@@ -223,7 +235,7 @@ class Plotter:
                         l.set_linewidth(8)
 
         # Show axis markers.
-        axes = 'on' if axes else 'off'
+        axes = 'on' if show_axes else 'off'
         plt.axis(axes)
 
         # Determine number of slices.
@@ -239,8 +251,16 @@ class Plotter:
 
         plt.show()
 
-    @classmethod
-    def to_image_coords(cls, data, view):
+    def to_image_coords(
+        self,
+        data: ndarray,
+        view: Union['axial', 'coronal', 'sagittal']) -> ndarray:
+        """
+        returns: data in correct orientation for viewing.
+        args:
+            data: the data to orient.
+            view: the viewing axis.
+        """
         if view == 'axial':
             data = np.transpose(data)
         elif view in ('coronal', 'sagittal'):
@@ -348,12 +368,13 @@ class Plotter:
         else:
             plt.show()
 
-    @classmethod
-    def binary_perimeter(cls, mask):
+    def binary_perimeter(
+        self,
+        label: ndarray) -> ndarray:
         """
-        returns: the edge pixels of the mask.
+        returns: label containing perimeter pixels only.
         args:
-            mask: a 2D image mask.
+            label: the full label.
         """
         mask_perimeter = np.zeros_like(mask, dtype=bool)
         x_dim, y_dim = mask.shape
