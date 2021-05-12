@@ -1,0 +1,50 @@
+#! /usr/bin/env python3
+import argparse
+import os
+import sys
+import torch
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import dataset
+from mymi import logging
+from mymi.metrics import batch_dice
+from mymi import utils
+
+# Parse args.
+parser = argparse.ArgumentParser(description='Compare contours to ground truth')
+parser.add_argument('-e', '--evaluate', action='store', help='the evaluation dataset', required=True)
+parser.add_argument('-g', '--ground-truth', action='store', help='the ground truth dataset', required=True)
+parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
+args = parser.parse_args()
+
+# Create logger.
+logging.config(args.log_level)
+
+# Load evaluation patients.
+dataset.select(args.evaluate)
+pats = dataset.list_patients()
+print(pats)
+
+# TODO: Handle different contours names, e.g. Parotid-Left vs Parotid_L.
+# Map from database to our local names.
+
+# Add metrics for patients.
+dice_scores = []
+for pat in pats:
+    # Load ground truth.
+    dataset.select(args.ground_truth)
+    _, gt_data = dataset.patient(pat).label_data(labels='Parotid-Left')[0]
+
+    # Load label data.
+    dataset.select(args.evaluate)
+    _, eval_data = dataset.patient(pat).label_data(labels='Parotid_L')[0]
+
+    # Calculate DSC.
+    gt_data = torch.Tensor(gt_data).unsqueeze(0)
+    eval_data = torch.Tensor(gt_data).unsqueeze(0)
+    dsc = batch_dice(gt_data, eval_data)  
+
+    print(dsc)
+

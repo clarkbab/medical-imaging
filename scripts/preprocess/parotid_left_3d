@@ -7,18 +7,13 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
-from mymi import cache
 from mymi import utils
 from mymi.preprocessing import ParotidLeft3DPreprocessor
 from torchio.transforms import Compose, CropOrPad, Resample
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
-parser.add_argument('-c', '--clear-cache', action='store_true', default=False, help='clear the cache')
 parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
-parser.add_argument('-n', '--no-cache', action='store_true', default=False, help='disables the cache')
-parser.add_argument('-nr', '--no-cache-read', action='store_true', default=False, help='disables cache read')
-parser.add_argument('-nw', '--no-cache-write', action='store_true', default=False, help='disables cache write')
 parser.add_argument('-np', '--num-pats', action='store', default='all', help='number of patients to process')
 parser.add_argument('-p', '--path', action='store', help='path to store processed data')
 parser.add_argument('-t', '--transforms-path', action='store', help='path to transforms')

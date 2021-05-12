@@ -2,7 +2,10 @@ import os
 import pydicom as dicom
 from typing import *
 
-def hierarchical_exists(self) -> bool:
+from mymi import logging
+from mymi.dataset import DicomDataset
+
+def hierarchical_exists(self: DicomDataset) -> bool:
     """
     returns: True if the hierarchical dataset has been built.
     """
@@ -10,10 +13,12 @@ def hierarchical_exists(self) -> bool:
     hier_path = os.path.join(self._path, 'hierarchical')
     return os.path.exists(hier_path)
 
-def build_hierarchical(self) -> None:
+def build_hierarchical(self: DicomDataset) -> None:
     """
     effect: creates a hierarchical dataset based on dicom content, not existing structure.
     """
+    logging.info('Building hierarchical dataset.')
+
     # Load all dicom files.
     raw_path = os.path.join(self._path, 'raw')
     dicom_files = []
