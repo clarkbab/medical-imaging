@@ -3,11 +3,13 @@ import logging
 import math
 import numpy as np
 import os
+import pandas as pd
 from skimage.draw import polygon
 import shutil
 import sys
 from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
+from typing import *
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
@@ -17,11 +19,19 @@ from mymi import config
 from mymi import dataset
 
 class ParotidLeft3DPreprocessor:
-    def __call__(self, drop_missing_slices=True, normalise=False, num_pats='all', seed=42, transform=None):
+    def __call__(
+        self,
+        clear_cache: bool = False,
+        drop_missing_slices: bool = True,
+        normalise: bool = False, 
+        num_pats: Union[str, Sequence[str]] = 'all',
+        seed: int = 42,
+        transform: bool = None):
         """
         effect: stores 3D patient volumes in 'train', 'validate' and 'test' folders
             by random split.
         kwargs:
+            clear_cache: force the cache to clear.
             drop_missing_slices: drops patients that have missing slices.
             normalise: normalise the input data.
             num_pats: operate on subset of patients.
@@ -29,24 +39,26 @@ class ParotidLeft3DPreprocessor:
             transforms: apply the transforms on all patient data.
         """
         # Define label.
-        label = 'Parotid-Left'
+        labels = 'Parotid-Left'
 
         # Load patients.
-        pat_ids = dataset.list_patients()
+        pats = dataset.list_patients()
+
+        # Drop patients with missing slices.
         if drop_missing_slices:
-            pat_missing_ids = dataset.patient_ct_summaries().query('`num-missing` > 0').index.to_numpy()
-            pat_ids = np.setdiff1d(pat_ids, pat_missing_ids)
+            pat_missing_ids = dataset.ct_summary(clear_cache=clear_cache).query('`num-missing` > 0').index.to_numpy()
+            pats = np.setdiff1d(pats, pat_missing_ids)
             logging.info(f"Removed {len(pat_missing_ids)} patients with missing slices.")
 
         # Load patients who have 'Parotid-Left' contours.
-        labels_df = dataset.labels(pat_id=pat_ids)
-        pat_ids = labels_df.query(f"`label` == '{label}'")['patient-id'].unique()
-        logging.info(f"Found {len(pat_ids)} patients with '{label}' contours.")
+        labels_df = dataset.label_summary(clear_cache=clear_cache, labels=labels, pat_ids=pats)
+        pats = labels_df['patient-id'].unique()
+        logging.info(f"Found {len(pats)} patients with one of '{labels}' contours.")
 
         # Get patient subset for testing.
         if num_pats != 'all':
             assert isinstance(num_pats, int)
-            pat_ids = pat_ids[:num_pats]
+            pats = pats[:num_pats]
             logging.info(f"Using subset of {num_pats} patients.")
 
         # Set split proportions.
@@ -55,42 +67,48 @@ class ParotidLeft3DPreprocessor:
 
         # Split the patient IDs.
         np.random.seed(seed) 
-        np.random.shuffle(pat_ids)
-        num_train = int(np.floor(p_train * len(pat_ids)))
-        num_validate = int(np.floor(p_validate * len(pat_ids)))
-        pat_train_ids = pat_ids[:num_train]
-        pat_validate_ids = pat_ids[num_train:(num_train + num_validate)]
-        pat_test_ids = pat_ids[(num_train + num_validate):]
-        logging.info(f"Num patients in split: {len(pat_train_ids)}/{len(pat_validate_ids)}/{len(pat_test_ids)}.") 
-
-        folders = ['train', 'validate', 'test']
-        folder_pat_ids = [pat_train_ids, pat_validate_ids, pat_test_ids]
+        np.random.shuffle(pats)
+        num_train = int(np.floor(p_train * len(pats)))
+        num_validate = int(np.floor(p_validate * len(pats)))
+        train_pats = pats[:num_train]
+        validate_pats = pats[num_train:(num_train + num_validate)]
+        test_pats = pats[(num_train + num_validate):]
+        logging.info(f"Num patients in split: {len(train_pats)}/{len(validate_pats)}/{len(test_pats)}.") 
 
         # Write data to each folder.
-        for folder, pat_ids in zip(folders, folder_pat_ids):
+        folders = ['train', 'validate', 'test']
+        folder_pats = [train_pats, validate_pats, test_pats]
+        for folder, pats in zip(folders, folder_pats):
             logging.info(f"Writing data to '{folder}' folder.")
 
             # Recreate folder.
-            folder_path = os.path.join(config.dataset_dir, 'HEAD-NECK-RADIOMICS-HN1', 'training', folder)
+            folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', folder)
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
             os.makedirs(folder_path)
 
             # Load dataset statistics for normalisation.
             if normalise:
-                stats_df = dataset.data_statistics(label=label)
+                stats_df = dataset.data_statistics(clear_cache=clear_cache, label=label)
                 mean, std_dev = stats_df['hu-mean'].item(), stats_df['hu-std-dev'].item() 
 
             # Maintain index per subfolder.
             sample_idx = 0
 
+            # Write patient manifest.
+            logging.info(f"Writing {folder} manifest file.")
+            manifest_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', 'manifest', f"{folder}.csv")
+            os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+            df = pd.DataFrame(pats, columns=['patient-id'])
+            df.to_csv(manifest_path, index=False) 
+
             # Write each patient to folder.
-            for pat_id in tqdm(pat_ids):
-                logging.info(f"Extracting data for patient {pat_id}.")
+            for pat in tqdm(pats):
+                logging.info(f"Extracting data for patient {pat}.")
 
                 # Load data.
-                input = dataset.patient_ct_data(pat_id)
-                _, label_data = dataset.patient_label_data(pat_id, label=label)[0]
+                input = dataset.patient(pat).ct_data(clear_cache=clear_cache)
+                _, label_data = dataset.patient(pat).label_data(clear_cache=clear_cache, labels=labels)[0]
 
                 # Normalise data.
                 if normalise:
@@ -99,7 +117,7 @@ class ParotidLeft3DPreprocessor:
                 # Perform transform.
                 if transform:
                     # Load patient summary.
-                    summary_df = dataset.patient_ct_summary(pat_id)
+                    summary = dataset.patient(pat).ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
 
                     # Add 'batch' dimension.
                     input = np.expand_dims(input, axis=0)
@@ -107,9 +125,9 @@ class ParotidLeft3DPreprocessor:
 
                     # Create 'subject'.
                     affine = np.array([
-                        [summary_df['spacing-x'], 0, 0, 0],
-                        [0, summary_df['spacing-y'], 0, 0],
-                        [0, 0, summary_df['spacing-z'], 1],
+                        [summary['spacing-x'], 0, 0, 0],
+                        [0, summary['spacing-y'], 0, 0],
+                        [0, 0, summary['spacing-z'], 1],
                         [0, 0, 0, 1]
                     ])
                     input = ScalarImage(tensor=input, affine=affine)

@@ -6,14 +6,16 @@ import numpy as np
 import os
 import sys
 import torch
-from torchio.transforms import Compose, Resample
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import checkpoint
+from mymi import dataset
+from mymi.dataset import Types
 from mymi.models import ParotidLeft3DNet
 from mymi.postprocessing import largest_connected_component
+from mymi.prediction import Predictor
 from mymi import utils
 
 # Parse options.
@@ -29,29 +31,19 @@ def interval_type(s: str):
 parser = ArgumentParser(description="""
     Evaluate the segmentation model.
 """)
-parser.add_argument('-d', '--data-path', action='store', help='the data to perform inference on', required=True)
+parser.add_argument('-d', '--dataset', action='store', help='the data to perform inference on', required=True)
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
 parser.add_argument('-mc', '--model-checkpoint', action='store', default='checkpoint', help='the checkpoint name')
 parser.add_argument('-mn', '--model-name', action='store', help='the model name', required=True)
-parser.add_argument('-p', '--print-interval', action='store', type=interval_type, help='how often to print the results')
-parser.add_argument('-n', '--name', action='store', help='the run name')
-parser.add_argument('-na', '--no-autocast', action='store_true', default=False, help='turn off autocast')
+parser.add_argument('-mr', '--model-run', action='store', help='the model run', required=True)
 parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='turn off GPU use')
-parser.add_argument('-nh', '--no-hausdorff', action='store_true', default=False, help='turn off the HD metric')
-parser.add_argument('-nr', '--no-record', action='store_true', default=False, help="don't record labels, predictions, figures, etc.")
-parser.add_argument('-r', '--run-name', action='store', help='the run name', required=True)
+parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('-p', '--patient-ids', action='store_true', default=False, help='turn off GPU use')
 args = parser.parse_args()
 
 # Configure logging.
 log_level = getattr(logging, args.log_level.upper(), None)
 utils.configure_logging(log_level)
-
-# Determine run name.
-if args.name:
-    run_name = args.name
-else:
-    run_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-logging.info(f"Run name: {run_name}.")
 
 # Configure device.
 if args.no_gpu:
@@ -70,71 +62,32 @@ model = model.to(device)
 logging.info(f"Using model arch: {model.__class__}.")
 
 # Load model params.
-cp = checkpoint.load(args.model_name, args.run_name, checkpoint_name=args.model_checkpoint)
-model.load_state_dict(cp['model_state_dict'])
-logging.info(f"Loaded model with name '{args.name}' from training run '{args.run_name}'.")
+model_state, _ = checkpoint.load(args.model_name, args.model_run, checkpoint_name=args.model_checkpoint, device=device)
+model.load_state_dict(model_state)
+logging.info(f"Loaded model with name '{args.model_name}' from training run '{args.model_run}'.")
 
-# Create input transforms.
-data_res = (512, 512, 212)
-input_res = (128, 128, 96)
-data_spacing = (1, 1, 3)
-input_spacing = tuple((np.array(data_res) / input_res) * data_spacing)
-transforms = [
-    Resample(input_spacing)
-]
-logging.info(f"Using transforms '{transforms}'.")
-transform = Compose(transforms)
+# Load test patients from manifest.
+ds_name = 'HEAD-NECK-RADIOMICS-HN1'
+dataset.select(ds_name, type=Types.PROCESSED)
+pats = dataset.manifest('test')
 
-# Create output transform, applied to prediction before post-processing.
-output_transforms = [
-    Resample(data_spacing)
-]
-logging.info(f"Using output transforms: '{output_transforms}'.")
-output_transform = Compose(output_transforms)
+# Create input transform.
+# First set the spacing, to a consistent 1, 1, 4.25 (or whatever).
+# Then crop/pad.
+approx_data_spacing = (1, 1, 3)
+approx_data_size = (512, 512, 212)
+network_size = (128, 128, 96)
+network_spacing = tuple((np.array(approx_data_size) / network_size) * approx_data_spacing)
 
-# Load input data.
-f = open(args.data_path, 'rb')
-data = np.load(f)
+# Create predictor kwargs.
+kwargs = { 'pat_ids': pats }
+kwargs['device'] = device
+if args.no_mixed:
+    kwargs['mixed_precision'] = False
+    logging.info('Using full precision.')
+else:
+    logging.info('Using mixed precision.')
 
-# Convert to PyTorch-friendly format.
-input = torch.Tensor(data).reshape((1, 1, *data.shape))
-input = input.float()
-    
-# Run inference.
-autocast_enabled = not args.no_autocast
-with autocast(enabled=autocast_enabled):
-    pred = model(input)
-
-# Convert to binary prediction.
-pred = pred.argmax(axis=1)
-
-# Move data to CPU for metric calculations.
-pred = pred.cpu()
-
-# Transform output prediction.
-output_spacing = input_spacing
-
-# Create torchio 'subject'.
-affine = np.array([
-    [output_spacing[0], 0, 0, 0],
-    [0, output_spacing[1], 0, 0],
-    [0, 0, output_spacing[2], 1],
-    [0, 0, 0, 1]
-])
-pred = LabelMap(tensor=pred, affine=affine)
-subject = Subject(a_segmentation=pred)
-
-# Transform the subject.
-output = output_transform(subject)
-
-# Extract results.
-pred = output['a_segmentation'].data
-
-# Find the largest connected component.
-pred = largest_connected_component(pred)
-
-# Get the bounding box.
-bb_min, bb_dim = bounding_box(pred)
-
-# Report results.
-print(bb_min, bb_dim)
+# Create/run predictor.
+predictor = Predictor(ds_name, network_size, network_spacing, **kwargs)
+predictor(model)

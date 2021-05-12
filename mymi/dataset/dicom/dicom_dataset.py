@@ -1,7 +1,9 @@
+from collections import OrderedDict
 import inspect
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy import ndarray
 import os
 import pandas as pd
 from pandas import DataFrame
@@ -15,7 +17,7 @@ from typing import *
 from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
-from mymi.utils import filterOnNumPats, filterOnPatIDs, filterOnLabels, stringOrSorted
+from mymi.utils import filterOnNumPats, filterOnPatIDs
 
 from .hierarchical import require_hierarchical
 from .patient import Patient
@@ -71,6 +73,65 @@ class DicomDataset:
 
     @require_hierarchical
     @cached_method('_name')
+    def ct_distribution(
+        self, 
+        bin_width: int = 10,
+        clear_cache: bool = False,
+        labels: Union[str, Sequence[str]] = 'all',
+        num_pats: Union[str, int] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all') -> OrderedDict:
+        """
+        effect: plots CT distribution of the dataset.
+        kwargs:
+            bin_width: the width of the histogram bins.
+            clear_cache: forces the cache to clear.
+            labels: include patients with any of the listed labels (behaves like an OR).
+            num_pats: the number of patients to include.
+            pat_ids: the patients to include.
+        """
+        # Load all patients.
+        pats = self.list_patients()
+        
+        # Filter patients.
+        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(filterOnLabels(labels), pats))
+        pats = list(filter(filterOnNumPats(num_pats), pats))
+
+        # Calculate the frequencies.
+        freqs = {}
+        for pat in tqdm(pats):
+            # Load patient volume.
+            ct_data = self.patient(pat).ct_data(clear_cache=clear_cache)
+
+            # Bin the data.
+            binned_data = bin_width * np.floor(ct_data / bin_width)
+
+            # Get values and their frequencies.
+            values, frequencies = np.unique(binned_data, return_counts=True)
+
+            # Add values to frequencies dict.
+            for v, f in zip(values, frequencies):
+                # Check if value has already been added.
+                if v in freqs:
+                    freqs[v] += f
+                else:
+                    freqs[v] = f
+
+        # Fill in empty bins.
+        values = np.fromiter(freqs.keys(), dtype=np.float)
+        min, max = values.min(), values.max() + bin_width
+        bins = np.arange(min, max, bin_width)
+        for b in bins:
+            if b not in freqs:
+                freqs[b] = 0            
+
+        # Sort dictionary.
+        freqs = OrderedDict(sorted(freqs.items()))
+
+        return freqs
+
+    @require_hierarchical
+    @cached_method('_name')
     def ct_summary(
         self, 
         clear_cache: bool = False,
@@ -107,11 +168,11 @@ class DicomDataset:
         df = pd.DataFrame(columns=cols.keys())
 
         # List patients.
-        pats = cls.list_patients()
+        pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filterOnPatIDs(pat_id), pats))
-        pats = list(filter(filterOnLabels(label), pats))
+        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(filterOnLabels(labels), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
@@ -161,9 +222,9 @@ class DicomDataset:
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(filterOnNumPats(num_pats), pats))
+        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
         pats = list(filter(filterOnLabels(labels), pats))
+        pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient labels.
         for pat in tqdm(pats):
@@ -257,3 +318,23 @@ class DicomDataset:
         cache.write(params, df, 'dataframe')
 
         return df
+
+    def filterOnLabels(
+        self,
+        labels: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+        """
+        returns: a function to filter patients on whether they have that labels.
+        args:
+            labels: the passed 'labels' kwarg.
+        """
+        def fn(id):
+            # Load patient labels.
+            pat_labels = self.patient(id).label_summary().label.to_numpy()
+
+            if ((isinstance(labels, str) and (labels == 'all' or labels in pat_labels)) or
+                ((isinstance(labels, list) or isinstance(labels, ndarray) or isinstance(labels, tuple)) and len(np.intersect1d(labels, pat_labels)) != 0)):
+                return True
+            else:
+                return False
+
+        return fn

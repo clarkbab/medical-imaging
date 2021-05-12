@@ -12,92 +12,42 @@ from typing import *
 from mymi import cache
 from mymi import config
 from mymi import dataset
-from mymi.utils import filterOnPatIDs, filterOnLabels, stringOrSorted
 
 class Plotting:
-    @classmethod
     def plot_ct_distribution(
-        cls, 
+        self, 
         bin_width: int = 10,
         clear_cache: bool = False,
-        end: int = None,
         figsize: Tuple[int, int] = (10, 10),
         labels: Union[str, Sequence[str]] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all',
-        start: int = None) -> None:
+        max_bin: int = None,
+        min_bin: int = None,
+        num_pats: Union[str, int] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all') -> None:
         """
-        effect: plots the CT intensity distribution for each patient with the specified label.
+        effect: plots CT distribution of the dataset.
         kwargs:
             bin_width: the width of the histogram bins.
             clear_cache: forces the cache to clear.
-            end: the highest bin to include.
             figsize: the size of the figure.
             labels: include patients with any of the listed labels (behaves like an OR).
+            max_bin: the maximum bin to show. 
+            min_bin: the minimum bin to show.
+            num_pats: the number of patients to include.
             pat_ids: the patients to include.
-            start: the lowest bin to include.
         """
-        params = {
-            'class': 'dataset',
-            'method': 'plot_ct_histogram',
-            'kwargs': {
-                'pat_id': stringOrSorted(pat_id),
-                'label': stringOrSorted(label)
-            }
-        }
-        result = cache.read(params, 'dict')
-        if result is None:
-            # Load all patients.
-            pat_ids = dataset.list_patients()
-            
-            # Filter patients.
-            pat_ids = list(filter(filterOnPatID(pat_id), pat_ids))
-            pat_ids = list(filter(filterOnLabel(label), pat_ids))
+        # Load CT distribution.
+        freqs = dataset.ct_distribution(bin_width=bin_width, clear_cache=clear_cache, labels=labels, num_pats=num_pats, pat_ids=pat_ids)
 
-            # Calculate the frequencies.
-            freqs = {}
-            for pat in pat_ids:
-                # Load patient volume.
-                data = dataset.patient_ct_data(pat)
-
-                # Bin the data.
-                binned_data = bin_width * np.floor(data / bin_width)
-
-                # Get values and their frequencies.
-                values, frequencies = np.unique(binned_data, return_counts=True)
-
-                # Add values to frequencies dict.
-                for v, f in zip(values, frequencies):
-                    # Check if value has already been added.
-                    if v in freqs:
-                        freqs[v] += f
-                    else:
-                        freqs[v] = f
-
-            # Write frequencies 'dict' to cache.
-            cache.write(params, freqs, 'dict')
-        else:
-            freqs = result
-
-        # Fill in empty bins.
-        values = np.fromiter(freqs.keys(), dtype=np.float)
-        min, max = values.min(), values.max() + 2 * bin_width
-        bins = np.arange(min, max, bin_width)
-        for b in bins:
-            if b not in freqs:
-                freqs[b] = 0            
-
-        # Remove bins we're not interested in.
-        new_bins = bins
-        if start is not None or end is not None:
-            for b in bins:
-                # Remove or break.
-                if (start is not None and b < start) or (end is not None and b > end):
-                    new_bins = new_bins[new_bins != b]
+        # Remove bins we don't want.
+        if min_bin or max_bin:
+            for b in freqs.keys():
+                if (min_bin and b < min_bin) or (max_bin and b > max_bin):
                     freqs.pop(b)
 
         # Plot the histogram.
         plt.figure(figsize=figsize)
-        plt.hist(new_bins[:-1], new_bins, weights=list(freqs.values())[:-1])
+        plt.hist(freqs.key()[:-1], freqs.keys(), weights=list(freqs.values())[:-1])
         plt.show()
 
     def plot_patient(
@@ -105,6 +55,7 @@ class Plotting:
         id: str,
         slice_idx: int,
         aspect: float = 1,
+        clear_cache: bool = False,
         figsize: Tuple[int, int] = (8, 8),
         labels: Union[str, Sequence[str]] = 'all',
         perimeter_only: bool = False,
@@ -113,12 +64,13 @@ class Plotting:
         view: Union['axial', 'coronal', 'sagittal'] = 'axial',
         window: Tuple[float, float] = None) -> None:
         """
-        effect: plots a CT slice with contours.
+        effect: plots a CT slice with labels.
         args:
             id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
             aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
+            clear_cache: force cache to clear.
             figsize: the size of the plot in inches.
             labels: the labels to display.
             perimeter_only: show the label perimeter only.
@@ -128,14 +80,14 @@ class Plotting:
             window: the HU window to apply.
         """
         # Load patient summary.
-        summary = dataset.patient(id).ct_summary().iloc[0].to_dict()
+        summary = dataset.patient(id).ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
 
         # Load CT data.
-        ct_data = dataset.patient(id).ct_data()
+        ct_data = dataset.patient(id).ct_data(clear_cache=clear_cache)
 
         # Load labels.
         if labels:
-            label_data = dataset.patient(id).label_data(labels=labels)
+            label_data = dataset.patient(id).label_data(clear_cache=clear_cache, labels=labels)
 
         # Transform data.
         if transform:
@@ -251,123 +203,6 @@ class Plotting:
 
         plt.show()
 
-    def to_image_coords(
-        self,
-        data: ndarray,
-        view: Union['axial', 'coronal', 'sagittal']) -> ndarray:
-        """
-        returns: data in correct orientation for viewing.
-        args:
-            data: the data to orient.
-            view: the viewing axis.
-        """
-        if view == 'axial':
-            data = np.transpose(data)
-        elif view in ('coronal', 'sagittal'):
-            data = np.rot90(data)
-
-        return data
-
-    @classmethod
-    def plot_batch(cls, input, slice_idx, label=None, pred=None, aspect=1.0, figsize=(8, 8), full_label=False, num_images='all', view='axial', return_figure=False):
-        """
-        effect: plots a training batch.
-        args:
-            input: the input data.
-            slice_idx: the slice to show. Can be list-like if batch has more than one element.
-        kwargs:
-            figsize: the plot figure size.
-            full_label: should we should full label mask or perimeter?
-            label: the label data.
-            num_images: number of images from the batch to plot.
-            pred: the predicted segmentation mask.
-            view: the viewing plane.
-            return_figure: whether we return or plot the figure.
-        """
-        # Convert to CPU.
-        input = input.cpu()
-        if label is not None: label = label.cpu()
-        if pred is not None: pred = pred.cpu()
-
-        # Remove input 'channel' dimension.
-        if input.dim() == 5:
-            input = input.squeeze(1)
-
-        # Get input data.
-        assert view in ('axial', 'coronal', 'sagittal')
-        num_images = len(input) if num_images == 'all' else num_images
-        input_data = input[:num_images]
-
-        # Handle 'slice_idx'.
-        if isinstance(slice_idx, int):
-            slice_idx = [slice_idx] * num_images
-
-        # Add label.
-        if label is not None:
-            # Get subset of images.
-            label_data = label[:num_images]
-
-        # Add prediction.
-        if pred is not None:
-            # Get subset of images.
-            pred_data = pred[:num_images]
-
-        # Plot data.
-        fig, axs = plt.subplots(num_images, figsize=figsize)
-        if num_images == 1: axs = [axs]
-        if return_figure: plt.close(fig)
-
-        for i in range(num_images):
-            # Plot input slice data.
-            if view == 'axial':
-                slice_input_data = np.transpose(input_data[i, :, :, slice_idx[i]])
-            elif view == 'coronal':
-                slice_input_data = np.rot90(input_data[i, :, slice_idx[i], :])
-            elif view == 'sagittal':
-                slice_input_data = np.rot90(input_data[i, slice_idx[i], :, :])
-
-            axs[i].imshow(slice_input_data, aspect=aspect, cmap='gray')
-
-            # Plot prediction slice data.
-            if pred is not None:
-                if view == 'axial':
-                    slice_pred_data = np.transpose(pred_data[i, :, :, slice_idx[i]])
-                elif view == 'coronal':
-                    slice_pred_data = np.rot90(pred_data[i, :, slice_idx[i], :])
-                elif view == 'sagittal':
-                    slice_pred_data = np.rot90(pred_data[i, slice_idx[i], :, :])
-
-                # Create binary colormap.
-                colours = [(1.0, 1.0, 1.0, 0), (0.12, 0.47, 0.7, 1.0)]
-                label_cmap = ListedColormap(colours)
-
-                axs[i].imshow(slice_pred_data, aspect=aspect, cmap=label_cmap)
-
-            # Plot label slice data.
-            if label is not None:
-                if view == 'axial':
-                    slice_label_data = np.transpose(label_data[i, :, :, slice_idx[i]])
-                elif view == 'coronal':
-                    slice_label_data = np.rot90(label_data[i, :, slice_idx[i], :])
-                elif view == 'sagittal':
-                    slice_label_data = np.rot90(label_data[i, slice_idx[i], :, :])
-
-                # Get binary perimeter.
-                if not full_label:
-                    slice_label_data = cls.binary_perimeter(slice_label_data)
-
-                # Create binary colormap.
-                colours = [(1.0, 1.0, 1.0, 0), (1.0, 1.0, 1.0e-5, 1.0)]
-                label_cmap = ListedColormap(colours)
-
-                axs[i].imshow(slice_label_data, aspect=aspect, cmap=label_cmap)
-        
-        # Return or plot the figure.
-        if return_figure:
-            return fig
-        else:
-            plt.show()
-
     def binary_perimeter(
         self,
         label: ndarray) -> ndarray:
@@ -392,33 +227,19 @@ class Plotting:
 
         return mask_perimeter
 
-    @classmethod
-    def list_saved_figures(cls):
+    def to_image_coords(
+        self,
+        data: ndarray,
+        view: Union['axial', 'coronal', 'sagittal']) -> ndarray:
         """
-        returns: a list of the files in the MYMI 'figures' directory.
-        """
-        return os.listdir(config.figure_dir) 
-
-    @classmethod
-    def plot_saved_figure(cls, batch, view, aspect=1.0, figsize=(15, 15)):
-        """
-        effect: plots the saved figure.
+        returns: data in correct orientation for viewing.
         args:
-            batch: the batch number.
-            view: the view.
-        kwargs:
-            aspect: the aspect ratio.
-            figsize: the figure size.
+            data: the data to orient.
+            view: the viewing axis.
         """
-        # Check the view.
-        assert view in ('axial', 'coronal', 'sagittal')
+        if view == 'axial':
+            data = np.transpose(data)
+        elif view in ('coronal', 'sagittal'):
+            data = np.rot90(data)
 
-        # Load the image.
-        filename = f"batch-{batch:05}-{view}.png"
-        img = mpimg.imread(os.path.join(config.figure_dir, filename))
-
-        # Plot the image.
-        plt.figure(figsize=figsize)
-        plt.imshow(img, aspect=aspect)
-        plt.axis('off')
-        plt.show()
+        return data

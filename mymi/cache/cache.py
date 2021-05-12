@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from datetime import datetime
 import glob
 import gzip
@@ -22,6 +23,7 @@ class Cache:
         DataFrame,
         dict,
         ndarray,
+        OrderedDict,
         Sequence[Tuple[str, ndarray]]
     ]
         
@@ -192,7 +194,7 @@ class Cache:
         if data_type is None:
             raise ValueError(f"Cache params must include 'type', got '{params}'.")
         if data_type not in self.Types:
-            raise ValueError(f"Cache type '{data_type}' not recognised, allowed types '{Types}'.")
+            raise ValueError(f"Cache type '{data_type}' not recognised, allowed types '{self.Types}'.")
         
         # Get cache key string.
         try:
@@ -214,7 +216,7 @@ class Cache:
         data = None
         if data_type == DataFrame:
             data = self.read_pandas_data_frame(key)
-        elif data_type == dict:
+        elif data_type == dict or data_type == OrderedDict:
             data = self.read_dict(key)
         elif data_type == ndarray:
             data = self.read_numpy_array(key)
@@ -264,7 +266,7 @@ class Cache:
         size = None
         if data_type == DataFrame:
             size = self.write_pandas_data_frame(key, obj)
-        elif data_type == dict:
+        elif data_type == dict or data_type == OrderedDict:
             size = self.write_dict(key, obj)
         elif data_type == ndarray:
             size = self.write_numpy_array(key, obj)

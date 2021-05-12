@@ -13,7 +13,6 @@ from typing import *
 from mymi import checkpoint
 from mymi import config
 from mymi import loaders
-from mymi import plotter
 from mymi.postprocessing import batch_largest_connected_component
 from mymi.reporting import WandbReporter
 from mymi import utils
@@ -315,20 +314,20 @@ class ModelTrainer:
 
                         # Rotate data and get axis name.
                         if j == 0:
-                            input_data = input_data.rot90()
-                            label_data = label_data.rot90()
-                            pred_data = pred_data.rot90()
                             axis = 'sagittal'
-                        elif j == 1:
                             input_data = input_data.rot90()
                             label_data = label_data.rot90()
                             pred_data = pred_data.rot90()
+                        elif j == 1:
                             axis = 'coronal'
+                            input_data = input_data.rot90()
+                            label_data = label_data.rot90()
+                            pred_data = pred_data.rot90()
                         elif j == 2:
+                            axis = 'axial'
                             input_data = input_data.rot90(-1)
                             label_data = label_data.rot90(-1)
                             pred_data = pred_data.rot90(-1)
-                            axis = 'axial'
 
                         self.reporter.add_figure(input_data, label_data, pred_data, train_step, step, sample_idx, axis, class_labels)
 

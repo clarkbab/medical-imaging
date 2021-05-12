@@ -14,7 +14,7 @@ from torchio.transforms import Compose, CropOrPad, Resample
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
-parser.add_argument('-c', '--cache-path', action='store', help='path to cache root')
+parser.add_argument('-c', '--clear-cache', action='store_true', default=False, help='clear the cache')
 parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
 parser.add_argument('-n', '--no-cache', action='store_true', default=False, help='disables the cache')
 parser.add_argument('-nr', '--no-cache-read', action='store_true', default=False, help='disables cache read')
@@ -27,15 +27,6 @@ args = parser.parse_args()
 # Create logger.
 log_level = getattr(logging, args.log_level.upper(), None)
 utils.configure_logging(log_level)
-
-# Set cache configuration.
-cache_config = {
-   'path': args.cache_path,
-   'enabled': not args.no_cache,
-   'enabled-read': not args.no_cache_read,
-   'enabled-write': not args.no_cache_write
-}
-cache.config(**cache_config)
 
 # Convert num pats to int.
 num_pats = args.num_pats if args.num_pats == 'all' else int(args.num_pats)
@@ -52,4 +43,4 @@ transform = Compose(transforms)
 
 # Perform extraction.
 preprocessor = ParotidLeft3DPreprocessor()
-preprocessor(num_pats=num_pats, transform=transform)
+preprocessor(clear_cache=args.clear_cache, num_pats=num_pats, transform=transform)

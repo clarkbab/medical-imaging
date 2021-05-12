@@ -5,8 +5,7 @@ from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
-from mymi import dataset
+from typing import *
 
 def pretty_size(size):
     assert isinstance(size, torch.Size)
@@ -71,67 +70,6 @@ def binary_perimeter(mask):
                     mask_perimeter[b, i, j] = 1
     return mask_perimeter
 
-def filterOnNumPats(num_pats):
-    """
-    returns: a function to filter patients by number of patients allowed.
-    args:
-        num_pats: the number of patients to keep.
-    """
-    def fn(id):
-        if num_pats == 'all' or fn.num_included < num_pats:
-            fn.num_included += 1
-            return True
-        else:
-            return False
-
-    # Assign state to the function.
-    fn.num_included = 0
-
-    return fn
-
-def filterOnPatIDs(pat_id):
-    """
-    returns: a function to filter patients based on a 'pat_id' string or list/tuple.
-    args:
-        pat_id: the passed 'pat_id' kwarg.
-    """
-    def fn(id):
-        if (pat_id == 'all' or 
-            (isinstance(pat_id, str) and id == pat_id) or
-            ((isinstance(pat_id, list) or isinstance(pat_id, tuple)) and id in pat_id)):
-            return True
-        else:
-            return False
-
-    return fn
-
-def filterOnLabels(label):
-    """
-    returns: a function to filter patients on whether they have that label.
-    args:
-        label: the passed 'label' kwarg.
-    """
-    def fn(id):
-        # Load patient labels.
-        pat_labels = dataset.patient(id).label_summary().label.to_numpy()
-
-        if (label == 'all' or
-            (isinstance(label, str) and label in pat_labels) or
-            ((isinstance(label, list) or isinstance(label, tuple)) and len(np.intersect1d(label, pat_labels)) != 0)):
-            return True
-        else:
-            return False
-
-    return fn
-
-def stringOrSorted(obj):
-    """
-    returns: obj if obj is a string, else sorted tuple.
-    args:
-        obj: a string or iterable.
-    """
-    return obj if isinstance(obj, str) else tuple(sorted(obj))
-
 def get_batch_centroids(label_batch, plane):
     """
     returns: the centroid location of the label along the plane axis, for each
@@ -169,3 +107,36 @@ def get_batch_centroids(label_batch, plane):
         centroids = np.append(centroids, centroid)
 
     return centroids
+
+def filterOnNumPats(num_pats: int) -> Callable[[str], bool]:
+    """
+    returns: a function to filter patients by number of patients allowed.
+    args:
+        num_pats: the number of patients to keep.
+    """
+    def fn(id):
+        if num_pats == 'all' or fn.num_included < num_pats:
+            fn.num_included += 1
+            return True
+        else:
+            return False
+
+    # Assign state to the function.
+    fn.num_included = 0
+
+    return fn
+
+def filterOnPatIDs(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+    """
+    returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
+    args:
+        pat_ids: the passed 'pat_ids' kwarg.
+    """
+    def fn(id):
+        if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
+            ((isinstance(pat_ids, list) or isinstance(pat_ids, ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
+            return True
+        else:
+            return False
+
+    return fn

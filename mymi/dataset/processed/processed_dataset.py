@@ -1,23 +1,39 @@
 import inspect
 import numpy as np
 import os
+import pandas as pd
+from typing import *
 
 from mymi import cache
+from mymi import config
 
 FILENAME_NUM_DIGITS = 5
 
 class ProcessedDataset:
-    ###
-    # Subclasses must implement.
-    ###
+    def __init__(
+        self,
+        name: str):
+        """
+        args:
+            name: the name of the dataset.
+        """
+        self._name = name
+        self._path = os.path.join(config.directories.datasets, name, 'processed')
 
-    @classmethod
-    def data_dir(cls):
-        raise NotImplementedError("Method 'data_dir' not implemented in subclass.")
+    def manifest(
+        self,
+        folder: str) -> Sequence[str]:
+        """
+        returns: a sequence of patient IDs for that folder.
+        args:
+            folder: read the manifest from this folder.
+        """
+        # Read manifest file.
+        filepath = os.path.join(self._path, 'manifest', f"{folder}.csv")
+        pats_df = pd.read_csv(filepath)
+        pats = pats_df['patient-id'].tolist()
 
-    ###
-    # Basic queries.
-    ###
+        return pats
 
     @classmethod
     def input(cls, folder, sample_idx):

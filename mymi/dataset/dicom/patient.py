@@ -62,6 +62,7 @@ class Patient:
             'fov-z': float,
             'hu-max': float,
             'hu-min': float,
+            'num-missing': int,
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
@@ -70,6 +71,7 @@ class Patient:
             'size-z': int,
             'spacing-x': float,
             'spacing-y': float,
+            'spacing-z': float
         }
         df = DataFrame(columns=cols.keys())
 
@@ -144,6 +146,9 @@ class Patient:
         # Add z-size.
         z_size = int(round(z_fov / z_spacing, 0) + 1)
         data['size-z'] = z_size
+
+        # Add num missing slices.
+        data['num-missing'] = z_size - len(cts)
 
         # Add row.
         df = df.append(data, ignore_index=True)

@@ -28,11 +28,25 @@ def cached_method(*attrs: Sequence[str]) -> Callable[[Callable], Callable]:
     """
     # Create decorator.
     def decorator(fn):
+        # Get default kwargs.
+        default_kwargs = {}
+        argspec = inspect.getfullargspec(fn)
+        if argspec.defaults:
+            num_defaults = len(argspec.defaults)
+            kwarg_names = argspec.args[-num_defaults:]
+            kwarg_values = argspec.defaults
+            for k, v in zip(kwarg_names, kwarg_values):
+                default_kwargs[k] = v
+
         # Determine return type.
         sig = inspect.signature(fn)
         return_type = sig.return_annotation
 
         def wrapper(self, *args, **kwargs):
+            # Merge kwargs with default kwargs for consistent cache keys when
+            # arguments aren't passed.
+            kwargs = {**default_kwargs, **kwargs}
+
             # Get 'clear_cache' param.
             clear_cache = kwargs.pop('clear_cache', False)
 
@@ -60,6 +74,7 @@ def cached_method(*attrs: Sequence[str]) -> Callable[[Callable], Callable]:
 
             # Add 'clear_cache' param back in if necessary to pass down.
             arg_names = inspect.getfullargspec(fn).args
+
             if 'clear_cache' in arg_names:
                 kwargs['clear_cache'] = clear_cache
 
