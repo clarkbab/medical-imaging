@@ -8,18 +8,6 @@ from .cache import Cache
 # Create cache
 cache = Cache()
 
-def delete(*args, **kwargs):
-    return cache.delete(*args, **kwargs)
-
-def exists(*args, **kwargs):
-    return cache.exists(*args, **kwargs)
-
-def read(*args, **kwargs):
-    return cache.read(*args, **kwargs)
-
-def write(*args, **kwargs):
-    return cache.write(*args, **kwargs)
-
 def cached_method(*attrs: Sequence[str]) -> Callable[[Callable], Callable]:
     """
     effect: caches the result of the wrapped function.
@@ -106,3 +94,12 @@ def config(**kwargs: dict) -> None:
     # Set enabled flags.
     cache.read_enabled = kwargs.pop('read_enabled', True)
     cache.write_enabled = kwargs.pop('write_enabled', True)
+
+def read(*args, **kwargs):
+    return cache.read(*args, **kwargs)
+
+def write(*args, **kwargs):
+    return cache.write(*args, **kwargs)
+
+def delete(*args, **kwargs):
+    return cache.delete(*args, **kwargs)

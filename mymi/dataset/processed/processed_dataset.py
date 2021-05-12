@@ -20,6 +20,10 @@ class ProcessedDataset:
         self._name = name
         self._path = os.path.join(config.directories.datasets, name, 'processed')
 
+        # Check if dataset exists.
+        if not os.path.exists(self._path):
+            raise ValueError(f"Dataset '{name}' not found.")
+
     def manifest(
         self,
         folder: str) -> Sequence[str]:

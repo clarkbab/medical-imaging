@@ -3,70 +3,79 @@ import os
 import sys
 from typing import *
 
+from mymi import config
+
 from .dicom import DicomDataset
 from .processed import ProcessedDataset
 from .types import Types
 
-MYMI_DATA = os.environ['MYMI_DATA']
-DATASETS_PATH = os.path.join(MYMI_DATA, 'datasets')
-DEFAULT_ACTIVE = 'HEAD-NECK-RADIOMICS-HN1'
+def list() -> Sequence[str]:
+    """
+    returns: list of available datasets.
+    """
+    return os.listdir(config.directories.datasets)
 
-# Create dataset.
-active = DicomDataset(DEFAULT_ACTIVE)
+# Make first dataset active.
+sets = list()
+ds = DicomDataset(sets[0])
+
+def active() -> str:
+    """
+    returns: active dataset name.
+    """
+    return ds.name
 
 def select(
     name: str,
+    ct_from: str = None,
     type: int = Types.DICOM):
     """
     effect: sets the new dataset as active.
     args:
+        ct_from: get CT data from other dataset.
         name: the name of the new dataset.
         type: the type of dataset.
     """
-    # Check if the dataset exists.
-    dataset_path = os.path.join(DATASETS_PATH, name)
-    if os.path.exists(dataset_path):
-        global active
-        if type == Types.DICOM:
-            active = DicomDataset(name)
-        elif type == Types.PROCESSED:
-            active = ProcessedDataset(name)
-    else:
-        raise ValueError(f"Dataset '{name}' not found.")
+    # Set current dataset.
+    global ds
+    if type == Types.DICOM:
+        ds = DicomDataset(name, ct_from=ct_from)
+    elif type == Types.PROCESSED:
+        ds = ProcessedDataset(name)
 
 def ct_distribution(*args, **kwargs):
-    return active.ct_distribution(*args, **kwargs)
+    return ds.ct_distribution(*args, **kwargs)
 
 def ct_summary(*args, **kwargs):
-    return active.ct_summary(*args, **kwargs)
+    return ds.ct_summary(*args, **kwargs)
 
 def label_summary(*args, **kwargs):
-    return active.label_summary(*args, **kwargs)
+    return ds.label_summary(*args, **kwargs)
 
 def list_patients(*args, **kwargs):
-    return active.list_patients(*args, **kwargs)
+    return ds.list_patients(*args, **kwargs)
     
 def patient(*args, **kwargs):
-    return active.patient(*args, **kwargs)
+    return ds.patient(*args, **kwargs)
 
 ##
 # Processed dataset API.
 ##
 
 def manifest(*args, **kwargs):
-    return active.manifest(*args, **kwargs)
+    return ds.manifest(*args, **kwargs)
 
 def class_frequencies(*args, **kwargs):
-    return active.class_frequencies(*args, **kwargs)
+    return ds.class_frequencies(*args, **kwargs)
 
 def input(*args, **kwargs):
-    return active.input(*args, **kwargs)
+    return ds.input(*args, **kwargs)
 
 def label(*args, **kwargs):
-    return active.label(*args, **kwargs)
+    return ds.label(*args, **kwargs)
 
 def list_samples(*args, **kwargs):
-    return active.list_samples(*args, **kwargs)
+    return ds.list_samples(*args, **kwargs)
 
 def sample(*args, **kwargs):
-    return active.sample(*args, **kwargs)
+    return ds.sample(*args, **kwargs)

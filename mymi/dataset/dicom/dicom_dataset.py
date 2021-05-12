@@ -19,21 +19,36 @@ from mymi.cache import cached_method
 from mymi import config
 from mymi.utils import filterOnNumPats, filterOnPatIDs
 
-from .hierarchical import require_hierarchical
-from .patient import Patient
+from .dicom_patient import DicomPatient
 
 Z_SPACING_ROUND_DP = 2
 
 class DicomDataset:
     def __init__(
         self,
-        name: str):
+        name: str,
+        ct_from: str = None):
         """
         args:
             name: the name of the dataset.
+        kwargs:
+            ct_from: pull CT info from another dataset.
         """
+        self._ct_from = ct_from
         self._name = name
         self._path = os.path.join(config.directories.datasets, name)
+
+        # Check if datasets exist.
+        if not os.path.exists(self._path):
+            raise ValueError(f"Dataset '{name}' not found.")
+        if ct_from:
+            ct_path = os.path.join(config.directories.datasets, ct_from)
+            if not os.path.exists(ct_path):
+                raise ValueError(f"Dataset '{ct_from}' not found.")
+
+    @property
+    def ct_from(self) -> str:
+        return self._ct_from
 
     @property
     def name(self) -> str:
@@ -43,7 +58,19 @@ class DicomDataset:
     def path(self) -> str:
         return self._path
 
-    @require_hierarchical
+    def _require_hierarchical(fn: Callable) -> Callable:
+        """
+        effect: returns a wrapped function, ensuring hierarchical data has been built.
+        args:
+            fn: the wrapped function.
+        """
+        def wrapper(self, *args, **kwargs):
+            if not self._hierarchical_exists():
+                self._build_hierarchical()
+            return fn(self, *args, **kwargs)
+        return wrapper
+
+    @_require_hierarchical
     def list_patients(self) -> Sequence[str]:
         """
         returns: a list of patient IDs.
@@ -52,26 +79,30 @@ class DicomDataset:
         hier_path = os.path.join(self._path, 'hierarchical')
         return list(sorted(os.listdir(hier_path)))
 
-    @require_hierarchical
+    @_require_hierarchical
     def patient(
         self,
-        id: str) -> Patient:
+        id: Union[str, int]) -> DicomPatient:
         """
-        returns: a Patient object.
+        returns: a DicomPatient object.
         args:
             id: the patient ID.
         """
+        # Convert to string.
+        if type(id) == int:
+            id = str(id)
+
         # Check that patient ID exists.
         pat_path = os.path.join(self._path, 'hierarchical', id)
         if not os.path.isdir(pat_path):
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
         # Create patient.
-        pat = Patient(self._name, id)
+        pat = DicomPatient(self._name, id, ct_from=self._ct_from)
 
         return pat
 
-    @require_hierarchical
+    @_require_hierarchical
     @cached_method('_name')
     def ct_distribution(
         self, 
@@ -93,8 +124,8 @@ class DicomDataset:
         pats = self.list_patients()
         
         # Filter patients.
-        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(filterOnLabels(labels), pats))
+        pats = list(filter(filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(self._filterOnLabels(labels), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Calculate the frequencies.
@@ -130,7 +161,7 @@ class DicomDataset:
 
         return freqs
 
-    @require_hierarchical
+    @_require_hierarchical
     @cached_method('_name')
     def ct_summary(
         self, 
@@ -171,8 +202,8 @@ class DicomDataset:
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(filterOnLabels(labels), pats))
+        pats = list(filter(filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(self._filterOnLabels(labels), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
@@ -189,7 +220,7 @@ class DicomDataset:
 
         return df
 
-    @require_hierarchical
+    @_require_hierarchical
     @cached_method('_name')
     def label_summary(
         self, 
@@ -222,8 +253,8 @@ class DicomDataset:
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(self.filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(filterOnLabels(labels), pats))
+        pats = list(filter(filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(self._filterOnLabels(labels), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient labels.
@@ -319,7 +350,7 @@ class DicomDataset:
 
         return df
 
-    def filterOnLabels(
+    def _filterOnLabels(
         self,
         labels: Union[str, Sequence[str]]) -> Callable[[str], bool]:
         """
@@ -338,3 +369,45 @@ class DicomDataset:
                 return False
 
         return fn
+
+    def _hierarchical_exists(self) -> bool:
+        """
+        returns: True if the hierarchical dataset has been built.
+        """
+        # Check if folder exists.
+        hier_path = os.path.join(self._path, 'hierarchical')
+        return os.path.exists(hier_path)
+
+    def _build_hierarchical(self) -> None:
+        """
+        effect: creates a hierarchical dataset based on dicom content, not existing structure.
+        """
+        logging.info('Building hierarchical dataset.')
+
+        # Load all dicom files.
+        raw_path = os.path.join(self._path, 'raw')
+        dicom_files = []
+        for root, _, files in os.walk(raw_path):
+            for f in files:
+                if f.lower().endswith('.dcm'):
+                    dicom_files.append(os.path.join(root, f))
+
+        # Copy dicom files.
+        for f in sorted(dicom_files):
+            # Get patient ID.
+            dcm = dicom.read_file(f)
+            pat_id = dcm.PatientID
+
+            # Get modality.
+            mod = dcm.Modality.lower()
+            if not mod in ('ct', 'rtstruct'):
+                continue
+
+            # Create filepath.
+            hier_path = os.path.join(self._path, 'hierarchical')
+            filename = os.path.basename(f)
+            filepath = os.path.join(hier_path, pat_id, mod, filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            # Save dicom.
+            dcm.save_as(filepath)

@@ -51,7 +51,19 @@ class Cache:
         enabled: bool) -> None:
         self._write_enabled = enabled
 
-    def cache_key(
+    def _require_cache(fn: Callable) -> Callable:
+        """
+        returns: a wrapped function, ensuring cache exists.
+        args:
+            fn: the function to wrap.
+        """
+        def wrapper(self, *args, **kwargs):
+            if not os.path.exists(config.directories.cache):
+                os.makedirs(config.directories.cache)
+            return fn(self, *args, **kwargs)
+        return wrapper
+
+    def _cache_key(
         self,
         params: dict) -> str:
         """
@@ -60,17 +72,17 @@ class Cache:
             params: the dictionary of cache parameters.
         """
         # Sort sequences for consistent cache keys.
-        params = self.sort_sequences(params)
+        params = self._sort_sequences(params)
 
         # Convert any non-JSON-serialisable parameters.
-        params = self.make_serialisable(params)
+        params = self._make_serialisable(params)
 
         # Create hash.
         hash = hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest() 
 
         return hash
 
-    def sort_sequences(
+    def _sort_sequences(
         self,
         params: dict) -> dict:
         """
@@ -101,7 +113,7 @@ class Cache:
         except TypeError:
             return False
 
-    def make_serialisable(
+    def _make_serialisable(
         self,
         obj: Any) -> Any:
         """
@@ -115,13 +127,13 @@ class Cache:
             # Handle 'sequence' types.
             seq_types = (list, ndarray)
             if type(obj) in seq_types:
-                obj = [self.make_serialisable(o) for o in obj]
+                obj = [self._make_serialisable(o) for o in obj]
                 return obj
 
             # Handle 'dict' type.
             if type(obj) == dict:
                 for k, v in obj.items():
-                    obj[k] = self.make_serialisable(v) 
+                    obj[k] = self._make_serialisable(v) 
                 return obj
 
             # Handle custom types.
@@ -130,6 +142,7 @@ class Cache:
 
         raise ValueError(f"Cache key can't contain type '{type(obj)}', must be JSON-serialisable or implement 'cache_key' method.")
 
+    @_require_cache
     def delete(
         self,
         params: dict) -> None:
@@ -144,14 +157,14 @@ class Cache:
 
         # Get cache key string.
         try:
-            key = self.cache_key(params)
+            key = self._cache_key(params)
         except ValueError as e:
             # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
             logging.info(e)
             return
 
         # Check if cache key exists.
-        if not self.key_exists(key):
+        if not self._key_exists(key):
             return
 
         # Delete the file/folder.
@@ -161,7 +174,7 @@ class Cache:
         else:
             os.remove(key_path)
 
-    def key_exists(
+    def _key_exists(
         self, 
         key: str) -> bool:
         """
@@ -176,6 +189,7 @@ class Cache:
         else:
             return False
 
+    @_require_cache
     def read(
         self,
         params: dict) -> Any:
@@ -185,7 +199,7 @@ class Cache:
             params: the dict of cache params.
         """
         # Check if cache read is enabled.
-        if not self.read_enabled:
+        if not self._read_enabled:
             return
 
         # Get the data type.
@@ -198,14 +212,14 @@ class Cache:
         
         # Get cache key string.
         try:
-            key = self.cache_key(params)
+            key = self._cache_key(params)
         except ValueError as e:
             # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
             logging.info(e)
             return
 
         # Check if cache key exists.
-        if not self.key_exists(key):
+        if not self._key_exists(key):
             return
 
         # Log cache read start.
@@ -215,19 +229,20 @@ class Cache:
         # Read data.
         data = None
         if data_type == DataFrame:
-            data = self.read_pandas_data_frame(key)
+            data = self._read_pandas_data_frame(key)
         elif data_type == dict or data_type == OrderedDict:
-            data = self.read_dict(key)
+            data = self._read_dict(key)
         elif data_type == ndarray:
-            data = self.read_numpy_array(key)
+            data = self._read_numpy_array(key)
         elif data_type == Sequence[Tuple[str, ndarray]]:
-            data = self.read_string_numpy_array_pairs(key)
+            data = self._read_string_numpy_array_pairs(key)
 
         # Log cache finish time and data size.
         logging.info(f"Complete [{time.time() - start:.3f}s].")
 
         return data
 
+    @_require_cache
     def write(
         self,
         params: dict,
@@ -239,7 +254,7 @@ class Cache:
             obj: the object to cache.
         """
         # Check if cache read is enabled.
-        if not self.write_enabled:
+        if not self._write_enabled:
             return
 
         # Get the data type.
@@ -252,7 +267,7 @@ class Cache:
         
         # Get cache key string.
         try:
-            key = self.cache_key(params)
+            key = self._cache_key(params)
         except ValueError as e:
             # Types can signal that they're uncacheable by raising a 'ValueError', e.g. 'RandomResample'.
             logging.info(e)
@@ -265,33 +280,33 @@ class Cache:
         # Write data.
         size = None
         if data_type == DataFrame:
-            size = self.write_pandas_data_frame(key, obj)
+            size = self._write_pandas_data_frame(key, obj)
         elif data_type == dict or data_type == OrderedDict:
-            size = self.write_dict(key, obj)
+            size = self._write_dict(key, obj)
         elif data_type == ndarray:
-            size = self.write_numpy_array(key, obj)
+            size = self._write_numpy_array(key, obj)
         elif data_type == Sequence[Tuple[str, ndarray]]:
-            size = self.write_string_numpy_array_pairs(key, obj)
+            size = self._write_string_numpy_array_pairs(key, obj)
 
         # Log cache finish time and data size.
         size_mb = size / (2 ** 20)
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
-    def read_numpy_array(self, key):
+    def _read_numpy_array(self, key):
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
-    def read_pandas_data_frame(self, key):
+    def _read_pandas_data_frame(self, key):
         filepath = os.path.join(config.directories.cache, key)
         return pd.read_parquet(filepath)
 
-    def read_dict(self, key):
+    def _read_dict(self, key):
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return pickle.load(f)
 
-    def read_string_numpy_array_pairs(self, key):
+    def _read_string_numpy_array_pairs(self, key):
         folder_path = os.path.join(config.directories.cache, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
@@ -302,7 +317,7 @@ class Cache:
         
         return name_array_pairs
 
-    def read_file_dataset_list(self, key):
+    def _read_file_dataset_list(self, key):
         folder_path = os.path.join(config.directories.cache, key)
         fds = []
         for name in sorted(os.listdir(folder_path)):
@@ -312,24 +327,24 @@ class Cache:
         
         return fds
 
-    def write_numpy_array(self, key, array):
+    def _write_numpy_array(self, key, array):
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
-    def write_pandas_data_frame(self, key, df):
+    def _write_pandas_data_frame(self, key, df):
         filepath = os.path.join(config.directories.cache, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
-    def write_dict(self, key, dictionary):
+    def _write_dict(self, key, dictionary):
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
 
-    def write_string_numpy_array_pairs(self, key, pairs):
+    def _write_string_numpy_array_pairs(self, key, pairs):
         folder_path = os.path.join(config.directories.cache, key)
         os.makedirs(folder_path, exist_ok=True)
 
@@ -342,7 +357,7 @@ class Cache:
 
         return size
 
-    def write_file_dataset_list(self, key, fds):
+    def _write_file_dataset_list(self, key, fds):
         folder_path = os.path.join(config.directories.cache, key)
         os.makedirs(folder_path, exist_ok=True)
 

@@ -8,6 +8,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import dataset
+from mymi.dataset import DicomDataset
 from mymi import logging
 from mymi.metrics import batch_dice
 from mymi import utils
@@ -22,10 +23,17 @@ args = parser.parse_args()
 # Create logger.
 logging.config(args.log_level)
 
+# Create ground truth dataset.
+gt_ds = DicomDataset(args.ground_truth)
+
 # Load evaluation patients.
-dataset.select(args.evaluate)
-pats = dataset.list_patients()
+eval_ds = DicomDataset(args.evaluate, ct_from=args.ground_truth)
+pats = eval_ds.list_patients()
 print(pats)
+
+# Label names.
+gt_labels = 'Parotid_L'
+eval_labels = 'Parotid_L'
 
 # TODO: Handle different contours names, e.g. Parotid-Left vs Parotid_L.
 # Map from database to our local names.
@@ -33,17 +41,17 @@ print(pats)
 # Add metrics for patients.
 dice_scores = []
 for pat in pats:
+    print(pat)
     # Load ground truth.
-    dataset.select(args.ground_truth)
-    _, gt_data = dataset.patient(pat).label_data(labels='Parotid-Left')[0]
+    _, gt_data = gt_ds.patient(pat).label_data(labels=gt_labels)[0]
 
-    # Load label data.
-    dataset.select(args.evaluate)
-    _, eval_data = dataset.patient(pat).label_data(labels='Parotid_L')[0]
+    # Load evaluation data.
+    _, eval_data = eval_ds.patient(pat).label_data(labels=eval_labels)[0]
 
     # Calculate DSC.
     gt_data = torch.Tensor(gt_data).unsqueeze(0)
-    eval_data = torch.Tensor(gt_data).unsqueeze(0)
+    eval_data = torch.Tensor(eval_data).unsqueeze(0)
+
     dsc = batch_dice(gt_data, eval_data)  
 
     print(dsc)

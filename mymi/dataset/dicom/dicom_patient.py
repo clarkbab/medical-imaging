@@ -12,28 +12,55 @@ from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
 
-class Patient:
+class DicomPatient:
     def __init__(
         self,
         dataset: str,
-        id: str):
+        id: str,
+        ct_from: str = None):
         """
         args:
             dataset: the dataset the patient belongs to, e.g. 'HEAD-NECK-RADIOMICS-HN1'.
             id: the patient ID.
         """
+        self._ct_from = ct_from
         self._dataset = dataset
         self._id = id
         self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', id)
+
+    @property
+    def ct_from(self) -> str:
+        return self._ct_from
+
+    @property
+    def dataset(self) -> str:
+        return self._dataset
+
+    @property
+    def id(self) -> str:
+        return self.id
 
     def ct_dicoms(self) -> Sequence[FileDataset]:
         """
         returns: a list of FileDataset objects holding CT info.
         """
-        # Load all CT dicoms.
+        # Pass query to alternate dataset if required.
+        if self._ct_from:
+            alt_patient = DicomPatient(self._ct_from, self._id)
+            return alt_patient.ct_dicoms()
+
+        # Check CT folder exists.
         cts_path = os.path.join(self._path, 'ct')
+        if not os.path.exists(cts_path):
+            raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+    
+        # Load CT dicoms.
         ct_paths = [os.path.join(cts_path, f) for f in os.listdir(cts_path)]
         cts = [dicom.read_file(f) for f in ct_paths]
+
+        # Check some CTs were loaded.
+        if len(cts) == 0:
+            raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
 
         return cts
 
@@ -41,16 +68,18 @@ class Patient:
         """
         returns: a FileDataset object holding RTSTRUCT info.
         """
-        # Load RTSTRUCT dicom.
+        # Check number of RTSTRUCTs.
         rtstructs_path = os.path.join(self._path, 'rtstruct')
         rtstruct_paths = [os.path.join(rtstructs_path, f) for f in os.listdir(rtstructs_path)]
         if len(rtstruct_paths) != 1:
-            raise ValueError(f"Expected 1 RTSTRUCT dicom for patient '{self._id}', got {len(rtstruct_paths)}.")
+            raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got {len(rtstruct_paths)}.")
+
+        # Load RTSTRUCT.
         rtstruct = dicom.read_file(rtstruct_paths[0])
 
         return rtstruct
 
-    @cached_method('_dataset', '_id')
+    @cached_method('_ct_from', '_dataset', '_id')
     def ct_summary(self) -> DataFrame:
         """
         returns: a table summarising CT info.
@@ -77,6 +106,8 @@ class Patient:
 
         # Load CT dicoms.
         cts = self.ct_dicoms()
+        if len(cts) == 0:
+            return df
 
         # Add summary.
         data = {}
@@ -99,11 +130,11 @@ class Patient:
             if 'offset-x' not in data:
                 data['offset-x'] = x_offset
             elif x_offset != data['offset-x']:
-                raise ValueError(f"Inconsistent 'offset-x' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'offset-x' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
             if 'offset-y' not in data:
                 data['offset-y'] = y_offset
             elif y_offset != data['offset-y']:
-                raise ValueError(f"Inconsistent 'offset-y' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'offset-y' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
             if 'offset-z' not in data or z_offset < data['offset-z']:
                 data['offset-z'] = z_offset
 
@@ -113,11 +144,11 @@ class Patient:
             if 'size-x' not in data:
                 data['size-x'] = x_size
             elif x_size != data['size-x']:
-                raise ValueError(f"Inconsistent 'size-x' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'size-x' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
             if 'size-y' not in data:
                 data['size-y'] = y_size
             elif y_size != data['size-y']:
-                raise ValueError(f"Inconsistent 'size-y' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'size-y' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
 
             # Add x/y-spacings.
             x_spacing = ct.PixelSpacing[0]
@@ -125,11 +156,11 @@ class Patient:
             if 'spacing-x' not in data:
                 data['spacing-x'] = x_spacing
             elif x_spacing != data['spacing-x']:
-                raise ValueError(f"Inconsistent 'spacing-x' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'spacing-x' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
             if 'spacing-y' not in data:
                 data['spacing-y'] = y_spacing
             elif y_spacing != data['spacing-y']:
-                raise ValueError(f"Inconsistent 'spacing-y' for patient '{self._id}' CT scans.")
+                raise ValueError(f"Inconsistent 'spacing-y' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
 
         # Add z-spacing.
         z_spacing = np.min([round(s, 2) for s in np.diff(sorted(z_offsets))])
@@ -159,7 +190,7 @@ class Patient:
 
         return df
 
-    @cached_method('_dataset', '_id')
+    @cached_method('_ct_from', '_dataset', '_id')
     def label_summary(
         self,
         clear_cache: bool = False,
@@ -222,7 +253,7 @@ class Patient:
 
         return df
 
-    @cached_method('_dataset', '_id')
+    @cached_method('_ct_from', '_dataset', '_id')
     def ct_data(self) -> ndarray:
         """
         returns: a 3D numpy ndarray of CT data in HU.
@@ -251,7 +282,7 @@ class Patient:
 
         return data
 
-    @cached_method('_dataset', '_id')
+    @cached_method('_ct_from', '_dataset', '_id')
     def label_data(
         self,
         clear_cache: bool = False,
