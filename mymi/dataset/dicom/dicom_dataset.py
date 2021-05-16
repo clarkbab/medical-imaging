@@ -3,10 +3,8 @@ import inspect
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy import ndarray
 import os
 import pandas as pd
-from pandas import DataFrame
 import pydicom as dicom
 from scipy.ndimage import center_of_mass
 from skimage.draw import polygon
@@ -103,7 +101,52 @@ class DicomDataset:
         return pat
 
     @_require_hierarchical
-    @cached_method('_name')
+    @cached_method('_ct_from', '_name')
+    def info(
+        self, 
+        clear_cache: bool = False,
+        labels: Union[str, Sequence[str]] = 'all',
+        num_pats: Union[str, int] = 'all',
+        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        """
+        returns: a DataFrame with patient info.
+        kwargs:
+            clear_cache: force the cache to clear.
+            labels: include patients with (at least) on of the labels.
+            num_pats: the number of patients to summarise.
+            pat_ids: include listed patients.
+        """
+        # Define table structure.
+        cols = {
+            'name': str,
+            'patient-id': str
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Load each patient.
+        pats = self.list_patients()
+
+        # Filter patients.
+        pats = list(filter(filterOnPatIDs(pat_ids), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
+        pats = list(filter(filterOnNumPats(num_pats), pats))
+
+        # Add patient labels.
+        for pat in tqdm(pats):
+            info_df = self.patient(pat).info(clear_cache=clear_cache)
+            info_df['patient-id'] = pat
+            df = df.append(info_df)
+
+        # Set column type.
+        df = df.astype(cols)
+        
+        # Set index.
+        df = df.set_index('patient-id')
+
+        return df
+
+    @_require_hierarchical
+    @cached_method('_ct_from', '_name')
     def ct_distribution(
         self, 
         bin_width: int = 10,
@@ -125,7 +168,7 @@ class DicomDataset:
         
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Calculate the frequencies.
@@ -162,13 +205,13 @@ class DicomDataset:
         return freqs
 
     @_require_hierarchical
-    @cached_method('_name')
+    @cached_method('_ct_from', '_name')
     def ct_summary(
         self, 
         clear_cache: bool = False,
         labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> DataFrame:
+        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient CT summaries.
         kwargs:
@@ -188,7 +231,7 @@ class DicomDataset:
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
-            'pat-id': str,
+            'patient-id': str,
             'size-x': int,
             'size-y': int,
             'size-z': int,
@@ -203,31 +246,31 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
         for pat in tqdm(pats):
             pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
-            pat_df['pat-id'] = pat
+            pat_df['patient-id'] = pat
             df = df.append(pat_df)
 
         # Set column type.
         df = df.astype(cols)
         
         # Set index.
-        df = df.set_index('pat-id')
+        df = df.set_index('patient-id')
 
         return df
 
     @_require_hierarchical
-    @cached_method('_name')
+    @cached_method('_ct_from', '_name')
     def label_summary(
         self, 
         clear_cache: bool = False,
         labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> DataFrame:
+        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient labels and information.
         kwargs:
@@ -238,14 +281,14 @@ class DicomDataset:
         """
         # Define table structure.
         cols = {
-            'patient-id': 'object',
-            'label': 'object',
-            'com-x': np.uint16,
-            'com-y': np.uint16,
-            'com-z': np.uint16,
-            'width-x': np.uint16,
-            'width-y': np.uint16,
-            'width-z': np.uint16
+            'com-x': int,
+            'com-y': int,
+            'com-z': int,
+            'label': str,
+            'patient-id': str,
+            'width-x': float,
+            'width-y': float,
+            'width-z': float,
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -254,7 +297,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient labels.
@@ -264,16 +307,22 @@ class DicomDataset:
             # Add rows.
             for _, row in summary_df.iterrows():
                 data = {
-                    'patient-id': pat,
-                    'label': row['label'],
                     'com-x': row['com-x'],
                     'com-y': row['com-y'],
                     'com-z': row['com-z'],
+                    'label': row['label'],
+                    'patient-id': pat,
                     'width-x': row['width-x'],
                     'width-y': row['width-y'],
                     'width-z': row['width-z']
                 }
                 df = df.append(data, ignore_index=True)
+
+        # Set column types.
+        df = df.astype(cols)
+        
+        # Set index.
+        df = df.set_index(('patient-id', 'label'))
 
         return df
 
@@ -302,8 +351,8 @@ class DicomDataset:
 
         # Define dataframe structure.
         cols = {
-            'hu-mean': 'float64',
-            'hu-std-dev': 'float64'
+            'hu-mean': float,
+            'hu-std-dev': float,
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -352,18 +401,21 @@ class DicomDataset:
 
     def _filterOnLabels(
         self,
-        labels: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+        labels: Union[str, Sequence[str]],
+        clear_cache: bool = False) -> Callable[[str], bool]:
         """
         returns: a function to filter patients on whether they have that labels.
         args:
             labels: the passed 'labels' kwarg.
+        kwargs:
+            clear_cache: force the cache to clear.
         """
         def fn(id):
             # Load patient labels.
-            pat_labels = self.patient(id).label_summary().label.to_numpy()
+            pat_labels = self.patient(id).label_summary(clear_cache=clear_cache).index.to_numpy()
 
             if ((isinstance(labels, str) and (labels == 'all' or labels in pat_labels)) or
-                ((isinstance(labels, list) or isinstance(labels, ndarray) or isinstance(labels, tuple)) and len(np.intersect1d(labels, pat_labels)) != 0)):
+                ((isinstance(labels, list) or isinstance(labels, np.ndarray) or isinstance(labels, tuple)) and len(np.intersect1d(labels, pat_labels)) != 0)):
                 return True
             else:
                 return False

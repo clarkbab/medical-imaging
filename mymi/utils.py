@@ -134,7 +134,7 @@ def filterOnPatIDs(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
     """
     def fn(id):
         if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
-            ((isinstance(pat_ids, list) or isinstance(pat_ids, ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
+            ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
             return True
         else:
             return False

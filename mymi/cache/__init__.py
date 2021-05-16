@@ -95,10 +95,24 @@ def config(**kwargs: dict) -> None:
     cache.read_enabled = kwargs.pop('read_enabled', True)
     cache.write_enabled = kwargs.pop('write_enabled', True)
 
-def read(*args, **kwargs):
+def disable() -> None:
+    """
+    effect: disables the cache.
+    """
+    cache.read_enabled = False
+    cache.write_enabled = False
+
+def enable() -> None:
+    """
+    effect: enables the cache.
+    """
+    cache.read_enabled = True
+    cache.write_enabled = True
+
+def read(*args: Sequence[Any], **kwargs: dict) -> Any:
     return cache.read(*args, **kwargs)
 
-def write(*args, **kwargs):
+def write(*args: Sequence[Any], **kwargs: dict) -> Any:
     return cache.write(*args, **kwargs)
 
 def delete(*args, **kwargs):

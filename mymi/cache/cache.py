@@ -198,6 +198,8 @@ class Cache:
         args:
             params: the dict of cache params.
         """
+        logging.info(f"Reading from cache with params '{params}'.")
+
         # Check if cache read is enabled.
         if not self._read_enabled:
             return
@@ -224,7 +226,6 @@ class Cache:
 
         # Log cache read start.
         start = time.time()
-        logging.info(f"Reading {type} from cache with params '{params}'.")
 
         # Read data.
         data = None
@@ -253,6 +254,8 @@ class Cache:
             params: cache parameters for the object.
             obj: the object to cache.
         """
+        logging.info(f"Writing to cache with params '{params}'.")
+
         # Check if cache read is enabled.
         if not self._write_enabled:
             return
@@ -275,7 +278,6 @@ class Cache:
 
         # Log cache write start.
         start = time.time()
-        logging.info(f"Writing {type} to cache with params '{params}'.")
 
         # Write data.
         size = None

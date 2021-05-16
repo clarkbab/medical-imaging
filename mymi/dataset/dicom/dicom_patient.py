@@ -1,12 +1,11 @@
 import numpy as np
-from numpy import ndarray
 import os
-from pandas import DataFrame
+import pandas as pd
 import pydicom as dicom
-from pydicom.dataset import FileDataset
 from scipy.ndimage import center_of_mass
 from skimage.draw import polygon
 from typing import *
+from rt_utils import RTStructBuilder
 
 from mymi import cache
 from mymi.cache import cached_method
@@ -28,6 +27,36 @@ class DicomPatient:
         self._id = id
         self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', id)
 
+    def _require_ct(fn: Callable) -> Callable:
+        """
+        returns: a wrapped function that ensures CTs are present.
+        args:
+            fn: the function to wrap.
+        """
+        def wrapper(self, *args, **kwargs):
+            # Pass query to alternate dataset if required.
+            if self._ct_from:
+                alt_patient = DicomPatient(self._ct_from, self._id)
+                alt_fn = getattr(alt_patient, fn.__name__)
+                fn_def = getattr(type(self), fn.__name__)
+                if type(fn_def) == property:
+                    return alt_fn
+                else:
+                    return alt_fn()
+
+            # Check CT folder exists.
+            cts_path = os.path.join(self._path, 'ct')
+            if not os.path.exists(cts_path):
+                raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+
+            # Check that there is at least one CT.
+            ct_files = os.listdir(cts_path)
+            if len(ct_files) == 0:
+                raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+            
+            return fn(self, *args, **kwargs)
+        return wrapper
+
     @property
     def ct_from(self) -> str:
         return self._ct_from
@@ -38,33 +67,37 @@ class DicomPatient:
 
     @property
     def id(self) -> str:
-        return self.id
+        return self._id
 
-    def ct_dicoms(self) -> Sequence[FileDataset]:
+    @property
+    @_require_ct
+    def name(self) -> str:
+        """
+        returns: the patient name.
+        """
+        # Get patient name.
+        cts_path = os.path.join(self._path, 'ct')
+        ct_path = os.path.join(cts_path, os.listdir(cts_path)[0])
+        ct = dicom.read_file(ct_path)
+        name = ct.PatientName
+        return name
+
+    @_require_ct
+    def get_cts(self) -> Sequence[dicom.dataset.FileDataset]:
         """
         returns: a list of FileDataset objects holding CT info.
         """
-        # Pass query to alternate dataset if required.
-        if self._ct_from:
-            alt_patient = DicomPatient(self._ct_from, self._id)
-            return alt_patient.ct_dicoms()
-
-        # Check CT folder exists.
-        cts_path = os.path.join(self._path, 'ct')
-        if not os.path.exists(cts_path):
-            raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
-    
         # Load CT dicoms.
+        cts_path = os.path.join(self._path, 'ct')
         ct_paths = [os.path.join(cts_path, f) for f in os.listdir(cts_path)]
         cts = [dicom.read_file(f) for f in ct_paths]
 
-        # Check some CTs were loaded.
-        if len(cts) == 0:
-            raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+        # Sort by z-position.
+        cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])
 
         return cts
 
-    def rtstruct_dicom(self) -> FileDataset:
+    def get_rtstruct(self) -> dicom.dataset.FileDataset:
         """
         returns: a FileDataset object holding RTSTRUCT info.
         """
@@ -79,8 +112,33 @@ class DicomPatient:
 
         return rtstruct
 
+    @_require_ct
+    def info(
+        self,
+        clear_cache: bool = False) -> pd.DataFrame:
+        """
+        returns: a table of patient info.
+        """
+        # Define dataframe structure.
+        cols = {
+            'name': str,
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Add data.
+        data = {}
+        data['name'] = self.name
+
+        # Add row.
+        df = df.append(data, ignore_index=True)
+
+        # Set column types as 'append' crushes them.
+        df = df.astype(cols)
+
+        return df
+
     @cached_method('_ct_from', '_dataset', '_id')
-    def ct_summary(self) -> DataFrame:
+    def ct_summary(self) -> pd.DataFrame:
         """
         returns: a table summarising CT info.
         """
@@ -102,12 +160,10 @@ class DicomPatient:
             'spacing-y': float,
             'spacing-z': float
         }
-        df = DataFrame(columns=cols.keys())
+        df = pd.DataFrame(columns=cols.keys())
 
         # Load CT dicoms.
-        cts = self.ct_dicoms()
-        if len(cts) == 0:
-            return df
+        cts = self.get_cts()
 
         # Add summary.
         data = {}
@@ -194,7 +250,7 @@ class DicomPatient:
     def label_summary(
         self,
         clear_cache: bool = False,
-        labels: Union[str, Sequence[str]] = 'all') -> DataFrame:
+        labels: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame label summary information.
         kwargs:
@@ -203,15 +259,15 @@ class DicomPatient:
         """
         # Define table structure.
         cols = {
-            'label': str,
             'com-x': int,
             'com-y': int,
             'com-z': int,
+            'label': str,
             'width-x': float,
             'width-y': float,
             'width-z': float,
         }
-        df = DataFrame(columns=cols.keys())
+        df = pd.DataFrame(columns=cols.keys())
 
         # Get label (name, data) pairs.
         label_data = self.label_data(clear_cache=clear_cache, labels=labels)
@@ -251,17 +307,20 @@ class DicomPatient:
         # Sort by label.
         df = df.sort_values('label').reset_index(drop=True)
 
+        # Set index.
+        df = df.set_index('label')
+
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
-    def ct_data(self) -> ndarray:
+    def ct_data(self) -> np.ndarray:
         """
         returns: a 3D numpy ndarray of CT data in HU.
         kwargs:
             clear_cache: force the cache to clear.
         """
         # Load patient CT dicoms.
-        cts = self.ct_dicoms()
+        cts = self.get_cts()
         summary = self.ct_summary().iloc[0].to_dict()
         
         # Create CT data array.
@@ -282,11 +341,23 @@ class DicomPatient:
 
         return data
 
+    def rt_utils_label_data(self):
+        """
+        rt-utils implementation.
+        """
+        rtstruct = RTStructBuilder.create_from(
+            dicom_series_path=os.path.join(self._path, 'ct'),
+            rt_struct_path=os.path.join(self._path, 'rtstruct')
+        )
+        roi_names = rtstruct.get_roi_names()
+        labels = [(n, rtstruct.get_roi_mask_by_name(n)) for n in roi_names]
+        return labels
+
     @cached_method('_ct_from', '_dataset', '_id')
     def label_data(
         self,
         clear_cache: bool = False,
-        labels: Union[str, Sequence[str]] = 'all') -> Sequence[Tuple[str, ndarray]]:
+        labels: Union[str, Sequence[str]] = 'all') -> Sequence[Tuple[str, np.ndarray]]:
         """
         returns: a list of (name, data) pairs, one for each label.
         kwargs:
@@ -294,17 +365,17 @@ class DicomPatient:
             labels: the desired labels.
         """
         # Load RTSTRUCT dicom.
-        rtstruct = self.rtstruct_dicom()
+        rtstruct = self.get_rtstruct()
 
         # Get label shape.
         summary = self.ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
         shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
 
         # Convert label data from vertices to voxels.
-        contours = rtstruct.ROIContourSequence
+        roi_contours = rtstruct.ROIContourSequence
         infos = rtstruct.StructureSetROISequence
         label_pairs = []
-        for contour, info in zip(contours, infos):
+        for roi_contour, info in zip(roi_contours, infos):
             # Get contour name.
             name = info.ROIName
 
@@ -317,25 +388,47 @@ class DicomPatient:
             # Create label placeholder.
             data = np.zeros(shape=shape, dtype=bool)
 
+            # Skip label if no contour sequence.
+            contour_seq = getattr(roi_contour, 'ContourSequence', None)
+            if not contour_seq:
+                continue
+
             # Convert vertices into voxel data. 
-            all_vertices = [c.ContourData for c in contour.ContourSequence]
-            for vertices in all_vertices:
+            for i, contour in enumerate(contour_seq):
+                # Get contour data.
+                contour_data = contour.ContourData
+                if contour.ContourGeometricType != 'CLOSED_PLANAR':
+                    print(contour.ContourGeometricType)
+
                 # Coords are stored in flat array.
-                vertices = np.array(vertices).reshape(-1, 3)
+                vertices = np.array(contour_data).reshape(-1, 3)
+                min_mm = summary['offset-x'] - 0.5 * summary['spacing-x']
+                max_mm = summary['size-x'] * summary['spacing-x'] + min_mm
+                # print('min mm: ', min_mm)
+                # print('max mm: ', max_mm)
+                # print(vertices.min(axis=0))
+                # print(vertices.max(axis=0))
 
                 # Convert from physical coordinates to voxel coordinates.
                 x_indices = (vertices[:, 0] - summary['offset-x']) / summary['spacing-x']
                 y_indices = (vertices[:, 1] - summary['offset-y']) / summary['spacing-y']
+                # print('x indices: ', x_indices)
 
                 # Get all voxels on the boundary and interior described by the vertices.
                 x_indices, y_indices = polygon(x_indices, y_indices)
 
-                # Get contour z pixel.
+                # Get contour z voxel.
                 z_offset = vertices[0, 2] - summary['offset-z']
                 z_idx = int(z_offset / summary['spacing-z'])
 
-                # Set labelled pixels in slice.
-                data[x_indices, y_indices, z_idx] = 1
+                # Set labelled voxels in slice. Subsequent contour data indicates
+                # pin holes that should be carved out.
+                # print(self._id)
+                # print(name)
+                # print(x_indices)
+                # print(y_indices)
+                # print(z_idx)
+                data[x_indices, y_indices, z_idx] = np.invert(data[x_indices, y_indices, z_idx])
 
             label_pairs.append((name, data))
 

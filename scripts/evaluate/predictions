@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 import argparse
 import os
+import pandas as pd
 import sys
 import torch
 
@@ -15,9 +16,10 @@ from mymi import utils
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Compare contours to ground truth')
-parser.add_argument('-e', '--evaluate', action='store', help='the evaluation dataset', required=True)
+parser.add_argument('-c', '--clear-cache', action='store_true', default=False, help='clear the cache')
 parser.add_argument('-g', '--ground-truth', action='store', help='the ground truth dataset', required=True)
 parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
+parser.add_argument('-p', '--predictions', action='store', help='the predictions', required=True)
 args = parser.parse_args()
 
 # Create logger.
@@ -27,32 +29,39 @@ logging.config(args.log_level)
 gt_ds = DicomDataset(args.ground_truth)
 
 # Load evaluation patients.
-eval_ds = DicomDataset(args.evaluate, ct_from=args.ground_truth)
-pats = eval_ds.list_patients()
-print(pats)
+pred_ds = DicomDataset(args.predictions, ct_from=args.ground_truth)
+pats = pred_ds.list_patients()
 
-# Label names.
-gt_labels = 'Parotid_L'
-eval_labels = 'Parotid_L'
+# Load up label names.
+gt_labels = gt_ds.label_summary(clear_cache=args.clear_cache).label.unique()
+pred_labels = pred_ds.label_summary(clear_cache=args.clear_cache).label.unique()
+print(gt_labels)
+print(pred_labels)
 
 # TODO: Handle different contours names, e.g. Parotid-Left vs Parotid_L.
 # Map from database to our local names.
+
+# Create dataframe.
+cols = {
+    'pat-id': str,
+
+}
 
 # Add metrics for patients.
 dice_scores = []
 for pat in pats:
     print(pat)
     # Load ground truth.
-    _, gt_data = gt_ds.patient(pat).label_data(labels=gt_labels)[0]
+    _, gt_data = gt_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=gt_labels)[0]
 
-    # Load evaluation data.
-    _, eval_data = eval_ds.patient(pat).label_data(labels=eval_labels)[0]
+    # Load prediction data.
+    _, pred_data = pred_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=pred_labels)[0]
 
     # Calculate DSC.
     gt_data = torch.Tensor(gt_data).unsqueeze(0)
-    eval_data = torch.Tensor(eval_data).unsqueeze(0)
+    pred_data = torch.Tensor(pred_data).unsqueeze(0)
 
-    dsc = batch_dice(gt_data, eval_data)  
+    dsc = batch_dice(gt_data, pred_data)  
 
     print(dsc)
 

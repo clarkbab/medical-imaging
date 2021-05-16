@@ -43,6 +43,9 @@ def select(
     elif type == Types.PROCESSED:
         ds = ProcessedDataset(name)
 
+def info(*args, **kwargs):
+    return ds.info(*args, **kwargs)
+
 def ct_distribution(*args, **kwargs):
     return ds.ct_distribution(*args, **kwargs)
 

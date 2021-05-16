@@ -13,7 +13,7 @@ from mymi import cache
 from mymi import config
 from mymi import dataset
 
-class Plotting:
+class Plotter:
     def plot_ct_distribution(
         self, 
         bin_width: int = 10,
@@ -47,13 +47,16 @@ class Plotting:
 
         # Plot the histogram.
         plt.figure(figsize=figsize)
-        plt.hist(freqs.key()[:-1], freqs.keys(), weights=list(freqs.values())[:-1])
+        keys = tuple(freqs.keys())
+        values = tuple(freqs.values())
+        plt.hist(keys[:-1], keys, weights=values[:-1])
         plt.show()
 
     def plot_patient(
         self,
         id: str,
         slice_idx: int,
+        alpha: float = 0.5,
         aspect: float = 1,
         clear_cache: bool = False,
         figsize: Tuple[int, int] = (8, 8),
@@ -69,6 +72,7 @@ class Plotting:
             id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
+            alpha: the label alpha.
             aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
             clear_cache: force cache to clear.
             figsize: the size of the plot in inches.
@@ -177,7 +181,7 @@ class Plotting:
                     label_cmap = ListedColormap(colours)
 
                     # Plot label.
-                    plt.imshow(ldata, cmap=label_cmap, aspect=aspect, alpha=0.5)
+                    plt.imshow(ldata, cmap=label_cmap, aspect=aspect, alpha=alpha)
                     plt.plot(0, 0, c=palette(i), label=lname)
 
                 # Turn on legend.
@@ -211,21 +215,21 @@ class Plotting:
         args:
             label: the full label.
         """
-        mask_perimeter = np.zeros_like(mask, dtype=bool)
-        x_dim, y_dim = mask.shape
+        label_perimeter = np.zeros_like(label, dtype=bool)
+        x_dim, y_dim = label.shape
         for i in range(x_dim):
             for j in range(y_dim):
                 # Check if edge pixel.
-                if (mask[i, j] == 1 and 
+                if (label[i, j] == 1 and 
                     ((i == 0 or i == x_dim - 1) or
                     (j == 0 or j == y_dim - 1) or
-                    i != 0 and mask[i - 1, j] == 0 or 
-                    i != x_dim - 1 and mask[i + 1, j] == 0 or
-                    j != 0 and mask[i, j - 1] == 0 or
-                    j != y_dim - 1 and mask[i, j + 1] == 0)):
-                    mask_perimeter[i, j] = 1
+                    i != 0 and label[i - 1, j] == 0 or 
+                    i != x_dim - 1 and label[i + 1, j] == 0 or
+                    j != 0 and label[i, j - 1] == 0 or
+                    j != y_dim - 1 and label[i, j + 1] == 0)):
+                    label_perimeter[i, j] = 1
 
-        return mask_perimeter
+        return label_perimeter
 
     def to_image_coords(
         self,
