@@ -198,8 +198,6 @@ class Cache:
         args:
             params: the dict of cache params.
         """
-        logging.info(f"Reading from cache with params '{params}'.")
-
         # Check if cache read is enabled.
         if not self._read_enabled:
             return
@@ -224,7 +222,8 @@ class Cache:
         if not self._key_exists(key):
             return
 
-        # Log cache read start.
+        # Start cache read.
+        logging.info(f"Reading from cache with params '{params}'.")
         start = time.time()
 
         # Read data.
@@ -254,8 +253,6 @@ class Cache:
             params: cache parameters for the object.
             obj: the object to cache.
         """
-        logging.info(f"Writing to cache with params '{params}'.")
-
         # Check if cache read is enabled.
         if not self._write_enabled:
             return
@@ -276,7 +273,8 @@ class Cache:
             logging.info(e)
             return
 
-        # Log cache write start.
+        # Start cache write.
+        logging.info(f"Writing to cache with params '{params}'.")
         start = time.time()
 
         # Write data.
@@ -294,80 +292,139 @@ class Cache:
         size_mb = size / (2 ** 20)
         logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
 
-    def _read_numpy_array(self, key):
+    def _read_numpy_array(
+        self,
+        key: str) -> np.ndarray:
+        """
+        returns: the cached np.ndarray.
+        args:
+            key: the cache key.
+        """
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return np.load(f)
 
-    def _read_pandas_data_frame(self, key):
+    def _read_pandas_data_frame(
+        self,
+        key: str) -> pd.DataFrame:
+        """
+        returns: the cached pd.DataFrame.
+        args:
+            key: the cache key.
+        """
         filepath = os.path.join(config.directories.cache, key)
         return pd.read_parquet(filepath)
 
-    def _read_dict(self, key):
+    def _read_dict(
+        self,
+        key: str) -> dict:
+        """
+        returns: the cached dict.
+        args:
+            key: the cache key.
+        """
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'rb')
         return pickle.load(f)
 
-    def _read_string_numpy_array_pairs(self, key):
+    def _read_string_numpy_array_pairs(
+        self,
+        key: str) -> List[Tuple[str, np.ndarray]]:
+        """
+        returns: the cached list of (str, np.ndarray) pairs.
+        args:
+            key: the cache key.
+        """
         folder_path = os.path.join(config.directories.cache, key)
         name_array_pairs = []
         for name in os.listdir(folder_path):
-            filepath = os.path.join(folder_path, name)
+            friendly_name = self._path_friendly(name)
+            filepath = os.path.join(folder_path, friendly_name)
             f = open(filepath, 'rb')
             data = np.load(f)
             name_array_pairs.append((name, data))
-        
         return name_array_pairs
 
-    def _read_file_dataset_list(self, key):
-        folder_path = os.path.join(config.directories.cache, key)
-        fds = []
-        for name in sorted(os.listdir(folder_path)):
-            filepath = os.path.join(folder_path, name)
-            fd = dicom.read_file(filepath)
-            fds.append(fd)
-        
-        return fds
-
-    def _write_numpy_array(self, key, array):
+    def _write_numpy_array(
+        self,
+        key: str,
+        array: np.ndarray) -> int:
+        """
+        effect: writes the np.ndarray to the cache.
+        returns: the size of the written cache in bytes.
+        args:
+            key: the cache key.
+            array: the np.ndarray to cache.
+        """
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         np.save(f, array)
         return os.path.getsize(filepath) 
 
-    def _write_pandas_data_frame(self, key, df):
+    def _write_pandas_data_frame(
+        self,
+        key: str,
+        df: pd.DataFrame) -> int:
+        """
+        effect: writes the pd.DataFrame to the cache.
+        returns: the size of the written cache in bytes.
+        args:
+            key: the cache key.
+            df: the pd.DataFrame to cache.
+        """
         filepath = os.path.join(config.directories.cache, key)
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
-    def _write_dict(self, key, dictionary):
+    def _write_dict(
+        self,
+        key: str,
+        dictionary: dict) -> int:
+        """
+        effect: writes the dict to the cache.
+        returns: the size of the written cache in bytes.
+        args:
+            key: the cache key.
+            dictionary: the dict to cache.
+        """
         filepath = os.path.join(config.directories.cache, key)
         f = open(filepath, 'wb')
         pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
 
-    def _write_string_numpy_array_pairs(self, key, pairs):
+    def _write_string_numpy_array_pairs(
+        self,
+        key: str,
+        pairs: List[Tuple[str, np.ndarray]]) -> int:
+        """
+        effect: writes the list of (str, np.ndarray) pairs to the cache.
+        returns: the size of the written cache in bytes.
+        args:
+            key: the cache key.
+            pairs: the list of (str, np.ndarray) pairs.
+        """
         folder_path = os.path.join(config.directories.cache, key)
         os.makedirs(folder_path, exist_ok=True)
 
         size = 0
         for name, data in pairs:
-            filepath = os.path.join(folder_path, name)
+            friendly_name = self._path_friendly(name)
+            filepath = os.path.join(folder_path, friendly_name)
             f = open(filepath, 'wb')
             np.save(f, data)
             size += os.path.getsize(filepath)
-
         return size
 
-    def _write_file_dataset_list(self, key, fds):
-        folder_path = os.path.join(config.directories.cache, key)
-        os.makedirs(folder_path, exist_ok=True)
-
-        size = 0
-        for i, fd in enumerate(fds):
-            filepath = os.path.join(folder_path, f"{i}.dcm")
-            fd.save_as(filepath)
-            size += os.path.getsize(filepath)
-
-        return size
-            
+    def _path_friendly(
+        self,
+        string: str) -> str:
+        """
+        returns: a path-friendly string.
+        args:
+            string: the string.
+        """
+        # Replace special chars with underscores.
+        chars = [' ', '.', '/', '\\', '[', ']']
+        for char in chars:
+            string = string.replace(char, '_')
+        return string

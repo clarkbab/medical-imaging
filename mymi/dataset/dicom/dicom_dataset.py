@@ -209,6 +209,7 @@ class DicomDataset:
     def ct_summary(
         self, 
         clear_cache: bool = False,
+        ignore_errors: bool = False,
         labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
         pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
@@ -216,6 +217,7 @@ class DicomDataset:
         returns: a DataFrame with patient CT summaries.
         kwargs:
             clear_cache: force the cache to clear.
+            ignore_errors: exclude patients that produce known errors.
             labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
@@ -246,12 +248,22 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache, ignore_errors=ignore_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
         for pat in tqdm(pats):
-            pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
+            # Load patient CT info.
+            try:
+                pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
+            except ValueError as e:
+                if ignore_errors:
+                    logging.info(f"Error calling 'ct_summary' for dataset '{self._name}', patient '{pat}', ignoring.")
+                    continue
+                else:
+                    raise e
+
+            # Add row.
             pat_df['patient-id'] = pat
             df = df.append(pat_df)
 
@@ -268,6 +280,7 @@ class DicomDataset:
     def label_summary(
         self, 
         clear_cache: bool = False,
+        ignore_errors: bool = False,
         labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
         pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
@@ -275,6 +288,7 @@ class DicomDataset:
         returns: a DataFrame with patient labels and information.
         kwargs:
             clear_cache: force the cache to clear.
+            ignore_errors: exclude patients that produce known errors.
             labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
@@ -297,13 +311,20 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache), pats))
+        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache, ignore_errors=ignore_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient labels.
         for pat in tqdm(pats):
             # Load patient summary.
-            summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
+            try:
+                summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
+            except ValueError as e:
+                if ignore_errors:
+                    logging.info(f"Error calling 'ct_summary' for dataset '{self._name}', patient '{pat}', ignoring.")
+                    continue
+                else:
+                    raise e
 
             # Add rows.
             for _, row in summary_df.iterrows():
@@ -311,7 +332,7 @@ class DicomDataset:
                     'com-x': row['com-x'],
                     'com-y': row['com-y'],
                     'com-z': row['com-z'],
-                    'label': row['label'],
+                    'label': row.name,
                     'patient-id': pat,
                     'width-x': row['width-x'],
                     'width-y': row['width-y'],
@@ -323,7 +344,7 @@ class DicomDataset:
         df = df.astype(cols)
         
         # Set index.
-        df = df.set_index(('patient-id', 'label'))
+        df = df.set_index(['patient-id', 'label'])
 
         return df
 
@@ -403,17 +424,26 @@ class DicomDataset:
     def _filterOnLabels(
         self,
         labels: Union[str, Sequence[str]],
-        clear_cache: bool = False) -> Callable[[str], bool]:
+        clear_cache: bool = False,
+        ignore_errors: bool = False) -> Callable[[str], bool]:
         """
-        returns: a function to filter patients on whether they have that labels.
+        returns: a function that filters patient on label presence.
         args:
             labels: the passed 'labels' kwarg.
         kwargs:
             clear_cache: force the cache to clear.
+            ignore_errors: exclude patients that produce known errors.
         """
         def fn(id):
             # Load patient labels.
-            pat_labels = self.patient(id).label_summary(clear_cache=clear_cache).index.to_numpy()
+            try:
+                pat_labels = self.patient(id).label_summary(clear_cache=clear_cache).index.to_numpy()
+            except ValueError as e:
+                if ignore_errors:
+                    logging.info(f"Error calling 'ct_summary' for dataset '{self._name}', patient '{id}', ignoring.")
+                    return False
+                else:
+                    raise e
 
             if ((isinstance(labels, str) and (labels == 'all' or labels in pat_labels)) or
                 ((isinstance(labels, list) or isinstance(labels, np.ndarray) or isinstance(labels, tuple)) and len(np.intersect1d(labels, pat_labels)) != 0)):
