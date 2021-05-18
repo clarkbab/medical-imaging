@@ -247,6 +247,66 @@ class DicomPatient:
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
+    def ct_slice_summary(self) -> pd.DataFrame:
+        """
+        returns: a table summarising CT slice info.
+        """
+        # Define dataframe structure.
+        cols = {
+            'fov-x': float,
+            'fov-y': float,
+            'hu-max': float,
+            'hu-min': float,
+            'offset-x': float,
+            'offset-y': float,
+            'offset-z': float,
+            'size-x': int,
+            'size-y': int,
+            'spacing-x': float,
+            'spacing-y': float,
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Load CT dicoms.
+        cts = self.get_cts()
+
+        # Add summary.
+        data = {}
+        for ct in cts:
+            # Add HU stats.
+            hus = ct.pixel_array * ct.RescaleSlope + ct.RescaleIntercept
+            data['hu-min'] = hus.min()
+            data['hu-max'] = hus.max()
+
+            # Add offsets.
+            data['offset-x'] = ct.ImagePositionPatient[0]
+            data['offset-y'] = ct.ImagePositionPatient[1]
+            data['offset-z'] = ct.ImagePositionPatient[2]
+
+            # Add sizes.
+            data['size-x'] = ct.pixel_array.shape[1]
+            data['size-y'] = ct.pixel_array.shape[0]
+
+            # Add x/y-spacings.
+            data['spacing-x'] = ct.PixelSpacing[0]
+            data['spacing-y'] = ct.PixelSpacing[1]
+
+            # Add fields-of-view.
+            data['fov-x'] = data['size-x'] * data['spacing-x']
+            data['fov-y'] = data['size-y'] * data['spacing-y']
+
+            # Add row.
+            df = df.append(data, ignore_index=True)
+
+        # Sort columns.
+        df = df.reindex(sorted(df.columns), axis=1)
+
+        # Set column types as 'append' crushes them.
+        df = df.astype(cols)
+
+        return df
+
+    @cached_method('_ct_from', '_dataset', '_id')
     def label_summary(
         self,
         clear_cache: bool = False,

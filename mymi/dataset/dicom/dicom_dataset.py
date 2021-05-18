@@ -302,6 +302,7 @@ class DicomDataset:
 
         # Add patient labels.
         for pat in tqdm(pats):
+            # Load patient summary.
             summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
 
             # Add rows.
