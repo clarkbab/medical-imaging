@@ -3,9 +3,9 @@ import os
 import pandas as pd
 import pydicom as dicom
 from scipy.ndimage import center_of_mass
-from skimage.draw import polygon
 from typing import *
 from rt_utils import RTStructBuilder
+import cv2 as cv
 
 from mymi import cache
 from mymi.cache import cached_method
@@ -341,18 +341,6 @@ class DicomPatient:
 
         return data
 
-    def rt_utils_label_data(self):
-        """
-        rt-utils implementation.
-        """
-        rtstruct = RTStructBuilder.create_from(
-            dicom_series_path=os.path.join(self._path, 'ct'),
-            rt_struct_path=os.path.join(self._path, 'rtstruct')
-        )
-        roi_names = rtstruct.get_roi_names()
-        labels = [(n, rtstruct.get_roi_mask_by_name(n)) for n in roi_names]
-        return labels
-
     @cached_method('_ct_from', '_dataset', '_id')
     def label_data(
         self,
@@ -392,8 +380,8 @@ class DicomPatient:
             contour_seq = getattr(roi_contour, 'ContourSequence', None)
             if not contour_seq:
                 continue
-
-            # Convert vertices into voxel data. 
+            
+            # Convert points into voxel data.
             for i, contour in enumerate(contour_seq):
                 # Get contour data.
                 contour_data = contour.ContourData
@@ -401,38 +389,29 @@ class DicomPatient:
                     print(contour.ContourGeometricType)
 
                 # Coords are stored in flat array.
-                vertices = np.array(contour_data).reshape(-1, 3)
-                min_mm = summary['offset-x'] - 0.5 * summary['spacing-x']
-                max_mm = summary['size-x'] * summary['spacing-x'] + min_mm
-                # print('min mm: ', min_mm)
-                # print('max mm: ', max_mm)
-                # print(vertices.min(axis=0))
-                # print(vertices.max(axis=0))
+                points = np.array(contour_data).reshape(-1, 3)
 
-                # Convert from physical coordinates to voxel coordinates.
-                x_indices = (vertices[:, 0] - summary['offset-x']) / summary['spacing-x']
-                y_indices = (vertices[:, 1] - summary['offset-y']) / summary['spacing-y']
-                # print('x indices: ', x_indices)
+                # Convert from physical coordinates to array indices.
+                x_indices = (points[:, 0] - summary['offset-x']) / summary['spacing-x']
+                y_indices = (points[:, 1] - summary['offset-y']) / summary['spacing-y']
+                z_idx = int((points[0, 2] - summary['offset-z']) / summary['spacing-z'])
 
-                # Get all voxels on the boundary and interior described by the vertices.
-                x_indices, y_indices = polygon(x_indices, y_indices)
+                # Round before typecasting to avoid truncation.
+                indices = np.stack((x_indices, y_indices), axis=1)
+                indices = np.around(indices)
+                indices = indices.astype('int32')
 
-                # Get contour z voxel.
-                z_offset = vertices[0, 2] - summary['offset-z']
-                z_idx = int(z_offset / summary['spacing-z'])
+                # Get all voxels on the boundary and interior described by the indices.
+                slice_data = np.zeros(shape=shape[:-1], dtype='uint8')
+                pts = [np.expand_dims(indices, axis=0)]
+                cv.fillPoly(img=slice_data, pts=pts, color=1)
 
-                # Set labelled voxels in slice. Subsequent contour data indicates
-                # pin holes that should be carved out.
-                # print(self._id)
-                # print(name)
-                # print(x_indices)
-                # print(y_indices)
-                # print(z_idx)
-                data[x_indices, y_indices, z_idx] = np.invert(data[x_indices, y_indices, z_idx])
+                # Write slice.
+                data[:, :, z_idx] = slice_data
 
             label_pairs.append((name, data))
 
         # Sort by label name.
-        label_pairs = sorted(label_pairs, key=lambda l: l[0])
+        label_pairs = list(sorted(label_pairs, key=lambda l: l[0]))
 
         return label_pairs

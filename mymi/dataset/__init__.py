@@ -9,14 +9,14 @@ from .dicom import DicomDataset
 from .processed import ProcessedDataset
 from .types import Types
 
-def list() -> Sequence[str]:
+def list_datasets() -> Sequence[str]:
     """
     returns: list of available datasets.
     """
-    return os.listdir(config.directories.datasets)
+    return list(sorted(os.listdir(config.directories.datasets)))
 
 # Make first dataset active.
-sets = list()
+sets = list_datasets()
 ds = DicomDataset(sets[0])
 
 def active() -> str:
