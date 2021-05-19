@@ -1,5 +1,6 @@
 import logging
 import os
+import pandas as pd
 import sys
 from typing import *
 
@@ -51,6 +52,12 @@ def ct_distribution(*args, **kwargs):
 
 def ct_summary(*args, **kwargs):
     return ds.ct_summary(*args, **kwargs)
+
+def label_map(*args, **kwargs):
+    return ds.label_map(*args, **kwargs)
+
+def label_names(*args, **kwargs):
+    return ds.label_names(*args, **kwargs)
 
 def label_summary(*args, **kwargs):
     return ds.label_summary(*args, **kwargs)

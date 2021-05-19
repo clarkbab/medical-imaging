@@ -10,6 +10,7 @@ import cv2 as cv
 from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
+from mymi import logging
 
 class DicomPatient:
     def __init__(
@@ -310,6 +311,7 @@ class DicomPatient:
     def label_summary(
         self,
         clear_cache: bool = False,
+        columns: Union[str, Sequence[str]] = 'all',
         labels: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame label summary information.
@@ -319,14 +321,15 @@ class DicomPatient:
         """
         # Define table structure.
         cols = {
+            'label': str,
             'com-x': int,
             'com-y': int,
             'com-z': int,
-            'label': str,
             'width-x': float,
             'width-y': float,
             'width-z': float,
         }
+        cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
         df = pd.DataFrame(columns=cols.keys())
 
         # Get label (name, data) pairs.
@@ -367,9 +370,6 @@ class DicomPatient:
         # Sort by label.
         df = df.sort_values('label').reset_index(drop=True)
 
-        # Set index.
-        df = df.set_index('label')
-
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
@@ -401,6 +401,26 @@ class DicomPatient:
 
         return data
 
+    @cached_method('_dataset', '_id')
+    def label_names(
+        self,
+        clear_cache: bool = False) -> pd.DataFrame:
+        """
+        returns: the patient's label names.
+        kwargs:
+            clear_cache: force the cache to clear.
+        """
+        # Load RTSTRUCT dicom.
+        rtstruct = self.get_rtstruct()
+
+        # Get region names.
+        names = list(sorted([r.ROIName for r in rtstruct.StructureSetROISequence]))
+
+        # Create dataframe.
+        df = pd.DataFrame(names, columns=['label'])
+
+        return df
+
     @cached_method('_ct_from', '_dataset', '_id')
     def label_data(
         self,
@@ -428,9 +448,8 @@ class DicomPatient:
             name = info.ROIName
 
             # Skip if label not needed.
-            if not (labels == 'all' or
-                ((type(labels) == tuple or type(labels) == list) and name in labels) or
-                (type(labels) == str and name == labels)):
+            if not ((type(labels) == str and (labels == 'all' or name == labels)) or
+                ((type(labels) == tuple or type(labels) == list or type(labels) == np.ndarray) and name in labels)):
                 continue
 
             # Create label placeholder.
@@ -439,6 +458,7 @@ class DicomPatient:
             # Skip label if no contour sequence.
             contour_seq = getattr(roi_contour, 'ContourSequence', None)
             if not contour_seq:
+                logging.error(f"No 'ContourSequence' found for contour '{name}'.")
                 continue
             
             # Convert points into voxel data.
@@ -446,28 +466,19 @@ class DicomPatient:
                 # Get contour data.
                 contour_data = contour.ContourData
                 if contour.ContourGeometricType != 'CLOSED_PLANAR':
-                    print(contour.ContourGeometricType)
+                    raise ValueError(f"Expected contour type 'CLOSED_PLANAR', got '{contour.ContourGeometricType}'.")
 
                 # Coords are stored in flat array.
                 points = np.array(contour_data).reshape(-1, 3)
 
-                # Convert from physical coordinates to array indices.
-                x_indices = (points[:, 0] - summary['offset-x']) / summary['spacing-x']
-                y_indices = (points[:, 1] - summary['offset-y']) / summary['spacing-y']
+                # Get z_idx of slice.
                 z_idx = int((points[0, 2] - summary['offset-z']) / summary['spacing-z'])
 
-                # Round before typecasting to avoid truncation.
-                indices = np.stack((x_indices, y_indices), axis=1)
-                indices = np.around(indices)
-                indices = indices.astype('int32')
+                # Convert contour data to voxels.
+                slice_data = self._contour_to_voxels(points, summary)
 
-                # Get all voxels on the boundary and interior described by the indices.
-                slice_data = np.zeros(shape=shape[:-1], dtype='uint8')
-                pts = [np.expand_dims(indices, axis=0)]
-                cv.fillPoly(img=slice_data, pts=pts, color=1)
-
-                # Write slice.
-                data[:, :, z_idx] = slice_data
+                # Write slice data to label, using XOR.
+                data[:, :, z_idx][slice_data == True] = np.invert(data[:, :, z_idx][slice_data == True])
 
             label_pairs.append((name, data))
 
@@ -475,3 +486,48 @@ class DicomPatient:
         label_pairs = list(sorted(label_pairs, key=lambda l: l[0]))
 
         return label_pairs
+
+    def _contour_to_voxels(
+        self,
+        points: np.ndarray,
+        summary: dict) -> np.ndarray:
+        """
+        returns: a boolean np.ndarray containing the mask.
+        args:
+            points: the (n x 3) np.ndarray of contour points in continuous physical coordinates.
+            summary: contains the CT summary info.
+        """
+        # Convert from physical coordinates to array indices.
+        x_indices = (points[:, 0] - summary['offset-x']) / summary['spacing-x']
+        y_indices = (points[:, 1] - summary['offset-y']) / summary['spacing-y']
+
+        # Round before typecasting to avoid truncation.
+        indices = np.stack((y_indices, x_indices), axis=1)  # 'fillPoly' expects rows, then columns.
+        indices = np.around(indices)
+        indices = indices.astype('int32')
+
+        # Get all voxels on the boundary and interior described by the indices.
+        shape = (int(summary['size-x']), int(summary['size-y']))
+        slice_data = np.zeros(shape=shape, dtype='uint8')
+        pts = [np.expand_dims(indices, axis=0)]
+        cv.fillPoly(img=slice_data, pts=pts, color=1)
+        slice_data = slice_data.astype(bool)
+
+        return slice_data
+
+    def _filterOnDictKeys(
+        self,
+        keys: Union[str, Sequence[str]] = 'all') -> Callable[[Tuple[str, Any]], bool]:
+        """
+        returns: a function that filters out unneeded keys.
+        args:
+            keys: description of required keys.
+        """
+        def fn(item: Tuple[str, Any]) -> bool:
+            key, _ = item
+            if ((isinstance(keys, str) and (keys == 'all' or key == keys)) or
+                ((isinstance(keys, list) or isinstance(keys, np.ndarray) or isinstance(keys, tuple)) and key in keys)):
+                return True
+            else:
+                return False
+        return fn

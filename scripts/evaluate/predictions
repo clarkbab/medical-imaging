@@ -17,6 +17,7 @@ from mymi import utils
 # Parse args.
 parser = argparse.ArgumentParser(description='Compare contours to ground truth')
 parser.add_argument('-c', '--clear-cache', action='store_true', default=False, help='clear the cache')
+parser.add_argument('-f', '--filter-errors', action='store_true', default=False, help='filter out patients with known errors')
 parser.add_argument('-g', '--ground-truth', action='store', help='the ground truth dataset', required=True)
 parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
 parser.add_argument('-p', '--predictions', action='store', help='the predictions', required=True)
@@ -33,29 +34,40 @@ pred_ds = DicomDataset(args.predictions, ct_from=args.ground_truth)
 pats = pred_ds.list_patients()
 
 # Load up label names.
-gt_labels = gt_ds.label_summary(clear_cache=args.clear_cache).label.unique()
-pred_labels = pred_ds.label_summary(clear_cache=args.clear_cache).label.unique()
-print(gt_labels)
-print(pred_labels)
+gt_labels = list(sorted(gt_ds.label_names(clear_cache=args.clear_cache, filter_errors=args.filter_errors).label.unique()))
+pred_labels = list(sorted(pred_ds.label_names(clear_cache=args.clear_cache, filter_errors=args.filter_errors).label.unique()))
+
+# Load map from gt -> pred labels.
+
+# Use pred labels.
+labels = pred_labels
 
 # TODO: Handle different contours names, e.g. Parotid-Left vs Parotid_L.
 # Map from database to our local names.
 
 # Create dataframe.
 cols = {
-    'pat-id': str,
-
+    'pat-id': str
 }
+metrics = ['dice']
+for label in labels:
+    for metric in metrics:
+        key = f"{label}-{metric}"
+        cols[key] = float
+df = pd.DataFrame(columns=cols.keys())
+print(df.head())
+
+exit()
 
 # Add metrics for patients.
 dice_scores = []
 for pat in pats:
     print(pat)
     # Load ground truth.
-    _, gt_data = gt_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=gt_labels)[0]
+    _, gt_data = gt_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=labels)[0]
 
     # Load prediction data.
-    _, pred_data = pred_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=pred_labels)[0]
+    _, pred_data = pred_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=labels)[0]
 
     # Calculate DSC.
     gt_data = torch.Tensor(gt_data).unsqueeze(0)
