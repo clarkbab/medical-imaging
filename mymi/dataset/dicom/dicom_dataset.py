@@ -66,19 +66,21 @@ class DicomDataset:
         """
         # Load map file.
         filepath = os.path.join(self._path, 'label-map.csv')
-        map_df = pd.read_csv(filepath)
+        df = pd.read_csv(filepath)
         
         if dataset:
             # Load other map file.
             ds = DicomDataset(dataset)
-            other_map_df = ds.label_map()
+            other_df = ds.label_map()
 
             # Merge the two maps.
-            map_df = pd.merge(map_df, other_map_df, on='internal')
-            map_df = map_df.rename(columns={ 'dataset_x': self._name, 'dataset_y': dataset })
-            map_df = map_df.drop(columns='internal')
+            df = pd.merge(df, other_df, on='internal')
+            df = df.rename(columns={ 'dataset_x': self._name, 'dataset_y': dataset })
 
-        return map_df
+        # Sort by internal name.
+        df = df.sort_values('internal').reset_index(drop=True)
+
+        return df
 
     def _require_hierarchical(fn: Callable) -> Callable:
         """

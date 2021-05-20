@@ -332,7 +332,7 @@ class DicomPatient:
         cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
         df = pd.DataFrame(columns=cols.keys())
 
-        # Get label (name, data) pairs.
+        # Get label dict.
         label_data = self.label_data(clear_cache=clear_cache, labels=labels)
 
         # Get voxel spacings.
@@ -340,7 +340,7 @@ class DicomPatient:
         spacing = (summary['spacing-x'], summary['spacing-y'], summary['spacing-z'])
 
         # Add info for each label.
-        for name, data in label_data:
+        for name, data in label_data.items():
             # Find centre-of-mass.
             coms = np.round(center_of_mass(data)).astype(int)
 
@@ -425,9 +425,9 @@ class DicomPatient:
     def label_data(
         self,
         clear_cache: bool = False,
-        labels: Union[str, Sequence[str]] = 'all') -> Sequence[Tuple[str, np.ndarray]]:
+        labels: Union[str, Sequence[str]] = 'all') -> dict:
         """
-        returns: a list of (name, data) pairs, one for each label.
+        returns: a Dict[str, np.ndarray] of label names and data.
         kwargs:
             clear_cache: force the cache to clear.
             labels: the desired labels.
@@ -442,7 +442,7 @@ class DicomPatient:
         # Convert label data from vertices to voxels.
         roi_contours = rtstruct.ROIContourSequence
         infos = rtstruct.StructureSetROISequence
-        label_pairs = []
+        label_dict = {}
         for roi_contour, info in zip(roi_contours, infos):
             # Get contour name.
             name = info.ROIName
@@ -480,12 +480,9 @@ class DicomPatient:
                 # Write slice data to label, using XOR.
                 data[:, :, z_idx][slice_data == True] = np.invert(data[:, :, z_idx][slice_data == True])
 
-            label_pairs.append((name, data))
+            label_dict[name] = data
 
-        # Sort by label name.
-        label_pairs = list(sorted(label_pairs, key=lambda l: l[0]))
-
-        return label_pairs
+        return label_dict
 
     def _contour_to_voxels(
         self,

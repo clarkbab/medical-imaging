@@ -3,11 +3,35 @@ import SimpleITK as sitk
 import torch
 from typing import *
 
-def batch_dice(
-        a: torch.Tensor,
-        b: torch.Tensor) -> torch.Tensor:
+def dice(
+    a: np.ndarray,
+    b: np.ndarray) -> float:
     """
-    returns: the mean dice similarity coefficient (DSC) for the batch.
+    returns: the dice score.
+    args:
+        a: a 3D np.ndarray.
+        b: a 3D np.ndarray.
+    """
+    if a.shape != b.shape:
+        raise ValueError(f"Got mismatched input shapes: '{a.shape}' and '{b.shape}'.")
+
+    # Get cardinality.
+    a_card = a.sum()
+    b_card = b.sum()
+
+    # Get number of intersecting pixels.
+    int_card = (a * b).sum()
+
+    # Calculate dice score.
+    dice = 2. * int_card / (a_card + b_card)
+
+    return dice
+
+def batch_dice(
+    a: torch.Tensor,
+    b: torch.Tensor) -> float:
+    """
+    returns: returns the mean batch dice score.
     args:
         a: a batch of 3D binary volumes.
         b: a bath of 3D binary volumes.

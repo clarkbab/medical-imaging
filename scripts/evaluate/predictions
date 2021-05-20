@@ -11,7 +11,7 @@ sys.path.append(root_dir)
 from mymi import dataset
 from mymi.dataset import DicomDataset
 from mymi import logging
-from mymi.metrics import batch_dice
+from mymi.metrics import dice
 from mymi import utils
 
 # Parse args.
@@ -33,47 +33,51 @@ gt_ds = DicomDataset(args.ground_truth)
 pred_ds = DicomDataset(args.predictions, ct_from=args.ground_truth)
 pats = pred_ds.list_patients()
 
-# Load up label names.
-gt_labels = list(sorted(gt_ds.label_names(clear_cache=args.clear_cache, filter_errors=args.filter_errors).label.unique()))
-pred_labels = list(sorted(pred_ds.label_names(clear_cache=args.clear_cache, filter_errors=args.filter_errors).label.unique()))
-
-# Load map from gt -> pred labels.
-
-# Use pred labels.
-labels = pred_labels
-
-# TODO: Handle different contours names, e.g. Parotid-Left vs Parotid_L.
-# Map from database to our local names.
+# Load up labels.
+label_map = gt_ds.label_map(dataset=args.predictions)
+internal_labels = list(label_map.internal)
+gt_labels = list(label_map[args.ground_truth])
+pred_labels = list(label_map[args.predictions])
 
 # Create dataframe.
 cols = {
-    'pat-id': str
+    'pat-id': str,
+    'metric': str
 }
-metrics = ['dice']
-for label in labels:
-    for metric in metrics:
-        key = f"{label}-{metric}"
-        cols[key] = float
+for label in internal_labels:
+    cols[label] = float
 df = pd.DataFrame(columns=cols.keys())
-print(df.head())
-
-exit()
 
 # Add metrics for patients.
-dice_scores = []
 for pat in pats:
-    print(pat)
     # Load ground truth.
-    _, gt_data = gt_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=labels)[0]
+    try:
+        gt_label_data = gt_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=gt_labels)
+    except ValueError as e:
+        if args.filter_errors:
+            logging.error(f"Error occurred while calling 'label_data' for dataset '{gt_ds.name}', patient '{pat}'.")
+            logging.error(f"Error message: {e}")
+            continue
+        else:
+            raise e
 
     # Load prediction data.
-    _, pred_data = pred_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=labels)[0]
+    pred_label_data = pred_ds.patient(pat).label_data(clear_cache=args.clear_cache, labels=pred_labels)
 
-    # Calculate DSC.
-    gt_data = torch.Tensor(gt_data).unsqueeze(0)
-    pred_data = torch.Tensor(pred_data).unsqueeze(0)
+    # Add metrics for each label.
+    dice_data = {
+        'pat-id': pat,
+        'metric': 'dice'
+    }
+    for internal_label, gt_label, pred_label in zip(internal_labels, gt_labels, pred_labels):
+        if gt_label in gt_label_data and pred_label in pred_label_data:
+            # Add dice.
+            dice_score = dice(pred_label_data[pred_label], gt_label_data[gt_label])
+            dice_data[internal_label] = dice_score
+        else:
+            continue
 
-    dsc = batch_dice(gt_data, pred_data)  
+    # Add row.
+    df = df.append(dice_data, ignore_index=True)
 
-    print(dsc)
-
+print(df)

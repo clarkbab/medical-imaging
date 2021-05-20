@@ -6,10 +6,8 @@ import hashlib
 import json
 import logging
 import numpy as np
-from numpy import ndarray
 import os
 import pandas as pd
-from pandas import DataFrame
 import pickle
 import pydicom as dicom
 import shutil
@@ -20,11 +18,11 @@ from mymi import config
 
 class Cache:
     Types = [
-        DataFrame,
+        pd.DataFrame,
         dict,
-        ndarray,
+        np.ndarray,
         OrderedDict,
-        Sequence[Tuple[str, ndarray]]
+        Sequence[Tuple[str, np.ndarray]]
     ]
         
     def __init__(self):
@@ -125,7 +123,7 @@ class Cache:
             return obj
         else:
             # Handle 'sequence' types.
-            seq_types = (list, ndarray)
+            seq_types = (list, np.ndarray)
             if type(obj) in seq_types:
                 obj = [self._make_serialisable(o) for o in obj]
                 return obj
@@ -223,18 +221,19 @@ class Cache:
             return
 
         # Start cache read.
-        logging.info(f"Reading from cache with params '{params}'.")
+        all_params = { 'type': data_type, **params }
+        logging.info(f"Reading from cache with params '{all_params}'.")
         start = time.time()
 
         # Read data.
         data = None
-        if data_type == DataFrame:
+        if data_type == pd.DataFrame:
             data = self._read_pandas_data_frame(key)
         elif data_type == dict or data_type == OrderedDict:
             data = self._read_dict(key)
-        elif data_type == ndarray:
+        elif data_type == np.ndarray:
             data = self._read_numpy_array(key)
-        elif data_type == Sequence[Tuple[str, ndarray]]:
+        elif data_type == Sequence[Tuple[str, np.ndarray]]:
             data = self._read_string_numpy_array_pairs(key)
 
         # Log cache finish time and data size.
@@ -263,7 +262,7 @@ class Cache:
         if data_type is None:
             raise ValueError(f"Cache params must include 'type', got '{params}'.")
         if data_type not in self.Types:
-            raise ValueError(f"Cache type '{data_type}' not recognised, allowed types '{Types}'.")
+            raise ValueError(f"Cache type '{data_type}' not recognised, allowed types '{self.Types}'.")
         
         # Get cache key string.
         try:
@@ -274,18 +273,19 @@ class Cache:
             return
 
         # Start cache write.
-        logging.info(f"Writing to cache with params '{params}'.")
+        all_params = { 'type': data_type, **params }
+        logging.info(f"Writing to cache with params '{all_params}'.")
         start = time.time()
 
         # Write data.
         size = None
-        if data_type == DataFrame:
+        if data_type == pd.DataFrame:
             size = self._write_pandas_data_frame(key, obj)
         elif data_type == dict or data_type == OrderedDict:
             size = self._write_dict(key, obj)
-        elif data_type == ndarray:
+        elif data_type == np.ndarray:
             size = self._write_numpy_array(key, obj)
-        elif data_type == Sequence[Tuple[str, ndarray]]:
+        elif data_type == Sequence[Tuple[str, np.ndarray]]:
             size = self._write_string_numpy_array_pairs(key, obj)
 
         # Log cache finish time and data size.
