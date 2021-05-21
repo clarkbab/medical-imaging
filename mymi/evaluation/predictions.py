@@ -1,12 +1,12 @@
 import pandas as pd
 from typing import *
 
-from mymi.cache import cached_method
+from mymi.cache import cached_function
 from mymi.dataset import DicomDataset
 from mymi import logging
 from mymi.metrics import dice
 
-@cached_method()
+@cached_function
 def evaluate_predictions(
     pred_dataset: str,
     gt_dataset: str,

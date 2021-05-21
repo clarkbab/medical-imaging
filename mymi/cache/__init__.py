@@ -8,9 +8,72 @@ from .cache import Cache
 # Create cache
 cache = Cache()
 
+def cached_function(fn: Callable) -> Callable:
+    """
+    returns: a wrapped function with result caching.
+    args:
+        fn: the function to cache.
+    """
+    # Get default kwargs.
+    default_kwargs = {}
+    argspec = inspect.getfullargspec(fn)
+    if argspec.defaults:
+        num_defaults = len(argspec.defaults)
+        kwarg_names = argspec.args[-num_defaults:]
+        kwarg_values = argspec.defaults
+        for k, v in zip(kwarg_names, kwarg_values):
+            default_kwargs[k] = v
+
+    # Determine return type.
+    sig = inspect.signature(fn)
+    return_type = sig.return_annotation
+
+    def wrapper(*args, **kwargs):
+        # Merge kwargs with default kwargs for consistent cache keys when
+        # arguments aren't passed.
+        kwargs = { **default_kwargs, **kwargs }
+
+        # Get 'clear_cache' param.
+        clear_cache = kwargs.pop('clear_cache', False)
+
+        # Create cache params.
+        params = {
+            'type': return_type,
+            'method': fn.__name__
+        }
+
+        # Add args/kwargs.
+        if len(args) > 0:
+            params = { **params, 'args': args }
+        params = { **params, **kwargs }
+
+        # Clear cache.
+        if clear_cache:
+            cache.delete(params)
+
+        # Read from cache.
+        result = cache.read(params)
+        if result is not None:
+            return result
+
+        # Add 'clear_cache' param back in if necessary to pass down.
+        arg_names = inspect.getfullargspec(fn).args
+        if 'clear_cache' in arg_names:
+            kwargs['clear_cache'] = clear_cache
+
+        # Call inner function.
+        result = fn(*args, **kwargs)
+
+        # Write data to cache.
+        cache.write(params, result)
+
+        return result
+
+    return wrapper
+
 def cached_method(*attrs: Sequence[str]) -> Callable[[Callable], Callable]:
     """
-    effect: caches the result of the wrapped function.
+    returns: a decorator providing result caching for instance methods.
     args:
         attrs: the instance attributes to include in cache parameters.
     """
@@ -49,7 +112,9 @@ def cached_method(*attrs: Sequence[str]) -> Callable[[Callable], Callable]:
                 params[a] = getattr(self, a)
 
             # Add args/kwargs.
-            params = {**params, **kwargs}
+            if len(args) > 0:
+                params = { **params, 'args': args }
+            params = { **params, **kwargs }
 
             # Clear cache.
             if clear_cache:
