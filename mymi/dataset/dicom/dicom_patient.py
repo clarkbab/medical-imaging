@@ -458,7 +458,7 @@ class DicomPatient:
             # Skip label if no contour sequence.
             contour_seq = getattr(roi_contour, 'ContourSequence', None)
             if not contour_seq:
-                logging.error(f"No 'ContourSequence' found for contour '{name}'.")
+                logging.error(f"No 'ContourSequence' found for contour '{name}' for dataset '{self._dataset}', patient '{self._id}'.")
                 continue
             
             # Convert points into voxel data.

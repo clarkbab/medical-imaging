@@ -283,7 +283,7 @@ class DicomDataset:
                 pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
             except ValueError as e:
                 if filter_errors:
-                    logging.error(f"Error calling 'ct_summary' for dataset '{self._name}', patient '{pat}', filtering.")
+                    logging.error(f"Patient filtered due to error calling 'ct_summary' for dataset '{self._name}', patient '{pat}'.")
                     logging.error(f"Filtered error: {e}")
                     continue
                 else:
@@ -395,7 +395,7 @@ class DicomDataset:
                 summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
             except ValueError as e:
                 if filter_errors:
-                    logging.error(f"Error calling 'ct_summary' for dataset '{self._name}', patient '{pat}', filtering.")
+                    logging.error(f"Patient filtered due to error calling 'ct_summary' for dataset '{self._name}', patient '{pat}'.")
                     logging.error(f"Filtered error: {e}")
                     continue
                 else:
@@ -511,7 +511,7 @@ class DicomDataset:
                 pat_labels = self.patient(id).label_names(clear_cache=clear_cache).label.to_numpy()
             except ValueError as e:
                 if filter_errors:
-                    logging.error(f"Error calling 'label_names' for dataset '{self._name}', patient '{id}', filtering.")
+                    logging.error(f"Patient filtered due to error calling 'label_names' for dataset '{self._name}', patient '{id}'.")
                     logging.error(f"Filtered error: {e}")
                     return False
                 else:

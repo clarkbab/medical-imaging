@@ -38,7 +38,7 @@ def evaluate_predictions(
 
     # Create dataframe.
     cols = {
-        'pat-id': str,
+        'patient-id': str,
         'metric': str
     }
     for label in internal_labels:
@@ -52,7 +52,7 @@ def evaluate_predictions(
             gt_label_data = gt_ds.patient(pat).label_data(clear_cache=clear_cache, labels=gt_labels)
         except ValueError as e:
             if filter_errors:
-                logging.error(f"Error occurred while calling 'label_data' for dataset '{gt_ds.name}', patient '{pat}'.")
+                logging.error(f"Patient filtered due to error calling 'label_data' for dataset '{gt_ds.name}', patient '{pat}'.")
                 logging.error(f"Error message: {e}")
                 continue
             else:
@@ -63,7 +63,7 @@ def evaluate_predictions(
 
         # Add metrics for each label.
         dice_data = {
-            'pat-id': pat,
+            'patient-id': pat,
             'metric': 'dice'
         }
         for internal_label, gt_label, pred_label in zip(internal_labels, gt_labels, pred_labels):
