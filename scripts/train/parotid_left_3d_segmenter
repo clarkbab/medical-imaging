@@ -137,7 +137,7 @@ def train(args: dict):
         RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value='minimum')
     ]
     if args.use_aug:
-        log_info(f"Using transforms '{train_transforms}'.")
+        log_info(f"Using transforms '{aug_transforms}'.")
         train_transform = Compose(aug_transforms)
     else:
         train_transform = None
