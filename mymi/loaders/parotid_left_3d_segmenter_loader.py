@@ -94,8 +94,8 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             output = self.transform(subject)
 
             # Extract results.
-            input = output['one_image'].data.squeeze(0)
-            label = output['a_segmentation'].data.squeeze(0)
+            input = output['one_image'].data.squeeze(0).numpy()
+            label = output['a_segmentation'].data.squeeze(0).numpy()
 
         # Required extent.
         # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
