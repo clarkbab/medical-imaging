@@ -97,7 +97,7 @@ class Plotter:
         if transform:
             # Add 'batch' dimension.
             ct_data = np.expand_dims(ct_data, axis=0)
-            label_data = [(name, np.expand_dims(data, axis=0)) for name, data in label_data]
+            label_data = dict(((n, np.expand_dims(d, axis=0)) for n, d in label_data.items()))
 
             # Create 'subject'.
             affine = np.array([
@@ -107,7 +107,7 @@ class Plotter:
                 [0, 0, 0, 1]
             ])
             ct_data = ScalarImage(tensor=ct_data, affine=affine)
-            label_data = [(name, LabelMap(tensor=data, affine=affine)) for name, data in label_data]
+            label_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in label_data.items()))
 
             # Transform CT data.
             subject = Subject(one_image=ct_data)
@@ -115,11 +115,11 @@ class Plotter:
 
             # Transform label data.
             det_transform = output.get_composed_history()
-            label_data = [(name, det_transform(Subject(a_segmentation=image))) for name, image in label_data]
+            label_data = dict(((n, det_transform(Subject(a_segmentation=d))) for n, d in label_data.items()))
 
             # Extract results.
             ct_data = output['one_image'].data.squeeze(0)
-            label_data = [(name, out['a_segmentation'].data.squeeze(0)) for name, out in label_data]
+            label_data = dict(((n, out['a_segmentation'].data.squeeze(0)) for n, d in label_data.items()))
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert view in ('axial', 'coronal', 'sagittal')
@@ -162,7 +162,7 @@ class Plotter:
 
                 # Plot each label.
                 show_legend = False
-                for i, (lname, ldata) in enumerate(label_data):
+                for i, (lname, ldata) in enumerate(label_data.items()):
                     # Convert data to 'imshow' co-ordinate system.
                     ldata = ldata[data_index]
                     ldata = self.to_image_coords(ldata, view)

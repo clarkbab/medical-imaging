@@ -322,12 +322,9 @@ class DicomPatient:
         # Define table structure.
         cols = {
             'label': str,
-            'com-x': int,
-            'com-y': int,
-            'com-z': int,
-            'width-x': float,
-            'width-y': float,
-            'width-z': float,
+            'width-mm-x': float,
+            'width-mm-y': float,
+            'width-mm-z': float,
         }
         cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
         df = pd.DataFrame(columns=cols.keys())
@@ -351,16 +348,13 @@ class DicomPatient:
             voxel_widths = maxs - mins
 
             # Convert voxel widths to millimetres.
-            widths = voxel_widths * spacing
+            mm_widths = voxel_widths * spacing
 
             data = {
                 'label': name,
-                'com-x': coms[0],
-                'com-y': coms[1],
-                'com-z': coms[2],
-                'width-x': widths[0],
-                'width-y': widths[1],
-                'width-z': widths[2]
+                'width-mm-x': mm_widths[0],
+                'width-mm-y': mm_widths[1],
+                'width-mm-z': mm_widths[2]
             }
             df = df.append(data, ignore_index=True)
 

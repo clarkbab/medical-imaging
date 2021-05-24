@@ -26,7 +26,7 @@ class ProcessedDataset:
 
     def manifest(
         self,
-        folder: str) -> Sequence[str]:
+        folder: Union['train', 'validate', 'test']) -> Sequence[str]:
         """
         returns: a sequence of patient IDs for that folder.
         args:
@@ -39,8 +39,10 @@ class ProcessedDataset:
 
         return pats
 
-    @classmethod
-    def input(cls, folder, sample_idx):
+    def input(
+        self,
+        folder: Union['train', 'validate', 'test'],
+        sample_idx: int):
         """
         returns: the input data for sample i.
         args:
@@ -49,14 +51,15 @@ class ProcessedDataset:
         """
         # Load the input data.
         filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-input"
-        input_path = os.path.join(cls.data_dir(), folder, filename)
+        input_path = os.path.join(self._path, folder, filename)
         f = open(input_path, 'rb')
         input = np.load(f)
-
         return input
 
-    @classmethod
-    def label(cls, folder, sample_idx):
+    def label(
+        self,
+        folder: Union['train', 'validate', 'test'],
+        sample_idx: int):
         """
         returns: the label data for sample i.
         args:
@@ -65,21 +68,24 @@ class ProcessedDataset:
         """
         # Load the label data.
         filename = f"{sample_idx:0{FILENAME_NUM_DIGITS}}-label"
-        label_path = os.path.join(cls.data_dir(), folder, filename)
+        label_path = os.path.join(self._path, folder, filename)
         f = open(label_path, 'rb')
         label = np.load(f)
-
         return label
 
-    @classmethod
-    def sample(cls, folder, sample_idx):
+    def sample(
+        self,
+        folder: Union['train', 'validate', 'test'],
+        sample_idx: int):
         """
         returns: the (input, label) pair for the given sample index.
         args:
             folder: 'train', 'test' or 'validate'.
             sample_idx: the sample index to load.
         """
-        return cls.input(folder, sample_idx), cls.label(folder, sample_idx)
+        # Get sample (input, label) pair.
+        pair = self.input(folder, sample_idx), self.label(folder, sample_idx)
+        return pair 
 
     # TODO: Move to subclass if necessary.
     @classmethod

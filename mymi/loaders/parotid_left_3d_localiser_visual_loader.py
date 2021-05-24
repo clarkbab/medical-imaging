@@ -5,7 +5,7 @@ from torchio import Compose, LabelMap, ScalarImage, Subject
 
 from mymi import config
 
-class ParotidLeft3DVisualLoader:
+class ParotidLeft3DLocaliserVisualLoader:
     @staticmethod
     def build(batch_size=1, num_batches=5, seed=42, spacing=None, transform=None):
         """
@@ -18,15 +18,15 @@ class ParotidLeft3DVisualLoader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DVisualDataset(spacing=spacing, transform=transform)
+        dataset = ParotidLeft3DLocaliserVisualDataset(spacing=spacing, transform=transform)
 
         # Create sampler.
-        sampler = ParotidLeft3DVisualSampler(dataset, num_batches * batch_size, seed)
+        sampler = ParotidLeft3DLocaliserVisualSampler(dataset, num_batches * batch_size, seed)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
-class ParotidLeft3DVisualDataset(Dataset):
+class ParotidLeft3DLocaliserVisualDataset(Dataset):
     def __init__(self, spacing=None, transform=None):
         """
         returns: a dataset.
@@ -92,7 +92,7 @@ class ParotidLeft3DVisualDataset(Dataset):
 
         return input, label
 
-class ParotidLeft3DVisualSampler(Sampler):
+class ParotidLeft3DLocaliserVisualSampler(Sampler):
     def __init__(self, dataset, num_images, seed):
         self.dataset_length = len(dataset)
         self.num_images = num_images

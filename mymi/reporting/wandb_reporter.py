@@ -18,7 +18,6 @@ class WandbReporter(Reporter):
             run_name: the name of the training run.
         """
         # Configure wandb.
-        os.environ['WANDB_MODE'] = 'dryrun'
         wandb.init(dir=config.directories.wandb, project=project_name, name=run_name)
 
     """

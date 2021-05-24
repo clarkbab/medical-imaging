@@ -371,12 +371,9 @@ class DicomDataset:
         cols = {
             'patient-id': str,
             'label': str,
-            'com-x': int,
-            'com-y': int,
-            'com-z': int,
-            'width-x': float,
-            'width-y': float,
-            'width-z': float,
+            'width-mm-x': float,
+            'width-mm-y': float,
+            'width-mm-z': float,
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -406,12 +403,9 @@ class DicomDataset:
                 data = {
                     'patient-id': pat,
                     'label': row.label,
-                    'com-x': row['com-x'],
-                    'com-y': row['com-y'],
-                    'com-z': row['com-z'],
-                    'width-x': row['width-x'],
-                    'width-y': row['width-y'],
-                    'width-z': row['width-z']
+                    'width-mm-x': row['width-mm-x'],
+                    'width-mm-y': row['width-mm-y'],
+                    'width-mm-z': row['width-mm-z']
                 }
                 df = df.append(data, ignore_index=True)
 

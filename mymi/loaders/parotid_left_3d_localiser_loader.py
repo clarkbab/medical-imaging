@@ -6,7 +6,7 @@ from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import config
 
-class ParotidLeft3DLoader:
+class ParotidLeft3DLocaliserLoader:
     @staticmethod
     def build(folder, batch_size=1, raw_input=False, raw_label=False, spacing=None, transform=None):
         """
@@ -21,12 +21,12 @@ class ParotidLeft3DLoader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
+        dataset = ParotidLeft3DLocaliserDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset)
 
-class ParotidLeft3DDataset(Dataset):
+class ParotidLeft3DLocaliserDataset(Dataset):
     def __init__(self, folder, raw_input=False, raw_label=False, spacing=None, transform=None):
         """
         args:
@@ -46,7 +46,7 @@ class ParotidLeft3DDataset(Dataset):
             assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
-        folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', 'parotid-left-3d', folder)
+        folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', folder)
         self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
         self.num_samples = len(self.samples)
 
