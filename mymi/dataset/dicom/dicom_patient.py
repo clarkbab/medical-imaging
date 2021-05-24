@@ -1,16 +1,17 @@
 import numpy as np
 import os
 import pandas as pd
-import pydicom as dicom
+import pydicom as dcm
 from scipy.ndimage import center_of_mass
 from typing import *
 from rt_utils import RTStructBuilder
-import cv2 as cv
 
 from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
 from mymi import logging
+
+from .rtstruct_converter import RTStructConverter
 
 class DicomPatient:
     def __init__(
@@ -79,26 +80,26 @@ class DicomPatient:
         # Get patient name.
         cts_path = os.path.join(self._path, 'ct')
         ct_path = os.path.join(cts_path, os.listdir(cts_path)[0])
-        ct = dicom.read_file(ct_path)
+        ct = dcm.read_file(ct_path)
         name = ct.PatientName
         return name
 
     @_require_ct
-    def get_cts(self) -> Sequence[dicom.dataset.FileDataset]:
+    def get_cts(self) -> Sequence[dcm.dataset.FileDataset]:
         """
         returns: a list of FileDataset objects holding CT info.
         """
         # Load CT dicoms.
         cts_path = os.path.join(self._path, 'ct')
         ct_paths = [os.path.join(cts_path, f) for f in os.listdir(cts_path)]
-        cts = [dicom.read_file(f) for f in ct_paths]
+        cts = [dcm.read_file(f) for f in ct_paths]
 
         # Sort by z-position.
         cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])
 
         return cts
 
-    def get_rtstruct(self) -> dicom.dataset.FileDataset:
+    def get_rtstruct(self) -> dcm.dataset.FileDataset:
         """
         returns: a FileDataset object holding RTSTRUCT info.
         """
@@ -109,7 +110,7 @@ class DicomPatient:
             raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got {len(rtstruct_paths)}.")
 
         # Load RTSTRUCT.
-        rtstruct = dicom.read_file(rtstruct_paths[0])
+        rtstruct = dcm.read_file(rtstruct_paths[0])
 
         return rtstruct
 
@@ -429,82 +430,31 @@ class DicomPatient:
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 
-        # Get label shape.
-        summary = self.ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
-        shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
+        # Load ROI names.
+        roi_names = RTStructConverter.get_roi_names(rtstruct) 
 
-        # Convert label data from vertices to voxels.
-        roi_contours = rtstruct.ROIContourSequence
-        infos = rtstruct.StructureSetROISequence
-        label_dict = {}
-        for roi_contour, info in zip(roi_contours, infos):
-            # Get contour name.
-            name = info.ROIName
-
-            # Skip if label not needed.
-            if not ((type(labels) == str and (labels == 'all' or name == labels)) or
+        # Filter on required labels.
+        def fn(name):
+            if ((type(labels) == str and (labels == 'all' or name == labels)) or
                 ((type(labels) == tuple or type(labels) == list or type(labels) == np.ndarray) and name in labels)):
-                continue
+                return True
+            else:
+                return False
+        roi_names = list(filter(fn, roi_names))
 
-            # Create label placeholder.
-            data = np.zeros(shape=shape, dtype=bool)
+        # Get offset, shape and spacing.
+        summary_df = self.ct_summary(clear_cache=clear_cache)
+        offset = tuple(summary_df[['offset-x', 'offset-y', 'offset-z']].iloc[0])
+        shape = tuple(summary_df[['size-x', 'size-y', 'size-z']].iloc[0])
+        spacing = tuple(summary_df[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
 
-            # Skip label if no contour sequence.
-            contour_seq = getattr(roi_contour, 'ContourSequence', None)
-            if not contour_seq:
-                logging.error(f"No 'ContourSequence' found for contour '{name}' for dataset '{self._dataset}', patient '{self._id}'.")
-                continue
-            
-            # Convert points into voxel data.
-            for i, contour in enumerate(contour_seq):
-                # Get contour data.
-                contour_data = contour.ContourData
-                if contour.ContourGeometricType != 'CLOSED_PLANAR':
-                    raise ValueError(f"Expected contour type 'CLOSED_PLANAR', got '{contour.ContourGeometricType}'.")
-
-                # Coords are stored in flat array.
-                points = np.array(contour_data).reshape(-1, 3)
-
-                # Get z_idx of slice.
-                z_idx = int((points[0, 2] - summary['offset-z']) / summary['spacing-z'])
-
-                # Convert contour data to voxels.
-                slice_data = self._contour_to_voxels(points, summary)
-
-                # Write slice data to label, using XOR.
-                data[:, :, z_idx][slice_data == True] = np.invert(data[:, :, z_idx][slice_data == True])
-
+        # Add ROI data.
+        label_dict = {}
+        for name in roi_names:
+            data = RTStructConverter.get_roi_mask(name, offset, rtstruct, shape, spacing)
             label_dict[name] = data
 
         return label_dict
-
-    def _contour_to_voxels(
-        self,
-        points: np.ndarray,
-        summary: dict) -> np.ndarray:
-        """
-        returns: a boolean np.ndarray containing the mask.
-        args:
-            points: the (n x 3) np.ndarray of contour points in continuous physical coordinates.
-            summary: contains the CT summary info.
-        """
-        # Convert from physical coordinates to array indices.
-        x_indices = (points[:, 0] - summary['offset-x']) / summary['spacing-x']
-        y_indices = (points[:, 1] - summary['offset-y']) / summary['spacing-y']
-
-        # Round before typecasting to avoid truncation.
-        indices = np.stack((y_indices, x_indices), axis=1)  # 'fillPoly' expects rows, then columns.
-        indices = np.around(indices)
-        indices = indices.astype('int32')
-
-        # Get all voxels on the boundary and interior described by the indices.
-        shape = (int(summary['size-x']), int(summary['size-y']))
-        slice_data = np.zeros(shape=shape, dtype='uint8')
-        pts = [np.expand_dims(indices, axis=0)]
-        cv.fillPoly(img=slice_data, pts=pts, color=1)
-        slice_data = slice_data.astype(bool)
-
-        return slice_data
 
     def _filterOnDictKeys(
         self,
