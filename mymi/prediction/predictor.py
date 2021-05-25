@@ -77,11 +77,11 @@ class Predictor:
             print('loaded size: ', initial_size)
 
             # Resample to network input layer voxel spacing.
-            input = self.resample(input, self._network_spacing, initial_spacing)
+            input = self._resample(input, self._network_spacing, initial_spacing)
             print('with network spacing: ', input.shape)
             
             # Reshape to network input layer size.
-            input = self.crop_or_pad(input, self._network_size)
+            input = self._crop_or_pad(input, self._network_size)
             print('with network size: ', input.shape)
 
             # Prepare for network.
@@ -101,11 +101,11 @@ class Predictor:
             print('pred size: ', pred.shape)
 
             # Resample to CT spacing.
-            pred = self.resample(pred, initial_spacing, self._network_spacing)
+            pred = self._resample(pred, initial_spacing, self._network_spacing)
             print('with restored spacing: ', pred.shape) 
 
             # Resize to original size - accounting for rounding errors.
-            pred = self.crop_or_pad(pred, initial_size)
+            pred = self._crop_or_pad(pred, initial_size)
             print('with restored size: ', pred.shape)
 
             # Inspect pred.
@@ -126,7 +126,7 @@ class Predictor:
             os.makedirs(os.path.dirname(rtstruct_path), exist_ok=True)
             rtstruct.save(rtstruct_path)
 
-    def resample(
+    def _resample(
         self,
         array: np.ndarray,
         new_spacing: Tuple[float, float, float],
@@ -154,7 +154,7 @@ class Predictor:
 
         return array
 
-    def crop_or_pad(
+    def _crop_or_pad(
         self,
         array: np.ndarray,
         new_size: Tuple[int, int, int]) -> np.ndarray:

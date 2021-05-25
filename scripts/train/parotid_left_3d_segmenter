@@ -20,7 +20,7 @@ sys.path.append(root_dir)
 
 from mymi.loaders import ParotidLeft3DSegmenterLoader, ParotidLeft3DSegmenterVisualLoader
 from mymi.losses import DiceLoss
-from mymi.models import ParotidLeft3DNet
+from mymi.models import SingleChannelUNet
 from mymi.training import ModelTrainer
 from mymi import transforms as ts
 from mymi import utils
@@ -104,7 +104,7 @@ def train(args: dict):
     log_info(f"Using device: {device}.")
 
     # Create model.
-    model = ParotidLeft3DNet()
+    model = SingleChannelUNet()
     model = model.to(device)
     log_info(f"Using model: {model.__class__}.")
 

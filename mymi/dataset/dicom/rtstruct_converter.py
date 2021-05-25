@@ -104,3 +104,36 @@ class RTStructConverter:
         slice_data = slice_data.astype(bool)
 
         return slice_data
+
+    @classmethod
+    def create_rtstruct(
+        cls,
+        labels: dict) -> dcm.dataset.FileDataset:
+        """
+        returns: an RTSTRUCT dicom.
+        args:
+            labels: a dict with label name keys and mask data values.
+        """
+        # Create pydicom RTSTRUCT file.
+
+    @classmethod
+    def _get_contours(
+        cls,
+        mask: np.ndarray) -> 
+        """
+        returns: an array of contour vertices.
+        args:
+            mask: the binary input mask.
+        """
+        # Get contours.
+        mask = mask.astype('uint8')
+        contours, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        # Contours is a list of ndarrays containing the (x, y) coordinates of the vertices for each contour.
+        # Hierarchy represented as [next, previous, first_child, parent]. Next/previous relate to contours
+        # in the same level (-1 means no next/previous).
+        # Without hierarchy we get:
+        # [[1, -1, -1, -1],
+        #  [2, 0, -1, -1],
+        #  [3, 1, -1, -1] ... ]
+        # I don't think we need to worry about 'hierarchy' unless we're creating a pinhole. Most
+        # DICOM viewers will handle the contour hierarchy for us.

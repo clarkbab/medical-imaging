@@ -103,23 +103,23 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
         # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
         # which is more than large enough. We can probably trim this later.
-        extent = (128, 128, 96)
+        required_shape = (128, 128, 96)
 
         # Find OAR extent.
         non_zero = np.argwhere(label != 0)
         mins = non_zero.min(axis=0)
         maxs = non_zero.max(axis=0)
-        voxel_widths = maxs - mins
+        oar_shape = maxs - mins
 
-        # Pad the OAR, preferencing lower indices.
-        to_add = extent - voxel_widths
-        half_add = np.ceil(to_add / 2).astype(int)
-        min_voxels = mins - half_add
+        # Pad the OAR to the required shape.
+        shape_diff = required_shape - oar_shape
+        lower_add = np.ceil(shape_diff / 2).astype(int)
+        mins = mins - lower_add
+        maxs = mins + required_shape
 
-        # Extract patch.
-        slices = tuple(slice(m, m + w) for m, w in zip(min_voxels, extent))
-        input = input[slices]
-        label = label[slices]
+        # Crop or pad the volume.
+        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
+        label = self._crop_or_pad(label, mins, maxs)
 
         # Determine result.
         result = (input, label)
@@ -129,3 +129,38 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             result += (label,)
 
         return result
+
+    def _crop_or_pad(
+        self,
+        array: np.ndarray,
+        mins: Tuple[int, int, int],
+        maxs: Tuple[int, int, int],
+        fill: Union[int, float] = 0) -> np.ndarray:
+        """
+        returns: a 3D array that has been cropped or padded according to limits.
+        args:
+            array: the array data.
+            mins: the minimum indices along each dimension. Negative indices
+                indicate that padding should be added.
+            maxs: the maximum indices along each dimension. Indices larger
+                than the array shape indicate padding should be added.
+        kwargs:
+            fill: the padding value.
+        """
+        # Check for negative indices, and record padding.
+        lower_pad = (-mins).clip(0) 
+        mins = mins.clip(0)
+
+        # Check for max indices larger than input, and record padding.
+        upper_pad = (maxs - array.shape).clip(0)
+        maxs = maxs - upper_pad
+
+        # Perform crop.
+        slices = tuple(slice(min, max) for min, max in zip(mins, maxs))
+        array = array[slices]
+
+        # Perform padding.
+        padding = tuple(zip(lower_pad, upper_pad))
+        array = np.pad(array, padding, constant_values=fill)
+
+        return array

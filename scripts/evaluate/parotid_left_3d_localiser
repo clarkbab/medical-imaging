@@ -14,7 +14,7 @@ sys.path.append(root_dir)
 from mymi import checkpoint
 from mymi.evaluation import ModelEvaluator
 from mymi.loaders import ParotidLeft3DLoader
-from mymi.models import ParotidLeft3DNet
+from mymi.models import SingleChannelUNet
 from mymi import utils
 
 # Parse options.
@@ -64,7 +64,7 @@ else:
 logging.info(f"Using device: {device}.")
 
 # Create model.
-model = ParotidLeft3DNet()
+model = SingleChannelUNet()
 model = model.to(device)
 logging.info(f"Using model arch: {model.__class__}.")
 
