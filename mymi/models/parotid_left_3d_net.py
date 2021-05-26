@@ -3,24 +3,27 @@ import torch.nn as nn
 class ParotidLeft3DNet(nn.Module):
     def __init__(
         self,
-        input_spacing: Tuple[float, float, float],
         localiser: nn.Module,
-        localiser_spacing: Tuple[float, float, float],
-        segmenter: nn.Module):
+        segmenter: nn.Module,
+        spacing: Tuple[float, float, float],
+        localiser_size: Tuple[int, int, int],
+        localiser_spacing: Tuple[float, float, float]):
         """
         effect: initialises the network.
         args:
-            input_spacing: input to 'forward' assumed to have this spacing.
             localiser: the localisation module.
-            localiser_spacing: the spacing expected by the localiser.
             segmenter: the segmentation module.
+            spacing: spacing of input data.
+            localiser_size: the input size required by the localiser.
+            localiser_spacing: the spacing expected by the localiser.
         """
         super().__init__()
 
-        self._input_spacing = input_spacing
         self._localiser = localiser
-        self._localiser_spacing = localiser_spacing
         self._segmenter = segmenter
+        self._spacing = spacing
+        self._localiser_size = localiser_size
+        self._localiser_spacing = localiser_spacing
 
     def forward(
         self,
@@ -31,21 +34,29 @@ class ParotidLeft3DNet(nn.Module):
             x: the batch of input volumes.
         """
         # Create downsampled input.
-        x_down = self._resample_for_localiser(x)
+        x_loc = self._resample(x, self._spacing, self._localiser_spacing)
+
+        # Save resampled size. We need to resize our localiser prediction to it's original shape
+        # before resampling to attain the correct full-resolution shape.
+        x_loc_size = x_loc.shape
+
+        # Create cropped/padded input.
+        x_loc = self._crop_or_pad(x_loc, self._localiser_size)
 
         # Get localiser result.
-        pred_loc = self._localiser(x_down)
+        pred_loc = self._localiser(x_loc)
+
+        # Get binary mask.
+        pred_loc = pred_loc.argmax(axis=1)
+
+        # Reverse the crop/pad.
+        pred_loc = self._crop_or_pad(pred_loc, x_loc_size)
 
         # Upsample to full resolution.
-        pred_loc_up = self._upsample_prediction(pred_loc)
-
-        # Find bounding box.
-        # ((x_min, x_max), (y_min, y_max), ...)
-        oar_bb = self._get_bounding_box(pred_loc_up)
+        pred_loc = self._resample(pred_loc, self._localiser_spacing, self._spacing)
 
         # Extract patch around bounding box.
-        shape = (128, 128, 96)
-        x_patch = self._extract_patch(x, oar_bb, shape)
+        x_patch, crop_or_padding = self._extract_patch(x, pred_loc)
 
         # Pass patch to segmenter.
         pred_seg = self._segmenter(x_patch)
@@ -55,72 +66,112 @@ class ParotidLeft3DNet(nn.Module):
 
         return pred_seg
 
-    def _resample_for_localiser(
+    def _resample(
         self,
-        x: torch.Tensor) -> torch.Tensor:
+        x: torch.Tensor,
+        before: Tuple[float, float, float],
+        after: Tuple[float, float, float]) -> torch.Tensor:
         """
         returns: a resampled tensor.
         args:
             x: the data to resample.
+            before: the spacing before resampling.
+            after: the spacing after resampling.
         """
         # Create the transform.
-        transform = Resample(self._localiser_spacing)
-
-        # Add 'batch' dimension.
-        x = x.unsqueeze(0)
+        transform = Resample(after)
 
         # Create 'subject'.
         affine = np.array([
-            [self._input_spacing[0], 0, 0, 0],
-            [0, self._input_spacing[1], 0, 0],
-            [0, 0, self._input_spacing[2], 1],
+            [before[0], 0, 0, 0],
+            [0, before[1], 0, 0],
+            [0, 0, before[2], 1],
             [0, 0, 0, 1]
         ])
         x = ScalarImage(tensor=x, affine=affine)
-        subject = Subject(one_image=x)
+        subject = Subject(input=x)
 
         # Transform the subject.
         output = transform(subject)
 
         # Extract results.
-        x = output['one_image'].data.squeeze(0)
+        x = output['input'].data.squeeze(0)
 
         return x
 
-    def _extract_oar_patch(
+    def _crop_or_pad(
         self,
-        input: torch.Tensor,
-        label: torch.Tensor,
-        shape: Tuple[int, int, int]) -> torch.Tensor:
+        x: torch.Tensor,
+        after: Tuple[int, int, int]) -> torch.Tensor:
+        """
+        returns: a cropped/padded ndarray.
+        args:
+            x: the tensor to resize.
+            after: the new size.
+        """
+        # Create transform.
+        transform = CropOrPad(after, padding_mode='minimum')
+
+        # Create subject.
+        affine = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 1],
+            [0, 0, 0, 1]
+        ])
+        x = ScalarImage(tensor=x, affine=affine)
+        subject = Subject(x=x)
+
+        # Perform transformation.
+        output = transform(subject)
+
+        # Get result.
+        x = output['x'].data
+
+        return x
+
+    def _extract_patch(
+        self,
+        x: torch.Tensor,
+        pred: torch.Tensor,
+        size: Tuple[int, int, int]) -> Tuple[torch.Tensor, 
         """
         returns: a patch around the OAR.
         args:
-            input: the input data.
-            label: the label data.
-            shape: the shape of the patch.
+            x: the input data.
+            pred: the label data.
+            size: the size of the patch. Must be larger than the extent of the OAR.
         """
-        # Required extent.
-        # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
-        # Converting to voxel width we have: (48.85, 61.52, 24) for a spacing of (1.0mm, 1.0mm, 3.0mm).
-        # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
-        # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
-        # which is more than large enough. We can probably trim this later.
-
         # Find OAR extent.
-        non_zero = np.argwhere(label != 0)
+        non_zero = np.argwhere(pred != 0)
         mins = non_zero.min(axis=0)
         maxs = non_zero.max(axis=0)
-        oar_shape = maxs - mins
+        oar_size = maxs - mins
 
-        # Pad the OAR to the required shape.
-        shape_diff = shape - oar_shape
-        lower_add = np.ceil(shape_diff / 2).astype(int)
+        # Check oar size.        
+        if (oar_size > extent).any():
+            raise ValueError(f"OAR size '{oar_size}' larger than requested patch size '{size}'.")
+
+        # Determine min/max indices of the patch.
+        size_diff = size - oar_size
+        lower_add = np.ceil(size_diff / 2).astype(int)
         mins = mins - lower_add
-        maxs = mins + shape
+        maxs = mins + size
 
-        # Crop or pad the volume.
-        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
-        label = self._crop_or_pad(label, mins, maxs)
+        # Check for negative indices, and record padding.
+        lower_pad = (-mins).clip(0) 
+        mins = mins.clip(0)
 
-        return input, label
+        # Check for max indices larger than input size, and record padding.
+        upper_pad = (maxs - x.shape).clip(0)
+        maxs = maxs - upper_pad
 
+        # Perform crop.
+        slices = tuple(slice(min, max) for min, max in zip(mins, maxs))
+        x = x[slices]
+
+        # Perform padding.
+        padding = tuple(zip(lower_pad, upper_pad))
+        x = np.pad(x, padding, padding_mode='minimum')
+
+        return x

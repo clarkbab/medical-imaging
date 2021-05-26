@@ -110,16 +110,16 @@ class Plotter:
             label_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in label_data.items()))
 
             # Transform CT data.
-            subject = Subject(one_image=ct_data)
+            subject = Subject(input=ct_data)
             output = transform(subject)
 
             # Transform label data.
             det_transform = output.get_composed_history()
-            label_data = dict(((n, det_transform(Subject(a_segmentation=d))) for n, d in label_data.items()))
+            label_data = dict(((n, det_transform(Subject(label=d))) for n, d in label_data.items()))
 
             # Extract results.
-            ct_data = output['one_image'].data.squeeze(0)
-            label_data = dict(((n, out['a_segmentation'].data.squeeze(0)) for n, d in label_data.items()))
+            ct_data = output['input'].data.squeeze(0)
+            label_data = dict(((n, out['label'].data.squeeze(0)) for n, d in label_data.items()))
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert view in ('axial', 'coronal', 'sagittal')

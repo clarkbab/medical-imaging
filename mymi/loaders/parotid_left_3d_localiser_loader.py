@@ -102,14 +102,14 @@ class ParotidLeft3DLocaliserDataset(Dataset):
             ])
             input = ScalarImage(tensor=input, affine=affine)
             label = LabelMap(tensor=label, affine=affine)
-            subject = Subject(one_image=input, a_segmentation=label)
+            subject = Subject(input=input, label=label)
 
             # Transform the subject.
             output = self.transform(subject)
 
             # Extract results.
-            input = output['one_image'].data.squeeze(0)
-            label = output['a_segmentation'].data.squeeze(0)
+            input = output['input'].data.squeeze(0)
+            label = output['label'].data.squeeze(0)
 
         # Determine result.
         result = (input, label)

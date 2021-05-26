@@ -3,6 +3,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchio import LabelMap, ScalarImage, Subject
+from typing import *
 
 from mymi import config
 
@@ -83,14 +84,14 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
             ])
             input = ScalarImage(tensor=input, affine=affine)
             label = LabelMap(tensor=label, affine=affine)
-            subject = Subject(one_image=input, a_segmentation=label)
+            subject = Subject(input=input, label=label)
 
             # Transform the subject.
             output = self.transform(subject)
 
             # Extract results.
-            input = output['one_image'].data.squeeze(0)
-            label = output['a_segmentation'].data.squeeze(0)
+            input = output['input'].data.squeeze(0)
+            label = output['label'].data.squeeze(0)
 
         # Get the OAR patch.
         # 'Parotid-Left' max extent in training data is (48.85mm, 61.52mm, 72.00mm), which equates

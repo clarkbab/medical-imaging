@@ -79,7 +79,6 @@ class SingleChannelUNet(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def forward(self, x):
-        print('model input shape:', x.shape)
         x1 = self.first(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)

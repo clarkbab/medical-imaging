@@ -132,14 +132,14 @@ class ParotidLeft3DPreprocessor:
                     ])
                     input = ScalarImage(tensor=input, affine=affine)
                     label_data = LabelMap(tensor=label_data, affine=affine)
-                    subject = Subject(one_image=input, a_segmentation=label_data)
+                    subject = Subject(input=input, label=label_data)
 
                     # Transform the subject.
                     output = transform(subject)
 
                     # Extract results.
-                    input = output['one_image'].data.squeeze(0)
-                    label_data = output['a_segmentation'].data.squeeze(0)
+                    input = output['input'].data.squeeze(0)
+                    label_data = output['label'].data.squeeze(0)
 
                 # Save input data.
                 filename = f"{sample_idx:0{config.formatting.sample_digits}}-input"

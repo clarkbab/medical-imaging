@@ -118,13 +118,13 @@ class ModelEvaluator:
                     [0, 0, 0, 1]
                 ])
                 pred = LabelMap(tensor=pred, affine=affine)
-                subject = Subject(a_segmentation=pred)
+                subject = Subject(label=pred)
 
                 # Transform the subject.
                 output = self.output_transform(subject)
 
                 # Extract results.
-                pred = output['a_segmentation'].data
+                pred = output['label'].data
 
                 # Save transformed predictions and labels.
                 if self.record:

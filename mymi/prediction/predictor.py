@@ -148,9 +148,9 @@ class Predictor:
             [0, 0, 0, 1]
         ])
         array = ScalarImage(tensor=array, affine=affine)
-        subject = Subject(one_image=array)
+        subject = Subject(input=array)
         output = transform(subject)
-        array = output['one_image'].data
+        array = output['input'].data
 
         return array
 
@@ -174,8 +174,8 @@ class Predictor:
             [0, 0, 0, 1]
         ])
         array = ScalarImage(tensor=array, affine=affine)
-        subject = Subject(one_image=array)
+        subject = Subject(input=array)
         output = transform(subject)
-        array = output['one_image'].data
+        array = output['input'].data
 
         return array
