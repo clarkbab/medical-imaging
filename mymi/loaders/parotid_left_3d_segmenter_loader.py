@@ -3,6 +3,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torchio import LabelMap, ScalarImage, Subject
+from typing import *
 
 from mymi import config
 
@@ -97,29 +98,9 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             input = output['one_image'].data.squeeze(0).numpy()
             label = output['a_segmentation'].data.squeeze(0).numpy()
 
-        # Required extent.
-        # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
-        # Converting to voxel width we have: (48.85, 61.52, 24) for a spacing of (1.0mm, 1.0mm, 3.0mm).
-        # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
-        # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
-        # which is more than large enough. We can probably trim this later.
-        required_shape = (128, 128, 96)
-
-        # Find OAR extent.
-        non_zero = np.argwhere(label != 0)
-        mins = non_zero.min(axis=0)
-        maxs = non_zero.max(axis=0)
-        oar_shape = maxs - mins
-
-        # Pad the OAR to the required shape.
-        shape_diff = required_shape - oar_shape
-        lower_add = np.ceil(shape_diff / 2).astype(int)
-        mins = mins - lower_add
-        maxs = mins + required_shape
-
-        # Crop or pad the volume.
-        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
-        label = self._crop_or_pad(label, mins, maxs)
+        # Get the patch.
+        shape = (128, 128, 96)
+        input, label = self._extract_patch(input, label, shape)
 
         # Determine result.
         result = (input, label)
@@ -129,6 +110,43 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             result += (label,)
 
         return result
+
+    def _extract_oar_patch(
+        self,
+        input: np.ndarray,
+        label: np.ndarray,
+        shape: Tuple[int, int, int]) -> np.ndarray:
+        """
+        returns: a patch around the OAR.
+        args:
+            input: the input data.
+            label: the label data.
+            shape: the shape of the patch.
+        """
+        # Required extent.
+        # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
+        # Converting to voxel width we have: (48.85, 61.52, 24) for a spacing of (1.0mm, 1.0mm, 3.0mm).
+        # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
+        # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
+        # which is more than large enough. We can probably trim this later.
+
+        # Find OAR extent.
+        non_zero = np.argwhere(label != 0)
+        mins = non_zero.min(axis=0)
+        maxs = non_zero.max(axis=0)
+        oar_shape = maxs - mins
+
+        # Pad the OAR to the required shape.
+        shape_diff = shape - oar_shape
+        lower_add = np.ceil(shape_diff / 2).astype(int)
+        mins = mins - lower_add
+        maxs = mins + shape
+
+        # Crop or pad the volume.
+        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
+        label = self._crop_or_pad(label, mins, maxs)
+
+        return input, label
 
     def _crop_or_pad(
         self,

@@ -73,8 +73,8 @@ class ParotidLeft3DLocaliserDataset(Dataset):
         # Perform transform.
         if self.transform:
             # Add 'batch' dimension.
-            input_t = np.expand_dims(input, axis=0)
-            label_t = np.expand_dims(label, axis=0)
+            input = np.expand_dims(input, axis=0)
+            label = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
@@ -83,19 +83,19 @@ class ParotidLeft3DLocaliserDataset(Dataset):
                 [0, 0, self.spacing[2], 1],
                 [0, 0, 0, 1]
             ])
-            input_t = ScalarImage(tensor=input_t, affine=affine)
-            label_t = LabelMap(tensor=label_t, affine=affine)
-            subject = Subject(one_image=input_t, a_segmentation=label_t)
+            input = ScalarImage(tensor=input, affine=affine)
+            label = LabelMap(tensor=label, affine=affine)
+            subject = Subject(one_image=input, a_segmentation=label)
 
             # Transform the subject.
             output = self.transform(subject)
 
             # Extract results.
-            input_t = output['one_image'].data.squeeze(0)
-            label_t = output['a_segmentation'].data.squeeze(0)
+            input = output['one_image'].data.squeeze(0)
+            label = output['a_segmentation'].data.squeeze(0)
 
         # Determine result.
-        result = (input_t, label_t)
+        result = (input, label)
         if self.raw_input:
             result += (input,)
         if self.raw_label:

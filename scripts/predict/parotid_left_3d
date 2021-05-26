@@ -1,0 +1,95 @@
+#! /usr/bin/env python
+from argparse import ArgumentParser
+from datetime import datetime
+import logging
+import numpy as np
+import os
+import sys
+import torch
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import checkpoint
+from mymi import dataset
+from mymi.dataset import Types
+from mymi.models import SingleChannelUNet
+from mymi.postprocessing import largest_connected_component
+from mymi.prediction import Predictor
+from mymi import utils
+
+# Parse options.
+def interval_type(s: str):
+    if s == 'epoch':
+        return s
+    elif s.isdigit():
+        return int(s)
+    else:
+        raise ArgumentTypeError(f"Should be 'epoch' or integer, got '{s}'.")
+
+# Parse arguments.
+parser = ArgumentParser(description="""
+    Evaluate the segmentation model.
+""")
+parser.add_argument('-d', '--dataset', action='store', help='the data to perform inference on', required=True)
+parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('-lc', '--localiser-checkpoint', action='store', default='checkpoint', help='the checkpoint name')
+parser.add_argument('-ln', '--localiser-name', action='store', help='the localiser name', required=True)
+parser.add_argument('-lr', '--localiser-run', action='store', help='the localiser run', required=True)
+parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='turn off GPU use')
+parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('-p', '--patient-ids', action='store_true', default=False, help='turn off GPU use')
+parser.add_argument('-sc', '--segmenter-checkpoint', action='store', default='checkpoint', help='the checkpoint name')
+parser.add_argument('-sn', '--segmenter-name', action='store', help='the segmenter name', required=True)
+parser.add_argument('-sr', '--segmenter-run', action='store', help='the segmenter run', required=True)
+args = parser.parse_args()
+
+# Configure logging.
+log_level = getattr(logging, args.log_level.upper(), None)
+utils.configure_logging(log_level)
+
+# Configure device.
+if args.no_gpu:
+    device = torch.device('cpu')
+else:
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+    else:
+        device = torch.device('cpu')
+        logging.info('CUDA not available.')
+logging.info(f"Using device: {device}.")
+
+# Load localiser model.
+localiser = SingleChannelUNet()
+localiser = localiser.to(device)
+logging.info(f"Using model arch: {localiser.__class__}.")
+
+# Load localiser params.
+localiser_state, _ = checkpoint.load(args.localiser_name, args.localiser_run, checkpoint_name=args.localiser_checkpoint, device=device)
+localiser.load_state_dict(localiser_state)
+logging.info(f"Loaded localiser with name '{args.localiser_name}' from training run '{args.localiser_run}'.")
+
+# Load test patients from manifest.
+ds_name = 'HEAD-NECK-RADIOMICS-HN1'
+dataset.select(ds_name, type=Types.PROCESSED) pats = dataset.manifest('test')
+
+# Create input transform.
+# First set the spacing, to a consistent 1, 1, 4.25 (or whatever).
+# Then crop/pad.
+approx_data_spacing = (1, 1, 3)
+approx_data_size = (512, 512, 212)
+network_size = (128, 128, 96)
+network_spacing = tuple((np.array(approx_data_size) / network_size) * approx_data_spacing)
+
+# Create predictor kwargs.
+kwargs = { 'pat_ids': pats }
+kwargs['device'] = device
+if args.no_mixed:
+    kwargs['mixed_precision'] = False
+    logging.info('Using full precision.')
+else:
+    logging.info('Using mixed precision.')
+
+# Create/run predictor.
+predictor = Predictor(ds_name, network_size, network_spacing, **kwargs)
+predictor(model)
