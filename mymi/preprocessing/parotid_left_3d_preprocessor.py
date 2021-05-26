@@ -97,7 +97,7 @@ class ParotidLeft3DPreprocessor:
 
             # Write patient manifest.
             logging.info(f"Writing {folder} manifest file.")
-            manifest_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', 'manifest', f"{folder}.csv")
+            manifest_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', 'manifests', f"{folder}.csv")
             os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
             df = pd.DataFrame(pats, columns=['patient-id'])
             df.to_csv(manifest_path, index=False) 
@@ -108,7 +108,7 @@ class ParotidLeft3DPreprocessor:
 
                 # Load data.
                 input = dataset.patient(pat).ct_data(clear_cache=clear_cache)
-                _, label_data = dataset.patient(pat).label_data(clear_cache=clear_cache, labels=labels)[0]
+                label_data = dataset.patient(pat).label_data(clear_cache=clear_cache, labels=labels)['Parotid-Left']
 
                 # Normalise data.
                 if normalise:

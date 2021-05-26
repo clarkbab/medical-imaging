@@ -25,7 +25,7 @@ class ParotidLeft3DSegmenterLoader:
         dataset = ParotidLeft3DSegmenterDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
 
         # Create loader.
-        return DataLoader(batch_size=batch_size, dataset=dataset)
+        return DataLoader(batch_size=batch_size, dataset=dataset, shuffle=True)
 
 class ParotidLeft3DSegmenterDataset(Dataset):
     def __init__(self, folder, raw_input=False, raw_label=False, spacing=None, transform=None):
@@ -65,6 +65,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         args:
             idx: the index of the item to return.
         """
+        print('sample index:', idx)
         # Get data and label paths.
         input_path, label_path = self.samples[idx]
 
@@ -98,9 +99,18 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             input = output['one_image'].data.squeeze(0).numpy()
             label = output['a_segmentation'].data.squeeze(0).numpy()
 
-        # Get the patch.
+        # Get the OAR patch.
+        # 'Parotid-Left' max extent in training data is (48.85mm, 61.52mm, 72.00mm), which equates
+        # to a voxel shape of (48.85, 61.52, 24) for a spacing of (1mm, 1mm, 3mm).
+        # Chose (128, 128, 96) for patch size as it's larger than the OAR extent and it fits into
+        # the GPU memory.
         shape = (128, 128, 96)
+        print('input path:', input_path)
+        print('input shape:', input.shape)
+        print('label shape:', label.shape)
         input, label = self._extract_patch(input, label, shape)
+        print('input patch shape:', input.shape)
+        print('input label shape:', label.shape)
 
         # Determine result.
         result = (input, label)
@@ -111,7 +121,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
 
         return result
 
-    def _extract_oar_patch(
+    def _extract_patch(
         self,
         input: np.ndarray,
         label: np.ndarray,
@@ -121,22 +131,15 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         args:
             input: the input data.
             label: the label data.
-            shape: the shape of the patch.
+            shape: the shape of the patch. Must be larger than the extent of the OAR.
         """
-        # Required extent.
-        # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
-        # Converting to voxel width we have: (48.85, 61.52, 24) for a spacing of (1.0mm, 1.0mm, 3.0mm).
-        # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
-        # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
-        # which is more than large enough. We can probably trim this later.
-
         # Find OAR extent.
         non_zero = np.argwhere(label != 0)
         mins = non_zero.min(axis=0)
         maxs = non_zero.max(axis=0)
         oar_shape = maxs - mins
 
-        # Pad the OAR to the required shape.
+        # Determine min/max indices of the patch.
         shape_diff = shape - oar_shape
         lower_add = np.ceil(shape_diff / 2).astype(int)
         mins = mins - lower_add
@@ -155,7 +158,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         maxs: Tuple[int, int, int],
         fill: Union[int, float] = 0) -> np.ndarray:
         """
-        returns: a 3D array that has been cropped or padded according to limits.
+        returns: extracts a patch from a 3D array, cropping/padding as necessary.
         args:
             array: the array data.
             mins: the minimum indices along each dimension. Negative indices

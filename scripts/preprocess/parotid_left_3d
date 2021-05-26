@@ -13,10 +13,9 @@ from torchio.transforms import Compose, CropOrPad, Resample
 
 # Parse args.
 parser = argparse.ArgumentParser(description='Preprocess DICOM dataset for ML model')
+parser.add_argument('-c', '--clear-cache', action='store_true', default=False, help='clear cached data')
 parser.add_argument('-l', '--log-level', action='store', default='info', help='sets the log level')
 parser.add_argument('-np', '--num-pats', action='store', default='all', help='number of patients to process')
-parser.add_argument('-p', '--path', action='store', help='path to store processed data')
-parser.add_argument('-t', '--transforms-path', action='store', help='path to transforms')
 args = parser.parse_args()
 
 # Create logger.
@@ -31,8 +30,7 @@ fill = 'minimum'
 spacing = (1.0, 1.0, 3.0)
 resolution = (512, 512, 212)
 transforms = [
-    Resample(spacing),
-    CropOrPad(resolution, padding_mode=fill)
+    Resample(spacing)
 ]
 transform = Compose(transforms)
 

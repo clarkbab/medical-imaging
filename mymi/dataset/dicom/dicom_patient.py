@@ -227,7 +227,7 @@ class DicomPatient:
         # Add fields-of-view.
         x_fov = data['size-x'] * data['spacing-x']
         y_fov = data['size-y'] * data['spacing-y']
-        z_fov = np.max(z_offsets) - np.min(z_offsets)
+        z_fov = np.max(z_offsets) - np.min(z_offsets) + z_spacing   # Assume that FOV includes half-voxel at either end.
         data['fov-x'] = x_fov
         data['fov-y'] = y_fov
         data['fov-z'] = z_fov

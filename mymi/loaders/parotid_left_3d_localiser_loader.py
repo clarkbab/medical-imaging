@@ -1,18 +1,27 @@
 import logging
 import numpy as np
 import os
+import torch
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+import torchio
 from torchio import LabelMap, ScalarImage, Subject
+from typing import *
 
 from mymi import config
 
 class ParotidLeft3DLocaliserLoader:
     @staticmethod
-    def build(folder, batch_size=1, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def build(
+        folder: Union['train', 'validate', 'test'],
+        batch_size: int = 1,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        spacing: Union[float, float, float] = None,
+        transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         """
         returns: a data loader.
         args:
-            folder: a string describing the desired loader - 'train', 'validate' or 'test'.
+            folder: a string describing the loader folder.
         kwargs:
             batch_size: the number of images in the batch.
             raw_input: return the non-transformed input also.
@@ -24,14 +33,19 @@ class ParotidLeft3DLocaliserLoader:
         dataset = ParotidLeft3DLocaliserDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
 
         # Create loader.
-        return DataLoader(batch_size=batch_size, dataset=dataset)
+        return DataLoader(batch_size=batch_size, dataset=dataset, shuffle=True)
 
 class ParotidLeft3DLocaliserDataset(Dataset):
-    def __init__(self, folder, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def __init__(
+        self,
+        folder: str,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        spacing: Union[float, float, float] = None,
+        transform: torchio.transforms.Transform = None):
         """
         args:
-            folder: a string describing the desired loader - 'train', 'validate' or 'test'.
-            spacing: the voxel spacing of the data.
+            folder: a string describing the loader folder.
         kwargs:
             raw_input: return the raw input data loaded from disk, in addition to transformed data.
             raw_label: return the raw label data loaded from disk, in addition to transformed data.
@@ -46,7 +60,7 @@ class ParotidLeft3DLocaliserDataset(Dataset):
             assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
-        folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'parotid-left-3d', folder)
+        folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', folder)
         self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
         self.num_samples = len(self.samples)
 
@@ -56,10 +70,13 @@ class ParotidLeft3DLocaliserDataset(Dataset):
         """
         return self.num_samples
 
-    def __getitem__(self, idx):
+    def __getitem__(
+        self,
+        idx: int):
         """
         returns: an (input, label) pair from the dataset.
-        idx: the item to return.
+        args:
+            idx: the item to return.
         """
         # Get data and label paths.
         input_path, label_path = self.samples[idx]

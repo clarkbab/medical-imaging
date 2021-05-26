@@ -26,7 +26,6 @@ class ModelTrainer:
         loss_fn: torch.nn.Module,
         model_name: str,
         optimiser: torch.optim.Optimizer,
-        project_name: str,
         run_name: str,
         train_loader: torch.utils.data.DataLoader,
         validation_loader: torch.utils.data.DataLoader,
@@ -50,7 +49,7 @@ class ModelTrainer:
         effect: sets the initial trainer values.
         args:
             loss_fn: objective function of the training.
-            model_name: the name of the model, e.g. 'Parotid-Left-3D-Localiser'.
+            model_name: the name of the model, e.g. 'parotid-left-3d-localiser'.
             optimiser: updates the model parameters in response to gradients.
             run_name: the name of the run to show in reporting.
             train_loader: provides the training input and label batches.
@@ -78,7 +77,7 @@ class ModelTrainer:
         self.hausdorff_delay = hausdorff_delay
         if report:
             # Create tensorboard writer.
-            self.reporter = WandbReporter(project_name, run_name)
+            self.reporter = WandbReporter(model_name, run_name)
 
             # Add hyperparameters.
             hparams = {

@@ -119,7 +119,7 @@ class RTStructConverter:
     @classmethod
     def _get_contours(
         cls,
-        mask: np.ndarray) -> 
+        mask: np.ndarray) -> np.ndarray:
         """
         returns: an array of contour vertices.
         args:

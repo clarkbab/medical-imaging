@@ -41,6 +41,7 @@ parser.add_argument('-a', '--use-aug', action='store_true', default=False, help=
 parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
 parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
 parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
+parser.add_argument('-ea', '--use-elastic-aug', action='store_true', default=False, help='use elastic deformation augmentation')
 parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
 parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
 parser.add_argument('-lr', '--learning-rate', action='store', type=float, help="sets the learning rate")
@@ -113,11 +114,13 @@ def train(args: dict):
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_idx])
 
     # Define loss function.
-    if args.loss == 'cross-entropy':
+    if args.loss == 'bce':
         class_weights = torch.Tensor((1, 6767.77)).to(device)      # Calculated from 'dataset.class_frequencies'.
         loss_fn = nn.CrossEntropyLoss(weight=class_weights)
     elif args.loss == 'dice':
         loss_fn = DiceLoss()
+    else:
+        raise ValueError(f"Loss '{args.loss}' not recognised.")
     log_info(f"Using loss function: {loss_fn.__class__}.")
 
     # Define optimiser.
@@ -128,22 +131,28 @@ def train(args: dict):
     optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     log_info(f"Using optimiser: {optimiser}.")
 
-    # Define data transforms..
+    # Define augmentations.
     rotation = (-5, 5)
-    scale = (0.8, 1.2)
     translation = (-50, 50)
-    spacing = (1, 1, 3)
-    aug_transforms = [                                               # Only applied when augmenting.
+    scale = (0.8, 1.2)
+    aug_transforms = [
         RandomAffine(degrees=rotation, scales=scale, translation=translation, default_pad_value='minimum')
     ]
+    if args.use_elastic_aug:
+        aug_transforms += [
+            RandomElasticDeformation()
+        ]
+
+    # Compose transforms.
     if args.use_aug:
-        log_info(f"Using transforms '{aug_transforms}'.")
         train_transform = Compose(aug_transforms)
+        log_info(f"Using transforms '{aug_transforms}'.")
     else:
         train_transform = None
 
     # Create data loaders.
     batch_size = args.batch_size
+    spacing = (1, 1, 3)         # Data on disk has this spacing.
     train_loader = ParotidLeft3DSegmenterLoader.build('train', batch_size=batch_size, spacing=spacing, transform=train_transform)
     validation_loader = ParotidLeft3DSegmenterLoader.build('validate', batch_size=batch_size, spacing=spacing)
     visual_loader = ParotidLeft3DSegmenterVisualLoader.build(batch_size=batch_size, spacing=spacing)
@@ -196,8 +205,7 @@ def train(args: dict):
 
     # Train the model.
     model_name = 'parotid-left-3d-segmenter'
-    project_name = 'parotid-left-3d'
-    trainer = ModelTrainer(loss_fn, model_name, optimiser, project_name, run_name, train_loader, validation_loader, visual_loader, **kwargs)
+    trainer = ModelTrainer(loss_fn, model_name, optimiser, run_name, train_loader, validation_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):
