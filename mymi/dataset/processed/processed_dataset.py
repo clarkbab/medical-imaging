@@ -7,6 +7,8 @@ from typing import *
 from mymi import cache
 from mymi import config
 
+from ..types import types
+
 FILENAME_NUM_DIGITS = 5
 
 class ProcessedDataset:
@@ -23,6 +25,14 @@ class ProcessedDataset:
         # Check if dataset exists.
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{name}' not found.")
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def type(self) -> int:
+        return types.PROCESSED
 
     def manifest(
         self,

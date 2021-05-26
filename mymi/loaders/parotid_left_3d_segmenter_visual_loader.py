@@ -92,29 +92,13 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
             input = output['one_image'].data.squeeze(0)
             label = output['a_segmentation'].data.squeeze(0)
 
-        # Required extent.
-        # From 'Segmenter dataloader' notebook, max extent in training data is (48.85mm, 61.52mm, 72.00mm).
-        # Converting to voxel width we have: (48.85, 61.52, 24) for a spacing of (1.0mm, 1.0mm, 3.0mm).
-        # We can choose a patch that is larger than the required voxel width, and that we know fits into the GPU
-        # as we use it for the localiser training: (128, 128, 96), giving physical size of (128mm, 128mm, 288mm)
-        # which is more than large enough. We can probably trim this later.
-        extent = (128, 128, 96)
-
-        # Find OAR extent.
-        non_zero = np.argwhere(label != 0)
-        mins = non_zero.min(axis=0)
-        maxs = non_zero.max(axis=0)
-        voxel_widths = maxs - mins
-
-        # Pad the OAR, preferencing lower indices.
-        to_add = extent - voxel_widths
-        half_add = np.ceil(to_add / 2).astype(int)
-        min_voxels = mins - half_add
-
-        # Extract patch.
-        slices = tuple(slice(m, m + w) for m, w in zip(min_voxels, extent))
-        input = input[slices]
-        label = label[slices]
+        # Get the OAR patch.
+        # 'Parotid-Left' max extent in training data is (48.85mm, 61.52mm, 72.00mm), which equates
+        # to a voxel shape of (48.85, 61.52, 24) for a spacing of (1mm, 1mm, 3mm).
+        # Chose (128, 128, 96) for patch size as it's larger than the OAR extent and it fits into
+        # the GPU memory.
+        shape = (128, 128, 96)
+        input, label = self._extract_patch(input, label, shape)
 
         # Determine result.
         result = (input, label)
@@ -124,6 +108,71 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
             result += (label,)
 
         return result
+
+    def _extract_patch(
+        self,
+        input: np.ndarray,
+        label: np.ndarray,
+        shape: Tuple[int, int, int]) -> np.ndarray:
+        """
+        returns: a patch around the OAR.
+        args:
+            input: the input data.
+            label: the label data.
+            shape: the shape of the patch. Must be larger than the extent of the OAR.
+        """
+        # Find OAR extent.
+        non_zero = np.argwhere(label != 0)
+        mins = non_zero.min(axis=0)
+        maxs = non_zero.max(axis=0)
+        oar_shape = maxs - mins
+
+        # Determine min/max indices of the patch.
+        shape_diff = shape - oar_shape
+        lower_add = np.ceil(shape_diff / 2).astype(int)
+        mins = mins - lower_add
+        maxs = mins + shape
+
+        # Crop or pad the volume.
+        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
+        label = self._crop_or_pad(label, mins, maxs)
+
+        return input, label
+
+    def _crop_or_pad(
+        self,
+        array: np.ndarray,
+        mins: Tuple[int, int, int],
+        maxs: Tuple[int, int, int],
+        fill: Union[int, float] = 0) -> np.ndarray:
+        """
+        returns: extracts a patch from a 3D array, cropping/padding as necessary.
+        args:
+            array: the array data.
+            mins: the minimum indices along each dimension. Negative indices
+                indicate that padding should be added.
+            maxs: the maximum indices along each dimension. Indices larger
+                than the array shape indicate padding should be added.
+        kwargs:
+            fill: the padding value.
+        """
+        # Check for negative indices, and record padding.
+        lower_pad = (-mins).clip(0) 
+        mins = mins.clip(0)
+
+        # Check for max indices larger than input, and record padding.
+        upper_pad = (maxs - array.shape).clip(0)
+        maxs = maxs - upper_pad
+
+        # Perform crop.
+        slices = tuple(slice(min, max) for min, max in zip(mins, maxs))
+        array = array[slices]
+
+        # Perform padding.
+        padding = tuple(zip(lower_pad, upper_pad))
+        array = np.pad(array, padding, constant_values=fill)
+
+        return array
 
 class ParotidLeft3DSegmenterVisualSampler(Sampler):
     def __init__(self, dataset, num_images, seed):

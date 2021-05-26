@@ -18,6 +18,7 @@ from mymi import config
 from mymi.utils import filterOnNumPats, filterOnPatIDs
 
 from .dicom_patient import DicomPatient
+from ..types import types
 
 Z_SPACING_ROUND_DP = 2
 
@@ -51,6 +52,10 @@ class DicomDataset:
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def type(self) -> int:
+        return types.DICOM
 
     @property
     def path(self) -> str:

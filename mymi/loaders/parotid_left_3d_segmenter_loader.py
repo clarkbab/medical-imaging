@@ -65,7 +65,6 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         args:
             idx: the index of the item to return.
         """
-        print('sample index:', idx)
         # Get data and label paths.
         input_path, label_path = self.samples[idx]
 
@@ -105,12 +104,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         # Chose (128, 128, 96) for patch size as it's larger than the OAR extent and it fits into
         # the GPU memory.
         shape = (128, 128, 96)
-        print('input path:', input_path)
-        print('input shape:', input.shape)
-        print('label shape:', label.shape)
         input, label = self._extract_patch(input, label, shape)
-        print('input patch shape:', input.shape)
-        print('input label shape:', label.shape)
 
         # Determine result.
         result = (input, label)

@@ -40,6 +40,7 @@ class ModelTrainer:
         train_print_interval: Union[str, int] = 'epoch',
         train_report_interval: Union[str, int] = 'epoch',
         report: bool = True,
+        report_offline: bool = False,
         spacing: Optional[Iterable[float]] = None,
         validate: bool = True,
         validation_interval: Union[str, int] ='epoch',
@@ -66,6 +67,7 @@ class ModelTrainer:
             train_print_interval: how often to print results during training.
             train_report_interval: how often to report results during training.
             report: turns reporting on and off.
+            report_offline: creates reporting files locally, to be uploaded later.
             spacing: the voxel spacing. Required for calculating Hausdorff distance.
             validate: turns validation on and off.
             validation_interval: how often to run the validation.
@@ -77,7 +79,7 @@ class ModelTrainer:
         self.hausdorff_delay = hausdorff_delay
         if report:
             # Create tensorboard writer.
-            self.reporter = WandbReporter(model_name, run_name)
+            self.reporter = WandbReporter(model_name, run_name, offline=report_offline)
 
             # Add hyperparameters.
             hparams = {

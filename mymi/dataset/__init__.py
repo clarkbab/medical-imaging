@@ -8,7 +8,7 @@ from mymi import config
 
 from .dicom import DicomDataset
 from .processed import ProcessedDataset
-from .types import Types
+from .types import types
 
 def list_datasets() -> Sequence[str]:
     """
@@ -24,12 +24,12 @@ def active() -> str:
     """
     returns: active dataset name.
     """
-    return ds.name
+    return f"Name: {ds.name}, Type: {ds.type.name}"
 
 def select(
     name: str,
     ct_from: str = None,
-    type: int = Types.DICOM):
+    type: int = types.DICOM):
     """
     effect: sets the new dataset as active.
     args:
@@ -39,10 +39,14 @@ def select(
     """
     # Set current dataset.
     global ds
-    if type == Types.DICOM:
+    if type == types.DICOM:
         ds = DicomDataset(name, ct_from=ct_from)
-    elif type == Types.PROCESSED:
+    elif type == types.PROCESSED:
         ds = ProcessedDataset(name)
+    else:
+        type_names = [t.name for t in types]
+        type_string = ', '.join(type_names)
+        raise ValueError(f"Invalid dataset type '{type}', expected one of 'dataset.types.{{{type_string}}}'.")
 
 def info(*args, **kwargs):
     return ds.info(*args, **kwargs)
