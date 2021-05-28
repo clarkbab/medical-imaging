@@ -12,6 +12,7 @@ from typing import *
 from mymi import cache
 from mymi import config
 from mymi import dataset
+from mymi import regions
 
 class Plotter:
     def plot_ct_distribution(
@@ -56,13 +57,18 @@ class Plotter:
         self,
         id: str,
         slice_idx: int,
-        alpha: float = 0.5,
+        alpha: float = 0.2,
         aspect: float = 1,
+        axes: bool = True,
         clear_cache: bool = False,
         figsize: Tuple[int, int] = (8, 8),
-        labels: Union[str, Sequence[str]] = 'all',
-        perimeter_only: bool = False,
-        show_axes: bool = True,
+        internal_regions: bool = False,
+        legend: bool = True,
+        legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+        legend_size: int = 10,
+        perimeter: bool = True,
+        regions: Union[str, Sequence[str]] = 'all',
+        title: bool = True,
         transform: str = None,
         view: Union['axial', 'coronal', 'sagittal'] = 'axial',
         window: Tuple[float, float] = None) -> None:
@@ -72,13 +78,17 @@ class Plotter:
             id: the patient ID.
             slice_idx: the slice to plot.
         kwargs:
-            alpha: the label alpha.
+            alpha: the region alpha.
             aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
+            axes: display the axes ticks and labels.
             clear_cache: force cache to clear.
             figsize: the size of the plot in inches.
-            labels: the labels to display.
-            perimeter_only: show the label perimeter only.
-            show_axes: display the pixel values on the axes.
+            internal_regions: use the internal MYMI region names.
+            legend: display the legend.
+            legend_loc: the location of the legend.
+            perimeter: highlight the perimeter.
+            regions: the regions to display.
+            title: display the title.
             transform: apply the transform before plotting.
             view: the viewing axis.
             window: the HU window to apply.
@@ -89,15 +99,19 @@ class Plotter:
         # Load CT data.
         ct_data = dataset.patient(id).ct_data(clear_cache=clear_cache)
 
-        # Load labels.
-        if labels:
-            label_data = dataset.patient(id).label_data(clear_cache=clear_cache, labels=labels)
+        if regions:
+            # Load region data.
+            region_data = dataset.patient(id).region_data(clear_cache=clear_cache, regions=regions)
+
+            if internal_regions:
+                # Map to internal region names.
+                region_data = dict((self._to_internal_region(r, clear_cache=clear_cache), d) for r, d in region_data.items())
 
         # Transform data.
         if transform:
             # Add 'batch' dimension.
             ct_data = np.expand_dims(ct_data, axis=0)
-            label_data = dict(((n, np.expand_dims(d, axis=0)) for n, d in label_data.items()))
+            region_data = dict(((n, np.expand_dims(d, axis=0)) for n, d in region_data.items()))
 
             # Create 'subject'.
             affine = np.array([
@@ -107,19 +121,19 @@ class Plotter:
                 [0, 0, 0, 1]
             ])
             ct_data = ScalarImage(tensor=ct_data, affine=affine)
-            label_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in label_data.items()))
+            region_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in region_data.items()))
 
             # Transform CT data.
             subject = Subject(input=ct_data)
             output = transform(subject)
 
-            # Transform label data.
+            # Transform region data.
             det_transform = output.get_composed_history()
-            label_data = dict(((n, det_transform(Subject(label=d))) for n, d in label_data.items()))
+            region_data = dict(((r, det_transform(Subject(region=d))) for r, d in region_data.items()))
 
             # Extract results.
             ct_data = output['input'].data.squeeze(0)
-            label_data = dict(((n, out['label'].data.squeeze(0)) for n, d in label_data.items()))
+            region_data = dict(((n, out['region'].data.squeeze(0)) for n, d in region_data.items()))
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert view in ('axial', 'coronal', 'sagittal')
@@ -132,7 +146,7 @@ class Plotter:
 
         # Convert from our co-ordinate system (frontal, sagittal, longitudinal) to 
         # that required by 'imshow'.
-        ct_slice_data = self.to_image_coords(ct_slice_data, view)
+        ct_slice_data = self._to_image_coords(ct_slice_data, view)
 
         # Only apply aspect ratio if no transforms are being presented otherwise
         # we might end up with skewed images.
@@ -154,45 +168,44 @@ class Plotter:
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
-        if labels:
-            # Plot labels.
-            if len(label_data) != 0:
+        if regions:
+            # Plot regions.
+            if len(region_data) != 0:
                 # Define color pallete.
                 palette = plt.cm.tab20
 
-                # Plot each label.
+                # Plot each region.
                 show_legend = False
-                for i, (lname, ldata) in enumerate(label_data.items()):
+                for i, (region, data) in enumerate(region_data.items()):
                     # Convert data to 'imshow' co-ordinate system.
-                    ldata = ldata[data_index]
-                    ldata = self.to_image_coords(ldata, view)
+                    data = data[data_index]
+                    data = self._to_image_coords(data, view)
 
-                    # Skip label if not present on this slice.
-                    if ldata.max() == 0:
+                    # Skip region if not present on this slice.
+                    if data.max() == 0:
                         continue
                     show_legend = True
-
-                    # Get binary perimeter.
-                    if perimeter_only:
-                        ldata = self.binary_perimeter(ldata)
                     
-                    # Create binary colormap for each label.
+                    # Create binary colormap for each region.
                     colours = [(1.0, 1.0, 1.0, 0), palette(i)]
-                    label_cmap = ListedColormap(colours)
+                    region_cmap = ListedColormap(colours)
 
-                    # Plot label.
-                    plt.imshow(ldata, cmap=label_cmap, aspect=aspect, alpha=alpha)
-                    plt.plot(0, 0, c=palette(i), label=lname)
+                    # Plot region.
+                    plt.imshow(data, cmap=region_cmap, aspect=aspect, alpha=alpha)
+                    plt.plot(0, 0, c=palette(i), label=region)
+                    if perimeter:
+                        plt.contour(data, colors=[palette(i)], levels=[0.5])
 
                 # Turn on legend.
                 if show_legend: 
-                    legend = plt.legend(loc=(1.05, 0.8))
+                    # Get legend props.
+                    legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
                     for l in legend.get_lines():
                         l.set_linewidth(8)
 
         # Show axis markers.
-        axes = 'on' if show_axes else 'off'
-        plt.axis(axes)
+        show_axes = 'on' if axes else 'off'
+        plt.axis(show_axes)
 
         # Determine number of slices.
         if view == 'axial':
@@ -203,35 +216,36 @@ class Plotter:
             num_slices = ct_data.shape[0]
 
         # Add title.
-        plt.title(f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}")
+        if title:
+            plt.title(f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}")
 
         plt.show()
 
     def binary_perimeter(
         self,
-        label: ndarray) -> ndarray:
+        data: ndarray) -> ndarray:
         """
-        returns: label containing perimeter pixels only.
+        returns: a 2D array containing perimeter pixels only.
         args:
-            label: the full label.
+            data: the 2D binary array.
         """
-        label_perimeter = np.zeros_like(label, dtype=bool)
-        x_dim, y_dim = label.shape
+        data_perimeter = np.zeros_like(data, dtype=bool)
+        x_dim, y_dim = data.shape
         for i in range(x_dim):
             for j in range(y_dim):
                 # Check if edge pixel.
-                if (label[i, j] == 1 and 
+                if (data[i, j] == 1 and 
                     ((i == 0 or i == x_dim - 1) or
                     (j == 0 or j == y_dim - 1) or
-                    i != 0 and label[i - 1, j] == 0 or 
-                    i != x_dim - 1 and label[i + 1, j] == 0 or
-                    j != 0 and label[i, j - 1] == 0 or
-                    j != y_dim - 1 and label[i, j + 1] == 0)):
-                    label_perimeter[i, j] = 1
+                    i != 0 and data[i - 1, j] == 0 or 
+                    i != x_dim - 1 and data[i + 1, j] == 0 or
+                    j != 0 and data[i, j - 1] == 0 or
+                    j != y_dim - 1 and data[i, j + 1] == 0)):
+                    data_perimeter[i, j] = 1
 
-        return label_perimeter
+        return data_perimeter
 
-    def to_image_coords(
+    def _to_image_coords(
         self,
         data: ndarray,
         view: Union['axial', 'coronal', 'sagittal']) -> ndarray:
@@ -247,3 +261,27 @@ class Plotter:
             data = np.rot90(data)
 
         return data
+    
+    def _to_internal_region(
+        self,
+        region: str,
+        clear_cache: bool = False) -> str:
+        """
+        returns: the internal region name.
+        args:
+            region: the dataset region name.
+        kwargs:
+            clear_cache: force the cache to clear.
+        """
+        # Check if region is an internal name.
+        if regions.is_region(region):
+            return region
+
+        # Map from dataset name to internal name.
+        map_df = dataset.region_map(clear_cache=clear_cache)
+        map_dict = dict((r.dataset, r.internal) for _, r in map_df.iterrows())
+        if region in map_dict:
+            return map_dict[region]
+
+        # Raise an error if we don't know how to translate to the internal name.
+        raise ValueError(f"Region '{region}' is neither an internal region, nor listed in the region map, can't create internal name.")

@@ -57,20 +57,20 @@ def ct_distribution(*args, **kwargs):
 def ct_summary(*args, **kwargs):
     return ds.ct_summary(*args, **kwargs)
 
-def label_map(*args, **kwargs):
-    return ds.label_map(*args, **kwargs)
-
-def label_names(*args, **kwargs):
-    return ds.label_names(*args, **kwargs)
-
-def label_summary(*args, **kwargs):
-    return ds.label_summary(*args, **kwargs)
-
 def list_patients(*args, **kwargs):
     return ds.list_patients(*args, **kwargs)
     
 def patient(*args, **kwargs):
     return ds.patient(*args, **kwargs)
+
+def region_map(*args, **kwargs):
+    return ds.region_map(*args, **kwargs)
+
+def region_names(*args, **kwargs):
+    return ds.region_names(*args, **kwargs)
+
+def region_summary(*args, **kwargs):
+    return ds.region_summary(*args, **kwargs)
 
 ##
 # Processed dataset API.

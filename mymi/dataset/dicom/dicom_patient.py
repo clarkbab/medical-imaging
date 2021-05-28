@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import numpy as np
 import os
 import pandas as pd
@@ -309,20 +310,20 @@ class DicomPatient:
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
-    def label_summary(
+    def region_summary(
         self,
         clear_cache: bool = False,
         columns: Union[str, Sequence[str]] = 'all',
-        labels: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
-        returns: a DataFrame label summary information.
+        returns: a DataFrame region summary information.
         kwargs:
             clear_cache: clear the cache.
-            labels: the desired labels.
+            regions: the desired regions.
         """
         # Define table structure.
         cols = {
-            'label': str,
+            'region': str,
             'width-mm-x': float,
             'width-mm-y': float,
             'width-mm-z': float,
@@ -330,15 +331,15 @@ class DicomPatient:
         cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
         df = pd.DataFrame(columns=cols.keys())
 
-        # Get label dict.
-        label_data = self.label_data(clear_cache=clear_cache, labels=labels)
+        # Get region dict.
+        region_data = self.region_data(clear_cache=clear_cache, regions=regions)
 
         # Get voxel spacings.
         summary = self.ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
         spacing = (summary['spacing-x'], summary['spacing-y'], summary['spacing-z'])
 
-        # Add info for each label.
-        for name, data in label_data.items():
+        # Add info for each region.
+        for name, data in region_data.items():
             # Find centre-of-mass.
             coms = np.round(center_of_mass(data)).astype(int)
 
@@ -352,7 +353,7 @@ class DicomPatient:
             mm_widths = voxel_widths * spacing
 
             data = {
-                'label': name,
+                'region': name,
                 'width-mm-x': mm_widths[0],
                 'width-mm-y': mm_widths[1],
                 'width-mm-z': mm_widths[2]
@@ -362,8 +363,8 @@ class DicomPatient:
         # Set column type.
         df = df.astype(cols)
 
-        # Sort by label.
-        df = df.sort_values('label').reset_index(drop=True)
+        # Sort by region.
+        df = df.sort_values('region').reset_index(drop=True)
 
         return df
 
@@ -397,11 +398,11 @@ class DicomPatient:
         return data
 
     @cached_method('_dataset', '_id')
-    def label_names(
+    def region_names(
         self,
         clear_cache: bool = False) -> pd.DataFrame:
         """
-        returns: the patient's label names.
+        returns: the patient's region names.
         kwargs:
             clear_cache: force the cache to clear.
         """
@@ -412,20 +413,20 @@ class DicomPatient:
         names = list(sorted([r.ROIName for r in rtstruct.StructureSetROISequence]))
 
         # Create dataframe.
-        df = pd.DataFrame(names, columns=['label'])
+        df = pd.DataFrame(names, columns=['region'])
 
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
-    def label_data(
+    def region_data(
         self,
         clear_cache: bool = False,
-        labels: Union[str, Sequence[str]] = 'all') -> dict:
+        regions: Union[str, Sequence[str]] = 'all') -> OrderedDict:
         """
-        returns: a Dict[str, np.ndarray] of label names and data.
+        returns: an OrderedDict[str, np.ndarray] of region names and data.
         kwargs:
             clear_cache: force the cache to clear.
-            labels: the desired labels.
+            regions: the desired regions.
         """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
@@ -433,10 +434,10 @@ class DicomPatient:
         # Load ROI names.
         roi_names = RTStructConverter.get_roi_names(rtstruct) 
 
-        # Filter on required labels.
+        # Filter on required regions.
         def fn(name):
-            if ((type(labels) == str and (labels == 'all' or name == labels)) or
-                ((type(labels) == tuple or type(labels) == list or type(labels) == np.ndarray) and name in labels)):
+            if ((type(regions) == str and (regions == 'all' or name == regions)) or
+                ((type(regions) == tuple or type(regions) == list or type(regions) == np.ndarray) and name in regions)):
                 return True
             else:
                 return False
@@ -449,12 +450,16 @@ class DicomPatient:
         spacing = tuple(summary_df[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
 
         # Add ROI data.
-        label_dict = {}
+        region_dict = {}
         for name in roi_names:
+            # Get binary mask.
             data = RTStructConverter.get_roi_mask(name, offset, rtstruct, shape, spacing)
-            label_dict[name] = data
+            region_dict[name] = data
 
-        return label_dict
+        # Create ordered dict.
+        ordered_dict = OrderedDict((n, region_dict[n]) for n in sorted(roi_names)) 
+
+        return ordered_dict
 
     def _filterOnDictKeys(
         self,

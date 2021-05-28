@@ -15,6 +15,7 @@ from typing import *
 from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
+from mymi import regions
 from mymi.utils import filterOnNumPats, filterOnPatIDs
 
 from .dicom_patient import DicomPatient
@@ -60,32 +61,6 @@ class DicomDataset:
     @property
     def path(self) -> str:
         return self._path
-
-    def label_map(
-        self,
-        dataset: str = None) -> pd.DataFrame:
-        """
-        returns: a pd.DataFrame mapping internal region names to this dataset.
-        kwargs:
-            dataset: the other dataset, or internal representation if None.
-        """
-        # Load map file.
-        filepath = os.path.join(self._path, 'label-map.csv')
-        df = pd.read_csv(filepath)
-        
-        if dataset:
-            # Load other map file.
-            ds = DicomDataset(dataset)
-            other_df = ds.label_map()
-
-            # Merge the two maps.
-            df = pd.merge(df, other_df, on='internal')
-            df = df.rename(columns={ 'dataset_x': self._name, 'dataset_y': dataset })
-
-        # Sort by internal name.
-        df = df.sort_values('internal').reset_index(drop=True)
-
-        return df
 
     def _require_hierarchical(fn: Callable) -> Callable:
         """
@@ -137,17 +112,17 @@ class DicomDataset:
         self, 
         clear_cache: bool = False,
         filter_errors: bool = False,
-        labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: Union[str, Sequence[str]] = 'all',
+        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient info.
         kwargs:
             clear_cache: force the cache to clear.
             filter_errors: exclude patients that produce known errors.
-            labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
+            regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
         cols = {
@@ -161,10 +136,10 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
-        # Add patient labels.
+        # Add patient regions.
         for pat in tqdm(pats):
             info_df = self.patient(pat).info(clear_cache=clear_cache)
             info_df['patient-id'] = pat
@@ -181,24 +156,24 @@ class DicomDataset:
         self, 
         bin_width: int = 10,
         clear_cache: bool = False,
-        labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> OrderedDict:
+        pat_ids: Union[str, Sequence[str]] = 'all',
+        regions: Union[str, Sequence[str]] = 'all') -> OrderedDict:
         """
         effect: plots CT distribution of the dataset.
         kwargs:
             bin_width: the width of the histogram bins.
             clear_cache: forces the cache to clear.
-            labels: include patients with any of the listed labels (behaves like an OR).
             num_pats: the number of patients to include.
             pat_ids: the patients to include.
+            regions: include patients with any of the listed regions (behaves like an OR).
         """
         # Load all patients.
         pats = self.list_patients()
         
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels), pats))
+        pats = list(filter(self._filterOnRegions(regions), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Calculate the frequencies.
@@ -240,17 +215,17 @@ class DicomDataset:
         self, 
         clear_cache: bool = False,
         filter_errors: bool = False,
-        labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: Union[str, Sequence[str]] = 'all',
+        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient CT summaries.
         kwargs:
             clear_cache: force the cache to clear.
             filter_errors: exclude patients that produce known errors.
-            labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
+            regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
         cols = {
@@ -278,7 +253,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, filter_errors=filter_errors), pats))
+        pats = list(filter(self._filterOnRegions(regions, filter_errors=filter_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
@@ -305,26 +280,26 @@ class DicomDataset:
 
     @_require_hierarchical
     @cached_method('_name')
-    def label_names(
+    def region_names(
         self,
         clear_cache: bool = False,
         filter_errors: bool = False,
-        labels: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: Union[str, Sequence[str]] = 'all',
+        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
-        returns: a DataFrame with patient label names.
+        returns: a DataFrame with patient region names.
         kwargs:
             clear_cache: force the cache to clear.
             filter_errors: exclude patients that produce known errors.
-            labels: include patients with (at least) on of the labels.
             num_pats: the number of patients to include.
             pat_ids: include listed patients.
+            regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
         cols = {
             'patient-id': str,
-            'label': str,
+            'region': str,
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -333,19 +308,19 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
-        # Add patient labels.
+        # Add patient regions.
         for pat in tqdm(pats):
-            # Load patient labels.
-            label_names_df = self.patient(pat).label_names(clear_cache=clear_cache)
+            # Load patient regions.
+            names_df = self.patient(pat).region_names(clear_cache=clear_cache)
 
             # Add rows.
-            for _, row in label_names_df.iterrows():
+            for _, row in names_df.iterrows():
                 data = {
                     'patient-id': pat,
-                    'label': row.label,
+                    'region': row.region,
                 }
                 df = df.append(data, ignore_index=True)
 
@@ -356,26 +331,26 @@ class DicomDataset:
 
     @_require_hierarchical
     @cached_method('_ct_from', '_name')
-    def label_summary(
+    def region_summary(
         self, 
         clear_cache: bool = False,
         filter_errors: bool = False,
-        labels: Union[str, Sequence[str]] = 'all',
+        regions: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
         pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
         """
-        returns: a DataFrame with patient labels and information.
+        returns: a DataFrame with patient regions and information.
         kwargs:
             clear_cache: force the cache to clear.
             filter_errors: exclude patients that produce known errors.
-            labels: include patients with (at least) on of the labels.
+            regions: include patients with (at least) on of the regions.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
         """
         # Define table structure.
         cols = {
             'patient-id': str,
-            'label': str,
+            'region': str,
             'width-mm-x': float,
             'width-mm-y': float,
             'width-mm-z': float,
@@ -387,14 +362,14 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnLabels(labels, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
-        # Add patient labels.
+        # Add patient regions.
         for pat in tqdm(pats):
             # Load patient summary.
             try:
-                summary_df = self.patient(pat).label_summary(clear_cache=clear_cache, labels=labels)
+                summary_df = self.patient(pat).region_summary(clear_cache=clear_cache, regions=regions)
             except ValueError as e:
                 if filter_errors:
                     logging.error(f"Patient filtered due to error calling 'ct_summary' for dataset '{self._name}', patient '{pat}'.")
@@ -407,7 +382,7 @@ class DicomDataset:
             for _, row in summary_df.iterrows():
                 data = {
                     'patient-id': pat,
-                    'label': row.label,
+                    'region': row.region,
                     'width-mm-x': row['width-mm-x'],
                     'width-mm-y': row['width-mm-y'],
                     'width-mm-z': row['width-mm-z']
@@ -419,28 +394,76 @@ class DicomDataset:
 
         return df
 
+    @_require_hierarchical
+    @cached_method('_ct_from', '_name')
+    def region_map(
+        self,
+        clear_cache: bool = False,
+        dataset: str = None) -> pd.DataFrame:
+        """
+        returns: a pd.DataFrame mapping internal region names to this dataset.
+        kwargs:
+            clear_cache: forces the cache to clear.
+            dataset: the other dataset, or internal representation if None.
+        raises:
+            ValueError: if 'region-map.csv' isn't configured properly.
+        """
+        # Check for region map.
+        filepath = os.path.join(self._path, 'region-map.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Region map doesn't exist, please create at '{filepath}'.")
+
+        # Load map file.
+        df = pd.read_csv(filepath)
+
+        # Check that internal region names are entered correctly.
+        for n in df.internal:
+            if not regions.is_region(n):
+                raise ValueError(f"Error in region map for dataset '{self._name}', '{n}' is not an internal region.")
+
+        # Check that dataset region names are entered correctly. 
+        region_names = self.region_names(clear_cache=clear_cache).region.unique()
+        for n in df.dataset:
+            if not n in region_names:
+                raise ValueError(f"Error in region map for dataset '{self._name}', '{n}' is not a dataset region.")
+        
+        if dataset:
+            # Load other map file.
+            ds = DicomDataset(dataset)
+            other_df = ds.region_map()
+
+            # Merge the two maps.
+            df = pd.merge(df, other_df, on='internal')
+            df = df.rename(columns={ 'dataset_x': self._name, 'dataset_y': dataset })
+
+        # Sort by internal name.
+        df = df.sort_values('internal').reset_index(drop=True)
+
+        return df
+
+
     @classmethod
-    def ct_statistics(cls, label='all'):
+    def ct_statistics(cls, regions='all'):
         """
         returns: a dataframe of CT statistics for the entire dataset.
         kwargs:
-            label: only include data for patients with the label.
+            regions: only include data for patients with the regions.
         """
         # Load from cache if present.
         params = {
             'class': cls.__name__,
             'method': inspect.currentframe().f_code.co_name,
             'kwargs': {
-                'label': label
+                'regions': regions
             }
         }
         result = cache.read(params, 'dataframe')
         if result is not None:
             return result
 
-        # Convert 'labels'.
-        if isinstance(label, str) and label != 'all':
-            label = [label]
+        # Convert 'regions'.
+        if isinstance(regions, str) and regions != 'all':
+            regions = [regions]
 
         # Define dataframe structure.
         cols = {
@@ -456,11 +479,11 @@ class DicomDataset:
         total = 0
         num_voxels = 0
         for pat_id in pat_ids:
-            # Get patient labels.
-            pat_labels = list(cls.patient_labels(pat_id)['label'])
+            # Get patient regions.
+            pat_regions = list(cls.patient_regions(pat_id)['region'])
             
-            # Skip if patient has no labels, or doesn't have the specified labels.
-            if len(pat_labels) == 0 or (label != 'all' and not np.array_equal(np.intersect1d(label, pat_labels), label)):
+            # Skip if patient has no regions, or doesn't have the specified regions.
+            if len(pat_regions) == 0 or (regions != 'all' and not np.array_equal(np.intersect1d(regions, pat_regions), regions)):
                 continue
 
             # Add data for this patient.
@@ -492,32 +515,32 @@ class DicomDataset:
 
         return df
 
-    def _filterOnLabels(
+    def _filterOnRegions(
         self,
-        labels: Union[str, Sequence[str]],
+        regions: Union[str, Sequence[str]],
         clear_cache: bool = False,
         filter_errors: bool = False) -> Callable[[str], bool]:
         """
-        returns: a function that filters patient on label presence.
+        returns: a function that filters patient on region presence.
         args:
             clear_cache: force the cache to clear.
-            labels: the passed 'labels' kwarg.
+            regions: the passed 'regions' kwarg.
             filter_errors: exclude patients that produce known errors.
         """
         def fn(id):
-            # Load patient labels.
+            # Load patient regions.
             try:
-                pat_labels = self.patient(id).label_names(clear_cache=clear_cache).label.to_numpy()
+                pat_regions = self.patient(id).region_names(clear_cache=clear_cache).region.to_numpy()
             except ValueError as e:
                 if filter_errors:
-                    logging.error(f"Patient filtered due to error calling 'label_names' for dataset '{self._name}', patient '{id}'.")
+                    logging.error(f"Patient filtered due to error calling 'region_names' for dataset '{self._name}', patient '{id}'.")
                     logging.error(f"Filtered error: {e}")
                     return False
                 else:
                     raise e
 
-            if ((isinstance(labels, str) and (labels == 'all' or labels in pat_labels)) or
-                ((isinstance(labels, list) or isinstance(labels, np.ndarray) or isinstance(labels, tuple)) and len(np.intersect1d(labels, pat_labels)) != 0)):
+            if ((isinstance(regions, str) and (regions == 'all' or regions in pat_regions)) or
+                ((isinstance(regions, list) or isinstance(regions, np.ndarray) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) != 0)):
                 return True
             else:
                 return False

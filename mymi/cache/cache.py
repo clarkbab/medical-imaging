@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from datetime import datetime
 import glob
 import gzip
@@ -12,17 +11,16 @@ import pickle
 import pydicom as dicom
 import shutil
 import time
-from typing import *
+from typing import Any, Callable, Dict, List, OrderedDict, Sequence, Tuple
 
 from mymi import config
 
 class Cache:
     Types = [
-        pd.DataFrame,
-        dict,
+        Dict,
         np.ndarray,
         OrderedDict,
-        Sequence[Tuple[str, np.ndarray]]
+        pd.DataFrame
     ]
         
     def __init__(self):
@@ -227,14 +225,12 @@ class Cache:
 
         # Read data.
         data = None
-        if data_type == pd.DataFrame:
-            data = self._read_pandas_data_frame(key)
-        elif data_type == dict or data_type == OrderedDict:
+        if data_type in (Dict, OrderedDict):
             data = self._read_dict(key)
         elif data_type == np.ndarray:
             data = self._read_numpy_array(key)
-        elif data_type == Sequence[Tuple[str, np.ndarray]]:
-            data = self._read_string_numpy_array_pairs(key)
+        elif data_type == pd.DataFrame:
+            data = self._read_pandas_data_frame(key)
 
         # Log cache finish time and data size.
         logging.info(f"Complete [{time.time() - start:.3f}s].")
@@ -279,14 +275,12 @@ class Cache:
 
         # Write data.
         size = None
-        if data_type == pd.DataFrame:
-            size = self._write_pandas_data_frame(key, obj)
-        elif data_type == dict or data_type == OrderedDict:
+        if data_type in (Dict, OrderedDict):
             size = self._write_dict(key, obj)
         elif data_type == np.ndarray:
             size = self._write_numpy_array(key, obj)
-        elif data_type == Sequence[Tuple[str, np.ndarray]]:
-            size = self._write_string_numpy_array_pairs(key, obj)
+        elif data_type == pd.DataFrame:
+            size = self._write_pandas_data_frame(key, obj)
 
         # Log cache finish time and data size.
         size_mb = size / (2 ** 20)

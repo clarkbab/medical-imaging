@@ -38,8 +38,8 @@ class ParotidLeft3DPreprocessor:
             seed: the random number generator seed.
             transforms: apply the transforms on all patient data.
         """
-        # Define label.
-        labels = 'Parotid-Left'
+        # Define regions.
+        regions = 'Parotid-Left'
 
         # Load patients.
         pats = dataset.list_patients()
@@ -51,9 +51,9 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Removed {len(pat_missing_ids)} patients with missing slices.")
 
         # Load patients who have 'Parotid-Left' contours.
-        labels_df = dataset.label_summary(clear_cache=clear_cache, labels=labels, pat_ids=pats)
-        pats = labels_df['patient-id'].unique()
-        logging.info(f"Found {len(pats)} patients with one of '{labels}' contours.")
+        regions_df = dataset.region_summary(clear_cache=clear_cache, regions=regions, pat_ids=pats)
+        pats = regions_df['patient-id'].unique()
+        logging.info(f"Found {len(pats)} patients with one of '{regions}' regions.")
 
         # Get patient subset for testing.
         if num_pats != 'all':
@@ -89,7 +89,7 @@ class ParotidLeft3DPreprocessor:
 
             # Load dataset statistics for normalisation.
             if normalise:
-                stats_df = dataset.data_statistics(clear_cache=clear_cache, label=label)
+                stats_df = dataset.data_statistics(clear_cache=clear_cache, region=region)
                 mean, std_dev = stats_df['hu-mean'].item(), stats_df['hu-std-dev'].item() 
 
             # Maintain index per subfolder.
@@ -107,8 +107,9 @@ class ParotidLeft3DPreprocessor:
                 logging.info(f"Extracting data for patient {pat}.")
 
                 # Load data.
+                # Terminology: 'regions' become 'labels' when the data is prepared for model training.
                 input = dataset.patient(pat).ct_data(clear_cache=clear_cache)
-                label_data = dataset.patient(pat).label_data(clear_cache=clear_cache, labels=labels)['Parotid-Left']
+                label_data = dataset.patient(pat).region_data(clear_cache=clear_cache, regions=regions)['Parotid-Left']
 
                 # Normalise data.
                 if normalise:
