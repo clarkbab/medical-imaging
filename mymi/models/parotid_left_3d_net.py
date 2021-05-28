@@ -134,7 +134,7 @@ class ParotidLeft3DNet(nn.Module):
         self,
         x: torch.Tensor,
         pred: torch.Tensor,
-        size: Tuple[int, int, int]) -> Tuple[torch.Tensor, 
+        size: Tuple[int, int, int]) -> Tuple[torch.Tensor, Any]:
         """
         returns: a patch around the OAR.
         args:

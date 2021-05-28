@@ -1,18 +1,14 @@
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import numpy as np
 from numpy import ndarray
-import os
-import sys
-import torch
+import re
+import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import *
+from typing import Literal, Sequence, Tuple, Union
 
-from mymi import cache
-from mymi import config
 from mymi import dataset
-from mymi import regions
+from mymi.regions import is_region, RegionColours
 
 class Plotter:
     def plot_ct_distribution(
@@ -62,15 +58,17 @@ class Plotter:
         axes: bool = True,
         clear_cache: bool = False,
         figsize: Tuple[int, int] = (8, 8),
+        font_size: int = 10,
         internal_regions: bool = False,
+        latex: bool = False,
         legend: bool = True,
         legend_loc: Union[str, Tuple[float, float]] = 'upper right',
         legend_size: int = 10,
         perimeter: bool = True,
         regions: Union[str, Sequence[str]] = 'all',
-        title: bool = True,
-        transform: str = None,
-        view: Union['axial', 'coronal', 'sagittal'] = 'axial',
+        title: Union[bool, str] = True,
+        transform: torchio.transforms.Transform = None,
+        view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
         window: Tuple[float, float] = None) -> None:
         """
         effect: plots a CT slice with labels.
@@ -83,16 +81,30 @@ class Plotter:
             axes: display the axes ticks and labels.
             clear_cache: force cache to clear.
             figsize: the size of the plot in inches.
+            font_size: the size of the font.
             internal_regions: use the internal MYMI region names.
+            latex: use latex to display text.
             legend: display the legend.
             legend_loc: the location of the legend.
             perimeter: highlight the perimeter.
             regions: the regions to display.
-            title: display the title.
+            title: turns the title on/off. Can optionally pass a custom title.
             transform: apply the transform before plotting.
             view: the viewing axis.
             window: the HU window to apply.
         """
+        # Get params.
+        plt.rcParams.update({
+            'font.size': font_size
+        })
+
+        # Set latex params.
+        if latex:
+            plt.rcParams.update({
+                "font.family": "serif",
+                'text.usetex': True
+            })
+
         # Load patient summary.
         summary = dataset.patient(id).ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
 
@@ -133,7 +145,7 @@ class Plotter:
 
             # Extract results.
             ct_data = output['input'].data.squeeze(0)
-            region_data = dict(((n, out['region'].data.squeeze(0)) for n, d in region_data.items()))
+            region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in region_data.items()))
 
         # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
         assert view in ('axial', 'coronal', 'sagittal')
@@ -168,14 +180,20 @@ class Plotter:
         plt.figure(figsize=figsize)
         plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, vmin=vmin, vmax=vmax)
 
+        # Add axis labels.
+        if axes:
+            plt.xlabel('voxel')
+            plt.ylabel('voxel')
+
         if regions:
             # Plot regions.
             if len(region_data) != 0:
-                # Define color pallete.
-                palette = plt.cm.tab20
+                # Create palette if not using internal region colours.
+                if not internal_regions:
+                    palette = plt.cm.tab20
 
                 # Plot each region.
-                show_legend = False
+                show_legend = False     # Only show legend if slice has at least one region.
                 for i, (region, data) in enumerate(region_data.items()):
                     # Convert data to 'imshow' co-ordinate system.
                     data = data[data_index]
@@ -184,23 +202,28 @@ class Plotter:
                     # Skip region if not present on this slice.
                     if data.max() == 0:
                         continue
-                    show_legend = True
+                    else:
+                        show_legend = True
                     
                     # Create binary colormap for each region.
-                    colours = [(1.0, 1.0, 1.0, 0), palette(i)]
+                    if internal_regions:
+                        colour = getattr(RegionColours, region)
+                    else:
+                        colour = palette(i)
+                    colours = [(1.0, 1.0, 1.0, 0), colour]
                     region_cmap = ListedColormap(colours)
 
                     # Plot region.
                     plt.imshow(data, cmap=region_cmap, aspect=aspect, alpha=alpha)
-                    plt.plot(0, 0, c=palette(i), label=region)
+                    plt.plot(0, 0, c=colour, label=self._escape_latex(region))
                     if perimeter:
-                        plt.contour(data, colors=[palette(i)], levels=[0.5])
+                        plt.contour(data, colors=[colour], levels=[0.5])
 
                 # Turn on legend.
-                if show_legend: 
+                if legend and show_legend: 
                     # Get legend props.
-                    legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
-                    for l in legend.get_lines():
+                    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+                    for l in plt_legend.get_lines():
                         l.set_linewidth(8)
 
         # Show axis markers.
@@ -217,7 +240,16 @@ class Plotter:
 
         # Add title.
         if title:
-            plt.title(f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}")
+            if isinstance(title, str):
+                title_text = title
+            else:
+                title_text = f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}" 
+
+            # Escape text if using latex.
+            if latex:
+                title_text = self._escape_latex(title_text)
+
+            plt.title(title_text)
 
         plt.show()
 
@@ -248,7 +280,7 @@ class Plotter:
     def _to_image_coords(
         self,
         data: ndarray,
-        view: Union['axial', 'coronal', 'sagittal']) -> ndarray:
+        view: Literal['axial', 'coronal', 'sagittal']) -> ndarray:
         """
         returns: data in correct orientation for viewing.
         args:
@@ -274,7 +306,7 @@ class Plotter:
             clear_cache: force the cache to clear.
         """
         # Check if region is an internal name.
-        if regions.is_region(region):
+        if is_region(region):
             return region
 
         # Map from dataset name to internal name.
@@ -285,3 +317,30 @@ class Plotter:
 
         # Raise an error if we don't know how to translate to the internal name.
         raise ValueError(f"Region '{region}' is neither an internal region, nor listed in the region map, can't create internal name.")
+
+    def _escape_latex(
+        self,
+        text: str) -> str:
+        """
+        returns: a string with escaped latex special characters.
+        args:
+            text: the string to escape.
+        """
+        # Provide map for special characters.
+        char_map = {
+            '&': r'\&',
+            '%': r'\%',
+            '$': r'\$',
+            '#': r'\#',
+            '_': r'\_',
+            '{': r'\{',
+            '}': r'\}',
+            '~': r'\textasciitilde{}',
+            '^': r'\^{}',
+            '\\': r'\textbackslash{}',
+            '<': r'\textless{}',
+            '>': r'\textgreater{}',
+        }
+        regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
+        return regex.sub(lambda match: char_map[match.group()], text)
+    
