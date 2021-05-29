@@ -37,28 +37,29 @@ def interval_type(s: str):
 parser = ArgumentParser(description="""
 Train the segmentation model on a single node. Spins up a separate process for each GPU on the node (--num-gpus).
 """)
-parser.add_argument('-a', '--use-aug', action='store_true', default=False, help='use data augmentations when training')
-parser.add_argument('-b', '--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
-parser.add_argument('-d', '--data-dir', action='store', help='sets the data directory')
-parser.add_argument('-e', '--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
-parser.add_argument('-ea', '--use-elastic-aug', action='store_true', default=False, help='use elastic deformation augmentation')
-parser.add_argument('-g', '--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
-parser.add_argument('-l', '--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
-parser.add_argument('-lr', '--learning-rate', action='store', type=float, help="sets the learning rate")
-parser.add_argument('-ls', '--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
-parser.add_argument('-n', '--name', action='store', help='sets the run name for Tensorboard')
-parser.add_argument('-ng', '--no-gpu', action='store_true', default=False, help='use CPU for training')
-parser.add_argument('-nm', '--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
-parser.add_argument('-no', '--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
-parser.add_argument('-nr', '--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
-parser.add_argument('-nrp', '--no-report', action='store_true', default=False, help="don't send run reports")
-parser.add_argument('-nv', '--no-validate', action='store_true', default=False, help="don't validate the model during training")
-parser.add_argument('-tpi', '--train-print-interval', action='store', type=interval_type, help='iterations between printing during training')
-parser.add_argument('-tri', '--train-report-interval', action='store', type=interval_type, help='iterations between recording during training')
-parser.add_argument('-s', '--use-early-stopping', action='store_true', default=False, help='use early stopping')
-parser.add_argument('-v', '--validation-interval', action='store', type=interval_type, help='iterations between validation')
-parser.add_argument('-vpi', '--validation-print-interval', action='store', type=interval_type, help='iterations between printing during validation')
-parser.add_argument('-vri', '--validation-report-interval', action='store', type=interval_type, help='iterations between reporting during validation')
+parser.add_argument('--batch-size', action='store', type=int, default=1, help='sets the batch size, default=1')
+parser.add_argument('--data-dir', action='store', help='sets the data directory')
+parser.add_argument('--learning-rate', action='store', type=float, help="sets the learning rate")
+parser.add_argument('--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
+parser.add_argument('--loss', action='store', default='dice', help="sets the loss function, e.g. 'cross-entropy' or 'dice', default='dice'")
+parser.add_argument('--max-epochs', action='store', type=int, help='sets the maximum number of epochs')
+parser.add_argument('--name', action='store', help='sets the run name for Tensorboard')
+parser.add_argument('--no-gpu', action='store_true', default=False, help='use CPU for training')
+parser.add_argument('--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('--no-report', action='store_true', default=False, help="don't send run reports")
+parser.add_argument('--no-validate', action='store_true', default=False, help="don't validate the model during training")
+parser.add_argument('--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
+parser.add_argument('--num-gpus', action='store', type=int, default=1, help='sets the number of GPUs per node, default=0')
+parser.add_argument('--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
+parser.add_argument('--train-print-interval', action='store', type=interval_type, help='iterations between printing during training')
+parser.add_argument('--train-report-interval', action='store', type=interval_type, help='iterations between recording during training')
+parser.add_argument('--use-aug', action='store_true', default=False, help='use data augmentations when training')
+parser.add_argument('--use-dropout', action='store_true', default=False, help='use dropout when training')
+parser.add_argument('--use-early-stopping', action='store_true', default=False, help='use early stopping')
+parser.add_argument('--use-elastic-aug', action='store_true', default=False, help='use elastic deformation augmentation')
+parser.add_argument('--validate-interval', action='store', type=interval_type, help='iterations between validation')
+parser.add_argument('--validate-print-interval', action='store', type=interval_type, help='iterations between printing during validation')
+parser.add_argument('--validate-report-interval', action='store', type=interval_type, help='iterations between reporting during validation')
 args = parser.parse_args()
 
 # Returns a logging function for the process.
@@ -105,9 +106,9 @@ def train(args: dict):
     log_info(f"Using device: {device}.")
 
     # Create model.
-    model = SingleChannelUNet()
+    model = SingleChannelUNet(dropout=args.use_dropout)
     model = model.to(device)
-    log_info(f"Using model: {model.__class__}.")
+    log_info(f"Using model: {model.__class__}. Dropout: {args.use_dropout}.")
 
     # Wrap model for distributed training.
     if is_multi_process(args):
@@ -160,14 +161,14 @@ def train(args: dict):
         train_transforms = required_pre_transforms + required_post_transforms
     log_info(f"Using transforms '{train_transforms}'.")
     train_transform = Compose(train_transforms)
-    validation_transform = Compose(required_pre_transforms + required_post_transforms)
+    validate_transform = Compose(required_pre_transforms + required_post_transforms)
 
     # Create data loaders.
     batch_size = args.batch_size
     spacing = (1, 1, 3)         # Data on disk has this spacing.
     train_loader = ParotidLeft3DLocaliserLoader.build('train', batch_size=batch_size, spacing=spacing, transform=train_transform)
-    validation_loader = ParotidLeft3DLocaliserLoader.build('validate', batch_size=batch_size, spacing=spacing, transform=validation_transform)
-    visual_loader = ParotidLeft3DLocaliserVisualLoader.build(batch_size=batch_size, spacing=spacing, transform=validation_transform)
+    validate_loader = ParotidLeft3DLocaliserLoader.build('validate', batch_size=batch_size, spacing=spacing, transform=validate_transform)
+    visual_loader = ParotidLeft3DLocaliserVisualLoader.build(batch_size=batch_size, spacing=spacing, transform=validate_transform)
 
     # Create model trainer kwargs.
     kwargs = {}
@@ -208,16 +209,16 @@ def train(args: dict):
         log_info('Using early stopping.')
     else:
         log_info('Not using early stopping.')
-    if args.validation_interval:
-        kwargs['validation_interval'] = args.validation_interval
-    if args.validation_print_interval:
-        kwargs['validation_print_interval'] = args.validation_print_interval
-    if args.validation_report_interval:
-        kwargs['validation_report_interval'] = args.validation_report_interval
+    if args.validate_interval:
+        kwargs['validate_interval'] = args.validate_interval
+    if args.validate_print_interval:
+        kwargs['validate_print_interval'] = args.validate_print_interval
+    if args.validate_report_interval:
+        kwargs['validate_report_interval'] = args.validate_report_interval
 
     # Train the model.
     model_name = 'parotid-left-3d-localiser'
-    trainer = ModelTrainer(loss_fn, model_name, optimiser, run_name, train_loader, validation_loader, visual_loader, **kwargs)
+    trainer = ModelTrainer(loss_fn, model_name, optimiser, run_name, train_loader, validate_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):

@@ -17,25 +17,30 @@ class DoubleConv(nn.Module):
         """
         super().__init__()
 
-        # Define single convolution block.
-        self.conv = nn.Sequential(
-            nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
-            nn.ReLU()
-        )
+        # Define convolution blocks.
+        convs = [
+            nn.Sequential(
+                nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm3d(out_channels),
+                nn.ReLU()
+            ),
+            nn.Sequential(
+                nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm3d(out_channels),
+                nn.ReLU()
+            )
+        ]
 
         # Add dropout if necessary.
         if dropout:
-            self.conv = nn.Sequential(
-                self.conv,
-                nn.Dropout3d()
-            )
+            for i, conv in enumerate(convs):
+                convs[i] = nn.Sequential(
+                    conv,
+                    nn.Dropout3d()
+                )
 
         # Create double convolution block.
-        self.double_conv = nn.Sequential(
-            self.conv,
-            self.conv
-        )
+        self.double_conv = nn.Sequential(*convs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.double_conv(x)
