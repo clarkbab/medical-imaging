@@ -74,12 +74,12 @@ class ModelTrainer:
             validate_print_interval: how often to print results during validation.
             validate_report_interval: how often to report results during validation.
         """
-        self.device = device
-        self.early_stopping = early_stopping
-        self.hausdorff_delay = hausdorff_delay
+        self._device = device
+        self._early_stopping = early_stopping
+        self._hausdorff_delay = hausdorff_delay
         if report:
             # Create tensorboard writer.
-            self.reporter = WandbReporter(model_name, run_name, offline=report_offline)
+            self._reporter = WandbReporter(model_name, run_name, offline=report_offline)
 
             # Add hyperparameters.
             hparams = {
@@ -90,39 +90,39 @@ class ModelTrainer:
                 'optimiser': str(optimiser),
                 'transform': str(train_loader.dataset.transform),
             }
-            self.reporter.add_hyperparameters(hparams)
-        self.log_info = log_info
-        self.loss_fn = loss_fn
-        self.max_epochs = max_epochs
-        self.max_epochs_since_improvement = 20
-        self.metrics = metrics
-        self.min_validate_loss = np.inf
-        self.mixed_precision = mixed_precision
-        self.model_name = model_name
-        self.num_epochs_since_improvement = 0
-        self.optimiser = optimiser
-        self.report = report
-        self.run_name = run_name
-        self.scaler = GradScaler(enabled=mixed_precision)
-        self.spacing = spacing
+            self._reporter.add_hyperparameters(hparams)
+        self._log_info = log_info
+        self._loss_fn = loss_fn
+        self._max_epochs = max_epochs
+        self._max_epochs_since_improvement = 20
+        self._metrics = metrics
+        self._min_validate_loss = np.inf
+        self._mixed_precision = mixed_precision
+        self._model_name = model_name
+        self._num_epochs_since_improvement = 0
+        self._optimiser = optimiser
+        self._report = report
+        self._run_name = run_name
+        self._scaler = GradScaler(enabled=mixed_precision)
+        self._spacing = spacing
         if 'hausdorff' in metrics:
             assert spacing is not None, 'Voxel spacing must be provided when calculating Hausdorff distance.'
-        self.train_loader = train_loader
-        self.train_print_interval = len(train_loader) if train_print_interval == 'epoch' else train_print_interval
-        self.train_report_interval = len(train_loader) if train_report_interval == 'epoch' else train_report_interval
-        self.validate = validate
-        self.validate_interval = len(train_loader) if validate_interval == 'epoch' else validate_interval
-        self.validate_loader = validate_loader
-        self.validate_loader_visual = validate_loader_visual
-        self.validate_print_interval = len(validate_loader) if validate_print_interval == 'epoch' else validate_print_interval
-        self.validate_report_interval = len(validate_loader) if validate_report_interval == 'epoch' else validate_report_interval
+        self._train_loader = train_loader
+        self._train_print_interval = len(train_loader) if train_print_interval == 'epoch' else train_print_interval
+        self._train_report_interval = len(train_loader) if train_report_interval == 'epoch' else train_report_interval
+        self._validate = validate
+        self._validate_interval = len(train_loader) if validate_interval == 'epoch' else validate_interval
+        self._validate_loader = validate_loader
+        self._validate_loader_visual = validate_loader_visual
+        self._validate_print_interval = len(validate_loader) if validate_print_interval == 'epoch' else validate_print_interval
+        self._validate_report_interval = len(validate_loader) if validate_report_interval == 'epoch' else validate_report_interval
 
         # Initialise running scores.
-        self.running_scores = {}
+        self._running_scores = {}
         keys = ['print', 'report', 'validate-print', 'validate-report', 'validate-checkpoint']
         for key in keys:
-            self.running_scores[key] = {}
-            self.reset_running_scores(key)
+            self._running_scores[key] = {}
+            self._reset_running_scores(key)
 
     def __call__(
         self,
@@ -135,32 +135,32 @@ class ModelTrainer:
         # Put in training mode.
         model.train()
 
-        for epoch in range(self.max_epochs):
-            for batch, (input, label) in enumerate(self.train_loader):
+        for epoch in range(self._max_epochs):
+            for batch, (input, label) in enumerate(self._train_loader):
                 # Calculate training step.
-                step = epoch * len(self.train_loader) + batch
+                step = epoch * len(self._train_loader) + batch
 
                 # Convert input and label.
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
-                input, label = input.to(self.device), label.to(self.device)
+                input, label = input.to(self._device), label.to(self._device)
 
                 # Add model structure.
-                if self.report and epoch == 0 and batch == 0:
+                if self._report and epoch == 0 and batch == 0:
                     # Error when adding graph with 'mixed-precision' training.
-                    if not self.mixed_precision:
-                        self.reporter.add_model_graph(model, input)
+                    if not self._mixed_precision:
+                        self._reporter.add_model_graph(model, input)
 
                 # Perform forward/backward pass.
-                with autocast(enabled=self.mixed_precision):
+                with autocast(enabled=self._mixed_precision):
                     pred = model(input)
-                    loss = self.loss_fn(pred, label)
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimiser)
-                self.scaler.update()
-                self.optimiser.zero_grad()
-                self.running_scores['print']['loss'] += [loss.item()]
-                self.running_scores['report']['loss'] += [loss.item()]
+                    loss = self._loss_fn(pred, label)
+                self._scaler.scale(loss).backward()
+                self._scaler.step(self._optimiser)
+                self._scaler.update()
+                self._optimiser.zero_grad()
+                self._running_scores['print']['loss'] += [loss.item()]
+                self._running_scores['report']['loss'] += [loss.item()]
 
                 # Convert to binary prediction.
                 pred = pred.argmax(axis=1)
@@ -169,41 +169,41 @@ class ModelTrainer:
                 pred, label = pred.cpu(), label.cpu()
 
                 # Calculate other metrics.
-                if 'dice' in self.metrics:
+                if 'dice' in self._metrics:
                     dice = batch_dice(pred, label)
-                    self.running_scores['print']['dice'] += [dice.item()]
-                    self.running_scores['report']['dice'] += [dice.item()]
+                    self._running_scores['print']['dice'] += [dice.item()]
+                    self._running_scores['report']['dice'] += [dice.item()]
 
-                if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
+                if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
                     # Can't calculate HD if prediction is empty.
                     if pred.sum() > 0:
-                        hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                        self.running_scores['print']['hausdorff'] += [hausdorff.item()]
-                        self.running_scores['report']['hausdorff'] += [hausdorff.item()]
+                        hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self._spacing)
+                        self._running_scores['print']['hausdorff'] += [hausdorff.item()]
+                        self._running_scores['report']['hausdorff'] += [hausdorff.item()]
                 
                 # Print results.
-                if self.is_print_step(self.train_print_interval, step):
-                    self.print_training_results(epoch, batch, step)
-                    self.reset_running_scores('print')
+                if self._is_print_step(self._train_print_interval, step):
+                    self._print_training_results(epoch, batch, step)
+                    self._reset_running_scores('print')
 
                 # Report results.
-                if self.report and self.is_report_step(self.train_report_interval, step):
-                    self.report_training_results(step)
-                    self.reset_running_scores('report')
+                if self._report and self._is_report_step(self._train_report_interval, step):
+                    self._report_training_results(step)
+                    self._reset_running_scores('report')
 
                 # Perform validation and checkpointing.
-                if self.validate and self.is_validate_step(step):
-                    self.validate_model(model, epoch, batch, step)
+                if self._validate and self._is_validate_step(step):
+                    self._validate_model(model, epoch, batch, step)
 
                 # Check early stopping.
-                if self.early_stopping:
-                    if self.num_epochs_since_improvement >= self.max_epochs_since_improvement:
-                        self.log_info(f"Stopping early due to {self.num_epochs_since_improvement} epochs without improved validation score.")
+                if self._early_stopping:
+                    if self._num_epochs_since_improvement >= self._max_epochs_since_improvement:
+                        self._log_info(f"Stopping early due to {self._num_epochs_since_improvement} epochs without improved validation score.")
                         return
 
-        self.log_info(f"Maximum epochs ({self.max_epochs} reached.")
+        self._log_info(f"Maximum epochs ({self._max_epochs} reached.")
 
-    def validate_model(
+    def _validate_model(
         self,
         model: torch.nn.Module,
         train_epoch: int,
@@ -220,19 +220,19 @@ class ModelTrainer:
         model.eval()
 
         # Calculate validation score.
-        for step, (input, label) in enumerate(self.validate_loader):
+        for step, (input, label) in enumerate(self._validate_loader):
             # Convert input data.
             input, label = input.float(), label.long()
             input = input.unsqueeze(1)
-            input, label = input.to(self.device), label.to(self.device)
+            input, label = input.to(self._device), label.to(self._device)
 
             # Perform forward pass.
-            with autocast(enabled=self.mixed_precision):
+            with autocast(enabled=self._mixed_precision):
                 pred = model(input)
-                loss = self.loss_fn(pred, label)
-            self.running_scores['validate-checkpoint']['loss'] += [loss.item()]
-            self.running_scores['validate-print']['loss'] += [loss.item()]
-            self.running_scores['validate-report']['loss'] += [loss.item()]
+                loss = self._loss_fn(pred, label)
+            self._running_scores['validate-checkpoint']['loss'] += [loss.item()]
+            self._running_scores['validate-print']['loss'] += [loss.item()]
+            self._running_scores['validate-report']['loss'] += [loss.item()]
 
             # Convert to binary prediction.
             pred = pred.argmax(axis=1)
@@ -240,33 +240,31 @@ class ModelTrainer:
             # Move data to CPU for metric calculations.
             pred, label = pred.cpu(), label.cpu()
 
-            if 'dice' in self.metrics:
+            if 'dice' in self._metrics:
                 dice = batch_dice(pred, label)
-                self.running_scores['validate-print']['dice'] += [dice.item()]
-                self.running_scores['validate-report']['dice'] += [dice.item()]
+                self._running_scores['validate-print']['dice'] += [dice.item()]
+                self._running_scores['validate-report']['dice'] += [dice.item()]
 
-            if 'hausdorff' in self.metrics and train_step > self.hausdorff_delay:
+            if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
                 # Can't calculate HD if prediction is empty.
                 if pred.sum() > 0:
-                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self.spacing)
-                    self.running_scores['validate-print']['hausdorff'] += [hausdorff.item()]
-                    self.running_scores['validate-report']['hausdorff'] += [hausdorff.item()]
-                    print('print:', self.running_scores['validate-print']['hausdorff'])
-                    print('report:', self.running_scores['validate-report']['hausdorff'])
+                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self._spacing)
+                    self._running_scores['validate-print']['hausdorff'] += [hausdorff.item()]
+                    self._running_scores['validate-report']['hausdorff'] += [hausdorff.item()]
 
             # Print results.
-            if self.is_print_step(self.validate_print_interval, step):
-                self.print_validate_results(train_epoch, train_batch, train_step, step)
-                self.reset_running_scores('validate-print')
+            if self._is_print_step(self._validate_print_interval, step):
+                self._print_validate_results(train_epoch, train_batch, train_step, step)
+                self._reset_running_scores('validate-print')
 
             # Report results.
-            if self.report and self.is_report_step(self.validate_report_interval, step):
-                self.report_validate_results(train_step)
-                self.reset_running_scores('validate-report')
+            if self._report and self._is_report_step(self._validate_report_interval, step):
+                self._report_validate_results(train_step)
+                self._reset_running_scores('validate-report')
 
         # Check for validation loss improvement.
-        loss = np.mean(self.running_scores['validate-checkpoint']['loss'])
-        if loss < self.min_validate_loss:
+        loss = np.mean(self._running_scores['validate-checkpoint']['loss'])
+        if loss < self._min_validate_loss:
             # Save model checkpoint.
             info = {
                 'train-epoch': train_epoch,
@@ -274,22 +272,22 @@ class ModelTrainer:
                 'train-step': train_step,
                 'validate-loss': loss
             }
-            checkpoint.save(model, self.model_name, self.optimiser, self.run_name, info=info)
-            self.min_validate_loss = loss
-            self.num_epochs_since_improvement = 0
+            checkpoint.save(model, self._model_name, self._optimiser, self._run_name, info=info)
+            self._min_validate_loss = loss
+            self._num_epochs_since_improvement = 0
         else:
-            self.num_epochs_since_improvement += 1
-        self.reset_running_scores('validate-checkpoint')
+            self._num_epochs_since_improvement += 1
+        self._reset_running_scores('validate-checkpoint')
 
         # Plot validation images for visual indication of improvement.
-        if self.report:
-            for step, (input, label) in enumerate(self.validate_loader_visual):
+        if self._report:
+            for step, (input, label) in enumerate(self._validate_loader_visual):
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
-                input, label = input.to(self.device), label.to(self.device)
+                input, label = input.to(self._device), label.to(self._device)
 
                 # Perform forward pass.
-                with autocast(enabled=self.mixed_precision):
+                with autocast(enabled=self._mixed_precision):
                     pred = model(input)
 
                 # Convert prediction to binary values.
@@ -332,11 +330,11 @@ class ModelTrainer:
                             label_data = label_data.rot90(-1)
                             pred_data = pred_data.rot90(-1)
 
-                        self.reporter.add_figure(input_data, label_data, pred_data, train_step, step, sample_idx, axis, class_labels)
+                        self._reporter.add_figure(input_data, label_data, pred_data, train_step, step, sample_idx, axis, class_labels)
 
         model.train()
         
-    def is_print_step(
+    def _is_print_step(
         self,
         interval: int,
         step: int) -> bool:
@@ -351,7 +349,7 @@ class ModelTrainer:
         else:
             return False
 
-    def is_report_step(
+    def _is_report_step(
         self,
         interval: int,
         step: int) -> bool:
@@ -366,7 +364,7 @@ class ModelTrainer:
         else:
             return False
 
-    def is_validate_step(
+    def _is_validate_step(
         self,
         step: int) -> bool:
         """
@@ -374,12 +372,12 @@ class ModelTrainer:
         args:
             step: the current training step.
         """
-        if (step + 1) % self.validate_interval == 0:
+        if (step + 1) % self._validate_interval == 0:
             return True
         else:
             return False
 
-    def print_training_results(
+    def _print_training_results(
         self,
         epoch: int,
         batch: int,
@@ -392,21 +390,21 @@ class ModelTrainer:
             step: the current training step.
         """
         # Get average training loss.
-        mean_loss = np.mean(self.running_scores['print']['loss'])
+        mean_loss = np.mean(self._running_scores['print']['loss'])
         message = f"[E:{epoch}, B:{batch}, I:{step}] Loss: {mean_loss:{PRINT_DP}}"
 
         # Get additional metrics.
-        if 'dice' in self.metrics:
-            mean_dice = np.mean(self.running_scores['print']['dice'])
+        if 'dice' in self._metrics:
+            mean_dice = np.mean(self._running_scores['print']['dice'])
             message += f", DSC: {mean_dice:{PRINT_DP}}"
 
-        if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            mean_hausdorff = np.mean(self.running_scores['print']['hausdorff'])
+        if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
+            mean_hausdorff = np.mean(self._running_scores['print']['hausdorff'])
             message += f", HD: {mean_hausdorff:{PRINT_DP}}"
 
-        self.log_info(message)
+        self._log_info(message)
         
-    def print_validate_results(
+    def _print_validate_results(
         self,
         train_epoch: int,
         train_batch: int,
@@ -421,21 +419,21 @@ class ModelTrainer:
             validate_batch: the current validation batch.
         """
         # Get average validation loss.
-        mean_loss = np.mean(self.running_scores['validate-print']['loss'])
+        mean_loss = np.mean(self._running_scores['validate-print']['loss'])
         message = f"VAL - [E:{train_epoch}, B:{train_batch}, I:{train_step}, VB:{validate_batch}] Loss: {mean_loss:{PRINT_DP}}"
 
         # Get additional metrics.
-        if 'dice' in self.metrics:
-            mean_dice = np.mean(self.running_scores['validate-print']['dice'])
+        if 'dice' in self._metrics:
+            mean_dice = np.mean(self._running_scores['validate-print']['dice'])
             message += f", DSC: {mean_dice:{PRINT_DP}}"
 
-        if 'hausdorff' in self.metrics and train_step > self.hausdorff_delay:
-            mean_hausdorff = np.mean(self.running_scores['validate-print']['hausdorff'])
+        if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
+            mean_hausdorff = np.mean(self._running_scores['validate-print']['hausdorff'])
             message += f", HD: {mean_hausdorff:{PRINT_DP}}"
 
-        self.log_info(message)
+        self._log_info(message)
 
-    def report_training_results(
+    def _report_training_results(
         self,
         step: int) -> None:
         """
@@ -443,18 +441,18 @@ class ModelTrainer:
         args:
             step: the current training step.
         """
-        mean_loss = np.mean(self.running_scores['report']['loss'])
-        self.reporter.add_metric('Loss/train', mean_loss, step)
+        mean_loss = np.mean(self._running_scores['report']['loss'])
+        self._reporter.add_metric('Loss/train', mean_loss, step)
         
-        if 'dice' in self.metrics:
-            mean_dice = np.mean(self.running_scores['report']['dice'])
-            self.reporter.add_metric('Dice/train', mean_dice, step)
+        if 'dice' in self._metrics:
+            mean_dice = np.mean(self._running_scores['report']['dice'])
+            self._reporter.add_metric('Dice/train', mean_dice, step)
 
-        if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            mean_hausdorff = np.mean(self.running_scores['report']['hausdorff'])
-            self.reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
+        if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
+            mean_hausdorff = np.mean(self._running_scores['report']['hausdorff'])
+            self._reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
 
-    def report_validate_results(
+    def _report_validate_results(
         self,
         step: int) -> None:
         """
@@ -462,18 +460,18 @@ class ModelTrainer:
         args:
             step: the current training step. 
         """
-        mean_loss = np.mean(self.running_scores['validate-report']['loss'])
-        self.reporter.add_metric('Loss/validate', mean_loss, step)
+        mean_loss = np.mean(self._running_scores['validate-report']['loss'])
+        self._reporter.add_metric('Loss/validate', mean_loss, step)
 
-        if 'dice' in self.metrics:
-            mean_dice = np.mean(self.running_scores['validate-report']['dice'])
-            self.reporter.add_metric('Dice/validate', mean_dice, step)
+        if 'dice' in self._metrics:
+            mean_dice = np.mean(self._running_scores['validate-report']['dice'])
+            self._reporter.add_metric('Dice/validate', mean_dice, step)
 
-        if 'hausdorff' in self.metrics and step > self.hausdorff_delay:
-            mean_hausdorff = np.mean(self.running_scores['report']['hausdorff'])
-            self.reporter.add_metric('Hausdorff/validate', mean_hausdorff, step)
+        if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
+            mean_hausdorff = np.mean(self._running_scores['validate-report']['hausdorff'])
+            self._reporter.add_metric('Hausdorff/validate', mean_hausdorff, step)
 
-    def reset_running_scores(
+    def _reset_running_scores(
         self,
         key: str) -> None:
         """
@@ -481,49 +479,8 @@ class ModelTrainer:
         args:
             key: the metric namespace, e.g. print, report, etc.
         """
-        self.running_scores[key]['loss'] = []
-        if 'dice' in self.metrics:
-            self.running_scores[key]['dice'] = []
-        if 'hausdorff' in self.metrics:
-            self.running_scores[key]['hausdorff'] = []
-
-    def get_batch_centroids(
-        self,
-        label_b: torch.Tensor,
-        plane: str) -> Iterable[int]:
-        """
-        returns: the centroid location of the label along the plane axis, for each
-            image in the batch.
-        args:
-            label_b: the batch of labels.
-            plane: the plane along which to find the centroid.
-        """
-        assert plane in ('axial', 'coronal', 'sagittal')
-
-        # Move data to CPU.
-        label_b = label_b.cpu()
-
-        # Determine axes to sum over.
-        if plane == 'axial':
-            axes = (0, 1)
-        elif plane == 'coronal':
-            axes = (0, 2)
-        elif plane == 'sagittal':
-            axes = (1, 2)
-
-        centroids = np.array([], dtype=np.int)
-
-        # Loop through batch and get centroid for each label.
-        for label_i in label_b:
-            # Get weighting along 'plane' axis.
-            weights = label_i.sum(axes)
-
-            # Get average weighted sum.
-            indices = np.arange(len(weights))
-            avg_weighted_sum = (weights * indices).sum() /  weights.sum()
-
-            # Get centroid index.
-            centroid = np.round(avg_weighted_sum).long()
-            centroids = np.append(centroids, centroid)
-
-        return centroids
+        self._running_scores[key]['loss'] = []
+        if 'dice' in self._metrics:
+            self._running_scores[key]['dice'] = []
+        if 'hausdorff' in self._metrics:
+            self._running_scores[key]['hausdorff'] = []
