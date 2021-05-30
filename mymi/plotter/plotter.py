@@ -215,7 +215,8 @@ class Plotter:
 
                     # Plot region.
                     plt.imshow(data, cmap=region_cmap, aspect=aspect, alpha=alpha)
-                    plt.plot(0, 0, c=colour, label=self._escape_latex(region))
+                    label = self._escape_latex(region) if latex else region
+                    plt.plot(0, 0, c=colour, label=label)
                     if perimeter:
                         plt.contour(data, colors=[colour], levels=[0.5])
 
