@@ -173,8 +173,7 @@ def plot_patient_regions(
     # Plot CT data.
     plt.figure(figsize=figsize)
     if zoom:
-        zoom_indices = tuple(slice(z_min, z_max) for z_min, z_max in reversed(zoom))
-        ct_slice_data = ct_slice_data[zoom_indices]
+        ct_slice_data = _get_zoomed_data(ct_slice_data, zoom)
     plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=_get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
@@ -211,7 +210,7 @@ def plot_patient_regions(
 
                 # Handle zoom.
                 if zoom:
-                    slice_data = slice_data[zoom_indices]
+                    slice_data = _get_zoomed_data(slice_data, zoom)
 
                 # Plot region.
                 plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
@@ -259,9 +258,11 @@ def plot_patient_bounding_box(
     id: str,
     slice_idx: int,
     localiser: nn.Module,
+    box_colour: str = 'y',
     device: torch.device = torch.device('cpu'),
-    prediction: bool = False,
+    segmentation: bool = False,
     view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
+    zoom: Tuple[Tuple[int, int], Tuple[int, int]] = None,
     **kwargs: dict) -> None:
     """
     effect: plots the patient bounding box produced by localiser.
@@ -272,27 +273,27 @@ def plot_patient_bounding_box(
     kwargs:
         aspect: the aspect ratio.
         device: the device to perform network calcs on.
-        prediction: display the localiser segmentation prediction.
+        segmentation: display the localiser segmentation prediction.
         view: the view plane. 
+        zoom: the zoom window.
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
     # Plot patient regions.
-    plot_patient_regions(id, slice_idx, show=False, view=view, **kwargs)
+    plot_patient_regions(id, slice_idx, show=False, view=view, zoom=zoom, **kwargs)
 
     # Get bounding box.
     mins, widths, pred = get_patient_bounding_box(id, localiser, device=device, return_prediction=True)
 
     # Plot prediction.
-    if prediction:
+    if segmentation:
         # Get aspect ratio.
         aspect = _get_aspect_ratio(id, view) 
 
         # Get slice data.
         pred_slice_data = _get_slice_data(pred, slice_idx, view)
-        non_zero = np.argwhere(pred_slice_data != 0)
-        pmins = non_zero.min(axis=0)
-        pmaxs = non_zero.max(axis=0)
-        pwidths = pmaxs - pmins
+
+        # Zoom window.
+        pred_slice_data = _get_zoomed_data(pred_slice_data, zoom)
 
         # Plot prediction.
         colours = [(1, 1, 1, 0), plt.cm.tab20(0)]
@@ -310,8 +311,12 @@ def plot_patient_bounding_box(
         mins = mins[1], mins[2]
         widths = widths[1], widths[2]
 
+    # Zoom the rectangle.
+    if zoom:
+        mins = mins[0] - zoom[0][0], mins[1] - zoom[1][0]
+
     # Draw rectangle.
-    rect = Rectangle(mins, *widths, linewidth=1, edgecolor='r', facecolor='none')
+    rect = Rectangle(mins, *widths, linewidth=1, edgecolor=box_colour, facecolor='none')
     ax = plt.gca()
     ax.add_patch(rect)
 
@@ -447,3 +452,18 @@ def _get_aspect_ratio(
         aspect = spacing[2] / spacing[1]
 
     return aspect
+
+def _get_zoomed_data(
+    data: np.ndarray,
+    zoom: Tuple[Tuple[int, int], Tuple[int, int]]) -> np.ndarray:
+    """
+    returns: zoomed array.
+    args:
+        data: the data to zoom.
+        zoom: the window to use.
+    """
+    # Slice data.
+    zoom_indices = tuple(slice(z_min, z_max) for z_min, z_max in reversed(zoom))
+    data = data[zoom_indices]
+
+    return data
