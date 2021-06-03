@@ -1,76 +1,51 @@
-import hashlib
-import json
-import math
 import numpy as np
+from typing import Tuple
 
-class CropOrPad:
-    def __init__(self, resolution, fill=0):
-        """
-        args:
-            resolution: an (x, y) tuple of the new resolution.
-        kwargs:
-            fill: value to use for new pixels.
-            p: the probability that the transform is applied.
-        """
-        self.resolution = resolution
-        self.fill = fill
+def crop_or_pad(
+    input: np.ndarray,
+    crop_or_padding: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]],
+    fill: float = 0) -> np.ndarray:
+    """
+    returns: a 3D array with dimensions cropped or padded.
+    args:
+        input: the input tensor.
+        crop_or_padding: number of voxels to add remove from each dimension.
+    kwargs:
+        fill: the default fill value for padded voxels.
+    """
+    # Perform padding.
+    padding = np.array(crop_or_padding).clip(0)
+    input = np.pad(input, padding, constant_values=fill)
 
-    def __call__(self, data, binary=False, info=None):
-        """
-        returns: transformed data.
-        args:
-            the data to transform.
-        kwargs:
-            binary: is the data binary data.
-            info: extra info.
-        """
-        # Preserve data type.
-        data_type = data.dtype
+    # Perform cropping.
+    cropping = (-np.array(crop_or_padding)).clip(0)
+    mins = tuple(d[0] for d in cropping)
+    maxs = tuple(s - d[1] for d, s in zip(cropping, input.shape))
+    slices = tuple(slice(min, max) for min, max in zip(mins, maxs))
+    input = input[slices]
 
-        # Determine which dimensions to reshape.
-        resolution = [r if r is not None else d for r, d in zip(self.resolution, data.shape)]
+    return input
 
-        # Create placeholder array.
-        fill = 0 if binary else self.fill
-        new_data = np.full(shape=resolution, fill_value=fill, dtype=data.dtype)
+def centre_crop_or_pad(
+    input: np.ndarray,
+    size: Tuple[int, int, int],
+    fill: float = 0) -> np.ndarray:
+    """
+    returns: an array cropped/padded along each axis. When an uneven amount is cropped 
+        from an axis, more is removed from the left-hand side. When an uneven amount is
+        padded on an axis, more is added to the left-hand side, thus allowing this 
+        function to invert itself.
+    args:
+        input: the array to resize.
+        size: the new size.
+    kwargs:
+        fill: the default padding fill value.
+    """
+    # Determine cropping/padding amounts.
+    amounts = np.array(size) - input.shape
+    crop_or_padding = tuple((int(a / 2), int(a / 2)) if (a / 2).is_integer() else (int((a + np.sign(a)) / 2), int(((a + np.sign(a)) / 2) - np.sign(a))) for a in amounts)
 
-        # Find data centres as we will perform centred cropping and padding.
-        data_centre = (np.array(data.shape) - 1) / 2
-        new_data_centre = (np.array(new_data.shape) - 1) / 2
+    # Perform crop or padding.
+    output = crop_or_pad(input, crop_or_padding, fill=fill)
 
-        # Find the write range.
-        write_shape = np.minimum(new_data.shape, data.shape)
-        write_lower_bound = np.array(list(map(math.ceil, new_data_centre - write_shape / 2)))
-        write_range = [slice(l, l + r) for l, r in zip(write_lower_bound, write_shape)]
-
-        # Find the read range.
-        read_lower_bound = np.array(list(map(math.ceil, data_centre - write_shape / 2)))
-        read_range = [slice(l, l + r) for l, r in zip(read_lower_bound, write_shape)]
-
-        # Add data to placeholder.
-        new_data[tuple(write_range)] = data[tuple(read_range)]
-
-        # Reset data type.
-        new_data = new_data.astype(data_type)
-
-        return new_data
-
-    def deterministic(self):
-        """
-        returns: a deterministic function with same signature as '__call__'.
-        """
-        # No randomness, just return function identical to '__call__'.
-        def fn(data, binary=False, info=None):
-            return self.__call__(data, binary=binary, info=info)
-
-        return fn
-
-    def cache_key(self):
-        """
-        returns: an ID that is unique based upon transform parameters.
-        """
-        params = {
-            'fill': self.fill,
-            'resolution': self.resolution
-        }
-        return hashlib.sha1(json.dumps(params).encode('utf-8')).hexdigest()
+    return output

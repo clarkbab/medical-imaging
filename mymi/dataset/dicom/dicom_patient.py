@@ -249,6 +249,30 @@ class DicomPatient:
 
         return df
 
+    def origin(
+        self,
+        clear_cache: bool = False) -> Tuple[float, float, float]:
+        """
+        returns: the patient origin in physical coordinates.
+        kwargs:
+            clear_cache: forces the cache to clear.
+        """
+        # Get the origin.
+        origin = tuple(self.ct_summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
+        return origin
+
+    def spacing(
+        self,
+        clear_cache: bool = False) -> Tuple[float, float, float]:
+        """
+        returns: the patient spacing in physical coordinates.
+        kwargs:
+            clear_cache: forces the cache to clear.
+        """
+        # Get the spacing.
+        spacing = tuple(self.ct_summary(clear_cache=clear_cache)[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
+        return spacing
+
     @cached_method('_ct_from', '_dataset', '_id')
     def ct_slice_summary(self) -> pd.DataFrame:
         """

@@ -1,7 +1,2 @@
-from .crop_or_pad import CropOrPad
-from .random_elastic_deformation import RandomElasticDeformation
-from .random_intensity import RandomIntensity
-from .random_resample import RandomResample
-from .random_rotation import RandomRotation
-from .random_translation import RandomTranslation
-from .resample import Resample
+from .crop_or_pad import centre_crop_or_pad, crop_or_pad
+from .resample import resample

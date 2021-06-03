@@ -30,7 +30,7 @@ fill = 'minimum'
 spacing = (1.0, 1.0, 3.0)
 resolution = (512, 512, 212)
 transforms = [
-    Resample(spacing)
+    Resample(spacing, image_interpolation='bspline')
 ]
 transform = Compose(transforms)
 
