@@ -107,7 +107,7 @@ def train(args: dict):
     log_info(f"Using device: {device}.")
 
     # Create model.
-    model = SingleChannelUNet(dropout=args.use_dropout)
+    model = SingleChannelUNet()
     model = model.to(device)
     log_info(f"Using model: {model.__class__}, Dropout: {args.use_dropout}.")
 
