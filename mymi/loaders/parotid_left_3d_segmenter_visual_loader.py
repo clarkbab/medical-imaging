@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import os
 from torch.utils.data import Dataset, DataLoader, Sampler
+import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import *
 
@@ -9,59 +10,99 @@ from mymi import config
 
 class ParotidLeft3DSegmenterVisualLoader:
     @staticmethod
-    def build(num_batches=5, seed=42, batch_size=1, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def build(
+        patch_size: Tuple[int, int, int],
+        batch_size: int = 1,
+        num_batches: int = 5,
+        p: float = 1,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        seed: float = 42,
+        spacing: Tuple[float, float, float] = None,
+        transform: torchio.transforms.Transform = None):
         """
         returns: a data loader.
+        args:
+            patch_size: the patch size to extract.
         kwargs:
             batch_size: the number of images in the batch.
             num_batches: how many batches this loader should generate.
+            p: the proportion of patches that are centered on a foreground voxel.
             seed: random number generator seed.
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
+        # Determine draws.
+        num_images = num_batches * batch_size
+        np.random.seed(seed)
+        draws = np.random.binomial(1, p, num_images)
+
         # Create dataset object.
-        dataset = ParotidLeft3DSegmenterVisualDataset(raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
+        dataset = ParotidLeft3DSegmenterVisualDataset(patch_size, draws, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
+
+        # Determine image indices.
+        indices = list(range(len(dataset)))
+        np.random.shuffle(indices)
+        indices = indices[:num_images]
 
         # Create sampler.
-        sampler = ParotidLeft3DSegmenterVisualSampler(dataset, num_batches * batch_size, seed)
+        sampler = ParotidLeft3DSegmenterVisualSampler(indices)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset, sampler=sampler)
 
 class ParotidLeft3DSegmenterVisualDataset(Dataset):
-    def __init__(self, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def __init__(
+        self, 
+        patch_size: Tuple[int, int, int],
+        draws: Sequence[int],
+        p: float = 1,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        spacing: Tuple[float, float, float] = None,
+        transform: torchio.transforms.Transform = None):
         """
+        args:
+            patch_size: the size of patch to extract.
         kwargs:
+            p: the proportion of patches centred on a foreground voxel.
             raw_input: return the raw input data loaded from disk, in addition to transformed data.
             raw_label: return the raw label data loaded from disk, in addition to transformed data.
             spacing: the voxel spacing of the data on disk.
             transform: transformations to apply.
         """
-        self.raw_input = raw_input
-        self.raw_label = raw_label
-        self.spacing = spacing
-        self.transform = transform
+        self._draws = draws
+        self._draw_i = 0    # Track next draw to use.
+        self._p = p
+        self._patch_size = patch_size
+        self._raw_input = raw_input
+        self._raw_label = raw_label
+        self._spacing = spacing
+        self._transform = transform
         if transform:
             assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
         folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'validate')
-        self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
-        self.num_samples = len(self.samples)
+        self._samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
+        self._num_samples = len(self._samples)
 
     def __len__(self):
         """
         returns: number of samples in the dataset.
         """
-        return self.num_samples
+        return self._num_samples
 
-    def __getitem__(self, idx):
+    def __getitem__(
+        self,
+        idx: int):
         """
         returns: an (input, label) pair from the dataset.
-        idx: the item to return.
+        args:
+            idx: the index of the item to return.
         """
         # Get data and label paths.
-        input_path, label_path = self.samples[idx]
+        input_path, label_path = self._samples[idx]
 
         # Load data and label.
         f = open(input_path, 'rb')
@@ -70,16 +111,16 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
         label = np.load(f)
 
         # Perform transform.
-        if self.transform:
+        if self._transform:
             # Add 'batch' dimension.
             input = np.expand_dims(input, axis=0)
             label = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
-                [self.spacing[0], 0, 0, 0],
-                [0, self.spacing[1], 0, 0],
-                [0, 0, self.spacing[2], 1],
+                [self._spacing[0], 0, 0, 0],
+                [0, self._spacing[1], 0, 0],
+                [0, 0, self._spacing[2], 1],
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)
@@ -87,52 +128,83 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
             subject = Subject(input=input, label=label)
 
             # Transform the subject.
-            output = self.transform(subject)
+            output = self._transform(subject)
 
             # Extract results.
-            input = output['input'].data.squeeze(0)
-            label = output['label'].data.squeeze(0)
+            input = output['input'].data.squeeze(0).numpy()
+            label = output['label'].data.squeeze(0).numpy()
 
-        # Get the OAR patch.
-        # 'Parotid-Left' max extent in training data is (48.85mm, 61.52mm, 72.00mm), which equates
-        # to a voxel shape of (48.85, 61.52, 24) for a spacing of (1mm, 1mm, 3mm).
-        # Chose (128, 128, 96) for patch size as it's larger than the OAR extent and it fits into
-        # the GPU memory.
-        shape = (128, 128, 96)
-        input, label = self._extract_patch(input, label, shape)
+        # Roll the dice.
+        if self._draws[self._draw_i]:
+            input, label = self._extract_foreground_patch(input, label, self._patch_size)
+        else:
+            input, label = self._extract_random_patch(input, label, self._patch_size)
+
+        # Update draw.
+        self._draw_i += 1
+        if self._draw_i >= len(self._draws):
+            self._draw_i = 0
 
         # Determine result.
         result = (input, label)
-        if self.raw_input:
+        if self._raw_input:
             result += (input,)
-        if self.raw_label:
+        if self._raw_label:
             result += (label,)
 
         return result
 
-    def _extract_patch(
+    def _extract_foreground_patch(
         self,
         input: np.ndarray,
         label: np.ndarray,
-        shape: Tuple[int, int, int]) -> np.ndarray:
+        size: Tuple[int, int, int]) -> np.ndarray:
         """
         returns: a patch around the OAR.
         args:
             input: the input data.
             label: the label data.
-            shape: the shape of the patch. Must be larger than the extent of the OAR.
+            size: the size of the patch. Must be larger than the extent of the OAR.
         """
-        # Find OAR extent.
-        non_zero = np.argwhere(label != 0)
-        mins = non_zero.min(axis=0)
-        maxs = non_zero.max(axis=0)
-        oar_shape = maxs - mins
+        # Find foreground voxels.
+        fg_voxels = np.argwhere(label != 0)
+        
+        # Choose randomly from the foreground voxels.
+        fg_voxel_idx = np.random.choice(len(fg_voxels))
+        centre_voxel = fg_voxels[fg_voxel_idx]
 
         # Determine min/max indices of the patch.
-        shape_diff = shape - oar_shape
+        shape_diff = np.array(size) - 1
         lower_add = np.ceil(shape_diff / 2).astype(int)
-        mins = mins - lower_add
-        maxs = mins + shape
+        mins = centre_voxel - lower_add
+        maxs = mins + size
+
+        # Crop or pad the volume.
+        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
+        label = self._crop_or_pad(label, mins, maxs)
+
+        return input, label
+
+    def _extract_random_patch(
+        self,
+        input: np.ndarray,
+        label: np.ndarray,
+        size: Tuple[int, int, int]) -> np.ndarray:
+        """
+        returns: a random patch from the volume.
+        args:
+            input: the input data.
+            label: the label data.
+            size: the size of the patch.
+        """
+        # Choose a random voxel.
+        centre_voxel = tuple(map(np.random.randint, size))
+
+        # Determine min/max indices of the patch.
+        shape_diff = np.array(size) - 1
+        lower_add = np.ceil(shape_diff / 2).astype(int)
+        mins = centre_voxel - lower_add
+        maxs = mins + size
 
         # Crop or pad the volume.
         input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
@@ -176,21 +248,17 @@ class ParotidLeft3DSegmenterVisualDataset(Dataset):
         return array
 
 class ParotidLeft3DSegmenterVisualSampler(Sampler):
-    def __init__(self, dataset, num_images, seed):
-        self.dataset_length = len(dataset)
-        self.num_images = num_images
-        self.seed = seed
+    def __init__(
+        self,
+        indices: Sequence[int]):
+        """
+        args:
+            indices: the image indices to choose.
+        """
+        self._indices = indices
 
     def __iter__(self):
-        # Set random seed for repeatability.
-        np.random.seed(self.seed)
-
-        # Get random subset of indices.
-        indices = list(range(self.dataset_length))
-        np.random.shuffle(indices)
-        indices = indices[:self.num_images]
-
-        return iter(indices)
+        return iter(self._indices)
 
     def __len__(self):
-        return self.num_images
+        return len(self._indices)

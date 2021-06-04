@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 from torch import nn
-from typing import Tuple
+from torch.cuda.amp import autocast
+from typing import Tuple, Union
 
 from mymi import dataset
 from mymi.transforms import centre_crop_or_pad, resample
@@ -9,9 +10,11 @@ from mymi.transforms import centre_crop_or_pad, resample
 def get_patient_bounding_box(
     id: str,
     localiser: nn.Module,
+    localiser_size: Tuple[int, int, int],
+    localiser_spacing: Tuple[float, float, float],
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    return_prediction: bool = False) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    return_prediction: bool = False) -> Union[Tuple[Tuple[float, float, float], Tuple[float, float, float]], Tuple[Tuple[float, float, float], Tuple[float, float, float], np.ndarray]]:
     """
     returns: the bounding box, (mins, widths) pair in voxel coordinates.
     args:
@@ -28,12 +31,10 @@ def get_patient_bounding_box(
     spacing = patient.spacing(clear_cache=clear_cache)
 
     # Create downsampled input.
-    downsampled_spacing = (4, 4, 6.625)
-    input = resample(input, spacing, downsampled_spacing)
+    input = resample(input, spacing, localiser_spacing)
     downsampled_size = input.shape
 
     # Shape the image so it'll fit the network.
-    localiser_size = (128, 128, 96)
     input = centre_crop_or_pad(input, localiser_size, fill=input.min())
 
     # Get localiser result.
@@ -42,7 +43,8 @@ def get_patient_bounding_box(
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
     input = input.to(device)
-    pred = localiser(input)
+    with autocast(enabled=True):
+        pred = localiser(input)
     pred = pred.cpu()
 
     # Get binary mask.
@@ -53,7 +55,7 @@ def get_patient_bounding_box(
     pred = centre_crop_or_pad(pred, downsampled_size)
 
     # Upsample to full resolution.
-    pred = resample(pred, downsampled_spacing, spacing)
+    pred = resample(pred, localiser_spacing, spacing)
 
     # Get OAR extent.
     non_zero = np.argwhere(pred != 0).astype(int)
@@ -62,7 +64,7 @@ def get_patient_bounding_box(
     widths = maxs - mins
 
     # Create result.
-    result = (mins, widths)
+    result = (tuple(mins), tuple(widths))
     if return_prediction:
         result = (*result, pred)
 

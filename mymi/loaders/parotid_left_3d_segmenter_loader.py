@@ -1,7 +1,8 @@
-import logging
 import numpy as np
 import os
-from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+import torch
+from torch.utils.data import Dataset, DataLoader
+import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import *
 
@@ -9,53 +10,74 @@ from mymi import config
 
 class ParotidLeft3DSegmenterLoader:
     @staticmethod
-    def build(folder, batch_size=1, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def build(
+        folder: str,
+        patch_size: Tuple[int, int, int],
+        batch_size: int = 1,
+        p: float = 1,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        spacing: Tuple[float, float, float] = None,
+        transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         """
         returns: a data loader.
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
+            patch_size: the patch size to extract.
         kwargs:
             batch_size: the number of images in the batch.
+            p: the proportion of samples that include the Parotid.
             raw_input: return the non-transformed input also.
             raw_label: return the non-transformed label also.
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
         # Create dataset object.
-        dataset = ParotidLeft3DSegmenterDataset(folder, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
+        dataset = ParotidLeft3DSegmenterDataset(folder, patch_size, p=p, raw_input=raw_input, raw_label=raw_label, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=dataset, shuffle=True)
 
 class ParotidLeft3DSegmenterDataset(Dataset):
-    def __init__(self, folder, raw_input=False, raw_label=False, spacing=None, transform=None):
+    def __init__(
+        self,
+        folder: str,
+        patch_size: Tuple[int, int, int],
+        p: float = 1,
+        raw_input: bool = False,
+        raw_label: bool = False,
+        spacing: Tuple[int, int, int] = None,
+        transform: torchio.transforms.Transform = None):
         """
         args:
             folder: a string describing the desired loader - 'train', 'validate' or 'test'.
-            spacing: the voxel spacing of the data.
+            patch_size: the size of the patch.
         kwargs:
+            p: the proportion of samples that are centred on a foreground voxel.
             raw_input: return the raw input data loaded from disk, in addition to transformed data.
             raw_label: return the raw label data loaded from disk, in addition to transformed data.
             spacing: the voxel spacing of the data on disk.
             transform: transformations to apply.
         """
-        self.raw_input = raw_input
-        self.raw_label = raw_label
-        self.spacing = spacing
-        self.transform = transform
+        self._p = p
+        self._patch_size = patch_size
+        self._raw_input = raw_input
+        self._raw_label = raw_label
+        self._spacing = spacing
+        self._transform = transform
         if transform:
             assert spacing, 'Spacing is required when transform applied to dataloader.'
 
         # Load up samples into 2D arrays of (input_path, label_path) pairs.
         folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', folder)
-        self.samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
-        self.num_samples = len(self.samples)
+        self._samples = np.reshape([os.path.join(folder_path, p) for p in sorted(os.listdir(folder_path))], (-1, 2))
+        self._num_samples = len(self._samples)
 
     def __len__(self):
         """
         returns: number of samples in the dataset.
         """
-        return self.num_samples
+        return self._num_samples
 
     def __getitem__(
         self,
@@ -66,7 +88,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             idx: the index of the item to return.
         """
         # Get data and label paths.
-        input_path, label_path = self.samples[idx]
+        input_path, label_path = self._samples[idx]
 
         # Load data and label.
         f = open(input_path, 'rb')
@@ -75,16 +97,16 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         label = np.load(f)
 
         # Perform transform.
-        if self.transform:
+        if self._transform:
             # Add 'batch' dimension.
             input = np.expand_dims(input, axis=0)
             label = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
-                [self.spacing[0], 0, 0, 0],
-                [0, self.spacing[1], 0, 0],
-                [0, 0, self.spacing[2], 1],
+                [self._spacing[0], 0, 0, 0],
+                [0, self._spacing[1], 0, 0],
+                [0, 0, self._spacing[2], 1],
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)
@@ -92,52 +114,80 @@ class ParotidLeft3DSegmenterDataset(Dataset):
             subject = Subject(input=input, label=label)
 
             # Transform the subject.
-            output = self.transform(subject)
+            output = self._transform(subject)
 
             # Extract results.
             input = output['input'].data.squeeze(0).numpy()
             label = output['label'].data.squeeze(0).numpy()
 
+        # Roll the dice.
+        if np.random.binomial(1, self._p):
+            input, label = self._extract_foreground_patch(input, label, self._patch_size)
+        else:
+            input, label = self._extract_random_patch(input, label, self._patch_size)
+
         # Get the OAR patch.
-        # 'Parotid-Left' max extent in training data is (48.85mm, 61.52mm, 72.00mm), which equates
-        # to a voxel shape of (48.85, 61.52, 24) for a spacing of (1mm, 1mm, 3mm).
-        # Chose (128, 128, 96) for patch size as it's larger than the OAR extent and it fits into
-        # the GPU memory.
-        shape = (128, 128, 96)
-        input, label = self._extract_patch(input, label, shape)
 
         # Determine result.
         result = (input, label)
-        if self.raw_input:
+        if self._raw_input:
             result += (input,)
-        if self.raw_label:
+        if self._raw_label:
             result += (label,)
 
         return result
 
-    def _extract_patch(
+    def _extract_foreground_patch(
         self,
         input: np.ndarray,
         label: np.ndarray,
-        shape: Tuple[int, int, int]) -> np.ndarray:
+        size: Tuple[int, int, int]) -> np.ndarray:
         """
         returns: a patch around the OAR.
         args:
             input: the input data.
             label: the label data.
-            shape: the shape of the patch. Must be larger than the extent of the OAR.
+            size: the size of the patch. Must be larger than the extent of the OAR.
         """
-        # Find OAR extent.
-        non_zero = np.argwhere(label != 0)
-        mins = non_zero.min(axis=0)
-        maxs = non_zero.max(axis=0)
-        oar_shape = maxs - mins
+        # Find foreground voxels.
+        fg_voxels = np.argwhere(label != 0)
+        
+        # Choose randomly from the foreground voxels.
+        fg_voxel_idx = np.random.choice(len(fg_voxels))
+        centre_voxel = fg_voxels[fg_voxel_idx]
 
         # Determine min/max indices of the patch.
-        shape_diff = shape - oar_shape
+        shape_diff = np.array(size) - 1
         lower_add = np.ceil(shape_diff / 2).astype(int)
-        mins = mins - lower_add
-        maxs = mins + shape
+        mins = centre_voxel - lower_add
+        maxs = mins + size
+
+        # Crop or pad the volume.
+        input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 
+        label = self._crop_or_pad(label, mins, maxs)
+
+        return input, label
+
+    def _extract_random_patch(
+        self,
+        input: np.ndarray,
+        label: np.ndarray,
+        size: Tuple[int, int, int]) -> np.ndarray:
+        """
+        returns: a random patch from the volume.
+        args:
+            input: the input data.
+            label: the label data.
+            size: the size of the patch.
+        """
+        # Choose a random voxel.
+        centre_voxel = tuple(map(np.random.randint, size))
+
+        # Determine min/max indices of the patch.
+        shape_diff = np.array(size) - 1
+        lower_add = np.ceil(shape_diff / 2).astype(int)
+        mins = centre_voxel - lower_add
+        maxs = mins + size
 
         # Crop or pad the volume.
         input = self._crop_or_pad(input, mins, maxs, fill=input.min()) 

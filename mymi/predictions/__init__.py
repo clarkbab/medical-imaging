@@ -1,1 +1,2 @@
 from .localisation import get_patient_bounding_box
+from .segmentation import get_patient_segmentation

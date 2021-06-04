@@ -154,10 +154,11 @@ def train(args: dict):
 
     # Create data loaders.
     batch_size = args.batch_size
+    patch_size = (128, 128, 96)
     spacing = (1, 1, 3)         # Data on disk has this spacing.
-    train_loader = ParotidLeft3DSegmenterLoader.build('train', batch_size=batch_size, spacing=spacing, transform=train_transform)
-    validate_loader = ParotidLeft3DSegmenterLoader.build('validate', batch_size=batch_size, spacing=spacing)
-    visual_loader = ParotidLeft3DSegmenterVisualLoader.build(batch_size=batch_size, spacing=spacing)
+    train_loader = ParotidLeft3DSegmenterLoader.build('train', patch_size, batch_size=batch_size, spacing=spacing, transform=train_transform)
+    validate_loader = ParotidLeft3DSegmenterLoader.build('validate', patch_size, batch_size=batch_size, spacing=spacing)
+    visual_loader = ParotidLeft3DSegmenterVisualLoader.build(patch_size, batch_size=batch_size, spacing=spacing)
 
     # Create model trainer kwargs.
     kwargs = {}

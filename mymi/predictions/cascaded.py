@@ -1,28 +1,16 @@
 import numpy as np
-import os
 import pydicom as dcm
-import SimpleITK as sitk
 import torch
 from torch import nn
-import torchio
-from torch.cuda.amp import autocast
-from torchio import ScalarImage, Subject
-from torchio.transforms import Compose, CropOrPad, Resample
-from tqdm import tqdm
 from typing import *
-import sys
 
-from mymi import config
-from mymi import dataset
-from mymi.utils import filterOnPatIDs
+from mymi.predictions import get_patient_bounding_box
 
-sys.path.append('/home/baclark/code/rt-utils')
-from rt_utils import RTStructBuilder
-
-def predict_patient(
-    ds: str,
-    patient: Union[str, int],
+def get_patient_segmentation(
+    id: Union[str, int],
     localiser: nn.Module,
+    localiser_size: Tuple[int, int, int],
+    localiser_spacing: Tuple[float, float, float],
     segmenter: nn.Module,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> dcm.FileDataset:
@@ -36,73 +24,14 @@ def predict_patient(
     kwargs:
         clear_cache: force the cache to clear.
     """
-    # Get the patient CT data, origin and spacing.
-    dataset.select(ds)
-    pat = dataset.patient(patient)
-    input = pat.ct_data(clear_cache=clear_cache)
-    origin = pat.origin(clear_cache=clear_cache)
-    spacing = pat.spacing(clear_cache=clear_cache)
-
-    # Get OAR bounding box.
-    mins, widths = _get_bounding_box(input, origin, spacing, localiser, device=device)
-    print('bounding box:', mins, widths)
+    # Get the OAR bounding box.
+    mins, widths = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
 
     # Get segmentation prediction.
     pred = _get_segmentation(input, (mins, widths), segmenter, device=device)
     print('segmenter pred shape:', pred.shape)
 
     return pred
-    
-def _get_bounding_box(
-    input: np.ndarray,
-    origin: Tuple[float, float, float],
-    spacing: Tuple[float, float, float],
-    localiser: nn.Module,
-    device: torch.device = torch.device('cpu')) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
-    """
-    returns: the bounding box (origin, width) in voxel coordinates.
-    args:
-        input: the input 3D array at (1, 1, 3) spacing.
-        spacing: the input data spacing.
-        localiser: the localiser model.
-    kwargs:
-        device: the device for network calcs.
-    """
-    # Create downsampled input.
-    downsampled_spacing = (4, 4, 6.625)
-    input = _resample(input, origin, spacing, downsampled_spacing)
-    downsampled_size = input.shape
-
-    # Shape the image so it'll fit the network.
-    localiser_size = (128, 128, 96)
-    input = _centre_crop_or_pad(input, localiser_size, fill=input.min())
-
-    # Get localiser result.
-    input = torch.Tensor(input)
-    input = input.unsqueeze(0)      # Add 'batch' dimension.
-    input = input.unsqueeze(1)      # Add 'channel' dimension.
-    input = input.float()
-    input = input.to(device)
-    pred = localiser(input)
-    pred = pred.cpu()
-
-    # Get binary mask.
-    pred = pred.argmax(axis=1)
-    pred = pred.squeeze(0)          # Remove 'batch' dimension.
-
-    # Reverse the crop/pad.
-    pred = _centre_crop_or_pad(pred, downsampled_size)
-
-    # Upsample to full resolution.
-    pred = _resample(pred, origin, downsampled_spacing, spacing)
-
-    # Get OAR extent.
-    non_zero = np.argwhere(pred != 0).astype(int)
-    mins, _ = non_zero.min(axis=1)
-    maxs, _ = non_zero.max(axis=1)
-    width = maxs - min
-
-    return mins, width
 
 def _get_segmentation(
     input: np.ndarray,

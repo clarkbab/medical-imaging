@@ -11,7 +11,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Literal, Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.predictions import get_patient_bounding_box
+from mymi.predictions import get_patient_bounding_box, get_patient_segmentation
 from mymi.regions import is_region, RegionColours
 
 def plot_ct_distribution(
@@ -58,6 +58,7 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     clear_cache: bool = False,
+    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
     device: nn.Module = None,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
@@ -72,8 +73,7 @@ def plot_patient_regions(
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
     view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
-    window: Tuple[float, float] = None,
-    zoom: Tuple[Tuple[int, int], Tuple[int, int]] = None) -> None:
+    window: Tuple[float, float] = None) -> None:
     """
     effect: plots a CT slice with labels.
     args:
@@ -84,6 +84,7 @@ def plot_patient_regions(
         aspect: use a hard-coded aspect ratio, useful for viewing transformed images.
         axes: display the axes ticks and labels.
         clear_cache: force cache to clear.
+        crop: crop plotting window to this extent.
         figsize: the size of the plot in inches.
         font_size: the size of the font.
         internal_regions: use the internal MYMI region names.
@@ -97,7 +98,6 @@ def plot_patient_regions(
         transform: apply the transform before plotting.
         view: the viewing axis.
         window: the HU window to apply.
-        zoom: zoom to this extent.
     """
     # Get params.
     plt.rcParams.update({
@@ -154,7 +154,7 @@ def plot_patient_regions(
         region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in region_data.items()))
 
     # Get slice data.
-    ct_slice_data = _get_slice_data(ct_data, slice_idx, view)
+    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -172,8 +172,8 @@ def plot_patient_regions(
 
     # Plot CT data.
     plt.figure(figsize=figsize)
-    if zoom:
-        ct_slice_data = _get_zoomed_data(ct_slice_data, zoom)
+    if crop:
+        ct_slice_data = _get_cropped_image(ct_slice_data, crop)
     plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=_get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
@@ -189,16 +189,16 @@ def plot_patient_regions(
                 palette = plt.cm.tab20
 
             # Plot each region.
-            show_legend = False     # Only show legend if slice has at least one region.
+            at_least_one_region = False     # Only show legend if slice has at least one region.
             for i, (region, data) in enumerate(region_data.items()):
                 # Convert data to 'imshow' co-ordinate system.
-                slice_data = _get_slice_data(data, slice_idx, view)
+                slice_data = _get_slice_for_plotting(data, slice_idx, view)
 
                 # Skip region if not present on this slice.
                 if slice_data.max() == 0:
                     continue
                 else:
-                    show_legend = True
+                    at_least_one_region = True
                 
                 # Create binary colormap for each region.
                 if internal_regions:
@@ -208,9 +208,9 @@ def plot_patient_regions(
                 colours = [(1.0, 1.0, 1.0, 0), colour]
                 region_cmap = ListedColormap(colours)
 
-                # Handle zoom.
-                if zoom:
-                    slice_data = _get_zoomed_data(slice_data, zoom)
+                # Crop image.
+                if crop:
+                    slice_data = _get_cropped_image(slice_data, crop)
 
                 # Plot region.
                 plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
@@ -219,9 +219,8 @@ def plot_patient_regions(
                 if perimeter:
                     plt.contour(slice_data, colors=[colour], levels=[0.5])
 
-            # Turn on legend.
-            if legend and show_legend: 
-                # Get legend props.
+            # Create legend.
+            if legend and at_least_one_region: 
                 plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
                 for l in plt_legend.get_lines():
                     l.set_linewidth(8)
@@ -258,11 +257,17 @@ def plot_patient_bounding_box(
     id: str,
     slice_idx: int,
     localiser: nn.Module,
+    localiser_size: Tuple[int, int, int],
+    localiser_spacing: Tuple[float, float, float],
+    aspect: float = None,
     box_colour: str = 'y',
+    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
+    clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
     segmentation: bool = False,
     view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
-    zoom: Tuple[Tuple[int, int], Tuple[int, int]] = None,
     **kwargs: dict) -> None:
     """
     effect: plots the patient bounding box produced by localiser.
@@ -272,17 +277,18 @@ def plot_patient_bounding_box(
         localiser: the localiser network.
     kwargs:
         aspect: the aspect ratio.
+        clear_cache: force the cache to clear.
+        crop: the crop window.
         device: the device to perform network calcs on.
         segmentation: display the localiser segmentation prediction.
         view: the view plane. 
-        zoom: the zoom window.
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
     # Plot patient regions.
-    plot_patient_regions(id, slice_idx, show=False, view=view, zoom=zoom, **kwargs)
+    plot_patient_regions(id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
 
     # Get bounding box.
-    mins, widths, pred = get_patient_bounding_box(id, localiser, device=device, return_prediction=True)
+    mins, widths, pred = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
 
     # Plot prediction.
     if segmentation:
@@ -290,15 +296,17 @@ def plot_patient_bounding_box(
         aspect = _get_aspect_ratio(id, view) 
 
         # Get slice data.
-        pred_slice_data = _get_slice_data(pred, slice_idx, view)
+        pred_slice_data = _get_slice_for_plotting(pred, slice_idx, view)
 
-        # Zoom window.
-        pred_slice_data = _get_zoomed_data(pred_slice_data, zoom)
+        # Crop the image.
+        pred_slice_data = _get_cropped_image(pred_slice_data, crop)
 
         # Plot prediction.
-        colours = [(1, 1, 1, 0), plt.cm.tab20(0)]
+        colour = plt.cm.tab20(0)
+        colours = [(1, 1, 1, 0), colour]
         cmap = ListedColormap(colours)
         plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+        plt.plot(0, 0, c=colour, label='Segmentation')
 
     # Determine values to use.
     if view == 'axial':
@@ -311,14 +319,77 @@ def plot_patient_bounding_box(
         mins = mins[1], mins[2]
         widths = widths[1], widths[2]
 
-    # Zoom the rectangle.
-    if zoom:
-        mins = mins[0] - zoom[0][0], mins[1] - zoom[1][0]
+    # Adjust bounding box for cropped view.
+    if crop:
+        mins = mins[0] - crop[0][0], mins[1] - crop[1][0]
 
-    # Draw rectangle.
+    # Draw bounding box.
     rect = Rectangle(mins, *widths, linewidth=1, edgecolor=box_colour, facecolor='none')
     ax = plt.gca()
     ax.add_patch(rect)
+    plt.plot(0, 0, c=box_colour, label='Bounding Box')
+
+    # Show legend.
+    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    for l in plt_legend.get_lines():
+        l.set_linewidth(8)
+
+    plt.show()
+
+def plot_patient_segmentation(
+    id: str,
+    slice_idx: int,
+    bounding_box: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    segmenter: nn.Module,
+    segmenter_size: Tuple[int, int, int],
+    segmenter_spacing: Tuple[float, float, float],
+    aspect: float = None,
+    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
+    clear_cache: bool = False,
+    device: torch.device = torch.device('cpu'),
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
+    segmentation: bool = False,
+    view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
+    **kwargs: dict) -> None:
+    """
+    effect: plots the patient bounding box produced by segmenter.
+    args:
+        id: the patient ID.
+        slice_idx: the slice index.
+        segmenter: the localiser network.
+        segmenter_size: the input size expected by the segmenter.
+        segmenter_spacing: the input spacing expected by the segmenter.
+    kwargs:
+        aspect: the aspect ratio.
+        crop: the crop window.
+        clear_cache: force the cache to clear.
+        device: the device to perform network calcs on.
+        segmentation: display the localiser segmentation prediction.
+        view: the view plane. 
+        **kwargs: all kwargs accepted by 'plot_patient_regions'.
+    """
+    # Plot patient regions.
+    plot_patient_regions(id, slice_idx, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+
+    # Get segmentation prediction.
+    seg = get_patient_segmentation(id, bounding_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device)
+
+    # Determine values to use.
+    seg = _get_slice_for_plotting(seg, slice_idx, view)
+
+    # Crop the slice.
+    if crop:
+        seg = _get_cropped_image(seg, crop)
+
+    # Plot segmentation.
+    colour = plt.cm.tab20(0)
+    colours = [(1, 1, 1, 0), colour]
+    cmap = ListedColormap(colours)
+    plt.imshow(seg, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+    plt.plot(0, 0, c=colour, label='Segmentation')
+
+    plt.show()
 
 def _to_image_coords(
     data: ndarray,
@@ -395,7 +466,7 @@ def _escape_latex(text: str) -> str:
     regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
     return regex.sub(lambda match: char_map[match.group()], text)
 
-def _get_slice_data(
+def _get_slice_for_plotting(
     data: np.ndarray,
     slice_idx: int,
     view: Literal['axial', 'coronal', 'sagittal']) -> np.ndarray:
@@ -453,17 +524,17 @@ def _get_aspect_ratio(
 
     return aspect
 
-def _get_zoomed_data(
+def _get_cropped_image(
     data: np.ndarray,
-    zoom: Tuple[Tuple[int, int], Tuple[int, int]]) -> np.ndarray:
+    crop: Tuple[Tuple[int, int], Tuple[int, int]]) -> np.ndarray:
     """
-    returns: zoomed array.
+    returns: cropped image for close-up plotting.
     args:
-        data: the data to zoom.
-        zoom: the window to use.
+        data: the data to crop.
+        crop: the window to use.
     """
     # Slice data.
-    zoom_indices = tuple(slice(z_min, z_max) for z_min, z_max in reversed(zoom))
-    data = data[zoom_indices]
+    crop_indices = tuple(slice(z_min, z_max) for z_min, z_max in reversed(crop))
+    data = data[crop_indices]
 
     return data

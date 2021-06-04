@@ -1,1 +1,1 @@
-from .plotter import plot_patient_bounding_box, plot_patient_regions
+from .plotter import plot_patient_bounding_box, plot_patient_regions, plot_patient_segmentation

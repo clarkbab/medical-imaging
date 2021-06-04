@@ -12,13 +12,22 @@ def resample(
         image: the SimpleITK image.
         spacing: the old spacing.
         new_spacing: the new spacing.
+    kwargs:
+        nearest_neighbour: use nearest neighbour interpolation.
     """
+    # Convert boolean data to sitk-friendly type.
+    boolean = input.dtype == bool
+    if boolean:
+        input = input.astype('uint8') 
+
     # Create sitk image.
     image = sitk.GetImageFromArray(input)
     image.SetSpacing(tuple(reversed(spacing)))
 
     # Create resample filter.
     resample = sitk.ResampleImageFilter()
+    if boolean:
+        resample.SetInterpolator(sitk.sitkNearestNeighbor)
     resample.SetOutputOrigin(image.GetOrigin())
     resample.SetOutputSpacing(tuple(reversed(new_spacing)))
     image_size = np.array(image.GetSize())
@@ -32,5 +41,9 @@ def resample(
     
     # Get output data.
     output = sitk.GetArrayFromImage(image)
+
+    # Convert back to boolean.
+    if boolean:
+        output = output.astype(bool)
 
     return output
