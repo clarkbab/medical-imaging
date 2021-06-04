@@ -88,7 +88,7 @@ class ModelTrainer:
                 'max-epochs': max_epochs,
                 'mixed-precision': mixed_precision,
                 'optimiser': str(optimiser),
-                'transform': str(train_loader.dataset.transform),
+                'transform': str(train_loader.dataset._transform),
             }
             self._reporter.add_hyperparameters(hparams)
         self._log_info = log_info

@@ -275,8 +275,11 @@ def plot_patient_bounding_box(
         id: the patient ID.
         slice_idx: the slice index.
         localiser: the localiser network.
+        localiser_size: the localiser network input size.
+        localiser_spacing: the localiser network input voxel spacing.
     kwargs:
         aspect: the aspect ratio.
+        box_colour: colour of the bounding box.
         clear_cache: force the cache to clear.
         crop: the crop window.
         device: the device to perform network calcs on.
@@ -344,6 +347,7 @@ def plot_patient_segmentation(
     segmenter_size: Tuple[int, int, int],
     segmenter_spacing: Tuple[float, float, float],
     aspect: float = None,
+    box_colour: str = 'y',
     crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
@@ -362,6 +366,7 @@ def plot_patient_segmentation(
         segmenter_spacing: the input spacing expected by the segmenter.
     kwargs:
         aspect: the aspect ratio.
+        box_colour: colour of the bounding box.
         crop: the crop window.
         clear_cache: force the cache to clear.
         device: the device to perform network calcs on.
@@ -381,6 +386,18 @@ def plot_patient_segmentation(
     # Crop the slice.
     if crop:
         seg = _get_cropped_image(seg, crop)
+
+    # Adjust bounding box for cropped view.
+    mins, widths = bounding_box
+    if crop:
+        mins = mins[0] - crop[0][0], mins[1] - crop[1][0]
+
+    # Draw bounding box.
+    print(mins, widths)
+    rect = Rectangle(mins, *widths, linewidth=1, edgecolor=box_colour, facecolor='none')
+    ax = plt.gca()
+    ax.add_patch(rect)
+    plt.plot(0, 0, c=box_colour, label='Bounding Box')
 
     # Plot segmentation.
     colour = plt.cm.tab20(0)

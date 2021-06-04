@@ -13,7 +13,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-RUN_NAME="baseline"
+RUN_NAME="dataloader_with_background_patches"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/train/parotid_left_3d_segmenter --name $RUN_NAME --train-print-interval 50 --train-report-interval 50
