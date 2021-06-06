@@ -1,34 +1,63 @@
 import numpy as np
 from typing import Tuple
 
-def crop_or_pad(
+from mymi import types
+
+def crop_or_pad_2D(
     input: np.ndarray,
-    crop_or_padding: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]],
+    bounding_box: types.Box2D,
     fill: float = 0) -> np.ndarray:
     """
     returns: a 3D array with dimensions cropped or padded.
     args:
-        input: the input tensor.
-        crop_or_padding: number of voxels to add remove from each dimension.
+        input: the 2D input array.
+        bounding_box: a 2D box defining the crop/pad.
     kwargs:
-        fill: the default fill value for padded voxels.
+        fill: the default fill value for padded elements.
+    """
+    # Convert args to 3D.
+    input = np.expand_dims(input, axis=2)
+    bounding_box = tuple((x, y, z) for (x, y), z in zip(bounding_box, (0, 1)))
+
+    # Use 3D pad code.
+    input = crop_or_pad_3D(input, bounding_box, fill=fill)
+
+    # Remove final dimension.
+    input = np.squeeze(input, axis=2)
+
+    return input
+
+def crop_or_pad_3D(
+    input: np.ndarray,
+    bounding_box: types.Box3D,
+    fill: float = 0) -> np.ndarray:
+    """
+    returns: a 3D array with dimensions cropped or padded.
+    args:
+        input: the 3D input array.
+        bounding_box: a 3D box defining the crop/pad.
+    kwargs:
+        fill: the default fill value for padded elements.
     """
     # Perform padding.
-    padding = np.array(crop_or_padding).clip(0)
+    size = np.array(input.shape)
+    min, max = bounding_box
+    pad_min = (-np.array(min)).clip(0)
+    pad_max = (max - size).clip(0)
+    padding = tuple(zip(pad_min, pad_max))
     input = np.pad(input, padding, constant_values=fill)
 
     # Perform cropping.
-    cropping = (-np.array(crop_or_padding)).clip(0)
-    mins = tuple(d[0] for d in cropping)
-    maxs = tuple(s - d[1] for d, s in zip(cropping, input.shape))
-    slices = tuple(slice(min, max) for min, max in zip(mins, maxs))
+    crop_min = np.array(min).clip(0)
+    crop_max = (size - max).clip(0)
+    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, input.shape))
     input = input[slices]
 
     return input
 
-def centre_crop_or_pad(
+def centre_crop_or_pad_3D(
     input: np.ndarray,
-    size: Tuple[int, int, int],
+    size: types.Size3D,
     fill: float = 0) -> np.ndarray:
     """
     returns: an array cropped/padded along each axis. When an uneven amount is cropped 
@@ -42,10 +71,12 @@ def centre_crop_or_pad(
         fill: the default padding fill value.
     """
     # Determine cropping/padding amounts.
-    amounts = np.array(size) - input.shape
-    crop_or_padding = tuple((int(a / 2), int(a / 2)) if (a / 2).is_integer() else (int((a + np.sign(a)) / 2), int(((a + np.sign(a)) / 2) - np.sign(a))) for a in amounts)
+    to_crop = input.shape - np.array(size)
+    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
 
     # Perform crop or padding.
-    output = crop_or_pad(input, crop_or_padding, fill=fill)
+    output = crop_or_pad_3D(input, bounding_box, fill=fill)
 
     return output

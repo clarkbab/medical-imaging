@@ -5,12 +5,13 @@ from torch import nn
 from typing import *
 
 from mymi.predictions import get_patient_bounding_box
+from mymi import types
 
 def get_patient_segmentation(
     id: Union[str, int],
     localiser: nn.Module,
-    localiser_size: Tuple[int, int, int],
-    localiser_spacing: Tuple[float, float, float],
+    localiser_size: types.Size3D,
+    localiser_spacing: types.Spacing3D,
     segmenter: nn.Module,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> dcm.FileDataset:
@@ -35,7 +36,7 @@ def get_patient_segmentation(
 
 def _get_segmentation(
     input: np.ndarray,
-    bounding_box: Tuple[Tuple[float, float, float], Tuple[float, float, float]],
+    bounding_box: types.Box3D,
     segmenter: nn.Module,
     device: torch.device = torch.device('cpu')) -> torch.Tensor:
     """
@@ -77,12 +78,10 @@ def _get_segmentation(
 
     return pred
 
-
-
 def _extract_patch(
     input: np.ndarray,
     pred: torch.Tensor,
-    size: Tuple[int, int, int]) -> Tuple[torch.Tensor, Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]]:
+    size: types.Size3D) -> Tuple[np.ndarray, types.Box3D]:
     """
     returns: a (patch, crop_or_padding) tuple where the patch is the extracted patch centred around the OAR,
         and the crop_or_padding tells us how much was added/removed at each end of each dimension.

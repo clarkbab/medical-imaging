@@ -1,11 +1,12 @@
 import numpy as np
 import SimpleITK as sitk
-from typing import Tuple
 
-def resample(
+from mymi import types
+
+def resample_3D(
     input: np.ndarray,
-    spacing: Tuple[float, float, float],
-    new_spacing: Tuple[float, float, float]) -> sitk.Image:
+    spacing: types.Spacing3D,
+    new_spacing: types.Spacing3D) -> sitk.Image:
     """
     returns: a resampled tensor.
     args:
@@ -47,3 +48,31 @@ def resample(
         output = output.astype(bool)
 
     return output
+
+def resample_box_3D(
+    bounding_box: types.Box3D,
+    spacing: types.Spacing3D,
+    new_spacing: types.Spacing3D) -> types.Box3D:
+    """
+    returns: a bounding box in resampled coordinates.
+    args:
+        bounding_box: the bounding box.
+        spacing: the current voxel spacing.
+        new_spacing: the new voxel spacing.
+    """
+    # Convert bounding box to label array.
+    min, max = bounding_box
+    bbox_label = np.zeros(max, dtype=bool)
+    slices = tuple(slice(min, max) for min, max in zip(min, max))
+    bbox_label[slices] = 1
+
+    # Resample label array.
+    bbox_label = resample_3D(bbox_label, spacing, new_spacing)
+
+    # Extract new bounding box.
+    non_zero = np.argwhere(bbox_label != 0).astype(int)
+    min = tuple(non_zero.min(axis=0))
+    max = tuple(non_zero.max(axis=0))
+    bounding_box = (min, max)
+
+    return bounding_box

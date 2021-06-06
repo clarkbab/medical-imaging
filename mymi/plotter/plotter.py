@@ -8,11 +8,13 @@ import torch
 from torch import nn
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import Literal, Sequence, Tuple, Union
+from typing import Sequence, Tuple, Union
 
 from mymi import dataset
 from mymi.predictions import get_patient_bounding_box, get_patient_segmentation
 from mymi.regions import is_region, RegionColours
+from mymi.transforms import crop_or_pad_2D
+from mymi import types
 
 def plot_ct_distribution(
     bin_width: int = 10,
@@ -58,8 +60,7 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     clear_cache: bool = False,
-    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
-    device: nn.Module = None,
+    crop: types.Box2D = None,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
     internal_regions: bool = False,
@@ -72,7 +73,7 @@ def plot_patient_regions(
     show: bool = True,
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
-    view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
+    view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
     """
     effect: plots a CT slice with labels.
@@ -110,16 +111,29 @@ def plot_patient_regions(
             "font.family": "serif",
             'text.usetex': True
         })
+    else:
+        # This setting persists, so must set to False.
+        plt.rcParams.update({
+            'text.usetex': False
+        })
 
     # Load patient spacing.
-    spacing = dataset.patient(id).spacing(clear_cache=clear_cache)
+    pat = dataset.patient(id)
+    spacing = pat.spacing(clear_cache=clear_cache)
 
     # Load CT data.
-    ct_data = dataset.patient(id).ct_data(clear_cache=clear_cache)
+    ct_data = pat.ct_data(clear_cache=clear_cache)
 
+    # Get slice data.
+    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
+
+    # Perform crop.
+    if crop:
+        ct_slice_data = crop_or_pad_2D(ct_slice_data, _reverse_box_coords_2D(crop))
+
+    # Load region data.
     if regions:
-        # Load region data.
-        region_data = dataset.patient(id).region_data(clear_cache=clear_cache, regions=regions)
+        region_data = pat.region_data(clear_cache=clear_cache, regions=regions)
 
         if internal_regions:
             # Map to internal region names.
@@ -153,9 +167,6 @@ def plot_patient_regions(
         ct_data = output['input'].data.squeeze(0)
         region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in region_data.items()))
 
-    # Get slice data.
-    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
-
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
     if not aspect:
@@ -172,8 +183,6 @@ def plot_patient_regions(
 
     # Plot CT data.
     plt.figure(figsize=figsize)
-    if crop:
-        ct_slice_data = _get_cropped_image(ct_slice_data, crop)
     plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=_get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
@@ -194,6 +203,10 @@ def plot_patient_regions(
                 # Convert data to 'imshow' co-ordinate system.
                 slice_data = _get_slice_for_plotting(data, slice_idx, view)
 
+                # Crop image.
+                if crop:
+                    slice_data = crop_or_pad_2D(slice_data, _reverse_box_coords_2D(crop))
+
                 # Skip region if not present on this slice.
                 if slice_data.max() == 0:
                     continue
@@ -207,10 +220,6 @@ def plot_patient_regions(
                     colour = palette(i)
                 colours = [(1.0, 1.0, 1.0, 0), colour]
                 region_cmap = ListedColormap(colours)
-
-                # Crop image.
-                if crop:
-                    slice_data = _get_cropped_image(slice_data, crop)
 
                 # Plot region.
                 plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
@@ -257,17 +266,17 @@ def plot_patient_bounding_box(
     id: str,
     slice_idx: int,
     localiser: nn.Module,
-    localiser_size: Tuple[int, int, int],
-    localiser_spacing: Tuple[float, float, float],
+    localiser_size: types.Size3D,
+    localiser_spacing: types.Spacing3D,
     aspect: float = None,
-    box_colour: str = 'y',
-    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
+    box_colour: str = 'r',
+    crop: types.Box2D = None,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
     segmentation: bool = False,
-    view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
+    view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
     effect: plots the patient bounding box produced by localiser.
@@ -288,21 +297,23 @@ def plot_patient_bounding_box(
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
     # Plot patient regions.
-    plot_patient_regions(id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+    plot_patient_regions(id, slice_idx, aspect=aspect, crop=crop, legend=False, legend_loc=legend_loc, show=False, view=view, **kwargs)
 
     # Get bounding box.
-    mins, widths, pred = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
+    bounding_box, pred = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
 
     # Plot prediction.
     if segmentation:
         # Get aspect ratio.
-        aspect = _get_aspect_ratio(id, view) 
+        if not aspect:
+            aspect = _get_aspect_ratio(id, view) 
 
         # Get slice data.
         pred_slice_data = _get_slice_for_plotting(pred, slice_idx, view)
 
         # Crop the image.
-        pred_slice_data = _get_cropped_image(pred_slice_data, crop)
+        if crop:
+            pred_slice_data = crop_or_pad_2D(pred_slice_data, _reverse_box_coords_2D(crop))
 
         # Plot prediction.
         colour = plt.cm.tab20(0)
@@ -311,26 +322,8 @@ def plot_patient_bounding_box(
         plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=_get_origin(view))
         plt.plot(0, 0, c=colour, label='Segmentation')
 
-    # Determine values to use.
-    if view == 'axial':
-        mins = mins[0], mins[1]
-        widths = widths[0], widths[1]
-    elif view == 'coronal':
-        mins = mins[0], mins[2]
-        widths = widths[0], widths[2]
-    elif view == 'sagittal':
-        mins = mins[1], mins[2]
-        widths = widths[1], widths[2]
-
-    # Adjust bounding box for cropped view.
-    if crop:
-        mins = mins[0] - crop[0][0], mins[1] - crop[1][0]
-
-    # Draw bounding box.
-    rect = Rectangle(mins, *widths, linewidth=1, edgecolor=box_colour, facecolor='none')
-    ax = plt.gca()
-    ax.add_patch(rect)
-    plt.plot(0, 0, c=box_colour, label='Bounding Box')
+    # Plot the bounding box.
+    _plot_bounding_box(bounding_box, view, box_colour=box_colour, crop=crop, label='Localisation Box')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
@@ -342,25 +335,26 @@ def plot_patient_bounding_box(
 def plot_patient_segmentation(
     id: str,
     slice_idx: int,
-    bounding_box: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    bounding_box: types.Box3D,
     segmenter: nn.Module,
-    segmenter_size: Tuple[int, int, int],
-    segmenter_spacing: Tuple[float, float, float],
+    segmenter_size: types.Size3D,
+    segmenter_spacing: types.Spacing3D,
     aspect: float = None,
-    box_colour: str = 'y',
-    crop: Tuple[Tuple[int, int], Tuple[int, int]] = None,
+    crop: types.Box2D = None,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    segmentation: bool = False,
-    view: Literal['axial', 'coronal', 'sagittal'] = 'axial',
+    loc_box_colour: str = 'r',
+    seg_box_colour: str = 'y',
+    view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
     effect: plots the patient bounding box produced by segmenter.
     args:
         id: the patient ID.
         slice_idx: the slice index.
+        bounding_box: the box to centre the segmentation on.
         segmenter: the localiser network.
         segmenter_size: the input size expected by the segmenter.
         segmenter_spacing: the input spacing expected by the segmenter.
@@ -370,34 +364,29 @@ def plot_patient_segmentation(
         crop: the crop window.
         clear_cache: force the cache to clear.
         device: the device to perform network calcs on.
-        segmentation: display the localiser segmentation prediction.
         view: the view plane. 
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
     # Plot patient regions.
-    plot_patient_regions(id, slice_idx, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+    plot_patient_regions(id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
 
     # Get segmentation prediction.
-    seg = get_patient_segmentation(id, bounding_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device)
+    seg, seg_patch = get_patient_segmentation(id, bounding_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
+    print('non zero:', seg.sum())
+    print('segmentation size:', seg.shape)
 
-    # Determine values to use.
+    # Get seg slice.
     seg = _get_slice_for_plotting(seg, slice_idx, view)
+    print('slice non zero:', seg.sum())
+    print('segmentation slice size:', seg.shape)
 
-    # Crop the slice.
+    # Crop the segmentation.
     if crop:
-        seg = _get_cropped_image(seg, crop)
+        seg = crop_or_pad_2D(seg, _reverse_box_coords_2D(crop))
 
-    # Adjust bounding box for cropped view.
-    mins, widths = bounding_box
-    if crop:
-        mins = mins[0] - crop[0][0], mins[1] - crop[1][0]
-
-    # Draw bounding box.
-    print(mins, widths)
-    rect = Rectangle(mins, *widths, linewidth=1, edgecolor=box_colour, facecolor='none')
-    ax = plt.gca()
-    ax.add_patch(rect)
-    plt.plot(0, 0, c=box_colour, label='Bounding Box')
+    # Get aspect ratio.
+    if not aspect:
+        aspect = _get_aspect_ratio(id, view) 
 
     # Plot segmentation.
     colour = plt.cm.tab20(0)
@@ -406,11 +395,22 @@ def plot_patient_segmentation(
     plt.imshow(seg, aspect=aspect, cmap=cmap, origin=_get_origin(view))
     plt.plot(0, 0, c=colour, label='Segmentation')
 
+    # Plot localisation bounding box.
+    _plot_bounding_box(bounding_box, view, box_colour=loc_box_colour, crop=crop, label='Localisation Box')
+
+    # Plot segmentation patch.
+    _plot_bounding_box(seg_patch, view, box_colour=seg_box_colour, crop=crop, label='Segmentation Patch')
+
+    # Show legend.
+    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    for l in plt_legend.get_lines():
+        l.set_linewidth(8)
+
     plt.show()
 
 def _to_image_coords(
     data: ndarray,
-    view: Literal['axial', 'coronal', 'sagittal']) -> ndarray:
+    view: types.PatientView) -> ndarray:
     """
     returns: data in correct orientation for viewing.
     args:
@@ -422,7 +422,7 @@ def _to_image_coords(
 
     return data
 
-def _get_origin(view: Literal['axial', 'coronal', 'sagittal']) -> str:
+def _get_origin(view: types.PatientView) -> str:
     """
     returns: whether to place image origin in lower or upper corner of plot.
     args:
@@ -486,7 +486,7 @@ def _escape_latex(text: str) -> str:
 def _get_slice_for_plotting(
     data: np.ndarray,
     slice_idx: int,
-    view: Literal['axial', 'coronal', 'sagittal']) -> np.ndarray:
+    view: types.PatientView) -> np.ndarray:
     """
     returns: the slice data ready for plotting.
     args:
@@ -518,7 +518,7 @@ def _get_slice_for_plotting(
 
 def _get_aspect_ratio(
     id: str,
-    view: Literal['axial', 'coronal', 'sagittal'],
+    view: types.PatientView,
     clear_cache: bool = False) -> float:
     """
     returns: the aspect ratio required for the patient view.
@@ -541,17 +541,50 @@ def _get_aspect_ratio(
 
     return aspect
 
-def _get_cropped_image(
-    data: np.ndarray,
-    crop: Tuple[Tuple[int, int], Tuple[int, int]]) -> np.ndarray:
+def _reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
     """
-    returns: cropped image for close-up plotting.
+    returns: a box with (x, y) coordinates reversed.
     args:
-        data: the data to crop.
-        crop: the window to use.
+        box: the box to swap coordinates for.
     """
-    # Slice data.
-    crop_indices = tuple(slice(z_min, z_max) for z_min, z_max in reversed(crop))
-    data = data[crop_indices]
+    # Reverse coords.
+    box = tuple((y, x) for x, y in box)
 
-    return data
+    return box
+
+def _plot_bounding_box(
+    bounding_box: types.Box3D,
+    view: types.PatientView,
+    box_colour: str = 'r',
+    crop: types.Box2D = None,
+    label: str = 'Bounding Box') -> None:
+    """
+    effect: plots a 2D slice of the bounding box.
+    args:
+        bounding_box: the bounding box to plot.
+        view: the view direction.
+    kwargs:
+        crop: the cropping applied to the image.
+    """
+    # Get 2D bounding box.
+    if view == 'axial':
+        dims = (0, 1)
+    elif view == 'coronal':
+        dims = (0, 2)
+    elif view == 'sagittal':
+        dims = (1, 2)
+    bbox_min, bbox_max = bounding_box
+    bbox_min = np.array(bbox_min)[[*dims]]
+    bbox_max = np.array(bbox_max)[[*dims]]
+    bbox_width = bbox_max - bbox_min
+
+    # Adjust bounding box for cropped view.
+    if crop:
+        crop_min, _ = crop
+        bbox_min -= crop_min
+
+    # Draw bounding box.
+    rect = Rectangle(bbox_min, *bbox_width, linewidth=1, edgecolor=box_colour, facecolor='none')
+    ax = plt.gca()
+    ax.add_patch(rect)
+    plt.plot(0, 0, c=box_colour, label=label)

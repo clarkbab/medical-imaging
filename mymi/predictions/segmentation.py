@@ -2,26 +2,33 @@ import numpy as np
 import torch
 from torch import nn
 from torch.cuda.amp import autocast
-from typing import Tuple
+from typing import Tuple, Union
 
 from mymi import dataset
-from mymi.transforms import crop_or_pad, resample
+from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
+from mymi import types
 
 def get_patient_segmentation(
     id: str,
-    bounding_box: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    bounding_box: types.Box3D,
     segmenter: nn.Module,
-    segmenter_size: Tuple[int, int, int],
-    segmenter_spacing: Tuple[float, float, float],
+    segmenter_size: types.Size3D,
+    segmenter_spacing: types.Spacing3D,
     clear_cache: bool = False,
-    device: torch.device = torch.device('cpu')) -> np.ndarray:
+    device: torch.device = torch.device('cpu'),
+    return_patch: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Box3D]]:
     """
     returns: the segmentation for the patient.
     args:
+        id: the patient ID.
+        bounding_box: the box from localisation.
         segmenter: the segmentation network.
+        segmenter_size: the input size expected by the segmenter.
+        segmenter_spacing: the voxel spacing expected by the segmenter.
     kwargs:
         clear_cache: forces the cache to clear.
         device: the device to use for network calcs.
+        return_patch: returns the box used for the segmentation.
     """
     # Load patient CT data and spacing.
     patient = dataset.patient(id)
@@ -30,24 +37,14 @@ def get_patient_segmentation(
 
     # Resample input to segmenter spacing.
     input_size = input.shape
-    input = resample(input, spacing, segmenter_spacing) 
+    input = resample_3D(input, spacing, segmenter_spacing) 
 
-    # Resample bounding box to segmenter spacing.
-    mins, widths = bounding_box
-    bbox_label = np.zeros(input_size, dtype=bool)
-    indices = tuple(slice(m, m + w) for m, w in zip(mins, widths))
-    bbox_label[indices] = 1
-    bbox_label = resample(bbox_label, spacing, segmenter_spacing)
-
-    # Get new bounding box.
-    non_zero = np.argwhere(bbox_label != 0)
-    mins = non_zero.min(axis=0)
-    maxs = non_zero.max(axis=0)
-    widths = maxs - mins
-    bounding_box = (tuple(mins), tuple(widths))
+    # Resample the localisation bounding box.
+    bounding_box = resample_box_3D(bounding_box, spacing, segmenter_spacing)
 
     # Extract patch around bounding box.
-    input, crop_or_padding = _extract_patch(input, bounding_box, size=segmenter_size)
+    pre_extract_size = input.shape
+    input, patch_box = _extract_patch(input, bounding_box, size=segmenter_size)
 
     # Pass patch to segmenter.
     input = torch.Tensor(input)
@@ -63,59 +60,61 @@ def get_patient_segmentation(
     pred = pred.argmax(axis=1)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
-    # Crop or pad to pre-patch-extraction.
-    crop_or_padding = tuple((-d[0], -d[1]) for d in crop_or_padding)    # Reverse crop/padding amounts.
-    pred = crop_or_pad(pred, crop_or_padding)
+    # Crop/pad to size before patch extraction.
+    bbox_min, bbox_max = bounding_box
+    bbox_min = -np.array(bbox_min)
+    bbox_max = np.array(pre_extract_size) - bbox_max
+    bounding_box = (bbox_min, bbox_max)
+    pred = crop_or_pad_3D(pred, bounding_box)
 
     # Resample to original spacing.
-    pred = resample(pred, segmenter_spacing, spacing)
+    pred = resample_3D(pred, segmenter_spacing, spacing)
 
-    return pred
+    # Resample patch box to original spacing.
+    patch_box = resample_box_3D(patch_box, segmenter_spacing, spacing)
+
+    # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
+    crop_box = ((0, 0, 0), input_size)
+    pred = crop_or_pad_3D(pred, crop_box)
+
+    # Get result.
+    if return_patch:
+        return (pred, patch_box)
+    else:
+        return pred
 
 def _extract_patch(
     input: np.ndarray,
-    bounding_box: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
-    size: Tuple[int, int, int]) -> np.ndarray:
+    bounding_box: types.Box3D,
+    size: types.Size3D) -> Tuple[np.ndarray, types.Box3D]:
     """
-    returns: a patch of the input data that is centered on the bounding box.
+    returns: a patch of size 'size' centred on the bounding box. Also returns the bounding
+        box that was used to extract the patch, relative to the input size.
     args:
         input: the input data.
-        pred: the label data.
+        bounding_box: the bounding box of the OAR.
         size: the patch will be this size with the OAR in the centre. Must be larger than OAR extent.
     raises:
         ValueError: if the OAR extent is larger than the patch size.
     """
     # Check bounding box size.
-    size = np.array(size, dtype=int)
-    mins = np.array(bounding_box[0], dtype=int)
-    widths = np.array(bounding_box[1], dtype=int)
-    if (widths > size).any():
-        raise ValueError(f"Bounding box size '{widths}' larger than patch size '{size}'.")
+    size = np.array(size)
+    min, max = bounding_box
+    min = np.array(min)
+    max = np.array(max)
+    width = max - min
+    if (width > size).any():
+        raise ValueError(f"Bounding box size '{width}' larger than patch size '{size}'.")
 
     # Determine min/max indices of the patch.
-    size_diff = size - widths
+    size_diff = size - width
     lower_add = np.ceil(size_diff / 2).astype(int)
-    mins = mins - lower_add
-    maxs = mins + size
+    min = min - lower_add
+    max = min + size
+    
+    # Perform the crop or pad.
+    input_size = input.shape
+    patch_box = (tuple(min), tuple(max))
+    input = crop_or_pad_3D(input, patch_box, fill=input.min())
 
-    # Check for negative indices, and record padding.
-    lower_pad = (-mins).clip(0) 
-    mins = mins.clip(0)
-
-    # Check for max indices larger than input size, and record padding.
-    input_size = np.array(input.shape, dtype=int)
-    upper_pad = (maxs - input_size).clip(0)
-    maxs = maxs - upper_pad
-
-    # Perform crop.
-    slices = tuple(slice(min.item(), max.item()) for min, max in zip(mins, maxs))
-    input = input[slices]
-
-    # Perform padding.
-    padding = tuple(zip(lower_pad, upper_pad))
-    input = np.pad(input, padding, mode='minimum')
-
-    # Get crop or padding information.
-    info = tuple((-min, max) for min, max in zip(mins, maxs - input_size))
-
-    return input, info
+    return input, patch_box

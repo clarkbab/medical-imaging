@@ -1,3 +1,4 @@
+from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
 import torch
 from torch import nn
@@ -5,18 +6,20 @@ from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi import dataset
-from mymi.transforms import centre_crop_or_pad, resample
+from mymi.transforms import centre_crop_or_pad_3D, resample_3D
+from mymi import types
 
 def get_patient_bounding_box(
     id: str,
     localiser: nn.Module,
-    localiser_size: Tuple[int, int, int],
-    localiser_spacing: Tuple[float, float, float],
+    localiser_size: types.Size3D,
+    localiser_spacing: types.Spacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    return_prediction: bool = False) -> Union[Tuple[Tuple[float, float, float], Tuple[float, float, float]], Tuple[Tuple[float, float, float], Tuple[float, float, float], np.ndarray]]:
+    return_prediction: bool = False) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:
     """
-    returns: the bounding box, (mins, widths) pair in voxel coordinates.
+    returns: the bounding box (min, max) pair in voxel coordinates. Optionally returns the localiser
+        segmentation prediction.
     args:
         id: the patient ID.
         localiser: the localiser network.
@@ -29,13 +32,14 @@ def get_patient_bounding_box(
     patient = dataset.patient(id)
     input = patient.ct_data(clear_cache=clear_cache)
     spacing = patient.spacing(clear_cache=clear_cache)
+    input_size = input.shape
 
     # Create downsampled input.
-    input = resample(input, spacing, localiser_spacing)
+    input = resample_3D(input, spacing, localiser_spacing)
     downsampled_size = input.shape
 
     # Shape the image so it'll fit the network.
-    input = centre_crop_or_pad(input, localiser_size, fill=input.min())
+    input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
 
     # Get localiser result.
     input = torch.Tensor(input)
@@ -52,20 +56,23 @@ def get_patient_bounding_box(
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
     # Reverse the crop/pad.
-    pred = centre_crop_or_pad(pred, downsampled_size)
+    pred = centre_crop_or_pad_3D(pred, downsampled_size)
 
     # Upsample to full resolution.
-    pred = resample(pred, localiser_spacing, spacing)
+    pred = resample_3D(pred, localiser_spacing, spacing)
+    
+    # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
+    crop_box = ((0, 0, 0), input_size)
+    pred = crop_or_pad_3D(pred, crop_box)
 
     # Get OAR extent.
     non_zero = np.argwhere(pred != 0).astype(int)
-    mins = non_zero.min(axis=0)
-    maxs = non_zero.max(axis=0)
-    widths = maxs - mins
+    min = tuple(non_zero.min(axis=0))
+    max = tuple(non_zero.max(axis=0))
+    bounding_box = (min, max)
 
     # Create result.
-    result = (tuple(mins), tuple(widths))
     if return_prediction:
-        result = (*result, pred)
-
-    return result
+        return (bounding_box, pred)
+    else:
+        return bounding_box
