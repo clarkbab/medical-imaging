@@ -8,7 +8,7 @@ from mymi import dataset
 from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
-def get_patient_segmentation(
+def get_patient_patch_segmentation(
     id: str,
     bounding_box: types.Box3D,
     segmenter: nn.Module,
@@ -61,11 +61,11 @@ def get_patient_segmentation(
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
     # Crop/pad to size before patch extraction.
-    bbox_min, bbox_max = bounding_box
-    bbox_min = -np.array(bbox_min)
-    bbox_max = np.array(pre_extract_size) - bbox_max
-    bounding_box = (bbox_min, bbox_max)
-    pred = crop_or_pad_3D(pred, bounding_box)
+    rev_patch_box_min, rev_patch_box_max = patch_box
+    rev_patch_box_max = np.array(pre_extract_size) - rev_patch_box_min
+    rev_patch_box_min = -np.array(rev_patch_box_min)
+    rev_patch_box = (tuple(rev_patch_box_min), tuple(rev_patch_box_max))
+    pred = crop_or_pad_3D(pred, rev_patch_box)
 
     # Resample to original spacing.
     pred = resample_3D(pred, segmenter_spacing, spacing)
@@ -85,21 +85,21 @@ def get_patient_segmentation(
 
 def _extract_patch(
     input: np.ndarray,
-    bounding_box: types.Box3D,
+    loc_box: types.Box3D,
     size: types.Size3D) -> Tuple[np.ndarray, types.Box3D]:
     """
     returns: a patch of size 'size' centred on the bounding box. Also returns the bounding
         box that was used to extract the patch, relative to the input size.
     args:
         input: the input data.
-        bounding_box: the bounding box of the OAR.
+        loc_box: the localisation box for the OAR.
         size: the patch will be this size with the OAR in the centre. Must be larger than OAR extent.
     raises:
         ValueError: if the OAR extent is larger than the patch size.
     """
     # Check bounding box size.
     size = np.array(size)
-    min, max = bounding_box
+    min, max = loc_box
     min = np.array(min)
     max = np.array(max)
     width = max - min
