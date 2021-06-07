@@ -12,10 +12,9 @@ sys.path.append(root_dir)
 
 from mymi import checkpoint
 from mymi import dataset
-from mymi.dataset import Types
+from mymi.dataset.dicom import RTStructConverter
 from mymi.models import SingleChannelUNet
-from mymi.postprocessing import largest_connected_component
-from mymi.prediction import Predictor
+from mymi.predictions import get_patient_segmentation
 from mymi import utils
 
 # Parse options.
@@ -60,36 +59,50 @@ else:
 logging.info(f"Using device: {device}.")
 
 # Load localiser model.
+localiser_size = (128, 128, 96)
+localiser_spacing = (1, 1, 3)
 localiser = SingleChannelUNet()
 localiser = localiser.to(device)
-logging.info(f"Using model arch: {localiser.__class__}.")
+logging.info(f"Using localiser model arch: {localiser.__class__}.")
 
 # Load localiser params.
 localiser_state, _ = checkpoint.load(args.localiser_name, args.localiser_run, checkpoint_name=args.localiser_checkpoint, device=device)
 localiser.load_state_dict(localiser_state)
 logging.info(f"Loaded localiser with name '{args.localiser_name}' from training run '{args.localiser_run}'.")
 
+# Load segmenter model.
+segmenter_size = (128, 128, 96)
+segmenter_spacing = (1, 1, 3)
+segmenter = SingleChannelUNet()
+segmenter = segmenter.to(device)
+logging.info(f"Using segmenter model arch: {segmenter.__class__}.")
+
+# Load segmenter params.
+segmenter_state, _ = checkpoint.load(args.segmenter_name, args.segmenter_run, checkpoint_name=args.segmenter_checkpoint, device=device)
+segmenter.load_state_dict(segmenter_state)
+logging.info(f"Loaded segmenter with name '{args.segmenter_name}' from training run '{args.segmenter_run}'.")
+
 # Load test patients from manifest.
 ds_name = 'HEAD-NECK-RADIOMICS-HN1'
-dataset.select(ds_name, type=Types.PROCESSED) pats = dataset.manifest('test')
+dataset.select(ds_name, type=dataset.types.PROCESSED)
+pats = dataset.manifest('test')
 
-# Create input transform.
-# First set the spacing, to a consistent 1, 1, 4.25 (or whatever).
-# Then crop/pad.
-approx_data_spacing = (1, 1, 3)
-approx_data_size = (512, 512, 212)
-network_size = (128, 128, 96)
-network_spacing = tuple((np.array(approx_data_size) / network_size) * approx_data_spacing)
+# Switch back to main dataset to load CT data.
+dataset.select(ds_name)
 
-# Create predictor kwargs.
-kwargs = { 'pat_ids': pats }
-kwargs['device'] = device
-if args.no_mixed:
-    kwargs['mixed_precision'] = False
-    logging.info('Using full precision.')
-else:
-    logging.info('Using mixed precision.')
+for pat in pats:
+    # Get segmentation
+    seg = get_patient_segmentation(pat, localiser, localiser_size, localiser_spacing, segmenter, segmenter_size, segmenter_spacing, clear_cache=args.clear_cache, device=device)
+    
+    # Create label dict.
+    rois = {}
+    rois['Parotid_L'] = seg
 
-# Create/run predictor.
-predictor = Predictor(ds_name, network_size, network_spacing, **kwargs)
-predictor(model)
+    # Load reference CT dicoms.
+    cts = dataset.patient(pat).ct_data(clear_cache=args.clear_cache)
+
+    # Convert to RTSTRUCT dicom.
+    rtstruct = RTStructConverter.create_rtstruct(rois, cts)
+
+    # Save in new 'pred' dataset.
+

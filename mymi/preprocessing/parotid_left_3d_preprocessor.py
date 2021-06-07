@@ -82,7 +82,7 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Writing data to '{folder}' folder.")
 
             # Recreate folder.
-            folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', folder)
+            folder_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', folder)
             if os.path.exists(folder_path):
                 shutil.rmtree(folder_path)
             os.makedirs(folder_path)
@@ -97,7 +97,7 @@ class ParotidLeft3DPreprocessor:
 
             # Write patient manifest.
             logging.info(f"Writing {folder} manifest file.")
-            manifest_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'training', 'manifests', f"{folder}.csv")
+            manifest_path = os.path.join(config.directories.datasets, 'HEAD-NECK-RADIOMICS-HN1', 'processed', 'manifests', f"{folder}.csv")
             os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
             df = pd.DataFrame(pats, columns=['patient-id'])
             df.to_csv(manifest_path, index=False) 

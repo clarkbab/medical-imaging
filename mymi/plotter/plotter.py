@@ -11,7 +11,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.predictions import get_patient_bounding_box, get_patient_patch_segmentation
+from mymi.predictions import get_patient_localisation_box, get_patient_patch_segmentation
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -300,7 +300,7 @@ def plot_patient_bounding_box(
     plot_patient_regions(id, slice_idx, aspect=aspect, crop=crop, legend=False, legend_loc=legend_loc, show=False, view=view, **kwargs)
 
     # Get bounding box.
-    bounding_box, pred = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
+    bounding_box, pred = get_patient_localisation_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
 
     # Plot prediction.
     if segmentation:
@@ -336,7 +336,6 @@ def plot_patient_bounding_box(
 def plot_patient_segmentation(
     id: str,
     slice_idx: int,
-    bounding_box: types.Box3D,
     segmenter: nn.Module,
     segmenter_size: types.Size3D,
     segmenter_spacing: types.Spacing3D,
@@ -346,11 +345,15 @@ def plot_patient_segmentation(
     device: torch.device = torch.device('cpu'),
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    localisation_box: bool = True,
+    localiser: nn.Module = None,
+    localiser_size: types.Size3D = None,
+    localiser_spacing: types.Spacing3D = None,
+    localisation_box: bool = None,
     localisation_box_colour: str = 'r',
-    segmentation_box: bool = True,
     segmentation_box_colour: str = 'y',
     segmentation_colour: str = (0.12, 0.47, 0.70, 1.0),
+    show_localisation_box: bool = False,
+    show_segmentation_box: bool = False,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
@@ -358,7 +361,6 @@ def plot_patient_segmentation(
     args:
         id: the patient ID.
         slice_idx: the slice index.
-        bounding_box: the box to centre the segmentation on.
         segmenter: the localiser network.
         segmenter_size: the input size expected by the segmenter.
         segmenter_spacing: the input spacing expected by the segmenter.
@@ -369,19 +371,26 @@ def plot_patient_segmentation(
         device: the device to perform network calcs on.
         legend_loc: the legend location.
         legend_size: the size of the legend.
-        localisation_box: whether to display the localisation box.
-        localisation_box_colour: the colour of the localisation box.
-        segmentation_box: whether to display the segmentation box.
-        segmentation_box_colour: the colour of the segmentation box.
-        segmentation_colour: the colour of the segmentation mask.
+        localiser: the localiser network.
+        localiser_size: the input size of the localiser network.
+        localiser_spacing: the voxel spacing for the localiser network.
+        localisation_box: the coordinates of the localisation box.
+        localisation_box_colour: the colour to use for displaying the localisation box.
+        segmentation_box_colour: the colour to use for displaying the segmentation patch box.
+        show_localisation_box: display localisation box.
+        show_segmentation_box: display segmentation patch box.
         view: the view plane. 
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
     # Plot patient regions.
     plot_patient_regions(id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
 
+    # Get localisation box if not given.
+    if not localisation_box:
+        localisation_box = get_patient_localisation_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
+
     # Get segmentation prediction.
-    seg, seg_patch = get_patient_patch_segmentation(id, bounding_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
+    seg, seg_patch = get_patient_patch_segmentation(id, localisation_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
 
     # Get seg slice.
     seg = _get_slice_for_plotting(seg, slice_idx, view)
@@ -401,11 +410,11 @@ def plot_patient_segmentation(
     plt.plot(0, 0, c=segmentation_colour, label='Segmentation')
 
     # Plot localisation bounding box.
-    if localisation_box and _should_plot_bounding_box(bounding_box, view, slice_idx):
-        _plot_bounding_box(bounding_box, view, box_colour=localisation_box_colour, crop=crop, label='Localisation Box')
+    if show_localisation_box and _should_plot_bounding_box(localisation_box, view, slice_idx):
+        _plot_bounding_box(localisation_box, view, box_colour=localisation_box_colour, crop=crop, label='Localisation Box')
 
     # Plot segmentation patch.
-    if segmentation_box and _should_plot_bounding_box(seg_patch, view, slice_idx):
+    if show_segmentation_box and _should_plot_bounding_box(seg_patch, view, slice_idx):
         _plot_bounding_box(seg_patch, view, box_colour=segmentation_box_colour, crop=crop, label='Segmentation Patch')
 
     # Show legend.

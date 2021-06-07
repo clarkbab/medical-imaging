@@ -2,11 +2,16 @@ import cv2 as cv
 from datetime import datetime
 import numpy as np
 import pydicom as dcm
-from pydicom.dataset import FileDataset, FileMetaDataset
-from pydicom.uid import ImplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
+from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
+from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
 from typing import Dict, Sequence
 
 from mymi import types
+
+class SOPClassUID:
+    DETACHED_STUDY_MANAGEMENT = '1.2.840.10008.3.1.2.3.1'
+    RTSTRUCT = '1.2.840.10008.5.1.4.1.1.481.3'
+    RTSTRUCT_IMPLEMENTATION_CLASS = PYDICOM_IMPLEMENTATION_UID
 
 class RTStructConverter:
     @classmethod
@@ -113,30 +118,34 @@ class RTStructConverter:
     @classmethod
     def create_rtstruct(
         cls,
-        patient_id: types.PatientID,
         rois: Dict[str, np.ndarray],
-        ref_ct: dcm.dataset.FileDataset) -> dcm.dataset.FileDataset:
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> dcm.dataset.FileDataset:
         """
         returns: an RTSTRUCT dicom.
         args:
-            patient_id: the patient ID.
             rois: a dict with roi name keys and mask data values.
-            ref_ct: the reference CT dicom.
+            ref_cts: the reference CT dicoms.
         """
         # Create metadata.
         metadata = cls._create_metadata()
 
         # Create rtstruct.
         rtstruct = FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
+        # rtstruct.StructureSetROISequence = dcm.sequence.Sequence()
+        # rtstruct.ROIContourSequence = dcm.sequence.Sequence()
+        # rtstruct.RTROIObservationsSequence = dcm.sequence.Sequence()
 
-        # Add general data.
+        # Add general info.
         cls._add_general_info(rtstruct)
 
-        # Add patient data.
-        cls._add_patient_info(rtstruct, patient_id)
+        # Add patient info.
+        cls._add_patient_info(rtstruct, ref_cts[0])
 
-        # Add study/series data.
-        cls._add_study_and_series_info(rtstruct, ref_ct)
+        # Add study/series info.
+        cls._add_study_and_series_info(rtstruct, ref_cts[0])
+
+        # Add frame of reference.
+        cls._add_frame_of_reference(rtstruct, ref_cts)
 
         # Add ROI data. 
         cls._add_roi_data(rtstruct, rois)
@@ -152,19 +161,12 @@ class RTStructConverter:
         file_meta = FileMetaDataset()
         file_meta.FileMetaInformationGroupLength = 204
         file_meta.FileMetaInformationVersion = b'\x00\x01'
-        file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.481.3'
-        file_meta.MediaStorageSOPInstanceUID = cls._generate_uid()
+        file_meta.MediaStorageSOPClassUID = SOPClassUID.RTSTRUCT
+        file_meta.MediaStorageSOPInstanceUID = generate_uid()
         file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
-        file_meta.ImplementationClassUID = PYDICOM_IMPLEMENTATION_UID
+        file_meta.ImplementationClassUID = SOPClassUID.RTSTRUCT_IMPLEMENTATION_CLASS
 
         return file_meta
-
-    @classmethod
-    def _generate_uid(cls) -> str:
-        """
-        returns: a new RTSTRUCT dicom UID.
-        """
-        pass
 
     @classmethod
     def _add_general_info(
@@ -207,23 +209,23 @@ class RTStructConverter:
 
     @classmethod
     def _add_patient_info(
+        cls,
         rtstruct: dcm.dataset.FileDataset,
-        id: str) -> None:
+        ref_ct: dcm.dataset.FileDataset) -> None:
         """
         effect: adds patient info to the RTSTRUCT dicom.
         args:
             rtstruct: the RTSTRUCT dicom.
-            id: the patient ID.
+            ref_ct: the reference CT dicom.
         """
         # Add patient info.
-        pat = dataset.patient(id)
-        rtstruct.PatientName = getattr(name, 'PatientName', '')
-        rtstruct.PatientID = getattr(id, 'PatientID', '')
-        rtstruct.PatientBirthDate = getattr(birth_date, 'PatientBirthDate', '')
-        rtstruct.PatientSex = getattr(sex, 'PatientSex', '')
-        rtstruct.PatientAge = getattr(age, 'PatientAge', '')
-        rtstruct.PatientSize = getattr(size, 'PatientSize', '')
-        rtstruct.PatientWeight = getattr(weight, 'PatientWeight', '')
+        rtstruct.PatientAge = getattr(ref_ct, 'PatientAge', '')
+        rtstruct.PatientBirthDate = getattr(ref_ct, 'PatientBirthDate', '')
+        rtstruct.PatientID = getattr(ref_ct, 'PatientID', '')
+        rtstruct.PatientName = getattr(ref_ct, 'PatientName', '')
+        rtstruct.PatientSex = getattr(ref_ct, 'PatientSex', '')
+        rtstruct.PatientSize = getattr(ref_ct, 'PatientSize', '')
+        rtstruct.PatientWeight = getattr(ref_ct, 'PatientWeight', '')
 
     @classmethod
     def _add_study_and_series_info(
@@ -234,19 +236,106 @@ class RTStructConverter:
         effect: copies study/series info from the CT to the RTSTRUCT dicom.
         args:
             rtstruct: the RTSTRUCT dicom.
-            ref_ct: the reference CT dicom.
-        """
+            ref_ct: the reference CT dicom.  """
         # Copy information.
-        ds.StudyDate = reference_ds.StudyDate
-        ds.SeriesDate = getattr(reference_ds, 'SeriesDate', '')
-        ds.StudyTime = reference_ds.StudyTime
-        ds.SeriesTime = getattr(reference_ds, 'SeriesTime', '')
-        ds.StudyDescription = getattr(reference_ds, 'StudyDescription', '')
-        ds.SeriesDescription = getattr(reference_ds, 'SeriesDescription', '')
-        ds.StudyInstanceUID = reference_ds.StudyInstanceUID
-        ds.SeriesInstanceUID = generate_uid() # TODO: find out if random generation is ok
-        ds.StudyID = reference_ds.StudyID
-        ds.SeriesNumber = "1" # TODO: find out if we can just use 1 (Should be fine since its a new series)
+        rtstruct.SeriesDate = getattr(ref_ct, 'SeriesDate', '')
+        rtstruct.SeriesDescription = getattr(ref_ct, 'SeriesDescription', '')
+        rtstruct.SeriesInstanceUID = generate_uid()
+        rtstruct.SeriesNumber = 1
+        rtstruct.SeriesTime = getattr(ref_ct, 'SeriesTime', '')
+        rtstruct.StudyDate = ref_ct.StudyDate
+        rtstruct.StudyDescription = getattr(ref_ct, 'StudyDescription', '')
+        rtstruct.StudyInstanceUID = ref_ct.StudyInstanceUID
+        rtstruct.StudyID = ref_ct.StudyID
+        rtstruct.StudyTime = ref_ct.StudyTime
+
+    @classmethod
+    def _add_frame_of_reference(
+        cls,
+        rtstruct: dcm.dataset.FileDataset,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
+        """
+        effect: adds frame of reference to the RTSTRUCT dicom.
+        args:
+            rtstruct: the RTSTRUCT dicom.
+            ref_cts: the reference CT dicoms.
+        """
+        # Create frame of reference.
+        frame = Dataset()
+        frame.FrameOfReferenceUID = generate_uid()
+
+        # Add referenced study sequence.
+        cls._add_study(frame, ref_cts)
+
+        # Add frame of reference to RTSTRUCT.
+        rtstruct.ReferencedFrameOfReferenceSequence = dcm.sequence.Sequence()
+        rtstruct.ReferencedFrameOfReferenceSequence.append(frame)
+
+    @classmethod
+    def _add_study(
+        cls,
+        frame: dcm.dataset.Dataset,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
+        """
+        effect: adds referenced CT study.
+        args:
+            frame: the frame of reference.
+            ref_cts: the reference CT dicoms.
+        """
+        # Create study.
+        study = Dataset()
+        study.ReferencedSOPClassUID = SOPClassUID.DETACHED_STUDY_MANAGEMENT
+        study.ReferencedSOPInstanceUID = ref_cts[0].StudyInstanceUID
+
+        # Add contour image sequence.
+        cls._add_series(study, ref_cts)
+
+        # Add study to the frame of reference. 
+        frame.RTReferencedStudySequence = dcm.sequence.Sequence()
+        frame.RTReferencedStudySequence.append(study) 
+
+    @classmethod
+    def _add_series(
+        cls,
+        study: dcm.dataset.Dataset,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
+        """
+        effect: adds referenced CT series.
+        args:
+            study: the CT study.
+            ref_cts: the referenced CT dicoms.
+        """
+        # Create series.
+        series = Dataset()
+        series.SeriesInstanceUID = ref_cts[0].SeriesInstanceUID
+
+        # Add contour image sequence.
+        cls._add_contour_image_sequence(series, ref_cts)
+
+        # Add series to the study.
+        study.RTReferencedSeriesSequence = dcm.sequence.Sequence()
+        study.RTReferencedSeriesSequence.append(series)
+
+    @classmethod
+    def _add_contour_image_series(
+        cls,
+        series: dcm.dataset.Dataset,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
+        """
+        effect: adds contour images to CT series.
+        args:
+            series: the reference CT series.
+            ref_cts: the referenced CT dicoms.
+        """
+        # Initialise contour image sequence.
+        series.ContourImageSequence = dcm.sequence.Sequence()
+        
+        # Append contour images.
+        for ct in ref_cts:
+            contour_image = dcm.dataset.Dataset()
+            contour_image.ReferencedSOPClassUID = series.file_meta.MediaStorageSOPClassUID
+            contour_image.ReferencedSOPInstanceUID = series.file_meta.MediaStorageSOPInstanceUID
+            series.ContourImageSequence.append(contour_image)
 
     @classmethod
     def _add_roi_data(

@@ -6,7 +6,7 @@ from typing import *
 
 from mymi import types
 
-from .localisation import get_patient_bounding_box
+from .localisation import get_patient_localisation_box, get_patient_localisation_box
 from .segmentation import get_patient_patch_segmentation
 
 def get_patient_segmentation(
@@ -20,7 +20,7 @@ def get_patient_segmentation(
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     """
-    returns: an RTSTRUCT dicom file containing the predictions made by the model.
+    returns: the patient segmentation.
     args:
         ds: the dataset name.
         patient: the patient ID.
@@ -35,7 +35,7 @@ def get_patient_segmentation(
         device: the device to perform network calcs on.
     """
     # Get the OAR bounding box.
-    bounding_box = get_patient_bounding_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
+    bounding_box = get_patient_localisation_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
 
     # Get segmentation prediction.
     seg = get_patient_patch_segmentation(id, bounding_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device)

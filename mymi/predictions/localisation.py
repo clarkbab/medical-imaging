@@ -9,7 +9,7 @@ from mymi import dataset
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
-def get_patient_bounding_box(
+def get_patient_localisation_box(
     id: str,
     localiser: nn.Module,
     localiser_size: types.Size3D,
