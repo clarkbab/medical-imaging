@@ -5,7 +5,6 @@ import pandas as pd
 import pydicom as dcm
 from scipy.ndimage import center_of_mass
 from typing import *
-from rt_utils import RTStructBuilder
 
 from mymi import cache
 from mymi.cache import cached_method
@@ -61,6 +60,16 @@ class DicomPatient:
         return wrapper
 
     @property
+    @_require_ct
+    def age(self) -> str:
+        return getattr(self.get_cts()[0], 'PatientAge', '')
+
+    @property
+    @_require_ct
+    def birth_date(self) -> str:
+        return self.get_cts()[0].PatientBirthDate
+
+    @property
     def ct_from(self) -> str:
         return self._ct_from
 
@@ -75,15 +84,22 @@ class DicomPatient:
     @property
     @_require_ct
     def name(self) -> str:
-        """
-        returns: the patient name.
-        """
-        # Get patient name.
-        cts_path = os.path.join(self._path, 'ct')
-        ct_path = os.path.join(cts_path, os.listdir(cts_path)[0])
-        ct = dcm.read_file(ct_path)
-        name = ct.PatientName
-        return name
+        return self.get_cts()[0].PatientName
+
+    @property
+    @_require_ct
+    def sex(self) -> str:
+        return self.get_cts()[0].PatientSex
+
+    @property
+    @_require_ct
+    def size(self) -> str:
+        return getattr(self.get_cts()[0], 'PatientSize', '')
+
+    @property
+    @_require_ct
+    def weight(self) -> str:
+        return getattr(self.get_cts()[0], 'PatientWeight', '')
 
     @_require_ct
     def get_cts(self) -> Sequence[dcm.dataset.FileDataset]:
@@ -124,13 +140,20 @@ class DicomPatient:
         """
         # Define dataframe structure.
         cols = {
+            'age': str,
+            'birth-date': str,
             'name': str,
+            'sex': str,
+            'size': str,
+            'weight': str
         }
         df = pd.DataFrame(columns=cols.keys())
 
         # Add data.
         data = {}
-        data['name'] = self.name
+        for col in cols.keys():
+            col_method = col.replace('-', '_')
+            data[col] = getattr(self, col_method)
 
         # Add row.
         df = df.append(data, ignore_index=True)
@@ -404,8 +427,8 @@ class DicomPatient:
         summary = self.ct_summary().iloc[0].to_dict()
         
         # Create CT data array.
-        shape = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
-        data = np.zeros(shape=shape)
+        size = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
+        data = np.zeros(shape=size)
         for ct in cts:
             # Convert to HU. Transpose to (x, y) coordinates, 'pixel_array' returns
             # row-fist image data.
@@ -467,17 +490,17 @@ class DicomPatient:
                 return False
         roi_names = list(filter(fn, roi_names))
 
-        # Get offset, shape and spacing.
+        # Get offset, size and spacing.
         summary_df = self.ct_summary(clear_cache=clear_cache)
         offset = tuple(summary_df[['offset-x', 'offset-y', 'offset-z']].iloc[0])
-        shape = tuple(summary_df[['size-x', 'size-y', 'size-z']].iloc[0])
+        size = tuple(summary_df[['size-x', 'size-y', 'size-z']].iloc[0])
         spacing = tuple(summary_df[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
 
         # Add ROI data.
         region_dict = {}
         for name in roi_names:
             # Get binary mask.
-            data = RTStructConverter.get_roi_mask(name, offset, rtstruct, shape, spacing)
+            data = RTStructConverter.get_roi_data(rtstruct, name, size, spacing, offset)
             region_dict[name] = data
 
         # Create ordered dict.

@@ -6,8 +6,9 @@ from typing import *
 
 from mymi import cache
 from mymi import config
+from mymi import types
 
-from ..types import types
+from ..types import types as ds_types
 
 FILENAME_NUM_DIGITS = 5
 
@@ -32,18 +33,18 @@ class ProcessedDataset:
 
     @property
     def type(self) -> int:
-        return types.PROCESSED
+        return ds_types.PROCESSED
 
     def manifest(
         self,
-        folder: Union['train', 'validate', 'test']) -> Sequence[str]:
+        folder: types.ProcessedFolder) -> Sequence[str]:
         """
         returns: a sequence of patient IDs for that folder.
         args:
             folder: read the manifest from this folder.
         """
         # Read manifest file.
-        filepath = os.path.join(self._path, 'manifest', f"{folder}.csv")
+        filepath = os.path.join(self._path, 'manifests', f"{folder}.csv")
         pats_df = pd.read_csv(filepath)
         pats = pats_df['patient-id'].tolist()
 
@@ -51,8 +52,8 @@ class ProcessedDataset:
 
     def input(
         self,
-        folder: Union['train', 'validate', 'test'],
-        sample_idx: int):
+        folder: types.ProcessedFolder,
+        sample_idx: int) -> np.ndarray:
         """
         returns: the input data for sample i.
         args:
@@ -68,8 +69,8 @@ class ProcessedDataset:
 
     def label(
         self,
-        folder: Union['train', 'validate', 'test'],
-        sample_idx: int):
+        folder: types.ProcessedFolder,
+        sample_idx: int) -> np.ndarray:
         """
         returns: the label data for sample i.
         args:
@@ -85,8 +86,8 @@ class ProcessedDataset:
 
     def sample(
         self,
-        folder: Union['train', 'validate', 'test'],
-        sample_idx: int):
+        folder: types.ProcessedFolder,
+        sample_idx: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         returns: the (input, label) pair for the given sample index.
         args:
