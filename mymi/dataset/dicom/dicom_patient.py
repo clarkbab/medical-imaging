@@ -244,8 +244,8 @@ class DicomPatient:
             elif y_spacing != data['spacing-y']:
                 raise ValueError(f"Inconsistent 'spacing-y' for dataset '{self._dataset}', patient '{self._id}' CT scans.")
 
-        # Add z-spacing.
-        z_spacing = np.min([round(s, 2) for s in np.diff(sorted(z_offsets))])
+        # Add z-spacing. Round z-spacings to 3 d.p. as some of the diffs are whacky like 2.99999809.
+        z_spacing = np.min([round(s, 3) for s in np.diff(sorted(z_offsets))])
         data['spacing-z'] = z_spacing
 
         # Add fields-of-view.
@@ -257,7 +257,7 @@ class DicomPatient:
         data['fov-z'] = z_fov
 
         # Add z-size.
-        z_size = int(round(z_fov / z_spacing, 0) + 1)
+        z_size = int(round(z_fov / z_spacing, 0))
         data['size-z'] = z_size
 
         # Add num missing slices.
