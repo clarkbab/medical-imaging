@@ -46,6 +46,19 @@ class DicomDataset:
             if not os.path.exists(ct_path):
                 raise ValueError(f"Dataset '{ct_from}' not found.")
 
+    def description(self) -> str:
+        """
+        returns: a short descriptive string.
+        """
+        # Create description.
+        desc = f"Name: {self._name}, Type: DICOM"
+
+        # Add CT from.
+        if self._ct_from:
+            desc += f", CT from: {self._ct_from}"
+
+        return desc
+
     @property
     def ct_from(self) -> str:
         return self._ct_from

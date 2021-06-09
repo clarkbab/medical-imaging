@@ -4,9 +4,11 @@ import numpy as np
 import pydicom as dcm
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
-from typing import Dict, Sequence
+from typing import Dict, List, Sequence
 
 from mymi import types
+
+from .roi_data import ROIData
 
 class SOPClassUID:
     DETACHED_STUDY_MANAGEMENT = '1.2.840.10008.3.1.2.3.1'
@@ -15,24 +17,26 @@ class SOPClassUID:
 
 class RTStructConverter:
     @classmethod
-    def get_roi_mask(
+    def get_roi_data(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         name: str,
-        size: types.Size3D,
-        spacing: types.Spacing3D,
-        offset: types.Point3D) -> np.ndarray:
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> np.ndarray:
         """
         returns: an np.ndarray of mask data.
         args:
             rtstruct: the RTSTRUCT dicom.
             name: the ROI name.
-            size: the mask size.
-            spacing: the (x, y, z) voxel spacing in mm.
-            offset: the (0, 0, 0) voxel offset in physical space.
+            ref_cts: the reference CT dicoms.
         raises:
             ValueError: if name not found in ROIs, or no 'ContourSequence' data found.
         """
+        # Get necessary values from CT.
+        offset = ref_cts[0].ImagePositionPatient
+        size_2D = ref_cts[0].pixel_array.shape
+        size = (*size_2D, len(ref_cts))
+        spacing_2D = ref_cts[0].PixelSpacing
+
         # Load the contour data.
         rois = rtstruct.ROIContourSequence
         roi_infos = rtstruct.StructureSetROISequence
@@ -49,6 +53,9 @@ class RTStructConverter:
         if not contour_seq:
             raise ValueError(f"'ContourSequence' not found for ROI '{name}'.")
 
+        # Sort contour sequence by z-axis.
+        contour_seq = sorted(contour_seq, key=lambda c: c.ContourData[2])
+
         # Convert points into voxel data.
         for i, contour in enumerate(contour_seq):
             # Get contour data.
@@ -59,14 +66,11 @@ class RTStructConverter:
             # Coords are stored in flat array.
             points = np.array(contour_data).reshape(-1, 3)
 
-            # Get z_idx of slice.
-            z_idx = int((points[0, 2] - offset[2]) / spacing[2])
-
             # Convert contour data to voxels.
-            slice_data = cls._get_mask_slice(points, size[:-1], spacing[:-1], offset[:-1])
+            slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, offset[:-1])
 
             # Write slice data to label, using XOR.
-            data[:, :, z_idx][slice_data == True] = np.invert(data[:, :, z_idx][slice_data == True])
+            data[:, :, i][slice_data == True] = np.invert(data[:, :, i][slice_data == True])
 
         return data
 
@@ -118,12 +122,10 @@ class RTStructConverter:
     @classmethod
     def create_rtstruct(
         cls,
-        rois: Dict[str, np.ndarray],
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> dcm.dataset.FileDataset:
         """
         returns: an RTSTRUCT dicom.
         args:
-            rois: a dict with roi name keys and mask data values.
             ref_cts: the reference CT dicoms.
         """
         # Create metadata.
@@ -131,9 +133,11 @@ class RTStructConverter:
 
         # Create rtstruct.
         rtstruct = FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
-        # rtstruct.StructureSetROISequence = dcm.sequence.Sequence()
-        # rtstruct.ROIContourSequence = dcm.sequence.Sequence()
-        # rtstruct.RTROIObservationsSequence = dcm.sequence.Sequence()
+
+        # Set empty sequences.
+        rtstruct.StructureSetROISequence = dcm.sequence.Sequence()
+        rtstruct.ROIContourSequence = dcm.sequence.Sequence()
+        rtstruct.RTROIObservationsSequence = dcm.sequence.Sequence()
 
         # Add general info.
         cls._add_general_info(rtstruct)
@@ -145,10 +149,7 @@ class RTStructConverter:
         cls._add_study_and_series_info(rtstruct, ref_cts[0])
 
         # Add frame of reference.
-        cls._add_frame_of_reference(rtstruct, ref_cts)
-
-        # Add ROI data. 
-        cls._add_roi_data(rtstruct, rois)
+        cls._add_frames_of_reference(rtstruct, ref_cts)
 
         return rtstruct
 
@@ -250,7 +251,7 @@ class RTStructConverter:
         rtstruct.StudyTime = ref_ct.StudyTime
 
     @classmethod
-    def _add_frame_of_reference(
+    def _add_frames_of_reference(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -265,14 +266,14 @@ class RTStructConverter:
         frame.FrameOfReferenceUID = generate_uid()
 
         # Add referenced study sequence.
-        cls._add_study(frame, ref_cts)
+        cls._add_studies(frame, ref_cts)
 
         # Add frame of reference to RTSTRUCT.
         rtstruct.ReferencedFrameOfReferenceSequence = dcm.sequence.Sequence()
         rtstruct.ReferencedFrameOfReferenceSequence.append(frame)
 
     @classmethod
-    def _add_study(
+    def _add_studies(
         cls,
         frame: dcm.dataset.Dataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -310,14 +311,14 @@ class RTStructConverter:
         series.SeriesInstanceUID = ref_cts[0].SeriesInstanceUID
 
         # Add contour image sequence.
-        cls._add_contour_image_sequence(series, ref_cts)
+        cls._add_contour_images(series, ref_cts)
 
         # Add series to the study.
         study.RTReferencedSeriesSequence = dcm.sequence.Sequence()
         study.RTReferencedSeriesSequence.append(series)
 
     @classmethod
-    def _add_contour_image_series(
+    def _add_contour_images(
         cls,
         series: dcm.dataset.Dataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -333,41 +334,192 @@ class RTStructConverter:
         # Append contour images.
         for ct in ref_cts:
             contour_image = dcm.dataset.Dataset()
-            contour_image.ReferencedSOPClassUID = series.file_meta.MediaStorageSOPClassUID
-            contour_image.ReferencedSOPInstanceUID = series.file_meta.MediaStorageSOPInstanceUID
+            contour_image.ReferencedSOPClassUID = ct.file_meta.MediaStorageSOPClassUID
+            contour_image.ReferencedSOPInstanceUID = ct.file_meta.MediaStorageSOPInstanceUID
             series.ContourImageSequence.append(contour_image)
 
     @classmethod
-    def _add_roi_data(
+    def add_roi(
         cls,
         rtstruct: dcm.dataset.FileDataset,
-        rois: Dict[str, np.ndarray]) -> None:
+        roi_data: ROIData,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
         """
         effect: adds ROI data to the RTSTRUCT dicom file.
         args:
             rtstruct: the RTSTRUCT dicom file.
-            rois: a dict of ROI data.
+            name: the ROI name.
+            data: the ROI data.
+            ref_cts: the reference CT dicoms.
         """
-        pass
+        # Perform checks.
+        assert roi_data.data.dtype == bool
+        assert roi_data.data.ndim == 3
+        assert roi_data.data.sum() != 0
+
+        # Add ROI number.
+        roi_number = len(rtstruct.StructureSetROISequence) + 1
+        roi_data.number = roi_number
+
+        # Add ROI contours.
+        cls._add_roi_contours(rtstruct, roi_data, ref_cts)
 
     @classmethod
-    def _get_contours(
+    def _add_roi_contours(
         cls,
-        mask: np.ndarray) -> np.ndarray:
+        rtstruct: dcm.dataset.FileDataset,
+        roi_data: ROIData,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
         """
-        returns: an array of contour vertices.
+        effect: adds ROI contours sequence to the RTSTRUCT dicom.
         args:
-            mask: the binary input mask.
+            rtstruct: the RTSTRUCT dicom.
+            roi_data: ROI information.
+            ref_cts: the reference CT dicoms.
         """
-        # Get contours.
-        mask = mask.astype('uint8')
-        contours, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        # Contours is a list of ndarrays containing the (x, y) coordinates of the vertices for each contour.
-        # Hierarchy represented as [next, previous, first_child, parent]. Next/previous relate to contours
-        # in the same level (-1 means no next/previous).
-        # Without hierarchy we get:
-        # [[1, -1, -1, -1],
-        #  [2, 0, -1, -1],
-        #  [3, 1, -1, -1] ... ]
-        # I don't think we need to worry about 'hierarchy' unless we're creating a pinhole. Most
-        # DICOM viewers will handle the contour hierarchy for us.
+        # Create ROI contour sequence.
+        rtstruct.ROIContourSequence = dcm.sequence.Sequence()
+
+        # Create ROI contour.
+        roi_contour = Dataset()
+        roi_contour.ROIDisplayColor = roi_data.colour
+        roi_contour.ReferencedROINumber = str(roi_data.number)
+
+        # Add contour sequence.
+        cls._add_contours(roi_contour, roi_data.data, ref_cts)
+
+        # Append ROI contour.
+        rtstruct.ROIContourSequence.append(roi_contour)
+
+    @classmethod
+    def _add_contours(
+        cls,
+        roi_contour: dcm.dataset.Dataset,
+        data: np.ndarray,
+        ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
+        """
+        effect: adds contours to the ROI contour.
+        args:
+            roi_contour: the ROI contour.
+            data: the contour data array.
+            ref_cts: the reference CT dicoms.
+        """
+        # Create contour sequence.
+        roi_contour.ContourSequence = dcm.sequence.Sequence()
+
+        for i, ct in enumerate(ref_cts):
+            # Get data slice.
+            slice_data = data[:, :, i]
+            
+            # Skip empty slices.
+            if slice_data.sum() == 0:
+                continue
+
+            # Add contour.
+            cls._add_slice_contours(roi_contour, slice_data, ct)
+
+    @classmethod
+    def _add_slice_contours(
+        cls,
+        roi_contour: dcm.dataset.Dataset,
+        slice_data: np.ndarray,
+        ref_ct: dcm.dataset.FileDataset) -> None:
+        """
+        effect: adds a contour to the ROI contour.
+        args:
+            roi_contour: the ROI contour.
+            slice_data: the slice data.
+            ref_ct: the reference CT dicom.
+        """
+        # Get contour coordinates.
+        slice_data = slice_data.astype('uint8')
+        contours_coords, _ = cv.findContours(slice_data, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        
+        # Remove unneeded dimensions.
+        for i, contour_coords in enumerate(contours_coords):
+            contours_coords[i] = contour_coords.squeeze(1)
+
+        # 'contours_coords' is a list of contour coordinates, i.e. multiple contours are possible per slice.
+        for contour_coords in contours_coords:
+            # Convert to numpy array.
+            contour_coords = np.array(contour_coords)
+
+            # Translate to physical space.
+            contour_coords = cls._translate_to_physical_coordinates(contour_coords, ref_ct)
+
+            # Format for DICOM.
+            contour_coords = cls._format_coordinates(contour_coords, ref_ct)
+
+            # Create contour.
+            contour = Dataset()
+            contour.ContourData = contour_coords
+            contour.ContourGeometricType = 'CLOSED_PLANAR'
+            contour.NumberOfContourPoints = len(contour_coords) / 3
+
+            # Add contour images.
+            cls._add_roi_contour_images(contour, ref_ct)
+
+            # Append contour to ROI contour.
+            roi_contour.ContourSequence.append(contour)
+
+    @classmethod
+    def _add_roi_contour_images(
+        cls,
+        contour: dcm.dataset.Dataset,
+        ref_ct: dcm.dataset.FileDataset) -> None:
+        """
+        effect: adds reference images to the contour.
+        args:
+            contour: the contour.
+            ref_ct: the reference CT dicom.
+        """
+        # Create contour image.
+        image = Dataset()
+        image.ReferencedSOPClassUID = ref_ct.file_meta.MediaStorageSOPClassUID
+        image.ReferencedSOPInstanceUID = ref_ct.file_meta.MediaStorageSOPInstanceUID
+
+        # Append to contour.
+        contour.ContourImageSequence = dcm.sequence.Sequence()
+        contour.ContourImageSequence.append(image)
+
+    @classmethod
+    def _translate_to_physical_coordinates(
+        cls,
+        coords: np.ndarray,
+        ref_ct: dcm.dataset.FileDataset) -> np.ndarray:
+        """
+        returns: coordinates translated from voxel to physical space.
+        args:
+            coords: the coordinates in voxel space.
+            ref_ct: the reference CT dicom.
+        """
+        # Load offset/spacing.
+        offset = ref_ct.ImagePositionPatient
+        spacing = ref_ct.PixelSpacing
+
+        # Perform affine transform.
+        coords = (coords - offset[:-1]) / spacing
+        return coords
+
+    @classmethod
+    def _format_coordinates(
+        cls,
+        coords: np.ndarray,
+        ref_ct: dcm.dataset.FileDataset) -> List[float]:
+        """
+        returns: the coordinates formated to DICOM standard.
+        args:
+            coords: the coordinates in physical space.
+            ref_ct: the reference CT dicom.
+        """
+        # Add z-index.
+        z_indices = np.ones((len(coords), 1)) * ref_ct.ImagePositionPatient[2]
+        coords = np.concatenate((coords, z_indices), axis=1)
+
+        # Flatten the array.
+        coords = coords.flatten()
+
+        # Convert to list.
+        coords = list(coords)
+
+        return coords 

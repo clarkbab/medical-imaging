@@ -1,7 +1,5 @@
-import logging
 import os
-import pandas as pd
-import sys
+import shutil
 from typing import *
 
 from mymi import config
@@ -10,21 +8,39 @@ from .dicom import DicomDataset
 from .processed import ProcessedDataset
 from .types import types
 
-def list_datasets() -> Sequence[str]:
+def list() -> Tuple[str]:
     """
     returns: list of available datasets.
     """
-    return list(sorted(os.listdir(config.directories.datasets)))
+    return tuple(sorted(os.listdir(config.directories.datasets)))
+
+def create(name: str) -> None:
+    """
+    effect: creates a dataset.
+    args:
+        name: the name of the dataset.
+    """
+    ds_path = os.path.join(config.directories.datasets, name)
+    os.makedirs(ds_path)
+
+def destroy(name: str) -> None:
+    """
+    effect: destroys a dataset.
+    args:
+        name: the name of the dataset.
+    """
+    ds_path = os.path.join(config.directories.datasets, name)
+    shutil.rmtree(ds_path)
 
 # Make first dataset active.
-sets = list_datasets()
+sets = list()
 ds = DicomDataset(sets[0])
 
 def active() -> str:
     """
     returns: active dataset name.
     """
-    return f"Name: {ds.name}, Type: {ds.type.name}"
+    return ds.description()
 
 def select(
     name: str,

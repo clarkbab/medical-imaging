@@ -9,7 +9,7 @@ from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
 def get_patient_patch_segmentation(
-    id: str,
+    id: types.PatientID,
     bounding_box: types.Box3D,
     segmenter: nn.Module,
     segmenter_size: types.Size3D,
@@ -59,6 +59,10 @@ def get_patient_patch_segmentation(
     # Get binary mask.
     pred = pred.argmax(axis=1)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
+
+    # Convert to numpy.
+    pred = pred.numpy()
+    pred = pred.astype(bool)
 
     # Crop/pad to size before patch extraction.
     rev_patch_box_min, rev_patch_box_max = patch_box

@@ -490,17 +490,14 @@ class DicomPatient:
                 return False
         roi_names = list(filter(fn, roi_names))
 
-        # Get offset, size and spacing.
-        summary_df = self.ct_summary(clear_cache=clear_cache)
-        offset = tuple(summary_df[['offset-x', 'offset-y', 'offset-z']].iloc[0])
-        size = tuple(summary_df[['size-x', 'size-y', 'size-z']].iloc[0])
-        spacing = tuple(summary_df[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
+        # Get reference CTs.
+        cts = self.get_cts()
 
         # Add ROI data.
         region_dict = {}
         for name in roi_names:
             # Get binary mask.
-            data = RTStructConverter.get_roi_data(rtstruct, name, size, spacing, offset)
+            data = RTStructConverter.get_roi_data(rtstruct, name, cts)
             region_dict[name] = data
 
         # Create ordered dict.

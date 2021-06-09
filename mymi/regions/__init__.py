@@ -1,4 +1,5 @@
-from .regions import RegionColours, Regions
+from .colours import to_255, RegionColours
+from .regions import Regions
 
 def is_region(name: str) -> bool:
     """

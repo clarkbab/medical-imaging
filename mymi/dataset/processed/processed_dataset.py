@@ -27,6 +27,14 @@ class ProcessedDataset:
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{name}' not found.")
 
+    def description(self) -> str:
+        """
+        returns: a short descriptive string.
+        """
+        # Create description.
+        desc = f"Name: {self._name}, Type: PROCESSED"
+        return desc
+
     @property
     def name(self) -> str:
         return self._name

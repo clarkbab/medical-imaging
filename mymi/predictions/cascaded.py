@@ -10,7 +10,7 @@ from .localisation import get_patient_localisation_box, get_patient_localisation
 from .segmentation import get_patient_patch_segmentation
 
 def get_patient_segmentation(
-    id: Union[str, int],
+    id: types.PatientID,
     localiser: nn.Module,
     localiser_size: types.Size3D,
     localiser_spacing: types.Spacing3D,
