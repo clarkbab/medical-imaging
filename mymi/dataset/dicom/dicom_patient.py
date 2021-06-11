@@ -1,10 +1,10 @@
-from collections import OrderedDict
+import collections
 import numpy as np
 import os
 import pandas as pd
 import pydicom as dcm
 from scipy.ndimage import center_of_mass
-from typing import *
+from typing import Any, Callable, OrderedDict, Sequence, Tuple, Union
 
 from mymi.cache import cached_method
 from mymi import config
@@ -538,7 +538,7 @@ class DicomPatient:
             region_dict[name] = data
 
         # Create ordered dict.
-        ordered_dict = OrderedDict((n, region_dict[n]) for n in sorted(roi_names)) 
+        ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(roi_names)) 
 
         return ordered_dict
 
