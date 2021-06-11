@@ -9,5 +9,6 @@ from mymi import types
 class ROIData:
     colour: types.Colour
     data: np.ndarray
+    frame_of_reference_uid: str
     name: str
     number: Optional[int] = None

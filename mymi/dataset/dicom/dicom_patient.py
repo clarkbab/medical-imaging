@@ -6,10 +6,9 @@ import pydicom as dcm
 from scipy.ndimage import center_of_mass
 from typing import *
 
-from mymi import cache
 from mymi.cache import cached_method
 from mymi import config
-from mymi import logging
+from mymi import types
 
 from .rtstruct_converter import RTStructConverter
 
@@ -57,6 +56,27 @@ class DicomPatient:
                 raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
             
             return fn(self, *args, **kwargs)
+        return wrapper
+
+    def _use_internal_regions(fn: Callable) -> Callable:
+        """
+        returns: a wrapped function that renames DataFrame 'regions' to internal names.
+        args:
+            fn: the function to wrap.
+        """
+        def wrapper(self, *args, **kwargs):
+            # Determine if internal region names are required.
+            use_internal = kwargs.pop('internal_regions', False)
+
+            # Call function.
+            result = fn(self, *args, **kwargs)
+
+            if use_internal:
+                # Load region map.
+                pass 
+            else:
+                return result
+
         return wrapper
 
     @property
@@ -272,21 +292,33 @@ class DicomPatient:
 
         return df
 
-    def origin(
+    def ct_offset(
         self,
-        clear_cache: bool = False) -> Tuple[float, float, float]:
+        clear_cache: bool = False) -> types.Point3D:
         """
-        returns: the patient origin in physical coordinates.
+        returns: the patient offset in physical coordinates.
         kwargs:
             clear_cache: forces the cache to clear.
         """
-        # Get the origin.
-        origin = tuple(self.ct_summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
-        return origin
+        # Get the offset.
+        offset = tuple(self.ct_summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
+        return offset
 
-    def spacing(
+    def ct_size(
         self,
-        clear_cache: bool = False) -> Tuple[float, float, float]:
+        clear_cache: bool = False) -> types.Spacing3D:
+        """
+        returns: the CT scan size in physical coordinates.
+        kwargs:
+            clear_cache: forces the cache to clear.
+        """
+        # Get the spacing.
+        spacing = tuple(self.ct_summary(clear_cache=clear_cache)[['size-x', 'size-y', 'size-z']].iloc[0])
+        return spacing
+
+    def ct_spacing(
+        self,
+        clear_cache: bool = False) -> types.Spacing3D:
         """
         returns: the patient spacing in physical coordinates.
         kwargs:
@@ -416,7 +448,9 @@ class DicomPatient:
         return df
 
     @cached_method('_ct_from', '_dataset', '_id')
-    def ct_data(self) -> np.ndarray:
+    def ct_data(
+        self,
+        clear_cache: bool = False) -> np.ndarray:
         """
         returns: a 3D numpy ndarray of CT data in HU.
         kwargs:
@@ -424,10 +458,13 @@ class DicomPatient:
         """
         # Load patient CT dicoms.
         cts = self.get_cts()
-        summary = self.ct_summary().iloc[0].to_dict()
+
+        # Load CT summary info.
+        size = self.ct_size(clear_cache=True)
+        offset = self.ct_offset()
+        spacing = self.ct_spacing()
         
         # Create CT data array.
-        size = (int(summary['size-x']), int(summary['size-y']), int(summary['size-z']))
         data = np.zeros(shape=size)
         for ct in cts:
             # Convert to HU. Transpose to (x, y) coordinates, 'pixel_array' returns
@@ -436,8 +473,8 @@ class DicomPatient:
             ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
 
             # Get z index.
-            z_offset =  ct.ImagePositionPatient[2] - summary['offset-z']
-            z_idx = int(round(z_offset / summary['spacing-z']))
+            z_offset =  ct.ImagePositionPatient[2] - offset[2]
+            z_idx = int(round(z_offset / spacing[2]))
 
             # Add data.
             data[:, :, z_idx] = ct_data

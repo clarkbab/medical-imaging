@@ -13,6 +13,10 @@ class Directories:
     @property
     def datasets(self):
         return os.path.join(self.root, 'datasets')
+
+    @property
+    def files(self):
+        return os.path.join(self.root, 'files')
     
     @property
     def evaluation(self):

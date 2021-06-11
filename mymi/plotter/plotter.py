@@ -119,7 +119,7 @@ def plot_patient_regions(
 
     # Load patient spacing.
     pat = dataset.patient(id)
-    spacing = pat.spacing(clear_cache=clear_cache)
+    spacing = pat.ct_spacing(clear_cache=clear_cache)
 
     # Load CT data.
     ct_data = pat.ct_data(clear_cache=clear_cache)
@@ -177,7 +177,9 @@ def plot_patient_regions(
 
     # Determine plotting window.
     if window:
-        vmin, vmax = window
+        width, level = window
+        vmin = level - (width / 2)
+        vmax = level + (width / 2)
     else:
         vmin, vmax = ct_data.min(), ct_data.max()
 
@@ -545,7 +547,7 @@ def _get_aspect_ratio(
         clear_cache: forces the cache to clear.
     """
     # Get patient spacing.
-    spacing = dataset.patient(id).spacing(clear_cache=clear_cache)
+    spacing = dataset.patient(id).ct_spacing(clear_cache=clear_cache)
 
     # Get the aspect ratio.
     if view == 'axial':

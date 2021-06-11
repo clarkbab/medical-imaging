@@ -95,18 +95,19 @@ for pat in tqdm(pats):
     # Get segmentation
     seg = get_patient_segmentation(pat, localiser, args.localiser_size, args.localiser_spacing, segmenter, args.segmenter_size, args.segmenter_spacing, clear_cache=args.clear_cache, device=device)
 
-    # Create ROI data.
-    roi_data = ROIData(
-        name='Parotid_L',
-        colour=list(to_255(RegionColours.Parotid_L)),
-        data=seg
-    )
-
     # Load reference CT dicoms.
     cts = ds.patient(pat).get_cts()
 
     # Create RTSTRUCT dicom.
     rtstruct = RTStructConverter.create_rtstruct(cts)
+
+    # Create ROI data.
+    roi_data = ROIData(
+        colour=list(to_255(RegionColours.Parotid_L)),
+        data=seg,
+        frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+        name='Parotid_L'
+    )
 
     # Add ROI.
     RTStructConverter.add_roi(rtstruct, roi_data, cts)
