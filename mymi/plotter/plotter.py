@@ -359,7 +359,7 @@ def plot_patient_segmentation(
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
-    effect: plots the patient bounding box produced by segmenter.
+    effect: plots the cascader segmentation.
     args:
         id: the patient ID.
         slice_idx: the slice index.

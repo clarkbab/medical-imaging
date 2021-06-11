@@ -33,7 +33,7 @@ def get_patient_patch_segmentation(
     # Load patient CT data and spacing.
     patient = dataset.patient(id)
     input = patient.ct_data(clear_cache=clear_cache)
-    spacing = patient.spacing(clear_cache=clear_cache)
+    spacing = patient.ct_spacing(clear_cache=clear_cache)
 
     # Resample input to segmenter spacing.
     input_size = input.shape

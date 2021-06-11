@@ -10,7 +10,7 @@ from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 def get_patient_localisation_box(
-    id: str,
+    id: types.PatientID,
     localiser: nn.Module,
     localiser_size: types.Size3D,
     localiser_spacing: types.Spacing3D,
@@ -31,7 +31,7 @@ def get_patient_localisation_box(
     # Get the patient CT data and spacing.
     patient = dataset.patient(id)
     input = patient.ct_data(clear_cache=clear_cache)
-    spacing = patient.spacing(clear_cache=clear_cache)
+    spacing = patient.ct_spacing(clear_cache=clear_cache)
     input_size = input.shape
 
     # Create downsampled input.
