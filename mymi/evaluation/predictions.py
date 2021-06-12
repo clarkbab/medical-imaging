@@ -1,17 +1,17 @@
+from mymi.metrics.hausdorff_distance import sitk_hausdorff_distance
 import pandas as pd
 from typing import *
 
 from mymi.cache import cached_function
 from mymi.dataset import DicomDataset
 from mymi import logging
-from mymi.metrics import dice
+from mymi.metrics import dice, sitk_hausdorff_distance
 
 @cached_function
 def evaluate_predictions(
     pred_dataset: str,
     gt_dataset: str,
     clear_cache: bool = False,
-    filter_errors: bool = False,
     pred_ct_from: str = None) -> pd.DataFrame:
     """
     returns: a table of prediction results.
@@ -20,7 +20,6 @@ def evaluate_predictions(
         gt_dataset: the dataset of ground truth regions.
     kwargs:
         clear_cache: force the cache to clear.
-        filter_errors: filter out patients with known errors. 
         pred_ct_from: the CT data matching the prediction regions.
     """
     # Create ground truth dataset.
@@ -47,34 +46,41 @@ def evaluate_predictions(
 
     # Add metrics for patients.
     for pat in pats:
+        # Load patient spacing.
+        spacing = gt_ds.patient(pat).ct_spacing(clear_cache=clear_cache)
+
         # Load ground truth.
-        try:
-            gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=gt_regions)
-        except ValueError as e:
-            if filter_errors:
-                logging.error(f"Patient filtered due to error calling 'region_data' for dataset '{gt_ds.name}', patient '{pat}'.")
-                logging.error(f"Error message: {e}")
-                continue
-            else:
-                raise e
+        gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=gt_regions)
 
         # Load prediction data.
         pred_region_data = pred_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pred_regions)
 
-        # Add metrics for each region.
+        # Create empty dataframe rows.
         dice_data = {
             'patient-id': pat,
             'metric': 'dice'
         }
-        for internal_region, gt_region, pred_region in zip(internal_regions, gt_regions, pred_regions):
-            if gt_region in gt_region_data and pred_region in pred_region_data:
-                # Add dice.
-                dice_score = dice(pred_region_data[pred_region], gt_region_data[gt_region])
-                dice_data[internal_region] = dice_score
-            else:
+        hd_data = {
+            'patient-id': pat,
+            'metric': 'hausdorff'
+        }
+
+        # Calculate metrics for each region.
+        for i in range(len(internal_regions)):
+            # Skip region if not contoured in both prediction and ground truth.
+            if not (gt_regions[i] in gt_region_data and pred_regions[i] in pred_region_data):
                 continue
 
-        # Add row.
+            # Add dice.
+            dice_score = dice(pred_region_data[pred_regions[i]], gt_region_data[gt_regions[i]])
+            dice_data[internal_regions[i]] = dice_score
+
+            # Add Hausdorff distance.
+            hd_score = sitk_hausdorff_distance(pred_region_data[pred_regions[i]], gt_region_data[gt_regions[i]], spacing)
+            hd_data[internal_regions[i]] = hd_score
+
+        # Add rows.
         df = df.append(dice_data, ignore_index=True)
+        df = df.append(hd_data, ignore_index=True)
 
     return df

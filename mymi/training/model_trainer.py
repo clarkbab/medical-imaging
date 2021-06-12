@@ -3,20 +3,14 @@ import logging
 import numpy as np
 import os
 import torch
-from torch.autograd import profiler
 from torch.cuda.amp import autocast, GradScaler
-# from torch.autograd.profiler import profile, tensorboard_trace_handler
-from torch.autograd.profiler import profile
-from torch.utils.tensorboard import SummaryWriter
-from typing import *
+from typing import Optional, Union
 
 from mymi import checkpoint
-from mymi import config
-from mymi import loaders
 from mymi.postprocessing import batch_largest_connected_component
 from mymi.reporting import WandbReporter
-from mymi import utils
 from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
+from mymi import types
 
 PRINT_DP = '.10f'
 
@@ -41,7 +35,7 @@ class ModelTrainer:
         train_report_interval: Union[str, int] = 'epoch',
         report: bool = True,
         report_offline: bool = False,
-        spacing: Optional[Iterable[float]] = None,
+        spacing: Optional[types.Spacing3D] = None,
         validate: bool = True,
         validate_interval: Union[str, int] ='epoch',
         validate_print_interval: Union[str, int] = 'epoch',

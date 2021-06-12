@@ -78,10 +78,9 @@ segmenter_state, _ = checkpoint.load(args.segmenter, args.segmenter_run, checkpo
 segmenter.load_state_dict(segmenter_state)
 logging.info(f"Loaded segmenter with name '{args.segmenter}' from training run '{args.segmenter_run}'.")
 
-# Load test patients from manifest.
-ds = DicomDataset(args.dataset) 
-ds_proc = ProcessedDataset(args.dataset) 
-pats = ds_proc.manifest('test')
+# Load patient IDs.
+dataset.select(args.dataset)
+pats = dataset.list_patients()
 
 # Re/create pred dataset.
 pred_ds_name = f"{args.dataset}-pred"
@@ -92,11 +91,16 @@ dataset.create(pred_ds_name)
 ds_pred = DicomDataset(pred_ds_name)
 
 for pat in tqdm(pats):
-    # Get segmentation
-    seg = get_patient_segmentation(pat, localiser, args.localiser_size, args.localiser_spacing, segmenter, args.segmenter_size, args.segmenter_spacing, clear_cache=args.clear_cache, device=device)
+    # Get segmentation.
+    try:
+        seg = get_patient_segmentation(pat, localiser, args.localiser_size, args.localiser_spacing, segmenter, args.segmenter_size, args.segmenter_spacing, clear_cache=args.clear_cache, device=device)
+    except ValueError as e:
+        logging.error(f"Caught error segmenting patient '{pat}', dataset '{self._dataset}', patient '{self._id}'.")
+        logging.error(f"Error message: {e}")
+        continue
 
     # Load reference CT dicoms.
-    cts = ds.patient(pat).get_cts()
+    cts = dataset.patient(pat).get_cts()
 
     # Create RTSTRUCT dicom.
     rtstruct = RTStructConverter.create_rtstruct(cts)

@@ -1,4 +1,5 @@
 import collections
+import logging
 import numpy as np
 import os
 import pandas as pd
@@ -534,11 +535,17 @@ class DicomPatient:
         region_dict = {}
         for name in roi_names:
             # Get binary mask.
-            data = RTStructConverter.get_roi_data(rtstruct, name, cts)
+            try:
+                data = RTStructConverter.get_roi_data(rtstruct, name, cts)
+            except ValueError as e:
+                logging.error(f"Caught error extracting data for region '{name}', dataset '{self._dataset}', patient '{self._id}'.")
+                logging.error(f"Error message: {e}")
+                continue
+
             region_dict[name] = data
 
         # Create ordered dict.
-        ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(roi_names)) 
+        ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 
 
         return ordered_dict
 

@@ -3,7 +3,6 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy import ndarray
-import re
 import torch
 from torch import nn
 import torchio
@@ -11,10 +10,11 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.predictions import get_patient_localisation_box, get_patient_patch_segmentation
+from mymi.predictions import get_patient_localisation, get_patient_patch_segmentation
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
+from mymi.utils import escape_latex
 
 def plot_ct_distribution(
     bin_width: int = 10,
@@ -100,21 +100,17 @@ def plot_patient_regions(
         view: the viewing axis.
         window: the HU window to apply.
     """
-    # Get params.
+    # Update font size.
     plt.rcParams.update({
         'font.size': font_size
     })
 
-    # Set latex params.
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
     if latex:
         plt.rcParams.update({
             "font.family": "serif",
             'text.usetex': True
-        })
-    else:
-        # This setting persists, so must set to False.
-        plt.rcParams.update({
-            'text.usetex': False
         })
 
     # Load patient spacing.
@@ -225,7 +221,7 @@ def plot_patient_regions(
 
                 # Plot region.
                 plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
-                label = _escape_latex(region) if latex else region
+                label = escape_latex(region) if latex else region
                 plt.plot(0, 0, c=colour, label=label)
                 if perimeter:
                     plt.contour(slice_data, colors=[colour], levels=[0.5])
@@ -257,26 +253,36 @@ def plot_patient_regions(
 
         # Escape text if using latex.
         if latex:
-            title_text = _escape_latex(title_text)
+            title_text = escape_latex(title_text)
 
         plt.title(title_text)
 
     if show:
         plt.show()
 
-def plot_patient_bounding_box(
+        # Revert latex settings.
+        if latex:
+            plt.rcParams.update({
+                "font.family": rc_params['font.family'],
+                'text.usetex': rc_params['text.usetex']
+            })
+
+def plot_patient_localisation(
     id: str,
     slice_idx: int,
-    localiser: nn.Module,
-    localiser_size: types.Size3D,
-    localiser_spacing: types.Spacing3D,
     aspect: float = None,
     box_colour: str = 'r',
     crop: types.Box2D = None,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
+    latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
+    localisation: types.Box3D = None,
+    localisation_seg: np.ndarray = None,
+    localiser: nn.Module = None,
+    localiser_size: types.Size3D = None,
+    localiser_spacing: types.Spacing3D = None,
     segmentation: bool = False,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
@@ -285,24 +291,40 @@ def plot_patient_bounding_box(
     args:
         id: the patient ID.
         slice_idx: the slice index.
-        localiser: the localiser network.
-        localiser_size: the localiser network input size.
-        localiser_spacing: the localiser network input voxel spacing.
     kwargs:
         aspect: the aspect ratio.
         box_colour: colour of the bounding box.
         clear_cache: force the cache to clear.
         crop: the crop window.
         device: the device to perform network calcs on.
+        latex: use latex compiler for text.
+        localisation: the 3D box from localisation.
+        localisation_seg: the segmentation prediction from localisation.
+        localiser: the localiser network.
+        localiser_size: the localiser network input size.
+        localiser_spacing: the localiser network input voxel spacing.
         segmentation: display the localiser segmentation prediction.
         view: the view plane. 
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
-    # Plot patient regions.
-    plot_patient_regions(id, slice_idx, aspect=aspect, crop=crop, legend=False, legend_loc=legend_loc, show=False, view=view, **kwargs)
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
 
-    # Get bounding box.
-    bounding_box, pred = get_patient_localisation_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_prediction=True)
+    # Plot patient regions.
+    plot_patient_regions(id, slice_idx, aspect=aspect, crop=crop, latex=latex, legend=False, legend_loc=legend_loc, show=False, view=view, **kwargs)
+
+    # Get bounding box (and maybe segmentation).
+    if localisation is not None:
+        assert localisation_seg is not None
+        bounding_box, pred = localisation, localisation_seg
+    else:
+        assert localiser is not None and localiser_size is not None and localiser_spacing is not None
+        bounding_box, pred = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_seg=True)
 
     # Plot prediction.
     if segmentation:
@@ -334,6 +356,13 @@ def plot_patient_bounding_box(
         l.set_linewidth(8)
 
     plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })
 
 def plot_patient_segmentation(
     id: str,
@@ -389,7 +418,7 @@ def plot_patient_segmentation(
 
     # Get localisation box if not given.
     if not localisation_box:
-        localisation_box = get_patient_localisation_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
+        localisation_box = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
 
     # Get segmentation prediction.
     seg, seg_patch = get_patient_patch_segmentation(id, localisation_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
@@ -476,30 +505,6 @@ def _to_internal_region(
 
     # Raise an error if we don't know how to translate to the internal name.
     raise ValueError(f"Region '{region}' is neither an internal region, nor listed in the region map, can't create internal name.")
-
-def _escape_latex(text: str) -> str:
-    """
-    returns: a string with escaped latex special characters.
-    args:
-        text: the string to escape.
-    """
-    # Provide map for special characters.
-    char_map = {
-        '&': r'\&',
-        '%': r'\%',
-        '$': r'\$',
-        '#': r'\#',
-        '_': r'\_',
-        '{': r'\{',
-        '}': r'\}',
-        '~': r'\textasciitilde{}',
-        '^': r'\^{}',
-        '\\': r'\textbackslash{}',
-        '<': r'\textless{}',
-        '>': r'\textgreater{}',
-    }
-    regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
-    return regex.sub(lambda match: char_map[match.group()], text)
 
 def _get_slice_for_plotting(
     data: np.ndarray,

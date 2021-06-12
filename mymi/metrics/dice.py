@@ -1,7 +1,6 @@
 import numpy as np
 import SimpleITK as sitk
 import torch
-from typing import *
 
 def dice(
     a: np.ndarray,
@@ -9,8 +8,8 @@ def dice(
     """
     returns: the dice score.
     args:
-        a: a 3D np.ndarray.
-        b: a 3D np.ndarray.
+        a: an array.
+        b: another array.
     """
     if a.shape != b.shape:
         raise ValueError(f"Got mismatched input shapes: '{a.shape}' and '{b.shape}'.")

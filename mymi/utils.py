@@ -4,8 +4,33 @@ import logging
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 import torch
 from typing import *
+
+def escape_latex(text: str) -> str:
+    """
+    returns: a string with escaped latex special characters.
+    args:
+        text: the string to escape.
+    """
+    # Provide map for special characters.
+    char_map = {
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\^{}',
+        '\\': r'\textbackslash{}',
+        '<': r'\textless{}',
+        '>': r'\textgreater{}',
+    }
+    regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
+    return regex.sub(lambda match: char_map[match.group()], text)
 
 def pretty_size(size):
     assert isinstance(size, torch.Size)

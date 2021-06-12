@@ -28,14 +28,20 @@ def hausdorff_distance(
     return hd_dist
 
 def sitk_hausdorff_distance(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    distance: str = 'euclidean',
-    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: Union[tuple, list]) -> torch.Tensor:
+    """
+    returns: the Hausdorff distance between the two binary volumes.
+    args:
+        a: a 3D volume.
+        b: a 3D volume.
+        spacing: the voxel spacing.
+    """
     # Convert to SimpleITK images.
-    img_a = sitk.GetImageFromArray(a)
+    img_a = sitk.GetImageFromArray(a.astype('float32'))
     img_a.SetSpacing(spacing)
-    img_b = sitk.GetImageFromArray(b)
+    img_b = sitk.GetImageFromArray(b.astype('float32'))
     img_b.SetSpacing(spacing)
 
     # Calculate Hausdorff distance.
