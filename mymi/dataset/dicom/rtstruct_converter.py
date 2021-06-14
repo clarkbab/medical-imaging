@@ -17,6 +17,33 @@ class SOPClassUID:
 
 class RTStructConverter:
     @classmethod
+    def has_roi_data(
+        cls,
+        rtstruct: dcm.dataset.FileDataset,
+        name: str) -> np.ndarray:
+        """
+        returns: True if 'ContourData' is present for the ROI.
+        args:
+            rtstruct: the RTSTRUCT dicom.
+            name: the ROI name.
+            ref_cts: the reference CT dicoms.
+        """
+        # Load the contour data.
+        rois = rtstruct.ROIContourSequence
+        roi_infos = rtstruct.StructureSetROISequence
+        try:
+            roi, _ = next(filter(lambda r: r[1].ROIName == name, zip(rois, roi_infos)))
+        except StopIteration:
+            return False
+
+        # Skip label if no contour sequence.
+        contour_seq = getattr(roi, 'ContourSequence', None)
+        if not contour_seq:
+            return False
+
+        return True
+
+    @classmethod
     def get_roi_data(
         cls,
         rtstruct: dcm.dataset.FileDataset,

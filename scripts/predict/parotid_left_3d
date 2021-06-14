@@ -95,7 +95,7 @@ for pat in tqdm(pats):
     try:
         seg = get_patient_segmentation(pat, localiser, args.localiser_size, args.localiser_spacing, segmenter, args.segmenter_size, args.segmenter_spacing, clear_cache=args.clear_cache, device=device)
     except ValueError as e:
-        logging.error(f"Caught error segmenting patient '{pat}', dataset '{self._dataset}', patient '{self._id}'.")
+        logging.error(f"Caught error segmenting patient '{pat}', dataset '{args.dataset}', patient '{pat}'.")
         logging.error(f"Error message: {e}")
         continue
 

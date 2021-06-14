@@ -1,9 +1,10 @@
 import numpy as np
 from skimage.measure import label   
 
-def largest_connected_component(a):
+def get_largest_cc(
+    a: np.ndarray) -> np.ndarray:
     """
-    returns: a 3D array with largest CC only.
+    returns: a 3D array with largest connected component only.
     args:
         a: a 3D array with binary values.
     """

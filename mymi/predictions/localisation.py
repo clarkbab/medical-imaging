@@ -6,6 +6,7 @@ from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi import dataset
+from mymi.postprocessing import get_largest_cc
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
@@ -64,6 +65,9 @@ def get_patient_localisation(
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_3D(pred, crop_box)
+
+    # Run CCA.
+    pred = get_largest_cc(pred)
 
     # Get OAR extent.
     non_zero = np.argwhere(pred != 0).astype(int)

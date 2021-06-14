@@ -497,6 +497,10 @@ class DicomPatient:
         # Get region names.
         names = list(sorted([r.ROIName for r in rtstruct.StructureSetROISequence]))
 
+        # Filter names on those for which data can be obtained, e.g. some may not have
+        # 'ContourData' and shouldn't be included.
+        names = list(filter(lambda n: RTStructConverter.has_roi_data(rtstruct, n), names))
+
         # Create dataframe.
         df = pd.DataFrame(names, columns=['region'])
 
