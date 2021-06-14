@@ -120,13 +120,6 @@ def plot_patient_regions(
     # Load CT data.
     ct_data = pat.ct_data(clear_cache=clear_cache)
 
-    # Get slice data.
-    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
-
-    # Perform crop.
-    if crop:
-        ct_slice_data = crop_or_pad_2D(ct_slice_data, _reverse_box_coords_2D(crop))
-
     # Load region data.
     if regions:
         region_data = pat.region_data(clear_cache=clear_cache, regions=regions)
@@ -162,6 +155,13 @@ def plot_patient_regions(
         # Extract results.
         ct_data = output['input'].data.squeeze(0)
         region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in region_data.items()))
+
+    # Get slice data.
+    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
+
+    # Perform crop.
+    if crop:
+        ct_slice_data = crop_or_pad_2D(ct_slice_data, _reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
