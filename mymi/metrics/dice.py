@@ -26,14 +26,14 @@ def dice(
 
     return dice
 
-def batch_dice(
-    a: torch.Tensor,
-    b: torch.Tensor) -> float:
+def batch_mean_dice(
+    a: np.ndarray,
+    b: np.ndarray) -> float:
     """
-    returns: returns the mean batch dice score.
+    returns: returns the mean batch DSC.
     args:
-        a: a batch of 3D binary volumes.
-        b: a bath of 3D binary volumes.
+        a: a 4D array (batch of 3D binary volumes).
+        b: a 4D array (batch of 3D binary volumes).
     """
     assert a.shape == b.shape
 
@@ -46,14 +46,6 @@ def batch_dice(
 
     # Calculate dice score.
     dice_scores = 2. * int_card / (a_card + b_card)
-
-    # Handle nan cases.
-    # For each prediction in batch, handle case where dice is 'nan'. This
-    # occurs when no foreground label or predictions are made, e.g. for
-    # unlabelled volumes.
-    # for i, d in enumerate(dice):
-    #     if np.isnan(d):
-    #         dice_scores[i] = 1
 
     return dice_scores.mean()
 

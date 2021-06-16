@@ -1,15 +1,14 @@
-from collections.abc import Callable, Iterable
 import logging
 import numpy as np
 import os
 import torch
 from torch.cuda.amp import autocast, GradScaler
-from typing import Optional, Union
+from typing import Callable, Optional, Sequence, Union
 
 from mymi import checkpoint
 from mymi.postprocessing import batch_largest_connected_component
 from mymi.reporting import WandbReporter
-from mymi.metrics import batch_dice, sitk_batch_hausdorff_distance
+from mymi.metrics import batch_mean_dice, sitk_batch_mean_hausdorff_distance
 from mymi import types
 
 PRINT_DP = '.10f'
@@ -30,7 +29,7 @@ class ModelTrainer:
         log_info: Callable[[str], None] = logging.info,
         max_epochs: int = 500,
         mixed_precision: bool = True,
-        metrics: Iterable[str] = ('dice', 'hausdorff'),
+        metrics: Sequence[str] = ('dice', 'hausdorff'),
         train_print_interval: Union[str, int] = 'epoch',
         train_report_interval: Union[str, int] = 'epoch',
         report: bool = True,
@@ -160,18 +159,18 @@ class ModelTrainer:
                 pred = pred.argmax(axis=1)
 
                 # Move data to CPU for metric calculations.
-                pred, label = pred.cpu(), label.cpu()
+                pred, label = pred.cpu().numpy(), label.cpu().numpy()
 
                 # Calculate other metrics.
                 if 'dice' in self._metrics:
-                    dice = batch_dice(pred, label)
+                    dice = batch_mean_dice(pred, label)
                     self._running_scores['print']['dice'] += [dice.item()]
                     self._running_scores['report']['dice'] += [dice.item()]
 
                 if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
                     # Can't calculate HD if prediction is empty.
                     if pred.sum() > 0:
-                        hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self._spacing)
+                        hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, self._spacing)
                         self._running_scores['print']['hausdorff'] += [hausdorff.item()]
                         self._running_scores['report']['hausdorff'] += [hausdorff.item()]
                 
@@ -232,17 +231,17 @@ class ModelTrainer:
             pred = pred.argmax(axis=1)
 
             # Move data to CPU for metric calculations.
-            pred, label = pred.cpu(), label.cpu()
+            pred, label = pred.cpu().numpy(), label.cpu().numpy()
 
             if 'dice' in self._metrics:
-                dice = batch_dice(pred, label)
+                dice = batch_mean_dice(pred, label)
                 self._running_scores['validate-print']['dice'] += [dice.item()]
                 self._running_scores['validate-report']['dice'] += [dice.item()]
 
             if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
                 # Can't calculate HD if prediction is empty.
                 if pred.sum() > 0:
-                    hausdorff = sitk_batch_hausdorff_distance(pred, label, spacing=self._spacing)
+                    hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, self._spacing)
                     self._running_scores['validate-print']['hausdorff'] += [hausdorff.item()]
                     self._running_scores['validate-report']['hausdorff'] += [hausdorff.item()]
 

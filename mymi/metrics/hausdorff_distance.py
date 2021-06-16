@@ -2,20 +2,19 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
 import torch
-from typing import *
+from typing import Union
+
+from mymi import types
 
 def hausdorff_distance(
     a: torch.Tensor,
     b: torch.Tensor,
-    distance: str = 'euclidean',
-    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
+    spacing: types.Spacing3D) -> torch.Tensor:
     """
     returns: the Hausdorff distance between pred and label.
     args:
         a: a 3D array of binary values.
         b: a 3D array of binary values.
-    kwargs:
-        distance: the distance metric to use.
         spacing: the voxel spacing used.
     """
     assert a.shape == b.shape
@@ -30,7 +29,7 @@ def hausdorff_distance(
 def sitk_hausdorff_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: Union[tuple, list]) -> torch.Tensor:
+    spacing: types.Spacing3D) -> float:
     """
     returns: the Hausdorff distance between the two binary volumes.
     args:
@@ -136,14 +135,20 @@ def directed_hausdorff_distance(
         
     return max_min_dist
 
-def sitk_batch_hausdorff_distance(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    distance: str = 'euclidean',
-    spacing: Union[tuple, list] = (1., 1., 1.)) -> torch.Tensor:
+def sitk_batch_mean_hausdorff_distance(
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: types.Spacing3D) -> float:
+    """
+    returns: the mean HD over the batch.
+    args:
+        a: a 4D array (batch of 3D binary volumes).
+        b: a 4D array (batch of 3D binary volumes).
+        spacing: the voxel spacing.
+    """
     hd_dists = []
     for i in range(len(a)):
-        hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing=spacing)
+        hd_dist = sitk_hausdorff_distance(a[i], b[i], spacing)
         hd_dists.append(hd_dist)
     return np.mean(hd_dists)
 
