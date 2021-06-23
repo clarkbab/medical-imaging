@@ -1,5 +1,4 @@
 #! /usr/bin/env bash
-
 live='https://upload.pypi.org/legacy/'
 test='https://test.pypi.org/legacy/'
 

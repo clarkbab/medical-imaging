@@ -5,8 +5,8 @@ from mymi import types
 
 def resample_3D(
     input: np.ndarray,
-    spacing: types.Spacing3D,
-    new_spacing: types.Spacing3D) -> sitk.Image:
+    spacing: types.ImageSpacing3D,
+    new_spacing: types.ImageSpacing3D) -> sitk.Image:
     """
     returns: a resampled tensor.
     args:
@@ -51,8 +51,8 @@ def resample_3D(
 
 def resample_box_3D(
     bounding_box: types.Box3D,
-    spacing: types.Spacing3D,
-    new_spacing: types.Spacing3D) -> types.Box3D:
+    spacing: types.ImageSpacing3D,
+    new_spacing: types.ImageSpacing3D) -> types.Box3D:
     """
     returns: a bounding box in resampled coordinates.
     args:

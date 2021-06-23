@@ -13,8 +13,8 @@ from mymi import types
 def get_patient_localisation(
     id: types.PatientID,
     localiser: nn.Module,
-    localiser_size: types.Size3D,
-    localiser_spacing: types.Spacing3D,
+    localiser_size: types.ImageSize3D,
+    localiser_spacing: types.ImageSpacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     return_seg: bool = False) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:

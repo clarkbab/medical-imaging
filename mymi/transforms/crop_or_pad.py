@@ -57,7 +57,7 @@ def crop_or_pad_3D(
 
 def centre_crop_or_pad_3D(
     input: np.ndarray,
-    size: types.Size3D,
+    size: types.ImageSize3D,
     fill: float = 0) -> np.ndarray:
     """
     returns: an array cropped/padded along each axis. When an uneven amount is cropped 

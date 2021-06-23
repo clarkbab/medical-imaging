@@ -49,6 +49,7 @@ parser.add_argument('--loss', action='store', default='dice', help="sets the los
 parser.add_argument('--name', action='store', help='sets the run name for Tensorboard')
 parser.add_argument('--no-gpu', action='store_true', default=False, help='use CPU for training')
 parser.add_argument('--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
 parser.add_argument('--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
 parser.add_argument('--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
 parser.add_argument('--no-report', action='store_true', default=False, help="don't send run reports")
@@ -167,9 +168,9 @@ def train(args: dict):
     if args.max_epochs:
         kwargs['max_epochs'] = args.max_epochs
     if args.no_mixed:
-        kwargs['mixed_precision'] = False
-        log_info('Using full precision.')
+        log_info('Not using mixed precision.')
     else:
+        kwargs['mixed_precision'] = True
         log_info('Using mixed precision.')
     if args.no_report:
         kwargs['report'] = False

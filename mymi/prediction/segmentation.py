@@ -13,8 +13,8 @@ def get_patient_patch_segmentation(
     id: types.PatientID,
     bounding_box: types.Box3D,
     segmenter: nn.Module,
-    segmenter_size: types.Size3D,
-    segmenter_spacing: types.Spacing3D,
+    segmenter_size: types.ImageSize3D,
+    segmenter_spacing: types.ImageSpacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     return_patch: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Box3D]]:
@@ -94,7 +94,7 @@ def get_patient_patch_segmentation(
 def _extract_patch(
     input: np.ndarray,
     loc_box: types.Box3D,
-    size: types.Size3D) -> Tuple[np.ndarray, types.Box3D]:
+    size: types.ImageSize3D) -> Tuple[np.ndarray, types.Box3D]:
     """
     returns: a patch of size 'size' centred on the bounding box. Also returns the bounding
         box that was used to extract the patch, relative to the input size.

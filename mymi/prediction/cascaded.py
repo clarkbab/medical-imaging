@@ -12,11 +12,11 @@ from .segmentation import get_patient_patch_segmentation
 def get_patient_segmentation(
     id: types.PatientID,
     localiser: nn.Module,
-    localiser_size: types.Size3D,
-    localiser_spacing: types.Spacing3D,
+    localiser_size: types.ImageSize3D,
+    localiser_spacing: types.ImageSpacing3D,
     segmenter: nn.Module,
-    segmenter_size: types.Size3D,
-    segmenter_spacing: types.Spacing3D,
+    segmenter_size: types.ImageSize3D,
+    segmenter_spacing: types.ImageSpacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     """

@@ -16,7 +16,7 @@ from mymi import dataset
 from mymi.dataset.dicom import DicomDataset, ROIData, RTStructConverter
 from mymi.dataset.processed import ProcessedDataset
 from mymi.models import SingleChannelUNet
-from mymi.predictions import get_patient_segmentation
+from mymi.prediction import get_patient_segmentation
 from mymi.regions import to_255, RegionColours
 from mymi import types
 from mymi import utils
@@ -34,13 +34,16 @@ parser.add_argument('--localiser-size', action='store', help='the localiser inpu
 parser.add_argument('--localiser-spacing', action='store', help='the localiser input spacing', required=True, type=types.parse_spacing_3D)
 parser.add_argument('--log-level', action='store', default='info', help="sets the log level, e.g. 'debug', 'info'")
 parser.add_argument('--no-gpu', action='store_true', default=False, help='turn off GPU use')
-parser.add_argument('--no-mixed', action='store_true', default=False, help="don't use mixed precision for training")
+parser.add_argument('--no-post', action='store_true', default=False, help="don't apply postprocessing")
+parser.add_argument('--output-dataset', action='store', help='the output dataset name')
 parser.add_argument('--patient-ids', action='store_true', default=False, help='turn off GPU use')
+parser.add_argument('--rtstruct-label', action='store', help='the RTSTRUCT label')
 parser.add_argument('--segmenter', action='store', help='the segmenter name', required=True)
 parser.add_argument('--segmenter-checkpoint', action='store', default='checkpoint', help='the checkpoint name')
 parser.add_argument('--segmenter-run', action='store', help='the segmenter run', required=True)
 parser.add_argument('--segmenter-size', action='store', help='the segmenter input size', required=True, type=types.parse_size_3D)
 parser.add_argument('--segmenter-spacing', action='store', help='the segmenter input spacing', required=True, type=types.parse_spacing_3D)
+parser.add_argument('--series-desc', action='store', help='the RTSTRUCT series description')
 args = parser.parse_args()
 
 # Configure logging.
@@ -83,7 +86,7 @@ dataset.select(args.dataset)
 pats = dataset.list_patients()
 
 # Re/create pred dataset.
-pred_ds_name = f"{args.dataset}-pred"
+pred_ds_name = args.output_dataset if args.output_dataset else f"{args.dataset}-pred"
 dss = dataset.list()
 if pred_ds_name in dss:
     dataset.destroy(pred_ds_name)
@@ -103,7 +106,9 @@ for pat in tqdm(pats):
     cts = dataset.patient(pat).get_cts()
 
     # Create RTSTRUCT dicom.
-    rtstruct = RTStructConverter.create_rtstruct(cts)
+    rtstruct_label = args.rtstruct_label if args.rtstruct_label else 'MYMI RTSTRUCT'
+    series_desc = args.series_desc if args.series_desc else 'MYMI'
+    rtstruct = RTStructConverter.create_rtstruct(cts, label=rtstruct_label, series_desc=series_desc)
 
     # Create ROI data.
     roi_data = ROIData(

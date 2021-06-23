@@ -9,7 +9,7 @@ from mymi import types
 def hausdorff_distance(
     a: torch.Tensor,
     b: torch.Tensor,
-    spacing: types.Spacing3D) -> torch.Tensor:
+    spacing: types.ImageSpacing3D) -> torch.Tensor:
     """
     returns: the Hausdorff distance between pred and label.
     args:
@@ -29,7 +29,7 @@ def hausdorff_distance(
 def sitk_hausdorff_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.Spacing3D) -> float:
+    spacing: types.ImageSpacing3D) -> float:
     """
     returns: the Hausdorff distance between the two binary volumes.
     args:
@@ -138,7 +138,7 @@ def directed_hausdorff_distance(
 def sitk_batch_mean_hausdorff_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.Spacing3D) -> float:
+    spacing: types.ImageSpacing3D) -> float:
     """
     returns: the mean HD over the batch.
     args:

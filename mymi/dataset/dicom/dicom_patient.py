@@ -295,7 +295,7 @@ class DicomPatient:
 
     def ct_offset(
         self,
-        clear_cache: bool = False) -> types.Point3D:
+        clear_cache: bool = False) -> types.PhysPoint3D:
         """
         returns: the patient offset in physical coordinates.
         kwargs:
@@ -307,7 +307,7 @@ class DicomPatient:
 
     def ct_size(
         self,
-        clear_cache: bool = False) -> types.Spacing3D:
+        clear_cache: bool = False) -> types.ImageSpacing3D:
         """
         returns: the CT scan size in physical coordinates.
         kwargs:
@@ -319,7 +319,7 @@ class DicomPatient:
 
     def ct_spacing(
         self,
-        clear_cache: bool = False) -> types.Spacing3D:
+        clear_cache: bool = False) -> types.ImageSpacing3D:
         """
         returns: the patient spacing in physical coordinates.
         kwargs:
@@ -469,7 +469,7 @@ class DicomPatient:
         data = np.zeros(shape=size)
         for ct in cts:
             # Convert to HU. Transpose to (x, y) coordinates, 'pixel_array' returns
-            # row-fist image data.
+            # row-first image data.
             ct_data = np.transpose(ct.pixel_array)
             ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
 

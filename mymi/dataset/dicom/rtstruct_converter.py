@@ -10,6 +10,9 @@ from mymi import types
 
 from .roi_data import ROIData
 
+DATE_FORMAT = '%Y%m%d'
+TIME_FORMAT = '%H%M%S.%f'
+
 class SOPClassUID:
     DETACHED_STUDY_MANAGEMENT = '1.2.840.10008.3.1.2.3.1'
     RTSTRUCT = '1.2.840.10008.5.1.4.1.1.481.3'
@@ -109,9 +112,9 @@ class RTStructConverter:
     def _get_mask_slice(
         cls,
         points: np.ndarray,
-        size: types.Size2D,
-        spacing: types.Spacing2D,
-        offset: types.Point2D) -> np.ndarray:
+        size: types.ImageSize2D,
+        spacing: types.ImageSpacing2D,
+        offset: types.PhysPoint2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:
@@ -153,17 +156,22 @@ class RTStructConverter:
     @classmethod
     def create_rtstruct(
         cls,
-        ref_cts: Sequence[dcm.dataset.FileDataset]) -> dcm.dataset.FileDataset:
+        ref_cts: Sequence[dcm.dataset.FileDataset],
+        label: str = 'RTSTRUCT',
+        series_desc: str = '') -> dcm.dataset.FileDataset:
         """
         returns: an RTSTRUCT dicom.
         args:
             ref_cts: the reference CT dicoms.
+        kwargs:
+            series_desc: the DICOM series description field.
         """
         # Create metadata.
         metadata = cls._create_metadata()
 
         # Create rtstruct.
         rtstruct = FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
+        rtstruct.StructureSetLabel = label
 
         # Set empty sequences.
         rtstruct.StructureSetROISequence = dcm.sequence.Sequence()
@@ -177,7 +185,7 @@ class RTStructConverter:
         cls._add_patient_info(rtstruct, ref_cts[0])
 
         # Add study/series info.
-        cls._add_study_and_series_info(rtstruct, ref_cts[0])
+        cls._add_study_and_series_info(rtstruct, ref_cts[0], series_desc)
 
         # Add frame of reference.
         cls._add_frames_of_reference(rtstruct, ref_cts)
@@ -219,8 +227,8 @@ class RTStructConverter:
 
         # Get date/time.
         dt = datetime.now()
-        date = dt.strftime('%Y%m%d')
-        time = dt.strftime('%H%M%S.%f')
+        date = dt.strftime(DATE_FORMAT)
+        time = dt.strftime(TIME_FORMAT)
 
         # Set other required fields.
         rtstruct.ContentDate = date
@@ -263,23 +271,31 @@ class RTStructConverter:
     def _add_study_and_series_info(
         cls,
         rtstruct: dcm.dataset.FileDataset,
-        ref_ct: dcm.dataset.FileDataset) -> None:
+        ref_ct: dcm.dataset.FileDataset,
+        series_desc: str) -> None:
         """
         effect: copies study/series info from the CT to the RTSTRUCT dicom.
         args:
             rtstruct: the RTSTRUCT dicom.
-            ref_ct: the reference CT dicom.  """
-        # Copy information.
-        rtstruct.SeriesDate = getattr(ref_ct, 'SeriesDate', '')
-        rtstruct.SeriesDescription = getattr(ref_ct, 'SeriesDescription', '')
-        rtstruct.SeriesInstanceUID = generate_uid()
-        rtstruct.SeriesNumber = 1
-        rtstruct.SeriesTime = getattr(ref_ct, 'SeriesTime', '')
+            ref_ct: the reference CT dicom.
+            series_desc: the series description.
+        """
+        # Get current datetime.
+        dt = datetime.now()
+ 
+        # Copy study info - same as reference CT.
         rtstruct.StudyDate = ref_ct.StudyDate
         rtstruct.StudyDescription = getattr(ref_ct, 'StudyDescription', '')
         rtstruct.StudyInstanceUID = ref_ct.StudyInstanceUID
         rtstruct.StudyID = ref_ct.StudyID
         rtstruct.StudyTime = ref_ct.StudyTime
+
+        # Add series info.
+        rtstruct.SeriesDate = dt.strftime(DATE_FORMAT)
+        rtstruct.SeriesDescription = series_desc
+        rtstruct.SeriesInstanceUID = generate_uid()
+        rtstruct.SeriesNumber = 0
+        rtstruct.SeriesTime = dt.strftime(TIME_FORMAT)
 
     @classmethod
     def _add_frames_of_reference(
