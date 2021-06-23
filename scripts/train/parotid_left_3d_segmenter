@@ -52,14 +52,14 @@ parser.add_argument('--no-mixed', action='store_true', default=False, help="don'
 parser.add_argument('--num-nodes', action='store', type=int, default=1, help='sets the number of nodes, default=1')
 parser.add_argument('--node-rank', action='store', type=int, default=0, help="the node's rank, default=0")
 parser.add_argument('--no-report', action='store_true', default=False, help="don't send run reports")
-parser.add_argument('--no-validate', action='store_true', default=False, help="don't validate the model during training")
+parser.add_argument('--no-validation', action='store_true', default=False, help="don't validation the model during training")
 parser.add_argument('--train-print-interval', action='store', type=interval_type, help='iterations between printing during training')
 parser.add_argument('--train-report-interval', action='store', type=interval_type, help='iterations between recording during training')
 parser.add_argument('--use-early-stopping', action='store_true', default=False, help='use early stopping')
 parser.add_argument('--use-dropout', action='store_true', default=False, help='use dropout when training')
-parser.add_argument('--validate-interval', action='store', type=interval_type, help='iterations between validation')
-parser.add_argument('--validate-print-interval', action='store', type=interval_type, help='iterations between printing during validation')
-parser.add_argument('--validate-report-interval', action='store', type=interval_type, help='iterations between reporting during validation')
+parser.add_argument('--validation-interval', action='store', type=interval_type, help='iterations between validation')
+parser.add_argument('--validation-print-interval', action='store', type=interval_type, help='iterations between printing during validation')
+parser.add_argument('--validation-report-interval', action='store', type=interval_type, help='iterations between reporting during validation')
 args = parser.parse_args()
 
 # Returns a logging function for the process.
@@ -157,7 +157,7 @@ def train(args: dict):
     patch_size = (128, 128, 96)
     spacing = (1, 1, 3)         # Data on disk has this spacing.
     train_loader = ParotidLeft3DSegmenterLoader.build('train', patch_size, batch_size=batch_size, spacing=spacing, transform=train_transform)
-    validate_loader = ParotidLeft3DSegmenterLoader.build('validate', patch_size, batch_size=batch_size, spacing=spacing)
+    validation_loader = ParotidLeft3DSegmenterLoader.build('validation', patch_size, batch_size=batch_size, spacing=spacing)
     visual_loader = ParotidLeft3DSegmenterVisualLoader.build(patch_size, batch_size=batch_size, spacing=spacing)
 
     # Create model trainer kwargs.
@@ -180,15 +180,15 @@ def train(args: dict):
             log_info('Reporting results.')
         else:
             kwargs['report'] = False
-    if args.no_validate:
-        kwargs['validate'] = False
+    if args.no_validation:
+        kwargs['validation'] = False
         log_info('Not validating.')
     else:
         if is_lead_process(args):
-            kwargs['validate'] = True
+            kwargs['validation'] = True
             log_info('Validating.')
         else:
-            kwargs['validate'] = False
+            kwargs['validation'] = False
     if args.train_print_interval:
         kwargs['train_print_interval'] = args.train_print_interval
     if args.train_report_interval:
@@ -199,15 +199,15 @@ def train(args: dict):
         log_info('Using early stopping.')
     else:
         log_info('Not using early stopping.')
-    if args.validate_interval:
-        kwargs['validate_interval'] = args.validate_interval
-    if args.validate_print_interval:
-        kwargs['validate_print_interval'] = args.validate_print_interval
-    if args.validate_report_interval:
-        kwargs['validate_report_interval'] = args.validate_report_interval
+    if args.validation_interval:
+        kwargs['validation_interval'] = args.validation_interval
+    if args.validation_print_interval:
+        kwargs['validation_print_interval'] = args.validation_print_interval
+    if args.validation_report_interval:
+        kwargs['validation_report_interval'] = args.validation_report_interval
 
     # Train the model.
-    trainer = ModelTrainer(loss_fn, model_name, optimiser, run_name, train_loader, validate_loader, visual_loader, **kwargs)
+    trainer = ModelTrainer(loss_fn, model_name, optimiser, run_name, train_loader, validation_loader, visual_loader, **kwargs)
     trainer(model)
 
 def is_multi_process(args: dict):

@@ -5,6 +5,7 @@ from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi import dataset
+from mymi.postprocessing import get_largest_cc
 from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
@@ -80,6 +81,9 @@ def get_patient_patch_segmentation(
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_3D(pred, crop_box)
+
+    # Return largest connected structure.
+    pred = get_largest_cc(pred)
 
     # Get result.
     if return_patch:

@@ -7,10 +7,11 @@ import torch
 from torch import nn
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.predictions import get_patient_localisation, get_patient_patch_segmentation
+from mymi.dataset.dicom import DicomDataset
+from mymi.prediction import get_patient_localisation, get_patient_patch_segmentation
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -68,6 +69,8 @@ def plot_patient_regions(
     legend: bool = True,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
+    other_ds: str = None,
+    other_regions: Union[str, Sequence[str]] = 'all',
     perimeter: bool = True,
     regions: Union[str, Sequence[str]] = 'all',
     show: bool = True,
@@ -92,6 +95,8 @@ def plot_patient_regions(
         latex: use latex to display text.
         legend: display the legend.
         legend_loc: the location of the legend.
+        other_ds: plot regions from another dataset.
+        other_regions: regions to plot from other dataset.
         perimeter: highlight the perimeter.
         regions: the regions to display.
         show: call 'plt.show'.
@@ -121,18 +126,29 @@ def plot_patient_regions(
     ct_data = pat.ct_data(clear_cache=clear_cache)
 
     # Load region data.
-    if regions:
+    if regions is not None:
         region_data = pat.region_data(clear_cache=clear_cache, regions=regions)
 
         if internal_regions:
             # Map to internal region names.
             region_data = dict((_to_internal_region(r, clear_cache=clear_cache), d) for r, d in region_data.items())
 
+        # Load other regions.
+        if other_ds:
+            other_ds = DicomDataset(other_ds) 
+            other_region_data = other_ds.patient(id).region_data(clear_cache=clear_cache, regions=other_regions)
+
+            if internal_regions:
+                # Map to internal region names.
+                other_region_data = dict((_to_internal_region(r, clear_cache=clear_cache), d) for r, d in other_region_data.items())
+
     # Transform data.
     if transform:
         # Add 'batch' dimension.
         ct_data = np.expand_dims(ct_data, axis=0)
         region_data = dict(((n, np.expand_dims(d, axis=0)) for n, d in region_data.items()))
+        if other_ds:
+            other_region_data = dict(((n, np.expand_dims(d, axis=0)) for n, d in other_region_data.items()))
 
         # Create 'subject'.
         affine = np.array([
@@ -143,6 +159,8 @@ def plot_patient_regions(
         ])
         ct_data = ScalarImage(tensor=ct_data, affine=affine)
         region_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in region_data.items()))
+        if other_ds:
+            other_region_data = dict(((n, LabelMap(tensor=d, affine=affine)) for n, d in other_region_data.items()))
 
         # Transform CT data.
         subject = Subject(input=ct_data)
@@ -151,10 +169,14 @@ def plot_patient_regions(
         # Transform region data.
         det_transform = output.get_composed_history()
         region_data = dict(((r, det_transform(Subject(region=d))) for r, d in region_data.items()))
+        if other_ds:
+            other_region_data = dict(((r, det_transform(Subject(region=d))) for r, d in other_region_data.items()))
 
         # Extract results.
         ct_data = output['input'].data.squeeze(0)
         region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in region_data.items()))
+        if other_ds:
+            other_region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in other_region_data.items()))
 
     # Get slice data.
     ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
@@ -190,47 +212,20 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        if len(region_data) != 0:
-            # Create palette if not using internal region colours.
-            if not internal_regions:
-                palette = plt.cm.tab20
+        show_legend = _plot_regions(region_data, alpha, aspect, crop, internal_regions, latex, perimeter, slice_idx, view) 
 
-            # Plot each region.
-            at_least_one_region = False     # Only show legend if slice has at least one region.
-            for i, (region, data) in enumerate(region_data.items()):
-                # Convert data to 'imshow' co-ordinate system.
-                slice_data = _get_slice_for_plotting(data, slice_idx, view)
+        if other_ds:
+            # Prepend other dataset name.
+            other_region_data = dict((f"{r} - {other_ds.name}", d) for r, d in other_region_data.items())
+ 
+            # Plot other regions.
+            other_show_legend = _plot_regions(other_region_data, alpha, aspect, crop, internal_regions, latex, perimeter, slice_idx, view)
 
-                # Crop image.
-                if crop:
-                    slice_data = crop_or_pad_2D(slice_data, _reverse_box_coords_2D(crop))
-
-                # Skip region if not present on this slice.
-                if slice_data.max() == 0:
-                    continue
-                else:
-                    at_least_one_region = True
-                
-                # Create binary colormap for each region.
-                if internal_regions:
-                    colour = getattr(RegionColours, region)
-                else:
-                    colour = palette(i)
-                colours = [(1.0, 1.0, 1.0, 0), colour]
-                region_cmap = ListedColormap(colours)
-
-                # Plot region.
-                plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
-                label = escape_latex(region) if latex else region
-                plt.plot(0, 0, c=colour, label=label)
-                if perimeter:
-                    plt.contour(slice_data, colors=[colour], levels=[0.5])
-
-            # Create legend.
-            if legend and at_least_one_region: 
-                plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
-                for l in plt_legend.get_lines():
-                    l.set_linewidth(8)
+        # Create legend.
+        if legend and (show_legend or (other_ds and other_show_legend)): 
+            plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+            for l in plt_legend.get_lines():
+                l.set_linewidth(8)
 
     # Show axis markers.
     show_axes = 'on' if axes else 'off'
@@ -267,6 +262,60 @@ def plot_patient_regions(
                 'text.usetex': rc_params['text.usetex']
             })
 
+def _plot_regions(
+    region_data: Dict[str, np.ndarray],
+    alpha: float,
+    aspect: float,
+    crop: types.Box3D,
+    internal_regions: bool,
+    latex: bool,
+    perimeter: bool,
+    slice_idx: int,
+    view: types.PatientView) -> bool:
+    """
+    effect: adds regions to the plot.
+    returns: whether the legend should be shown.
+    args:
+        region_data: the region data to plot.
+        others: see 'plot_patient_regions'.
+    """
+    # Create palette if not using internal region colours.
+    if not internal_regions:
+        palette = plt.cm.tab20
+
+    # Plot each region.
+    show_legend = False     # Only show legend if slice has at least one region.
+    for i, (region, data) in enumerate(region_data.items()):
+        # Convert data to 'imshow' co-ordinate system.
+        slice_data = _get_slice_for_plotting(data, slice_idx, view)
+
+        # Crop image.
+        if crop:
+            slice_data = crop_or_pad_2D(slice_data, _reverse_box_coords_2D(crop))
+
+        # Skip region if not present on this slice.
+        if slice_data.max() == 0:
+            continue
+        else:
+            show_legend = True
+        
+        # Create binary colormap for each region.
+        if internal_regions:
+            colour = getattr(RegionColours, region)
+        else:
+            colour = palette(i)
+        colours = [(1.0, 1.0, 1.0, 0), colour]
+        region_cmap = ListedColormap(colours)
+
+        # Plot region.
+        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
+        label = escape_latex(region) if latex else region
+        plt.plot(0, 0, c=colour, label=label)
+        if perimeter:
+            plt.contour(slice_data, colors=[colour], levels=[0.5])
+
+    return show_legend
+
 def plot_patient_localisation(
     id: str,
     slice_idx: int,
@@ -278,12 +327,12 @@ def plot_patient_localisation(
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    localisation: types.Box3D = None,
-    localisation_seg: np.ndarray = None,
+    loc_box: types.Box3D = None,
+    loc_seg: np.ndarray = None,
     localiser: nn.Module = None,
     localiser_size: types.Size3D = None,
     localiser_spacing: types.Spacing3D = None,
-    segmentation: bool = False,
+    show_seg: bool = False,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
@@ -298,12 +347,12 @@ def plot_patient_localisation(
         crop: the crop window.
         device: the device to perform network calcs on.
         latex: use latex compiler for text.
-        localisation: the 3D box from localisation.
-        localisation_seg: the segmentation prediction from localisation.
+        loc_box: the 3D box from localisation.
+        loc_seg: the segmentation prediction from localisation.
         localiser: the localiser network.
         localiser_size: the localiser network input size.
         localiser_spacing: the localiser network input voxel spacing.
-        segmentation: display the localiser segmentation prediction.
+        show_seg: display the localiser segmentation prediction.
         view: the view plane. 
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
@@ -319,15 +368,15 @@ def plot_patient_localisation(
     plot_patient_regions(id, slice_idx, aspect=aspect, crop=crop, latex=latex, legend=False, legend_loc=legend_loc, show=False, view=view, **kwargs)
 
     # Get bounding box (and maybe segmentation).
-    if localisation is not None:
-        assert localisation_seg is not None
-        bounding_box, pred = localisation, localisation_seg
+    if loc_box is not None:
+        assert loc_seg is not None
+        bounding_box, pred = loc_box, loc_seg
     else:
         assert localiser is not None and localiser_size is not None and localiser_spacing is not None
         bounding_box, pred = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_seg=True)
 
     # Plot prediction.
-    if segmentation:
+    if show_seg:
         # Get aspect ratio.
         if not aspect:
             aspect = _get_aspect_ratio(id, view) 
@@ -376,15 +425,15 @@ def plot_patient_segmentation(
     device: torch.device = torch.device('cpu'),
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
+    loc_box: types.Box3D = None,
+    loc_box_colour: str = 'r',
     localiser: nn.Module = None,
     localiser_size: types.Size3D = None,
     localiser_spacing: types.Spacing3D = None,
-    localisation_box: bool = None,
-    localisation_box_colour: str = 'r',
     segmentation_box_colour: str = 'y',
     segmentation_colour: str = (0.12, 0.47, 0.70, 1.0),
-    show_localisation_box: bool = False,
-    show_segmentation_box: bool = False,
+    show_loc_box: bool = False,
+    show_seg_box: bool = False,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     """
@@ -392,7 +441,7 @@ def plot_patient_segmentation(
     args:
         id: the patient ID.
         slice_idx: the slice index.
-        segmenter: the localiser network.
+        segmenter: the segmenter network.
         segmenter_size: the input size expected by the segmenter.
         segmenter_spacing: the input spacing expected by the segmenter.
     kwargs:
@@ -402,14 +451,14 @@ def plot_patient_segmentation(
         device: the device to perform network calcs on.
         legend_loc: the legend location.
         legend_size: the size of the legend.
+        loc_box: the coordinates of the localisation box.
+        loc_box_colour: the colour to use for displaying the localisation box.
         localiser: the localiser network.
         localiser_size: the input size of the localiser network.
         localiser_spacing: the voxel spacing for the localiser network.
-        localisation_box: the coordinates of the localisation box.
-        localisation_box_colour: the colour to use for displaying the localisation box.
         segmentation_box_colour: the colour to use for displaying the segmentation patch box.
-        show_localisation_box: display localisation box.
-        show_segmentation_box: display segmentation patch box.
+        show_loc_box: display localisation box.
+        show_seg_box: display segmentation patch box.
         view: the view plane. 
         **kwargs: all kwargs accepted by 'plot_patient_regions'.
     """
@@ -417,11 +466,11 @@ def plot_patient_segmentation(
     plot_patient_regions(id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
 
     # Get localisation box if not given.
-    if not localisation_box:
+    if not loc_box:
         localisation_box = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
 
     # Get segmentation prediction.
-    seg, seg_patch = get_patient_patch_segmentation(id, localisation_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
+    seg, seg_patch = get_patient_patch_segmentation(id, loc_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
 
     # Get seg slice.
     seg = _get_slice_for_plotting(seg, slice_idx, view)
@@ -441,11 +490,11 @@ def plot_patient_segmentation(
     plt.plot(0, 0, c=segmentation_colour, label='Segmentation')
 
     # Plot localisation bounding box.
-    if show_localisation_box and _should_plot_bounding_box(localisation_box, view, slice_idx):
-        _plot_bounding_box(localisation_box, view, box_colour=localisation_box_colour, crop=crop, label='Localisation Box')
+    if show_loc_box and _should_plot_bounding_box(loc_box, view, slice_idx):
+        _plot_bounding_box(loc_box, view, box_colour=loc_box_colour, crop=crop, label='Localisation Box')
 
     # Plot segmentation patch.
-    if show_segmentation_box and _should_plot_bounding_box(seg_patch, view, slice_idx):
+    if show_seg_box and _should_plot_bounding_box(seg_patch, view, slice_idx):
         _plot_bounding_box(seg_patch, view, box_colour=segmentation_box_colour, crop=crop, label='Segmentation Patch')
 
     # Show legend.

@@ -28,7 +28,7 @@ class ParotidLeft3DPreprocessor:
         seed: int = 42,
         transform: bool = None):
         """
-        effect: stores 3D patient volumes in 'train', 'validate' and 'test' folders
+        effect: stores 3D patient volumes in 'train', 'validation' and 'test' folders
             by random split.
         kwargs:
             clear_cache: force the cache to clear.
@@ -62,22 +62,22 @@ class ParotidLeft3DPreprocessor:
             logging.info(f"Using subset of {num_pats} patients.")
 
         # Set split proportions.
-        p_train, p_validate, p_test = .6, .2, .2
-        logging.info(f"Splitting dataset using proportions: {p_train}/{p_validate}/{p_test}.")
+        p_train, p_validation, p_test = .6, .2, .2
+        logging.info(f"Splitting dataset using proportions: {p_train}/{p_validation}/{p_test}.")
 
         # Split the patient IDs.
         np.random.seed(seed) 
         np.random.shuffle(pats)
         num_train = int(np.floor(p_train * len(pats)))
-        num_validate = int(np.floor(p_validate * len(pats)))
+        num_validation = int(np.floor(p_validation * len(pats)))
         train_pats = pats[:num_train]
-        validate_pats = pats[num_train:(num_train + num_validate)]
-        test_pats = pats[(num_train + num_validate):]
-        logging.info(f"Num patients in split: {len(train_pats)}/{len(validate_pats)}/{len(test_pats)}.") 
+        validation_pats = pats[num_train:(num_train + num_validation)]
+        test_pats = pats[(num_train + num_validation):]
+        logging.info(f"Num patients in split: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)}.") 
 
         # Write data to each folder.
-        folders = ['train', 'validate', 'test']
-        folder_pats = [train_pats, validate_pats, test_pats]
+        folders = ['train', 'validation', 'test']
+        folder_pats = [train_pats, validation_pats, test_pats]
         for folder, pats in zip(folders, folder_pats):
             logging.info(f"Writing data to '{folder}' folder.")
 

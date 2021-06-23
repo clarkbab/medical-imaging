@@ -22,7 +22,7 @@ class ParotidLeft3DSegmenterLoader:
         """
         returns: a data loader.
         args:
-            folder: a string describing the desired loader - 'train', 'validate' or 'test'.
+            folder: a string describing the desired loader - 'train', 'validation' or 'test'.
             patch_size: the patch size to extract.
         kwargs:
             batch_size: the number of images in the batch.
@@ -50,7 +50,7 @@ class ParotidLeft3DSegmenterDataset(Dataset):
         transform: torchio.transforms.Transform = None):
         """
         args:
-            folder: a string describing the desired loader - 'train', 'validate' or 'test'.
+            folder: a string describing the desired loader - 'train', 'validation' or 'test'.
             patch_size: the size of the patch.
         kwargs:
             p: the proportion of samples that are centred on a foreground voxel.

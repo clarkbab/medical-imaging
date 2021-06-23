@@ -21,8 +21,8 @@ class ModelTrainer:
         optimiser: torch.optim.Optimizer,
         run_name: str,
         train_loader: torch.utils.data.DataLoader,
-        validate_loader: torch.utils.data.DataLoader,
-        validate_loader_visual: torch.utils.data.DataLoader,
+        validation_loader: torch.utils.data.DataLoader,
+        validation_loader_visual: torch.utils.data.DataLoader,
         device: torch.device = torch.device('cpu'),
         early_stopping: bool = False,
         hausdorff_delay: int = 500,
@@ -35,10 +35,10 @@ class ModelTrainer:
         report: bool = True,
         report_offline: bool = False,
         spacing: Optional[types.Spacing3D] = None,
-        validate: bool = True,
-        validate_interval: Union[str, int] ='epoch',
-        validate_print_interval: Union[str, int] = 'epoch',
-        validate_report_interval: Union[str, int] = 'epoch') -> None:
+        validation: bool = True,
+        validation_interval: Union[str, int] ='epoch',
+        validation_print_interval: Union[str, int] = 'epoch',
+        validation_report_interval: Union[str, int] = 'epoch') -> None:
         """
         effect: sets the initial trainer values.
         args:
@@ -47,8 +47,8 @@ class ModelTrainer:
             optimiser: updates the model parameters in response to gradients.
             run_name: the name of the run to show in reporting.
             train_loader: provides the training input and label batches.
-            validate_loader: provides the validation input and label batches.
-            validate_loader_visual: provides the visual validation input and label batches.
+            validation_loader: provides the validation input and label batches.
+            validation_loader_visual: provides the visual validation input and label batches.
         kwargs:
             device: the device to train on.
             early_stopping: if the training should use early stopping or not.
@@ -62,10 +62,10 @@ class ModelTrainer:
             report: turns reporting on and off.
             report_offline: creates reporting files locally, to be uploaded later.
             spacing: the voxel spacing. Required for calculating Hausdorff distance.
-            validate: turns validation on and off.
-            validate_interval: how often to run the validation.
-            validate_print_interval: how often to print results during validation.
-            validate_report_interval: how often to report results during validation.
+            validation: turns validation on and off.
+            validation_interval: how often to run the validation.
+            validation_print_interval: how often to print results during validation.
+            validation_report_interval: how often to report results during validation.
         """
         self._device = device
         self._early_stopping = early_stopping
@@ -89,7 +89,7 @@ class ModelTrainer:
         self._max_epochs = max_epochs
         self._max_epochs_since_improvement = 20
         self._metrics = metrics
-        self._min_validate_loss = np.inf
+        self._min_validation_loss = np.inf
         self._mixed_precision = mixed_precision
         self._model_name = model_name
         self._num_epochs_since_improvement = 0
@@ -103,16 +103,16 @@ class ModelTrainer:
         self._train_loader = train_loader
         self._train_print_interval = len(train_loader) if train_print_interval == 'epoch' else train_print_interval
         self._train_report_interval = len(train_loader) if train_report_interval == 'epoch' else train_report_interval
-        self._validate = validate
-        self._validate_interval = len(train_loader) if validate_interval == 'epoch' else validate_interval
-        self._validate_loader = validate_loader
-        self._validate_loader_visual = validate_loader_visual
-        self._validate_print_interval = len(validate_loader) if validate_print_interval == 'epoch' else validate_print_interval
-        self._validate_report_interval = len(validate_loader) if validate_report_interval == 'epoch' else validate_report_interval
+        self._validation = validation
+        self._validation_interval = len(train_loader) if validation_interval == 'epoch' else validation_interval
+        self._validation_loader = validation_loader
+        self._validation_loader_visual = validation_loader_visual
+        self._validation_print_interval = len(validation_loader) if validation_print_interval == 'epoch' else validation_print_interval
+        self._validation_report_interval = len(validation_loader) if validation_report_interval == 'epoch' else validation_report_interval
 
         # Initialise running scores.
         self._running_scores = {}
-        keys = ['print', 'report', 'validate-print', 'validate-report', 'validate-checkpoint']
+        keys = ['print', 'report', 'validation-print', 'validation-report', 'validation-checkpoint']
         for key in keys:
             self._running_scores[key] = {}
             self._reset_running_scores(key)
@@ -185,8 +185,8 @@ class ModelTrainer:
                     self._reset_running_scores('report')
 
                 # Perform validation and checkpointing.
-                if self._validate and self._is_validate_step(step):
-                    self._validate_model(model, epoch, batch, step)
+                if self._validation and self._is_validation_step(step):
+                    self._validation_model(model, epoch, batch, step)
 
                 # Check early stopping.
                 if self._early_stopping:
@@ -196,7 +196,7 @@ class ModelTrainer:
 
         self._log_info(f"Maximum epochs ({self._max_epochs} reached.")
 
-    def _validate_model(
+    def _validation_model(
         self,
         model: torch.nn.Module,
         train_epoch: int,
@@ -213,7 +213,7 @@ class ModelTrainer:
         model.eval()
 
         # Calculate validation score.
-        for step, (input, label) in enumerate(self._validate_loader):
+        for step, (input, label) in enumerate(self._validation_loader):
             # Convert input data.
             input, label = input.float(), label.long()
             input = input.unsqueeze(1)
@@ -223,9 +223,9 @@ class ModelTrainer:
             with autocast(enabled=self._mixed_precision):
                 pred = model(input)
                 loss = self._loss_fn(pred, label)
-            self._running_scores['validate-checkpoint']['loss'] += [loss.item()]
-            self._running_scores['validate-print']['loss'] += [loss.item()]
-            self._running_scores['validate-report']['loss'] += [loss.item()]
+            self._running_scores['validation-checkpoint']['loss'] += [loss.item()]
+            self._running_scores['validation-print']['loss'] += [loss.item()]
+            self._running_scores['validation-report']['loss'] += [loss.item()]
 
             # Convert to binary prediction.
             pred = pred.argmax(axis=1)
@@ -235,46 +235,46 @@ class ModelTrainer:
 
             if 'dice' in self._metrics:
                 dice = batch_mean_dice(pred, label)
-                self._running_scores['validate-print']['dice'] += [dice.item()]
-                self._running_scores['validate-report']['dice'] += [dice.item()]
+                self._running_scores['validation-print']['dice'] += [dice.item()]
+                self._running_scores['validation-report']['dice'] += [dice.item()]
 
             if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
                 # Can't calculate HD if prediction is empty.
                 if pred.sum() > 0:
-                    hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, self._spacing)
-                    self._running_scores['validate-print']['hausdorff'] += [hausdorff.item()]
-                    self._running_scores['validate-report']['hausdorff'] += [hausdorff.item()]
+                    hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, spacing=self._spacing)
+                    self._running_scores['validation-print']['hausdorff'] += [hausdorff.item()]
+                    self._running_scores['validation-report']['hausdorff'] += [hausdorff.item()]
 
             # Print results.
-            if self._is_print_step(self._validate_print_interval, step):
-                self._print_validate_results(train_epoch, train_batch, train_step, step)
-                self._reset_running_scores('validate-print')
+            if self._is_print_step(self._validation_print_interval, step):
+                self._print_validation_results(train_epoch, train_batch, train_step, step)
+                self._reset_running_scores('validation-print')
 
             # Report results.
-            if self._report and self._is_report_step(self._validate_report_interval, step):
-                self._report_validate_results(train_step)
-                self._reset_running_scores('validate-report')
+            if self._report and self._is_report_step(self._validation_report_interval, step):
+                self._report_validation_results(train_step)
+                self._reset_running_scores('validation-report')
 
         # Check for validation loss improvement.
-        loss = np.mean(self._running_scores['validate-checkpoint']['loss'])
-        if loss < self._min_validate_loss:
+        loss = np.mean(self._running_scores['validation-checkpoint']['loss'])
+        if loss < self._min_validation_loss:
             # Save model checkpoint.
             info = {
                 'train-epoch': train_epoch,
                 'train-batch': train_batch,
                 'train-step': train_step,
-                'validate-loss': loss
+                'validation-loss': loss
             }
             checkpoint.save(model, self._model_name, self._optimiser, self._run_name, info=info)
-            self._min_validate_loss = loss
+            self._min_validation_loss = loss
             self._num_epochs_since_improvement = 0
         else:
             self._num_epochs_since_improvement += 1
-        self._reset_running_scores('validate-checkpoint')
+        self._reset_running_scores('validation-checkpoint')
 
         # Plot validation images for visual indication of improvement.
         if self._report:
-            for step, (input, label) in enumerate(self._validate_loader_visual):
+            for step, (input, label) in enumerate(self._validation_loader_visual):
                 input, label = input.float(), label.long()
                 input = input.unsqueeze(1)
                 input, label = input.to(self._device), label.to(self._device)
@@ -357,7 +357,7 @@ class ModelTrainer:
         else:
             return False
 
-    def _is_validate_step(
+    def _is_validation_step(
         self,
         step: int) -> bool:
         """
@@ -365,7 +365,7 @@ class ModelTrainer:
         args:
             step: the current training step.
         """
-        if (step + 1) % self._validate_interval == 0:
+        if (step + 1) % self._validation_interval == 0:
             return True
         else:
             return False
@@ -397,31 +397,31 @@ class ModelTrainer:
 
         self._log_info(message)
         
-    def _print_validate_results(
+    def _print_validation_results(
         self,
         train_epoch: int,
         train_batch: int,
         train_step: int,
-        validate_batch: int) -> None:
+        validation_batch: int) -> None:
         """
         effect: logs the averaged validation results.
         args:
             train_epoch: the current training epoch.
             train_batch: the current training batch.
             train_step: the current training step.
-            validate_batch: the current validation batch.
+            validation_batch: the current validation batch.
         """
         # Get average validation loss.
-        mean_loss = np.mean(self._running_scores['validate-print']['loss'])
-        message = f"VAL - [E:{train_epoch}, B:{train_batch}, I:{train_step}, VB:{validate_batch}] Loss: {mean_loss:{PRINT_DP}}"
+        mean_loss = np.mean(self._running_scores['validation-print']['loss'])
+        message = f"VAL - [E:{train_epoch}, B:{train_batch}, I:{train_step}, VB:{validation_batch}] Loss: {mean_loss:{PRINT_DP}}"
 
         # Get additional metrics.
         if 'dice' in self._metrics:
-            mean_dice = np.mean(self._running_scores['validate-print']['dice'])
+            mean_dice = np.mean(self._running_scores['validation-print']['dice'])
             message += f", DSC: {mean_dice:{PRINT_DP}}"
 
         if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
-            mean_hausdorff = np.mean(self._running_scores['validate-print']['hausdorff'])
+            mean_hausdorff = np.mean(self._running_scores['validation-print']['hausdorff'])
             message += f", HD: {mean_hausdorff:{PRINT_DP}}"
 
         self._log_info(message)
@@ -445,7 +445,7 @@ class ModelTrainer:
             mean_hausdorff = np.mean(self._running_scores['report']['hausdorff'])
             self._reporter.add_metric('Hausdorff/train', mean_hausdorff, step)
 
-    def _report_validate_results(
+    def _report_validation_results(
         self,
         step: int) -> None:
         """
@@ -453,16 +453,16 @@ class ModelTrainer:
         args:
             step: the current training step. 
         """
-        mean_loss = np.mean(self._running_scores['validate-report']['loss'])
-        self._reporter.add_metric('Loss/validate', mean_loss, step)
+        mean_loss = np.mean(self._running_scores['validation-report']['loss'])
+        self._reporter.add_metric('Loss/validation', mean_loss, step)
 
         if 'dice' in self._metrics:
-            mean_dice = np.mean(self._running_scores['validate-report']['dice'])
-            self._reporter.add_metric('Dice/validate', mean_dice, step)
+            mean_dice = np.mean(self._running_scores['validation-report']['dice'])
+            self._reporter.add_metric('Dice/validation', mean_dice, step)
 
         if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
-            mean_hausdorff = np.mean(self._running_scores['validate-report']['hausdorff'])
-            self._reporter.add_metric('Hausdorff/validate', mean_hausdorff, step)
+            mean_hausdorff = np.mean(self._running_scores['validation-report']['hausdorff'])
+            self._reporter.add_metric('Hausdorff/validation', mean_hausdorff, step)
 
     def _reset_running_scores(
         self,

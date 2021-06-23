@@ -21,7 +21,7 @@ FILENAME_NUM_DIGITS = 5
 class ParotidLeft2DPreprocessor:
     def __call__(self, drop_missing_slices=True, num_pats='all', seed=42, transforms=[]):
         """
-        effect: stores 2D slice data in 'train', 'validate' and 'test' folders by 
+        effect: stores 2D slice data in 'train', 'validation' and 'test' folders by 
             random split and 'positive' and 'negative' subfolders by presence of 
             'Parotid-Left' gland.
         kwargs:
@@ -52,21 +52,21 @@ class ParotidLeft2DPreprocessor:
             logging.info(f"Using subset of {num_pats} patients.")
 
         # Set split proportions.
-        p_train, p_validate, p_test = .6, .2, .2
-        logging.info(f"Splitting dataset using proportions: {p_train}/{p_validate}/{p_test}.")
+        p_train, p_validation, p_test = .6, .2, .2
+        logging.info(f"Splitting dataset using proportions: {p_train}/{p_validation}/{p_test}.")
 
         # Split the patient IDs.
         np.random.seed(seed) 
         np.random.shuffle(pat_ids)
         num_train = int(np.floor(p_train * len(pat_ids)))
-        num_validate = int(np.floor(p_validate * len(pat_ids)))
+        num_validation = int(np.floor(p_validation * len(pat_ids)))
         pat_train_ids = pat_ids[:num_train]
-        pat_validate_ids = pat_ids[num_train:(num_train + num_validate)]
-        pat_test_ids = pat_ids[(num_train + num_validate):]
-        logging.info(f"Num patients in split: {len(pat_train_ids)}/{len(pat_validate_ids)}/{len(pat_test_ids)}.") 
+        pat_validation_ids = pat_ids[num_train:(num_train + num_validation)]
+        pat_test_ids = pat_ids[(num_train + num_validation):]
+        logging.info(f"Num patients in split: {len(pat_train_ids)}/{len(pat_validation_ids)}/{len(pat_test_ids)}.") 
 
-        folders = ['train', 'validate', 'test']
-        folder_pat_ids = [pat_train_ids, pat_validate_ids, pat_test_ids]
+        folders = ['train', 'validation', 'test']
+        folder_pat_ids = [pat_train_ids, pat_validation_ids, pat_test_ids]
 
         # Write data to each folder.
         for folder, pat_ids in zip(folders, folder_pat_ids):

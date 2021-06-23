@@ -12,7 +12,7 @@ from mymi import config
 class ParotidLeft3DLocaliserLoader:
     @staticmethod
     def build(
-        folder: Union['train', 'validate', 'test'],
+        folder: Union['train', 'validation', 'test'],
         batch_size: int = 1,
         raw_input: bool = False,
         raw_label: bool = False,

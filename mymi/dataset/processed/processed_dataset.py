@@ -65,7 +65,7 @@ class ProcessedDataset:
         """
         returns: the input data for sample i.
         args:
-            folder: 'train', 'test' or 'validate'.
+            folder: 'train', 'test' or 'validation'.
             sample_idx: the sample index to load.
         """
         # Load the input data.
@@ -82,7 +82,7 @@ class ProcessedDataset:
         """
         returns: the label data for sample i.
         args:
-            folder: 'train', 'test' or 'validate'.
+            folder: 'train', 'test' or 'validation'.
             sample_idx: the sample index to load.
         """
         # Load the label data.
@@ -99,7 +99,7 @@ class ProcessedDataset:
         """
         returns: the (input, label) pair for the given sample index.
         args:
-            folder: 'train', 'test' or 'validate'.
+            folder: 'train', 'test' or 'validation'.
             sample_idx: the sample index to load.
         """
         # Get sample (input, label) pair.
@@ -112,7 +112,7 @@ class ProcessedDataset:
         """
         returns: the frequencies for each class.
         args:
-            folder: 'train', 'test', or 'validate'.
+            folder: 'train', 'test', or 'validation'.
         """
         params = {
             'class': cls.__name__,
