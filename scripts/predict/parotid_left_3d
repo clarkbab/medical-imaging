@@ -93,6 +93,12 @@ if pred_ds_name in dss:
 dataset.create(pred_ds_name)
 ds_pred = DicomDataset(pred_ds_name)
 
+# Create RTSTRUCT info.
+rt_info = {
+    'label': args.rtstruct_label if args.rtstruct_label else 'MYMI',
+    'institution-name': 'PMAC'
+}
+
 for pat in tqdm(pats):
     # Get segmentation.
     try:
@@ -106,9 +112,7 @@ for pat in tqdm(pats):
     cts = dataset.patient(pat).get_cts()
 
     # Create RTSTRUCT dicom.
-    rtstruct_label = args.rtstruct_label if args.rtstruct_label else 'MYMI RTSTRUCT'
-    series_desc = args.series_desc if args.series_desc else 'MYMI'
-    rtstruct = RTStructConverter.create_rtstruct(cts, label=rtstruct_label, series_desc=series_desc)
+    rtstruct = RTStructConverter.create_rtstruct(cts, rt_info)
 
     # Create ROI data.
     roi_data = ROIData(

@@ -145,7 +145,8 @@ class ModelTrainer:
                         self._reporter.add_model_graph(model, input)
 
                 # Perform forward/backward pass.
-                with autocast(enabled=self._mixed_precision):
+                autocast_enabled = self._device.type == 'cuda'
+                with autocast(enabled=autocast_enabled):
                     pred = model(input)
                     loss = self._loss_fn(pred, label)
                 self._scaler.scale(loss).backward()
@@ -220,7 +221,8 @@ class ModelTrainer:
             input, label = input.to(self._device), label.to(self._device)
 
             # Perform forward pass.
-            with autocast(enabled=self._mixed_precision):
+            autocast_enabled = self._device.type == 'cuda'
+            with autocast(enabled=autocast_enabled):
                 pred = model(input)
                 loss = self._loss_fn(pred, label)
             self._running_scores['validation-checkpoint']['loss'] += [loss.item()]
@@ -280,7 +282,8 @@ class ModelTrainer:
                 input, label = input.to(self._device), label.to(self._device)
 
                 # Perform forward pass.
-                with autocast(enabled=self._mixed_precision):
+                autocast_enabled = self._device == 'cuda'
+                with autocast(enabled=autocast_enabled):
                     pred = model(input)
 
                 # Convert prediction to binary values.

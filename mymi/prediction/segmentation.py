@@ -53,7 +53,8 @@ def get_patient_patch_segmentation(
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
     input = input.to(device)
-    with autocast(enabled=True):
+    autocast_enabled = device.type == 'cuda'
+    with autocast(enabled=autocast_enabled):
         pred = segmenter(input)
     pred = pred.cpu()
 

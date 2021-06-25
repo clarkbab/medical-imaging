@@ -157,21 +157,21 @@ class RTStructConverter:
     def create_rtstruct(
         cls,
         ref_cts: Sequence[dcm.dataset.FileDataset],
-        label: str = 'RTSTRUCT',
-        series_desc: str = '') -> dcm.dataset.FileDataset:
+        info: Dict[str, str] = {}) -> dcm.dataset.FileDataset:
         """
         returns: an RTSTRUCT dicom.
         args:
             ref_cts: the reference CT dicoms.
         kwargs:
-            series_desc: the DICOM series description field.
+            info: a dictionary of extra info to add to RTSTRUCT.
+                institution-name: the RTSTRUCT 'InstitutionName' field.
+                label: the RTSTRUCT 'StructureSetLabel' field.
         """
         # Create metadata.
         metadata = cls._create_metadata()
 
         # Create rtstruct.
         rtstruct = FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
-        rtstruct.StructureSetLabel = label
 
         # Set empty sequences.
         rtstruct.StructureSetROISequence = dcm.sequence.Sequence()
@@ -179,13 +179,13 @@ class RTStructConverter:
         rtstruct.RTROIObservationsSequence = dcm.sequence.Sequence()
 
         # Add general info.
-        cls._add_general_info(rtstruct)
+        cls._add_general_info(rtstruct, info)
 
         # Add patient info.
         cls._add_patient_info(rtstruct, ref_cts[0])
 
         # Add study/series info.
-        cls._add_study_and_series_info(rtstruct, ref_cts[0], series_desc)
+        cls._add_study_and_series_info(rtstruct, ref_cts[0], info)
 
         # Add frame of reference.
         cls._add_frames_of_reference(rtstruct, ref_cts)
@@ -211,11 +211,13 @@ class RTStructConverter:
     @classmethod
     def _add_general_info(
         cls,
-        rtstruct: dcm.dataset.FileDataset) -> None:
+        rtstruct: dcm.dataset.FileDataset,
+        info: Dict[str, str]) -> None:
         """
         effect: adds general info to RTSTRUCT dicom.
         args:
             rtstruct: the RTSTRUCT dicom.
+            info: a dictionary of general info to add to RTSTRUCT.
         """
         # Set transfer syntax.
         rtstruct.is_little_endian = True
@@ -235,12 +237,11 @@ class RTStructConverter:
         rtstruct.ContentTime = time
         rtstruct.InstanceCreationDate = date
         rtstruct.InstanceCreationTime = time
-        rtstruct.InstitutionName = 'PMCC'
-        rtstruct.Manufacturer = 'PMCC'
-        rtstruct.ManufacturerModelName = 'PMCC-Seg'
+        if 'institution-name' in info:
+            rtstruct.InstitutionName = info['institution-name']
         rtstruct.Modality = 'RTSTRUCT'
         rtstruct.SpecificCharacterSet = 'ISO_IR 100'
-        rtstruct.StructureSetLabel = 'RTSTRUCT'
+        rtstruct.StructureSetLabel = info['label'] if 'label' in info else 'RTSTRUCT'
         rtstruct.StructureSetDate = date
         rtstruct.StructureSetTime = time
 
@@ -272,13 +273,13 @@ class RTStructConverter:
         cls,
         rtstruct: dcm.dataset.FileDataset,
         ref_ct: dcm.dataset.FileDataset,
-        series_desc: str) -> None:
+        info: Dict[str, str]) -> None:
         """
         effect: copies study/series info from the CT to the RTSTRUCT dicom.
         args:
             rtstruct: the RTSTRUCT dicom.
             ref_ct: the reference CT dicom.
-            series_desc: the series description.
+            info: a dictionary of information.
         """
         # Get current datetime.
         dt = datetime.now()
@@ -292,7 +293,6 @@ class RTStructConverter:
 
         # Add series info.
         rtstruct.SeriesDate = dt.strftime(DATE_FORMAT)
-        rtstruct.SeriesDescription = series_desc
         rtstruct.SeriesInstanceUID = generate_uid()
         rtstruct.SeriesNumber = 0
         rtstruct.SeriesTime = dt.strftime(TIME_FORMAT)
