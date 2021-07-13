@@ -7,7 +7,7 @@ import pydicom as dcm
 from scipy.ndimage import center_of_mass
 from typing import Any, Callable, OrderedDict, Sequence, Tuple, Union
 
-from mymi.cache import cached_method
+from mymi import cache
 from mymi import config
 from mymi import types
 
@@ -127,8 +127,12 @@ class DicomPatient:
         """
         returns: a list of FileDataset objects holding CT info.
         """
-        # Load CT dicoms.
+        # Check CT path.
         cts_path = os.path.join(self._path, 'ct')
+        if not os.path.exists(cts_path):
+            raise ValueError(f"Expected multiple CT dicoms for dataset '{self._dataset}', patient '{self._id}', got 0.")
+
+        # Load CTs.
         ct_paths = [os.path.join(cts_path, f) for f in os.listdir(cts_path)]
         cts = [dcm.read_file(f) for f in ct_paths]
 
@@ -141,8 +145,12 @@ class DicomPatient:
         """
         returns: a FileDataset object holding RTSTRUCT info.
         """
-        # Check number of RTSTRUCTs.
+        # Check RTSTRUCT path.
         rtstructs_path = os.path.join(self._path, 'rtstruct')
+        if not os.path.exists(rtstructs_path):
+            raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got 0.")
+
+        # Check number of RTSTRUCTs.
         rtstruct_paths = [os.path.join(rtstructs_path, f) for f in os.listdir(rtstructs_path)]
         if len(rtstruct_paths) != 1:
             raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got {len(rtstruct_paths)}.")
@@ -184,7 +192,7 @@ class DicomPatient:
 
         return df
 
-    @cached_method('_ct_from', '_dataset', '_id')
+    @cache.method('_ct_from', '_dataset', '_id')
     def ct_summary(self) -> pd.DataFrame:
         """
         returns: a table summarising CT info.
@@ -329,7 +337,7 @@ class DicomPatient:
         spacing = tuple(self.ct_summary(clear_cache=clear_cache)[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
         return spacing
 
-    @cached_method('_ct_from', '_dataset', '_id')
+    @cache.method('_ct_from', '_dataset', '_id')
     def ct_slice_summary(self) -> pd.DataFrame:
         """
         returns: a table summarising CT slice info.
@@ -389,7 +397,7 @@ class DicomPatient:
 
         return df
 
-    @cached_method('_ct_from', '_dataset', '_id')
+    @cache.method('_ct_from', '_dataset', '_id')
     def region_summary(
         self,
         clear_cache: bool = False,
@@ -404,9 +412,18 @@ class DicomPatient:
         # Define table structure.
         cols = {
             'region': str,
+            'centroid-mm-x': float,
+            'centroid-mm-y': float,
+            'centroid-mm-z': float,
+            'centroid-voxels-x': int,
+            'centroid-voxels-y': int,
+            'centroid-voxels-z': int,
             'width-mm-x': float,
             'width-mm-y': float,
             'width-mm-z': float,
+            'width-voxels-x': int,
+            'width-voxels-y': int,
+            'width-voxels-z': int,
         }
         cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
         df = pd.DataFrame(columns=cols.keys())
@@ -414,14 +431,17 @@ class DicomPatient:
         # Get region dict.
         region_data = self.region_data(clear_cache=clear_cache, regions=regions)
 
-        # Get voxel spacings.
-        summary = self.ct_summary(clear_cache=clear_cache).iloc[0].to_dict()
-        spacing = (summary['spacing-x'], summary['spacing-y'], summary['spacing-z'])
+        # Get voxel offset/spacing.
+        offset = self.ct_offset(clear_cache=clear_cache)
+        spacing = self.ct_spacing(clear_cache=clear_cache)
 
         # Add info for each region.
         for name, data in region_data.items():
             # Find centre-of-mass.
-            coms = np.round(center_of_mass(data)).astype(int)
+            centroid = np.round(center_of_mass(data)).astype(int)
+
+            # Convert COM to millimetres.
+            mm_centroid = (centroid * spacing) + offset
 
             # Find bounding box co-ordinates.
             non_zero = np.argwhere(data != 0)
@@ -434,9 +454,18 @@ class DicomPatient:
 
             data = {
                 'region': name,
+                'centroid-mm-x': mm_centroid[0],
+                'centroid-mm-y': mm_centroid[1],
+                'centroid-mm-z': mm_centroid[2],
+                'centroid-voxels-x': centroid[0],
+                'centroid-voxels-y': centroid[1],
+                'centroid-voxels-z': centroid[2],
                 'width-mm-x': mm_widths[0],
                 'width-mm-y': mm_widths[1],
-                'width-mm-z': mm_widths[2]
+                'width-mm-z': mm_widths[2],
+                'width-voxels-x': voxel_widths[0],
+                'width-voxels-y': voxel_widths[1],
+                'width-voxels-z': voxel_widths[2]
             }
             df = df.append(data, ignore_index=True)
 
@@ -448,7 +477,7 @@ class DicomPatient:
 
         return df
 
-    @cached_method('_ct_from', '_dataset', '_id')
+    @cache.method('_ct_from', '_dataset', '_id')
     def ct_data(
         self,
         clear_cache: bool = False) -> np.ndarray:
@@ -482,7 +511,7 @@ class DicomPatient:
 
         return data
 
-    @cached_method('_dataset', '_id')
+    @cache.method('_dataset', '_id')
     def region_names(
         self,
         clear_cache: bool = False) -> pd.DataFrame:
@@ -506,7 +535,18 @@ class DicomPatient:
 
         return df
 
-    @cached_method('_ct_from', '_dataset', '_id')
+    def has_region(
+        self,
+        region: str,
+        clear_cache: bool = False) -> bool:
+        """
+        returns: if the patient has the region.
+        args:
+            region: the region name.
+        """
+        return region in list(self.region_names(clear_cache=clear_cache).region)
+
+    @cache.method('_ct_from', '_dataset', '_id')
     def region_data(
         self,
         clear_cache: bool = False,

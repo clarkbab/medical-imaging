@@ -27,6 +27,10 @@ class Directories:
         return os.environ['MYMI_DATA']
 
     @property
+    def temp(self):
+        return os.path.join(self.root, 'tmp')
+
+    @property
     def tensorboard(self):
         return os.path.join(self.root, 'reporting', 'tensorboard')
 

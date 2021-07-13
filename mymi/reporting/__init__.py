@@ -1,2 +1,3 @@
+from .dataset import generate_dataset_regions_report
 from .tensorboard_reporter import TensorboardReporter
 from .wandb_reporter import WandbReporter

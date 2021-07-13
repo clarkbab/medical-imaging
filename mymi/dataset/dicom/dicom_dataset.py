@@ -13,13 +13,13 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import cache
-from mymi.cache import cached_method
 from mymi import config
 from mymi import regions
+from mymi import types
 from mymi.utils import filterOnNumPats, filterOnPatIDs
 
 from .dicom_patient import DicomPatient
-from ..types import types
+from ..types import types as old_types
 
 Z_SPACING_ROUND_DP = 2
 
@@ -60,7 +60,7 @@ class DicomDataset:
         return desc
 
     @property
-    def ct_from(self) -> str:
+    def ct_from(self) -> Optional[str]:
         return self._ct_from
 
     @property
@@ -68,8 +68,8 @@ class DicomDataset:
         return self._name
 
     @property
-    def type(self) -> int:
-        return types.DICOM
+    def type(self) -> old_types:
+        return old_types.DICOM
 
     @property
     def path(self) -> str:
@@ -120,21 +120,21 @@ class DicomDataset:
         return pat
 
     @_require_hierarchical
-    @cached_method('_ct_from', '_name')
+    @cache.method('_ct_from', '_name')
     def info(
         self, 
         clear_cache: bool = False,
-        filter_errors: bool = False,
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all',
-        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: types.PatientIDs = 'all',
+        raise_errors: bool = False,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient info.
         kwargs:
             clear_cache: force the cache to clear.
-            filter_errors: exclude patients that produce known errors.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
+            raise_errors: raise known patient errors.
             regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
@@ -149,7 +149,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient regions.
@@ -164,14 +164,14 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    @cached_method('_ct_from', '_name')
+    @cache.method('_ct_from', '_name')
     def ct_distribution(
         self, 
         bin_width: int = 10,
         clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all',
-        regions: Union[str, Sequence[str]] = 'all') -> OrderedDict:
+        pat_ids: types.PatientIDs = 'all',
+        regions: types.PatientRegions = 'all') -> OrderedDict:
         """
         effect: plots CT distribution of the dataset.
         kwargs:
@@ -186,7 +186,7 @@ class DicomDataset:
         
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnRegions(regions), pats))
+        pats = list(filter(self.filterOnRegions(regions), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Calculate the frequencies.
@@ -223,21 +223,21 @@ class DicomDataset:
         return freqs
 
     @_require_hierarchical
-    @cached_method('_ct_from', '_name')
+    @cache.method('_ct_from', '_name')
     def ct_summary(
         self, 
         clear_cache: bool = False,
-        filter_errors: bool = False,
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all',
-        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: types.PatientIDs = 'all',
+        raise_errors: bool = True,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient CT summaries.
         kwargs:
             clear_cache: force the cache to clear.
-            filter_errors: exclude patients that produce known errors.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
+            raise_errors: raise known patient errors.
             regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
@@ -266,7 +266,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnRegions(regions, filter_errors=filter_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, raise_errors=raise_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient info.
@@ -275,12 +275,12 @@ class DicomDataset:
             try:
                 pat_df = self.patient(pat).ct_summary(clear_cache=clear_cache)
             except ValueError as e:
-                if filter_errors:
-                    logging.error(f"Patient filtered due to error calling 'ct_summary' for dataset '{self._name}', patient '{pat}'.")
-                    logging.error(f"Filtered error: {e}")
-                    continue
-                else:
+                if raise_errors:
                     raise e
+                else:
+                    logging.error(f"Patient '{pat}' removed due to error calling 'ct_summary'.")
+                    logging.error(f"Error: {e}")
+                    continue
 
             # Add row.
             pat_df['patient-id'] = pat
@@ -292,21 +292,21 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    @cached_method('_name')
+    @cache.method('_name')
     def region_names(
         self,
         clear_cache: bool = False,
-        filter_errors: bool = False,
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all',
-        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: types.PatientIDs = 'all',
+        raise_errors: bool = True,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
         kwargs:
             clear_cache: force the cache to clear.
-            filter_errors: exclude patients that produce known errors.
             num_pats: the number of patients to include.
             pat_ids: include listed patients.
+            raise_errors: raise known patient errors.
             regions: include patients with (at least) on of the regions.
         """
         # Define table structure.
@@ -321,7 +321,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient regions.
@@ -343,22 +343,22 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    @cached_method('_ct_from', '_name')
+    @cache.method('_ct_from', '_name')
     def region_summary(
         self, 
         clear_cache: bool = False,
-        filter_errors: bool = False,
-        regions: Union[str, Sequence[str]] = 'all',
         num_pats: Union[str, int] = 'all',
-        pat_ids: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
+        pat_ids: types.PatientIDs = 'all',
+        raise_errors: bool = False,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
         """
         returns: a DataFrame with patient regions and information.
         kwargs:
             clear_cache: force the cache to clear.
-            filter_errors: exclude patients that produce known errors.
             regions: include patients with (at least) on of the regions.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
+            raise_errors: raise known patient errors.
         """
         # Define table structure.
         cols = {
@@ -375,7 +375,7 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self._filterOnRegions(regions, clear_cache=clear_cache, filter_errors=filter_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient regions.
@@ -384,12 +384,12 @@ class DicomDataset:
             try:
                 summary_df = self.patient(pat).region_summary(clear_cache=clear_cache, regions=regions)
             except ValueError as e:
-                if filter_errors:
-                    logging.error(f"Patient filtered due to error calling 'ct_summary' for dataset '{self._name}', patient '{pat}'.")
-                    logging.error(f"Filtered error: {e}")
-                    continue
-                else:
+                if raise_errors:
                     raise e
+                else:
+                    logging.error(f"Patient '{pat}' removed due to error calling 'ct_summary'.")
+                    logging.error(f"Error: {e}")
+                    continue
 
             # Add rows.
             for _, row in summary_df.iterrows():
@@ -408,7 +408,7 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    @cached_method('_ct_from', '_name')
+    @cache.method('_ct_from', '_name')
     def region_map(
         self,
         clear_cache: bool = False,
@@ -528,29 +528,29 @@ class DicomDataset:
 
         return df
 
-    def _filterOnRegions(
+    def filterOnRegions(
         self,
-        regions: Union[str, Sequence[str]],
+        regions: types.PatientRegions,
         clear_cache: bool = False,
-        filter_errors: bool = False) -> Callable[[str], bool]:
+        raise_errors: bool = False) -> Callable[[str], bool]:
         """
         returns: a function that filters patient on region presence.
         args:
             clear_cache: force the cache to clear.
             regions: the passed 'regions' kwarg.
-            filter_errors: exclude patients that produce known errors.
+            raise_errors: raise known patient errors.
         """
         def fn(id):
             # Load patient regions.
             try:
                 pat_regions = self.patient(id).region_names(clear_cache=clear_cache).region.to_numpy()
             except ValueError as e:
-                if filter_errors:
-                    logging.error(f"Patient filtered due to error calling 'region_names' for dataset '{self._name}', patient '{id}'.")
-                    logging.error(f"Filtered error: {e}")
-                    return False
-                else:
+                if raise_errors:
                     raise e
+                else:
+                    logging.error(f"Patient '{id}' removed due to error calling 'ct_summary'.")
+                    logging.error(f"Error: {e}")
+                    return False
 
             if ((isinstance(regions, str) and (regions == 'all' or regions in pat_regions)) or
                 ((isinstance(regions, list) or isinstance(regions, np.ndarray) or isinstance(regions, tuple)) and len(np.intersect1d(regions, pat_regions)) != 0)):
@@ -572,7 +572,7 @@ class DicomDataset:
         """
         effect: creates a hierarchical dataset based on dicom content, not existing structure.
         """
-        logging.info('Building hierarchical dataset.')
+        logging.info('Building hierarchical dataset...')
 
         # Load all dicom files.
         raw_path = os.path.join(self._path, 'raw')
@@ -583,7 +583,7 @@ class DicomDataset:
                     dicom_files.append(os.path.join(root, f))
 
         # Copy dicom files.
-        for f in sorted(dicom_files):
+        for f in tqdm(sorted(dicom_files)):
             # Get patient ID.
             dcm = dicom.read_file(f)
             pat_id = dcm.PatientID
@@ -601,3 +601,5 @@ class DicomDataset:
             
             # Save dicom.
             dcm.save_as(filepath)
+
+        logging.info('Complete.')

@@ -17,3 +17,6 @@ def info(*args, **kwargs):
 
 def error(*args, **kwargs):
     return logging.error(*args, **kwargs)
+
+# Default config.
+config('info')
