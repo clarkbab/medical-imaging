@@ -11,6 +11,7 @@ from mymi import cache
 from mymi import config
 from mymi import types
 
+from .region_map import RegionMap
 from .rtstruct_converter import RTStructConverter
 
 class DicomPatient:
@@ -18,7 +19,8 @@ class DicomPatient:
         self,
         dataset: str,
         id: str,
-        ct_from: str = None):
+        ct_from: str = None,
+        region_map: RegionMap = None):
         """
         args:
             dataset: the dataset the patient belongs to, e.g. 'HEAD-NECK-RADIOMICS-HN1'.
@@ -28,6 +30,7 @@ class DicomPatient:
         self._dataset = dataset
         self._id = id
         self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', id)
+        self._region_map = region_map
 
     def _require_ct(fn: Callable) -> Callable:
         """
@@ -530,6 +533,10 @@ class DicomPatient:
         # 'ContourData' and shouldn't be included.
         names = list(filter(lambda n: RTStructConverter.has_roi_data(rtstruct, n), names))
 
+        # Map region names.
+        names = self.dataset
+        names = map_names(names)
+
         # Create dataframe.
         df = pd.DataFrame(names, columns=['region'])
 
@@ -562,6 +569,9 @@ class DicomPatient:
 
         # Load ROI names.
         roi_names = RTStructConverter.get_roi_names(rtstruct) 
+
+        # Convert mapped names using region map.
+
 
         # Filter on required regions.
         def fn(name):

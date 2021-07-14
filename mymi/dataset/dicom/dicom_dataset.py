@@ -19,6 +19,7 @@ from mymi import types
 from mymi.utils import filterOnNumPats, filterOnPatIDs
 
 from .dicom_patient import DicomPatient
+from .region_map import RegionMap
 from ..types import types as old_types
 
 Z_SPACING_ROUND_DP = 2
@@ -115,7 +116,7 @@ class DicomDataset:
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
         # Create patient.
-        pat = DicomPatient(self._name, id, ct_from=self._ct_from)
+        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self.region_map)
 
         return pat
 
@@ -408,10 +409,8 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    @cache.method('_ct_from', '_name')
     def region_map(
         self,
-        clear_cache: bool = False,
         dataset: str = None) -> pd.DataFrame:
         """
         returns: a pd.DataFrame mapping internal region names to this dataset.
@@ -421,39 +420,10 @@ class DicomDataset:
         raises:
             ValueError: if 'region-map.csv' isn't configured properly.
         """
-        # Check for region map.
-        filepath = os.path.join(self._path, 'region-map.csv')
-        if not os.path.exists(filepath):
-            raise ValueError(f"Region map doesn't exist, please create at '{filepath}'.")
+        # Create region map.    
+        map = RegionMap(self._name)
 
-        # Load map file.
-        df = pd.read_csv(filepath)
-
-        # Check that internal region names are entered correctly.
-        for n in df.internal:
-            if not regions.is_region(n):
-                raise ValueError(f"Error in region map for dataset '{self._name}', '{n}' is not an internal region.")
-
-        # Check that dataset region names are entered correctly. 
-        region_names = self.region_names(clear_cache=clear_cache).region.unique()
-        for n in df.dataset:
-            if not n in region_names:
-                raise ValueError(f"Error in region map for dataset '{self._name}', '{n}' is not a dataset region.")
-        
-        if dataset:
-            # Load other map file.
-            ds = DicomDataset(dataset)
-            other_df = ds.region_map()
-
-            # Merge the two maps.
-            df = pd.merge(df, other_df, on='internal')
-            df = df.rename(columns={ 'dataset_x': self._name, 'dataset_y': dataset })
-
-        # Sort by internal name.
-        df = df.sort_values('internal').reset_index(drop=True)
-
-        return df
-
+        return map
 
     @classmethod
     def ct_statistics(cls, regions='all'):
