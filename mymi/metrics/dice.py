@@ -49,7 +49,7 @@ def batch_mean_dice(
 
     return dice_scores.mean()
 
-def sitk_batch_dice(
+def sitk_batch_mean_dice(
         a: torch.Tensor,
         b: torch.Tensor) -> torch.Tensor:
     dice_scores = []

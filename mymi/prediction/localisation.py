@@ -17,17 +17,21 @@ def get_patient_localisation(
     localiser_spacing: types.ImageSpacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    return_seg: bool = False) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:
+    return_seg: bool = False,
+    use_postprocessing: bool = True) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:
     """
     returns: the bounding box (min, max) pair in voxel coordinates. Optionally returns the localiser
         segmentation prediction.
     args:
         id: the patient ID.
         localiser: the localiser network.
+        localiser_size: the input size expected by the localiser network.
+        localiser_spacing: the input spacing expected by the localiser network.
     kwargs:
         clear_cache: force the cache to clear.
         device: the device to run network calcs on.
         return_seg: return the network's segmentation prediction.
+        use_postprocessing: apply postprocessing steps.
     """
     # Get the patient CT data and spacing.
     patient = dataset.patient(id)
@@ -68,7 +72,8 @@ def get_patient_localisation(
     pred = crop_or_pad_3D(pred, crop_box)
 
     # Run CCA.
-    pred = get_largest_cc(pred)
+    if use_postprocessing:
+        pred = get_largest_cc(pred)
 
     # Get OAR extent.
     non_zero = np.argwhere(pred != 0).astype(int)

@@ -4,15 +4,16 @@ from typing import *
 
 from mymi import cache
 from mymi.dataset import DicomDataset
-from mymi import logging
 from mymi.metrics import dice, sitk_hausdorff_distance
+from mymi import types
 
 @cache.function
 def evaluate_predictions(
     pred_dataset: str,
     gt_dataset: str,
     clear_cache: bool = False,
-    pred_ct_from: str = None) -> pd.DataFrame:
+    pred_ct_from: str = None,
+    regions: types.PatientRegions = 'all') -> pd.DataFrame:
     """
     returns: a table of prediction results.
     args:
@@ -21,13 +22,14 @@ def evaluate_predictions(
     kwargs:
         clear_cache: force the cache to clear.
         pred_ct_from: the CT data matching the prediction regions.
+        regions: the prediction regions to evaluate.
     """
-    # Create ground truth dataset.
-    gt_ds = DicomDataset(gt_dataset)
-
-    # Load evaluation patients.
+    # Load predictions.
     pred_ds = DicomDataset(pred_dataset, ct_from=pred_ct_from)
     pats = pred_ds.list_patients()
+
+    # Load ground truth labels.
+    gt_ds = DicomDataset(gt_dataset)
 
     # Load up regions.
     region_map = gt_ds.region_map(dataset=pred_dataset)

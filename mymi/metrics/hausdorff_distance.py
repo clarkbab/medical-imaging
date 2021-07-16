@@ -50,7 +50,7 @@ def sitk_hausdorff_distance(
 
     return hd_dist
 
-def batch_hausdorff_distance(
+def batch_mean_hausdorff_distance(
     a: torch.Tensor,
     b: torch.Tensor,
     distance: str = 'euclidean',
