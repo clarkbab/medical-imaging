@@ -143,7 +143,7 @@ class RTStructConverter:
     @classmethod
     def get_roi_names(
         cls,
-        rtstruct: dcm.dataset.FileDataset) -> Sequence[str]:
+        rtstruct: dcm.dataset.FileDataset) -> List[str]:
         """
         returns: a list of ROIs.
         args:

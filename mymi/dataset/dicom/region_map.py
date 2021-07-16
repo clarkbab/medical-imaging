@@ -62,3 +62,28 @@ class RegionMap:
                 return row.internal
             
         return region
+
+    def to_dataset(
+        self,
+        region: str) -> str:
+        """
+        returns: the dataset region name if appropriate mapping was supplied. If no mapping
+            was supplied for the region then it remains unchanged.
+        args:
+            region: the region name to map.
+        """
+        # Iterrate over map rows.
+        for _, row in self._data.iterrows():
+            # Create pattern match args.
+            args = [row.dataset, region]
+            
+            # Check case.
+            case_matters = row['case-sensitive']
+            if not np.isnan(case_matters) and not case_matters:
+                args += [re.IGNORECASE]
+                
+            # Perform match.
+            if re.match(*args):
+                return row.internal
+            
+        return region

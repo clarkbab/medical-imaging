@@ -116,7 +116,7 @@ class DicomDataset:
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
         # Create patient.
-        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self.region_map)
+        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self.region_map())
 
         return pat
 
@@ -518,7 +518,7 @@ class DicomDataset:
                 if raise_errors:
                     raise e
                 else:
-                    logging.error(f"Patient '{id}' removed due to error calling 'ct_summary'.")
+                    logging.error(f"Patient '{id}' removed due to error calling 'region_names'.")
                     logging.error(f"Error: {e}")
                     return False
 

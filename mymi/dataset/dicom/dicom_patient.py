@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import pydicom as dcm
 from scipy.ndimage import center_of_mass
-from typing import Any, Callable, OrderedDict, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, OrderedDict, Sequence, Tuple, Union
 
 from mymi import cache
 from mymi import config
@@ -18,9 +18,9 @@ class DicomPatient:
     def __init__(
         self,
         dataset: str,
-        id: str,
+        id: types.PatientID,
         ct_from: str = None,
-        region_map: RegionMap = None):
+        region_map: Optional[RegionMap] = None):
         """
         args:
             dataset: the dataset the patient belongs to, e.g. 'HEAD-NECK-RADIOMICS-HN1'.
@@ -517,28 +517,30 @@ class DicomPatient:
     @cache.method('_dataset', '_id')
     def region_names(
         self,
-        clear_cache: bool = False) -> pd.DataFrame:
+        clear_cache: bool = False,
+        use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: the patient's region names.
         kwargs:
             clear_cache: force the cache to clear.
+            use_mapping: use region map if present.
         """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 
         # Get region names.
-        names = list(sorted([r.ROIName for r in rtstruct.StructureSetROISequence]))
+        regions = list(sorted(RTStructConverter.get_roi_names(rtstruct)))
 
         # Filter names on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        names = list(filter(lambda n: RTStructConverter.has_roi_data(rtstruct, n), names))
+        regions = list(filter(lambda n: RTStructConverter.has_roi_data(rtstruct, n), regions))
 
-        # Map region names.
-        names = self.dataset
-        names = map_names(names)
+        # Map to internal names.
+        if use_mapping and self._region_map:
+            regions = [self._region_map.to_internal(n) for n in regions]
 
         # Create dataframe.
-        df = pd.DataFrame(names, columns=['region'])
+        df = pd.DataFrame(regions, columns=['region'])
 
         return df
 
@@ -557,46 +559,55 @@ class DicomPatient:
     def region_data(
         self,
         clear_cache: bool = False,
-        regions: Union[str, Sequence[str]] = 'all') -> OrderedDict:
+        regions: Union[str, Sequence[str]] = 'all',
+        use_mapping: bool = True) -> OrderedDict:
         """
         returns: an OrderedDict[str, np.ndarray] of region names and data.
         kwargs:
             clear_cache: force the cache to clear.
             regions: the desired regions.
+            use_mapping: use region map if present.
         """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 
-        # Load ROI names.
-        roi_names = RTStructConverter.get_roi_names(rtstruct) 
+        # Get region names.
+        names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping)
 
-        # Convert mapped names using region map.
-
+        # Ensure patient has all requested regions.
+        if type(regions) == str and regions not in internal_names: 
+            raise ValueError(f"Region '{regions}' not found for dataset '{self._dataset}', patient '{self._id}'.")
+        else:
+            for region in regions:
+                if region not in internal_names:
+                    raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._id}'.")
 
         # Filter on required regions.
-        def fn(name):
-            if ((type(regions) == str and (regions == 'all' or name == regions)) or
-                ((type(regions) == tuple or type(regions) == list or type(regions) == np.ndarray) and name in regions)):
+        def fn(name_pair):
+            int_name = name_pair[1]
+            if ((type(regions) == str and (regions == 'all' or int_name == regions)) or
+                ((type(regions) == tuple or type(regions) == list or type(regions) == np.ndarray) and int_name in regions)):
                 return True
             else:
                 return False
-        roi_names = list(filter(fn, roi_names))
+        names = list(zip(dataset_names, internal_names))
+        names = list(filter(fn, names))
 
         # Get reference CTs.
         cts = self.get_cts()
 
         # Add ROI data.
         region_dict = {}
-        for name in roi_names:
+        for name in names:
             # Get binary mask.
             try:
-                data = RTStructConverter.get_roi_data(rtstruct, name, cts)
+                data = RTStructConverter.get_roi_data(rtstruct, name[0], cts)
             except ValueError as e:
-                logging.error(f"Caught error extracting data for region '{name}', dataset '{self._dataset}', patient '{self._id}'.")
+                logging.error(f"Caught error extracting data for region '{name[0]}', dataset '{self._dataset}', patient '{self._id}'.")
                 logging.error(f"Error message: {e}")
                 continue
 
-            region_dict[name] = data
+            region_dict[name[1]] = data
 
         # Create ordered dict.
         ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 
