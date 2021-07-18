@@ -9,6 +9,8 @@ def parse_size_3D(s: str) -> ImageSize3D:
     """
     # Evaluate string literal.
     try:
+        print(s)
+        print(type(s))
         s = literal_eval(s)
     except SyntaxError:
         raise TypeError(f"Couldn't parse '{s}' into type '{ImageSize3D}', got syntax error.")

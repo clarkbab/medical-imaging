@@ -13,6 +13,7 @@ def evaluate_predictions(
     gt_dataset: str,
     clear_cache: bool = False,
     pred_ct_from: str = None,
+    raise_errors: bool = True,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     """
     returns: a table of prediction results.
@@ -22,27 +23,53 @@ def evaluate_predictions(
     kwargs:
         clear_cache: force the cache to clear.
         pred_ct_from: the CT data matching the prediction regions.
+        raise_errors: raise known patient errors.
         regions: the prediction regions to evaluate.
     """
-    # Load predictions.
+    # Load ground truth regions.
+    gt_ds = DicomDataset(gt_dataset)
+    gt_regions = gt_ds.region_names(clear_cache=clear_cache, raise_errors=raise_errors)
+
+    # Load prediction patients/regions.
     pred_ds = DicomDataset(pred_dataset, ct_from=pred_ct_from)
     pats = pred_ds.list_patients()
+    pred_regions = pred_ds.region_names(clear_cache=clear_cache, raise_errors=raise_errors)
 
-    # Load ground truth labels.
-    gt_ds = DicomDataset(gt_dataset)
+    # Check that requested regions are present.
+    if type(regions) == str:
+        if regions == 'all':
+            # Use all 'pred' regions.
+            regions = pred_regions
 
-    # Load up regions.
-    region_map = gt_ds.region_map(dataset=pred_dataset)
-    internal_regions = list(region_map.internal)
-    gt_regions = list(region_map[gt_dataset])
-    pred_regions = list(region_map[pred_dataset])
+            # Check that ground truth has required regions.
+            for region in regions:
+                if region not in gt_regions:
+                    raise ValueError(f"Requested region '{region}' not found in dataset '{gt_dataset}'.")
+        else:
+            if regions not in gt_regions:
+                raise ValueError(f"Requested region '{regions}' not found in dataset '{gt_dataset}'.")
+            elif regions not in pred_regions:
+                raise ValueError(f"Requested region '{regions}' not found in dataset '{pred_dataset}'.")
+            
+            # Convert to list.
+            regions = [regions]
+    else:
+        for region in regions:
+            if region not in gt_regions:
+                raise ValueError(f"Requested region '{region}' not found in dataset '{gt_dataset}'.")
+            elif region not in pred_regions:
+                raise ValueError(f"Requested region '{region}' not found in dataset '{pred_dataset}'.")
+
+    # Load patients.
+    pats = pred_ds.list_patients()
+    # TODO: filter patients with errors.
 
     # Create dataframe.
     cols = {
         'patient-id': str,
         'metric': str
     }
-    for region in internal_regions:
+    for region in regions:
         cols[region] = float
     df = pd.DataFrame(columns=cols.keys())
 
@@ -52,10 +79,10 @@ def evaluate_predictions(
         spacing = gt_ds.patient(pat).ct_spacing(clear_cache=clear_cache)
 
         # Load ground truth.
-        gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=gt_regions)
+        gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=regions)
 
         # Load prediction data.
-        pred_region_data = pred_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pred_regions)
+        pred_region_data = pred_ds.patient(pat).region_data(clear_cache=clear_cache, regions=regions)
 
         # Create empty dataframe rows.
         dice_data = {
@@ -68,12 +95,9 @@ def evaluate_predictions(
         }
 
         # Calculate metrics for each region.
-        for i in range(len(internal_regions)):
-            # Skip region if not contoured in both prediction and ground truth.
-            if not (gt_regions[i] in gt_region_data and pred_regions[i] in pred_region_data):
-                continue
-
+        for i, region in enumerate(regions):
             # Add dice.
+            dice_score = dice()
             dice_score = dice(pred_region_data[pred_regions[i]], gt_region_data[gt_regions[i]])
             dice_data[internal_regions[i]] = dice_score
 
