@@ -5,15 +5,16 @@ import numpy as np
 import os
 import pandas as pd
 import pydicom as dcm
-from scipy.ndimage import center_of_mass
-from typing import Any, Callable, Optional, OrderedDict, Sequence, Tuple, Union
+from typing import Any, Callable, List, Optional, OrderedDict, Sequence, Tuple, Union
 
 from mymi import cache
 from mymi import config
 from mymi import types
 
+from .ct_series import CTSeries
 from .region_map import RegionMap
-from .rtstruct_converter import RTStructConverter
+from .rtstruct_converter import RTSTRUCTConverter
+from .rtstruct_series import RTSTRUCTSeries
 
 class DicomPatient:
     def __init__(
@@ -33,7 +34,16 @@ class DicomPatient:
         self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', id)
         self._region_map = region_map
 
-    def _require_ct(fn: Callable) -> Callable:
+        # Check number of RTSTRUCT series.
+        rtstruct_series = self.list_rtstruct_series()
+        if len(rtstruct_series) == 0:
+            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self._id}', dataset '{self._dataset}'.")
+        
+        # Set default RTSTRUCT series.
+        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0])
+
+    def _require_ct(
+        fn: Callable) -> Callable:
         """
         returns: a wrapped function that ensures CTs are present.
         args:
@@ -63,7 +73,8 @@ class DicomPatient:
             return fn(self, *args, **kwargs)
         return wrapper
 
-    def _use_internal_regions(fn: Callable) -> Callable:
+    def _use_internal_regions(
+        fn: Callable) -> Callable:
         """
         returns: a wrapped function that renames DataFrame 'regions' to internal names.
         args:
@@ -126,43 +137,57 @@ class DicomPatient:
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
-    @_require_ct
-    def get_cts(self) -> Sequence[dcm.dataset.FileDataset]:
+    def list_ct_series(self) -> List[str]:
         """
-        returns: a list of FileDataset objects holding CT info.
+        returns: CT series names for the patient.
         """
-        # Check CT path.
-        cts_path = os.path.join(self._path, 'ct')
-        if not os.path.exists(cts_path):
-            raise ValueError(f"Expected multiple CT dicoms for dataset '{self._dataset}', patient '{self._id}', got 0.")
+        # List the CT series.
+        series = list(sorted(os.listdir(os.path.join(self._path, 'ct'))))
+        return series
 
-        # Load CTs.
-        ct_paths = [os.path.join(cts_path, f) for f in os.listdir(cts_path)]
-        cts = [dcm.read_file(f) for f in ct_paths]
-
-        # Sort by z-position.
-        cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])
-
-        return cts
-
-    def get_rtstruct(self) -> dcm.dataset.FileDataset:
+    def ct_series(
+        self,
+        id: str) -> CTSeries:
         """
-        returns: a FileDataset object holding RTSTRUCT info.
+        returns: a CTSeries object.
+        args:
+            id: the CT series ID.
         """
-        # Check RTSTRUCT path.
-        rtstructs_path = os.path.join(self._path, 'rtstruct')
-        if not os.path.exists(rtstructs_path):
-            raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got 0.")
+        # Check that series ID exists.
+        series_path = os.path.join(self._path, 'ct', id)
+        if not os.path.isdir(series_path):
+            raise ValueError(f"CT series '{id}' not found for patient '{self._id}', dataset '{self._dataset}'.")
 
-        # Check number of RTSTRUCTs.
-        rtstruct_paths = [os.path.join(rtstructs_path, f) for f in os.listdir(rtstructs_path)]
-        if len(rtstruct_paths) != 1:
-            raise ValueError(f"Expected 1 RTSTRUCT dicom for dataset '{self._dataset}', patient '{self._id}', got {len(rtstruct_paths)}.")
+        # Create CT series.
+        series = CTSeries(self._dataset, self._id, id)
 
-        # Load RTSTRUCT.
-        rtstruct = dcm.read_file(rtstruct_paths[0])
+        return series
 
-        return rtstruct
+    def list_rtstruct_series(self) -> List[str]:
+        """
+        returns: RTSTRUCT series names for the patient.
+        """
+        # List the RTSTRUCT series.
+        series = list(sorted(os.listdir(os.path.join(self._path, 'rtstruct'))))
+        return series
+
+    def rtstruct_series(
+        self,
+        id: str) -> RTSTRUCTSeries:
+        """
+        returns: a RTSTRUCTSeries object.
+        args:
+            id: the RTSTRUCT series ID.
+        """
+        # Check that series ID exists.
+        series_path = os.path.join(self._path, 'rtstruct', id)
+        if not os.path.isdir(series_path):
+            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{self._id}', dataset '{self._dataset}'.")
+
+        # Create RTSTRUCT series.
+        series = RTSTRUCTSeries(self._dataset, self._id, id, region_map=self._region_map)
+
+        return series
 
     @_require_ct
     def info(
@@ -196,452 +221,42 @@ class DicomPatient:
 
         return df
 
-    @cache.method('_ct_from', '_dataset', '_id')
-    def ct_summary(self) -> pd.DataFrame:
-        """
-        returns: a table summarising CT info.
-        """
-        # Define dataframe structure.
-        cols = {
-            'fov-x': float,
-            'fov-y': float,
-            'fov-z': float,
-            'hu-max': float,
-            'hu-min': float,
-            'num-missing': int,
-            'offset-x': float,
-            'offset-y': float,
-            'offset-z': float,
-            'size-x': int,
-            'size-y': int,
-            'size-z': int,
-            'spacing-x': float,
-            'spacing-y': float,
-            'spacing-z': float
-        }
-        df = pd.DataFrame(columns=cols.keys())
+    # Proxy to default CTSeries.
 
-        # Load CT dicoms.
-        cts = self.get_cts()
+    def get_cts(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.get_cts(*args, **kwargs)
 
-        # Add summary.
-        data = {}
-        z_offsets = []
-        for ct in cts:
-            # Add HU stats.
-            hus = ct.pixel_array * ct.RescaleSlope + ct.RescaleIntercept
-            hu_min = hus.min()
-            hu_max = hus.max()
-            if 'hu-min' not in data or hu_min < data['hu-min']:
-                data['hu-min'] = hu_min
-            if 'hu-max' not in data or hu_max > data['hu-max']:
-                data['hu-max'] = hu_max
+    def ct_offset(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.offset(*args, **kwargs)
 
-            # Add offsets.
-            x_offset = ct.ImagePositionPatient[0]
-            y_offset = ct.ImagePositionPatient[1]
-            z_offset = ct.ImagePositionPatient[2]
-            z_offsets.append(z_offset)
-            if 'offset-x' not in data:
-                data['offset-x'] = x_offset
-            elif x_offset != data['offset-x']:
-                raise ValueError(f"Inconsistent CT 'offset-x' for dataset '{self._dataset}', patient '{self._id}'.")
-            if 'offset-y' not in data:
-                data['offset-y'] = y_offset
-            elif y_offset != data['offset-y']:
-                raise ValueError(f"Inconsistent CT 'offset-y' for dataset '{self._dataset}', patient '{self._id}'.")
-            if 'offset-z' not in data or z_offset < data['offset-z']:
-                data['offset-z'] = z_offset
+    def ct_size(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.size(*args, **kwargs)
 
-            # Add sizes.
-            x_size = ct.pixel_array.shape[1]
-            y_size = ct.pixel_array.shape[0]
-            if 'size-x' not in data:
-                data['size-x'] = x_size
-            elif x_size != data['size-x']:
-                raise ValueError(f"Inconsistent CT 'size-x' for dataset '{self._dataset}', patient '{self._id}'.")
-            if 'size-y' not in data:
-                data['size-y'] = y_size
-            elif y_size != data['size-y']:
-                raise ValueError(f"Inconsistent CT 'size-y' for dataset '{self._dataset}', patient '{self._id}'.")
+    def ct_spacing(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.spacing(*args, **kwargs)
 
-            # Add x/y-spacings.
-            x_spacing = ct.PixelSpacing[0]
-            y_spacing = ct.PixelSpacing[1]
-            if 'spacing-x' not in data:
-                data['spacing-x'] = x_spacing
-            elif x_spacing != data['spacing-x']:
-                raise ValueError(f"Inconsistent CT 'spacing-x' for dataset '{self._dataset}', patient '{self._id}'.")
-            if 'spacing-y' not in data:
-                data['spacing-y'] = y_spacing
-            elif y_spacing != data['spacing-y']:
-                raise ValueError(f"Inconsistent CT 'spacing-y' for dataset '{self._dataset}', patient '{self._id}'.")
+    def ct_slice_summary(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.slice_summary(*args, **kwargs)
 
-        # Add z-spacing. Round z-spacings to 3 d.p. as some of the diffs are whacky like 2.99999809.
-        z_spacing = np.min([round(s, 3) for s in np.diff(sorted(z_offsets))])
-        data['spacing-z'] = z_spacing
+    def ct_summary(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.summary(*args, **kwargs)
 
-        # Add fields-of-view.
-        x_fov = data['size-x'] * data['spacing-x']
-        y_fov = data['size-y'] * data['spacing-y']
-        z_fov = np.max(z_offsets) - np.min(z_offsets) + z_spacing   # Assume that FOV includes half-voxel at either end.
-        data['fov-x'] = x_fov
-        data['fov-y'] = y_fov
-        data['fov-z'] = z_fov
+    def ct_data(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.data(*args, **kwargs)
 
-        # Add z-size.
-        z_size = int(round(z_fov / z_spacing, 0))
-        data['size-z'] = z_size
+    # Proxy to default RTSTRUCTSeries.
 
-        # Add num missing slices.
-        data['num-missing'] = z_size - len(cts)
+    def get_rtstruct(self, *args, **kwargs):
+        return self._default_rtstruct_series.get_rtstruct(*args, **kwargs)
 
-        # Add row.
-        df = df.append(data, ignore_index=True)
-        df = df.reindex(sorted(df.columns), axis=1)
+    def region_names(self, *args, **kwargs):
+        return self._default_rtstruct_series.region_names(*args, **kwargs)
 
-        # Set column types as 'append' crushes them.
-        df = df.astype(cols)
+    def has_region(self, *args, **kwargs):
+        return self._default_rtstruct_series.has_region(*args, **kwargs)
 
-        return df
+    def region_data(self, *args, **kwargs):
+        return self._default_rtstruct_series.region_data(*args, **kwargs)
 
-    def ct_offset(
-        self,
-        clear_cache: bool = False) -> types.PhysPoint3D:
-        """
-        returns: the patient offset in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the offset.
-        offset = tuple(self.ct_summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
-        return offset
-
-    def ct_size(
-        self,
-        clear_cache: bool = False) -> types.ImageSpacing3D:
-        """
-        returns: the CT scan size in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the spacing.
-        spacing = tuple(self.ct_summary(clear_cache=clear_cache)[['size-x', 'size-y', 'size-z']].iloc[0])
-        return spacing
-
-    def ct_spacing(
-        self,
-        clear_cache: bool = False) -> types.ImageSpacing3D:
-        """
-        returns: the patient spacing in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the spacing.
-        spacing = tuple(self.ct_summary(clear_cache=clear_cache)[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
-        return spacing
-
-    @cache.method('_ct_from', '_dataset', '_id')
-    def ct_slice_summary(self) -> pd.DataFrame:
-        """
-        returns: a table summarising CT slice info.
-        """
-        # Define dataframe structure.
-        cols = {
-            'fov-x': float,
-            'fov-y': float,
-            'hu-max': float,
-            'hu-min': float,
-            'offset-x': float,
-            'offset-y': float,
-            'offset-z': float,
-            'size-x': int,
-            'size-y': int,
-            'spacing-x': float,
-            'spacing-y': float,
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Load CT dicoms.
-        cts = self.get_cts()
-
-        # Add summary.
-        data = {}
-        for ct in cts:
-            # Add HU stats.
-            hus = ct.pixel_array * ct.RescaleSlope + ct.RescaleIntercept
-            data['hu-min'] = hus.min()
-            data['hu-max'] = hus.max()
-
-            # Add offsets.
-            data['offset-x'] = ct.ImagePositionPatient[0]
-            data['offset-y'] = ct.ImagePositionPatient[1]
-            data['offset-z'] = ct.ImagePositionPatient[2]
-
-            # Add sizes.
-            data['size-x'] = ct.pixel_array.shape[1]
-            data['size-y'] = ct.pixel_array.shape[0]
-
-            # Add x/y-spacings.
-            data['spacing-x'] = ct.PixelSpacing[0]
-            data['spacing-y'] = ct.PixelSpacing[1]
-
-            # Add fields-of-view.
-            data['fov-x'] = data['size-x'] * data['spacing-x']
-            data['fov-y'] = data['size-y'] * data['spacing-y']
-
-            # Add row.
-            df = df.append(data, ignore_index=True)
-
-        # Sort columns.
-        df = df.reindex(sorted(df.columns), axis=1)
-
-        # Set column types as 'append' crushes them.
-        df = df.astype(cols)
-
-        return df
-
-    @cache.method('_ct_from', '_dataset', '_id')
-    def region_summary(
-        self,
-        clear_cache: bool = False,
-        columns: Union[str, Sequence[str]] = 'all',
-        regions: Union[str, Sequence[str]] = 'all') -> pd.DataFrame:
-        """
-        returns: a DataFrame region summary information.
-        kwargs:
-            clear_cache: clear the cache.
-            regions: the desired regions.
-        """
-        # Define table structure.
-        cols = {
-            'region': str,
-            'centroid-mm-x': float,
-            'centroid-mm-y': float,
-            'centroid-mm-z': float,
-            'centroid-voxels-x': int,
-            'centroid-voxels-y': int,
-            'centroid-voxels-z': int,
-            'width-mm-x': float,
-            'width-mm-y': float,
-            'width-mm-z': float,
-            'width-voxels-x': int,
-            'width-voxels-y': int,
-            'width-voxels-z': int,
-        }
-        cols = dict(filter(self._filterOnDictKeys(columns), cols.items()))
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Get region dict.
-        region_data = self.region_data(clear_cache=clear_cache, regions=regions)
-
-        # Get voxel offset/spacing.
-        offset = self.ct_offset(clear_cache=clear_cache)
-        spacing = self.ct_spacing(clear_cache=clear_cache)
-
-        # Add info for each region.
-        for name, data in region_data.items():
-            # Find centre-of-mass.
-            centroid = np.round(center_of_mass(data)).astype(int)
-
-            # Convert COM to millimetres.
-            mm_centroid = (centroid * spacing) + offset
-
-            # Find bounding box co-ordinates.
-            non_zero = np.argwhere(data != 0)
-            mins = non_zero.min(axis=0)
-            maxs = non_zero.max(axis=0)
-            voxel_widths = maxs - mins
-
-            # Convert voxel widths to millimetres.
-            mm_widths = voxel_widths * spacing
-
-            data = {
-                'region': name,
-                'centroid-mm-x': mm_centroid[0],
-                'centroid-mm-y': mm_centroid[1],
-                'centroid-mm-z': mm_centroid[2],
-                'centroid-voxels-x': centroid[0],
-                'centroid-voxels-y': centroid[1],
-                'centroid-voxels-z': centroid[2],
-                'width-mm-x': mm_widths[0],
-                'width-mm-y': mm_widths[1],
-                'width-mm-z': mm_widths[2],
-                'width-voxels-x': voxel_widths[0],
-                'width-voxels-y': voxel_widths[1],
-                'width-voxels-z': voxel_widths[2]
-            }
-            df = df.append(data, ignore_index=True)
-
-        # Set column type.
-        df = df.astype(cols)
-
-        # Sort by region.
-        df = df.sort_values('region').reset_index(drop=True)
-
-        return df
-
-    @cache.method('_ct_from', '_dataset', '_id')
-    def ct_data(
-        self,
-        clear_cache: bool = False) -> np.ndarray:
-        """
-        returns: a 3D numpy ndarray of CT data in HU.
-        kwargs:
-            clear_cache: force the cache to clear.
-        """
-        # Load patient CT dicoms.
-        cts = self.get_cts()
-
-        # Load CT summary info.
-        size = self.ct_size(clear_cache=True)
-        offset = self.ct_offset()
-        spacing = self.ct_spacing()
-        
-        # Create CT data array.
-        data = np.zeros(shape=size)
-        for ct in cts:
-            # Convert to HU. Transpose to (x, y) coordinates, 'pixel_array' returns
-            # row-first image data.
-            ct_data = np.transpose(ct.pixel_array)
-            ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
-
-            # Get z index.
-            z_offset =  ct.ImagePositionPatient[2] - offset[2]
-            z_idx = int(round(z_offset / spacing[2]))
-
-            # Add data.
-            data[:, :, z_idx] = ct_data
-
-        return data
-
-    @cache.method('_dataset', '_id')
-    def region_names(
-        self,
-        clear_cache: bool = False,
-        include_unmapped: bool = False,
-        use_mapping: bool = True) -> pd.DataFrame:
-        """
-        returns: the patient's region names.
-        kwargs:
-            clear_cache: force the cache to clear.
-            include_unmapped: include unmapped region names.
-            use_mapping: use region map if present.
-        """
-        # Load RTSTRUCT dicom.
-        rtstruct = self.get_rtstruct()
-
-        # Get region names.
-        regions = list(sorted(RTStructConverter.get_roi_names(rtstruct)))
-
-        # Filter names on those for which data can be obtained, e.g. some may not have
-        # 'ContourData' and shouldn't be included.
-        regions = list(filter(lambda n: RTStructConverter.has_roi_data(rtstruct, n), regions))
-
-        # Save unmapped regions.
-        if include_unmapped:
-            unmapped_regions = regions
-
-        # Map to internal names.
-        if use_mapping and self._region_map:
-            regions = [self._region_map.to_internal(n) for n in regions]
-
-        # Create dataframe.
-        df = pd.DataFrame(regions, columns=['region'])
-
-        # Add unmapped regions.
-        if include_unmapped:
-            df['unmapped'] = unmapped_regions
-
-        return df
-
-    def has_region(
-        self,
-        region: str,
-        clear_cache: bool = False) -> bool:
-        """
-        returns: if the patient has the region.
-        args:
-            region: the region name.
-        """
-        return region in list(self.region_names(clear_cache=clear_cache).region)
-
-    @cache.method('_ct_from', '_dataset', '_id')
-    def region_data(
-        self,
-        clear_cache: bool = False,
-        regions: types.PatientRegions = 'all',
-        use_mapping: bool = True) -> OrderedDict:
-        """
-        returns: an OrderedDict[str, np.ndarray] of region names and data.
-        kwargs:
-            clear_cache: force the cache to clear.
-            regions: the desired regions.
-            use_mapping: use region map if present.
-        """
-        # Load RTSTRUCT dicom.
-        rtstruct = self.get_rtstruct()
-
-        # Get region names; include unmapped as we need these to load RTSTRUCT regions later.
-        region_names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True)
-        names = list(zip(region_names.region, region_names.unmapped))
-        mapped_names = list(region_names.region)
-
-        # Ensure patient has all requested regions.
-        if type(regions) == str:
-            if regions not in mapped_names:
-                raise ValueError(f"Region '{regions}' not found for dataset '{self._dataset}', patient '{self._id}'.")
-        else:
-            for region in regions:
-                if region not in mapped_names:
-                    raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._id}'.")
-
-        # Filter on requested regions.
-        def fn(name_map):
-            # Use mapped name.
-            name = name_map[0]
-
-            if ((type(regions) == str and (regions == 'all' or name == regions)) or
-                ((type(regions) == tuple or type(regions) == list or type(regions) == np.ndarray) and name in regions)):
-                return True
-            else:
-                return False
-        names = list(filter(fn, names))
-
-        # Get reference CTs.
-        cts = self.get_cts()
-
-        # Add ROI data.
-        region_dict = {}
-        for name in names:
-            # Get binary mask.
-            try:
-                data = RTStructConverter.get_roi_data(rtstruct, name[1], cts)
-            except ValueError as e:
-                logging.error(f"Caught error extracting data for region '{name[1]}', dataset '{self._dataset}', patient '{self._id}'.")
-                logging.error(f"Error message: {e}")
-                continue
-
-            region_dict[name[0]] = data
-
-        # Create ordered dict.
-        ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 
-
-        return ordered_dict
-
-    def _filterOnDictKeys(
-        self,
-        keys: Union[str, Sequence[str]] = 'all') -> Callable[[Tuple[str, Any]], bool]:
-        """
-        returns: a function that filters out unneeded keys.
-        args:
-            keys: description of required keys.
-        """
-        def fn(item: Tuple[str, Any]) -> bool:
-            key, _ = item
-            if ((isinstance(keys, str) and (keys == 'all' or key == keys)) or
-                ((isinstance(keys, list) or isinstance(keys, np.ndarray) or isinstance(keys, tuple)) and key in keys)):
-                return True
-            else:
-                return False
-        return fn
+    def region_summary(self, *args, **kwargs):
+        return self._default_rtstruct_series.region_summary(*args, **kwargs)

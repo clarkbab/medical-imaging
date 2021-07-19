@@ -7,6 +7,7 @@ from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTA
 from typing import Dict, List, Sequence
 
 from mymi import types
+from mymi import logging
 
 from .roi_data import ROIData
 
@@ -18,7 +19,7 @@ class SOPClassUID:
     RTSTRUCT = '1.2.840.10008.5.1.4.1.1.481.3'
     RTSTRUCT_IMPLEMENTATION_CLASS = PYDICOM_IMPLEMENTATION_UID
 
-class RTStructConverter:
+class RTSTRUCTConverter:
     @classmethod
     def has_roi_data(
         cls,
@@ -92,7 +93,8 @@ class RTStructConverter:
             # Get contour data.
             contour_data = contour.ContourData
             if contour.ContourGeometricType != 'CLOSED_PLANAR':
-                raise ValueError(f"Expected contour type 'CLOSED_PLANAR', got '{contour.ContourGeometricType}'.")
+                # raise ValueError(f"Expected contour type 'CLOSED_PLANAR', got '{contour.ContourGeometricType}'.")
+                logging.error(f"Got contour type '{contour.ContourGeometricType}'.")
 
             # Coords are stored in flat array.
             points = np.array(contour_data).reshape(-1, 3)

@@ -117,7 +117,7 @@ class DicomDataset:
 
         # Create patient.
         pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self.region_map())
-
+        
         return pat
 
     @_require_hierarchical
@@ -300,7 +300,8 @@ class DicomDataset:
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         raise_errors: bool = True,
-        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
         kwargs:
@@ -309,6 +310,7 @@ class DicomDataset:
             pat_ids: include listed patients.
             raise_errors: raise known patient errors.
             regions: include patients with (at least) on of the regions.
+            use_mapping: use region map if present.
         """
         # Define table structure.
         cols = {
@@ -322,13 +324,13 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors, use_mapping=use_mapping), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient regions.
         for pat in tqdm(pats):
             # Load patient regions.
-            names_df = self.patient(pat).region_names(clear_cache=clear_cache)
+            names_df = self.patient(pat).region_names(clear_cache=clear_cache, use_mapping=use_mapping)
 
             # Add rows.
             for _, row in names_df.iterrows():
@@ -351,7 +353,8 @@ class DicomDataset:
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         raise_errors: bool = False,
-        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient regions and information.
         kwargs:
@@ -360,6 +363,7 @@ class DicomDataset:
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
             raise_errors: raise known patient errors.
+            use_mapping: use region map if present.
         """
         # Define table structure.
         cols = {
@@ -376,14 +380,14 @@ class DicomDataset:
 
         # Filter patients.
         pats = list(filter(filterOnPatIDs(pat_ids), pats))
-        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors), pats))
+        pats = list(filter(self.filterOnRegions(regions, clear_cache=clear_cache, raise_errors=raise_errors, use_mapping=use_mapping), pats))
         pats = list(filter(filterOnNumPats(num_pats), pats))
 
         # Add patient regions.
         for pat in tqdm(pats):
             # Load patient summary.
             try:
-                summary_df = self.patient(pat).region_summary(clear_cache=clear_cache, regions=regions)
+                summary_df = self.patient(pat).region_summary(clear_cache=clear_cache, regions=regions, use_mapping=use_mapping)
             except ValueError as e:
                 if raise_errors:
                     raise e
@@ -409,21 +413,26 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    def region_map(
-        self,
-        dataset: str = None) -> pd.DataFrame:
+    def region_map(self) -> Optional[RegionMap]:
         """
-        returns: a pd.DataFrame mapping internal region names to this dataset.
-        kwargs:
-            clear_cache: forces the cache to clear.
-            dataset: the other dataset, or internal representation if None.
+        returns: a RegionMap object mapping dataset region names to internal names.
         raises:
             ValueError: if 'region-map.csv' isn't configured properly.
         """
-        # Create region map.    
-        map = RegionMap(self._name)
+        # Check for region map.
+        filepath = os.path.join(self._path, 'region-map.csv')
+        if os.path.exists(filepath):
+            # Load map file.
+            map_df = pd.read_csv(filepath)
 
-        return map
+            # Check that internal region names are entered correctly.
+            for n in map_df.internal:
+                if not regions.is_region(n):
+                    raise ValueError(f"Error in region map for dataset '{self._name}', '{n}' is not an internal region.")
+            
+            return RegionMap(map_df)
+        else:
+            return None
 
     @classmethod
     def ct_statistics(cls, regions='all'):
@@ -502,18 +511,21 @@ class DicomDataset:
         self,
         regions: types.PatientRegions,
         clear_cache: bool = False,
-        raise_errors: bool = False) -> Callable[[str], bool]:
+        raise_errors: bool = False,
+        use_mapping: bool = True) -> Callable[[str], bool]:
         """
         returns: a function that filters patient on region presence.
         args:
-            clear_cache: force the cache to clear.
             regions: the passed 'regions' kwarg.
+        kwargs:
+            clear_cache: force the cache to clear.
             raise_errors: raise known patient errors.
+            use_mapping: use region map if present.
         """
         def fn(id):
             # Load patient regions.
             try:
-                pat_regions = self.patient(id).region_names(clear_cache=clear_cache).region.to_numpy()
+                pat_regions = self.patient(id).region_names(clear_cache=clear_cache, use_mapping=use_mapping).region.to_numpy()
             except ValueError as e:
                 if raise_errors:
                     raise e
@@ -563,13 +575,24 @@ class DicomDataset:
             if not mod in ('ct', 'rtstruct'):
                 continue
 
+            # Get series UID.
+            series_UID = dcm.SeriesInstanceUID
+
             # Create filepath.
-            hier_path = os.path.join(self._path, 'hierarchical')
             filename = os.path.basename(f)
-            filepath = os.path.join(hier_path, pat_id, mod, filename)
+            filepath = os.path.join(self._path, 'hierarchical', pat_id, mod, series_UID, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             
             # Save dicom.
             dcm.save_as(filepath)
 
         logging.info('Complete.')
+
+    def _trim_hierarchical(self) -> None:
+        """
+        effect: removes CT series for which there is no RTSTRUCT.
+        """
+        # Get patients.
+        pats = self.list_patients()
+
+        # Trim each patient.

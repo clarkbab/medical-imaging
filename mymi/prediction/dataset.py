@@ -6,7 +6,7 @@ from typing import Optional
 
 from mymi import checkpoint
 from mymi import dataset as ds
-from mymi.dataset.dicom import DicomDataset, ROIData, RTStructConverter
+from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
 from mymi.models import SingleChannelUNet
 from mymi.regions import to_255, RegionColours
 from mymi import types
