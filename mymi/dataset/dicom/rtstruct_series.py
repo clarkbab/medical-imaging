@@ -26,7 +26,7 @@ class RTSTRUCTSeries:
         args:
             dataset: the dataset name.
             pat_id: the patient ID.
-            id: the CT series ID.
+            id: the RTSTRUCT series ID.
         kwargs:
             region_map: the RegionMap object.
         """
@@ -38,17 +38,20 @@ class RTSTRUCTSeries:
 
         # Check that series exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"RTSTRUCT series '{self._id}' not found for patient '{self._pat_id}', dataset '{self._dataset}'.")
+            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{pat_id}', dataset '{dataset}'.")
 
         # Check that DICOM is present.
         rtstructs = os.listdir(self._path)
         if len(rtstructs) != 1:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{self._id}' for patient '{self._pat_id}', dataset '{self._dataset}'.")
+            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{id}' for patient '{pat_id}', dataset '{dataset}'.")
 
         # Get reference CT series.
         rtstruct = self.get_rtstruct()
-        series_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-        self._ref_ct = CTSeries(dataset, pat_id, series_id)
+        ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+        try:
+            self._ref_ct = CTSeries(dataset, pat_id, ct_id)
+        except ValueError as e:
+            raise ValueError(f"Error when loading CT series '{ct_id}' referenced by RTSTRUCT series '{id}', for patient '{pat_id}', dataset '{dataset}'.")
 
     @property
     def id(self) -> str:

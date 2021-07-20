@@ -37,7 +37,7 @@ class DicomPatient:
         # Check number of RTSTRUCT series.
         rtstruct_series = self.list_rtstruct_series()
         if len(rtstruct_series) == 0:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self._id}', dataset '{self._dataset}'.")
+            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{id}', dataset '{dataset}'.")
         
         # Set default RTSTRUCT series.
         self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0], region_map=region_map)

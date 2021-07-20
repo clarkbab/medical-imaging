@@ -26,12 +26,12 @@ class CTSeries:
         
         # Check that series exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"CT series '{self._id}' not found for patient '{self._pat_id}', dataset '{self._dataset}'.")
+            raise ValueError(f"CT series '{id}' not found for patient '{pat_id}', dataset '{dataset}'.")
 
         # Check that DICOMs are present.
         cts = os.listdir(self._path)
         if len(cts) == 0:
-            raise ValueError(f"CT series '{self._id}' empty for patient '{self._pat_id}', dataset '{self._dataset}'.")
+            raise ValueError(f"CT series '{id}' empty for patient '{pat_id}', dataset '{dataset}'.")
 
     @property
     def id(self) -> str:
