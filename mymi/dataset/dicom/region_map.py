@@ -35,7 +35,7 @@ class RegionMap:
             args = [row.dataset, region]
             
             # Check case.
-            case_matters = row['case-sensitive']
+            case_matters = row['case-sensitive'] if 'case-sensitive' in row else True
             if not np.isnan(case_matters) and not case_matters:
                 args += [re.IGNORECASE]
                 

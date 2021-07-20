@@ -31,7 +31,7 @@ class DicomPatient:
         self._ct_from = ct_from
         self._dataset = dataset
         self._id = id
-        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', id)
+        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', id)
         self._region_map = region_map
 
         # Check number of RTSTRUCT series.
@@ -40,7 +40,7 @@ class DicomPatient:
             raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self._id}', dataset '{self._dataset}'.")
         
         # Set default RTSTRUCT series.
-        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0])
+        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0], region_map=region_map)
 
     def _require_ct(
         fn: Callable) -> Callable:
@@ -166,8 +166,15 @@ class DicomPatient:
     def list_rtstruct_series(self) -> List[str]:
         """
         returns: RTSTRUCT series names for the patient.
+        raises:
+            ValueError: when patient 'rtstruct' folder not found.
         """
-        # List the RTSTRUCT series.
+        # Check that 'rtstruct' folder exists. This is required for a patient.
+        rtstruct_path = os.path.join(self._path, 'rtstruct')
+        if not os.path.exists(rtstruct_path):
+            raise ValueError(f"No RTSTRUCTs found for dataset '{self._dataset}', patient '{self._id}'.")
+    
+        # Load RTSTRUCT series.
         series = list(sorted(os.listdir(os.path.join(self._path, 'rtstruct'))))
         return series
 

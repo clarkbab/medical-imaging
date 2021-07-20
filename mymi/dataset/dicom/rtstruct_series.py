@@ -34,7 +34,7 @@ class RTSTRUCTSeries:
         self._pat_id = pat_id
         self._id = id
         self._region_map = region_map
-        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', pat_id, 'rtstruct', id)
+        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', pat_id, 'rtstruct', id)
 
         # Check that series exists.
         if not os.path.exists(self._path):
@@ -142,7 +142,7 @@ class RTSTRUCTSeries:
         # Ensure patient has all requested regions.
         for region in regions:
             if not self.has_region(region, clear_cache=clear_cache, use_mapping=use_mapping):
-                raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._pat_id}', series '{self._id}'.")
 
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
         names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True)

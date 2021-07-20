@@ -22,7 +22,7 @@ class CTSeries:
         self._dataset = dataset
         self._pat_id = pat_id
         self._id = id
-        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', pat_id, 'ct', id)
+        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', pat_id, 'ct', id)
         
         # Check that series exists.
         if not os.path.exists(self._path):

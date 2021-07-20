@@ -1,12 +1,12 @@
 from collections import OrderedDict
 import inspect
-import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 import pydicom as dicom
 from scipy.ndimage import center_of_mass
+import shutil
 from skimage.draw import polygon
 from torchio import ScalarImage, Subject
 from tqdm import tqdm
@@ -14,6 +14,7 @@ from typing import *
 
 from mymi import cache
 from mymi import config
+from mymi import logging
 from mymi import regions
 from mymi import types
 from mymi.utils import filterOnNumPats, filterOnPatIDs
@@ -85,6 +86,7 @@ class DicomDataset:
         def wrapper(self, *args, **kwargs):
             if not self._hierarchical_exists():
                 self._build_hierarchical()
+                self._trim_hierarchical()
             return fn(self, *args, **kwargs)
         return wrapper
 
@@ -94,13 +96,13 @@ class DicomDataset:
         returns: a list of patient IDs.
         """
         # Return top-level folders from 'hierarchical' dataset.
-        hier_path = os.path.join(self._path, 'hierarchical')
+        hier_path = os.path.join(self._path, 'hierarchical', 'data')
         return list(sorted(os.listdir(hier_path)))
 
     @_require_hierarchical
     def patient(
         self,
-        id: Union[str, int]) -> DicomPatient:
+        id: types.PatientID) -> DicomPatient:
         """
         returns: a DicomPatient object.
         args:
@@ -111,7 +113,7 @@ class DicomDataset:
             id = str(id)
 
         # Check that patient ID exists.
-        pat_path = os.path.join(self._path, 'hierarchical', id)
+        pat_path = os.path.join(self._path, 'hierarchical', 'data', id)
         if not os.path.isdir(pat_path):
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
@@ -554,7 +556,7 @@ class DicomDataset:
         """
         effect: creates a hierarchical dataset based on dicom content, not existing structure.
         """
-        logging.info('Building hierarchical dataset...')
+        logging.info('Building hierarchical dataset..')
 
         # Load all dicom files.
         raw_path = os.path.join(self._path, 'raw')
@@ -580,19 +582,40 @@ class DicomDataset:
 
             # Create filepath.
             filename = os.path.basename(f)
-            filepath = os.path.join(self._path, 'hierarchical', pat_id, mod, series_UID, filename)
+            filepath = os.path.join(self._path, 'hierarchical', 'data', pat_id, mod, series_UID, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             
             # Save dicom.
             dcm.save_as(filepath)
 
-        logging.info('Complete.')
-
     def _trim_hierarchical(self) -> None:
         """
-        effect: removes CT series for which there is no RTSTRUCT.
+        effect: removes patients that don't have RTSTRUCT/CT DICOMS.
         """
+        logging.info('Trimming patients with errors..')
+
         # Get patients.
         pats = self.list_patients()
 
         # Trim each patient.
+        for pat in tqdm(pats):
+            try:
+                # Creating the patient will raise an error is data is insufficient.
+                self.patient(pat)
+            except ValueError as e:
+                # Move patient to error folder.
+                pat_path = os.path.join(self._path, 'hierarchical', 'data', pat)
+                pat_error_path = os.path.join(self._path, 'hierarchical', 'errors', pat)
+                shutil.move(pat_path, pat_error_path)
+
+                # Write error message.
+                msg = f"Patient '{pat}' trimmed from hierarchical dataset due to error."
+                error_msg = f"Error: {e}"
+                filepath = os.path.join(pat_error_path, 'error.log')
+                with open(filepath, 'w') as f:
+                    f.write(msg + '\n')
+                    f.write(error_msg + '\n')
+
+                # Log error message.
+                logging.error(msg)
+                logging.error(error_msg)
