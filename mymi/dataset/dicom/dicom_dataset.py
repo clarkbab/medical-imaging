@@ -48,6 +48,9 @@ class DicomDataset:
             if not os.path.exists(ct_path):
                 raise ValueError(f"Dataset '{ct_from}' not found.")
 
+        # Load region map.
+        self._region_map = self._load_region_map()
+
     def description(self) -> str:
         """
         returns: a short descriptive string.
@@ -118,7 +121,7 @@ class DicomDataset:
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
         # Create patient.
-        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self.region_map())
+        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self._region_map)
         
         return pat
 
@@ -415,7 +418,7 @@ class DicomDataset:
         return df
 
     @_require_hierarchical
-    def region_map(self) -> Optional[RegionMap]:
+    def _load_region_map(self) -> Optional[RegionMap]:
         """
         returns: a RegionMap object mapping dataset region names to internal names.
         raises:
@@ -592,7 +595,7 @@ class DicomDataset:
         """
         effect: removes patients that don't have RTSTRUCT/CT DICOMS.
         """
-        logging.info('Trimming patients with errors..')
+        logging.info('Removing patients with errors..')
 
         # Get patients.
         pats = self.list_patients()
@@ -609,7 +612,7 @@ class DicomDataset:
                 shutil.move(pat_path, pat_error_path)
 
                 # Write error message.
-                msg = f"Patient '{pat}' trimmed from hierarchical dataset due to error."
+                msg = f"Patient '{pat}' removed from hierarchical dataset due to error."
                 error_msg = f"Error: {e}"
                 filepath = os.path.join(pat_error_path, 'error.log')
                 with open(filepath, 'w') as f:
