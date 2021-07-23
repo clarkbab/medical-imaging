@@ -36,7 +36,7 @@ class RTSTRUCTSeries:
         self._id = id
         self._ct_from = ct_from
         self._region_map = region_map
-        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', pat_id, 'rtstruct', id)
+        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'hierarchical', 'data', pat_id, 'rtstruct', id)
 
         # Check that series exists.
         if not os.path.exists(self._path):
@@ -74,40 +74,71 @@ class RTSTRUCTSeries:
     @cache.method('_dataset', '_pat_id', '_id')
     def region_names(
         self,
+        allow_unknown_regions: bool = False,
         clear_cache: bool = False,
         include_unmapped: bool = False,
+        regions: types.PatientRegions = 'all',
         use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: the patient's region names.
         kwargs:
+            allow_unknown_regions: allows unknown regions to be requested via 'regions' arg.
             clear_cache: force the cache to clear.
             include_unmapped: include unmapped region names.
+            regions: only return regions that match this arg. This arg allows us to:
+                a) get regions names for a patient when 'all' is passed.
+                b) determine which regions a patient has from a list when 'allow_unknown_regions' is True.
             use_mapping: use region map if present.
         """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 
         # Get region names.
-        regions = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
+        names = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
 
         # Filter names on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        regions = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), regions))
+        names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
 
-        # Save unmapped regions.
-        if include_unmapped:
-            unmapped_regions = regions
+        # Create (internal, dataset) tuple maps.
+        names = list(zip(names, names))
 
         # Map to internal names.
         if use_mapping and self._region_map:
-            regions = [self._region_map.to_internal(n) for n in regions]
+            names = [(self._region_map.to_internal(n[0]), n[1]) for n in names]
+
+        # Filter names on requested regions.
+        if type(regions) == str:
+            if regions != 'all':
+                # Search for requested region in tuple maps.
+                found_region = False
+                for name in names:
+                    if regions == name[0]:
+                        names = [name]
+                        found_region = True
+
+                # Raise error if unknown regions not allowed.
+                if not found_region:
+                    if allow_unknown_regions:
+                        names = []
+                    else:
+                        raise ValueError(f"Unknown region '{regions}' requested for series '{self._id}', patient {self._pat_id}, dataset '{self._dataset}'.")
+        else:
+            # Check that all requested regions are present.
+            if not allow_unknown_regions:
+                unknown_regions = np.setdiff1d(regions, list(map(lambda n: n[0], names)))
+                if len(unknown_regions) != 0:
+                    raise ValueError(f"Unknown regions '{unknown_regions}' requested for series '{self._id}', patient {self._pat_id}, dataset '{self._dataset}'.")
+
+            # Filter based on regions.
+            names = list(filter(lambda n: n[0] in regions, names))
 
         # Create dataframe.
-        df = pd.DataFrame(regions, columns=['region'])
+        df = pd.DataFrame(map(lambda n: n[0], names), columns=['region'])
 
         # Add unmapped regions.
         if include_unmapped:
-            df['unmapped'] = unmapped_regions
+            df['unmapped'] = list(map(lambda n: n[1], names))
 
         return df
 
@@ -140,20 +171,8 @@ class RTSTRUCTSeries:
             use_mapping: use region map if present.
         """
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        names_df = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True)
-        names = list(names_df.itertuples(index=False, name=None))
-
-        # Convert regions arg to iterable.
-        if type(regions) == str:
-            if regions == 'all':
-                regions = list(names_df.region)
-            else:
-                regions = [regions]
-
-        # Ensure patient has all requested regions.
-        for region in regions:
-            if not self.has_region(region, use_mapping=use_mapping):    # Don't clear cache as 'region_names' recalculates underlying region names.
-                raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._pat_id}', series '{self._id}'.")
+        names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True, regions=regions)
+        names = list(names.itertuples(index=False, name=None))
 
         # Filter on requested regions.
         def fn(map):

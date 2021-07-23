@@ -16,7 +16,7 @@ from .region_map import RegionMap
 from .rtstruct_converter import RTSTRUCTConverter
 from .rtstruct_series import RTSTRUCTSeries
 
-class DicomPatient:
+class DICOMPatient:
     def __init__(
         self,
         dataset: str,
@@ -31,7 +31,7 @@ class DicomPatient:
         self._ct_from = ct_from
         self._dataset = dataset
         self._id = id
-        self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', id)
+        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'hierarchical', 'data', id)
         self._region_map = region_map
 
         # Check number of RTSTRUCT series.
@@ -52,7 +52,7 @@ class DicomPatient:
         def wrapper(self, *args, **kwargs):
             # Pass query to alternate dataset if required.
             if self._ct_from:
-                alt_patient = DicomPatient(self._ct_from, self._id)
+                alt_patient = DICOMPatient(self._ct_from, self._id)
                 alt_fn = getattr(alt_patient, fn.__name__)
                 fn_def = getattr(type(self), fn.__name__)
                 if type(fn_def) == property:

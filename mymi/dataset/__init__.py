@@ -4,64 +4,89 @@ from typing import *
 
 from mymi import config
 
-from .dicom import DicomDataset
+from .dataset import Dataset, DatasetType
+from .raw import list as list_raw
+from .raw import detect_type as detect_raw_type
+from .raw.dicom import DICOMDataset
+from .raw.nifti import NIFTIDataset
 from .processed import ProcessedDataset
-from .types import types
+from .processed import list as list_processed
 
-def list() -> Tuple[str]:
+def default() -> Optional[Dataset]:
     """
-    returns: list of available datasets.
+    returns: the default active dataset.
     """
-    return tuple(sorted(os.listdir(config.directories.datasets)))
+    # Check raw datasets.
+    raw_ds = list_raw()
+    if len(raw_ds) != 0:
+        # Auto-detect type.
+        name = raw_ds[0]
+        type = detect_raw_type(name)
 
-def create(name: str) -> None:
-    """
-    effect: creates a dataset.
-    args:
-        name: the name of the dataset.
-    """
-    # Create dataset folder.
-    ds_path = os.path.join(config.directories.datasets, name)
-    os.makedirs(ds_path)
+        # Set dataset.
+        if type == DatasetType.DICOM:
+            return DICOMDataset(name)
+        elif type == DatasetType.NIFTI:
+            return NIFTIDataset(name)
 
-def destroy(name: str) -> None:
-    """
-    effect: destroys a dataset.
-    args:
-        name: the name of the dataset.
-    """
-    ds_path = os.path.join(config.directories.datasets, name)
-    shutil.rmtree(ds_path)
+    # Check processed datasets.
+    processed_ds = list_processed()
+    if len(processed_ds) != 0:
+        return ProcessedDataset(processed_ds[0])
 
-# Make first dataset active.
-sets = list()
-ds = DicomDataset(sets[0])
+    return None
+
+ds = default()
 
 def active() -> str:
     """
     returns: active dataset name.
     """
-    return ds.description()
+    if ds is None:
+        return "No active dataset."
+    else:
+        return ds.description
 
 def select(
     name: str,
-    type: int = types.DICOM):
+    type: Optional[Union[Literal[DatasetType.DICOM.name, DatasetType.NIFTI.name, DatasetType.PROCESSED.name]]] = None):
     """
     effect: sets the new dataset as active.
     args:
-        name: the name of the new dataset.
-        type: the type of dataset.
+        name: the dataset name.
+        type: the dataset type. Auto-detected if not present.
     """
-    # Set current dataset.
     global ds
-    if type == types.DICOM:
-        ds = DicomDataset(name)
-    elif type == types.PROCESSED:
-        ds = ProcessedDataset(name)
+
+    # Check if 'type' is set.
+    if type is None:
+        # Check raw datasets.
+        raw_ds = list_raw()
+        if name in raw_ds:
+            # Auto-detect type.
+            type = detect_raw_type(name)
+
+            # Set dataset.
+            if type == DatasetType.DICOM:
+                ds = DICOMDataset(name)
+            elif type == DatasetType.NIFTI:
+                ds = NIFTIDataset(name)
+
+            return
+
+        # Check processed datasets.
+        processed_ds = list_processed()
+        if name in processed_ds:
+            ds = ProcessedDataset(name)
     else:
-        type_names = [t.name for t in types]
-        type_string = ', '.join(type_names)
-        raise ValueError(f"Invalid dataset type '{type}', expected one of 'dataset.types.{{{type_string}}}'.")
+        if type.lower() == DatasetType.DICOM.name.lower():
+            ds = DICOMDataset(name)
+        elif type.lower() == DatasetType.NIFTI.name.lower():
+            ds = NIFTIDataset(name)
+        elif type.lower() == DatasetType.PROCESSED.name.lower():
+            ds = ProcessedDataset(name)
+        else:
+            raise ValueError(f"Dataset type '{type}' not recognised.")
 
 def info(*args, **kwargs):
     return ds.info(*args, **kwargs)

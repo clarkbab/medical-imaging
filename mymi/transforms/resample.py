@@ -10,11 +10,9 @@ def resample_3D(
     """
     returns: a resampled tensor.
     args:
-        image: the SimpleITK image.
+        input: the input data.
         spacing: the old spacing.
         new_spacing: the new spacing.
-    kwargs:
-        nearest_neighbour: use nearest neighbour interpolation.
     """
     # Convert boolean data to sitk-friendly type.
     boolean = input.dtype == bool

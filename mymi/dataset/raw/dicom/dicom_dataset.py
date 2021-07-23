@@ -20,13 +20,13 @@ from mymi import regions
 from mymi import types
 from mymi.utils import filter_on_num_pats, filter_on_pat_ids
 
-from .dicom_patient import DicomPatient
+from ...dataset import Dataset, DatasetType
+from .dicom_patient import DICOMPatient
 from .region_map import RegionMap
-from ..types import types as old_types
 
 Z_SPACING_ROUND_DP = 2
 
-class DicomDataset:
+class DICOMDataset(Dataset):
     def __init__(
         self,
         name: str):
@@ -35,7 +35,7 @@ class DicomDataset:
             name: the name of the dataset.
         """
         self._name = name
-        self._path = os.path.join(config.directories.datasets, name)
+        self._path = os.path.join(config.directories.datasets, 'raw', name)
 
         # Load 'ct_from' flag.
         self._ct_from = None
@@ -55,18 +55,9 @@ class DicomDataset:
         # Load region map.
         self._region_map = self._load_region_map()
 
+    @property
     def description(self) -> str:
-        """
-        returns: a short descriptive string.
-        """
-        # Create description.
-        desc = f"Name: {self._name}, Type: DICOM"
-
-        # Add CT from.
-        if self._ct_from:
-            desc += f", CT from: {self._ct_from}"
-
-        return desc
+        return f"DICOM: {self._name}"
 
     @property
     def ct_from(self) -> Optional[str]:
@@ -77,8 +68,8 @@ class DicomDataset:
         return self._name
 
     @property
-    def type(self) -> old_types:
-        return old_types.DICOM
+    def type(self) -> DatasetType:
+        return DatasetType.DICOM
 
     @property
     def path(self) -> str:
@@ -120,9 +111,9 @@ class DicomDataset:
     @_require_hierarchical
     def patient(
         self,
-        id: types.PatientID) -> DicomPatient:
+        id: types.PatientID) -> DICOMPatient:
         """
-        returns: a DicomPatient object.
+        returns: a DICOMPatient object.
         args:
             id: the patient ID.
         """
@@ -136,7 +127,7 @@ class DicomDataset:
             raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
 
         # Create patient.
-        pat = DicomPatient(self._name, id, ct_from=self._ct_from, region_map=self._region_map)
+        pat = DICOMPatient(self._name, id, ct_from=self._ct_from, region_map=self._region_map)
         
         return pat
 
@@ -370,7 +361,7 @@ class DicomDataset:
         returns: a DataFrame with patient regions and information.
         kwargs:
             clear_cache: force the cache to clear.
-            regions: include patients with (at least) on of the regions.
+            regions: include patients with (at least) on of the requested regions.
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
             use_mapping: use region map if present.

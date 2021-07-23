@@ -8,11 +8,11 @@ from mymi import cache
 from mymi import config
 from mymi import types
 
-from ..types import types as ds_types
+from ..dataset import Dataset, DatasetType
 
 FILENAME_NUM_DIGITS = 5
 
-class ProcessedDataset:
+class ProcessedDataset(Dataset):
     def __init__(
         self,
         name: str):
@@ -21,27 +21,32 @@ class ProcessedDataset:
             name: the name of the dataset.
         """
         self._name = name
-        self._path = os.path.join(config.directories.datasets, name, 'processed')
+        self._path = os.path.join(config.directories.datasets, 'processed', name)
+        self._folders = ['train', 'validation', 'test']
 
         # Check if dataset exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"Dataset '{name}' not found.")
+            raise ValueError(f"Dataset '{self.description}' not found.")
 
+    @property
     def description(self) -> str:
-        """
-        returns: a short descriptive string.
-        """
-        # Create description.
-        desc = f"Name: {self._name}, Type: PROCESSED"
-        return desc
+        return f"PROCESSED: {self._name}"
+
+    @property
+    def folders(self) -> List[str]:
+        return self._folders
 
     @property
     def name(self) -> str:
         return self._name
 
     @property
-    def type(self) -> int:
-        return ds_types.PROCESSED
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def type(self) -> DatasetType:
+        return DatasetType.PROCESSED
 
     def manifest(
         self,
@@ -148,3 +153,83 @@ class ProcessedDataset:
         cache.write(params, freqs, 'array')
 
         return freqs
+
+    def create_input(
+        self,
+        pat_id: types.PatientID,
+        data: np.ndarray,
+        folder: str) -> int:
+        """
+        effect: creates an input sample.
+        returns: the index of the sample.
+        args:
+            pat_id: the patient ID to add to the manifest.
+            data: the data to save.
+            folder: the folder to save to.
+        """
+        # Get next index.
+        input_path = os.path.join(self._path, 'data', folder, 'inputs')
+        if os.path.exists(input_path):
+            inputs = os.listdir(input_path)
+            if len(inputs) == 0:
+                index = -1
+            else:
+                index = int(list(sorted(inputs))[-1].replace('.npy', '')) + 1
+        else:
+            os.makedirs(input_path)
+            index = 0
+
+        # Save the input data.
+        filename = f"{index:0{FILENAME_NUM_DIGITS}}"
+        filepath = os.path.join(input_path, filename)
+        f = open(filepath, 'wb')
+        np.save(f, data)
+
+        # Update the manifest.
+        self._append_to_manifest(folder, index, pat_id)
+
+        return index
+
+    def create_label(
+        self,
+        pat_id: types.PatientID,
+        index: int,
+        region: str,
+        label: np.ndarray,
+        folder: str) -> None:
+        """
+        effect: creates an input sample.
+        args:
+            pat_id: the patient ID to add to the manifest.
+            region: the region name.
+            label: the label data.
+            folder: the folder to save to.
+        """
+        # Create region folder if it doesn't exist.
+        region_path = os.path.join(self._path, 'data', folder, 'labels', region)
+        if not os.path.exists(region_path):
+            os.makedirs(region_path)
+
+        # Save label.
+        filename = f"{index:0{FILENAME_NUM_DIGITS}}"
+        filepath = os.path.join(region_path, filename)
+        f = open(filepath, 'wb')
+        np.save(f, label)
+
+    def _append_to_manifest(
+        self,
+        folder: str,
+        index: int,
+        pat_id: types.PatientID) -> None:
+        """
+        effect: adds a line to the manifest.
+        """
+        # Create manifest if not present.
+        manifest_path = os.path.join(self._path, 'manifest.csv')
+        if not os.path.exists(manifest_path):
+            with open(manifest_path, 'w') as f:
+                f.write('folder,patient-id,index\n')
+
+        # Append line to manifest. 
+        with open(manifest_path, 'a') as f:
+            f.write(f"{folder},{pat_id},{index}\n")
