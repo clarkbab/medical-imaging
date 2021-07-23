@@ -133,7 +133,7 @@ def get_batch_centroids(label_batch, plane):
 
     return centroids
 
-def filterOnNumPats(num_pats: int) -> Callable[[str], bool]:
+def filter_on_num_pats(num_pats: int) -> Callable[[str], bool]:
     """
     returns: a function to filter patients by number of patients allowed.
     args:
@@ -151,7 +151,7 @@ def filterOnNumPats(num_pats: int) -> Callable[[str], bool]:
 
     return fn
 
-def filterOnPatIDs(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+def filter_on_pat_ids(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
     """
     returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
     args:

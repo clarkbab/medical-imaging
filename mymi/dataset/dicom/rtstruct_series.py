@@ -21,6 +21,7 @@ class RTSTRUCTSeries:
         dataset: str,
         pat_id: types.PatientID,
         id: str,
+        ct_from: Optional[str] = None,
         region_map: Optional[RegionMap] = None):
         """
         args:
@@ -33,6 +34,7 @@ class RTSTRUCTSeries:
         self._dataset = dataset
         self._pat_id = pat_id
         self._id = id
+        self._ct_from = ct_from
         self._region_map = region_map
         self._path = os.path.join(config.directories.datasets, dataset, 'hierarchical', 'data', pat_id, 'rtstruct', id)
 
@@ -46,12 +48,10 @@ class RTSTRUCTSeries:
             raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{id}' for patient '{pat_id}', dataset '{dataset}'.")
 
         # Get reference CT series.
+        ds = self._dataset if ct_from is None else ct_from
         rtstruct = self.get_rtstruct()
         ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-        try:
-            self._ref_ct = CTSeries(dataset, pat_id, ct_id)
-        except ValueError as e:
-            raise ValueError(f"Error when loading CT series '{ct_id}' referenced by RTSTRUCT series '{id}', for patient '{pat_id}', dataset '{dataset}'.")
+        self._ref_ct = CTSeries(ds, pat_id, ct_id)
 
     @property
     def id(self) -> str:
@@ -139,17 +139,21 @@ class RTSTRUCTSeries:
             regions: the desired regions.
             use_mapping: use region map if present.
         """
-        # Convert regions arg to list.
-        regions = self._convert_to_region_list(regions, clear_cache=clear_cache, use_mapping=use_mapping)
+        # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
+        names_df = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True)
+        names = list(names_df.itertuples(index=False, name=None))
+
+        # Convert regions arg to iterable.
+        if type(regions) == str:
+            if regions == 'all':
+                regions = list(names_df.region)
+            else:
+                regions = [regions]
 
         # Ensure patient has all requested regions.
         for region in regions:
-            if not self.has_region(region, clear_cache=clear_cache, use_mapping=use_mapping):
+            if not self.has_region(region, use_mapping=use_mapping):    # Don't clear cache as 'region_names' recalculates underlying region names.
                 raise ValueError(f"Region '{region}' not found for dataset '{self._dataset}', patient '{self._pat_id}', series '{self._id}'.")
-
-        # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True)
-        names = list(names.itertuples(index=False, name=None))
 
         # Filter on requested regions.
         def fn(map):

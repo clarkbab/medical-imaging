@@ -82,7 +82,7 @@ def generate_dataset_predictions(
     # Load segmenter model.
     seg_model = SingleChannelUNet()
     seg_model = seg_model.to(device)
-    logging.info(f"Using segmenter model arch: {segmenter.__class__}.")
+    logging.info(f"Using segmenter model arch: {seg_model.__class__}.")
 
     # Load segmenter params.
     segmenter_state, _ = checkpoint.load(segmenter, segmenter_run, checkpoint_name=segmenter_checkpoint, device=device)
@@ -109,18 +109,13 @@ def generate_dataset_predictions(
 
     for pat in tqdm(pats):
         # Get segmentation.
-        try:
-            seg = get_patient_two_stage_segmentation(pat, loc_model, localiser_size, localiser_spacing, seg_model, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, use_postprocessing=use_postprocessing)
-        except ValueError as e:
-            logging.error(f"Caught error segmenting patient '{pat}', dataset '{dataset}', patient '{pat}'.")
-            logging.error(f"Error message: {e}")
-            continue
+        seg = get_patient_two_stage_segmentation(pat, loc_model, localiser_size, localiser_spacing, seg_model, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, use_postprocessing=use_postprocessing)
 
         # Load reference CT dicoms.
         cts = ds.patient(pat).get_cts()
 
         # Create RTSTRUCT dicom.
-        rtstruct = RTStructConverter.create_rtstruct(cts, rt_info)
+        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
 
         # Create ROI data.
         roi_data = ROIData(
@@ -131,7 +126,7 @@ def generate_dataset_predictions(
         )
 
         # Add ROI.
-        RTStructConverter.add_roi(rtstruct, roi_data, cts)
+        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
 
         # Save in new 'pred' dataset.
         filename = f"{pat}.dcm"

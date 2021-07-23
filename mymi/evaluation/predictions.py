@@ -1,19 +1,21 @@
+from re import I
 from mymi.metrics.hausdorff_distance import sitk_hausdorff_distance
+import numpy as np
 import pandas as pd
 from typing import *
+from tqdm import tqdm
 
 from mymi import cache
 from mymi.dataset import DicomDataset
 from mymi.metrics import dice, sitk_hausdorff_distance
+from mymi import logging
 from mymi import types
 
-@cache.function
+# @cache.function
 def evaluate_predictions(
     pred_dataset: str,
     gt_dataset: str,
     clear_cache: bool = False,
-    pred_ct_from: str = None,
-    raise_errors: bool = True,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     """
     returns: a table of prediction results.
@@ -22,47 +24,21 @@ def evaluate_predictions(
         gt_dataset: the dataset of ground truth regions.
     kwargs:
         clear_cache: force the cache to clear.
-        pred_ct_from: the CT data matching the prediction regions.
-        raise_errors: raise known patient errors.
-        regions: the prediction regions to evaluate.
+        regions: the requested prediction regions.
     """
-    # Load ground truth regions.
-    gt_ds = DicomDataset(gt_dataset)
-    gt_regions = gt_ds.region_names(clear_cache=clear_cache, raise_errors=raise_errors)
-
-    # Load prediction patients/regions.
-    pred_ds = DicomDataset(pred_dataset, ct_from=pred_ct_from)
+    # Load patients to predict on.
+    pred_ds = DicomDataset(pred_dataset)
     pats = pred_ds.list_patients()
-    pred_regions = pred_ds.region_names(clear_cache=clear_cache, raise_errors=raise_errors)
 
-    # Check that requested regions are present.
+    # Load GT dataset.
+    gt_ds = DicomDataset(gt_dataset)
+
+    # Convert regions to list.
     if type(regions) == str:
         if regions == 'all':
-            # Use all 'pred' regions.
-            regions = pred_regions
-
-            # Check that ground truth has required regions.
-            for region in regions:
-                if region not in gt_regions:
-                    raise ValueError(f"Requested region '{region}' not found in dataset '{gt_dataset}'.")
+            regions = list(pred_ds.region_names(clear_cache=clear_cache).region.unique())
         else:
-            if regions not in gt_regions:
-                raise ValueError(f"Requested region '{regions}' not found in dataset '{gt_dataset}'.")
-            elif regions not in pred_regions:
-                raise ValueError(f"Requested region '{regions}' not found in dataset '{pred_dataset}'.")
-            
-            # Convert to list.
             regions = [regions]
-    else:
-        for region in regions:
-            if region not in gt_regions:
-                raise ValueError(f"Requested region '{region}' not found in dataset '{gt_dataset}'.")
-            elif region not in pred_regions:
-                raise ValueError(f"Requested region '{region}' not found in dataset '{pred_dataset}'.")
-
-    # Load patients.
-    pats = pred_ds.list_patients()
-    # TODO: filter patients with errors.
 
     # Create dataframe.
     cols = {
@@ -74,15 +50,26 @@ def evaluate_predictions(
     df = pd.DataFrame(columns=cols.keys())
 
     # Add metrics for patients.
-    for pat in pats:
-        # Load patient spacing.
-        spacing = gt_ds.patient(pat).ct_spacing(clear_cache=clear_cache)
+    logging.info(f"Evaluating patient predictions..")
+    for pat in tqdm(pats):
+        # Filter patient if not present in GT.
+        if not gt_ds.has_patient(pat):
+            logging.info(f"Skipping patient '{pat}', not present in ground truth dataset.")
+            continue
 
-        # Load ground truth.
-        gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=regions)
+        # Get overlap between available pred/GT regions and requested regions.
+        pred_regions = list(pred_ds.patient(pat).region_names(clear_cache=clear_cache).region)
+        gt_regions = list(gt_ds.patient(pat).region_names(clear_cache=clear_cache).region)
+        overlap_regions = np.intersect1d(np.intersect1d(pred_regions, gt_regions), regions) 
 
-        # Load prediction data.
-        pred_region_data = pred_ds.patient(pat).region_data(clear_cache=clear_cache, regions=regions)
+        # Filter if no overlapping regions.
+        if len(overlap_regions) == 0:
+            logging.info(f"Skipping patient '{pat}', no requested region is present in both prediction and ground truth datasets.")
+            continue
+
+        # Load prediction/GT data.
+        pred_region_data = pred_ds.patient(pat).region_data(clear_cache=clear_cache, regions=overlap_regions)
+        gt_region_data = gt_ds.patient(pat).region_data(clear_cache=clear_cache, regions=overlap_regions)
 
         # Create empty dataframe rows.
         dice_data = {
@@ -95,15 +82,15 @@ def evaluate_predictions(
         }
 
         # Calculate metrics for each region.
-        for i, region in enumerate(regions):
+        spacing = gt_ds.patient(pat).ct_spacing(clear_cache=clear_cache)
+        for region in overlap_regions:
             # Add dice.
-            dice_score = dice()
-            dice_score = dice(pred_region_data[pred_regions[i]], gt_region_data[gt_regions[i]])
-            dice_data[internal_regions[i]] = dice_score
+            dice_score = dice(pred_region_data[region], gt_region_data[region])
+            dice_data[region] = dice_score
 
             # Add Hausdorff distance.
-            hd_score = sitk_hausdorff_distance(pred_region_data[pred_regions[i]], gt_region_data[gt_regions[i]], spacing)
-            hd_data[internal_regions[i]] = hd_score
+            hd_score = sitk_hausdorff_distance(pred_region_data[region], gt_region_data[region], spacing)
+            hd_data[region] = hd_score
 
         # Add rows.
         df = df.append(dice_data, ignore_index=True)

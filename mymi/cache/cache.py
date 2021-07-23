@@ -144,6 +144,7 @@ class Cache:
             if hasattr(obj, 'cache_key'):
                 return obj.cache_key()
 
+        print(obj)
         raise ValueError(f"Cache key can't contain type '{type(obj)}', must be JSON-serialisable or implement 'cache_key' method.")
 
     @_require_cache

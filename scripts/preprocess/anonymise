@@ -1,0 +1,38 @@
+#! /usr/bin/env python
+import os
+import pandas as pd
+import shutil
+
+DRY_RUN = False
+REGIONS = ['Parotid_L', 'Parotid_R']
+
+root_path = os.path.join('S:', 'ImageStore', 'AtlasSegmentation', 'AI_HN', 'Training_CT')
+
+# Create CT map.
+ct_path = os.path.join(root_path, 'data', 'ct')
+ct_files = list(sorted(os.listdir(ct_path)))
+ct_ids = list(f.replace('.nii.gz', '') for f in ct_files)
+map_df = pd.DataFrame(ct_ids, columns=['series_id'])
+
+# Save map.
+filepath = os.path.join(root_path, 'map.csv')
+map_df.to_csv(filepath)
+
+for anon_id, row in map_df.iterrows():
+    # Rename CT files.
+    old_filepath = os.path.join(root_path, 'data', 'ct', f"{row[0]}.nii.gz")
+    new_filepath = os.path.join(root_path, 'data', 'ct', f"{anon_id}.nii.gz")
+    if DRY_RUN:
+        print(f"Moving from '{old_filepath}' to '{new_filepath}'.")
+    else:
+        shutil.move(old_filepath, new_filepath)
+
+    # Rename region files.
+    for region in REGIONS:
+        old_filepath = os.path.join(root_path, 'data', region, f"{row[0]}.nii.gz") 
+        new_filepath = os.path.join(root_path, 'data', region, f"{anon_id}.nii.gz")
+        if os.path.exists(old_filepath):
+            if DRY_RUN:
+                print(f"Moving from '{old_filepath}' to '{new_filepath}'.")
+            else:
+                shutil.move(old_filepath, new_filepath)

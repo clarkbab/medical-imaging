@@ -40,7 +40,7 @@ class DicomPatient:
             raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{id}', dataset '{dataset}'.")
         
         # Set default RTSTRUCT series.
-        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0], region_map=region_map)
+        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0], ct_from=ct_from, region_map=region_map)
 
     def _require_ct(
         fn: Callable) -> Callable:
@@ -142,7 +142,11 @@ class DicomPatient:
         returns: CT series names for the patient.
         """
         # List the CT series.
-        series = list(sorted(os.listdir(os.path.join(self._path, 'ct'))))
+        if self._ct_from is None:
+            series = list(sorted(os.listdir(os.path.join(self._path, 'ct'))))
+        else:
+            series = DicomPatient(self._ct_from, self._id).list_ct_series()
+
         return series
 
     def ct_series(
@@ -154,12 +158,12 @@ class DicomPatient:
             id: the CT series ID.
         """
         # Check that series ID exists.
-        series_path = os.path.join(self._path, 'ct', id)
-        if not os.path.isdir(series_path):
+        if not id in self.list_ct_series():
             raise ValueError(f"CT series '{id}' not found for patient '{self._id}', dataset '{self._dataset}'.")
 
         # Create CT series.
-        series = CTSeries(self._dataset, self._id, id)
+        ds = self._dataset if self._ct_from is None else self._ct_from
+        series = CTSeries(ds, self._id, id)
 
         return series
 

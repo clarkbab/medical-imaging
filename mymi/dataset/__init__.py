@@ -20,6 +20,7 @@ def create(name: str) -> None:
     args:
         name: the name of the dataset.
     """
+    # Create dataset folder.
     ds_path = os.path.join(config.directories.datasets, name)
     os.makedirs(ds_path)
 
@@ -44,19 +45,17 @@ def active() -> str:
 
 def select(
     name: str,
-    ct_from: str = None,
     type: int = types.DICOM):
     """
     effect: sets the new dataset as active.
     args:
-        ct_from: get CT data from other dataset.
         name: the name of the new dataset.
         type: the type of dataset.
     """
     # Set current dataset.
     global ds
     if type == types.DICOM:
-        ds = DicomDataset(name, ct_from=ct_from)
+        ds = DicomDataset(name)
     elif type == types.PROCESSED:
         ds = ProcessedDataset(name)
     else:
