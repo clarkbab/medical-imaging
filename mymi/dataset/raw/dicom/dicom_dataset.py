@@ -584,8 +584,12 @@ class DICOMDataset(Dataset):
         # Trim each patient.
         for pat in tqdm(pats):
             try:
-                # Creating the patient will raise an error is data is insufficient.
-                self.patient(pat)
+                # Creating the patient raises errors for missing files.
+                patient = self.patient(pat)
+
+                # Loading CT summary ensures data is consistent.
+                patient.ct_summary()
+
             except ValueError as e:
                 # Move patient to error folder.
                 pat_path = os.path.join(self._path, 'hierarchical', 'data', pat)

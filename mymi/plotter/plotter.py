@@ -10,7 +10,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.dataset.dicom import DicomDataset
+from mymi.dataset.raw.dicom import DICOMDataset
 from mymi.prediction import get_patient_localisation, get_patient_patch_segmentation
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
@@ -135,7 +135,7 @@ def plot_patient_regions(
 
         # Load other regions.
         if other_ds:
-            other_ds = DicomDataset(other_ds) 
+            other_ds = DICOMDataset(other_ds) 
             other_region_data = other_ds.patient(id).region_data(clear_cache=clear_cache, regions=other_regions)
 
             if internal_regions:

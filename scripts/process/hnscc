@@ -9,4 +9,4 @@ from mymi.dataset.raw.dicom import process_dicom
 
 ds = 'HNSCC'
 regions = ['Parotid_L', 'Parotid_R']
-process_dicom(ds, regions=regions)
+process_dicom(ds, clear_cache=True, regions=regions)

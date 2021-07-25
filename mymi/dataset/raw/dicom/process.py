@@ -12,6 +12,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
+from mymi.transforms import resample_3D
 from mymi import types
 
 from ...processed import create as create_processed_dataset
@@ -22,32 +23,36 @@ from .dicom_dataset import DICOMDataset
 def process_dicom(
     dataset: str,
     include_missing: bool = False,
+    clear_cache: bool = False,
     dest_dataset: Optional[str] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_validation: float = 0.2,
     random_seed: int = 42,
-    regions: types.PatientRegions = 'all'):
+    regions: types.PatientRegions = 'all',
+    spacing: Optional[types.ImageSpacing3D] = None):
     """
     effect: processes a DICOM dataset and partitions it into train/validation/test
         folders for training.
     args:
         the dataset to process.
     kwargs:
+        clear_cache: force the cache to clear.
         drop_missing: drop patients with missing slices.
         p_test: the proportion of test patients.
         p_train: the proportion of train patients.
         p_validation: the proportion of validation patients.
         regions: the regions to process.
+        spacing: resample to the desired spacing.
     """
     # Load patients who have (at least) one of the required regions.
     ds = DICOMDataset(dataset)
-    pats = list(ds.region_names(regions=regions)['patient-id'].unique())
+    pats = list(ds.region_names(clear_cache=clear_cache, regions=regions)['patient-id'].unique())
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Drop patients with missing slices.
     if not include_missing:
-        pat_ids = list(ds.ct_summary().query('`num-missing` > 0')['patient-id'])
+        pat_ids = list(ds.ct_summary(clear_cache=clear_cache).query('`num-missing` > 0')['patient-id'])
         pats = np.setdiff1d(pats, pat_ids)
         logging.info(f"Removed {len(pat_ids)} patients with missing slices.")
 
@@ -79,11 +84,16 @@ def process_dicom(
         # Write each patient to folder.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = list(ds.patient(pat).region_names(regions=regions, allow_unknown_regions=True).region)
+            pat_regions = list(ds.patient(pat).region_names(clear_cache=clear_cache, regions=regions, allow_unknown_regions=True).region)
 
             # Load data.
             input = ds.patient(pat).ct_data()
-            labels = ds.patient(pat).region_data(regions=pat_regions)
+            labels = ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
+
+            # Resample data if requested.
+            if spacing is not None:
+                old_spacing = ds.patient(pat).ct_spacing()
+                input = resample_3D(input, old_spacing, spacing)
 
             # Save input data.
             index = proc_ds.create_input(pat, input, folder)

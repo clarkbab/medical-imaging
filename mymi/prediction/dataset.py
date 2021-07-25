@@ -6,7 +6,7 @@ from typing import Optional
 
 from mymi import checkpoint
 from mymi import dataset as ds
-from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.raw.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.models import SingleChannelUNet
 from mymi.regions import to_255, RegionColours
 from mymi import types
@@ -99,7 +99,7 @@ def generate_dataset_predictions(
     if pred_ds_name in dss:
         ds.destroy(pred_ds_name)
     ds.create(pred_ds_name)
-    ds_pred = DicomDataset(pred_ds_name)
+    ds_pred = DICOMDataset(pred_ds_name)
 
     # Create RTSTRUCT info.
     rt_info = {

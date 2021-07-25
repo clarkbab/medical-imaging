@@ -195,11 +195,11 @@ class CTSeries:
             if 'offset-x' not in data:
                 data['offset-x'] = x_offset
             elif x_offset != data['offset-x']:
-                raise ValueError(f"Inconsistent CT 'offset-x' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'offset-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
             if 'offset-y' not in data:
                 data['offset-y'] = y_offset
             elif y_offset != data['offset-y']:
-                raise ValueError(f"Inconsistent CT 'offset-y' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'offset-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
             if 'offset-z' not in data or z_offset < data['offset-z']:
                 data['offset-z'] = z_offset
 
@@ -209,11 +209,11 @@ class CTSeries:
             if 'size-x' not in data:
                 data['size-x'] = x_size
             elif x_size != data['size-x']:
-                raise ValueError(f"Inconsistent CT 'size-x' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'size-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
             if 'size-y' not in data:
                 data['size-y'] = y_size
             elif y_size != data['size-y']:
-                raise ValueError(f"Inconsistent CT 'size-y' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'size-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
 
             # Add x/y-spacings.
             x_spacing = ct.PixelSpacing[0]
@@ -221,14 +221,16 @@ class CTSeries:
             if 'spacing-x' not in data:
                 data['spacing-x'] = x_spacing
             elif x_spacing != data['spacing-x']:
-                raise ValueError(f"Inconsistent CT 'spacing-x' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'spacing-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
             if 'spacing-y' not in data:
                 data['spacing-y'] = y_spacing
             elif y_spacing != data['spacing-y']:
-                raise ValueError(f"Inconsistent CT 'spacing-y' for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"Inconsistent CT 'spacing-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
 
         # Add z-spacing. Round z-spacings to 3 d.p. as some of the diffs are whacky like 2.99999809.
         z_spacing = np.min([round(s, 3) for s in np.diff(sorted(z_offsets))])
+        if z_spacing == 0:
+            raise ValueError(f"Zero spacing for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.") 
         data['spacing-z'] = z_spacing
 
         # Add fields-of-view.
