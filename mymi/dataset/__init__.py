@@ -88,6 +88,8 @@ def select(
         else:
             raise ValueError(f"Dataset type '{type}' not recognised.")
 
+# DICOMDataset API.
+
 def info(*args, **kwargs):
     return ds.info(*args, **kwargs)
 
@@ -112,9 +114,18 @@ def region_names(*args, **kwargs):
 def region_summary(*args, **kwargs):
     return ds.region_summary(*args, **kwargs)
 
-##
-# Processed dataset API.
-##
+# NIFTIDataset API.
+
+def list_ids(*args, **kwargs):
+    return ds.list_ids(*args, **kwargs)
+
+def object(*args, **kwargs):
+    return ds.object(*args, **kwargs)
+
+def region_names(*args, **kwargs):
+    return ds.region_names(*args, **kwargs)
+
+# ProcessedDataset API.
 
 def manifest(*args, **kwargs):
     return ds.manifest(*args, **kwargs)

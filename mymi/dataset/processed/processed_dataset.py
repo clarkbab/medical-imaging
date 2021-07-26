@@ -1,4 +1,6 @@
+import gzip
 import inspect
+import nibabel as nib
 import numpy as np
 import os
 import pandas as pd
@@ -50,7 +52,7 @@ class ProcessedDataset(Dataset):
 
     def manifest(
         self,
-        folder: types.ProcessedFolder) -> Sequence[str]:
+        folder: types.ProcessedFolder) -> List[str]:
         """
         returns: a sequence of patient IDs for that folder.
         args:
@@ -58,10 +60,8 @@ class ProcessedDataset(Dataset):
         """
         # Read manifest file.
         filepath = os.path.join(self._path, 'manifests', f"{folder}.csv")
-        pats_df = pd.read_csv(filepath)
-        pats = pats_df['patient-id'].tolist()
-
-        return pats
+        df = pd.read_csv(filepath)
+        return df
 
     def input(
         self,
@@ -156,14 +156,14 @@ class ProcessedDataset(Dataset):
 
     def create_input(
         self,
-        pat_id: types.PatientID,
+        id: str,
         data: np.ndarray,
         folder: str) -> int:
         """
         effect: creates an input sample.
         returns: the index of the sample.
         args:
-            pat_id: the patient ID to add to the manifest.
+            id: the object ID.
             data: the data to save.
             folder: the folder to save to.
         """
@@ -174,25 +174,23 @@ class ProcessedDataset(Dataset):
             if len(inputs) == 0:
                 index = -1
             else:
-                index = int(list(sorted(inputs))[-1].replace('.npy', '')) + 1
+                index = int(list(sorted(inputs))[-1].replace('.npz', '')) + 1
         else:
             os.makedirs(input_path)
             index = 0
 
         # Save the input data.
-        filename = f"{index:0{FILENAME_NUM_DIGITS}}"
+        filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
         filepath = os.path.join(input_path, filename)
-        f = open(filepath, 'wb')
-        np.save(f, data)
+        np.savez_compressed(filepath, data=data)
 
         # Update the manifest.
-        self._append_to_manifest(folder, index, pat_id)
+        self._append_to_manifest(folder, index, id)
 
         return index
 
     def create_label(
         self,
-        pat_id: types.PatientID,
         index: int,
         region: str,
         label: np.ndarray,
@@ -211,16 +209,16 @@ class ProcessedDataset(Dataset):
             os.makedirs(region_path)
 
         # Save label.
-        filename = f"{index:0{FILENAME_NUM_DIGITS}}"
+        filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
         filepath = os.path.join(region_path, filename)
         f = open(filepath, 'wb')
-        np.save(f, label)
+        np.savez_compressed(f, label=label)
 
     def _append_to_manifest(
         self,
         folder: str,
         index: int,
-        pat_id: types.PatientID) -> None:
+        id: str) -> None:
         """
         effect: adds a line to the manifest.
         """
@@ -228,8 +226,8 @@ class ProcessedDataset(Dataset):
         manifest_path = os.path.join(self._path, 'manifest.csv')
         if not os.path.exists(manifest_path):
             with open(manifest_path, 'w') as f:
-                f.write('folder,patient-id,index\n')
+                f.write('folder,id,index\n')
 
         # Append line to manifest. 
         with open(manifest_path, 'a') as f:
-            f.write(f"{folder},{pat_id},{index}\n")
+            f.write(f"{folder},{id},{index}\n")

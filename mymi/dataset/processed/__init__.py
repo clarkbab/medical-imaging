@@ -1,16 +1,20 @@
 import os
 import shutil
-from typing import Tuple
+from typing import List
 
 from mymi import config
 
 from .processed_dataset import ProcessedDataset
 
-def list() -> Tuple[str]:
+def list() -> List[str]:
     """
     returns: list of raw datasets.
     """
-    return tuple(sorted(os.listdir(os.path.join(config.directories.datasets, 'processed'))))
+    path = os.path.join(config.directories.datasets, 'processed')
+    if os.path.exists(path):
+        return sorted(os.listdir(path))
+    else:
+        return []
 
 def create(name: str) -> ProcessedDataset:
     """
