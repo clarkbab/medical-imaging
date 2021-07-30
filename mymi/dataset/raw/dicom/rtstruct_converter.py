@@ -85,6 +85,9 @@ class RTSTRUCTConverter:
         if not contour_seq:
             raise ValueError(f"'ContourSequence' not found for ROI '{name}'.")
 
+        # Filter contours without data.
+        contour_seq = filter(lambda c: hasattr(c, 'ContourData'), contour_seq)
+
         # Sort contour sequence by z-axis.
         contour_seq = sorted(contour_seq, key=lambda c: c.ContourData[2])
 

@@ -158,7 +158,6 @@ class CTSeries:
             'fov-z': float,
             'hu-max': float,
             'hu-min': float,
-            'num-missing': int,
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
@@ -228,9 +227,10 @@ class CTSeries:
                 raise ValueError(f"Inconsistent CT 'spacing-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
 
         # Add z-spacing. Round z-spacings to 3 d.p. as some of the diffs are whacky like 2.99999809.
-        z_spacing = np.min([round(s, 3) for s in np.diff(sorted(z_offsets))])
-        if z_spacing == 0:
-            raise ValueError(f"Zero spacing for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.") 
+        z_spacings = np.unique([round(s, 3) for s in np.diff(sorted(z_offsets))])
+        if len(z_spacings) != 1:
+            raise ValueError(f"Expected single 'spacing-z', got spacings '{z_spacings}' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.") 
+        z_spacing = z_spacings[0]
         data['spacing-z'] = z_spacing
 
         # Add fields-of-view.
@@ -245,8 +245,11 @@ class CTSeries:
         z_size = int(round(z_fov / z_spacing, 0))
         data['size-z'] = z_size
 
-        # Add num missing slices.
-        data['num-missing'] = z_size - len(cts)
+        # Check for missing slices.
+        # TODO: Handle missing slices.
+        num_missing = z_size - len(cts)
+        if num_missing != 0:
+            raise ValueError(f"{num_missing} missing slices for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
 
         # Add row.
         df = df.append(data, ignore_index=True)

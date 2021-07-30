@@ -176,7 +176,12 @@ class RTSTRUCTSeries:
 
         # Filter on requested regions.
         def fn(map):
-            if map[0] in regions:
+            if type(regions) == str:
+                if regions == 'all' or map[0] == regions:
+                    return True
+                else:
+                    return False
+            elif map[0] in regions:
                 return True
             else:
                 return False

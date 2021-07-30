@@ -1,3 +1,7 @@
+from typing import List
+
+from mymi import types
+
 from .colours import to_255, RegionColours
 from .regions import Regions
 
@@ -10,3 +14,20 @@ def is_region(name: str) -> bool:
     # Get region names.
     region_names = [r.name for r in Regions]
     return name in region_names
+
+def to_list(
+    regions: types.PatientRegions,
+    all_regions: List[str]) -> List[str]:
+    """
+    returns: a list of regions names.
+    args:
+        regions: the regions argument.
+        all_regions: all possible regions.
+    """
+    if type(regions) == str:
+        if regions == 'all':
+            return all_regions
+        else:
+            return [regions]
+    else:
+        return regions

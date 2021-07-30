@@ -5,6 +5,7 @@ from typing import List
 from mymi import config
 
 from .processed_dataset import ProcessedDataset
+from .processed_partition import ProcessedPartition
 
 def list() -> List[str]:
     """

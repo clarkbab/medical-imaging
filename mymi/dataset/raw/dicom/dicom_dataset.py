@@ -588,7 +588,7 @@ class DICOMDataset(Dataset):
                 patient = self.patient(pat)
 
                 # Loading CT summary ensures data is consistent.
-                patient.ct_summary()
+                ct_df = patient.ct_summary(clear_cache=True)
 
             except ValueError as e:
                 # Move patient to error folder.

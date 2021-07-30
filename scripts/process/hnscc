@@ -1,13 +1,7 @@
-#! /usr/bin/env python
-import os
-import sys
+#! /usr/bin/env bash
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.append(root_dir)
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd $parent_path
 
-from mymi.dataset.raw.dicom import process_dicom
-
-ds = 'HNSCC'
-regions = ['Parotid_L', 'Parotid_R']
-spacing = (1, 1, 3)
-process_dicom(ds, clear_cache=True, regions=regions, spacing=spacing)
+python dicom --dataset HNSCC --p_test 0 --p_train 0.8 --p_validation 0.2 \
+    --regions Parotid_L --spacing '(1, 1, 3)'
