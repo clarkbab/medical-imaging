@@ -114,6 +114,76 @@ class NIFTIDataset(Dataset):
         df = df.astype(cols)
 
         return df
+    
+    @cache.method('_name')
+    def region_summary(
+        self, 
+        clear_cache: bool = False,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        """
+        returns: a DataFrame with patient regions and information.
+        kwargs:
+            clear_cache: force the cache to clear.
+            regions: include objects with (at least) on of the requested regions.
+        """
+        # Define table structure.
+        cols = {
+            'id': str,
+            'region': str,
+            'centroid-mm-x': float,
+            'centroid-mm-y': float,
+            'centroid-mm-z': float,
+            'centroid-voxels-x': float,
+            'centroid-voxels-y': float,
+            'centroid-voxels-z': float,
+            'width-mm-x': float,
+            'width-mm-y': float,
+            'width-mm-z': float,
+            'width-voxels-x': float,
+            'width-voxels-y': float,
+            'width-voxels-z': float,
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Load each object.
+        ids = self.list_ids()
+
+        # Keep patients with (at least) one requested region.
+        ids = list(filter(lambda i: self.object(i).has_one_region(regions), ids))
+
+        # Add patient regions.
+        logging.info(f"Adding patient region summaries for dataset '{self._name}'..")
+        for id in tqdm(ids):
+            # Load object summary.
+            summary_df = self.object(id).region_summary(clear_cache=clear_cache, regions=regions)
+
+            # Add rows.
+            for _, row in summary_df.iterrows():
+                data = {
+                    'id': id,
+                    'region': row.region,
+                    'width-mm-x': row['width-mm-x'],
+                    'width-mm-y': row['width-mm-y'],
+                    'width-mm-z': row['width-mm-z'],
+                    'centroid-mm-x': row['centroid-mm-x'],
+                    'centroid-mm-y': row['centroid-mm-y'],
+                    'centroid-mm-z': row['centroid-mm-z'],
+                    'centroid-voxels-x': row['centroid-voxels-x'],
+                    'centroid-voxels-y': row['centroid-voxels-y'],
+                    'centroid-voxels-z': row['centroid-voxels-z'],
+                    'width-mm-x': row['width-mm-x'],
+                    'width-mm-y': row['width-mm-y'],
+                    'width-mm-z': row['width-mm-z'],
+                    'width-voxels-x': row['width-voxels-x'],
+                    'width-voxels-y': row['width-voxels-y'],
+                    'width-voxels-z': row['width-voxels-z'],
+                }
+                df = df.append(data, ignore_index=True)
+
+        # Set column types.
+        df = df.astype(cols)
+
+        return df
 
     def object(
         self,

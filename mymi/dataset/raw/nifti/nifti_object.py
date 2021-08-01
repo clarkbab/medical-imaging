@@ -2,7 +2,8 @@ import nibabel as nib
 import numpy as np
 import os
 import pandas as pd
-from typing import List, OrderedDict
+from scipy.ndimage import center_of_mass
+from typing import Any, Callable, List, OrderedDict, Tuple, Union
 
 from mymi import cache
 from mymi import config
@@ -18,7 +19,7 @@ class NIFTIObject:
         self._id = id
         self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'raw')
 
-    def region_names(self) -> List[str]:
+    def list_regions(self) -> List[str]:
         files = os.listdir(self._path)
         names = []
         for f in files:
@@ -29,14 +30,29 @@ class NIFTIObject:
                 id = r.replace('.nii.gz', '')
                 if id == self._id:
                     names.append(f)
-        # Create dataframe.
-        df = pd.DataFrame(names, columns=['region'])
-        return df
+        return names
 
     def has_region(
         self,
         region: str) -> bool:
-        return region in list(self.region_names().region)
+        return region in self.list_regions()
+
+    def has_one_region(
+        self,
+        regions: types.PatientRegions) -> bool:
+        pat_regions = self.list_regions()
+        if type(regions) == str:
+            if regions == 'all' and len(pat_regions) != 0:
+                return True
+            elif regions in pat_regions:
+                return True
+            else:
+                return False
+        else:
+            for region in regions:
+                if region in pat_regions:
+                    return True
+            return False
 
     def ct_spacing(self) -> types.ImageSpacing3D:
         path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
@@ -51,6 +67,35 @@ class NIFTIObject:
         affine = img.affine
         offset = (affine[0][3], affine[1][3], affine[2][3])
         return offset
+
+    def ct_data(self) -> np.ndarray:
+        path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
+        img = nib.load(path)
+        data = img.get_data()
+        return data
+
+    def region_data(
+        self,
+        regions: types.PatientRegions = 'all') -> OrderedDict:
+        # Convert regions to list.
+        if type(regions) == str:
+            if regions == 'all':
+                regions = self.list_regions()
+            else:
+                regions = [regions]
+
+        data = {}
+        for region in regions:
+            if not is_region(region):
+                raise ValueError(f"Requested region '{region}' not a valid internal region.")
+            if not self.has_region(region):
+                raise ValueError(f"Requested region '{region}' not found for object '{self._id}', dataset '{self._dataset}'.")
+            
+            path = os.path.join(self._path, region, f"{self._id}.nii.gz")
+            img = nib.load(path)
+            rdata = img.get_fdata()
+            data[region] = rdata
+        return data
 
     @cache.method('_dataset', '_id')
     def ct_summary(self) -> pd.DataFrame:
@@ -94,31 +139,114 @@ class NIFTIObject:
 
         return df
 
-    def ct_data(self) -> np.ndarray:
-        path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
-        img = nib.load(path)
-        data = img.get_data()
-        return data
-
-    def region_data(
+    @cache.method('_dataset', '_id')
+    def region_summary(
         self,
-        regions: types.PatientRegions = 'all') -> OrderedDict:
-        # Convert regions to list.
-        if type(regions) == str:
-            if regions == 'all':
-                regions = list(self.region_names().region)
-            else:
-                regions = [regions]
+        clear_cache: bool = False,
+        columns: Union[str, List[str]] = 'all',
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> pd.DataFrame:
+        """
+        returns: a DataFrame region summary information.
+        kwargs:
+            clear_cache: clear the cache.
+            columns: the columns to return.
+            regions: the desired regions.
+            use_mapping: use region map if present.
+        """
+        # Define table structure.
+        cols = {
+            'region': str,
+            'centroid-mm-x': float,
+            'centroid-mm-y': float,
+            'centroid-mm-z': float,
+            'centroid-voxels-x': int,
+            'centroid-voxels-y': int,
+            'centroid-voxels-z': int,
+            'width-mm-x': float,
+            'width-mm-y': float,
+            'width-mm-z': float,
+            'width-voxels-x': int,
+            'width-voxels-y': int,
+            'width-voxels-z': int,
+        }
+        cols = dict(filter(self._filter_on_dict_keys(columns, whitelist='region'), cols.items()))
+        df = pd.DataFrame(columns=cols.keys())
 
-        data = {}
-        for region in regions:
-            if not is_region(region):
-                raise ValueError(f"Requested region '{region}' not a valid internal region.")
-            if not self.has_region(region):
-                raise ValueError(f"Requested region '{region}' not found for object '{self._id}', dataset '{self._dataset}'.")
+        # Get region dict.
+        region_data = self.region_data(regions=regions)
+
+        # Get voxel offset/spacing.
+        offset = self.ct_offset()
+        spacing = self.ct_spacing()
+
+        # Add info for each region.
+        for name, data in region_data.items():
+            # Find centre-of-mass.
+            centroid = np.round(center_of_mass(data)).astype(int)
+
+            # Convert COM to millimetres.
+            mm_centroid = (centroid * spacing) + offset
+
+            # Find bounding box co-ordinates.
+            non_zero = np.argwhere(data != 0)
+            mins = non_zero.min(axis=0)
+            maxs = non_zero.max(axis=0)
+            voxel_widths = maxs - mins
+
+            # Convert voxel widths to millimetres.
+            mm_widths = voxel_widths * spacing
+
+            data = {
+                'region': name,
+                'centroid-mm-x': mm_centroid[0],
+                'centroid-mm-y': mm_centroid[1],
+                'centroid-mm-z': mm_centroid[2],
+                'centroid-voxels-x': centroid[0],
+                'centroid-voxels-y': centroid[1],
+                'centroid-voxels-z': centroid[2],
+                'width-mm-x': mm_widths[0],
+                'width-mm-y': mm_widths[1],
+                'width-mm-z': mm_widths[2],
+                'width-voxels-x': voxel_widths[0],
+                'width-voxels-y': voxel_widths[1],
+                'width-voxels-z': voxel_widths[2]
+            }
+            data = dict(filter(self._filter_on_dict_keys(columns, whitelist='region'), data.items()))
+            df = df.append(data, ignore_index=True)
+
+        # Set column type.
+        df = df.astype(cols)
+
+        # Sort by region.
+        df = df.sort_values('region').reset_index(drop=True)
+
+        return df
+
+    def _filter_on_dict_keys(
+        self,
+        keys: Union[str, List[str]] = 'all',
+        whitelist: Union[str, List[str]] = None) -> Callable[[Tuple[str, Any]], bool]:
+        """
+        returns: a function that filters out unneeded keys.
+        kwargs:
+            keys: description of required keys.
+            whitelist: keys that are never filtered.
+        """
+        def fn(item: Tuple[str, Any]) -> bool:
+            key, _ = item
+            # Allow based on whitelist.
+            if whitelist is not None:
+                if type(whitelist) == str:
+                    if key == whitelist:
+                        return True
+                elif key in whitelist:
+                    return True
             
-            path = os.path.join(self._path, region, f"{self._id}.nii.gz")
-            img = nib.load(path)
-            rdata = img.get_fdata()
-            data[region] = rdata
-        return data
+            # Filter based on allowed keys.
+            if ((isinstance(keys, str) and (keys == 'all' or key == keys)) or
+                ((isinstance(keys, list) or isinstance(keys, np.ndarray) or isinstance(keys, tuple)) and key in keys)):
+                return True
+            else:
+                return False
+        return fn

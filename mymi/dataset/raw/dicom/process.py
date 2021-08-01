@@ -27,7 +27,7 @@ def process_dicom(
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_validation: float = 0.2,
-    random_seed: int = 42,
+    seed: int = 42,
     regions: types.PatientRegions = 'all',
     spacing: Optional[types.ImageSpacing3D] = None):
     """
@@ -40,6 +40,7 @@ def process_dicom(
         p_test: the proportion of test patients.
         p_train: the proportion of train patients.
         p_validation: the proportion of validation patients.
+        seed: the random seed for shuffling patients.
         regions: the regions to process.
         spacing: resample to the desired spacing.
     """
@@ -49,7 +50,7 @@ def process_dicom(
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
-    np.random.seed(random_seed) 
+    np.random.seed(seed) 
     np.random.shuffle(pats)
 
     # Partition patients - rounding assigns more patients to the test set,
@@ -71,6 +72,18 @@ def process_dicom(
 
     # Create dataset.
     proc_ds = create_processed_dataset(name)
+
+    # Save processing params.
+    filepath = os.path.join(proc_ds.path, 'params.csv')
+    with open(filepath, 'w') as f:
+        f.write('key,value\n')
+        f.write(f"dataset,{dataset}\n")
+        f.write(f"p_test,{p_test}")
+        f.write(f"p_train,{p_train}")
+        f.write(f"p_validation,{p_validation}")
+        f.write(f"seed,{seed}")
+        f.write(f"regions,'{regions}'")
+        f.write(f"spacing,'{spacing}'")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']

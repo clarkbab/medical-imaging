@@ -40,7 +40,7 @@ def get(
         if name in proc_ds:
             return ProcessedDataset(name)
         else:
-            raise ValueError(f"Dataset 'PROCESSED: {name}' not found.")
+            raise ValueError(f"Dataset '{name}' not found.")
     else:
         # Convert from string to type.
         type = to_type(type_str)

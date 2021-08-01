@@ -42,7 +42,7 @@ def process_nifti(
     """
     # Load objects.
     ds = NIFTIDataset(dataset)
-    ids = list(ds.region_names()['id'].unique())
+    ids = ds.list_ids()
     logging.info(f"Found {len(ids)} objects.")
 
     # Shuffle objects.
@@ -56,8 +56,6 @@ def process_nifti(
         num_validation = len(ids) - num_train
     else:
         num_validation = int(np.floor(p_validation * len(ids)))
-    num_train = int(np.floor(p_train * len(ids)))
-    num_validation = int(np.floor(p_validation * len(ids)))
     train_ids = ids[:num_train]
     validation_ids = ids[num_train:(num_train + num_validation)]
     test_ids = ids[(num_train + num_validation):]
@@ -71,6 +69,16 @@ def process_nifti(
     # Create dataset.
     proc_ds = create_processed_dataset(name)
 
+    # Save processing params.
+    filepath = os.path.join(proc_ds.path, 'params.csv')
+    with open(filepath, 'w') as f:
+        f.write('key,value\n')
+        f.write(f"dataset,{dataset}\n")
+        f.write(f"p_test,{p_test}\n")
+        f.write(f"p_train,{p_train}\n")
+        f.write(f"p_validation,{p_validation}\n")
+        f.write(f"spacing,\"{spacing}\"\n")
+
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']
     partition_ids = [train_ids, validation_ids, test_ids]
@@ -79,10 +87,13 @@ def process_nifti(
 
         # TODO: implement normalisation.
 
+        # Create partition.
+        proc_ds.create_partition(partition)
+
         # Write each object to partition.
         for id in tqdm(ids):
             # Get available requested regions.
-            obj_regions = ds.object(id).region_names()
+            obj_regions = ds.object(id).list_regions()
 
             # Load data.
             input = ds.object(id).ct_data()

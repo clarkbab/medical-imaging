@@ -370,9 +370,18 @@ class DICOMDataset(Dataset):
         cols = {
             'patient-id': str,
             'region': str,
+            'centroid-mm-x': float,
+            'centroid-mm-y': float,
+            'centroid-mm-z': float,
+            'centroid-voxels-x': float,
+            'centroid-voxels-y': float,
+            'centroid-voxels-z': float,
             'width-mm-x': float,
             'width-mm-y': float,
             'width-mm-z': float,
+            'width-voxels-x': float,
+            'width-voxels-y': float,
+            'width-voxels-z': float,
         }
         df = pd.DataFrame(columns=cols.keys())
 
@@ -398,7 +407,19 @@ class DICOMDataset(Dataset):
                     'region': row.region,
                     'width-mm-x': row['width-mm-x'],
                     'width-mm-y': row['width-mm-y'],
-                    'width-mm-z': row['width-mm-z']
+                    'width-mm-z': row['width-mm-z'],
+                    'centroid-mm-x': row['centroid-mm-x'],
+                    'centroid-mm-y': row['centroid-mm-y'],
+                    'centroid-mm-z': row['centroid-mm-z'],
+                    'centroid-voxels-x': row['centroid-voxels-x'],
+                    'centroid-voxels-y': row['centroid-voxels-y'],
+                    'centroid-voxels-z': row['centroid-voxels-z'],
+                    'width-mm-x': row['width-mm-x'],
+                    'width-mm-y': row['width-mm-y'],
+                    'width-mm-z': row['width-mm-z'],
+                    'width-voxels-x': row['width-voxels-x'],
+                    'width-voxels-y': row['width-voxels-y'],
+                    'width-voxels-z': float,
                 }
                 df = df.append(data, ignore_index=True)
 
@@ -588,7 +609,7 @@ class DICOMDataset(Dataset):
                 patient = self.patient(pat)
 
                 # Loading CT summary ensures data is consistent.
-                ct_df = patient.ct_summary(clear_cache=True)
+                patient.ct_summary(clear_cache=True)
 
             except ValueError as e:
                 # Move patient to error folder.

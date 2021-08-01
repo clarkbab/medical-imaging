@@ -2,6 +2,7 @@ from numpy.lib.arraysetops import intersect1d
 from mymi.types.types import PatientRegions
 import numpy as np
 import os
+import pandas as pd
 from typing import Dict, List, Tuple
 
 from mymi.regions import to_list
@@ -34,18 +35,18 @@ class PartitionSample:
     def has_one_region(
         self,
         regions: types.PatientRegions) -> bool:
-        """
-        returns: True if the patient has (at least) one of the requested regions.
-        args:
-            regions: the region names.
-        """
-        # Convert regions to list.
-        all_regions = self.list_regions()
-        regions = to_list(regions, all_regions)
-
-        if len(np.intersect1d(regions, all_regions)) != 0:
-            return True
+        pat_regions = self.list_regions()
+        if type(regions) == str:
+            if regions == 'all' and len(pat_regions) != 0:
+                return True
+            elif regions in pat_regions:
+                return True
+            else:
+                return False
         else:
+            for region in regions:
+                if region in pat_regions:
+                    return True
             return False
 
     def input(self) -> np.ndarray:
@@ -90,3 +91,42 @@ class PartitionSample:
             regions: the region to return.
         """
         return self.input(), self.label(regions=regions)
+
+    def input_summary(self) -> pd.DataFrame:
+        cols = {
+            'size-x': int,
+            'size-y': int,
+            'size-z': int
+        }
+        df = pd.DataFrame(columns=cols.keys())
+        input = self.input()
+        data = {
+            'size-x': input.shape[0],
+            'size-y': input.shape[1],
+            'size-z': input.shape[2]
+        }
+        df = df.append(data, ignore_index=True)
+        df = df.astype(cols)
+        return df
+
+    def label_summary(
+        self,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        cols = {
+            'region'
+            'size-x': int,
+            'size-y': int,
+            'size-z': int
+        }
+        df = pd.DataFrame(columns=cols.keys())
+        label = self.label(regions=regions)
+        for region, ldata in label.items():
+            data = {
+                'region': region,
+                'size-x': ldata.shape[0],
+                'size-y': ldata.shape[1],
+                'size-z': ldata.shape[2]
+            }
+            df = df.append(data, ignore_index=True)
+        df = df.astype(cols)
+        return df
