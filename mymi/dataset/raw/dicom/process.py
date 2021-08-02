@@ -78,12 +78,12 @@ def process_dicom(
     with open(filepath, 'w') as f:
         f.write('key,value\n')
         f.write(f"dataset,{dataset}\n")
-        f.write(f"p_test,{p_test}")
-        f.write(f"p_train,{p_train}")
-        f.write(f"p_validation,{p_validation}")
-        f.write(f"seed,{seed}")
-        f.write(f"regions,'{regions}'")
-        f.write(f"spacing,'{spacing}'")
+        f.write(f"p_test,{p_test}\n")
+        f.write(f"p_train,{p_train}\n")
+        f.write(f"p_validation,{p_validation}\n")
+        f.write(f"seed,{seed}\n")
+        f.write(f"regions,'{regions}'\n")
+        f.write(f"spacing,'{spacing}'\n")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']

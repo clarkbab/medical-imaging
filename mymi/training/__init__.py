@@ -1,2 +1,1 @@
-from .model_trainer import ModelTrainer
-
+from .localiser import train_localiser

@@ -60,7 +60,7 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-class SingleChannelUNet(nn.Module):
+class UNet(nn.Module):
     def __init__(self):
         super().__init__()
 

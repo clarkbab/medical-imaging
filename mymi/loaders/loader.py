@@ -13,6 +13,7 @@ class Loader:
     def build(
         partition: ProcessedPartition,
         batch_size: int = 1,
+        num_workers: int = 1,
         regions: types.PatientRegions = 'all',
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
@@ -23,6 +24,7 @@ class Loader:
             partition: the dataset partition.
         kwargs:
             batch_size: the number of images in the batch.
+            num_workers: the number of CPUs for data loading.
             regions: only load samples with (at least) one of the requested regions.
             shuffle: shuffle the data.
             spacing: the voxel spacing of the data.
@@ -32,7 +34,7 @@ class Loader:
         ds = LoaderDataset(partition, regions=regions, spacing=spacing, transform=transform)
 
         # Create loader.
-        return DataLoader(batch_size=batch_size, dataset=ds, shuffle=shuffle)
+        return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
 
 class LoaderDataset(Dataset):
     def __init__(
@@ -109,9 +111,10 @@ class LoaderDataset(Dataset):
 
             # Extract results.
             input = output['input'].data.squeeze(0)
-            label_data = {}
-            for r in label.keys():
-                label_data[r] = output[r].data.squeeze(0)
-            label = label_data
+            label = dict((r, output[r].data.squeeze(0)) for r in label.keys()) 
+
+        # Add 'channel' dimension.
+        input = np.expand_dims(input, axis=0)
+        label = dict((r, np.expand_dims(d, axis=0)) for r, d in label.items())
 
         return input, label
