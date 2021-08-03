@@ -89,7 +89,6 @@ class LoaderDataset(Dataset):
         if self._transform:
             # Add 'batch' dimension.
             input = np.expand_dims(input, axis=0)
-            label = np.expand_dims(label, axis=0)
             label = dict((r, np.expand_dims(d, axis=0)) for r, d in label.items())
 
             # Create 'subject'.
@@ -100,7 +99,7 @@ class LoaderDataset(Dataset):
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)
-            label = LabelMap(tensor=label, affine=affine)
+            label = dict((r, LabelMap(tensor=d, affine=affine)) for r, d in label.items())
             subject_kwargs = { 'input': input }
             for r, d in label.items():
                 subject_kwargs[r] = d
@@ -115,6 +114,8 @@ class LoaderDataset(Dataset):
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
-        label = dict((r, np.expand_dims(d, axis=0)) for r, d in label.items())
+
+        # Convert to half precision.
+        input = input.astype(np.half)
 
         return input, label

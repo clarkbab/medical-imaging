@@ -1,2 +1,2 @@
 from .nifti_dataset import NIFTIDataset
-from .process import process_nifti
+from .process_nifti import process_nifti

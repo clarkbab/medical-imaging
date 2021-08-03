@@ -1,0 +1,7 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd $parent_path
+
+python dicom --dataset HN1 --dest_dataset HN1-SEG --p_test 0 --p_train 0.8 --p_validation 0.2 \
+    --regions Parotid_L --spacing '(1, 1, 2)'

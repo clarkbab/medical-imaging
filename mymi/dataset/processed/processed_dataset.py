@@ -66,10 +66,16 @@ class ProcessedDataset(Dataset):
     def manifest(self) -> pd.DataFrame:
         """
         returns: the manifest table.
-        args:
-            partition: read the manifest from this partition.
         """
         filepath = os.path.join(self._path, 'manifest.csv')
+        df = pd.read_csv(filepath)
+        return df
+
+    def params(self) -> pd.DataFrame:
+        """
+        returns: the params table.
+        """
+        filepath = os.path.join(self._path, 'params.csv')
         df = pd.read_csv(filepath)
         return df
 

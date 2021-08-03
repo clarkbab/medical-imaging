@@ -144,7 +144,6 @@ class Cache:
             if hasattr(obj, 'cache_key'):
                 return obj.cache_key()
 
-        print(obj)
         raise ValueError(f"Cache key can't contain type '{type(obj)}', must be JSON-serialisable or implement 'cache_key' method.")
 
     @_require_cache
@@ -541,7 +540,12 @@ class Cache:
 
                 # Add specified instance attributes.
                 for a in attrs:
-                    params[a] = getattr(inner_self, a)
+                    # Handle nested attributes.
+                    a_split = a.split('.')
+                    if len(a_split) == 1:
+                        params[a] = getattr(inner_self, a)
+                    elif len(a_split) == 2:
+                        params[a] = getattr(getattr(inner_self, a_split[0]), a_split[1])
 
                 # Add args/kwargs.
                 if len(args) > 0:

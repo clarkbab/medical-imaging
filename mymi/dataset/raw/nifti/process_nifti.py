@@ -25,8 +25,8 @@ def process_nifti(
     dest_dataset: Optional[str] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
-    p_validation: float = 0.2,
-    random_seed: int = 42,
+    p_val: float = 0.2,
+    seed: int = 42,
     spacing: Optional[types.ImageSpacing3D] = None):
     """
     effect: processes a NIFTI dataset and partitions it into train/validation/test
@@ -36,7 +36,7 @@ def process_nifti(
     kwargs:
         p_test: the proportion of test objects.
         p_train: the proportion of train objects.
-        p_validation: the proportion of validation objects.
+        p_val: the proportion of validation objects.
         regions: the regions to process.
         spacing: resample to the desired spacing.
     """
@@ -46,7 +46,7 @@ def process_nifti(
     logging.info(f"Found {len(ids)} objects.")
 
     # Shuffle objects.
-    np.random.seed(random_seed) 
+    np.random.seed(seed) 
     np.random.shuffle(ids)
 
     # Partition patients - rounding assigns more patients to the test set,
@@ -55,7 +55,7 @@ def process_nifti(
     if p_test == 0:
         num_validation = len(ids) - num_train
     else:
-        num_validation = int(np.floor(p_validation * len(ids)))
+        num_validation = int(np.floor(p_val * len(ids)))
     train_ids = ids[:num_train]
     validation_ids = ids[num_train:(num_train + num_validation)]
     test_ids = ids[(num_train + num_validation):]
@@ -72,12 +72,8 @@ def process_nifti(
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
     with open(filepath, 'w') as f:
-        f.write('key,value\n')
-        f.write(f"dataset,{dataset}\n")
-        f.write(f"p_test,{p_test}\n")
-        f.write(f"p_train,{p_train}\n")
-        f.write(f"p_validation,{p_validation}\n")
-        f.write(f"spacing,\"{spacing}\"\n")
+        f.write('dataset,p_test,p_train,p_val,seed,spacing\n')
+        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{spacing}\",\"{spacing}\"")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']

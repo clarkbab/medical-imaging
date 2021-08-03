@@ -12,4 +12,4 @@ fire.Fire(process_dicom)
 # Sample args:
 # --dataset HEAD-NECK-RADIOMICS-HN1 --clear_cache False --dest_dataset HEAD-NECK-RADIOMICS-HN1
 # --p_test 0 --p_train 0.8 --p_validation 0.2 --random_seed 42 --regions all
-# --spacing '(1, 1, 3)'
+# --size '(128, 128, 96)' --spacing '(1, 1, 3)'

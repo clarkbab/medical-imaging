@@ -25,6 +25,7 @@ class DiceLoss(nn.Module):
 
         # 'torch.argmax' isn't differentiable, so convert label to one-hot encoding
         # and calculate dice per-class/channel.
+        label = label.long()
         label = F.one_hot(label)
         label = label.movedim(-1, 1)
         assert pred.shape == label.shape, f"Prediction ({pred.shape}) and label ({label.shape}) must have the same shape."

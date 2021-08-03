@@ -1,7 +1,9 @@
 import numpy as np
 import os
+import pandas as pd
 from typing import List
 
+from mymi import cache
 from mymi import types
 
 from .partition_sample import PartitionSample
@@ -24,7 +26,7 @@ class ProcessedPartition:
 
         # Check if dataset exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"Partition '{name}' not found for dataset '{dataset}'.")
+            raise ValueError(f"Partition '{name}' not found for dataset '{dataset.name}'.")
 
     def list_samples(self) -> List[int]:
         """
@@ -104,3 +106,23 @@ class ProcessedPartition:
         filepath = os.path.join(region_path, filename)
         f = open(filepath, 'wb')
         np.savez_compressed(f, data=data)
+
+    def input_summary(self) -> pd.DataFrame:
+        cols = {
+            'size-x': int,
+            'size-y': int,
+            'size-z': int
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        for sample in self.list_samples():
+            row = self.sample(sample).input_summary()
+            data = {
+                'size-x': row['size-x'],
+                'size-y': row['size-y'],
+                'size-z': row['size-z']
+            }
+            df = df.append(data, ignore_index=True)
+
+        df = df.astype(cols)
+        return df

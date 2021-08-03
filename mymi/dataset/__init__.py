@@ -1,5 +1,3 @@
-import os
-import shutil
 from typing import *
 
 from .dataset import Dataset, DatasetType, to_type
@@ -137,6 +135,9 @@ def region_names(*args, **kwargs):
 
 def manifest(*args, **kwargs):
     return ds.manifest(*args, **kwargs)
+
+def params(*args, **kwargs):
+    return ds.params(*args, **kwargs)
 
 def class_frequencies(*args, **kwargs):
     return ds.class_frequencies(*args, **kwargs)
