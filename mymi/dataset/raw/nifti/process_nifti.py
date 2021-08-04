@@ -27,6 +27,7 @@ def process_nifti(
     p_train: float = 0.6,
     p_val: float = 0.2,
     seed: int = 42,
+    size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None):
     """
     effect: processes a NIFTI dataset and partitions it into train/validation/test
@@ -38,6 +39,7 @@ def process_nifti(
         p_train: the proportion of train objects.
         p_val: the proportion of validation objects.
         regions: the regions to process.
+        size: crop/pad to the desired size.
         spacing: resample to the desired spacing.
     """
     # Load objects.
@@ -72,8 +74,8 @@ def process_nifti(
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
     with open(filepath, 'w') as f:
-        f.write('dataset,p_test,p_train,p_val,seed,spacing\n')
-        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{spacing}\",\"{spacing}\"")
+        f.write('dataset,p_test,p_train,p_val,seed,size,spacing\n')
+        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{size}\",\"{spacing}\"")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']
@@ -99,6 +101,11 @@ def process_nifti(
             if spacing is not None:
                 old_spacing = ds.object(id).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
+
+            # Crop/pad if requested.
+            if size is not None:
+                input = centre_crop_or_pad_3D(input, size, fill=np.min(input))
+                labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
 
             # Save input data.
             index = proc_ds.partition(partition).create_input(id, input)

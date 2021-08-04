@@ -79,8 +79,8 @@ def process_dicom(
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
     with open(filepath, 'w') as f:
-        f.write('dataset,p_test,p_train,p_val,seed,regions,spacing\n')
-        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{regions}\",\"{spacing}\"")
+        f.write('dataset,p_test,p_train,p_val,seed,regions,size,spacing\n')
+        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{regions}\",\"{size}\",\"{spacing}\"")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']
