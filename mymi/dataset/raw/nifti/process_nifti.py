@@ -11,8 +11,7 @@ from typing import Optional
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi import config
-from mymi.transforms import resample_3D
+from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 from ...processed import create as create_processed_dataset

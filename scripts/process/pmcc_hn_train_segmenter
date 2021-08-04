@@ -1,0 +1,15 @@
+import os
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.dataset import process_nifti
+
+process_nifti(
+    'PMCC-HN-TRAIN',
+    dest_dataset='PMCC-HN-TRAIN-SEG',
+    p_test=0,
+    p_train=0.8,
+    p_val=0.2,
+    spacing=(1, 1, 2))
