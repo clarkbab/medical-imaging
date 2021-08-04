@@ -1,23 +1,22 @@
 import os
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from torchio.transforms import RandomAffine
 from typing import Optional
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders import Loader
-from mymi.models.systems import Localiser
+from mymi.loaders import PatchLoader
+from mymi.models.systems import Segmenter
 
-def train_localiser(
+def train_segmenter(
     dataset: str,
     num_gpus: int = 1,
-    num_nodes: int = 1,
     num_workers: int = 1,
     run_name: Optional[str] = None) -> None:
-    model_name = 'localiser-pl'
+    model_name = 'segmenter-pl'
 
     # Load partitions.
     set = ds.get(dataset, 'processed')
@@ -35,9 +34,11 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
+    patch_size = (128, 128, 96)
+    region = 'Parotid_L'
     spacing = eval(set.params().spacing[0])
-    train_loader = Loader.build(train_part, num_workers=num_workers, spacing=spacing, transform=transform)
-    val_loader = Loader.build(val_part, num_workers=num_workers, shuffle=False)
+    train_loader = PatchLoader.build(train_part, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
+    val_loader = PatchLoader.build(val_part, patch_size, region, num_workers=num_workers, shuffle=False)
 
     # Create checkpointing callback.
     path = os.path.join(config.directories.checkpoints, model_name, run_name)
@@ -48,7 +49,7 @@ def train_localiser(
 
     # Create model.
     metrics = ['dice', 'hausdorff']
-    model = Localiser(metrics=metrics)
+    model = Segmenter(metrics=metrics)
 
     # Create logger.
     logger = WandbLogger(
@@ -58,22 +59,12 @@ def train_localiser(
         save_dir=config.directories.wandb)
     logger.watch(model)
 
-    # Create callbacks.
-    callbacks = [
-        EarlyStopping('val/loss'),
-        ModelCheckpoint(
-            dirpath=path,
-            every_n_epochs=1,
-            monitor='val/loss')
-    ]
-
     # Perform training.
     trainer = Trainer(
         accelerator='ddp',
-        callbacks=callbacks,
+        callbacks=[checkpoint],
         gpus=num_gpus,
         logger=logger,
         max_epochs=500,
-        num_nodes=num_nodes,
         precision=16)
     trainer.fit(model, train_loader, val_loader)

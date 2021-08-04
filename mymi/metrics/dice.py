@@ -6,58 +6,35 @@ def dice(
     a: np.ndarray,
     b: np.ndarray) -> float:
     """
-    returns: the dice score.
+    returns: the dice coefficient.
     args:
-        a: an array.
-        b: another array.
+        a: a 3D array.
+        b: another 3D array.
     """
     if a.shape != b.shape:
-        raise ValueError(f"Got mismatched input shapes: '{a.shape}' and '{b.shape}'.")
+        raise ValueError(f"Dice coefficient expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
-    # Get cardinality.
-    a_card = a.sum()
-    b_card = b.sum()
-
-    # Get number of intersecting pixels.
-    int_card = (a * b).sum()
-
-    # Calculate dice score.
-    dice = 2. * int_card / (a_card + b_card)
-
+    a = sitk.GetImageFromArray(a)
+    b = sitk.GetImageFromArray(b)
+    filter = sitk.LabelOverlapMeasuresImageFilter()
+    filter.Execute(a, b)
+    dice = filter.GetDiceCoefficient()
     return dice
 
 def batch_mean_dice(
     a: np.ndarray,
     b: np.ndarray) -> float:
     """
-    returns: returns the mean batch DSC.
+    returns: the mean batch dice coefficient.
     args:
-        a: a 4D array (batch of 3D binary volumes).
-        b: a 4D array (batch of 3D binary volumes).
+        a: a 4D array.
+        b: another 4D array.
     """
-    assert a.shape == b.shape
+    if a.shape != b.shape:
+        raise ValueError(f"Batch mean dice coefficient expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
-    # Get cardinality.
-    a_card = a.sum((1, 2, 3))
-    b_card = b.sum((1, 2, 3))
-
-    # Get number of intersecting pixels.
-    int_card = (a * b).sum((1, 2, 3)) 
-
-    # Calculate dice score.
-    dice_scores = 2. * int_card / (a_card + b_card)
-
-    return dice_scores.mean()
-
-def sitk_batch_mean_dice(
-        a: torch.Tensor,
-        b: torch.Tensor) -> torch.Tensor:
-    dice_scores = []
-    for i in range(len(a)):
-        img_a_i = sitk.GetImageFromArray(a[i])
-        img_b_i = sitk.GetImageFromArray(b[i])
-        ol_filter = sitk.LabelOverlapMeasuresImageFilter()
-        ol_filter.Execute(img_a_i, img_b_i)
-        dice = ol_filter.GetDiceCoefficient()
-        dice_scores.append(dice)
-    return torch.Tensor(np.mean(dice_scores))
+    dices = []
+    for a, b, in zip(a, b):
+        dices.append(dice(a, b))
+    mean_dice = np.mean(dices)
+    return mean_dice
