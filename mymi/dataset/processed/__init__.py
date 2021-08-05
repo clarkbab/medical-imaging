@@ -36,4 +36,14 @@ def destroy(name: str) -> None:
         name: the name of the dataset.
     """
     ds_path = os.path.join(config.directories.datasets, 'processed', name)
-    shutil.rmtree(ds_path)
+    if os.path.exists(ds_path):
+        shutil.rmtree(ds_path)
+
+def recreate(name: str) -> None:
+    """
+    effect: destroys and creates a dataset.
+    args:
+        name: the name of the dataset.
+    """
+    destroy(name)
+    return create(name)
