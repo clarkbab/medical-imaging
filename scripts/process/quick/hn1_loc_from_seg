@@ -48,7 +48,7 @@ for partition in seg_ds.list_partitions():
         label = dict((r, resample_3D(d, spacing, NEW_SPACING)) for r, d in label.items())
 
         # Crop/pad.
-        input = centre_crop_or_pad_3D(input, NEW_SIZE)
+        input = centre_crop_or_pad_3D(input, NEW_SIZE, fill=np.min(input))
         label = dict((r, centre_crop_or_pad_3D(d, NEW_SIZE)) for r, d in label.items())
 
         # Save the input data.
