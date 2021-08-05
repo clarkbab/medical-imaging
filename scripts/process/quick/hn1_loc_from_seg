@@ -2,12 +2,14 @@
 import numpy as np
 import os
 import sys
+from tqdm import tqdm
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import dataset
 from mymi.dataset.processed import recreate
+from mymi import logging
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 
 REGIONS = ['Parotid_L', 'Parotid_R']
@@ -28,14 +30,15 @@ loc_ds = recreate(loc_ds_name)
 
 # Add samples.
 for partition in seg_ds.list_partitions():
+    logging.info(f"Processing '{partition}' partition..")
     # Create partition in loc.
     loc_ds.create_partition(partition)
 
     # Load partition patients.
-    indices = seg_ds.partition(partition).list_indices()
+    indices = seg_ds.partition(partition).list_samples()
 
     path = os.path.join(loc_ds.path, 'data', partition)
-    for index in indices:
+    for index in tqdm(indices):
         # Get sample regions.
         regions = seg_ds.partition(partition).sample(index).list_regions()
         regions = list(filter(lambda r: r in REGIONS, regions))

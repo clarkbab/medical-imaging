@@ -70,7 +70,7 @@ class LoaderDataset(Dataset):
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         # Filter samples by requested regions.
-        samples = partition.list_indices()
+        samples = partition.list_samples()
         samples = list(filter(lambda i: partition.sample(i).has_one_region(region), samples))
 
         # Record number of samples.

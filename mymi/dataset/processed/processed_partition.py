@@ -28,12 +28,12 @@ class ProcessedPartition:
         if not os.path.exists(self._path):
             raise ValueError(f"Partition '{name}' not found for dataset '{dataset.name}'.")
 
-    def list_indices(self) -> List[int]:
+    def list_samples(self) -> List[int]:
         """
         returns: the sample indices.
         """
         path = os.path.join(self._path, 'inputs')
-        if os.path.exists:
+        if os.path.exists(path):
             indices = [int(f.replace('.npz', '')) for f in os.listdir(path)]
         else:
             indices = []
@@ -118,7 +118,7 @@ class ProcessedPartition:
         }
         df = pd.DataFrame(columns=cols.keys())
 
-        for sample in self.list_indices():
+        for sample in self.list_samples():
             row = self.sample(sample).input_summary()
             data = {
                 'size-x': row['size-x'],
