@@ -94,9 +94,8 @@ class LoaderDataset(Dataset):
             index: the item to return.
         """
         # Load data.
-        pair = self._partition.sample(self._index_map[index]).pair(regions=self._region)
-        input = pair[0]
-        label = pair[1][self._region]
+        input, label = self._partition.sample(self._index_map[index]).pair(regions=self._region)
+        label = label[self._region]
 
         # Perform transform.
         if self._transform:
@@ -112,7 +111,7 @@ class LoaderDataset(Dataset):
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)
-            label = LabelMap(tensor=input, affine=affine)
+            label = LabelMap(tensor=label, affine=affine)
             subject = Subject(input=input, label=label)
 
             # Transform the subject.

@@ -3,6 +3,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
 from typing import Optional
 
@@ -70,10 +71,12 @@ def train_localiser(
 
     # Perform training.
     trainer = Trainer(
+        accelerator='ddp',
         callbacks=callbacks,
         gpus=num_gpus,
         logger=logger,
         max_epochs=500,
         num_nodes=num_nodes,
+        plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
     trainer.fit(model, train_loader, val_loader)

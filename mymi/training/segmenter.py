@@ -1,8 +1,9 @@
 import os
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
 from typing import Optional
 
@@ -14,6 +15,7 @@ from mymi.models.systems import Segmenter
 def train_segmenter(
     dataset: str,
     num_gpus: int = 1,
+    num_nodes: int = 1,
     num_workers: int = 1,
     run_name: Optional[str] = None) -> None:
     model_name = 'segmenter-pl'
@@ -59,11 +61,23 @@ def train_segmenter(
         save_dir=config.directories.wandb)
     logger.watch(model)
 
+    # Create callbacks.
+    callbacks = [
+        EarlyStopping('val/loss'),
+        ModelCheckpoint(
+            dirpath=path,
+            every_n_epochs=1,
+            monitor='val/loss')
+    ]
+
     # Perform training.
     trainer = Trainer(
+        accelerator='ddp',
         callbacks=[checkpoint],
         gpus=num_gpus,
         logger=logger,
         max_epochs=500,
+        num_nodes=num_nodes,
+        plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
     trainer.fit(model, train_loader, val_loader)

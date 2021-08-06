@@ -129,3 +129,27 @@ class ProcessedPartition:
 
         df = df.astype(cols)
         return df
+
+    def label_summary(self) -> pd.DataFrame:
+        cols = {
+            'sample': int,
+            'region': str,
+            'size-x': int,
+            'size-y': int,
+            'size-z': int
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        for sample in self.list_samples():
+            row = self.sample(sample).input_summary()
+            data = {
+                'sample': sample,
+                'region': row['region'],
+                'size-x': row['size-x'],
+                'size-y': row['size-y'],
+                'size-z': row['size-z']
+            }
+            df = df.append(data, ignore_index=True)
+
+        df = df.astype(cols)
+        return df

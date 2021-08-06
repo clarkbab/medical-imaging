@@ -113,7 +113,7 @@ class PartitionSample:
         self,
         regions: types.PatientRegions = 'all') -> pd.DataFrame:
         cols = {
-            'region'
+            'region': str,
             'size-x': int,
             'size-y': int,
             'size-z': int

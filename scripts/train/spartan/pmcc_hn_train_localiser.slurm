@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --gres=gpu:p100:4
-#SBATCH --time 3-0:00:00
+#SBATCH --gres=gpu:p100:1
+#SBATCH --time 5-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -15,4 +15,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-.$SCRIPT_DIR/train/pmcc_hn_train_localiser
+srun bash $SCRIPT_DIR/train/pmcc_hn_train_localiser
