@@ -85,6 +85,10 @@ class LoaderDataset(Dataset):
         # Load data.
         input, label = self._partition.sample(self._index_map[index]).pair(regions=self._regions)
 
+        # Convert data to expected types.
+        input = input.astype(float)
+        label = dict((r, d.astype(bool)) for r, d in label.items())
+
         # Perform transform.
         if self._transform:
             # Add 'batch' dimension.
@@ -114,8 +118,5 @@ class LoaderDataset(Dataset):
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
-
-        # Convert to half precision.
-        input = input.astype(np.half)
 
         return input, label

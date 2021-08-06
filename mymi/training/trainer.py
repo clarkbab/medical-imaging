@@ -8,7 +8,7 @@ from typing import Callable, Optional, Sequence, Union
 from mymi import checkpoint
 from mymi.postprocessing import batch_largest_connected_component
 from mymi.reporting import WandbReporter
-from mymi.metrics import batch_mean_dice, sitk_batch_mean_hausdorff_distance
+from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
 from mymi import types
 
 PRINT_DP = '.10f'
@@ -171,7 +171,7 @@ class ModelTrainer:
                 if 'hausdorff' in self._metrics and step > self._hausdorff_delay:
                     # Can't calculate HD if prediction is empty.
                     if pred.sum() > 0:
-                        hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, self._spacing)
+                        hausdorff = batch_mean_hausdorff_distance(pred, label, self._spacing)
                         self._running_scores['print']['hausdorff'] += [hausdorff.item()]
                         self._running_scores['report']['hausdorff'] += [hausdorff.item()]
                 
@@ -243,7 +243,7 @@ class ModelTrainer:
             if 'hausdorff' in self._metrics and train_step > self._hausdorff_delay:
                 # Can't calculate HD if prediction is empty.
                 if pred.sum() > 0:
-                    hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, spacing=self._spacing)
+                    hausdorff = batch_mean_hausdorff_distance(pred, label, spacing=self._spacing)
                     self._running_scores['validation-print']['hausdorff'] += [hausdorff.item()]
                     self._running_scores['validation-report']['hausdorff'] += [hausdorff.item()]
 

@@ -7,7 +7,7 @@ from torchio import LabelMap, Subject
 from tqdm import tqdm
 
 from mymi import config
-from mymi.metrics import sitk_batch_mean_dice, sitk_batch_mean_hausdorff_distance
+from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
 from mymi import plotter
 from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
@@ -86,12 +86,12 @@ class ModelEvaluator:
             # Calculate output metrics.
             if self.output_transform:
                 if 'dice' in self.metrics:
-                    dice = sitk_batch_mean_dice(pred, label)
+                    dice = batch_mean_dice(pred, label)
                     self.running_scores['print']['output-dice'] += dice.item()
                     self.running_scores['total']['output-dice'] += dice.item()
 
                 if 'hausdorff' in self.metrics:
-                    hausdorff = sitk_batch_mean_hausdorff_distance(pred, label, spacing=self.output_spacing)
+                    hausdorff = batch_mean_hausdorff_distance(pred, label, spacing=self.output_spacing)
                     self.running_scores['print']['output-hausdorff'] += hausdorff.item()
                     self.running_scores['total']['output-hausdorff'] += hausdorff.item()
 
@@ -150,12 +150,12 @@ class ModelEvaluator:
 
             # Calculate metrics.
             if 'dice' in self.metrics:
-                dice = sitk_batch_mean_dice(pred, label_raw)
+                dice = batch_mean_dice(pred, label_raw)
                 self.running_scores['print']['dice'] += dice.item()
                 self.running_scores['total']['dice'] += dice.item()
 
             if 'hausdorff' in self.metrics:
-                hausdorff = sitk_batch_mean_hausdorff_distance(pred, label_raw, spacing=self.output_spacing)
+                hausdorff = batch_mean_hausdorff_distance(pred, label_raw, spacing=self.output_spacing)
                 self.running_scores['print']['hausdorff'] += hausdorff.item()
                 self.running_scores['total']['hausdorff'] += hausdorff.item()
 

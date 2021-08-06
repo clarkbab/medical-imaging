@@ -1,5 +1,3 @@
-from re import I
-from mymi.metrics.hausdorff_distance import sitk_hausdorff_distance
 import numpy as np
 import pandas as pd
 from typing import *
@@ -7,7 +5,7 @@ from tqdm import tqdm
 
 from mymi import cache
 from mymi.dataset import DicomDataset
-from mymi.metrics import dice, sitk_hausdorff_distance
+from mymi.metrics import dice, hausdorff_distance
 from mymi import logging
 from mymi import types
 
@@ -89,7 +87,7 @@ def evaluate_predictions(
             dice_data[region] = dice_score
 
             # Add Hausdorff distance.
-            hd_score = sitk_hausdorff_distance(pred_region_data[region], gt_region_data[region], spacing)
+            hd_score = hausdorff_distance(pred_region_data[region], gt_region_data[region], spacing)
             hd_data[region] = hd_score
 
         # Add rows.

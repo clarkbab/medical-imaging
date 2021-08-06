@@ -43,7 +43,10 @@ class Segmenter(pl.LightningModule):
         loss = self._loss(y_hat, y)
 
         # Log metrics.
+        y = y.cpu().numpy().astype(np.bool)
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
         self.log('train/loss', loss, on_epoch=True)
+
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
             self.log('train/dice', dice, on_epoch=True)
@@ -58,12 +61,16 @@ class Segmenter(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # Forward pass.
         x, labels = batch
+        x = x.half()
         y = labels['Parotid_L']
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
         # Log metrics.
+        y = y.cpu().numpy().astype(np.bool)
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
         self.log('val/loss', loss, on_epoch=True, sync_dist=True)
+
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
             self.log('val/dice', dice, on_epoch=True, sync_dist=True)

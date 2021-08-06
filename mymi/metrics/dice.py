@@ -8,11 +8,17 @@ def dice(
     """
     returns: the dice coefficient.
     args:
-        a: a 3D array.
-        b: another 3D array.
+        a: a boolean 3D array.
+        b: another boolean 3D array.
     """
     if a.shape != b.shape:
-        raise ValueError(f"Dice coefficient expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+        raise ValueError(f"Metric 'dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'dice' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+
+    # Convert types for SimpleITK.
+    a = a.astype(np.int64)
+    b = b.astype(np.int64)
 
     a = sitk.GetImageFromArray(a)
     b = sitk.GetImageFromArray(b)
@@ -27,11 +33,13 @@ def batch_mean_dice(
     """
     returns: the mean batch dice coefficient.
     args:
-        a: a 4D array.
-        b: another 4D array.
+        a: a boolean 4D array.
+        b: another boolean 4D array.
     """
     if a.shape != b.shape:
-        raise ValueError(f"Batch mean dice coefficient expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+        raise ValueError(f"Metric 'batch_mean_dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'batch_mean_dice' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
     dices = []
     for a, b, in zip(a, b):

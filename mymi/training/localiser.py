@@ -35,9 +35,10 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
+    regions = 'Parotid_L'
     spacing = eval(set.params().spacing[0])
-    train_loader = Loader.build(train_part, num_workers=num_workers, spacing=spacing, transform=transform)
-    val_loader = Loader.build(val_part, num_workers=num_workers, shuffle=False)
+    train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+    val_loader = Loader.build(val_part, num_workers=num_workers, regions=regions, shuffle=False)
 
     # Create checkpointing callback.
     path = os.path.join(config.directories.checkpoints, model_name, run_name)
@@ -69,7 +70,6 @@ def train_localiser(
 
     # Perform training.
     trainer = Trainer(
-        accelerator='ddp',
         callbacks=callbacks,
         gpus=num_gpus,
         logger=logger,
