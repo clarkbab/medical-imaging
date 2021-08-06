@@ -100,6 +100,7 @@ def process_nifti(
             if spacing is not None:
                 old_spacing = ds.object(id).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
+                labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 
             # Crop/pad if requested.
             if size is not None:
