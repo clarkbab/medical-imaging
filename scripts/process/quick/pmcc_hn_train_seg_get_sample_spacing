@@ -1,0 +1,64 @@
+#! /usr/bin/env python
+import numpy as np
+import os
+import sys
+from tqdm import tqdm
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import dataset
+from mymi import logging
+
+# Load seg dataset.
+seg_ds_name = 'PMCC-HN-TRAIN-SEG'
+seg_ds = dataset.get(seg_ds_name, 'processed')
+
+# Load raw dataset.
+raw_ds = 'PMCC-HN-TRAIN'
+raw_ds = dataset.get(raw_ds)
+
+# Load manifest.
+manifest = seg_ds.manifest()
+manifest['spacing'] = np.nan
+
+# For each patient in the 
+
+# Add samples.
+for partition in seg_ds.list_partitions():
+    logging.info(f"Processing '{partition}' partition..")
+    # Create partition in loc.
+    loc_ds.create_partition(partition)
+
+    # Load partition patients.
+    indices = seg_ds.partition(partition).list_samples()
+
+    path = os.path.join(loc_ds.path, 'data', partition)
+    for index in tqdm(indices):
+        # Get sample regions.
+        regions = seg_ds.partition(partition).sample(index).list_regions()
+        regions = list(filter(lambda r: r in REGIONS, regions))
+
+        # Load data.
+        input, label = seg_ds.partition(partition).sample(index).pair(regions=regions)
+
+        # Resample.
+        input = resample_3D(input, spacing, NEW_SPACING)
+        label = dict((r, resample_3D(d, spacing, NEW_SPACING)) for r, d in label.items())
+
+        # Crop/pad.
+        input = centre_crop_or_pad_3D(input, NEW_SIZE, fill=np.min(input))
+        label = dict((r, centre_crop_or_pad_3D(d, NEW_SIZE)) for r, d in label.items())
+
+        # Save the input data.
+        filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
+        filepath = os.path.join(path, 'inputs', filename) 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        np.savez_compressed(filepath, data=input)
+
+        # Save the label data.
+        for region, data in label.items():
+            filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
+            filepath = os.path.join(path, 'labels', region, filename) 
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            np.savez_compressed(filepath, data=data)

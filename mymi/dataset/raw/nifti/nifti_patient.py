@@ -10,7 +10,7 @@ from mymi import config
 from mymi.regions import is_region
 from mymi import types
 
-class NIFTIObject:
+class NIFTIPatient:
     def __init__(
         self,
         dataset: str,
@@ -89,7 +89,7 @@ class NIFTIObject:
             if not is_region(region):
                 raise ValueError(f"Requested region '{region}' not a valid internal region.")
             if not self.has_region(region):
-                raise ValueError(f"Requested region '{region}' not found for object '{self._id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Requested region '{region}' not found for patient '{self._id}', dataset '{self._dataset}'.")
             
             path = os.path.join(self._path, region, f"{self._id}.nii.gz")
             img = nib.load(path)

@@ -10,7 +10,7 @@ from mymi import regions
 from mymi import types
 
 from ...dataset import Dataset, DatasetType
-from .nifti_object import NIFTIObject
+from .nifti_patient import NIFTIPatient
 
 class NIFTIDataset(Dataset):
     def __init__(
@@ -69,8 +69,8 @@ class NIFTIDataset(Dataset):
         # Add patient info.
         logging.info(f"Loading CT summary for dataset '{self._name}'..")
         for id in tqdm(ids):
-            # Load object CT info.
-            ct_df = self.object(id).ct_summary()
+            # Load patient CT info.
+            ct_df = self.patient(id).ct_summary()
 
             # Add row.
             ct_df['id'] = id
@@ -96,11 +96,11 @@ class NIFTIDataset(Dataset):
         # Load each patient.
         ids = self.list_ids()
 
-        # Add object regions.
+        # Add patient regions.
         logging.info(f"Loading region names for dataset '{self._name}'..")
         for id in tqdm(ids):
             # Load patient regions.
-            names_df = self.object(id).region_names()
+            names_df = self.patient(id).region_names()
 
             # Add rows.
             for _, row in names_df.iterrows():
@@ -124,7 +124,7 @@ class NIFTIDataset(Dataset):
         returns: a DataFrame with patient regions and information.
         kwargs:
             clear_cache: force the cache to clear.
-            regions: include objects with (at least) on of the requested regions.
+            regions: include patients with (at least) on of the requested regions.
         """
         # Define table structure.
         cols = {
@@ -146,21 +146,21 @@ class NIFTIDataset(Dataset):
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each object.
-        ids = self.list_ids()
+        pats = self.list_patients()
 
         # Keep patients with (at least) one requested region.
-        ids = list(filter(lambda i: self.object(i).has_one_region(regions), ids))
+        pats = list(filter(lambda i: self.object(i).has_one_region(regions), pats))
 
         # Add patient regions.
         logging.info(f"Adding patient region summaries for dataset '{self._name}'..")
-        for id in tqdm(ids):
+        for pat in tqdm(pats):
             # Load object summary.
-            summary_df = self.object(id).region_summary(clear_cache=clear_cache, regions=regions)
+            summary_df = self.patient(pat).region_summary(clear_cache=clear_cache, regions=regions)
 
             # Add rows.
             for _, row in summary_df.iterrows():
                 data = {
-                    'id': id,
+                    'patient-id': pat,
                     'region': row.region,
                     'width-mm-x': row['width-mm-x'],
                     'width-mm-y': row['width-mm-y'],
@@ -185,7 +185,7 @@ class NIFTIDataset(Dataset):
 
         return df
 
-    def object(
+    def patient(
         self,
-        id: str) -> NIFTIObject:
-        return NIFTIObject(self._name, id)
+        id: str) -> NIFTIPatient:
+        return NIFTIPatient(self._name, id)

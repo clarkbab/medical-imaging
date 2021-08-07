@@ -34,33 +34,33 @@ def process_nifti(
     args:
         the dataset to process.
     kwargs:
-        p_test: the proportion of test objects.
-        p_train: the proportion of train objects.
-        p_val: the proportion of validation objects.
+        p_test: the proportion of test patients.
+        p_train: the proportion of train patients.
+        p_val: the proportion of validation patients.
         regions: the regions to process.
         size: crop/pad to the desired size.
         spacing: resample to the desired spacing.
     """
-    # Load objects.
+    # Load patients.
     ds = NIFTIDataset(dataset)
-    ids = ds.list_ids()
-    logging.info(f"Found {len(ids)} objects.")
+    pats = ds.list_patients()
+    logging.info(f"Found {len(pats)} patients.")
 
-    # Shuffle objects.
+    # Shuffle patients.
     np.random.seed(seed) 
-    np.random.shuffle(ids)
+    np.random.shuffle(pats)
 
     # Partition patients - rounding assigns more patients to the test set,
     # unless p_test=0, when these are assigned to the validation set.
-    num_train = int(np.floor(p_train * len(ids)))
+    num_train = int(np.floor(p_train * len(pats)))
     if p_test == 0:
-        num_validation = len(ids) - num_train
+        num_validation = len(pats) - num_train
     else:
-        num_validation = int(np.floor(p_val * len(ids)))
-    train_ids = ids[:num_train]
-    validation_ids = ids[num_train:(num_train + num_validation)]
-    test_ids = ids[(num_train + num_validation):]
-    logging.info(f"Num objects per partition: {len(train_ids)}/{len(validation_ids)}/{len(test_ids)} for train/validation/test.")
+        num_validation = int(np.floor(p_val * len(pats)))
+    train_pats = pats[:num_train]
+    validation_pats = pats[num_train:(num_train + num_validation)]
+    test_pats = pats[(num_train + num_validation):]
+    logging.info(f"Num patients per partition: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)} for train/validation/test.")
 
     # Destroy old dataset if present.
     name = dest_dataset if dest_dataset else dataset
@@ -78,27 +78,27 @@ def process_nifti(
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']
-    partition_ids = [train_ids, validation_ids, test_ids]
-    for partition, ids in zip(partitions, partition_ids):
-        logging.info(f"Writing '{partition}' objects..")
+    partition_pats = [train_pats, validation_pats, test_pats]
+    for partition, pats in zip(partitions, partition_pats):
+        logging.info(f"Writing '{partition}' patients..")
 
         # TODO: implement normalisation.
 
         # Create partition.
         proc_ds.create_partition(partition)
 
-        # Write each object to partition.
-        for id in tqdm(ids):
+        # Write each patient to partition.
+        for pat in tqdm(pats):
             # Get available requested regions.
-            obj_regions = ds.object(id).list_regions()
+            pat_regions = ds.patient(pat).list_regions()
 
             # Load data.
-            input = ds.object(id).ct_data()
-            labels = ds.object(id).region_data(regions=obj_regions)
+            input = ds.patient(pat).ct_data()
+            labels = ds.patient(pat).region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:
-                old_spacing = ds.object(id).ct_spacing()
+                old_spacing = ds.patient(pat).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 
@@ -108,7 +108,7 @@ def process_nifti(
                 labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
 
             # Save input data.
-            index = proc_ds.partition(partition).create_input(id, input)
+            index = proc_ds.partition(partition).create_input(pat, input)
 
             # Save label data.
             for region, label in labels.items():
