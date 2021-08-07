@@ -78,6 +78,8 @@ class PartitionSample:
         for region in regions:
             filename = f"{self._index:0{FILENAME_NUM_DIGITS}}.npz"
             filepath = os.path.join(self._partition._path, 'labels', region, filename)
+            if not os.path.exists(filepath):
+                raise ValueError(f"Region '{region}' not found for sample '{self._index}', partition '{self._partition.name}', dataset '{self._partition._dataset.description}'.")
             label = np.load(filepath)['data']
             data[region] = label
         return data

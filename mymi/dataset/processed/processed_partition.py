@@ -28,6 +28,10 @@ class ProcessedPartition:
         if not os.path.exists(self._path):
             raise ValueError(f"Partition '{name}' not found for dataset '{dataset.name}'.")
 
+    @property
+    def name(self) -> str:
+        return self._name
+
     def list_samples(self) -> List[int]:
         """
         returns: the sample indices.
