@@ -107,7 +107,7 @@ def ct_summary(*args, **kwargs):
 
 def list_patients(*args, **kwargs):
     return ds.list_patients(*args, **kwargs)
-    
+
 def patient(*args, **kwargs):
     return ds.patient(*args, **kwargs)
 

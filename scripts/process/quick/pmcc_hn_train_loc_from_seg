@@ -37,7 +37,6 @@ for partition in seg_ds.list_partitions():
     # Load partition patients.
     indices = seg_ds.partition(partition).list_samples()
 
-    path = os.path.join(loc_ds.path, 'data', partition)
     for index in tqdm(indices):
         # Get sample regions.
         regions = seg_ds.partition(partition).sample(index).list_regions()
@@ -56,13 +55,13 @@ for partition in seg_ds.list_partitions():
 
         # Save the input data.
         filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
-        filepath = os.path.join(path, 'inputs', filename) 
+        filepath = os.path.join(loc_ds.path, 'data', partition, 'inputs', filename) 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         np.savez_compressed(filepath, data=input)
 
         # Save the label data.
         for region, data in label.items():
             filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
-            filepath = os.path.join(path, 'labels', region, filename) 
+            filepath = os.path.join(loc_ds.path, 'data', partition, 'labels', region, filename) 
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             np.savez_compressed(filepath, data=data)
