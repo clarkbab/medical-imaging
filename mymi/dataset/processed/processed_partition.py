@@ -34,7 +34,7 @@ class ProcessedPartition:
         """
         path = os.path.join(self._path, 'inputs')
         if os.path.exists(path):
-            indices = [int(f.replace('.npz', '')) for f in os.listdir(path)]
+            indices = [int(f.replace('.npz', '')) for f in sorted(os.listdir(path))]
         else:
             indices = []
         return indices
