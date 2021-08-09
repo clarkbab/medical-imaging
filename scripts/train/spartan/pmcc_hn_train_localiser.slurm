@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
+#SBATCH --mem 16G
 #SBATCH --gres=gpu:p100:1
 #SBATCH --time 5-0:00:00
 #SBATCH -A punim1413

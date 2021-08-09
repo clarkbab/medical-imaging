@@ -15,6 +15,9 @@ class PartitionSample:
         self,
         partition: 'ProcessedPartition',
         index: int):
+        if index not in partition.list_samples():
+            raise ValueError(f"Sample '{index}' not found for partition '{partition.name}', dataset '{partition.dataset.description}'.")
+
         self._partition = partition
         self._index = index
 

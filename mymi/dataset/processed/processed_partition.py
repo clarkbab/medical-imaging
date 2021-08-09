@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pandas as pd
+from tqdm import tqdm
 from typing import List
 
 from mymi import cache
@@ -27,6 +28,10 @@ class ProcessedPartition:
         # Check if dataset exists.
         if not os.path.exists(self._path):
             raise ValueError(f"Partition '{name}' not found for dataset '{dataset.name}'.")
+
+    @property
+    def dataset(self) -> str:
+        return self._dataset
 
     @property
     def name(self) -> str:
@@ -122,8 +127,8 @@ class ProcessedPartition:
         }
         df = pd.DataFrame(columns=cols.keys())
 
-        for sample in self.list_samples():
-            row = self.sample(sample).input_summary()
+        for sam_id in tqdm(self.list_samples()):
+            row = self.sample(sam_id).input_summary()
             data = {
                 'size-x': row['size-x'],
                 'size-y': row['size-y'],
@@ -134,7 +139,9 @@ class ProcessedPartition:
         df = df.astype(cols)
         return df
 
-    def label_summary(self) -> pd.DataFrame:
+    def label_summary(
+        self,
+        regions: types.PatientRegions = 'all') -> pd.DataFrame:
         cols = {
             'sample': int,
             'region': str,
@@ -144,16 +151,17 @@ class ProcessedPartition:
         }
         df = pd.DataFrame(columns=cols.keys())
 
-        for sample in self.list_samples():
-            row = self.sample(sample).input_summary()
-            data = {
-                'sample': sample,
-                'region': row['region'],
-                'size-x': row['size-x'],
-                'size-y': row['size-y'],
-                'size-z': row['size-z']
-            }
-            df = df.append(data, ignore_index=True)
+        for sam_id in tqdm(self.list_samples()):
+            summary = self.sample(sam_id).label_summary(regions=regions)
+            for i, row in summary.iterrows():
+                data = {
+                    'sample-id': sam_id,
+                    'region': row['region'],
+                    'size-x': row['size-x'],
+                    'size-y': row['size-y'],
+                    'size-z': row['size-z']
+                }
+                df = df.append(data, ignore_index=True)
 
         df = df.astype(cols)
         return df

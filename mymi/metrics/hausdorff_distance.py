@@ -55,5 +55,5 @@ def batch_mean_hausdorff_distance(
 
     dists = []
     for i in range(len(a)):
-        dists.append(sitk_hausdorff_distance(a[i], b[i], spacing))
+        dists.append(hausdorff_distance(a[i], b[i], spacing))
     return np.mean(hd_dists)
