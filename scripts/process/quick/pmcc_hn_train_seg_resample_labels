@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from datetime import datetime, timezone
 import numpy as np
 import os
 import pandas as pd
@@ -14,10 +15,15 @@ from mymi import logging
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 
 DRY_RUN = False
+PROCESS_BEFORE = '2021-08-06'
 REGIONS = ['Parotid_L', 'Parotid_R']
 NEW_SIZE = (128, 128, 96)
 NEW_SPACING = (1, 1, 2)
 FILENAME_NUM_DIGITS = 5
+
+# Convert cutoff to UNIX timestamp.
+date = datetime.strptime(PROCESS_BEFORE, '%Y-%m-%d')
+cutoff_ts = date.replace(tzinfo=timezone.utc).timestamp()
 
 # Load seg dataset.
 seg_ds_name = 'PMCC-HN-TRAIN-SEG'
@@ -42,6 +48,7 @@ for partition in seg_ds.list_partitions():
     indices = seg_ds.partition(partition).list_samples()
 
     for index in tqdm(indices):
+        logging.info(f"index: {index}")
         # Get spacing.
         spacing = eval(manifest[(manifest['partition'] == partition) & (manifest['index'] == index)].iloc[0]['spacing'])
     
@@ -56,16 +63,29 @@ for partition in seg_ds.list_partitions():
         label = dict((r, resample_3D(d, spacing, NEW_SPACING)) for r, d in label.items())
 
         if DRY_RUN:
-            print(f"Sample: '{index}'.")
+            logging.info(f"Sample: '{index}'.")
             for region, data in label.items():
                 filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
                 filepath = os.path.join(seg_ds.path, 'data', partition, 'labels', region, filename) 
-                print(f"\tRegion: '{region}', label shape: '{data.shape}'.")
-                print(f"\tWriting to: '{filepath}'.")
+                logging.info(f"\tRegion: '{region}', label shape: '{data.shape}'.")
+                logging.info(f"\tWriting to: '{filepath}'.")
+
+                # Apply cutoff criterion.
+                ts = os.path.getmtime(filepath)
+                if ts < cutoff_ts:
+                    logging.info('Passed cutoff criteria.')
+                else:
+                    logging.info('Skipping due to cutoff criteria.')
         else:
             # Save the label data.
             for region, data in label.items():
                 filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
                 filepath = os.path.join(seg_ds.path, 'data', partition, 'labels', region, filename) 
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.savez_compressed(filepath, data=data)
+
+                # Apply cutoff criterion.
+                ts = os.path.getmtime(filepath)
+                if ts < cutoff_ts:
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    np.savez_compressed(filepath, data=data)
+                else:
+                    logging.info('Skipping due to cutoff criteria.')
