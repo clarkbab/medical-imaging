@@ -28,6 +28,13 @@ spacing = eval(seg_ds.params()['spacing'][0])
 loc_ds_name = 'PMCC-HN-TRAIN-LOC'
 loc_ds = recreate(loc_ds_name)
 
+# Add params.
+params = seg_ds.params()
+params['spacing'] = str(NEW_SPACING)
+filename = 'params.csv'
+filepath = os.path.join(loc_ds.path, filename)
+params.to_csv(filepath)
+
 # Add samples.
 for partition in seg_ds.list_partitions():
     logging.info(f"Processing '{partition}' partition..")
