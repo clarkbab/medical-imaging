@@ -1,1 +1,1 @@
-from .dice_loss import DiceLoss
+from .dice import DiceLoss

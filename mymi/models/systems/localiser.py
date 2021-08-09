@@ -48,7 +48,7 @@ class Localiser(pl.LightningModule):
         loss = self._loss(y_hat, y)
 
         # Log metrics.
-        y = y.cpu().numpy().astype(np.bool)
+        y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
         self.log('train/loss', loss, on_epoch=True)
 
@@ -72,8 +72,8 @@ class Localiser(pl.LightningModule):
         loss = self._loss(y_hat, y)
 
         # Log metrics.
-        y = y.cpu().numpy().astype(np.bool)
-        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
+        y = y.cpu().numpy()
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('val/loss', loss, on_epoch=True, sync_dist=True)
 
         if 'dice' in self._metrics:

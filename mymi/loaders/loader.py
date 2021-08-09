@@ -85,10 +85,6 @@ class LoaderDataset(Dataset):
         # Load data.
         input, label = self._partition.sample(self._index_map[index]).pair(regions=self._regions)
 
-        # Convert data to expected types.
-        input = input.astype(float)
-        label = dict((r, d.astype(bool)) for r, d in label.items())
-
         # Perform transform.
         if self._transform:
             # Add 'batch' dimension.
@@ -116,7 +112,14 @@ class LoaderDataset(Dataset):
             input = output['input'].data.squeeze(0)
             label = dict((r, output[r].data.squeeze(0)) for r in label.keys()) 
 
+            # Convert to numpy.
+            input = input.numpy()
+            label = dict((r, d.numpy()) for r, d in label.items())
+
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
+
+        # Convert dtypes.
+        label = dict((r, d.astype(bool)) for r, d in label.items())
 
         return input, label
