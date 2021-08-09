@@ -121,6 +121,10 @@ class LoaderDataset(Dataset):
             input = output['input'].data.squeeze(0)
             label = output['label'].data.squeeze(0)
 
+            # Convert to numpy.
+            input = input.numpy()
+            label = label.numpy()
+
         # Roll the dice.
         if np.random.binomial(1, self._p_region):
             input, label = self._get_region_patch(input, label)
@@ -130,8 +134,9 @@ class LoaderDataset(Dataset):
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
 
-        # Convert to half precision.
+        # Convert dtypes
         input = input.astype(np.half)
+        label = label.astype(bool)
 
         return input, label
 

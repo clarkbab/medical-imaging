@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --mem 16G
+#SBATCH --mem 32G
 #SBATCH --gres=gpu:p100:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --time 5-0:00:00

@@ -17,6 +17,10 @@ class Localiser(pl.LightningModule):
         metrics: List[str] = [],
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
+        # Validate arguments.
+        if 'hausdorff' in metrics and spacing is None:
+            raise ValueError(f"Localiser requires 'spacing' when calculating 'Hausdorff' metric.")
+
         self._hausdorff_delay = 200
         self._loss = DiceLoss()
         self._metrics = metrics

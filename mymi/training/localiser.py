@@ -50,7 +50,9 @@ def train_localiser(
 
     # Create model.
     metrics = ['dice', 'hausdorff']
-    model = Localiser(metrics=metrics)
+    model = Localiser(
+        metrics=metrics,
+        spacing=spacing)
 
     # Create logger.
     logger = WandbLogger(

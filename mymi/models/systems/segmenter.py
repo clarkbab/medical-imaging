@@ -37,14 +37,13 @@ class Segmenter(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # Forward pass.
-        x, labels = batch
-        y = labels['Parotid_L']
+        x, y = batch
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
         # Log metrics.
-        y = y.cpu().numpy().astype(np.bool)
-        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
+        y = y.cpu().numpy()
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('train/loss', loss, on_epoch=True)
 
         if 'dice' in self._metrics:
@@ -66,8 +65,8 @@ class Segmenter(pl.LightningModule):
         loss = self._loss(y_hat, y)
 
         # Log metrics.
-        y = y.cpu().numpy().astype(np.bool)
-        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
+        y = y.cpu().numpy()
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('val/loss', loss, on_epoch=True, sync_dist=True)
 
         if 'dice' in self._metrics:
