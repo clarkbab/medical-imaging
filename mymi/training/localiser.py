@@ -42,13 +42,6 @@ def train_localiser(
     train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
     val_loader = Loader.build(val_part, num_workers=num_workers, regions=regions, shuffle=False)
 
-    # Create checkpointing callback.
-    path = os.path.join(config.directories.checkpoints, model_name, run_name)
-    checkpoint = ModelCheckpoint(
-        dirpath=path,
-        every_n_epochs=1,
-        monitor='val/loss')
-
     # Create model.
     metrics = ['dice', 'hausdorff']
     model = Localiser(
@@ -67,12 +60,16 @@ def train_localiser(
         logger = None
 
     # Create callbacks.
+    path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
-        EarlyStopping('val/loss'),
+        EarlyStopping(
+            monitor='val/loss',
+            patience=5),
         ModelCheckpoint(
             dirpath=path,
             every_n_epochs=1,
-            monitor='val/loss')
+            monitor='val/loss',
+            save_top_k=5)
     ]
 
     # Perform training.

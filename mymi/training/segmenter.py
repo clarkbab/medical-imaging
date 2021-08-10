@@ -43,13 +43,6 @@ def train_segmenter(
     train_loader = PatchLoader.build(train_part, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
     val_loader = PatchLoader.build(val_part, patch_size, region, num_workers=num_workers, shuffle=False)
 
-    # Create checkpointing callback.
-    path = os.path.join(config.directories.checkpoints, model_name, run_name)
-    checkpoint = ModelCheckpoint(
-        dirpath=path,
-        every_n_epochs=1,
-        monitor='val/loss')
-
     # Create model.
     metrics = ['dice', 'hausdorff']
     model = Segmenter(
@@ -68,18 +61,22 @@ def train_segmenter(
         logger = None
 
     # Create callbacks.
+    path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
-        EarlyStopping('val/loss'),
+        EarlyStopping(
+            monitor='val/loss',
+            patience=5),
         ModelCheckpoint(
             dirpath=path,
             every_n_epochs=1,
-            monitor='val/loss')
+            monitor='val/loss',
+            save_top_k=5)
     ]
 
     # Perform training.
     trainer = Trainer(
         accelerator='ddp',
-        callbacks=[checkpoint],
+        callbacks=callbacks,
         gpus=num_gpus,
         logger=logger,
         max_epochs=500,
