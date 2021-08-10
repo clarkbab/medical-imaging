@@ -17,7 +17,10 @@ class Segmenter(pl.LightningModule):
         metrics: List[str] = [],
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
-        self._hausdorff_delay = 200
+        if 'hausdorff' in metrics and spacing is None:
+            raise ValueError(f"Localiser requires 'spacing' when calculating 'Hausdorff' metric.")
+
+        self._hausdorff_delay = 50
         self._loss = DiceLoss()
         self._metrics = metrics
         self._network = UNet()

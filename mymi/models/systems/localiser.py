@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
-from mymi.postprocessing import get_largest_cc
+from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
 from ..networks import UNet
@@ -33,16 +33,19 @@ class Localiser(pl.LightningModule):
     def forward(self, x):
         # Get prediction.
         pred = self._network(x)
+        pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = get_largest_cc(pred)
+        pred = get_batch_largest_cc(pred)
         
         # Get bounding box.
-        non_zero = np.argwhere(pred != 0).astype(int)
-        min = tuple(non_zero.min(axis=0))
-        max = tuple(non_zero.max(axis=0))
-        bounding_box = (min, max)
-        return bounding_box
+        boxes = []
+        for p in pred: 
+            non_zero = np.argwhere(p != 0).astype(int)
+            min = tuple(non_zero.min(axis=0))
+            max = tuple(non_zero.max(axis=0))
+            boxes.append((min, max))
+        return boxes
 
     def training_step(self, batch, batch_idx):
         # Forward pass.

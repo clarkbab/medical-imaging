@@ -17,7 +17,8 @@ def train_localiser(
     num_gpus: int = 1,
     num_nodes: int = 1,
     num_workers: int = 1,
-    run_name: Optional[str] = None) -> None:
+    run_name: Optional[str] = None,
+    use_logger: bool = False) -> None:
     model_name = 'localiser-pl'
 
     # Load partitions.
@@ -55,12 +56,15 @@ def train_localiser(
         spacing=spacing)
 
     # Create logger.
-    logger = WandbLogger(
-        project=model_name,
-        log_model='all',
-        name=run_name,
-        save_dir=config.directories.wandb)
-    logger.watch(model)
+    if use_logger:
+        logger = WandbLogger(
+            project=model_name,
+            log_model='all',
+            name=run_name,
+            save_dir=config.directories.wandb)
+        logger.watch(model)
+    else:
+        logger = None
 
     # Create callbacks.
     callbacks = [
