@@ -64,7 +64,7 @@ class Localiser(pl.LightningModule):
             self.log('train/dice', dice, on_epoch=True)
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
-            if y_hat.sum() > 0:
+            if y_hat.sum() > 0 and y.sum() > 0:
                 hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
                 self.log('train/hausdorff', hausdorff, on_epoch=True)
 
