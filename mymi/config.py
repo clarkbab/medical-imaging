@@ -8,7 +8,7 @@ class Directories:
 
     @property
     def checkpoints(self):
-        return os.path.join(self.root, 'checkpoints')
+        return os.path.join(self.root, 'models')
 
     @property
     def datasets(self):
