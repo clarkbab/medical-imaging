@@ -26,6 +26,7 @@ class Localiser(pl.LightningModule):
         self._metrics = metrics
         self._network = UNet()
         self._spacing = spacing
+        self.save_hyperparameters()
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)

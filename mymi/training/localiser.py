@@ -62,14 +62,14 @@ def train_localiser(
     # Create callbacks.
     path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
-        EarlyStopping(
-            monitor='val/loss',
-            patience=5),
+        # EarlyStopping(
+        #     monitor='val/loss',
+        #     patience=5),
         ModelCheckpoint(
             dirpath=path,
             every_n_epochs=1,
             monitor='val/loss',
-            save_top_k=5)
+            save_top_k=3)
     ]
 
     # Perform training.
@@ -78,7 +78,7 @@ def train_localiser(
         callbacks=callbacks,
         gpus=num_gpus,
         logger=logger,
-        max_epochs=500,
+        max_epochs=200,
         num_nodes=num_nodes,
         plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
