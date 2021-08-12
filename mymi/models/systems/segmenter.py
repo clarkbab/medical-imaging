@@ -1,12 +1,14 @@
 import numpy as np
+import os
 import pytorch_lightning as pl
 import torch
 from torch.optim import SGD
 from typing import List, Optional
 
+from mymi import config
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
-from mymi.postprocessing import get_largest_cc
+from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
 from ..networks import UNet
@@ -26,15 +28,31 @@ class Segmenter(pl.LightningModule):
         self._network = UNet()
         self._spacing = spacing
 
+    @staticmethod
+    def load(
+        run_name: str,
+        checkpoint: str) -> pl.LightningModule:
+        filename = f"{checkpoint}.ckpt"
+        filepath = os.path.join(config.directories.checkpoints, 'segmenter-pl', run_name, filename)
+        if not os.path.exists(filepath):
+            raise ValueError(f"Model 'segmenter-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+        return Localiser.load_from_checkpoint(filepath)
+
+    @property
+    def name(self) -> str:
+        return 'segmenter-pl'
+
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
 
     def forward(self, x):
         # Get prediction.
         pred = self._network(x)
+        pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = get_largest_cc(pred)
+        pred = pred.cpu().numpy().astype(np.bool)
+        pred = get_batch_largest_cc(pred)
 
         return pred
 

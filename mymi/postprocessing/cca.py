@@ -29,11 +29,10 @@ def get_batch_largest_cc(a: np.ndarray) -> np.ndarray:
     if a.dtype != np.bool:
         raise ValueError(f"'get_batch_largest_cc' expected a boolean array, got '{a.dtype}'.")
 
-    b = np.zeros_like(a)
-    for i, data in enumerate(a):
-        largest_cc = get_largest_cc([i])
+    ccs = []
+    for data in a:
         cc = get_largest_cc(data)
-        b[i] = cc
-
+        ccs.append(cc)
+    b = np.stack(ccs, axis=0)
     return b
         

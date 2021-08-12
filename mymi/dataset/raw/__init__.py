@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 
 from mymi import config
 
-from ..dataset import DatasetType
+from ..dataset import DatasetType, to_type
 
 def list() -> Tuple[str]:
     """
@@ -12,14 +12,23 @@ def list() -> Tuple[str]:
     """
     return tuple(sorted(os.listdir(os.path.join(config.directories.datasets, 'raw'))))
 
-def create(name: str) -> None:
+def create(
+    name: str,
+    type_str: Optional[str] = 'dicom') -> None:
     """
     effect: creates a dataset.
     args:
         name: the name of the dataset.
+    kwargs:
+        type_str: the type of the dataset.
     """
+    type = to_type(type_str)
     ds_path = os.path.join(config.directories.datasets, 'raw', name)
     os.makedirs(ds_path)
+    if type == DatasetType.DICOM:
+        return DICOMDataset(name)
+    elif type == DatasetType.NIFTI:
+        return NIFTIDataset(name)
 
 def destroy(name: str) -> None:
     """
@@ -29,6 +38,19 @@ def destroy(name: str) -> None:
     """
     ds_path = os.path.join(config.directories.datasets, 'raw', name)
     shutil.rmtree(ds_path)
+
+def recreate(
+    name: str,
+    type_str: Optional[str] = 'dicom') -> None:
+    """
+    effect: destroys and creates a dataset.
+    args:
+        name: the name of the dataset.
+    kwargs:
+        type_str: the type of the dataset.
+    """
+    destroy(name)
+    return create(name, type_str=type_str)
 
 def detect_type(name: str) -> DatasetType:
     """

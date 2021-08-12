@@ -13,7 +13,7 @@ from mymi import types
 
 from ..networks import UNet
 
-class Localiser(pl.LightningModule):
+class TwoStage(pl.LightningModule):
     def __init__(
         self,
         metrics: List[str] = [],
@@ -53,10 +53,17 @@ class Localiser(pl.LightningModule):
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = pred.cpu().numpy().astype(np.bool)
+        pred = pred.numpy().astype(np.bool)
         pred = get_batch_largest_cc(pred)
-
-        return pred
+        
+        # Get bounding box.
+        boxes = []
+        for p in pred: 
+            non_zero = np.argwhere(p != 0).astype(np.int)
+            min = tuple(non_zero.min(axis=0))
+            max = tuple(non_zero.max(axis=0))
+            boxes.append((min, max))
+        return boxes
 
     def training_step(self, batch, batch_idx):
         # Forward pass.

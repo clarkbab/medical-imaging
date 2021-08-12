@@ -15,6 +15,7 @@ class PatchLoader:
         partition: ProcessedPartition,
         patch_size: types.ImageSize3D,
         region: str,
+        half_precision: bool = True,
         batch_size: int = 1,
         num_workers: int = 1,
         p_region: float = 1,
@@ -28,6 +29,7 @@ class PatchLoader:
             patch_size: the patch size.
             region: the single region to load patches for.
         kwargs:
+            half_precision: load images at half precision.
             batch_size: the number of images in the batch.
             num_workers: the number of CPUs for data loading.
             p_region: proportion of patches containing the region.
@@ -36,7 +38,7 @@ class PatchLoader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        ds = LoaderDataset(partition, patch_size, p_region=p_region, region=region, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partition, patch_size, region, half_precision=half_precision, p_region=p_region, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -47,6 +49,7 @@ class LoaderDataset(Dataset):
         partition: ProcessedPartition,
         patch_size: types.ImageSize3D,
         region: str,
+        half_precision: bool = True,
         p_region: float = 1,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
@@ -56,10 +59,12 @@ class LoaderDataset(Dataset):
             patch_size: the patch size.
             region: load patients with this region.
         kwargs:
+            half_precision: load images at half precision.
             p_region: proportion of patches containing the region.
             spacing: the voxel spacing.
             transform: transformations to apply.
         """
+        self._half_precision = half_precision
         self._p_region = p_region
         self._partition = partition
         self._patch_size = patch_size
@@ -135,8 +140,11 @@ class LoaderDataset(Dataset):
         input = np.expand_dims(input, axis=0)
 
         # Convert dtypes
-        input = input.astype(np.half)
-        label = label.astype(bool)
+        if self._half_precision:
+            input = input.astype(np.half)
+        else:
+            input = input.astype(np.single)
+        label = label.astype(np.bool)
 
         return input, label
 

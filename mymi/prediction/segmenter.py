@@ -5,34 +5,35 @@ from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi import dataset
+from mymi.dataset import Dataset
 from mymi.postprocessing import get_largest_cc
 from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
-def get_patient_patch_segmentation(
+def get_patient_segmentation_patch(
+    dataset: Dataset,
     id: types.PatientID,
-    bounding_box: types.Box3D,
-    segmenter: nn.Module,
-    segmenter_size: types.ImageSize3D,
-    segmenter_spacing: types.ImageSpacing3D,
+    box: types.Box3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    return_patch: bool = False,
-    use_postprocessing: bool = True) -> Union[np.ndarray, Tuple[np.ndarray, types.Box3D]]:
+    return_patch: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Box3D]]:
     """
     returns: the segmentation for the patient.
     args:
+        dataset: the dataset.
         id: the patient ID.
-        bounding_box: the box from localisation.
-        segmenter: the segmentation network.
-        segmenter_size: the input size expected by the segmenter.
-        segmenter_spacing: the voxel spacing expected by the segmenter.
+        box: the box from localisation.
     kwargs:
         clear_cache: forces the cache to clear.
         device: the device to use for network calcs.
         return_patch: returns the box used for the segmentation.
-        use_postprocessing: apply postprocessing steps.
     """
+    # Set segmenter parameters.
+    run_name = 'baseline'
+    checkpoint = ''
+    segmenter_spacing = (1, 1, 2)
+    segmenter_size = (128, 128, 96)
+
     # Load patient CT data and spacing.
     patient = dataset.patient(id)
     input = patient.ct_data(clear_cache=clear_cache)
@@ -43,11 +44,11 @@ def get_patient_patch_segmentation(
     input = resample_3D(input, spacing, segmenter_spacing) 
 
     # Resample the localisation bounding box.
-    bounding_box = resample_box_3D(bounding_box, spacing, segmenter_spacing)
+    box = resample_box_3D(box, spacing, segmenter_spacing)
 
     # Extract patch around bounding box.
     pre_extract_size = input.shape
-    input, patch_box = _extract_patch(input, bounding_box, size=segmenter_size)
+    input, patch_box = _extract_patch(input, box, size=segmenter_size)
 
     # Pass patch to segmenter.
     input = torch.Tensor(input)
@@ -58,15 +59,7 @@ def get_patient_patch_segmentation(
     autocast_enabled = device.type == 'cuda'
     with autocast(enabled=autocast_enabled):
         pred = segmenter(input)
-    pred = pred.cpu()
-
-    # Get binary mask.
-    pred = pred.argmax(axis=1)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
-
-    # Convert to numpy.
-    pred = pred.numpy()
-    pred = pred.astype(bool)
 
     # Crop/pad to size before patch extraction.
     rev_patch_box_min, rev_patch_box_max = patch_box
@@ -85,10 +78,6 @@ def get_patient_patch_segmentation(
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_3D(pred, crop_box)
 
-    # Apply CCA.
-    if use_postprocessing:
-        pred = get_largest_cc(pred)
-
     # Get result.
     if return_patch:
         return (pred, patch_box)
@@ -97,21 +86,21 @@ def get_patient_patch_segmentation(
 
 def _extract_patch(
     input: np.ndarray,
-    loc_box: types.Box3D,
+    box: types.Box3D,
     size: types.ImageSize3D) -> Tuple[np.ndarray, types.Box3D]:
     """
     returns: a patch of size 'size' centred on the bounding box. Also returns the bounding
         box that was used to extract the patch, relative to the input size.
     args:
         input: the input data.
-        loc_box: the localisation box for the OAR.
+        box: the localisation box for the OAR.
         size: the patch will be this size with the OAR in the centre. Must be larger than OAR extent.
     raises:
         ValueError: if the OAR extent is larger than the patch size.
     """
     # Check bounding box size.
     size = np.array(size)
-    min, max = loc_box
+    min, max = box
     min = np.array(min)
     max = np.array(max)
     width = max - min

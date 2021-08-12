@@ -13,6 +13,7 @@ class Loader:
     def build(
         partition: ProcessedPartition,
         batch_size: int = 1,
+        half_precision: bool = True,
         num_workers: int = 1,
         regions: types.PatientRegions = 'all',
         shuffle: bool = True,
@@ -24,6 +25,7 @@ class Loader:
             partition: the dataset partition.
         kwargs:
             batch_size: the number of images in the batch.
+            half_precision: load images at half precision.
             num_workers: the number of CPUs for data loading.
             regions: only load samples with (at least) one of the requested regions.
             shuffle: shuffle the data.
@@ -31,7 +33,7 @@ class Loader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        ds = LoaderDataset(partition, regions=regions, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partition, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -40,6 +42,7 @@ class LoaderDataset(Dataset):
     def __init__(
         self,
         partition: ProcessedPartition,
+        half_precision: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
@@ -47,10 +50,12 @@ class LoaderDataset(Dataset):
         args:
             partition: the dataset partition.
         kwargs:
+            half_precision: load images at half precision.
             regions: only load samples with (at least) one of the requested regions.
             spacing: the voxel spacing.
             transform: transformations to apply.
         """
+        self._half_precision = half_precision
         self._partition = partition
         self._regions = regions
         self._spacing = spacing
@@ -120,6 +125,10 @@ class LoaderDataset(Dataset):
         input = np.expand_dims(input, axis=0)
 
         # Convert dtypes.
-        label = dict((r, d.astype(bool)) for r, d in label.items())
+        if self._half_precision:
+            input = input.astype(np.half)
+        else:
+            input = input.astype(np.single)
+        label = dict((r, d.astype(np.bool)) for r, d in label.items())
 
         return input, label

@@ -19,7 +19,6 @@ def train_segmenter(
     num_workers: int = 1,
     run_name: Optional[str] = None,
     use_logger: bool = False) -> None:
-    model_name = 'segmenter-pl'
 
     # Load partitions.
     set = ds.get(dataset, 'processed')
@@ -52,7 +51,7 @@ def train_segmenter(
     # Create logger.
     if use_logger:
         logger = WandbLogger(
-            project=model_name,
+            project=model.name,
             log_model='all',
             name=run_name,
             save_dir=config.directories.wandb)
