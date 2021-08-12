@@ -1,0 +1,13 @@
+import fire
+import os
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.prediction import create_dicom_dataset
+
+fire.Fire(create_dicom_dataset)
+
+# Sample args:
+# --dataset PMCC-HN --dataset_type dicom --clear-cache False --log_level info --output_dataset PMCC-HN-pred --use-gpu True

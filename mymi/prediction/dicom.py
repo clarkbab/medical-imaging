@@ -4,19 +4,17 @@ import torch
 from tqdm import tqdm
 from typing import Optional
 
-from mymi import checkpoint
 from mymi import dataset as ds
-from mymi.dataset import Dataset
 from mymi.dataset.raw import recreate
 from mymi.dataset.raw.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.regions import to_255, RegionColours
-from mymi import types
 from mymi import utils
 
 from .two_stage import get_patient_segmentation
 
 def create_dicom_dataset(
-    dataset: Dataset,
+    dataset: str,
+    dataset_type: str,
     clear_cache: bool = False,
     log_level: str = 'info',
     output_dataset: Optional[str] = None,
@@ -46,14 +44,14 @@ def create_dicom_dataset(
         device = torch.device('cpu')
     logging.info(f"Using device: {device}.")
 
-    # Load patient IDs.
-    ds.select(dataset)
-    pats = ds.list_patients()
+    # Load patients.
+    source_ds = ds.get(dataset, dataset_type)
+    pats = source_ds.list_patients()
 
     # Re/create pred dataset.
     pred_ds_name = output_dataset if output_dataset else f"{dataset}-pred"
     recreate(pred_ds_name)
-    ds_pred = DICOMDataset(pred_ds_name)
+    ds_pred = ds.get(pred_ds_name, type_str='dicom')
 
     # Create RTSTRUCT info.
     rt_info = {

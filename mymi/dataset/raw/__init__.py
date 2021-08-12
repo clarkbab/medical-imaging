@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 
 from mymi import config
 
+from .dicom import DICOMDataset
+from .nifti import NIFTIDataset
 from ..dataset import DatasetType, to_type
 
 def list() -> Tuple[str]:
@@ -37,7 +39,8 @@ def destroy(name: str) -> None:
         name: the name of the dataset.
     """
     ds_path = os.path.join(config.directories.datasets, 'raw', name)
-    shutil.rmtree(ds_path)
+    if os.path.exists(ds_path):
+        shutil.rmtree(ds_path)
 
 def recreate(
     name: str,

@@ -91,7 +91,7 @@ class ProcessedDataset(Dataset):
         manifest_path = os.path.join(self._path, 'manifest.csv')
         if not os.path.exists(manifest_path):
             with open(manifest_path, 'w') as f:
-                f.write('partition,id,index\n')
+                f.write('partition,patient-id,index\n')
 
         # Append line to manifest. 
         with open(manifest_path, 'a') as f:
