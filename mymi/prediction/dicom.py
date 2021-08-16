@@ -6,7 +6,7 @@ from typing import Optional
 
 from mymi import dataset as ds
 from mymi.dataset.raw import recreate
-from mymi.dataset.raw.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
 from mymi.regions import to_255, RegionColours
 from mymi import utils
 
@@ -61,7 +61,7 @@ def create_dicom_dataset(
 
     for pat in tqdm(pats):
         # Get segmentation.
-        seg = get_patient_segmentation(ds_pred, pat, clear_cache=clear_cache, device=device)
+        seg = get_patient_segmentation(source_ds, pat, clear_cache=clear_cache, device=device)
 
         # Load reference CT dicoms.
         cts = ds.patient(pat).get_cts()

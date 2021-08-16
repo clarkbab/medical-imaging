@@ -36,7 +36,7 @@ class Segmenter(pl.LightningModule):
         filepath = os.path.join(config.directories.checkpoints, 'segmenter-pl', run_name, filename)
         if not os.path.exists(filepath):
             raise ValueError(f"Model 'segmenter-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
-        return Localiser.load_from_checkpoint(filepath)
+        return Segmenter.load_from_checkpoint(filepath)
 
     @property
     def name(self) -> str:

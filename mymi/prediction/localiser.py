@@ -1,7 +1,6 @@
 from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
 import torch
-from torch import nn
 from torch.cuda.amp import autocast
 from typing import Tuple, Union
 

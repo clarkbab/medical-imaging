@@ -4,9 +4,8 @@ from torch import nn
 from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
-from mymi import dataset
 from mymi.dataset import Dataset
-from mymi.postprocessing import get_largest_cc
+from mymi.models.systems import Segmenter
 from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
@@ -29,8 +28,9 @@ def get_patient_segmentation_patch(
         return_patch: returns the box used for the segmentation.
     """
     # Set segmenter parameters.
-    run_name = 'baseline'
-    checkpoint = ''
+    run_name = '200_epochs'
+    checkpoint = 'epoch=95-step=20735'
+    segmenter = Segmenter.load(run_name, checkpoint)
     segmenter_spacing = (1, 1, 2)
     segmenter_size = (128, 128, 96)
 

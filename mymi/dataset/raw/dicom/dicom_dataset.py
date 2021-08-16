@@ -81,12 +81,12 @@ class DICOMDataset(Dataset):
         args:
             fn: the wrapped function.
         """
-        def wrapper(self, *args, **kwargs):
+        def _require_hierarchical_wrapper(self, *args, **kwargs):
             if not self._hierarchical_exists():
                 self._build_hierarchical()
                 self._trim_hierarchical()
             return fn(self, *args, **kwargs)
-        return wrapper
+        return _require_hierarchical_wrapper
 
     @_require_hierarchical
     def has_patient(
@@ -564,6 +564,8 @@ class DICOMDataset(Dataset):
         """
         # Load all dicom files.
         raw_path = os.path.join(self._path, 'raw')
+        if not os.path.exists(raw_path):
+            raise ValueError(f"No 'raw' folder found for dataset '{self.description}'.")
         dicom_files = []
         for root, _, files in os.walk(raw_path):
             for f in files:

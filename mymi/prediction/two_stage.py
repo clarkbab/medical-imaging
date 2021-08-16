@@ -1,10 +1,7 @@
 import numpy as np
-import pydicom as dcm
 import torch
-from torch import nn
 
 from mymi.dataset import Dataset
-from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 from .localiser import get_patient_box
