@@ -12,7 +12,6 @@ from typing import Optional
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi import config
 from mymi.transforms import resample_3D
 from mymi import types
 
@@ -31,7 +30,8 @@ def process_dicom(
     seed: int = 42,
     regions: types.PatientRegions = 'all',
     size: Optional[types.ImageSize3D] = None,
-    spacing: Optional[types.ImageSpacing3D] = None):
+    spacing: Optional[types.ImageSpacing3D] = None,
+    use_mapping: bool = True):
     """
     effect: processes a DICOM dataset and partitions it into train/validation/test
         partitions for training.
@@ -46,10 +46,12 @@ def process_dicom(
         regions: the regions to process.
         size: crop/pad to desired size.
         spacing: resample to the desired spacing.
+        use_mapping: use region map if present.
     """
-    # Load patients who have (at least) one of the required regions.
+    # Load patients.
     ds = DICOMDataset(dataset)
-    pats = list(ds.region_names(clear_cache=clear_cache, regions=regions)['patient-id'].unique())
+    pats = set.list_patients() 
+    pats = list(filter(ds.filter_patient_by_region(regions), pats))
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
@@ -96,7 +98,7 @@ def process_dicom(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = list(ds.patient(pat).region_names(clear_cache=clear_cache, regions=regions, allow_unknown_regions=True).region)
+            pat_regions = ds.patient(pat).list_regions(use_mapping=use_mapping)
 
             # Load data.
             input = ds.patient(pat).ct_data()

@@ -12,8 +12,8 @@ def is_region(name: str) -> bool:
         name: the name of the region.
     """
     # Get region names.
-    region_names = [r.name for r in Regions]
-    return name in region_names
+    names = [r.name for r in Regions]
+    return name in names
 
 def to_list(
     regions: types.PatientRegions,

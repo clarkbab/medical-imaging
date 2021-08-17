@@ -35,7 +35,7 @@ def generate_dataset_regions_report(
 
     # Get regions.
     if regions == 'all':
-        regions = ds.region_names().region.unique() 
+        regions = ds.list_regions().region.unique() 
     elif isinstance(regions, str):
         regions = [regions]
 

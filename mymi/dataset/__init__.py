@@ -96,6 +96,12 @@ def active() -> str:
 
 # DICOMDataset API.
 
+def list_patients(*args, **kwargs):
+    return ds.list_patients(*args, **kwargs)
+
+def list_regions(*args, **kwargs):
+    return ds.list_regions(*args, **kwargs)
+
 def info(*args, **kwargs):
     return ds.info(*args, **kwargs)
 
@@ -105,17 +111,11 @@ def ct_distribution(*args, **kwargs):
 def ct_summary(*args, **kwargs):
     return ds.ct_summary(*args, **kwargs)
 
-def list_patients(*args, **kwargs):
-    return ds.list_patients(*args, **kwargs)
-
 def patient(*args, **kwargs):
     return ds.patient(*args, **kwargs)
 
 def region_map(*args, **kwargs):
     return ds.region_map(*args, **kwargs)
-
-def region_names(*args, **kwargs):
-    return ds.region_names(*args, **kwargs)
 
 def region_summary(*args, **kwargs):
     return ds.region_summary(*args, **kwargs)
@@ -125,11 +125,11 @@ def region_summary(*args, **kwargs):
 def list_ids(*args, **kwargs):
     return ds.list_ids(*args, **kwargs)
 
+def list_regions(*args, **kwargs):
+    return ds.list_regions(*args, **kwargs)
+
 def object(*args, **kwargs):
     return ds.object(*args, **kwargs)
-
-def region_names(*args, **kwargs):
-    return ds.region_names(*args, **kwargs)
 
 # ProcessedDataset API.
 

@@ -1,3 +1,1 @@
-from .model_evaluator import ModelEvaluator
-
-from .predictions import evaluate_predictions
+from .dicom import evaluate_dicom_predictions

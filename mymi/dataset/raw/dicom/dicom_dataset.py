@@ -48,7 +48,7 @@ class DICOMDataset(Dataset):
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{name}' not found.")
         if self._ct_from:
-            ct_path = os.path.join(config.directories.datasets, self._ct_from)
+            ct_path = os.path.join(config.directories.datasets, 'raw', self._ct_from)
             if not os.path.exists(ct_path):
                 raise ValueError(f"Dataset '{self._ct_from}' not found.")
 
@@ -138,7 +138,8 @@ class DICOMDataset(Dataset):
         clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
-        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient info.
         kwargs:
@@ -146,6 +147,7 @@ class DICOMDataset(Dataset):
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
             regions: include patients with (at least) on of the regions.
+            use_mapping: use region map if present.
         """
         # Define table structure.
         cols = {
@@ -160,7 +162,7 @@ class DICOMDataset(Dataset):
         # Filter patients.
         pats = list(filter(filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_on_regions(regions, clear_cache=clear_cache), tqdm(pats)))
+        pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
         pats = list(filter(filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
@@ -198,7 +200,7 @@ class DICOMDataset(Dataset):
         # Filter patients.
         pats = list(filter(filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_on_regions(regions), tqdm(pats)))
+        pats = list(filter(self.filter_patient_by_region(regions), tqdm(pats)))
         pats = list(filter(filter_on_num_pats(num_pats), pats))
 
         # Calculate the frequencies.
@@ -241,7 +243,8 @@ class DICOMDataset(Dataset):
         clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
-        regions: types.PatientRegions = 'all') -> pd.DataFrame:
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient CT summaries.
         kwargs:
@@ -249,6 +252,7 @@ class DICOMDataset(Dataset):
             num_pats: the number of patients to summarise.
             pat_ids: include listed patients.
             regions: include patients with (at least) on of the regions.
+            use_mapping: use region map if present.
         """
         # Define table structure.
         cols = {
@@ -277,7 +281,7 @@ class DICOMDataset(Dataset):
         # Filter patients.
         pats = list(filter(filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_on_regions(regions), tqdm(pats)))
+        pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
         pats = list(filter(filter_on_num_pats(num_pats), pats))
 
         # Add patient info.
@@ -297,9 +301,8 @@ class DICOMDataset(Dataset):
 
     @_require_hierarchical
     @cache.method('_name')
-    def region_names(
+    def list_regions(
         self,
-        clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         regions: types.PatientRegions = 'all',
@@ -326,20 +329,16 @@ class DICOMDataset(Dataset):
         # Filter patients.
         pats = list(filter(filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_on_regions(regions, clear_cache=clear_cache, use_mapping=use_mapping), tqdm(pats)))
+        pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
         pats = list(filter(filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
         logging.info(f"Loading region names for dataset '{self._name}'..")
         for pat in tqdm(pats):
-            # Load patient regions.
-            names_df = self.patient(pat).region_names(clear_cache=clear_cache, use_mapping=use_mapping)
-
-            # Add rows.
-            for _, row in names_df.iterrows():
+            for pat_region in self.patient(pat).list_regions(use_mapping=use_mapping):
                 data = {
                     'patient-id': pat,
-                    'region': row.region,
+                    'region': pat_region
                 }
                 df = df.append(data, ignore_index=True)
 
@@ -391,7 +390,7 @@ class DICOMDataset(Dataset):
         # Filter patients.
         pats = list(filter(filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_on_regions(regions, clear_cache=clear_cache, use_mapping=use_mapping), pats))
+        pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), pats))
         pats = list(filter(filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
@@ -522,13 +521,12 @@ class DICOMDataset(Dataset):
 
         return df
 
-    def _filter_on_regions(
+    def filter_patient_by_region(
         self,
         regions: types.PatientRegions,
-        clear_cache: bool = False,
         use_mapping: bool = True) -> Callable[[str], bool]:
         """
-        returns: a function that filters patient on region presence.
+        returns: a function that filters patients on region presence.
         args:
             regions: the passed 'regions' kwarg.
         kwargs:
@@ -536,18 +534,17 @@ class DICOMDataset(Dataset):
             use_mapping: use region map if present.
         """
         def fn(id):
-            if type(regions) == str and regions == 'all':
-                return True
+            if type(regions) == str:
+                if regions == 'all':
+                    return True
+                else:
+                    return self.patient(id).has_region(regions, use_mapping=use_mapping)
             else:
-                # Load patient regions.
-                pat_regions = self.patient(id).region_names(clear_cache=clear_cache, use_mapping=use_mapping).region.to_numpy()
-
-                if ((type(regions == str) and regions in pat_regions) or
-                    ((type(regions) == list or type(regions) == tuple or type(regions) == np.ndarray) and len(np.intersect1d(regions, pat_regions)) != 0)): 
+                pat_regions = self.patient(id).list_regions(use_mapping=use_mapping)
+                if len(np.intersect1d(regions, pat_regions)) != 0:
                     return True
                 else:
                     return False
-
         return fn
 
     def _hierarchical_exists(self) -> bool:

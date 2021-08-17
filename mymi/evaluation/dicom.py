@@ -1,20 +1,20 @@
 import numpy as np
 import pandas as pd
-from typing import *
 from tqdm import tqdm
 
 from mymi import cache
-from mymi.dataset import DicomDataset
+from mymi import dataset
 from mymi.metrics import dice, hausdorff_distance
 from mymi import logging
 from mymi import types
 
 # @cache.function
-def evaluate_predictions(
+def evaluate_dicom_predictions(
     pred_dataset: str,
     gt_dataset: str,
     clear_cache: bool = False,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    regions: types.PatientRegions = 'all',
+    use_mapping: bool = True) -> pd.DataFrame:
     """
     returns: a table of prediction results.
     args:
@@ -23,20 +23,14 @@ def evaluate_predictions(
     kwargs:
         clear_cache: force the cache to clear.
         regions: the requested prediction regions.
+        use_mapping: use region map if present.
     """
     # Load patients to predict on.
-    pred_ds = DicomDataset(pred_dataset)
+    pred_ds = dataset.get(pred_dataset)
     pats = pred_ds.list_patients()
 
     # Load GT dataset.
-    gt_ds = DicomDataset(gt_dataset)
-
-    # Convert regions to list.
-    if type(regions) == str:
-        if regions == 'all':
-            regions = list(pred_ds.region_names(clear_cache=clear_cache).region.unique())
-        else:
-            regions = [regions]
+    gt_ds = dataset.get(gt_dataset)
 
     # Create dataframe.
     cols = {
@@ -56,9 +50,18 @@ def evaluate_predictions(
             continue
 
         # Get overlap between available pred/GT regions and requested regions.
-        pred_regions = list(pred_ds.patient(pat).region_names(clear_cache=clear_cache).region)
-        gt_regions = list(gt_ds.patient(pat).region_names(clear_cache=clear_cache).region)
-        overlap_regions = np.intersect1d(np.intersect1d(pred_regions, gt_regions), regions) 
+        pred_regions = pred_ds.patient(pat).list_regions(use_mapping=use_mapping)
+        gt_regions = gt_ds.patient(pat).list_regions(use_mapping=use_mapping)
+        if type(regions) == str:
+            if regions == 'all':
+                overlap_regions = np.intersect1d(pred_regions, gt_regions)
+            else:
+                if regions in pred_regions and regions in gt_regions:
+                    overlap_regions = [regions]
+                else:
+                    regions = []
+        else:
+            overlap_regions = np.intersect1d(np.intersect1d(pred_regions, gt_regions), regions) 
 
         # Filter if no overlapping regions.
         if len(overlap_regions) == 0:

@@ -61,6 +61,16 @@ class RTSTRUCTSeries:
     def ref_ct(self) -> str:
         return self._ref_ct
 
+    def list_regions(
+        self,
+        use_mapping: bool = True) -> List[str]:
+        rtstruct = self.get_rtstruct()
+        names = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
+        names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
+        if use_mapping and self._region_map:
+            names = [self._region_map.to_internal(n) for n in names]
+        return names
+
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
         """
         returns: an RTSTRUCT DICOM object.
@@ -71,23 +81,13 @@ class RTSTRUCTSeries:
 
         return rtstruct
 
-    @cache.method('_dataset', '_pat_id', '_id')
-    def region_names(
+    def list_regions(
         self,
-        allow_unknown_regions: bool = False,
-        clear_cache: bool = False,
-        include_unmapped: bool = False,
-        regions: types.PatientRegions = 'all',
-        use_mapping: bool = True) -> pd.DataFrame:
+        use_mapping: bool = True) -> List[str]:
         """
         returns: the patient's region names.
         kwargs:
-            allow_unknown_regions: allows unknown regions to be requested via 'regions' arg.
             clear_cache: force the cache to clear.
-            include_unmapped: include unmapped region names.
-            regions: only return regions that match this arg. This arg allows us to:
-                a) get regions names for a patient when 'all' is passed.
-                b) determine which regions a patient has from a list when 'allow_unknown_regions' is True.
             use_mapping: use region map if present.
         """
         # Load RTSTRUCT dicom.
@@ -100,52 +100,15 @@ class RTSTRUCTSeries:
         # 'ContourData' and shouldn't be included.
         names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
 
-        # Create (internal, dataset) tuple maps.
-        names = list(zip(names, names))
-
         # Map to internal names.
         if use_mapping and self._region_map:
-            names = [(self._region_map.to_internal(n[0]), n[1]) for n in names]
+            names = [self._region_map.to_internal(n) for n in names]
 
-        # Filter names on requested regions.
-        if type(regions) == str:
-            if regions != 'all':
-                # Search for requested region in tuple maps.
-                found_region = False
-                for name in names:
-                    if regions == name[0]:
-                        names = [name]
-                        found_region = True
-
-                # Raise error if unknown regions not allowed.
-                if not found_region:
-                    if allow_unknown_regions:
-                        names = []
-                    else:
-                        raise ValueError(f"Unknown region '{regions}' requested for series '{self._id}', patient {self._pat_id}, dataset '{self._dataset}'.")
-        else:
-            # Check that all requested regions are present.
-            if not allow_unknown_regions:
-                unknown_regions = np.setdiff1d(regions, list(map(lambda n: n[0], names)))
-                if len(unknown_regions) != 0:
-                    raise ValueError(f"Unknown regions '{unknown_regions}' requested for series '{self._id}', patient {self._pat_id}, dataset '{self._dataset}'.")
-
-            # Filter based on regions.
-            names = list(filter(lambda n: n[0] in regions, names))
-
-        # Create dataframe.
-        df = pd.DataFrame(map(lambda n: n[0], names), columns=['region'])
-
-        # Add unmapped regions.
-        if include_unmapped:
-            df['unmapped'] = list(map(lambda n: n[1], names))
-
-        return df
+        return names
 
     def has_region(
         self,
         region: str,
-        clear_cache: bool = False,
         use_mapping: bool = True) -> bool:
         """
         returns: if the patient has the region.
@@ -155,7 +118,7 @@ class RTSTRUCTSeries:
             clear_cache: force the cache to clear.
             use_mapping: use region map if present.
         """
-        return region in list(self.region_names(clear_cache=clear_cache, use_mapping=use_mapping).region)
+        return region in self.list_regions(use_mapping=use_mapping)
 
     @cache.method('_dataset', '_pat_id', '_id')
     def region_data(
@@ -170,21 +133,23 @@ class RTSTRUCTSeries:
             regions: the desired regions.
             use_mapping: use region map if present.
         """
+        self._assert_requested_regions(regions, use_mapping=use_mapping)
+
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        names = self.region_names(clear_cache=clear_cache, use_mapping=use_mapping, include_unmapped=True, regions=regions)
-        names = list(names.itertuples(index=False, name=None))
+        unmapped_names = self.list_regions(use_mapping=False)
+        names = self.list_regions(use_mapping=use_mapping)
+        names = list(zip(names, unmapped_names))
 
         # Filter on requested regions.
-        def fn(map):
+        def fn(pair):
+            name, _ = pair
             if type(regions) == str:
-                if regions == 'all' or map[0] == regions:
+                if regions == 'all':
                     return True
                 else:
-                    return False
-            elif map[0] in regions:
-                return True
+                    return name == regions
             else:
-                return False
+                return name in regions
         names = list(filter(fn, names))
 
         # Get reference CTs.
@@ -295,27 +260,6 @@ class RTSTRUCTSeries:
 
         return df
 
-    def _convert_to_region_list(
-        self,
-        regions: types.PatientRegions,
-        clear_cache: bool = False,
-        use_mapping: bool = True) -> List[str]:
-        """
-        returns: a list of patient regions.
-        args:
-            regions: the patient regions arg.
-        kwargs:
-            clear_cache: force the cache to clear.
-            use_mapping: use region map if present.
-        """
-        if type(regions) == str:
-            if regions == 'all':
-                return list(self.region_names(clear_cache=clear_cache, use_mapping=use_mapping).region)
-            else:
-                return [regions]
-        else:
-            return list(regions)
-
     def _filter_on_dict_keys(
         self,
         keys: Union[str, Sequence[str]] = 'all',
@@ -343,3 +287,15 @@ class RTSTRUCTSeries:
             else:
                 return False
         return fn
+
+    def _assert_requested_regions(
+        self,
+        regions: types.PatientRegions = 'all',
+        use_mapping: bool = True) -> None:
+        if type(regions) == str:
+            if regions != 'all' and not self.has_region(regions, use_mapping=use_mapping):
+                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
+        else:
+            for region in regions:
+                if not self.has_region(regions, use_mapping=use_mapping):
+                    raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")

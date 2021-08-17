@@ -257,11 +257,11 @@ class DICOMPatient:
 
     # Proxy to default RTSTRUCTSeries.
 
+    def list_regions(self, *args, **kwargs):
+        return self._default_rtstruct_series.list_regions(*args, **kwargs)
+ 
     def get_rtstruct(self, *args, **kwargs):
         return self._default_rtstruct_series.get_rtstruct(*args, **kwargs)
-
-    def region_names(self, *args, **kwargs):
-        return self._default_rtstruct_series.region_names(*args, **kwargs)
 
     def has_region(self, *args, **kwargs):
         return self._default_rtstruct_series.has_region(*args, **kwargs)
