@@ -9,6 +9,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
+from mymi.regions import to_255, RegionColours
 
 class TestRTSTRUCTConverter(TestCase):
     def test_bidirectional_conversion(self):
@@ -19,6 +20,7 @@ class TestRTSTRUCTConverter(TestCase):
         # Perform bidirectional conversion.
         rtstruct = RTSTRUCTConverter.create_rtstruct(cts)
         roi_data = ROIData(
+            colour=list(to_255(RegionColours.Parotid_L)),
             data=before,
             frame_of_reference_uid='UID',
             name='sample'
@@ -31,8 +33,6 @@ class TestRTSTRUCTConverter(TestCase):
 
     def _load_cts(self) -> List[dcm.dataset.FileDataset]:
         path = os.path.join(root_dir, 'test', 'assets', 'dataset', 'raw', 'dicom', 'ct')
-        print(path)
-        print(os.listdir(path))
         filepaths = [os.path.join(path, f) for f in os.listdir(path)]
         cts = [dcm.read_file(f) for f in filepaths]
         cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])    # Sort by 'z-position'.
