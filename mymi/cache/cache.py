@@ -233,13 +233,16 @@ class Cache:
         start = time.time()
 
         # Read data.
-        data = None
-        if data_type in (Dict, OrderedDict):
-            data = self._read_dict(key)
-        elif data_type == np.ndarray:
-            data = self._read_numpy_array(key)
-        elif data_type == pd.DataFrame:
-            data = self._read_pandas_data_frame(key)
+        try:
+            data = None
+            if data_type in (Dict, OrderedDict):
+                data = self._read_dict(key)
+            elif data_type == np.ndarray:
+                data = self._read_numpy_array(key)
+            elif data_type == pd.DataFrame:
+                data = self._read_pandas_data_frame(key)
+        except EOFError:
+            return None
 
         # Log cache finish time and data size.
         if self._logging:
