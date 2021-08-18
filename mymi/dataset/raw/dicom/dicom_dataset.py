@@ -18,7 +18,6 @@ from mymi import config
 from mymi import logging
 from mymi import regions
 from mymi import types
-from mymi.utils import filter_on_num_pats, filter_on_pat_ids
 
 from ...dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
@@ -160,10 +159,10 @@ class DICOMDataset(Dataset):
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filter_on_pat_ids(pat_ids), pats))
+        pats = list(filter(self._filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
         pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
-        pats = list(filter(filter_on_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
         for pat in tqdm(pats):
@@ -198,10 +197,10 @@ class DICOMDataset(Dataset):
         pats = self.list_patients()
         
         # Filter patients.
-        pats = list(filter(filter_on_pat_ids(pat_ids), pats))
+        pats = list(filter(self._filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
         pats = list(filter(self.filter_patient_by_region(regions), tqdm(pats)))
-        pats = list(filter(filter_on_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_on_num_pats(num_pats), pats))
 
         # Calculate the frequencies.
         freqs = {}
@@ -279,10 +278,10 @@ class DICOMDataset(Dataset):
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filter_on_pat_ids(pat_ids), pats))
+        pats = list(filter(self._filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
         pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
-        pats = list(filter(filter_on_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_on_num_pats(num_pats), pats))
 
         # Add patient info.
         logging.info(f"Loading CT summary for dataset '{self._name}'..")
@@ -327,10 +326,10 @@ class DICOMDataset(Dataset):
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filter_on_pat_ids(pat_ids), pats))
+        pats = list(filter(self._filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
         pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), tqdm(pats)))
-        pats = list(filter(filter_on_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
         logging.info(f"Loading region names for dataset '{self._name}'..")
@@ -388,10 +387,10 @@ class DICOMDataset(Dataset):
         pats = self.list_patients()
 
         # Filter patients.
-        pats = list(filter(filter_on_pat_ids(pat_ids), pats))
+        pats = list(filter(self._filter_on_pat_ids(pat_ids), pats))
         logging.info(f"Filtering on region names for dataset '{self._name}'..")
         pats = list(filter(self.filter_patient_by_region(regions, use_mapping=use_mapping), pats))
-        pats = list(filter(filter_on_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_on_num_pats(num_pats), pats))
 
         # Add patient regions.
         logging.info(f"Loading region summary for dataset '{self._name}'..")
@@ -627,3 +626,34 @@ class DICOMDataset(Dataset):
                 # Log error message.
                 logging.error(msg)
                 logging.error(error_msg)
+
+    def _filter_on_num_pats(num_pats: int) -> Callable[[str], bool]:
+        """
+        returns: a function to filter patients by number of patients allowed.
+        args:
+            num_pats: the number of patients to keep.
+        """
+        def fn(id):
+            if num_pats == 'all' or fn.num_included < num_pats:
+                fn.num_included += 1
+                return True
+            else:
+                return False
+
+        # Assign state to the function.
+        fn.num_included = 0
+        return fn
+
+    def _filter_on_pat_ids(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+        """
+        returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
+        args:
+            pat_ids: the passed 'pat_ids' kwarg.
+        """
+        def fn(id):
+            if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
+                ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
+                return True
+            else:
+                return False
+        return fn

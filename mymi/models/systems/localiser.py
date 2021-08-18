@@ -84,7 +84,6 @@ class Localiser(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # Forward pass.
         x, labels = batch
-        x = x.half()
         y = labels['Parotid_L']
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)

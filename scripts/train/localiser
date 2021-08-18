@@ -7,7 +7,8 @@ sys.path.append(root_dir)
 
 from mymi.training import train_localiser
 
-fire.Fire(train_localiser)
+if __name__ == '__main__':
+    fire.Fire(train_localiser)
 
 # Sample args:
-# --dataset HN1-LOC --num_gpus 4 --num_nodes 1 --num_workers 4
+# --dataset HN1-LOC --num_gpus 4 --num_nodes 1 --num_workers 4 --use_logger True

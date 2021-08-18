@@ -1,4 +1,3 @@
-import logging
 import os
 import torch
 from tqdm import tqdm
@@ -16,7 +15,7 @@ def create_dicom_dataset(
     dataset: str,
     dataset_type: str,
     clear_cache: bool = False,
-    log_level: str = 'info',
+    device: torch.device = torch.device('cpu'),
     output_dataset: Optional[str] = None,
     use_gpu: bool = True) -> None:
     """
@@ -25,25 +24,10 @@ def create_dicom_dataset(
         dataset: the dataset to create predictions from.
     kwargs:
         clear_cache: force the cache to clear.
-        log_level: the log level.
+        device: the device to perform inference on.
         output_dataset: the name of the dataset to hold the predictions.
         use_gpu: use GPU for matrix calculations.
     """
-    # Configure logging.
-    log_level = getattr(logging, log_level.upper(), None)
-    utils.configure_logging(log_level)
-
-    # Configure device.
-    if use_gpu:
-        if torch.cuda.is_available():
-            device = torch.device('cuda:0')
-        else:
-            device = torch.device('cpu')
-            logging.info('CUDA not available.')
-    else:
-        device = torch.device('cpu')
-    logging.info(f"Using device: {device}.")
-
     # Load patients.
     source_ds = ds.get(dataset, dataset_type)
     pats = source_ds.list_patients()

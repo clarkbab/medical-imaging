@@ -60,7 +60,7 @@ def train_segmenter(
         logger = None
 
     # Create callbacks.
-    path = os.path.join(config.directories.checkpoints, model_name, run_name)
+    path = os.path.join(config.directories.checkpoints, model.name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
@@ -76,7 +76,7 @@ def train_segmenter(
     trainer = Trainer(
         accelerator='ddp',
         callbacks=callbacks,
-        gpus=num_gpus,
+        gpus=list(range(num_gpus)),
         logger=logger,
         max_epochs=200,
         num_nodes=num_nodes,

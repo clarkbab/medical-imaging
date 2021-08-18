@@ -3,4 +3,4 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
-python localiser --dataset HN1-LOC --run_name baseline --num_gpus 4 --num_nodes 1 --num_workers 2
+python localiser --dataset HN1-LOC --run_name hn1_baseline --num_gpus 4 --num_nodes 1 --num_workers 4 --use_logger True

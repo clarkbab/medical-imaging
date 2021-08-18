@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from torch import nn
-from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi.dataset import Dataset
@@ -31,6 +30,8 @@ def get_patient_segmentation_patch(
     run_name = '200_epochs'
     checkpoint = 'epoch=95-step=20735'
     segmenter = Segmenter.load(run_name, checkpoint)
+    segmenter.eval()
+    segmenter.to(device)
     segmenter_spacing = (1, 1, 2)
     segmenter_size = (128, 128, 96)
 
@@ -56,8 +57,7 @@ def get_patient_segmentation_patch(
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
     input = input.to(device)
-    autocast_enabled = device.type == 'cuda'
-    with autocast(enabled=autocast_enabled):
+    with torch.no_grad():
         pred = segmenter(input)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 

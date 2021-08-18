@@ -15,7 +15,6 @@ from mymi.prediction import get_patient_localisation, get_patient_patch_segmenta
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
-from mymi.utils import escape_latex
 
 def plot_ct_distribution(
     bin_width: int = 10,
@@ -248,7 +247,7 @@ def plot_patient_regions(
 
         # Escape text if using latex.
         if latex:
-            title_text = escape_latex(title_text)
+            title_text = _escape_latex(title_text)
 
         plt.title(title_text)
 
@@ -309,7 +308,7 @@ def _plot_regions(
 
         # Plot region.
         plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
-        label = escape_latex(region) if latex else region
+        label = _escape_latex(region) if latex else region
         plt.plot(0, 0, c=colour, label=label)
         if perimeter:
             plt.contour(slice_data, colors=[colour], levels=[0.5])
@@ -685,3 +684,27 @@ def _plot_bounding_box(
     ax = plt.gca()
     ax.add_patch(rect)
     plt.plot(0, 0, c=box_colour, label=label)
+
+def _escape_latex(text: str) -> str:
+    """
+    returns: a string with escaped latex special characters.
+    args:
+        text: the string to escape.
+    """
+    # Provide map for special characters.
+    char_map = {
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\^{}',
+        '\\': r'\textbackslash{}',
+        '<': r'\textless{}',
+        '>': r'\textgreater{}',
+    }
+    regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
+    return regex.sub(lambda match: char_map[match.group()], text)

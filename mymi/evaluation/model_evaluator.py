@@ -2,7 +2,6 @@ import logging
 import numpy as np
 import os
 import torch
-from torch.cuda.amp import autocast
 from torchio import LabelMap, Subject
 from tqdm import tqdm
 
@@ -64,8 +63,7 @@ class ModelEvaluator:
             input, label = input.to(self.device), label.to(self.device)
 
             # Perform forward pass.
-            with autocast(enabled=self.mixed_precision):
-                pred = model(input)
+            pred = model(input)
 
             # Move data back to cpu for calculations.
             pred, label = pred.cpu(), label.cpu()

@@ -1,7 +1,6 @@
 from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
 import torch
-from torch.cuda.amp import autocast
 from typing import Tuple, Union
 
 from mymi.dataset import Dataset
@@ -31,6 +30,8 @@ def get_patient_box(
     run_name = 'baseline'
     checkpoint = 'epoch=17-step=3887'
     localiser = Localiser.load(run_name, checkpoint)
+    localiser.eval()
+    localiser.to(device)
     localiser_spacing = (4, 4, 6.625)
     localiser_size = (128, 128, 96)
 
@@ -53,8 +54,7 @@ def get_patient_box(
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
     input = input.to(device)
-    autocast_enabled = device.type == 'cuda'
-    with autocast(enabled=autocast_enabled):
+    with torch.no_grad():
         pred = localiser(input)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 

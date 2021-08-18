@@ -81,7 +81,6 @@ class Segmenter(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # Forward pass.
         x, y = batch
-        x = x.half()
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
