@@ -17,7 +17,7 @@ class NIFTIPatient:
         id: str):
         self._dataset = dataset
         self._id = id
-        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'raw')
+        self._path = os.path.join(config.directories.datasets, 'raw', dataset)
 
     def list_regions(self) -> List[str]:
         files = os.listdir(self._path)

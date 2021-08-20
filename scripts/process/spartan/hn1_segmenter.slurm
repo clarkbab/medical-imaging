@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition physical
+#SBATCH --mem 16G
 #SBATCH --time 0-1:00:00
 #SBATCH -A punim1413
 

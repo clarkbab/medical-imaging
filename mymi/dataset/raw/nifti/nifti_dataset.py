@@ -31,7 +31,7 @@ class NIFTIDataset(Dataset):
         """
         returns: a list of NIFTI IDs.
         """
-        ct_path = os.path.join(self._path, 'raw', 'ct')
+        ct_path = os.path.join(self._path, 'ct')
         files = os.listdir(ct_path)
         files = [f.replace('.nii.gz', '') for f in files]
         return files
