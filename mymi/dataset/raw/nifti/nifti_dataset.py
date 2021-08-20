@@ -27,7 +27,7 @@ class NIFTIDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
-    def list_ids(self) -> List[str]:
+    def list_patients(self) -> List[str]:
         """
         returns: a list of NIFTI IDs.
         """
@@ -64,7 +64,7 @@ class NIFTIDataset(Dataset):
         df = pd.DataFrame(columns=cols.keys())
 
         # List patients.
-        ids = self.list_ids()
+        ids = self.list_patients()
 
         # Add patient info.
         logging.info(f"Loading CT summary for dataset '{self._name}'..")
@@ -94,7 +94,7 @@ class NIFTIDataset(Dataset):
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
-        ids = self.list_ids()
+        ids = self.list_patients()
 
         # Add patient regions.
         logging.info(f"Loading region names for dataset '{self._name}'..")

@@ -122,8 +122,8 @@ def region_summary(*args, **kwargs):
 
 # NIFTIDataset API.
 
-def list_ids(*args, **kwargs):
-    return ds.list_ids(*args, **kwargs)
+def list_patients(*args, **kwargs):
+    return ds.list_patients(*args, **kwargs)
 
 def list_regions(*args, **kwargs):
     return ds.list_regions(*args, **kwargs)
