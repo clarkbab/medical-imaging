@@ -1,15 +1,7 @@
-import os
-import sys
+#! /usr/bin/env bash
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.append(root_dir)
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd $parent_path
 
-from mymi.dataset import process_nifti
-
-process_nifti(
-    'PMCC-HN-TRAIN',
-    dest_dataset='PMCC-HN-TRAIN-SEG',
-    p_test=0,
-    p_train=0.8,
-    p_val=0.2,
-    spacing=(1, 1, 2))
+python nifti --dataset PMCC-HN-TRAIN --dest_dataset PMCC-HN-TRAIN-SEG --p_test 0 --p_train 0.8 --p_validation 0.2 \
+    --spacing '(1, 1, 2)'
