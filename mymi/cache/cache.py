@@ -1,16 +1,17 @@
 import hashlib
 import inspect
 import json
-import logging
 import numpy as np
 import os
 import pandas as pd
 import pickle
+from pickle import UnpicklingError
 import shutil
 import time
 from typing import Any, Callable, Dict, List, OrderedDict, Sequence, Tuple
 
 from mymi import config
+from mymi import logging
 
 class Cache:
     Types = [
@@ -241,7 +242,12 @@ class Cache:
                 data = self._read_numpy_array(key)
             elif data_type == pd.DataFrame:
                 data = self._read_pandas_data_frame(key)
-        except EOFError:
+        except EOFError as e:
+            logging.error(f"Caught 'EOFError' when reading cache key '{key}'.")
+            logging.error(f"Error: {e}")
+        except UnpicklingError as e:
+            logging.error(f"Caught 'UnpicklingError' when reading cache key '{key}'.")
+            logging.error(f"Error: {e}")
             return None
 
         # Log cache finish time and data size.

@@ -2,14 +2,18 @@
 import os
 import pandas as pd
 import shutil
+from tqdm import tqdm
 
 DRY_RUN = False
-REGIONS = ['Parotid_L', 'Parotid_R']
+REGIONS = ['BrachialPlexus_L', 'BrachialPlexus_R', 'Brain', 'BrainStem', 'Cochlea_L', 'Cochlea_R',
+    'Eye_L', 'Eye_R', 'Larynx', 'Lens_L', 'Lens_R', 'Mandible', 'Oesophagus', 'OpticNerve_L', 'OpticNerve_R',
+    'OralCavity', 'Parotid_L', 'Parotid_R', 'PharynConst', 'SpinalCanal', 'SpinalCord', 'Submandibular_L',
+    'Submandibular_R']
 
-root_path = os.path.join('S:', 'ImageStore', 'AtlasSegmentation', 'AI_HN', 'Training_CT')
+root_path = os.path.join('H:\\', 'data', 'mymi', 'datasets', 'raw', 'PMCC-HN-TRAIN')
 
 # Create CT map.
-ct_path = os.path.join(root_path, 'data', 'ct')
+ct_path = os.path.join(root_path, 'ct')
 ct_files = list(sorted(os.listdir(ct_path)))
 ct_ids = list(f.replace('.nii.gz', '') for f in ct_files)
 map_df = pd.DataFrame(ct_ids, columns=['series_id'])
@@ -18,10 +22,10 @@ map_df = pd.DataFrame(ct_ids, columns=['series_id'])
 filepath = os.path.join(root_path, 'map.csv')
 map_df.to_csv(filepath)
 
-for anon_id, row in map_df.iterrows():
+for anon_id, row in tqdm(map_df.iterrows()):
     # Rename CT files.
-    old_filepath = os.path.join(root_path, 'data', 'ct', f"{row[0]}.nii.gz")
-    new_filepath = os.path.join(root_path, 'data', 'ct', f"{anon_id}.nii.gz")
+    old_filepath = os.path.join(root_path, 'ct', f"{row[0]}.nii.gz")
+    new_filepath = os.path.join(root_path, 'ct', f"{anon_id}.nii.gz")
     if DRY_RUN:
         print(f"Moving from '{old_filepath}' to '{new_filepath}'.")
     else:
@@ -29,8 +33,8 @@ for anon_id, row in map_df.iterrows():
 
     # Rename region files.
     for region in REGIONS:
-        old_filepath = os.path.join(root_path, 'data', region, f"{row[0]}.nii.gz") 
-        new_filepath = os.path.join(root_path, 'data', region, f"{anon_id}.nii.gz")
+        old_filepath = os.path.join(root_path, region, f"{row[0]}.nii.gz")
+        new_filepath = os.path.join(root_path, region, f"{anon_id}.nii.gz")
         if os.path.exists(old_filepath):
             if DRY_RUN:
                 print(f"Moving from '{old_filepath}' to '{new_filepath}'.")

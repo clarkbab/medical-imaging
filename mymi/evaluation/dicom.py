@@ -8,7 +8,7 @@ from mymi.metrics import dice, hausdorff_distance
 from mymi import logging
 from mymi import types
 
-# @cache.function
+@cache.function
 def evaluate_dicom_predictions(
     pred_dataset: str,
     gt_dataset: str,
@@ -37,7 +37,8 @@ def evaluate_dicom_predictions(
         'patient-id': str,
         'metric': str
     }
-    for region in regions:
+    all_regions = pred_ds.list_regions()
+    for region in all_regions:
         cols[region] = float
     df = pd.DataFrame(columns=cols.keys())
 

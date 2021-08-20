@@ -295,7 +295,9 @@ class RTSTRUCTSeries:
         if type(regions) == str:
             if regions != 'all' and not self.has_region(regions, use_mapping=use_mapping):
                 raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
-        else:
+        elif hasattr(regions, '__iter__'):
             for region in regions:
-                if not self.has_region(regions, use_mapping=use_mapping):
-                    raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
+                if not self.has_region(region, use_mapping=use_mapping):
+                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
+        else:
+            raise ValueError(f"Requested regions '{regions}' isn't 'str' or 'iterable'.")
