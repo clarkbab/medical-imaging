@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition snowy
+#SBATCH --partition physical
 #SBATCH --time 0-1:00:00
 #SBATCH -A punim1413
-#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
