@@ -50,8 +50,7 @@ def process_dicom(
     """
     # Load patients.
     ds = DICOMDataset(dataset)
-    pats = ds.list_patients() 
-    pats = list(filter(ds.filter_patient_by_region(regions), pats))
+    pats = ds.list_patients(regions=regions) 
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
