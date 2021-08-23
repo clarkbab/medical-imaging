@@ -310,7 +310,6 @@ class DICOMDataset(Dataset):
         self,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
-        regions: types.PatientRegions = 'all',
         use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
@@ -318,7 +317,6 @@ class DICOMDataset(Dataset):
             clear_cache: force the cache to clear.
             num_pats: the number of patients to include.
             pat_ids: include listed patients.
-            regions: include patients with (at least) on of the regions.
             use_mapping: use region map if present.
         """
         # Define table structure.
@@ -333,12 +331,10 @@ class DICOMDataset(Dataset):
 
         # Filter patients.
         pats = list(filter(self._filter_patient_by_pat_ids(pat_ids), pats))
-        logging.info(f"Filtering on region names for dataset '{self._name}'..")
-        pats = list(filter(self._filter_patient_by_regions(regions, use_mapping=use_mapping), tqdm(pats)))
         pats = list(filter(self._filter_patient_by_num_pats(num_pats), pats))
 
         # Add patient regions.
-        logging.info(f"Loading region names for dataset '{self._name}'..")
+        logging.info(f"Loading regions for dataset '{self._name}'..")
         for pat in tqdm(pats):
             for pat_region in self.patient(pat).list_regions(use_mapping=use_mapping):
                 data = {

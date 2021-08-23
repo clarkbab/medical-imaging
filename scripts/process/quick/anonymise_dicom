@@ -1,0 +1,66 @@
+#! /usr/bin/env python
+from distutils.dir_util import copy_tree
+import nibabel as nib
+from nibabel.nifti1 import Nifti1Image
+import numpy as np
+import os
+import pandas as pd
+import shutil
+from tqdm import tqdm
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import dataset
+from mymi.dataset.raw import recreate
+from mymi import logging
+
+DATASET_PATH = os.path.join('H:\\', 'data', 'mymi', 'datasets', 'raw')
+FILENAME_NUM_DIGITS = 5
+REGIONS = ['BrachialPlexus_L', 'BrachialPlexus_R', 'Brain', 'BrainStem', 'Cochlea_L', 'Cochlea_R',
+    'Eye_L', 'Eye_R', 'Larynx', 'Lens_L', 'Lens_R', 'Mandible', 'Oesophagus', 'OpticNerve_L', 'OpticNerve_R',
+    'OralCavity', 'Parotid_L', 'Parotid_R', 'PharynConst', 'SpinalCanal', 'SpinalCord', 'Submandibular_L',
+    'Submandibular_R']
+
+# Create CT map.
+old_ds_name = 'PMCC-HN-TEST-sensitive'
+old_ds = dataset.get(old_ds_name)
+pats = old_ds.list_patients(regions=REGIONS)
+map_df = pd.DataFrame(pats, columns=['patient-id'])
+
+# Save map.
+filepath = os.path.join(old_ds.path, 'map.csv')
+map_df.to_csv(filepath)
+
+# Create new dataset.
+new_ds_path = os.path.join(DATASET_PATH, 'PMCC-HN-TEST')
+ds = recreate(new_ds_path, type_str='nifti')
+
+# Add patients to new dataset.
+for anon_id, row in tqdm(map_df.iterrows()):
+    # Add CT data.
+    data = old_ds.patient(row['patient-id']).ct_data()
+    spacing = old_ds.patient(row['patient-id']).ct_spacing()
+    offset = old_ds.patient(row['patient-id']).ct_offset()
+    affine = np.array([
+        [spacing[0], 0, 0, offset[0]],
+        [0, spacing[1], 0, offset[1]],
+        [0, 0, spacing[2], offset[2]],
+        [0, 0, 0, 1]])
+    img = Nifti1Image(data, affine)
+    filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+    filepath = os.path.join(new_ds_path, 'ct', filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    nib.save(img, filepath)
+
+    # Add region data.
+    pat_regions = old_ds.patient(row['patient-id']).list_regions()
+    regions = np.intersect1d(pat_regions, REGIONS)
+    region_data = old_ds.patient(row['patient-id']).region_data(regions=regions)
+    for r, d in region_data.items():
+        img = Nifti1Image(d.astype(np.float64), affine)
+        filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+        filepath = os.path.join(new_ds_path, r, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        nib.save(img, filepath)

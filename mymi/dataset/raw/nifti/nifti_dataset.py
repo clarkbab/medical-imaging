@@ -81,14 +81,14 @@ class NIFTIDataset(Dataset):
 
         return df
 
-    # @cache.method('_name')
+    @cache.method('_name')
     def list_regions(self) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
         """
         # Define table structure.
         cols = {
-            'id': str,
+            'patient-id': str,
             'region': str,
         }
         df = pd.DataFrame(columns=cols.keys())
@@ -97,11 +97,11 @@ class NIFTIDataset(Dataset):
         ids = self.list_patients()
 
         # Add patient regions.
-        logging.info(f"Loading region names for dataset '{self._name}'..")
+        logging.info(f"Loading regions for dataset '{self._name}'..")
         for id in tqdm(ids):
             for region in self.patient(id).list_regions():
                 data = {
-                    'id': id,
+                    'patient-id': id,
                     'region': region,
                 }
                 df = df.append(data, ignore_index=True)
