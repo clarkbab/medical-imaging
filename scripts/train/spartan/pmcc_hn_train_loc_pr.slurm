@@ -17,4 +17,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-srun bash $SCRIPT_DIR/train/pmcc_hn_train_localiser
+srun bash $SCRIPT_DIR/train/pmcc_hn_train_loc_pr

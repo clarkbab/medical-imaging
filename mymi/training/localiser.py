@@ -46,6 +46,7 @@ def train_localiser(
     # Create model.
     metrics = ['dice', 'hausdorff']
     model = Localiser(
+        region=regions,
         metrics=metrics,
         spacing=spacing)
 

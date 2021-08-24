@@ -16,6 +16,7 @@ from ..networks import UNet
 class Localiser(pl.LightningModule):
     def __init__(
         self,
+        region: str,
         metrics: List[str] = [],
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
@@ -27,6 +28,7 @@ class Localiser(pl.LightningModule):
         self._loss = DiceLoss()
         self._metrics = metrics
         self._network = UNet()
+        self._region = region
         self._spacing = spacing
         self.save_hyperparameters()
 
@@ -57,7 +59,7 @@ class Localiser(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # Forward pass.
         x, labels = batch
-        y = labels['Parotid_L']
+        y = labels[self._region]
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
@@ -80,7 +82,7 @@ class Localiser(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # Forward pass.
         x, labels = batch
-        y = labels['Parotid_L']
+        y = labels[self._region]
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 

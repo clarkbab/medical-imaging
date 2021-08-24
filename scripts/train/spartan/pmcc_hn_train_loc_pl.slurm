@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --mem 32G
+#SBATCH --mem 16G
 #SBATCH --gres=gpu:p100:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --time 5-0:00:00
@@ -17,4 +17,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-srun bash $SCRIPT_DIR/train/pmcc_hn_train_segmenter
+srun bash $SCRIPT_DIR/train/pmcc_hn_train_loc_pl
