@@ -38,10 +38,6 @@ class Segmenter(pl.LightningModule):
             raise ValueError(f"Model 'segmenter-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Segmenter.load_from_checkpoint(filepath)
 
-    @property
-    def name(self) -> str:
-        return 'segmenter-pl'
-
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
 

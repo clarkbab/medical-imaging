@@ -11,13 +11,16 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import PatchLoader
 from mymi.models.systems import Segmenter
+from mymi import types
 
 def train_segmenter(
+    model_name: str,
+    run_name: str,
     dataset: str,
     num_gpus: int = 1,
     num_nodes: int = 1,
     num_workers: int = 1,
-    run_name: Optional[str] = None,
+    regions: types.PatientRegions = 'all',
     use_logger: bool = False) -> None:
 
     # Load partitions.
@@ -37,10 +40,9 @@ def train_segmenter(
 
     # Create data loaders.
     patch_size = (128, 128, 96)
-    region = 'Parotid_L'
     spacing = eval(set.params().spacing[0])
-    train_loader = PatchLoader.build(train_part, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
-    val_loader = PatchLoader.build(val_part, patch_size, region, num_workers=num_workers, shuffle=False)
+    train_loader = PatchLoader.build(train_part, patch_size, regions, num_workers=num_workers, spacing=spacing, transform=transform)
+    val_loader = PatchLoader.build(val_part, patch_size, regions, num_workers=num_workers, shuffle=False)
 
     # Create model.
     metrics = ['dice', 'hausdorff']
@@ -51,7 +53,7 @@ def train_segmenter(
     # Create logger.
     if use_logger:
         logger = WandbLogger(
-            project=model.name,
+            project=model_name,
             log_model='all',
             name=run_name,
             save_dir=config.directories.wandb)
@@ -60,7 +62,7 @@ def train_segmenter(
         logger = None
 
     # Create callbacks.
-    path = os.path.join(config.directories.checkpoints, model.name, run_name)
+    path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',

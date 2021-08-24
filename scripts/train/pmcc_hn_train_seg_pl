@@ -1,0 +1,6 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd $parent_path
+
+python segmenter --model_name segmenter-pl --run_name 200_epochs --dataset PMCC-HN-TRAIN-SEG --num_gpus 1 --num_nodes 1 --num_workers 8 --regions Parotid_L --use_logger True

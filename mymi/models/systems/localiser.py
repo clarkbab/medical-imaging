@@ -40,10 +40,6 @@ class Localiser(pl.LightningModule):
             raise ValueError(f"Model 'localiser-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Localiser.load_from_checkpoint(filepath)
 
-    @property
-    def name(self) -> str:
-        return 'localiser-pl'
-
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
 
