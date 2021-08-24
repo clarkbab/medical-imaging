@@ -11,7 +11,7 @@ from typing import Dict, Sequence, Tuple, Union
 
 from mymi import dataset
 from mymi.dataset.raw.dicom import DICOMDataset
-from mymi.prediction import get_patient_localisation, get_patient_patch_segmentation
+from mymi.prediction import get_patient_box, get_patient_segmentation_patch
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -119,14 +119,14 @@ def plot_patient_regions(
 
     # Load patient spacing.
     pat = dataset.patient(id)
-    spacing = pat.ct_spacing(clear_cache=clear_cache)
+    spacing = pat.ct_spacing()
 
     # Load CT data.
-    ct_data = pat.ct_data(clear_cache=clear_cache)
+    ct_data = pat.ct_data()
 
     # Load region data.
     if regions is not None:
-        region_data = pat.region_data(clear_cache=clear_cache, regions=regions)
+        region_data = pat.region_data(regions=regions)
 
         if internal_regions:
             # Map to internal region names.
@@ -372,7 +372,7 @@ def plot_patient_localisation(
         bounding_box, pred = loc_box, loc_seg
     else:
         assert localiser is not None and localiser_size is not None and localiser_spacing is not None
-        bounding_box, pred = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_seg=True)
+        bounding_box, pred = get_patient_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device, return_seg=True)
 
     # Plot prediction.
     if show_seg:
@@ -466,10 +466,10 @@ def plot_patient_segmentation(
 
     # Get localisation box if not given.
     if not loc_box:
-        localisation_box = get_patient_localisation(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
+        localisation_box = get_patient_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
 
     # Get segmentation prediction.
-    seg, seg_patch = get_patient_patch_segmentation(id, loc_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
+    seg, seg_patch = get_patient_segmentation_patch(id, loc_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
 
     # Get seg slice.
     seg = _get_slice_for_plotting(seg, slice_idx, view)
@@ -600,7 +600,7 @@ def _get_aspect_ratio(
         clear_cache: forces the cache to clear.
     """
     # Get patient spacing.
-    spacing = dataset.patient(id).ct_spacing(clear_cache=clear_cache)
+    spacing = dataset.patient(id).ct_spacing()
 
     # Get the aspect ratio.
     if view == 'axial':

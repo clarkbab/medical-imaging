@@ -22,6 +22,10 @@ class NIFTIDataset(Dataset):
     @property
     def description(self) -> str:
         return f"NIFTI: {self._name}"
+    
+    @property
+    def path(self) -> str:
+        return self._path
 
     @property
     def type(self) -> DatasetType:
@@ -32,7 +36,7 @@ class NIFTIDataset(Dataset):
         returns: a list of NIFTI IDs.
         """
         ct_path = os.path.join(self._path, 'ct')
-        files = os.listdir(ct_path)
+        files = list(sorted(os.listdir(ct_path)))
         files = [f.replace('.nii.gz', '') for f in files]
         return files
 

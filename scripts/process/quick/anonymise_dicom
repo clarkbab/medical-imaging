@@ -59,7 +59,7 @@ for anon_id, row in tqdm(map_df.iterrows()):
     regions = np.intersect1d(pat_regions, REGIONS)
     region_data = old_ds.patient(row['patient-id']).region_data(regions=regions)
     for r, d in region_data.items():
-        img = Nifti1Image(d.astype(np.float64), affine)
+        img = Nifti1Image(d.astype(np.int32), affine)
         filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
         filepath = os.path.join(new_ds_path, r, filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
