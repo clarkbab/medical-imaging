@@ -21,7 +21,7 @@ old_ds = dataset.get(old_ds_name)
 ds_name = 'PMCC-HN-TRAIN-FLIP-LOC'
 ds = recreate(ds_name)
 
-partitions = ['train', 'validation', 'test']
+partitions = old_ds.list_partitions()
 for par in partitions:
     # Get flippable regions.
     old_partition = old_ds.partition(par)
