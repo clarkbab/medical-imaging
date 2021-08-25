@@ -1,7 +1,9 @@
 #! /usr/bin/env bash
 
+REGIONS="('Parotid_L','Parotid_R')"
+
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
 python dicom --dataset HNSCC --dest_dataset HNSCC-LOC --p_test 0 --p_train 0.8 --p_val 0.2 \
-    --regions Parotid_L --size '(128, 128, 96)' --spacing '(4, 4, 6.625)'
+    --regions $REGIONS --size '(128, 128, 96)' --spacing '(4, 4, 6.625)'

@@ -54,7 +54,6 @@ def train_segmenter(
     if use_logger:
         logger = WandbLogger(
             project=model_name,
-            log_model='all',
             name=run_name,
             save_dir=config.directories.wandb)
         logger.watch(model)

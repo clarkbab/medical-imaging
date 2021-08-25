@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition physical
-#SBATCH --mem 16G
+#SBATCH --mem 32GB
 #SBATCH --time 0-1:00:00
 #SBATCH -A punim1413
 
@@ -14,4 +14,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/process/hnscc_localiser
+python $SCRIPT_DIR/process/quick/pmcc_hn_train_flip

@@ -1,9 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition physical
-#SBATCH --mem 32G
-#SBATCH --time 0-12:00:00
+#SBATCH --partition gpgpu
+#SBATCH --mem 16G
+#SBATCH --gres=gpu:p100:1
+#SBATCH --cpus-per-gpu 8
+#SBATCH --time 5-0:00:00
 #SBATCH -A punim1413
+#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -14,4 +17,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/process/pmcc_hn_train_localiser
+srun bash $SCRIPT_DIR/train/localiser_pl

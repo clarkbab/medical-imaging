@@ -49,7 +49,7 @@ class ProcessedDataset(Dataset):
 
     def create_partition(
         self,
-        name: str) -> None:
+        name: types.ProcessedPartition) -> ProcessedPartition:
         """
         effect: creates partition folder.
         args:
@@ -57,6 +57,7 @@ class ProcessedDataset(Dataset):
         """
         path = os.path.join(self._path, 'data', name)
         os.makedirs(path)
+        return self.partition(name)
 
     def partition(
         self,

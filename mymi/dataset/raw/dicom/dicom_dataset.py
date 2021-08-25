@@ -603,7 +603,9 @@ class DICOMDataset(Dataset):
                 logging.error(msg)
                 logging.error(error_msg)
 
-    def _filter_patient_by_num_pats(num_pats: int) -> Callable[[str], bool]:
+    def _filter_patient_by_num_pats(
+        self,
+        num_pats: int) -> Callable[[str], bool]:
         """
         returns: a function to filter patients by number of patients allowed.
         args:
@@ -620,7 +622,9 @@ class DICOMDataset(Dataset):
         fn.num_included = 0
         return fn
 
-    def _filter_patient_by_pat_ids(pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+    def _filter_patient_by_pat_ids(
+        self,
+        pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
         """
         returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
         args:

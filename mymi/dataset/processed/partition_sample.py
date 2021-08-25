@@ -21,6 +21,12 @@ class PartitionSample:
         self._partition = partition
         self._index = index
 
+    @property
+    def patient_id(self) -> str:
+        manifest_df = self._partition.dataset.manifest()
+        pat_id = manifest_df[(manifest_df['partition'] == self._partition.name) & (manifest_df['index'] == self._index)].iloc[0]['patient-id']
+        return pat_id
+
     def list_regions(self) -> List[str]:
         """
         returns: the region names.
