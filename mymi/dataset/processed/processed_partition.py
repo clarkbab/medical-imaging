@@ -53,7 +53,11 @@ class ProcessedPartition:
         returns: the region names. 
         """
         path = os.path.join(self._path, 'labels')
-        return os.listdir(path)
+        if os.path.exists(path):
+            regions = list(sorted(os.listdir(path)))
+        else:
+            regions = []
+        return regions
 
     def sample(
         self,
