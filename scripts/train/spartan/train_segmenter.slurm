@@ -4,7 +4,7 @@
 #SBATCH --mem 32G
 #SBATCH --gres=gpu:p100:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 5-0:00:00
+#SBATCH --time 3-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -17,4 +17,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-srun bash $SCRIPT_DIR/train/segmenter_pl
+srun bash $SCRIPT_DIR/train/train_segmenter

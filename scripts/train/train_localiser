@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd $parent_path
+
+DATASET="PMCC-HN-TRAIN-LOC"
+MODEL_NAME="localiser-pr"
+REGIONS="Parotid_R"
+RUN_NAME="baseline"
+
+python localiser --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 8 --regions $REGIONS --use_logger True

@@ -308,6 +308,7 @@ class DICOMDataset(Dataset):
     @cache.method('_name')
     def list_regions(
         self,
+        clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         use_mapping: bool = True) -> pd.DataFrame:

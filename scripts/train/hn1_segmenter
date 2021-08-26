@@ -1,6 +1,0 @@
-#! /usr/bin/env bash
-
-parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
-cd $parent_path
-
-python segmenter --dataset HN1-LOC --run_name baseline --num_gpus 4 --num_nodes 1 --num_workers 4

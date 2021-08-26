@@ -4,7 +4,7 @@ import os
 import sys
 from tqdm import tqdm
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import dataset
@@ -14,11 +14,11 @@ from mymi import logging
 FILENAME_NUM_DIGITS = 5
 
 # Load old dataset.
-old_ds_name = 'PMCC-HN-TRAIN-LOC'
+old_ds_name = 'PMCC-HN-TRAIN-SEG'
 old_ds = dataset.get(old_ds_name)
 
 # Create new dataset.
-ds_name = 'PMCC-HN-TRAIN-FLIP-LOC'
+ds_name = 'PMCC-HN-TRAIN-FLIP-SEG'
 ds = recreate(ds_name)
 
 partitions = old_ds.list_partitions()
