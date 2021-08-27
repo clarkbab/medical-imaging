@@ -12,8 +12,9 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
+DEST_DATASET="HN1-LOC"
 REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 # Launch a job for each region.
-bash $SCRIPT_DIR/process/hnscc_loc $REGIONS
+bash $SCRIPT_DIR/process/hn1_loc $REGIONS $DEST_DATASET

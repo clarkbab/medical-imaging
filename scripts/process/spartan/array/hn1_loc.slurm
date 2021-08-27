@@ -17,6 +17,7 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 # Get region.
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+DEST_DATASET="HN1-$REGION-LOC"
 
 # Launch a job for each region.
-bash $SCRIPT_DIR/process/hn1_loc $REGION
+bash $SCRIPT_DIR/process/hn1_loc $REGION $DEST_DATASET

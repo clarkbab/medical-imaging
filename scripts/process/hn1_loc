@@ -4,7 +4,7 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
 DATASET="HN1"
-DEST_DATASET="HN1-$1-LOC"
+DEST_DATASET=$2
 P_TRAIN=0.8
 P_VAL=0.2
 P_TEST=0

@@ -12,12 +12,9 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-REGIONS=('Brain' 'Cochlea_L' 'Cochlea_R' 'MedullaOblongata' 'Neck_L' 'Neck_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
+DEST_DATASET="HN1-SEG"
+REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-# Get region.
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-DEST_DATASET="HN1-$REGION-SEG"
-
 # Launch a job for each region.
-bash $SCRIPT_DIR/process/hn1_seg $REGION $DEST_DATASET
+bash $SCRIPT_DIR/process/hn1_seg $REGIONS $DEST_DATASET
