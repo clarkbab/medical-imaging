@@ -10,4 +10,4 @@ from mymi.reporting.dataset.raw.dicom import create_region_count_report
 fire.Fire(create_region_count_report)
 
 # Sample args:
-# --dataset HN1
+# --dataset HN1 --clear_cache True --regions "('Parotid_L','Parotid_R')"
