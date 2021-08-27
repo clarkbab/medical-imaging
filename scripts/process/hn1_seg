@@ -4,12 +4,13 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
 DATASET="HN1"
-DEST_DATASET="HN1-SEG"
+DEST_DATASET="HN1-$1-SEG"
 P_TRAIN="0.8"
 P_VAL="0.2"
 P_TEST="0"
-REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
-SPACING="(1, 1, 2)"
+REGIONS=$1
+SPACING="(1,1,2)"
 
 python dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
     --regions $REGIONS --size $SIZE --spacing $SPACING
+

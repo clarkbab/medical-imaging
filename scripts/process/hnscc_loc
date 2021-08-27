@@ -8,7 +8,7 @@ DEST_DATASET="HNSCC-LOC"
 P_TRAIN="0.8"
 P_VAL="0.2"
 P_TEST="0"
-REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Lens_L','Lens_R','Mandible','OpticChiasm','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
+REGIONS=$1
 SIZE="(128, 128, 96)"
 SPACING="(4, 4, 6.625)"
 
