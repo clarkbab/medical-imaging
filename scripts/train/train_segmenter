@@ -6,6 +6,6 @@ cd $parent_path
 DATASET="PMCC-HN-TRAIN-FLIP-SEG"
 MODEL_NAME="segmenter-pr"
 REGIONS="Parotid_R"
-RUN_NAME="flipped"
+RUN_NAME="flipped-baseline"
 
-python segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 8 --regions $REGIONS --use_logger True
+python segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 1 --regions $REGIONS --use_logger True

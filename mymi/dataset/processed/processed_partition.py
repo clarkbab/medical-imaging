@@ -5,6 +5,7 @@ from tqdm import tqdm
 from typing import List
 
 from mymi import cache
+from mymi import logging
 from mymi import types
 
 from .partition_sample import PartitionSample
@@ -37,6 +38,14 @@ class ProcessedPartition:
     def name(self) -> str:
         return self._name
 
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def description(self) -> str:
+        return f"Partition '{self._name}' of {self.dataset.description}"
+
     def list_samples(self) -> List[int]:
         """
         returns: the sample indices.
@@ -48,16 +57,35 @@ class ProcessedPartition:
             indices = []
         return indices
 
-    def list_regions(self) -> List[str]:
+    @cache.method('_dataset.name', '_name')
+    def list_regions(self) -> pd.DataFrame:
         """
-        returns: the region names. 
+        returns: a DataFrame with partition region names.
         """
-        path = os.path.join(self._path, 'labels')
-        if os.path.exists(path):
-            regions = list(sorted(os.listdir(path)))
-        else:
-            regions = []
-        return regions
+        # Define table structure.
+        cols = {
+            'sample-index': str,
+            'region': str,
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Load each patient.
+        indices = self.list_samples()
+
+        # Add patient regions.
+        logging.info(f"Loading regions for dataset '{self._dataset.name}', partition '{self._name}'...")
+        for index in tqdm(indices):
+            for region in self.sample(index).list_regions():
+                data = {
+                    'sample-index': index,
+                    'region': region,
+                }
+                df = df.append(data, ignore_index=True)
+
+        # Set column types.
+        df = df.astype(cols)
+
+        return df
 
     def sample(
         self,

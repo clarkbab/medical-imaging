@@ -31,7 +31,10 @@ class PartitionSample:
         """
         returns: the region names.
         """
-        regions = self._partition.list_regions()
+        # List all regions.
+        filepath = os.path.join(self._partition.path, 'labels')
+        all_regions = os.listdir(filepath)
+
         def filter_fn(region):
             filename = f"{self._index:0{FILENAME_NUM_DIGITS}}.npz"
             filepath = os.path.join(self._partition._path, 'labels', region, filename)
@@ -39,7 +42,7 @@ class PartitionSample:
                 return True
             else:
                 return False
-        return list(filter(filter_fn, regions))
+        return list(filter(filter_fn, all_regions))
 
     def has_one_region(
         self,

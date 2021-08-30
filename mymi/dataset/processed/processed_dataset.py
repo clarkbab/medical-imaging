@@ -47,6 +47,15 @@ class ProcessedDataset(Dataset):
         else:
             return []
 
+    def list_regions(self) -> pd.DataFrame:
+        p_data = []
+        for p in self.list_partitions():
+            region_df = self.partition(p).list_regions()
+            region_df.insert(0, 'partition', p)
+            p_data.append(region_df)
+        region_df = pd.concat(p_data)
+        return region_df
+
     def create_partition(
         self,
         name: types.ProcessedPartition) -> ProcessedPartition:

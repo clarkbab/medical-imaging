@@ -3,8 +3,8 @@ from typing import *
 from .dataset import Dataset, DatasetType, to_type
 from .raw import list as list_raw
 from .raw import detect_type as detect_raw_type
-from .raw.dicom import DICOMDataset, process_dicom
-from .raw.nifti import NIFTIDataset, process_nifti
+from .raw.dicom import DICOMDataset
+from .raw.nifti import NIFTIDataset
 from .processed import ProcessedDataset
 from .processed import list as list_processed
 

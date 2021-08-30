@@ -6,4 +6,5 @@ cd $parent_path
 DATASET="HN1"
 REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 
-python dicom_region_count --dataset $DATASET --regions $REGIONS
+python region_count --dataset $DATASET --regions $REGIONS
+

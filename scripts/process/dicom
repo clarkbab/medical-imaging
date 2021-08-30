@@ -5,9 +5,9 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.dataset import process_dicom
+from mymi.preprocessing.dataset.raw.dicom import process
 
-fire.Fire(process_dicom)
+fire.Fire(process)
 
 # Sample args:
 # --dataset HEAD-NECK-RADIOMICS-HN1 --clear_cache False --dest_dataset HEAD-NECK-RADIOMICS-HN1

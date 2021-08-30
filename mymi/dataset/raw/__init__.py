@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import Optional, Tuple
+from typing import List, Optional
 
 from mymi import config
 
@@ -8,11 +8,15 @@ from .dicom import DICOMDataset
 from .nifti import NIFTIDataset
 from ..dataset import DatasetType, to_type
 
-def list() -> Tuple[str]:
+def list() -> List[str]:
     """
     returns: list of raw datasets.
     """
-    return tuple(sorted(os.listdir(os.path.join(config.directories.datasets, 'raw'))))
+    path = os.path.join(config.directories.datasets, 'raw')
+    if os.path.exists(path):
+        return sorted(os.listdir(path))
+    else:
+        return []
 
 def create(
     name: str,

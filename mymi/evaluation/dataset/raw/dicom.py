@@ -9,7 +9,7 @@ from mymi import logging
 from mymi import types
 
 @cache.function
-def evaluate_dicom_predictions(
+def evaluate_predictions(
     pred_dataset: str,
     gt_dataset: str,
     clear_cache: bool = False,

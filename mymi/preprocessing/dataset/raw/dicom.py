@@ -9,18 +9,82 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Optional
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.append(root_dir)
-
+from mymi.dataset.processed import recreate
 from mymi.transforms import resample_3D
 from mymi import types
 
-from ...processed import create as create_processed_dataset
-from ...processed import destroy as destroy_processed_dataset
-from ...processed import list as list_processed_datasets
-from .dicom_dataset import DICOMDataset
+#! /usr/bin/env python
+from distutils.dir_util import copy_tree
+import nibabel as nib
+from nibabel.nifti1 import Nifti1Image
+import numpy as np
+import os
+import pandas as pd
+import shutil
+from tqdm import tqdm
+import sys
 
-def process_dicom(
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import dataset
+from mymi.dataset.raw import recreate
+from mymi import logging
+
+DATASET_PATH = os.path.join('H:\\', 'data', 'mymi', 'datasets', 'raw')
+FILENAME_NUM_DIGITS = 5
+REGIONS = ['BrachialPlexus_L', 'BrachialPlexus_R', 'Brain', 'BrainStem', 'Cochlea_L', 'Cochlea_R',
+    'Eye_L', 'Eye_R', 'Larynx', 'Lens_L', 'Lens_R', 'Mandible', 'Oesophagus', 'OpticNerve_L', 'OpticNerve_R',
+    'OralCavity', 'Parotid_L', 'Parotid_R', 'PharynConst', 'SpinalCanal', 'SpinalCord', 'Submandibular_L',
+    'Submandibular_R']
+
+def anonymise(
+    dataset: str,
+    anon_dataset: str,
+    regions: types.PatientRegions = 'all') -> None:
+
+    # Create CT map.
+    old_ds = ds.get(dataset)
+    pats = old_ds.list_patients(regions=regions)
+    map_df = pd.DataFrame(pats, columns=['patient-id'])
+
+    # Save map.
+    filename = 'map.csv'
+    filepath = os.path.join(old_ds.path, filename)
+    map_df.to_csv(filepath)
+
+    # Create new dataset.
+    ds = recreate(anon_dataset, type_str='nifti')
+
+    # Add patients to new dataset.
+    for anon_id, row in tqdm(map_df.iterrows()):
+        # Add CT data.
+        data = old_ds.patient(row['patient-id']).ct_data()
+        spacing = old_ds.patient(row['patient-id']).ct_spacing()
+        offset = old_ds.patient(row['patient-id']).ct_offset()
+        affine = np.array([
+            [spacing[0], 0, 0, offset[0]],
+            [0, spacing[1], 0, offset[1]],
+            [0, 0, spacing[2], offset[2]],
+            [0, 0, 0, 1]])
+        img = Nifti1Image(data, affine)
+        filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+        filepath = os.path.join(ds.path, 'ct', filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        nib.save(img, filepath)
+
+        # Add region data.
+        pat_regions = old_ds.patient(row['patient-id']).list_regions()
+        regions = np.intersect1d(pat_regions, REGIONS)
+        region_data = old_ds.patient(row['patient-id']).region_data(regions=regions)
+        for r, d in region_data.items():
+            img = Nifti1Image(d.astype(np.int32), affine)
+            filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+            filepath = os.path.join(ds.path, r, filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            nib.save(img, filepath)
+
+def process(
     dataset: str,
     clear_cache: bool = False,
     dest_dataset: Optional[str] = None,
@@ -49,8 +113,8 @@ def process_dicom(
         use_mapping: use region map if present.
     """
     # Load patients.
-    ds = DICOMDataset(dataset)
-    pats = ds.list_patients(regions=regions) 
+    old_ds = ds.get(dataset, type_str='dicom')
+    pats = old_ds.list_patients(regions=regions) 
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
@@ -69,13 +133,8 @@ def process_dicom(
     test_pats = pats[(num_train + num_validation):]
     logging.info(f"Num patients per partition: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)} for train/validation/test.")
 
-    # Destroy old dataset if present.
-    name = dest_dataset if dest_dataset else dataset
-    if name in list_processed_datasets():
-        destroy_processed_dataset(name)
-
     # Create dataset.
-    proc_ds = create_processed_dataset(name)
+    proc_ds = recreate(name)
 
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
@@ -97,15 +156,15 @@ def process_dicom(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = ds.patient(pat).list_regions(use_mapping=use_mapping)
+            pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping)
 
             # Load data.
-            input = ds.patient(pat).ct_data()
-            labels = ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
+            input = old_ds.patient(pat).ct_data()
+            labels = old_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:
-                old_spacing = ds.patient(pat).ct_spacing()
+                old_spacing = old_ds.patient(pat).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 

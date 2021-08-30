@@ -8,18 +8,51 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Optional
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.append(root_dir)
-
+from mymi.dataset.processed import recreate as recreate_processed
+from mymi.dataset.raw import recreate as recreate_raw
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
-from ...processed import create as create_processed_dataset
-from ...processed import destroy as destroy_processed_dataset
-from ...processed import list as list_processed_datasets
-from .nifti_dataset import NIFTIDataset
+def anonymise(
+    dataset: str,
+    anon_dataset: str,
+    clear_cache: bool = False,
+    regions: types.PatientRegions = 'all') -> None:
+    # Copy dataset.
+    old_ds = dataset.get(dataset, type_str='nifti')
+    new_ds = recreate_raw(anon_dataset, type_str='nifti')
+    logging.info('Copying dataset...')
+    copy_tree(old_ds.path, new_ds.path)
+    logging.info('Copied.')
 
-def process_nifti(
+    # Create CT map.
+    ct_path = os.path.join(new_ds.path, 'ct')
+    ct_files = list(sorted(os.listdir(ct_path)))
+    ct_ids = list(f.replace('.nii.gz', '') for f in ct_files)
+    map_df = pd.DataFrame(ct_ids, columns=['patient-id'])
+
+    # Save map.
+    filepath = os.path.join(old_ds_path, 'map.csv')
+    map_df.to_csv(filepath)
+
+    for anon_id, row in tqdm(map_df.iterrows()):
+        # Rename CT files.
+        old_filename = f"{row['patient-id']}.nii.gz" 
+        old_filepath = os.path.join(new_ds.path, 'ct', old_filename)
+        new_filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+        new_filepath = os.path.join(new_ds.path, 'ct', new_filename)
+        shutil.move(old_filepath, new_filepath)
+
+        # Rename region files.
+        for region in REGIONS:
+            old_filename = f"{row['patient-id']}.nii.gz" 
+            old_filepath = os.path.join(new_ds.path, region, old_filename)
+            new_filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
+            new_filepath = os.path.join(new_ds.path, region, new_filename)
+            if os.path.exists(old_filepath):
+                shutil.move(old_filepath, new_filepath)
+
+def process(
     dataset: str,
     dest_dataset: Optional[str] = None,
     p_test: float = 0.2,
@@ -42,8 +75,8 @@ def process_nifti(
         spacing: resample to the desired spacing.
     """
     # Load patients.
-    ds = NIFTIDataset(dataset)
-    pats = ds.list_patients()
+    old_ds = ds.get(dataset, type_str='nifti')
+    pats = old_ds.list_patients()
     logging.info(f"Found {len(pats)} patients.")
 
     # Shuffle patients.
@@ -62,13 +95,8 @@ def process_nifti(
     test_pats = pats[(num_train + num_validation):]
     logging.info(f"Num patients per partition: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)} for train/validation/test.")
 
-    # Destroy old dataset if present.
-    name = dest_dataset if dest_dataset else dataset
-    if name in list_processed_datasets():
-        destroy_processed_dataset(name)
-
     # Create dataset.
-    proc_ds = create_processed_dataset(name)
+    proc_ds = recreate_processed(name)
 
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
@@ -90,15 +118,15 @@ def process_nifti(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = ds.patient(pat).list_regions()
+            pat_regions = old_ds.patient(pat).list_regions()
 
             # Load data.
-            input = ds.patient(pat).ct_data()
-            labels = ds.patient(pat).region_data(regions=pat_regions)
+            input = old_ds.patient(pat).ct_data()
+            labels = old_ds.patient(pat).region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:
-                old_spacing = ds.patient(pat).ct_spacing()
+                old_spacing = old_ds.patient(pat).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 
