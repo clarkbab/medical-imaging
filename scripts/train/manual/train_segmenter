@@ -1,0 +1,15 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="PMCC-HN-TRAIN-SEG"
+MODEL_NAME="segmenter-pl"
+NUM_GPUS=4
+NUM_NODES=1
+NUM_WORKERS=4
+REGIONS="Parotid_L"
+RUN_NAME="baseline-4gpu"
+USE_LOGGER=False
+
+python segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER

@@ -15,6 +15,14 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
+DATASET="PMCC-HN-TRAIN-SEG"
+MODEL_NAME="segmenter-pl"
+NUM_GPUS=4
+NUM_NODES=1
+NUM_WORKERS=4
+REGIONS="Parotid_L"
+RUN_NAME="baseline-4gpu"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+USE_LOGGER=False
 
-bash $SCRIPT_DIR/train/train_segmenter $SLURM_JOB_ID
+python $SCRIPT_DIR/train/segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER
