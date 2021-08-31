@@ -473,6 +473,8 @@ class Cache:
 
             # Get 'clear_cache' param.
             clear_cache = kwargs.pop('clear_cache', False)
+            if type(clear_cache) != bool:
+                raise ValueError(f"Boolean expected for 'clear_cache', got '{clear_cache}'.")
 
             # Create cache params.
             params = {
@@ -540,6 +542,8 @@ class Cache:
 
                 # Get 'clear_cache' param.
                 clear_cache = kwargs.pop('clear_cache', False)
+                if type(clear_cache) != bool:
+                    raise ValueError(f"Boolean expected for 'clear_cache', got '{clear_cache}'.")
 
                 # Create cache params.
                 params = {

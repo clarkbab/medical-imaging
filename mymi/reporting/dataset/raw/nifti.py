@@ -9,7 +9,7 @@ def region_count(
     clear_cache: bool = False,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     # List regions.
-    set = ds.get(dataset, type_str='processed')
+    set = ds.get(dataset, type_str='nifti')
     regions_df = set.list_regions(clear_cache=clear_cache)
 
     # Filter on requested regions.
@@ -27,15 +27,7 @@ def region_count(
     regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
 
     # Generate counts report.
-    count_df = regions_df.groupby(['partition', 'region']).count().rename(columns={'sample-index': 'count'})
-
-    # Add 'p' column.
-    count_df = count_df.reset_index()
-    total_df = count_df.groupby('region').sum().rename(columns={'count': 'total'})
-    count_df = count_df.join(total_df, on='region')
-    count_df['p'] = count_df['count'] / count_df['total']
-    count_df = count_df.drop(columns='total')
-    count_df = count_df.set_index(['partition', 'region'])
+    count_df = regions_df.groupby('region').count().rename(columns={'patient-id': 'count'})
     return count_df
 
 def create_region_count_report(
@@ -43,9 +35,36 @@ def create_region_count_report(
     clear_cache: bool = False,
     regions: types.PatientRegions = 'all') -> None:
     # Generate counts report.
-    set = ds.get(dataset, type_str='processed')
+    set = ds.get(dataset, type_str='nifti')
     count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
     filename = 'region-count.csv'
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     count_df.to_csv(filepath)
+
+def region_overlap(
+    dataset: str,
+    clear_cache: bool = False,
+    regions: types.PatientRegions = 'all') -> int:
+    # List regions.
+    set = ds.get(dataset, type_str='nifti')
+    regions_df = set.list_regions(clear_cache=clear_cache) 
+    regions_df = regions_df.drop_duplicates()
+    regions_df['count'] = 1
+    regions_df = regions_df.pivot(index='patient-id', columns='region', values='count')
+
+    # Filter on requested regions.
+    def filter_fn(row):
+        if type(regions) == str:
+            if regions == 'all':
+                return True
+            else:
+                return row[regions] == 1
+        else:
+            keep = True
+            for region in regions:
+                if row[region] != 1:
+                    keep = False
+            return keep
+    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
+    return len(regions_df) 

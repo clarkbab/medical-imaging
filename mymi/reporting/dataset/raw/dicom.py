@@ -27,15 +27,15 @@ def region_count(
     regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
 
     # Generate counts report.
-    count_df = regions_df.groupby('region').count()['patient-id']
+    count_df = regions_df.groupby('region').count().rename(columns={'patient-id': 'count'})
     return count_df
 
 def create_region_count_report(
     dataset: str,
     clear_cache: bool = False,
     regions: types.PatientRegions = 'all') -> None:
-
     # Generate counts report.
+    set = ds.get(dataset, type_str='dicom')
     count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
     filename = 'region-count.csv'
     filepath = os.path.join(set.path, 'reports', filename)
@@ -46,10 +46,12 @@ def region_overlap(
     dataset: str,
     clear_cache: bool = False,
     regions: types.PatientRegions = 'all') -> int:
-    set = ds.get(dataset, type_str='dicom')
     # List regions.
+    set = ds.get(dataset, type_str='dicom')
     regions_df = set.list_regions(clear_cache=clear_cache) 
     regions_df = regions_df.drop_duplicates()
+    regions_df['count'] = 1
+    regions_df = regions_df.pivot(index='patient-id', columns='region', values='count')
 
     # Filter on requested regions.
     def filter_fn(row):
@@ -57,14 +59,12 @@ def region_overlap(
             if regions == 'all':
                 return True
             else:
-                return row['region'] == regions
+                return row[regions] == 1
         else:
             keep = True
             for region in regions:
-                if row['region'] != region:
+                if row[region] != 1:
                     keep = False
-    regions_df = regions_df[regions_df.apply(filter_rn, axis=1)]
-
-    regions_df['count'] = 1
-    pivot_df = regions_df.pivot(index='patient-id', columns='region', values='count')
-    return len(pat_df) 
+            return keep
+    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
+    return len(regions_df) 

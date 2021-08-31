@@ -21,7 +21,6 @@ class Segmenter(pl.LightningModule):
         super().__init__()
         if 'hausdorff' in metrics and spacing is None:
             raise ValueError(f"Localiser requires 'spacing' when calculating 'Hausdorff' metric.")
-
         self._hausdorff_delay = 50
         self._loss = DiceLoss()
         self._metrics = metrics
@@ -30,12 +29,13 @@ class Segmenter(pl.LightningModule):
 
     @staticmethod
     def load(
+        model_name: str,
         run_name: str,
         checkpoint: str) -> pl.LightningModule:
         filename = f"{checkpoint}.ckpt"
-        filepath = os.path.join(config.directories.checkpoints, 'segmenter-pl', run_name, filename)
+        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, filename)
         if not os.path.exists(filepath):
-            raise ValueError(f"Model 'segmenter-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+            raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Segmenter.load_from_checkpoint(filepath)
 
     def configure_optimizers(self):

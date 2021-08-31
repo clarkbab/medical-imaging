@@ -86,7 +86,9 @@ class NIFTIDataset(Dataset):
         return df
 
     @cache.method('_name')
-    def list_regions(self) -> pd.DataFrame:
+    def list_regions(
+        self,
+        clear_cache: bool = False) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
         """

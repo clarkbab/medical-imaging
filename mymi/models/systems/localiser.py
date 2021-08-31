@@ -26,6 +26,10 @@ class Localiser(pl.LightningModule):
 
         self._hausdorff_delay = 50
         self._loss = DiceLoss()
+        self._log_args = {
+            'on_epoch': True,
+            'on_step': False,
+        }
         self._metrics = metrics
         self._network = UNet()
         self._region = region
@@ -34,12 +38,13 @@ class Localiser(pl.LightningModule):
 
     @staticmethod
     def load(
+        model_name: str,
         run_name: str,
         checkpoint: str) -> pl.LightningModule:
         filename = f"{checkpoint}.ckpt"
-        filepath = os.path.join(config.directories.checkpoints, 'localiser-pl', run_name, filename)
+        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, filename)
         if not os.path.exists(filepath):
-            raise ValueError(f"Model 'localiser-pl' state with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+            raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Localiser.load_from_checkpoint(filepath)
 
     def configure_optimizers(self):
@@ -66,16 +71,16 @@ class Localiser(pl.LightningModule):
         # Log metrics.
         y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
-        self.log('train/loss', loss, on_epoch=True)
+        self.log('train/loss', loss, **self._log_args)
 
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
-            self.log('train/dice', dice, on_epoch=True)
+            self.log('train/dice', dice, **self._log_args)
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
             if y_hat.sum() > 0 and y.sum() > 0:
                 hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('train/hausdorff', hausdorff, on_epoch=True)
+                self.log('train/hausdorff', hausdorff, **self._log_args)
 
         return loss
 
@@ -89,13 +94,13 @@ class Localiser(pl.LightningModule):
         # Log metrics.
         y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
-        self.log('val/loss', loss, on_epoch=True, sync_dist=True)
+        self.log('val/loss', loss, **self._log_args, sync_dist=True)
 
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
-            self.log('val/dice', dice, on_epoch=True, sync_dist=True)
+            self.log('val/dice', dice, **self._log_args, sync_dist=True)
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
             if y_hat.sum() > 0:
                 hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('val/hausdorff', hausdorff, on_epoch=True, sync_dist=True)
+                self.log('val/hausdorff', hausdorff, **self._log_args, sync_dist=True)

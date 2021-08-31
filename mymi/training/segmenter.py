@@ -81,6 +81,7 @@ def train_segmenter(
         logger=logger,
         max_epochs=200,
         num_nodes=num_nodes,
+        num_sanity_val_steps=0,
         plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
     trainer.fit(model, train_loader, val_loader)

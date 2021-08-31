@@ -3,9 +3,11 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
-DATASET="PMCC-HN-TRAIN-FLIP-SEG"
+DEFAULT_SLURM_ID="manual"
+SLURM_ID=${1:-$DEFAULT_SLURM_ID}
+DATASET="PMCC-HN-TRAIN-SEG"
 MODEL_NAME="segmenter-pr"
 REGIONS="Parotid_R"
-RUN_NAME="flipped-baseline"
+RUN_NAME="baseline"
 
-python segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 1 --regions $REGIONS --use_logger True
+SLURM_ID=$SLURM_ID python segmenter --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 4 --regions $REGIONS --use_logger True

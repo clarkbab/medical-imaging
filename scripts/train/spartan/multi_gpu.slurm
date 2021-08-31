@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:p100:4
 #SBATCH --ntasks-per-node=8
 #SBATCH --time=1-0:00:00
-#SBATCH -A=punim1413
-#SBATCH -q=gpgpumse
+#SBATCH -A punim1413
+#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2

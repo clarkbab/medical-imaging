@@ -3,9 +3,11 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd $parent_path
 
-DATASET="PMCC-HN-TRAIN-FLIP-LOC"
-MODEL_NAME="localiser-pr"
-REGIONS="Parotid_R"
-RUN_NAME="flipped-baseline"
+DEFAULT_SLURM_ID="manual"
+SLURM_ID=${1:-$DEFAULT_SLURM_ID}
+DATASET="PMCC-HN-TRAIN-LOC"
+MODEL_NAME="localiser-pl"
+REGIONS="Parotid_L"
+RUN_NAME="baseline"
 
-python localiser --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 1 --regions $REGIONS --use_logger True
+SLURM_ID=$SLURM_ID python localiser --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus 1 --num_nodes 1 --num_workers 4 --regions $REGIONS --use_logger True
