@@ -44,22 +44,10 @@ class PartitionSample:
                 return False
         return list(filter(filter_fn, all_regions))
 
-    def has_one_region(
+    def has_region(
         self,
-        regions: types.PatientRegions) -> bool:
-        pat_regions = self.list_regions()
-        if type(regions) == str:
-            if regions == 'all' and len(pat_regions) != 0:
-                return True
-            elif regions in pat_regions:
-                return True
-            else:
-                return False
-        else:
-            for region in regions:
-                if region in pat_regions:
-                    return True
-            return False
+        region: str) -> bool:
+        return region in self.list_regions()
 
     def input(self) -> np.ndarray:
         """

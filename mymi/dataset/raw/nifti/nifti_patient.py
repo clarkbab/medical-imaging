@@ -37,23 +37,6 @@ class NIFTIPatient:
         region: str) -> bool:
         return region in self.list_regions()
 
-    def has_one_region(
-        self,
-        regions: types.PatientRegions) -> bool:
-        pat_regions = self.list_regions()
-        if type(regions) == str:
-            if regions == 'all' and len(pat_regions) != 0:
-                return True
-            elif regions in pat_regions:
-                return True
-            else:
-                return False
-        else:
-            for region in regions:
-                if region in pat_regions:
-                    return True
-            return False
-
     def ct_spacing(self) -> types.ImageSpacing3D:
         path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)

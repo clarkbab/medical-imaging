@@ -8,10 +8,11 @@ from torchio import LabelMap, ScalarImage, Subject
 from mymi import types
 from mymi.dataset.processed import ProcessedPartition
 
-class Loader:
+class SubsetLoader:
     @staticmethod
     def build(
         partition: ProcessedPartition,
+        num_samples: int,
         batch_size: int = 1,
         half_precision: bool = True,
         num_workers: int = 1,
@@ -20,9 +21,10 @@ class Loader:
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         """
-        returns: a data loader.
+        returns: a data loader that loads a subset of the samples.
         args:
             partition: the dataset partition.
+            num_samples: the number of samples to load.
         kwargs:
             batch_size: the number of images in the batch.
             half_precision: load images at half precision.
@@ -33,7 +35,7 @@ class Loader:
             transform: the transform to apply.
         """
         # Create dataset object.
-        ds = LoaderDataset(partition, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partition, num_samples, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -42,6 +44,7 @@ class LoaderDataset(Dataset):
     def __init__(
         self,
         partition: ProcessedPartition,
+        num_samples: int,
         half_precision: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
@@ -49,6 +52,7 @@ class LoaderDataset(Dataset):
         """
         args:
             partition: the dataset partition.
+            num_samples: the number of samples to load.
         kwargs:
             half_precision: load images at half precision.
             regions: only load samples with (at least) one of the requested regions.
@@ -56,6 +60,7 @@ class LoaderDataset(Dataset):
             transform: transformations to apply.
         """
         self._half_precision = half_precision
+        self._num_samples = num_samples
         self._partition = partition
         self._regions = regions
         self._spacing = spacing
@@ -67,7 +72,8 @@ class LoaderDataset(Dataset):
         samples = partition.list_samples(regions=regions)
 
         # Record number of samples.
-        self._num_samples = len(samples)
+        if num_samples > len(samples):
+            raise ValueError(f"Subset loader requested '{num_samples}' samples with regions '{regions}', only '{len(samples)}' found.")
 
         # Map loader indices to dataset indices.
         self._index_map = dict(zip(range(self._num_samples), samples))

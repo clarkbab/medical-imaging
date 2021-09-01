@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from tqdm import tqdm
-from typing import List
+from typing import Callable, List
 
 from mymi import cache
 from mymi import config
@@ -31,14 +31,20 @@ class NIFTIDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
-    def list_patients(self) -> List[str]:
+    def list_patients(
+        self,
+        regions: types.PatientRegions = 'all') -> List[str]:
         """
         returns: a list of NIFTI IDs.
         """
+        # Load patients.
         ct_path = os.path.join(self._path, 'ct')
         files = list(sorted(os.listdir(ct_path)))
-        files = [f.replace('.nii.gz', '') for f in files]
-        return files
+        pats = [f.replace('.nii.gz', '') for f in files]
+
+        # Filter by 'regions'.
+        pats = list(filter(self._filter_patient_by_regions(regions), pats))
+        return pats
 
     @cache.method('_name')
     def ct_summary(
@@ -149,9 +155,7 @@ class NIFTIDataset(Dataset):
 
         # Load each object.
         pats = self.list_patients()
-
-        # Keep patients with (at least) one requested region.
-        pats = list(filter(lambda i: self.object(i).has_one_region(regions), pats))
+        pats = list(filter(self._filter_patients_by_region(regions), pats))
 
         # Add patient regions.
         logging.info(f"Adding patient region summaries for dataset '{self._name}'..")
@@ -191,3 +195,25 @@ class NIFTIDataset(Dataset):
         self,
         id: str) -> NIFTIPatient:
         return NIFTIPatient(self._name, id)
+
+    def _filter_patient_by_regions(
+        self,
+        regions: types.PatientRegions) -> Callable[[str], bool]:
+        """
+        returns: a function that filters patients on region presence.
+        args:
+            regions: the passed 'regions' kwarg.
+        """
+        def fn(id):
+            if type(regions) == str:
+                if regions == 'all':
+                    return True
+                else:
+                    return self.patient(id).has_region(regions)
+            else:
+                pat_regions = self.patient(id).list_regions()
+                if len(np.intersect1d(regions, pat_regions)) != 0:
+                    return True
+                else:
+                    return False
+        return fn

@@ -12,4 +12,4 @@ REGIONS="Parotid_L"
 RUN_NAME="baseline-4gpu"
 USE_LOGGER=False
 
-python localiser --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER
+python localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER

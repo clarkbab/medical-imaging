@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 from tqdm import tqdm
-from typing import List
+from typing import Callable, List
 
 from mymi import cache
 from mymi import logging
@@ -46,13 +46,18 @@ class ProcessedPartition:
     def description(self) -> str:
         return f"Partition '{self._name}' of {self.dataset.description}"
 
-    def list_samples(self) -> List[int]:
+    def list_samples(
+        self,
+        regions: types.PatientRegions = 'all') -> List[int]:
         """
         returns: the sample indices.
         """
         path = os.path.join(self._path, 'inputs')
         if os.path.exists(path):
             indices = [int(f.replace('.npz', '')) for f in sorted(os.listdir(path))]
+
+            # Filter on sample regions.
+            indices = list(filter(self._filter_sample_by_regions(regions), indices))
         else:
             indices = []
         return indices
@@ -197,3 +202,25 @@ class ProcessedPartition:
 
         df = df.astype(cols)
         return df
+
+    def _filter_sample_by_regions(
+        self,
+        regions: types.PatientRegions) -> Callable[[str], bool]:
+        """
+        returns: a function that filters patients on region presence.
+        args:
+            regions: the passed 'regions' kwarg.
+        """
+        def fn(index):
+            if type(regions) == str:
+                if regions == 'all':
+                    return True
+                else:
+                    return self.sample(index).has_region(regions)
+            else:
+                sam_regions = self.sample(index).list_regions()
+                if len(np.intersect1d(regions, sam_regions)) != 0:
+                    return True
+                else:
+                    return False
+        return fn
