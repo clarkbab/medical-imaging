@@ -19,8 +19,11 @@ def train_localiser(
     dataset: str,
     num_gpus: int = 1,
     num_nodes: int = 1,
+    num_subset: Optional[int] = None,
     num_workers: int = 1,
     regions: types.PatientRegions = 'all',
+    resume: bool = False,
+    resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     use_logger: bool = False) -> None:
 
@@ -41,7 +44,10 @@ def train_localiser(
 
     # Create data loaders.
     spacing = eval(set.params().spacing[0])
-    train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+    if subset_num is not None:
+        train_loader = SubsetLoader.build(train_part, subset_num, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+    else:
+        train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
     val_loader = Loader.build(val_part, num_workers=num_workers, regions=regions, shuffle=False)
 
     # Create model.
@@ -63,18 +69,27 @@ def train_localiser(
         logger = None
 
     # Create callbacks.
-    path = os.path.join(config.directories.checkpoints, model_name, run_name)
+    checks_path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
         #     patience=5),
         ModelCheckpoint(
-            dirpath=path,
+            dirpath=checks_path,
             every_n_epochs=1,
             monitor='val/loss',
+            save_last=True,
             save_top_k=3)
     ]
 
+    # Add optional trainer args.
+    opt_kwargs = {}
+    if resume:
+        if resume_checkpoint is None:
+            raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
+        check_path = os.path.join(checks_path, resume_checkpoint)
+        opt_kwargs['resume_from_checkpoint'] = check_path
+    
     # Perform training.
     trainer = Trainer(
         accelerator='ddp',
@@ -85,5 +100,6 @@ def train_localiser(
         num_nodes=num_nodes,
         num_sanity_val_steps=0,
         plugins=DDPPlugin(find_unused_parameters=False),
-        precision=16)
+        precision=16,
+        **opt_kwargs)
     trainer.fit(model, train_loader, val_loader)
