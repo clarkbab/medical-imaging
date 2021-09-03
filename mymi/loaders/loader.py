@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
+from typing import List, Union
 
 from mymi import types
 from mymi.dataset.processed import ProcessedPartition
@@ -11,7 +12,7 @@ from mymi.dataset.processed import ProcessedPartition
 class Loader:
     @staticmethod
     def build(
-        partition: ProcessedPartition,
+        partitions: Union[ProcessedPartition, List[ProcessedPartition]],
         batch_size: int = 1,
         half_precision: bool = True,
         num_workers: int = 1,
@@ -22,7 +23,7 @@ class Loader:
         """
         returns: a data loader.
         args:
-            partition: the dataset partition.
+            partitions: the dataset partitions, e.g. 'train' partitions from both 'HN1' and 'HNSCC' datasets.
         kwargs:
             batch_size: the number of images in the batch.
             half_precision: load images at half precision.
@@ -32,8 +33,11 @@ class Loader:
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
+        if type(partitions) == ProcessedPartition:
+            partitions = [partitions]
+
         # Create dataset object.
-        ds = LoaderDataset(partition, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -41,14 +45,14 @@ class Loader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partition: ProcessedPartition,
+        partitions: List[ProcessedPartition],
         half_precision: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         """
         args:
-            partition: the dataset partition.
+            partitions: the dataset partitions.
         kwargs:
             half_precision: load images at half precision.
             regions: only load samples with (at least) one of the requested regions.
@@ -56,21 +60,27 @@ class LoaderDataset(Dataset):
             transform: transformations to apply.
         """
         self._half_precision = half_precision
-        self._partition = partition
+        self._partitions = partitions
         self._regions = regions
         self._spacing = spacing
         self._transform = transform
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
-        # Filter samples by requested regions.
-        samples = partition.list_samples(regions=regions)
+        index = 0
+        map_tuples = []
+        for i, partition in enumerate(partitions):
+            # Filter samples by requested regions.
+            samples = partition.list_samples(regions=regions)
+            for sample in samples:
+                map_tuples.append((index, (i, sample)))
+                index += 1
 
         # Record number of samples.
-        self._num_samples = len(samples)
+        self._num_samples = index
 
         # Map loader indices to dataset indices.
-        self._index_map = dict(zip(range(self._num_samples), samples))
+        self._index_map = dict(map_tuples)
 
     def __len__(self):
         """
@@ -87,7 +97,8 @@ class LoaderDataset(Dataset):
             index: the item to return.
         """
         # Load data.
-        input, label = self._partition.sample(self._index_map[index]).pair(regions=self._regions)
+        p_idx, s_idx = self._index_map[index]
+        input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._regions)
 
         # Perform transform.
         if self._transform:
