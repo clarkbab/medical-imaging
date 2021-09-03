@@ -1,19 +1,3 @@
-import logging
-from mymi.transforms.crop_or_pad import centre_crop_or_pad_3D
-import numpy as np
-import os
-import pandas as pd
-from skimage.draw import polygon
-import sys
-from torchio import LabelMap, ScalarImage, Subject
-from tqdm import tqdm
-from typing import Optional
-
-from mymi.dataset.processed import recreate
-from mymi.transforms import resample_3D
-from mymi import types
-
-#! /usr/bin/env python
 from distutils.dir_util import copy_tree
 import nibabel as nib
 from nibabel.nifti1 import Nifti1Image
@@ -23,20 +7,19 @@ import pandas as pd
 import shutil
 from tqdm import tqdm
 import sys
+from typing import Optional
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi import dataset
-from mymi.dataset.raw import recreate
+from mymi import dataset as ds
+from mymi.dataset.processed import recreate as recreate_processed
+from mymi.dataset.raw import recreate as recreate_raw
 from mymi import logging
+from mymi.transforms import resample_3D
+from mymi import types
 
-DATASET_PATH = os.path.join('H:\\', 'data', 'mymi', 'datasets', 'raw')
 FILENAME_NUM_DIGITS = 5
-REGIONS = ['BrachialPlexus_L', 'BrachialPlexus_R', 'Brain', 'BrainStem', 'Cochlea_L', 'Cochlea_R',
-    'Eye_L', 'Eye_R', 'Larynx', 'Lens_L', 'Lens_R', 'Mandible', 'Oesophagus', 'OpticNerve_L', 'OpticNerve_R',
-    'OralCavity', 'Parotid_L', 'Parotid_R', 'PharynConst', 'SpinalCanal', 'SpinalCord', 'Submandibular_L',
-    'Submandibular_R']
 
 def anonymise(
     dataset: str,
@@ -54,7 +37,7 @@ def anonymise(
     map_df.to_csv(filepath)
 
     # Create new dataset.
-    ds = recreate(anon_dataset, type_str='nifti')
+    ds = recreate_raw(anon_dataset, type_str='nifti')
 
     # Add patients to new dataset.
     for anon_id, row in tqdm(map_df.iterrows()):
@@ -134,7 +117,7 @@ def process(
     logging.info(f"Num patients per partition: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)} for train/validation/test.")
 
     # Create dataset.
-    proc_ds = recreate(name)
+    proc_ds = recreate_processed(dest_dataset)
 
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')

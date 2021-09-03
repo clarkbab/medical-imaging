@@ -1,16 +1,16 @@
 #! /usr/bin/env bash
 
-parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 DATASET="HN1"
 DEST_DATASET=$2
-P_TRAIN=0.8
-P_VAL=0.2
-P_TEST=0
+P_TRAIN="0.8"
+P_VAL="0.2"
+P_TEST="0"
 REGIONS=$1
-SIZE="(128,128,96)"
-SPACING="(4,4,6.625)"
+SPACING="(1,1,2)"
 
 python dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
     --regions $REGIONS --size $SIZE --spacing $SPACING
+

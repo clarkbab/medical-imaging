@@ -9,11 +9,10 @@ from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
 from mymi.regions import to_255, RegionColours
 from mymi import utils
 
-from .two_stage import get_patient_segmentation
+from ...two_stage import get_patient_segmentation
 
-def create_dicom_dataset(
+def create_dataset(
     dataset: str,
-    dataset_type: str,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     output_dataset: Optional[str] = None,
@@ -29,7 +28,7 @@ def create_dicom_dataset(
         use_gpu: use GPU for matrix calculations.
     """
     # Load patients.
-    source_ds = ds.get(dataset, dataset_type)
+    source_ds = ds.get(dataset, 'dicom')
     pats = source_ds.list_patients()
 
     # Re/create pred dataset.

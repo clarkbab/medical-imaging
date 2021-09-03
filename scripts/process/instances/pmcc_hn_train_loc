@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
-parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 python nifti --dataset PMCC-HN-TRAIN --dest_dataset PMCC-HN-TRAIN-LOC --p_test 0 --p_train 0.8 --p_val 0.2 \
-    --size '(128, 128, 96)' --spacing '(4, 4, 6.625)'
+    --size '(128,128,96)' --spacing '(4,4,6.625)'

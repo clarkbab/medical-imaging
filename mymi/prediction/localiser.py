@@ -10,6 +10,7 @@ from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 def get_patient_box(
+    model: types.Model,
     dataset: Dataset,
     id: types.PatientID,
     clear_cache: bool = False,
@@ -26,14 +27,15 @@ def get_patient_box(
         device: the device to run network calcs on.
         return_seg: return the network's segmentation prediction.
     """
-    # Set localiser params.
-    run_name = 'baseline'
-    checkpoint = 'epoch=17-step=3887'
-    localiser = Localiser.load(run_name, checkpoint)
+    # Load localiser.
+    if type(model) == Localiser:
+        localiser = model
+    else:
+        localiser = Localiser.load(*model)
     localiser.eval()
     localiser.to(device)
-    localiser_spacing = (4, 4, 6.625)
     localiser_size = (128, 128, 96)
+    localiser_spacing = (4, 4, 6.625)
 
     # Get the patient CT data and spacing.
     patient = dataset.patient(id)

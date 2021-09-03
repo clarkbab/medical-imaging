@@ -1,3 +1,4 @@
+import pytorch_lightning as pl
 from typing import Literal, Sequence, Tuple, Union
 
 Point2D = Tuple[int, int]
@@ -5,6 +6,7 @@ Point3D = Tuple[int, int, int]
 Box2D = Tuple[Point2D, Point2D]
 Box3D = Tuple[Point3D, Point3D]
 Colour = Union[str, Tuple[float, float, float]]
+Model = Union[pl.LightningModule, Tuple[str, str, str]]
 PatientID = Union[int, str]
 PhysPoint2D = Tuple[float, float],
 PhysPoint3D = Tuple[float, float, float]

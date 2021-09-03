@@ -2,7 +2,22 @@ import os
 import pandas as pd
 
 from mymi import dataset as ds
+from mymi.evaluation.dataset.raw.nifti import evaluate_model
 from mymi import types
+
+def create_evaluation_report(
+    name: str,
+    dataset: str,
+    localiser: types.Model,
+    segmenter: types.Model,
+    region: str) -> None:
+    # Save report.
+    eval_df = evaluate_model(dataset, localiser, segmenter, region)
+    set = ds.get(dataset, 'dicom')
+    filename = f"{name}.csv"
+    filepath = os.path.join(set.path, 'reports', 'evaluation', filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    eval_df.to_csv(filepath)
 
 def region_count(
     dataset: str,

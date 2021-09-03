@@ -1,0 +1,14 @@
+import fire
+import os
+import sys
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.reporting.dataset.raw.nifti import create_evaluation_report
+
+fire.Fire(create_evaluation_report)
+
+# Sample args:
+#   --dataset PMCC-HN-TEST --localiser "('localiser-pl','baseline','epoch=10-step=10-loss=-0.9000')"
+#   --segmenter "('segmenter-pl','baseline','epoch=10-step=10-loss=-0.9000')" --region 'Parotid_L'

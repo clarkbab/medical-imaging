@@ -70,8 +70,10 @@ def train_segmenter(
         #     patience=5),
         ModelCheckpoint(
             dirpath=path,
+            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}'
             every_n_epochs=1,
             monitor='val/loss',
+            save_last=True,
             save_top_k=3)
     ]
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 from tqdm import tqdm
 
 from mymi import cache
@@ -24,7 +25,7 @@ def evaluate_model(
         logging.info('Evaluating on CPU...')
 
     # Load dataset.
-    set = ds.get(dataset, 'dicom')
+    set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=region)
 
     # Pre-load model - so we don't need to reload for each prediction.
@@ -44,7 +45,7 @@ def evaluate_model(
     for pat in tqdm(pats):
         # Get pred/ground truth.
         pred = get_patient_segmentation(localiser, segmenter, set, pat, device=device)
-        label = set.patient(pat).region_data()[region]
+        label = set.patient(pat).region_data()[region].astype(np.bool)
 
         # Add metrics.
         dsc_data = {

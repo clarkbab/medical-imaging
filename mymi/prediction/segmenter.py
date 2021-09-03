@@ -9,6 +9,7 @@ from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
 def get_patient_segmentation_patch(
+    model: types.Model,
     dataset: Dataset,
     id: types.PatientID,
     box: types.Box3D,
@@ -26,14 +27,15 @@ def get_patient_segmentation_patch(
         device: the device to use for network calcs.
         return_patch: returns the box used for the segmentation.
     """
-    # Set segmenter parameters.
-    run_name = '200_epochs'
-    checkpoint = 'epoch=95-step=20735'
-    segmenter = Segmenter.load(run_name, checkpoint)
+    # Load segmenter.
+    if type(model) == Segmenter:
+        segmenter = model
+    else:
+        segmenter = Segmenter.load(*model)
     segmenter.eval()
     segmenter.to(device)
-    segmenter_spacing = (1, 1, 2)
     segmenter_size = (128, 128, 96)
+    segmenter_spacing = (1, 1, 2)
 
     # Load patient CT data and spacing.
     patient = dataset.patient(id)
