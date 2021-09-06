@@ -22,6 +22,7 @@ def train_segmenter(
     num_workers: int = 1,
     regions: types.PatientRegions = 'all',
     slurm_job_id: Optional[str] = None,
+    slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
 
     # Load partitions.

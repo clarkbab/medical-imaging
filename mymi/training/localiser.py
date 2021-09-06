@@ -25,6 +25,7 @@ def train_localiser(
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
+    slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
 
     # Load partitions.

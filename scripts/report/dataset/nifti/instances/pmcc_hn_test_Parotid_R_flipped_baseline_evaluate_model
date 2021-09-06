@@ -4,9 +4,9 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd .. ;pwd -P )
 cd $parent_path
 
 DATASET="PMCC-HN-TEST"
-LOCALISER="('localiser-pl','flipped-baseline','epoch=88-step=39515')"
-NAME="Parotid_L-flipped"
-REGION='Parotid_L'
-SEGMENTER="('segmenter-pl','flipped-baseline','epoch=42-step=19091')"
+LOCALISER="('localiser-pr','baseline-flipped','epoch=136-step=60827')"
+NAME="Parotid_R-flipped"
+REGION='Parotid_R'
+SEGMENTER="('segmenter-pr','flipped-baseline','epoch=85-step=38183')"
 
 python evaluate_model --name $NAME --dataset $DATASET --localiser $LOCALISER --segmenter $SEGMENTER --region $REGION
