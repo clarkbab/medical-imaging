@@ -9,14 +9,11 @@ from tqdm import tqdm
 import sys
 from typing import Optional
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.append(root_dir)
-
 from mymi import dataset as ds
 from mymi.dataset.processed import recreate as recreate_processed
 from mymi.dataset.raw import recreate as recreate_raw
 from mymi import logging
-from mymi.transforms import resample_3D
+from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 FILENAME_NUM_DIGITS = 5
