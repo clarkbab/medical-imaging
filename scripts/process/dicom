@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.preprocessing.dataset.raw.dicom import process
+from mymi.preprocessing.dataset.dicom import process
 
 fire.Fire(process)
 
