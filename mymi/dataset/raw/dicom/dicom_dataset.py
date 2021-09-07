@@ -11,7 +11,7 @@ import shutil
 from skimage.draw import polygon
 from torchio import ScalarImage, Subject
 from tqdm import tqdm
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, List, Optional, Union
 
 from mymi import cache
 from mymi import config
@@ -33,7 +33,7 @@ class DICOMDataset(Dataset):
         args:
             name: the name of the dataset.
         """
-        self._type = DatasetType.DICOM
+        self._type = 'dicom'
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'raw', name)
 
@@ -100,10 +100,10 @@ class DICOMDataset(Dataset):
         return id in self.list_patients()
 
     @_require_hierarchical
-    @cache.method('_type', '_name')
+    @cache.method('_type', '_name', '_ct_from')
     def list_patients(
         self,
-        regions: types.PatientRegions = 'all') -> Sequence[str]:
+        regions: types.PatientRegions = 'all') -> List[str]:
         """
         returns: a list of patient IDs.
         """
@@ -627,7 +627,7 @@ class DICOMDataset(Dataset):
 
     def _filter_patient_by_pat_ids(
         self,
-        pat_ids: Union[str, Sequence[str]]) -> Callable[[str], bool]:
+        pat_ids: Union[str, List[str]]) -> Callable[[str], bool]:
         """
         returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
         args:

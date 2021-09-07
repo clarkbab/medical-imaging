@@ -8,7 +8,7 @@ import pickle
 from pickle import UnpicklingError
 import shutil
 import time
-from typing import Any, Callable, Dict, List, OrderedDict, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, OrderedDict, Sequence, Tuple
 
 from mymi import config
 from mymi import logging
@@ -16,6 +16,9 @@ from mymi import logging
 class Cache:
     Types = [
         Dict,
+        List,
+        List[int],
+        List[str],
         np.ndarray,
         OrderedDict,
         pd.DataFrame
@@ -236,8 +239,8 @@ class Cache:
         # Read data.
         try:
             data = None
-            if data_type in (Dict, OrderedDict):
-                data = self._read_dict(key)
+            if data_type in (Dict, List, List[int], List[str], OrderedDict):
+                data = self._read_pickle(key)
             elif data_type == np.ndarray:
                 data = self._read_numpy_array(key)
             elif data_type == pd.DataFrame:
@@ -295,8 +298,8 @@ class Cache:
 
         # Write data.
         size = None
-        if data_type in (Dict, OrderedDict):
-            size = self._write_dict(key, obj)
+        if data_type in (Dict, List, List[int], List[str], OrderedDict):
+            size = self._write_pickle(key, obj)
         elif data_type == np.ndarray:
             size = self._write_numpy_array(key, obj)
         elif data_type == pd.DataFrame:
@@ -306,6 +309,18 @@ class Cache:
         size_mb = size / (2 ** 20)
         if self._logging:
             logging.info(f"Complete [{size_mb:.3f}MB - {time.time() - start:.3f}s].")
+
+    def _read_pickle(
+        self,
+        key: str) -> dict:
+        """
+        returns: the pickled object.
+        args:
+            key: the cache key.
+        """
+        filepath = os.path.join(config.directories.cache, key)
+        f = open(filepath, 'rb')
+        return pickle.load(f)
 
     def _read_numpy_array(
         self,
@@ -329,36 +344,6 @@ class Cache:
         """
         filepath = os.path.join(config.directories.cache, key)
         return pd.read_parquet(filepath)
-
-    def _read_dict(
-        self,
-        key: str) -> dict:
-        """
-        returns: the cached dict.
-        args:
-            key: the cache key.
-        """
-        filepath = os.path.join(config.directories.cache, key)
-        f = open(filepath, 'rb')
-        return pickle.load(f)
-
-    def _read_string_numpy_array_pairs(
-        self,
-        key: str) -> List[Tuple[str, np.ndarray]]:
-        """
-        returns: the cached list of (str, np.ndarray) pairs.
-        args:
-            key: the cache key.
-        """
-        folder_path = os.path.join(config.directories.cache, key)
-        name_array_pairs = []
-        for name in os.listdir(folder_path):
-            friendly_name = self._path_friendly(name)
-            filepath = os.path.join(folder_path, friendly_name)
-            f = open(filepath, 'rb')
-            data = np.load(f)
-            name_array_pairs.append((name, data))
-        return name_array_pairs
 
     def _write_numpy_array(
         self,
@@ -391,12 +376,12 @@ class Cache:
         df.to_parquet(filepath)
         return os.path.getsize(filepath) 
 
-    def _write_dict(
+    def _write_pickle(
         self,
         key: str,
         dictionary: dict) -> int:
         """
-        effect: writes the dict to the cache.
+        effect: pickles the object.
         returns: the size of the written cache in bytes.
         args:
             key: the cache key.
@@ -406,29 +391,6 @@ class Cache:
         f = open(filepath, 'wb')
         pickle.dump(dictionary, f)
         return os.path.getsize(filepath) 
-
-    def _write_string_numpy_array_pairs(
-        self,
-        key: str,
-        pairs: List[Tuple[str, np.ndarray]]) -> int:
-        """
-        effect: writes the list of (str, np.ndarray) pairs to the cache.
-        returns: the size of the written cache in bytes.
-        args:
-            key: the cache key.
-            pairs: the list of (str, np.ndarray) pairs.
-        """
-        folder_path = os.path.join(config.directories.cache, key)
-        os.makedirs(folder_path, exist_ok=True)
-
-        size = 0
-        for name, data in pairs:
-            friendly_name = self._path_friendly(name)
-            filepath = os.path.join(folder_path, friendly_name)
-            f = open(filepath, 'wb')
-            np.save(f, data)
-            size += os.path.getsize(filepath)
-        return size
 
     def _path_friendly(
         self,
@@ -518,6 +480,7 @@ class Cache:
         returns: a decorator providing result caching for instance methods.
         args:
             attrs: the instance attributes to include in cache parameters.
+            type: the stored data type. Inferred from type annotation if present.
         """
         # Create decorator.
         def decorator(fn):

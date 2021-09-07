@@ -61,6 +61,7 @@ class RTSTRUCTSeries:
     def ref_ct(self) -> str:
         return self._ref_ct
 
+    @cache.method('_dataset', '_pat_id', '_id')
     def list_regions(
         self,
         use_mapping: bool = True) -> List[str]:
