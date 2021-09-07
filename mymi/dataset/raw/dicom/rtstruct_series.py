@@ -81,8 +81,10 @@ class RTSTRUCTSeries:
 
         return rtstruct
 
+    @cache.method('_dataset', '_pat_id', '_id')
     def list_regions(
         self,
+        clear_cache: bool = False,
         use_mapping: bool = True) -> List[str]:
         """
         returns: the patient's region names.

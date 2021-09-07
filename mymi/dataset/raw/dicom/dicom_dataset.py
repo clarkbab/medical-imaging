@@ -33,6 +33,7 @@ class DICOMDataset(Dataset):
         args:
             name: the name of the dataset.
         """
+        self._type = DatasetType.DICOM
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'raw', name)
 
@@ -68,7 +69,7 @@ class DICOMDataset(Dataset):
 
     @property
     def type(self) -> DatasetType:
-        return DatasetType.DICOM
+        return self._type
 
     @property
     def path(self) -> str:
@@ -99,6 +100,7 @@ class DICOMDataset(Dataset):
         return id in self.list_patients()
 
     @_require_hierarchical
+    @cache.method('_type', '_name')
     def list_patients(
         self,
         regions: types.PatientRegions = 'all') -> Sequence[str]:
@@ -137,7 +139,7 @@ class DICOMDataset(Dataset):
         return pat
 
     @_require_hierarchical
-    @cache.method('_ct_from', '_name')
+    @cache.method('_type', '_ct_from', '_name')
     def info(
         self, 
         clear_cache: bool = False,
@@ -182,7 +184,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_ct_from', '_name')
+    @cache.method('_type', '_ct_from', '_name')
     def ct_distribution(
         self, 
         bin_width: int = 10,
@@ -242,7 +244,7 @@ class DICOMDataset(Dataset):
         return freqs
 
     @_require_hierarchical
-    @cache.method('_ct_from', '_name')
+    @cache.method('_type', '_ct_from', '_name')
     def ct_summary(
         self, 
         clear_cache: bool = False,
@@ -305,7 +307,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_name')
+    @cache.method('_type', '_name')
     def list_regions(
         self,
         clear_cache: bool = False,
@@ -350,7 +352,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_ct_from', '_name')
+    @cache.method('_type', '_ct_from', '_name')
     def region_summary(
         self, 
         clear_cache: bool = False,
