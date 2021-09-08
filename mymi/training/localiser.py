@@ -27,6 +27,7 @@ def train_localiser(
     slurm_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
+    logging.info(f"Training model '({model_name}, {run_name})' on dataset '{dataset}' with regions '{regions}'.")
 
     # Load partitions.
     set = ds.get(dataset, 'processed')

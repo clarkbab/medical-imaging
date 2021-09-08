@@ -54,7 +54,7 @@ def anonymise(
 
 def process(
     dataset: str,
-    dest_dataset: Optional[str] = None,
+    dest_dataset: str,
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_val: float = 0.2,
@@ -65,7 +65,8 @@ def process(
     effect: processes a NIFTI dataset and partitions it into train/validation/test
         partitions for training.
     args:
-        the dataset to process.
+        dataset: the dataset to process.
+        dest_dataset: the processed dataset.
     kwargs:
         p_test: the proportion of test patients.
         p_train: the proportion of train patients.
@@ -74,6 +75,8 @@ def process(
         size: crop/pad to the desired size.
         spacing: resample to the desired spacing.
     """
+    logging.info(f"Processing '{dataset}' dataset into '{dest_dataset}' dataset.")
+
     # Load patients.
     old_ds = ds.get(dataset, type_str='nifti')
     pats = old_ds.list_patients()

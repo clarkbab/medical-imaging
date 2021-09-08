@@ -66,8 +66,8 @@ def anonymise(
 
 def process(
     dataset: str,
+    dest_dataset: str,
     clear_cache: bool = False,
-    dest_dataset: Optional[str] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_val: float = 0.2,
@@ -80,7 +80,8 @@ def process(
     effect: processes a DICOM dataset and partitions it into train/validation/test
         partitions for training.
     args:
-        the dataset to process.
+        dataset: the dataset to process.
+        dest_dataset: the processed dataset.
     kwargs:
         clear_cache: force the cache to clear.
         p_test: the proportion of test patients.
@@ -92,6 +93,8 @@ def process(
         spacing: resample to the desired spacing.
         use_mapping: use region map if present.
     """
+    logging.info(f"Processing '{dataset}' dataset into '{dest_dataset}' dataset.")
+
     # Load patients.
     old_ds = ds.get(dataset, type_str='dicom')
     pats = old_ds.list_patients(regions=regions) 
