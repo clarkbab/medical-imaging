@@ -38,7 +38,7 @@ class NIFTIDataset(Dataset):
         returns: a list of NIFTI IDs.
         """
         # Load patients.
-        ct_path = os.path.join(self._path, 'ct')
+        ct_path = os.path.join(self._path, 'data', 'ct')
         files = list(sorted(os.listdir(ct_path)))
         pats = [f.replace('.nii.gz', '') for f in files]
 

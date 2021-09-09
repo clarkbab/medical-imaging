@@ -19,28 +19,55 @@ from .rtstruct_series import RTSTRUCTSeries
 class DICOMPatient:
     def __init__(
         self,
-        dataset: str,
+        dataset: 'DICOMDataset',
         id: types.PatientID,
-        ct_from: str = None,
-        region_map: Optional[RegionMap] = None):
+        ct_from: Optional['DICOMPatient'] = None,
+        region_map: Optional[RegionMap] = None,
+        trimmed: bool = False):
         """
         args:
-            dataset: the dataset the patient belongs to, e.g. 'HEAD-NECK-RADIOMICS-HN1'.
+            dataset: the DICOMDataset the patient belongs to.
             id: the patient ID.
         """
+        if trimmed:
+            self._global_id = f"{dataset} - {id} (trimmed)"
+        else:
+            self._global_id = f"{dataset} - {id}"
         self._ct_from = ct_from
         self._dataset = dataset
         self._id = id
-        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'hierarchical', 'data', id)
+        self._trimmed = trimmed
         self._region_map = region_map
+        if trimmed:
+            self._path = os.path.join(dataset.path, 'hierarchical', 'errors', id)
+        else:
+            self._path = os.path.join(dataset.path, 'hierarchical', 'data', id)
+
+        # Check that patient ID exists.
+        if not os.path.isdir(self._path):
+            raise ValueError(f"Patient '{self}' not found.")
 
         # Check number of RTSTRUCT series.
         rtstruct_series = self.list_rtstruct_series()
         if len(rtstruct_series) == 0:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{id}', dataset '{dataset}'.")
+            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self}'.")
         
         # Set default RTSTRUCT series.
-        self._default_rtstruct_series = RTSTRUCTSeries(dataset, id, rtstruct_series[0], ct_from=ct_from, region_map=region_map)
+        self._default_rtstruct_series = RTSTRUCTSeries(self, rtstruct_series[0], ct_from=ct_from, region_map=region_map)
+
+    def cache_key(self) -> str:
+        return self._global_id
+
+    @property
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
+
+    @property
+    def path(self) -> str:
+        return self._path
 
     def _require_ct(
         fn: Callable) -> Callable:
@@ -51,7 +78,7 @@ class DICOMPatient:
         """
         def wrapper(self, *args, **kwargs):
             # Pass query to alternate dataset if required.
-            if self._ct_from:
+            if self._ct_from is not None:
                 alt_patient = DICOMPatient(self._ct_from, self._id)
                 alt_fn = getattr(alt_patient, fn.__name__)
                 fn_def = getattr(type(self), fn.__name__)
@@ -63,12 +90,12 @@ class DICOMPatient:
             # Check CT folder exists.
             cts_path = os.path.join(self._path, 'ct')
             if not os.path.exists(cts_path):
-                raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"No CTs found for patient '{self}'.")
 
             # Check that there is at least one CT.
             ct_files = os.listdir(cts_path)
             if len(ct_files) == 0:
-                raise ValueError(f"No CTs found for dataset '{self._dataset}', patient '{self._id}'.")
+                raise ValueError(f"No CTs found for patient '{self}'.")
             
             return fn(self, *args, **kwargs)
         return wrapper
@@ -176,7 +203,7 @@ class DICOMPatient:
         # Check that 'rtstruct' folder exists. This is required for a patient.
         rtstruct_path = os.path.join(self._path, 'rtstruct')
         if not os.path.exists(rtstruct_path):
-            raise ValueError(f"No RTSTRUCTs found for dataset '{self._dataset}', patient '{self._id}'.")
+            raise ValueError(f"No RTSTRUCTs found for patient '{self}'.")
     
         # Load RTSTRUCT series.
         series = list(sorted(os.listdir(os.path.join(self._path, 'rtstruct'))))
@@ -193,7 +220,7 @@ class DICOMPatient:
         # Check that series ID exists.
         series_path = os.path.join(self._path, 'rtstruct', id)
         if not os.path.isdir(series_path):
-            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{self._id}', dataset '{self._dataset}'.")
+            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{self}'.")
 
         # Create RTSTRUCT series.
         series = RTSTRUCTSeries(self._dataset, self._id, id, region_map=self._region_map)
@@ -245,6 +272,9 @@ class DICOMPatient:
 
     def ct_spacing(self, *args, **kwargs):
         return self._default_rtstruct_series.ref_ct.spacing(*args, **kwargs)
+
+    def ct_orientation(self, *args, **kwargs):
+        return self._default_rtstruct_series.ref_ct.orientation(*args, **kwargs)
 
     def ct_slice_summary(self, *args, **kwargs):
         return self._default_rtstruct_series.ref_ct.slice_summary(*args, **kwargs)

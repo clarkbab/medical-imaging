@@ -2,9 +2,9 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --mem 32G
-#SBATCH --gres gpu:p100:1
+#SBATCH --gres gpu:p100:4
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 2-0:00:00
+#SBATCH --time 3-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -15,16 +15,16 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-TRAIN-FLIP-LOC"
-MODEL_NAME="localiser-pl"
-NUM_GPUS=1
+DATASET="PMCC-HN-TRAIN-LOC"
+MODEL_NAME="localiser-Parotid_L"
+NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
 NUM_SUBSET=None
 REGIONS="Parotid_L"
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="flipped-baseline"
+RUN_NAME="4gpu-200epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

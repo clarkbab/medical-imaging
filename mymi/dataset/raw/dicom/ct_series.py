@@ -11,27 +11,32 @@ from mymi import types
 class CTSeries:
     def __init__(
         self,
-        dataset: str,
-        pat_id: types.PatientID,
+        patient: 'DICOMPatient',
         id: str):
         """
         args:
-            dataset: the dataset name.
+            patient: the DICOMPatient to which the CT series belongs.
             id: the CT series ID.
         """
-        self._dataset = dataset
-        self._pat_id = pat_id
+        self._global_id = f"{patient} - {id}"
+        self._patient = patient
         self._id = id
-        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'hierarchical', 'data', pat_id, 'ct', id)
+        self._path = os.path.join(patient.path, 'ct', id)
         
         # Check that series exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"CT series '{id}' not found for patient '{pat_id}', dataset '{dataset}'.")
+            raise ValueError(f"CT series '{self}' not found.")
 
         # Check that DICOMs are present.
         cts = os.listdir(self._path)
         if len(cts) == 0:
-            raise ValueError(f"CT series '{id}' empty for patient '{pat_id}', dataset '{dataset}'.")
+            raise ValueError(f"CT series '{self}' empty.")
+
+    def description(self) -> str:
+        return self._global_id
+    
+    def __str__(self) -> str:
+        return self._global_id
 
     @property
     def id(self) -> str:
@@ -62,6 +67,19 @@ class CTSeries:
         offset = tuple(self.summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
         return offset
 
+    def orientation(
+        self,
+        clear_cache: bool = False) -> types.ImageSpacing3D:
+        """
+        returns: the patient orientation in physical coordinates.
+        kwargs:
+            clear_cache: forces the cache to clear.
+        """
+        # Get the orientation.
+        row_x, row_y, row_z, col_x, col_y, col_z = self.summary(clear_cache=clear_cache)[['orientation-row-x', 'orientation-row-y', 'orientation-row-z', 'orientation-col-x', 'orientation-col-y', 'orientation-col-z']].iloc[0]
+        orientation = tuple(tuple(row_x, row_y, row_z), tuple(col_x, col_y, col_z))
+        return orientation
+
     def size(
         self,
         clear_cache: bool = False) -> types.ImageSpacing3D:
@@ -86,7 +104,7 @@ class CTSeries:
         spacing = tuple(self.summary(clear_cache=clear_cache)[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
         return spacing
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def slice_summary(self) -> pd.DataFrame:
         """
         returns: a table summarising CT slice info.
@@ -100,6 +118,12 @@ class CTSeries:
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
+            'orientation-row-x': float,
+            'orientation-row-y': float,
+            'orientation-row-z': float,
+            'orientation-col-x': float,
+            'orientation-col-y': float,
+            'orientation-col-z': float,
             'size-x': int,
             'size-y': int,
             'spacing-x': float,
@@ -122,6 +146,14 @@ class CTSeries:
             data['offset-x'] = ct.ImagePositionPatient[0]
             data['offset-y'] = ct.ImagePositionPatient[1]
             data['offset-z'] = ct.ImagePositionPatient[2]
+
+            # Add orientation.
+            data['orientation-row-x'] = ct.ImageOrientationPatient[0]
+            data['orientation-row-y'] = ct.ImageOrientationPatient[1]
+            data['orientation-row-z'] = ct.ImageOrientationPatient[2]
+            data['orientation-col-x'] = ct.ImageOrientationPatient[3]
+            data['orientation-col-y'] = ct.ImageOrientationPatient[4]
+            data['orientation-col-z'] = ct.ImageOrientationPatient[5]
 
             # Add sizes.
             data['size-x'] = ct.pixel_array.shape[1]
@@ -146,7 +178,7 @@ class CTSeries:
 
         return df
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def summary(self) -> pd.DataFrame:
         """
         returns: a table summarising CT info.
@@ -161,6 +193,12 @@ class CTSeries:
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
+            'orientation-row-x': float,
+            'orientation-row-y': float,
+            'orientation-row-z': float,
+            'orientation-col-x': float,
+            'orientation-col-y': float,
+            'orientation-col-z': float,
             'size-x': int,
             'size-y': int,
             'size-z': int,
@@ -194,13 +232,45 @@ class CTSeries:
             if 'offset-x' not in data:
                 data['offset-x'] = x_offset
             elif x_offset != data['offset-x']:
-                raise ValueError(f"Inconsistent CT 'offset-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'offset-x' for CT series '{self}'.")
             if 'offset-y' not in data:
                 data['offset-y'] = y_offset
             elif y_offset != data['offset-y']:
-                raise ValueError(f"Inconsistent CT 'offset-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'offset-y' for CT series '{self}'.")
             if 'offset-z' not in data or z_offset < data['offset-z']:
                 data['offset-z'] = z_offset
+
+            # Add orientations.
+            row_x_orientation = ct.ImageOrientationPatient[0]
+            row_y_orientation = ct.ImageOrientationPatient[1]
+            row_z_orientation = ct.ImageOrientationPatient[2]
+            col_x_orientation = ct.ImageOrientationPatient[3]
+            col_y_orientation = ct.ImageOrientationPatient[4]
+            col_z_orientation = ct.ImageOrientationPatient[5]
+            if 'orientation-row-x' not in data:
+                data['orientation-row-x'] = row_x_orientation
+            elif row_x_orientation != 1:
+                raise ValueError(f"Patient 'orientation-row-x' not standard for CT series '{self}'.")
+            if 'orientation-row-y' not in data:
+                data['orientation-row-y'] = row_y_orientation
+            elif row_y_orientation != 0:
+                raise ValueError(f"Patient 'orientation-row-y' not standard for CT series '{self}'.")
+            if 'orientation-row-z' not in data:
+                data['orientation-row-z'] = row_z_orientation
+            elif row_z_orientation != 0:
+                raise ValueError(f"Patient 'orientation-row-z' not standard for CT series '{self}'.")
+            if 'orientation-col-x' not in data:
+                data['orientation-col-x'] = col_x_orientation
+            elif col_x_orientation != 0:
+                raise ValueError(f"Patient 'orientation-col-x' not standard for CT series '{self}'.")
+            if 'orientation-col-y' not in data:
+                data['orientation-col-y'] = col_y_orientation
+            elif col_y_orientation != 1:
+                raise ValueError(f"Patient 'orientation-col-y' not standard for CT series '{self}'.")
+            if 'orientation-col-z' not in data:
+                data['orientation-col-z'] = col_z_orientation
+            elif col_z_orientation != 0:
+                raise ValueError(f"Patient 'orientation-col-z' not standard for CT series '{self}'.")
 
             # Add sizes.
             x_size = ct.pixel_array.shape[1]
@@ -208,11 +278,11 @@ class CTSeries:
             if 'size-x' not in data:
                 data['size-x'] = x_size
             elif x_size != data['size-x']:
-                raise ValueError(f"Inconsistent CT 'size-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'size-x' for CT series '{self}'.")
             if 'size-y' not in data:
                 data['size-y'] = y_size
             elif y_size != data['size-y']:
-                raise ValueError(f"Inconsistent CT 'size-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'size-y' for CT series '{self}'.")
 
             # Add x/y-spacings.
             x_spacing = ct.PixelSpacing[0]
@@ -220,16 +290,16 @@ class CTSeries:
             if 'spacing-x' not in data:
                 data['spacing-x'] = x_spacing
             elif x_spacing != data['spacing-x']:
-                raise ValueError(f"Inconsistent CT 'spacing-x' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'spacing-x' for CT series '{self}'.")
             if 'spacing-y' not in data:
                 data['spacing-y'] = y_spacing
             elif y_spacing != data['spacing-y']:
-                raise ValueError(f"Inconsistent CT 'spacing-y' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+                raise ValueError(f"Inconsistent 'spacing-y' for CT series '{self}'.")
 
         # Add z-spacing. Round z-spacings to 3 d.p. as some of the diffs are whacky like 2.99999809.
         z_spacings = np.unique([round(s, 3) for s in np.diff(sorted(z_offsets))])
         if len(z_spacings) != 1:
-            raise ValueError(f"Expected single 'spacing-z', got spacings '{z_spacings}' for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.") 
+            raise ValueError(f"Expected single 'spacing-z', got spacings '{z_spacings}' for CT series '{self}'.")
         z_spacing = z_spacings[0]
         data['spacing-z'] = z_spacing
 
@@ -249,7 +319,7 @@ class CTSeries:
         # TODO: Handle missing slices.
         num_missing = z_size - len(cts)
         if num_missing != 0:
-            raise ValueError(f"{num_missing} missing slices for series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset}'.")
+            raise ValueError(f"{num_missing} missing slices for CT series '{self}'.")
 
         # Add row.
         df = df.append(data, ignore_index=True)
@@ -260,7 +330,7 @@ class CTSeries:
 
         return df
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def data(
         self,
         clear_cache: bool = False) -> np.ndarray:

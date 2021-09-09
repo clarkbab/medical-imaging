@@ -18,40 +18,48 @@ from .rtstruct_converter import RTSTRUCTConverter
 class RTSTRUCTSeries:
     def __init__(
         self,
-        dataset: str,
-        pat_id: types.PatientID,
+        patient: 'DICOMPatient',
         id: str,
-        ct_from: Optional[str] = None,
+        ct_from: Optional['DICOMPatient'] = None,
         region_map: Optional[RegionMap] = None):
         """
         args:
-            dataset: the dataset name.
-            pat_id: the patient ID.
+            patient: the DICOMPatient to which the series belongs.
             id: the RTSTRUCT series ID.
         kwargs:
             region_map: the RegionMap object.
         """
-        self._dataset = dataset
-        self._pat_id = pat_id
+        self._global_id = f"{patient} - {id}"
+        self._patient = patient
         self._id = id
         self._ct_from = ct_from
         self._region_map = region_map
-        self._path = os.path.join(config.directories.datasets, 'raw', dataset, 'hierarchical', 'data', pat_id, 'rtstruct', id)
+        self._path = os.path.join(patient.path, 'rtstruct', id)
 
         # Check that series exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{pat_id}', dataset '{dataset}'.")
+            raise ValueError(f"RTSTRUCT series '{self}' not found.")
 
         # Check that DICOM is present.
         rtstructs = os.listdir(self._path)
         if len(rtstructs) != 1:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{id}' for patient '{pat_id}', dataset '{dataset}'.")
+            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{self}'.")
 
         # Get reference CT series.
-        ds = self._dataset if ct_from is None else ct_from
+        ct_pat = ct_from if ct_from is not None else patient
         rtstruct = self.get_rtstruct()
         ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-        self._ref_ct = CTSeries(ds, pat_id, ct_id)
+        try:
+            self._ref_ct = CTSeries(ct_pat, ct_id)
+        except ValueError as e:
+            raise ValueError(f"Error occurred while loading reference CT for RTSTRUCT series '{self}'.")
+
+    @property
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
 
     @property
     def id(self) -> str:
@@ -61,7 +69,7 @@ class RTSTRUCTSeries:
     def ref_ct(self) -> str:
         return self._ref_ct
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def list_regions(
         self,
         use_mapping: bool = True) -> List[str]:
@@ -82,7 +90,7 @@ class RTSTRUCTSeries:
 
         return rtstruct
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def list_regions(
         self,
         clear_cache: bool = False,
@@ -123,7 +131,7 @@ class RTSTRUCTSeries:
         """
         return region in self.list_regions(use_mapping=use_mapping)
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def region_data(
         self,
         clear_cache: bool = False,
@@ -168,7 +176,7 @@ class RTSTRUCTSeries:
             try:
                 data = RTSTRUCTConverter.get_roi_data(rtstruct, name[1], cts)
             except ValueError as e:
-                logging.error(f"Caught error extracting data for region '{name[1]}', dataset '{self._dataset}', patient '{self._id}'.")
+                logging.error(f"Caught error extracting data for region '{name[1]}', patient '{patient}'.")
                 logging.error(f"Error message: {e}")
                 continue
 
@@ -179,7 +187,7 @@ class RTSTRUCTSeries:
 
         return ordered_dict
 
-    @cache.method('_dataset', '_pat_id', '_id')
+    @cache.method('_global_id')
     def region_summary(
         self,
         clear_cache: bool = False,
@@ -297,10 +305,10 @@ class RTSTRUCTSeries:
         use_mapping: bool = True) -> None:
         if type(regions) == str:
             if regions != 'all' and not self.has_region(regions, use_mapping=use_mapping):
-                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
+                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self._id}', patient '{patient}'.")
         elif hasattr(regions, '__iter__'):
             for region in regions:
                 if not self.has_region(region, use_mapping=use_mapping):
-                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT series '{self._id}', patient '{self._pat_id}', dataset '{self._dataset.description}'.")
+                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT series '{self._id}', patient '{patient}'.")
         else:
             raise ValueError(f"Requested regions '{regions}' isn't 'str' or 'iterable'.")

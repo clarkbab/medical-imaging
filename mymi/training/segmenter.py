@@ -10,6 +10,7 @@ from typing import Optional
 from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import PatchLoader
+from mymi import logging
 from mymi.models.systems import Segmenter
 from mymi import types
 
@@ -72,7 +73,7 @@ def train_segmenter(
         #     patience=5),
         ModelCheckpoint(
             dirpath=path,
-            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}'
+            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
             save_last=True,

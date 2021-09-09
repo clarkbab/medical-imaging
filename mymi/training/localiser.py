@@ -10,6 +10,7 @@ from typing import Optional
 from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader
+from mymi import logging
 from mymi.models.systems import Localiser
 from mymi import types
 
@@ -46,8 +47,8 @@ def train_localiser(
 
     # Create data loaders.
     spacing = eval(set.params().spacing[0])
-    if subset_num is not None:
-        train_loader = SubsetLoader.build(train_part, subset_num, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+    if num_subset is not None:
+        train_loader = SubsetLoader.build(train_part, num_subset, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
     else:
         train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
     val_loader = Loader.build(val_part, num_workers=num_workers, regions=regions, shuffle=False)
@@ -78,7 +79,7 @@ def train_localiser(
         #     patience=5),
         ModelCheckpoint(
             dirpath=checks_path,
-            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}'
+            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
             save_last=True,

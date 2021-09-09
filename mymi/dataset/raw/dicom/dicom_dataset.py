@@ -33,34 +33,36 @@ class DICOMDataset(Dataset):
         args:
             name: the name of the dataset.
         """
-        self._type = 'dicom'
-        self._name = name
-        self._path = os.path.join(config.directories.datasets, 'raw', name)
-
         # Load 'ct_from' flag.
-        self._ct_from = None
+        ct_from_name = None
         for f in os.listdir(self._path):
             match = re.match('^ct_from_(.*)$', f)
             if match:
-                self._ct_from = match.group(1)
+                ct_from_name = match.group(1)
 
-        # Check if datasets exist.
+        self._ct_from = DICOMDataset(ct_from_name) if ct_from_name is not None else None
+        self._global_id = f"DICOM: {name}"
+        self._global_id = self._global_id + f" (CT from - {self._ct_from})" if self._ct_from is not None else self._global_id
+        self._name = name
+        self._path = os.path.join(config.directories.datasets, 'raw', name)
         if not os.path.exists(self._path):
-            raise ValueError(f"Dataset '{name}' not found.")
-        if self._ct_from:
-            ct_path = os.path.join(config.directories.datasets, 'raw', self._ct_from)
-            if not os.path.exists(ct_path):
-                raise ValueError(f"Dataset '{self._ct_from}' not found.")
+            raise ValueError(f"Dataset '{self}' not found.")
 
         # Load region map.
         self._region_map = self._load_region_map()
 
-    @property
-    def description(self) -> str:
-        return f"DICOM: {self._name}"
+    def cache_key(self) -> str:
+        return self._global_id
 
     @property
-    def ct_from(self) -> Optional[str]:
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
+
+    @property
+    def ct_from(self) -> Optional['DICOMDataset']:
         return self._ct_from
 
     @property
@@ -100,16 +102,20 @@ class DICOMDataset(Dataset):
         return id in self.list_patients()
 
     @_require_hierarchical
-    @cache.method('_type', '_name', '_ct_from')
+    @cache.method('_global_id')
     def list_patients(
         self,
-        regions: types.PatientRegions = 'all') -> List[str]:
+        regions: types.PatientRegions = 'all',
+        trimmed: bool = False) -> List[str]:
         """
         returns: a list of patient IDs.
         """
         # Load top-level folders from 'hierarchical' dataset.
-        hier_path = os.path.join(self._path, 'hierarchical', 'data')
-        pats = list(sorted(os.listdir(hier_path)))
+        if trimmed:
+            path = os.path.join(self._path, 'hierarchical', 'errors')
+        else:
+            path = os.path.join(self._path, 'hierarchical', 'data')
+        pats = list(sorted(os.listdir(path)))
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
@@ -118,28 +124,20 @@ class DICOMDataset(Dataset):
     @_require_hierarchical
     def patient(
         self,
-        id: types.PatientID) -> DICOMPatient:
+        id: types.PatientID,
+        trimmed: bool = False) -> DICOMPatient:
         """
         returns: a DICOMPatient object.
         args:
             id: the patient ID.
         """
-        # Convert to string.
         if type(id) == int:
             id = str(id)
-
-        # Check that patient ID exists.
-        pat_path = os.path.join(self._path, 'hierarchical', 'data', id)
-        if not os.path.isdir(pat_path):
-            raise ValueError(f"Patient '{id}' not found in dataset '{self._name}'.")
-
-        # Create patient.
-        pat = DICOMPatient(self._name, id, ct_from=self._ct_from, region_map=self._region_map)
-        
-        return pat
+        ct_from = self._ct_from.patient(id, trimmed=trimmed) if self._ct_from is not None else None
+        return DICOMPatient(self, id, ct_from=ct_from, region_map=self._region_map, trimmed=trimmed)
 
     @_require_hierarchical
-    @cache.method('_type', '_ct_from', '_name')
+    @cache.method('_global_id')
     def info(
         self, 
         clear_cache: bool = False,
@@ -184,7 +182,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_type', '_ct_from', '_name')
+    @cache.method('_global_id')
     def ct_distribution(
         self, 
         bin_width: int = 10,
@@ -244,7 +242,7 @@ class DICOMDataset(Dataset):
         return freqs
 
     @_require_hierarchical
-    @cache.method('_type', '_ct_from', '_name')
+    @cache.method('_global_id')
     def ct_summary(
         self, 
         clear_cache: bool = False,
@@ -273,6 +271,12 @@ class DICOMDataset(Dataset):
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
+            'orientation-row-x': float,
+            'orientation-row-y': float,
+            'orientation-row-z': float,
+            'orientation-col-x': float,
+            'orientation-col-y': float,
+            'orientation-col-z': float,
             'size-x': int,
             'size-y': int,
             'size-z': int,
@@ -307,7 +311,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_type', '_name')
+    @cache.method('_global_id')
     def list_regions(
         self,
         clear_cache: bool = False,
@@ -352,7 +356,7 @@ class DICOMDataset(Dataset):
         return df
 
     @_require_hierarchical
-    @cache.method('_type', '_ct_from', '_name')
+    @cache.method('_global_id')
     def region_summary(
         self, 
         clear_cache: bool = False,

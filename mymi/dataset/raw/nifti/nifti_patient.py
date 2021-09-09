@@ -20,12 +20,13 @@ class NIFTIPatient:
         self._path = os.path.join(config.directories.datasets, 'raw', dataset)
 
     def list_regions(self) -> List[str]:
-        files = os.listdir(self._path)
+        path = os.path.join(self._path, 'data')
+        files = os.listdir(path)
         names = []
         for f in files:
             if not is_region(f):
                 continue
-            region_path = os.path.join(self._path, f)
+            region_path = os.path.join(self._path, 'data', f)
             for r in os.listdir(region_path):
                 id = r.replace('.nii.gz', '')
                 if id == self._id:
@@ -40,7 +41,7 @@ class NIFTIPatient:
     def ct_spacing(
         self,
         clear_cache: bool = False) -> types.ImageSpacing3D:
-        path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
+        path = os.path.join(self._path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
         affine = img.affine
         spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
@@ -49,7 +50,7 @@ class NIFTIPatient:
     def ct_offset(
         self,
         clear_cache: bool = False) -> types.Point3D:
-        path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
+        path = os.path.join(self._path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
         affine = img.affine
         offset = (affine[0][3], affine[1][3], affine[2][3])
@@ -58,7 +59,7 @@ class NIFTIPatient:
     def ct_data(
         self,
         clear_cache: bool = False) -> np.ndarray:
-        path = os.path.join(self._path, 'ct', f"{self._id}.nii.gz")
+        path = os.path.join(self._path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
         data = img.get_data()
         return data
@@ -80,7 +81,7 @@ class NIFTIPatient:
             if not self.has_region(region):
                 raise ValueError(f"Requested region '{region}' not found for patient '{self._id}', dataset '{self._dataset}'.")
             
-            path = os.path.join(self._path, region, f"{self._id}.nii.gz")
+            path = os.path.join(self._path, 'data', region, f"{self._id}.nii.gz")
             img = nib.load(path)
             rdata = img.get_fdata()
             data[region] = rdata

@@ -26,8 +26,14 @@ class Cache:
         
     def __init__(self):
         self._logging = False
-        self._read_enabled = True
-        self._write_enabled = True
+
+        # Check for env var.
+        if os.environ.get('MYMI_DISABLE_CACHE'):
+            self._read_enabled = False
+            self._write_enabled = False
+        else:
+            self._read_enabled = True
+            self._write_enabled = True
 
     @property
     def logging(self) -> bool:
