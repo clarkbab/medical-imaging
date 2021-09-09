@@ -33,6 +33,8 @@ class DICOMDataset(Dataset):
         args:
             name: the name of the dataset.
         """
+        self._path = os.path.join(config.directories.datasets, 'raw', name)
+
         # Load 'ct_from' flag.
         ct_from_name = None
         for f in os.listdir(self._path):
@@ -44,7 +46,6 @@ class DICOMDataset(Dataset):
         self._global_id = f"DICOM: {name}"
         self._global_id = self._global_id + f" (CT from - {self._ct_from})" if self._ct_from is not None else self._global_id
         self._name = name
-        self._path = os.path.join(config.directories.datasets, 'raw', name)
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{self}' not found.")
 

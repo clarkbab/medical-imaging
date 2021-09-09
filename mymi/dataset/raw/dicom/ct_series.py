@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import os
 import pandas as pd
@@ -7,6 +8,8 @@ from typing import List
 from mymi import cache
 from mymi import config
 from mymi import types
+
+CLOSENESS_ABS_TOL = 1e-10;
 
 class CTSeries:
     def __init__(
@@ -249,27 +252,27 @@ class CTSeries:
             col_z_orientation = ct.ImageOrientationPatient[5]
             if 'orientation-row-x' not in data:
                 data['orientation-row-x'] = row_x_orientation
-            elif row_x_orientation != 1:
+            elif not math.isclose(row_x_orientation, 1, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-row-x' not standard for CT series '{self}'.")
             if 'orientation-row-y' not in data:
                 data['orientation-row-y'] = row_y_orientation
-            elif row_y_orientation != 0:
+            elif not math.isclose(row_y_orientation, 0, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-row-y' not standard for CT series '{self}'.")
             if 'orientation-row-z' not in data:
                 data['orientation-row-z'] = row_z_orientation
-            elif row_z_orientation != 0:
+            elif not math.isclose(row_z_orientation, 0, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-row-z' not standard for CT series '{self}'.")
             if 'orientation-col-x' not in data:
                 data['orientation-col-x'] = col_x_orientation
-            elif col_x_orientation != 0:
+            elif not math.isclose(col_x_orientation, 0, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-col-x' not standard for CT series '{self}'.")
             if 'orientation-col-y' not in data:
                 data['orientation-col-y'] = col_y_orientation
-            elif col_y_orientation != 1:
+            elif not math.isclose(col_y_orientation, 1, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-col-y' not standard for CT series '{self}'.")
             if 'orientation-col-z' not in data:
                 data['orientation-col-z'] = col_z_orientation
-            elif col_z_orientation != 0:
+            elif not math.isclose(col_z_orientation, 0, abs_tol=CLOSENESS_ABS_TOL):
                 raise ValueError(f"Patient 'orientation-col-z' not standard for CT series '{self}'.")
 
             # Add sizes.
