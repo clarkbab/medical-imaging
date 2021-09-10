@@ -61,7 +61,7 @@ def train_segmenter(
             project=model_name,
             name=run_name,
             save_dir=config.directories.wandb)
-        logger.watch(model)
+        # logger.watch(model)   # Caused multi-GPU training to hang.
     else:
         logger = None
 

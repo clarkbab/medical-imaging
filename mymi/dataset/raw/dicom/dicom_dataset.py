@@ -267,7 +267,6 @@ class DICOMDataset(Dataset):
             'fov-z': float,
             'hu-max': float,
             'hu-min': float,
-            'num-missing': int,
             'offset-x': float,
             'offset-y': float,
             'offset-z': float,
