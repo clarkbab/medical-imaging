@@ -50,29 +50,27 @@ class DICOMPatient:
         # Check number of RTSTRUCT series.
         rtstruct_series = self.list_rtstruct_series()
         if len(rtstruct_series) == 0:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self}'.")
+            raise ValueError(f"Expected at least 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self}'.")
         
         # Set default RTSTRUCT series.
         msgs = []
         for s in rtstruct_series:
             try:
-                series = RTSTRUCTSeries(self, rtstruct_series[0], ct_from=ct_from, region_map=region_map)
+                series = RTSTRUCTSeries(self, s, ct_from=ct_from, region_map=region_map)
+                break
             except ValueError as e:
                 msg = f"Error encountered when loading RTSTRUCT series '{s}', skipping."
                 error_msg = f"Error: {e}"
-                logging.error(msg)
-                logging.error(error_msg)
                 msgs.append(msg)
                 msgs.append(error_msg)
 
         # Raise error if no valid series was found.
         if series is None:
-            msg = f"No valid RTSTRUCT series found for patient '{patient}', tried '{len(rtstruct_series)}'."
+            msg = f"No valid RTSTRUCT series found for patient '{self}', tried '{len(rtstruct_series)}' series."
             msgs.insert(0, msg)
             raise ValueError('\n'.join(msgs))
-                
-
-self._default_rtstruct_series
+        else:
+            self._default_rtstruct_series = series
 
     def cache_key(self) -> str:
         return self._global_id
