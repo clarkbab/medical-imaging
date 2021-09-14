@@ -316,6 +316,7 @@ class DICOMDataset(Dataset):
         clear_cache: bool = False,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
+        trimmed: bool = False,
         use_mapping: bool = True) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
@@ -333,7 +334,7 @@ class DICOMDataset(Dataset):
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
-        pats = self.list_patients()
+        pats = self.list_patients(trimmed=trimmed)
 
         # Filter patients.
         pats = list(filter(self._filter_patient_by_pat_ids(pat_ids), pats))
@@ -342,7 +343,16 @@ class DICOMDataset(Dataset):
         # Add patient regions.
         logging.info(f"Loading regions for dataset '{self._name}'..")
         for pat in tqdm(pats):
-            for pat_region in self.patient(pat).list_regions(use_mapping=use_mapping):
+            try:
+                pat_regions = self.patient(pat, trimmed=trimmed).list_regions(use_mapping=use_mapping)
+            except ValueError as e:
+                # Allow errors if we're inspecting 'trimmed' patients.
+                if trimmed:
+                    logging.error(e)
+                else:
+                    raise e
+
+            for pat_region in pat_regions:
                 data = {
                     'patient-id': pat,
                     'region': pat_region
