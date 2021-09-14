@@ -17,12 +17,13 @@ echo $version
 
 DATASET="PMCC-HN-TRAIN-SEG"
 MODEL_NAME="segmenter-Parotid_L"
+NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
 REGIONS="Parotid_L"
-RUN_NAME="4gpu-200epochs"
+RUN_NAME="4gpu-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/segmenter --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER
+python $SCRIPT_DIR/train/segmenter --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGIONS --use_logger $USE_LOGGER

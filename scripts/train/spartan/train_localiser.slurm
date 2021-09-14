@@ -17,6 +17,7 @@ echo $version
 
 DATASET="PMCC-HN-TRAIN-LOC"
 MODEL_NAME="localiser-Parotid_L"
+NUM_EPOCHS=200
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
@@ -28,4 +29,4 @@ RUN_NAME="4gpu-200epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_subset $NUM_SUBSET --num_workers $NUM_WORKERS --regions $REGIONS --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER
+python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --dataset $DATASET --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_subset $NUM_SUBSET --num_workers $NUM_WORKERS --regions $REGIONS --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER
