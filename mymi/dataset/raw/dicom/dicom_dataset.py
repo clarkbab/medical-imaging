@@ -21,6 +21,7 @@ from mymi import types
 
 from ...dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
+from .hierarchy import require_hierarchy
 from .region_map import RegionMap
 
 Z_SPACING_ROUND_DP = 2
@@ -78,20 +79,7 @@ class DICOMDataset(Dataset):
     def path(self) -> str:
         return self._path
 
-    def _require_hierarchical(fn: Callable) -> Callable:
-        """
-        effect: returns a wrapped function, ensuring hierarchical data has been built.
-        args:
-            fn: the wrapped function.
-        """
-        def _require_hierarchical_wrapper(self, *args, **kwargs):
-            if not self._hierarchical_exists():
-                self._build_hierarchical()
-                self._trim_hierarchical()
-            return fn(self, *args, **kwargs)
-        return _require_hierarchical_wrapper
-
-    @_require_hierarchical
+    @require_hierarchy
     def has_patient(
         self,
         id: types.PatientID) -> bool:
@@ -102,7 +90,7 @@ class DICOMDataset(Dataset):
         """
         return id in self.list_patients()
 
-    @_require_hierarchical
+    @require_hierarchy
     def list_patients(
         self,
         regions: types.PatientRegions = 'all',
@@ -110,18 +98,18 @@ class DICOMDataset(Dataset):
         """
         returns: a list of patient IDs.
         """
-        # Load top-level folders from 'hierarchical' dataset.
+        # Load top-level folders from 'hierarchy' dataset.
         if trimmed:
-            path = os.path.join(self._path, 'hierarchical', 'errors')
+            path = os.path.join(self._path, 'hierarchy', 'trimmed', 'data')
         else:
-            path = os.path.join(self._path, 'hierarchical', 'data')
+            path = os.path.join(self._path, 'hierarchy', 'data')
         pats = list(sorted(os.listdir(path)))
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
         return pats
 
-    @_require_hierarchical
+    @require_hierarchy
     def patient(
         self,
         id: types.PatientID,
@@ -136,7 +124,7 @@ class DICOMDataset(Dataset):
         ct_from = self._ct_from.patient(id, trimmed=trimmed) if self._ct_from is not None else None
         return DICOMPatient(self, id, ct_from=ct_from, region_map=self._region_map, trimmed=trimmed)
 
-    @_require_hierarchical
+    @require_hierarchy
     @cache.method('_global_id')
     def info(
         self, 
@@ -181,7 +169,7 @@ class DICOMDataset(Dataset):
 
         return df
 
-    @_require_hierarchical
+    @require_hierarchy
     @cache.method('_global_id')
     def ct_distribution(
         self, 
@@ -241,7 +229,7 @@ class DICOMDataset(Dataset):
 
         return freqs
 
-    @_require_hierarchical
+    @require_hierarchy
     @cache.method('_global_id')
     def ct_summary(
         self, 
@@ -309,7 +297,7 @@ class DICOMDataset(Dataset):
 
         return df
 
-    @_require_hierarchical
+    @require_hierarchy
     @cache.method('_global_id')
     def list_regions(
         self,
@@ -364,7 +352,7 @@ class DICOMDataset(Dataset):
 
         return df
 
-    @_require_hierarchical
+    @require_hierarchy
     @cache.method('_global_id')
     def region_summary(
         self, 
@@ -537,87 +525,6 @@ class DICOMDataset(Dataset):
         cache.write(params, df, 'dataframe')
 
         return df
-
-    def _hierarchical_exists(self) -> bool:
-        """
-        returns: True if the hierarchical dataset has been built.
-        """
-        # Check if folder exists.
-        hier_path = os.path.join(self._path, 'hierarchical')
-        return os.path.exists(hier_path)
-
-    def _build_hierarchical(self) -> None:
-        """
-        effect: creates a hierarchical dataset based on dicom content, not existing structure.
-        """
-        # Load all dicom files.
-        raw_path = os.path.join(self._path, 'raw')
-        if not os.path.exists(raw_path):
-            raise ValueError(f"No 'raw' folder found for dataset '{self.description}'.")
-        dicom_files = []
-        for root, _, files in os.walk(raw_path):
-            for f in files:
-                if f.lower().endswith('.dcm'):
-                    dicom_files.append(os.path.join(root, f))
-
-        # Copy dicom files.
-        logging.info(f"Building hierarchical dataset for '{self._name}'..")
-        for f in tqdm(sorted(dicom_files)):
-            # Get patient ID.
-            dcm = dicom.read_file(f)
-            pat_id = dcm.PatientID
-
-            # Get modality.
-            mod = dcm.Modality.lower()
-            if not mod in ('ct', 'rtstruct'):
-                continue
-
-            # Get series UID.
-            series_UID = dcm.SeriesInstanceUID
-
-            # Create filepath.
-            filename = os.path.basename(f)
-            filepath = os.path.join(self._path, 'hierarchical', 'data', pat_id, mod, series_UID, filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
-            # Save dicom.
-            dcm.save_as(filepath)
-
-    def _trim_hierarchical(self) -> None:
-        """
-        effect: removes patients that don't have RTSTRUCT/CT DICOMS.
-        """
-        logging.info(f"Removing invalid patients from hierarchical dataset for '{self._name}'..")
-
-        # Get patients.
-        pats = self.list_patients()
-
-        # Trim each patient.
-        for pat in tqdm(pats):
-            try:
-                # Creating the patient raises errors for missing files.
-                patient = self.patient(pat)
-
-                # Loading CT summary ensures data is consistent.
-                patient.ct_summary(clear_cache=True)
-
-            except ValueError as e:
-                # Move patient to error folder.
-                pat_path = os.path.join(self._path, 'hierarchical', 'data', pat)
-                pat_error_path = os.path.join(self._path, 'hierarchical', 'errors', pat)
-                shutil.move(pat_path, pat_error_path)
-
-                # Write error message.
-                msg = f"Patient '{pat}' removed from hierarchical dataset due to error."
-                error_msg = f"Error: {e}"
-                filepath = os.path.join(pat_error_path, 'error.log')
-                with open(filepath, 'w') as f:
-                    f.write(msg + '\n')
-                    f.write(error_msg + '\n')
-
-                # Log error message.
-                logging.error(msg)
-                logging.error(error_msg)
 
     def _filter_patient_by_num_pats(
         self,

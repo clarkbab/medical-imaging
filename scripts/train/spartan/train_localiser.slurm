@@ -17,7 +17,7 @@ echo $version
 
 DATASET="PMCC-HN-TRAIN-LOC"
 MODEL_NAME="localiser-Parotid_L"
-NUM_EPOCHS=200
+NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
@@ -25,7 +25,7 @@ NUM_SUBSET=None
 REGIONS="Parotid_L"
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="4gpu-200epochs"
+RUN_NAME="4gpu-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --mem 32G
+#SBATCH --mem 64G
 #SBATCH --gres gpu:p100:4
 #SBATCH --cpus-per-gpu 4
 #SBATCH --time 3-0:00:00
@@ -17,12 +17,12 @@ echo $version
 
 DATASET="PMCC-HN-TRAIN-SEG"
 MODEL_NAME="segmenter-Parotid_L"
-NUM_EPOCHS=400
+NUM_EPOCHS=200
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
 REGIONS="Parotid_L"
-RUN_NAME="4gpu-400epochs"
+RUN_NAME="4gpu-200epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

@@ -39,9 +39,9 @@ class DICOMPatient:
         self._trimmed = trimmed
         self._region_map = region_map
         if trimmed:
-            self._path = os.path.join(dataset.path, 'hierarchical', 'errors', id)
+            self._path = os.path.join(dataset.path, 'hierarchy', 'trimmed', 'data', id)
         else:
-            self._path = os.path.join(dataset.path, 'hierarchical', 'data', id)
+            self._path = os.path.join(dataset.path, 'hierarchy', 'data', id)
 
         # Check that patient ID exists.
         if not os.path.isdir(self._path):

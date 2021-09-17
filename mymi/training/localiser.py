@@ -79,8 +79,9 @@ def train_localiser(
         #     monitor='val/loss',
         #     patience=5),
         ModelCheckpoint(
+            auto_insert_metric_name=False,
             dirpath=checks_path,
-            filename='loss={val/loss}-epoch={epoch}-step={trainer/global_step}',
+            filename='loss={val/loss:.6f}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
             save_last=True,

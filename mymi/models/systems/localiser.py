@@ -79,8 +79,9 @@ class Localiser(pl.LightningModule):
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
             if y_hat.sum() > 0 and y.sum() > 0:
-                hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('train/hausdorff', hausdorff, **self._log_args)
+                hd, mean_hd = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
+                self.log('train/hausdorff', hd, **self._log_args)
+                self.log('train/average-hausdorff', mean_hd, **self._log_args)
 
         return loss
 
@@ -102,5 +103,6 @@ class Localiser(pl.LightningModule):
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
             if y_hat.sum() > 0:
-                hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('val/hausdorff', hausdorff, **self._log_args, sync_dist=True)
+                hd, mean_hd = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
+                self.log('val/hausdorff', hd, **self._log_args, sync_dist=True)
+                self.log('val/average-hausdorff', mean_hd, **self._log_args, sync_dist=True)
