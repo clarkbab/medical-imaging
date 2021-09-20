@@ -48,46 +48,38 @@ def _build_dataset_hierarchy(
         hierarchy. Organising into a hierarchy allows us to interact with the data in a 
         consistent manner, regardless of the original DICOM folder structure.
     """
-    try:
-        # Load all dicom files.
-        raw_path = os.path.join(dataset.path, 'raw')
-        if not os.path.exists(raw_path):
-            raise ValueError(f"No 'raw' folder found for dataset '{dataset}'.")
-        dicom_files = []
-        for root, _, files in os.walk(raw_path):
-            for f in files:
-                if f.lower().endswith('.dcm'):
-                    dicom_files.append(os.path.join(root, f))
+    # Load all dicom files.
+    raw_path = os.path.join(dataset.path, 'raw')
+    if not os.path.exists(raw_path):
+        raise ValueError(f"No 'raw' folder found for dataset '{dataset}'.")
+    dicom_files = []
+    for root, _, files in os.walk(raw_path):
+        for f in files:
+            if f.lower().endswith('.dcm'):
+                dicom_files.append(os.path.join(root, f))
 
-        # Copy dicom files.
-        logging.info(f"Building hierarchy for dataset '{dataset}'..")
-        for f in tqdm(dicom_files):
-            # Get patient ID.
-            dicom = dcm.read_file(f)
-            pat_id = dicom.PatientID
+    # Copy dicom files.
+    logging.info(f"Building hierarchy for dataset '{dataset}'..")
+    for f in tqdm(dicom_files):
+        # Get patient ID.
+        dicom = dcm.read_file(f)
+        pat_id = dicom.PatientID
 
-            # Get modality.
-            mod = dicom.Modality.lower()
-            if not mod in ('ct', 'rtstruct'):
-                continue
+        # Get modality.
+        mod = dicom.Modality.lower()
+        if not mod in ('ct', 'rtstruct'):
+            continue
 
-            # Get series UID.
-            series_UID = dicom.SeriesInstanceUID
+        # Get series UID.
+        series_UID = dicom.SeriesInstanceUID
 
-            # Create filepath.
-            filename = os.path.basename(f)
-            filepath = os.path.join(dataset.path, 'hierarchy', 'data', pat_id, mod, series_UID, filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
-            # Save dicom.
-            dicom.save_as(filepath)
-    except Exception as e:
-        # Roll back in case of exceptions.
-        path = os.path.join(dataset.path, 'hierarchy')
-        if os.path.exists(path):
-            logging.info(f"Rolling back hierarchy creation for dataset '{dataset}'.")
-            shutil.rmtree(path)
-        raise e
+        # Create filepath.
+        filename = os.path.basename(f)
+        filepath = os.path.join(dataset.path, 'hierarchy', 'data', pat_id, mod, series_UID, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Save dicom.
+        dicom.save_as(filepath)
 
 @_rollback_hierarchy
 def _trim_dataset_hierarchy(
@@ -107,7 +99,7 @@ def _trim_dataset_hierarchy(
     # Get patients.
     pats = dataset.list_patients()
 
-    # Trim each patient.
+    # Check each patient for errors.
     for pat in tqdm(pats):
         try:
             # ValueError is thrown if:
@@ -152,43 +144,52 @@ def _trim_dataset_hierarchy(
             continue
 
         # Check for orientation consistency.
+        error = False
         for ct in cts:
             if ct.ImageOrientationPatient != ori:
-                msg = f"Inconsistent CT slice 'ImageOrientationPatient' found for patient '{patient}'."
-                _trim_patient(dataset, pat, msg)
-                data = {
-                    'patient-id': pat,
-                    'reason': 'INCONSISTENT-ORIENTATION'
-                }
-                df = df.append(data, ignore_index=True)
-                continue
+                error = True
+        if error:
+            msg = f"Inconsistent CT slice 'ImageOrientationPatient' found for patient '{patient}'."
+            _trim_patient(dataset, pat, msg)
+            data = {
+                'patient-id': pat,
+                'reason': 'INCONSISTENT-ORIENTATION'
+            }
+            df = df.append(data, ignore_index=True)
+            continue
 
         # Check position consistency.
+        error = False
         pos = [float(p) for p in cts[0].ImagePositionPatient]
         for ct in cts:
             ct_pos = [float(p) for p in ct.ImagePositionPatient]
             if ct_pos[:2] != pos[:2]:
-                msg = "Inconsistent CT slice 'ImagePositionPatient' (x/y) found for patient '{patient}'."
-                _trim_patient(dataset, pat, msg)
-                data = {
-                    'patient-id': pat,
-                    'reason': 'INCONSISTENT-POSITION'
-                }
-                df = df.append(data, ignore_index=True)
-                continue
+                error = True
+        if error:
+            msg = "Inconsistent CT slice 'ImagePositionPatient' (x/y) found for patient '{patient}'."
+            _trim_patient(dataset, pat, msg)
+            data = {
+                'patient-id': pat,
+                'reason': 'INCONSISTENT-POSITION'
+            }
+            df = df.append(data, ignore_index=True)
+            continue
 
         # Check x/y spacing consistency.
+        error = False
         spac = cts[0].PixelSpacing 
         for ct in cts:
             if ct.PixelSpacing != spac:
-                msg = f"Inconsistent CT slice 'PixelSpacing' found for patient '{patient}'."
-                _trim_patient(dataset, pat, msg)
-                data = {
-                    'patient-id': pat,
-                    'reason': 'INCONSISTENT-PIXEL-SPACING'
-                }
-                df = df.append(data, ignore_index=True)
-                continue
+                error = True
+        if error:
+            msg = f"Inconsistent CT slice 'PixelSpacing' found for patient '{patient}'."
+            _trim_patient(dataset, pat, msg)
+            data = {
+                'patient-id': pat,
+                'reason': 'INCONSISTENT-PIXEL-SPACING'
+            }
+            df = df.append(data, ignore_index=True)
+            continue
 
         # Check z spacing consistency.
         z_pos = [ct.ImagePositionPatient[2] for ct in cts]

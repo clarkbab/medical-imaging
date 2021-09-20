@@ -120,6 +120,9 @@ def region_map(*args, **kwargs):
 def region_summary(*args, **kwargs):
     return ds.region_summary(*args, **kwargs)
 
+def trimmed_summary(*args, **kwargs):
+    return ds.trimmed_summary(*args, **kwargs)
+
 # NIFTIDataset API.
 
 def list_patients(*args, **kwargs):

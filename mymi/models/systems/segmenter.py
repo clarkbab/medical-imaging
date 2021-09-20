@@ -84,12 +84,17 @@ class Segmenter(pl.LightningModule):
         y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('val/loss', loss, on_epoch=True, sync_dist=True)
+        self.log(f"val/batch/loss/{batch_idx}", loss, on_epoch=False, on_step=True)
 
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
             self.log('val/dice', dice, on_epoch=True, sync_dist=True)
+            self.log(f"val/batch/dice/{batch_idx}", dice, on_epoch=False, on_step=True)
 
         if 'hausdorff' in self._metrics and batch_idx > self._hausdorff_delay:
             if y_hat.sum() > 0:
-                hausdorff = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('val/hausdorff', hausdorff, on_epoch=True, sync_dist=True)
+                hd, mean_hd = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
+                self.log('val/hausdorff', hd, on_epoch=True, sync_dist=True)
+                self.log('val/average-hausdorff', mean_hd, **self._log_args, sync_dist=True)
+                self.log(f"val/batch/hausdorff/{batch_idx}", hd, on_epoch=False, on_step=True)
+                self.log(f"val/batch/average-hausdorff/{batch_idx}", mean_hd, on_epoch=False, on_step=True)

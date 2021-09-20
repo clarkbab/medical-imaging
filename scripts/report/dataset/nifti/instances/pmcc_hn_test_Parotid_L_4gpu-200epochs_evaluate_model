@@ -5,8 +5,8 @@ cd $parent_path
 
 DATASET="PMCC-HN-TEST"
 LOCALISER="('localiser-Parotid_L','4gpu-200epochs','loss=val/loss=-0.8987663984298706-epoch=epoch=180-step=trainer/global_step=0')"
-NAME="Parotid_L-1gpu-200epochs"
+NAME="Parotid_L-4gpu-200epochs"
 REGION='Parotid_L'
-SEGMENTER="('segmenter-Parotid_L','4gpu-200epochs','loss=val/loss=-0.9126893877983093-epoch=epoch=60-step=trainer/global_step=0')"
+SEGMENTER="('segmenter-Parotid_L','4gpu-200epochs','loss=-0.914714-epoch=169-step=0')"
 
 python evaluate_model --name $NAME --dataset $DATASET --localiser $LOCALISER --segmenter $SEGMENTER --region $REGION

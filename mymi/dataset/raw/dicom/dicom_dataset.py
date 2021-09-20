@@ -80,6 +80,11 @@ class DICOMDataset(Dataset):
         return self._path
 
     @require_hierarchy
+    def trimmed_summary(self) -> pd.DataFrame:
+        path = os.path.join(self._path, 'hierarchy', 'trimmed', 'summary.csv')
+        return pd.read_csv(path)
+
+    @require_hierarchy
     def has_patient(
         self,
         id: types.PatientID) -> bool:

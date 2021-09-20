@@ -58,6 +58,11 @@ def evaluate_model(
             'region': region,
             'metric': 'hd'
         }
+        hd_avg_data = {
+            'patient-id': pat,
+            'region': region,
+            'metric': 'hd-avg'
+        }
 
         # DSC.
         dsc_score = dice(pred, label)
@@ -65,11 +70,13 @@ def evaluate_model(
 
         # HD.
         spacing = set.patient(pat).ct_spacing()
-        hd_score = hausdorff_distance(pred, label, spacing)
-        hd_data[region] = hd_score
+        hd, hd_avg = hausdorff_distance(pred, label, spacing)
+        hd_data[region] = hd
+        hd_avg_data[region] = hd_avg
 
         df = df.append(dsc_data, ignore_index=True)
         df = df.append(hd_data, ignore_index=True)
+        df = df.append(hd_avg_data, ignore_index=True)
 
     # Set index.
     df = df.set_index('patient-id')

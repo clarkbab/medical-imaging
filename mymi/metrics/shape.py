@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
 from SimpleITK import GetArrayViewFromImage as ArrayView
-from typing import Union
+from typing import Tuple, Union
 
 from mymi import types
 
@@ -85,6 +85,20 @@ def surface_distance(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D) -> Tuple[float, float, float, float]:
+    if a.shape != b.shape:
+        raise ValueError(f"Metric 'surface_distance' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'surface_distance' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+
+    # Convert types for SimpleITK.
+    a = a.astype('uint8')
+    b = b.astype('uint8')
+
+    # Convert to SimpleITK images.
+    a = sitk.GetImageFromArray(a)
+    a.SetSpacing(spacing)
+    b = sitk.GetImageFromArray(b)
+    b.SetSpacing(spacing)
 
     # Get symmetric surface distances.
     a_surface = sitk.LabelContour(a)

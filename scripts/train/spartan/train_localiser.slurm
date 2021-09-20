@@ -25,7 +25,7 @@ NUM_SUBSET=None
 REGIONS="Parotid_L"
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="4gpu-400epochs"
+RUN_NAME="4gpu-val-test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
