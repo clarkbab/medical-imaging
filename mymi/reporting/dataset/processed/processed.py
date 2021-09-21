@@ -6,7 +6,7 @@ from mymi import types
 
 def region_count(
     dataset: str,
-    clear_cache: bool = False,
+    clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     # List regions.
     set = ds.get(dataset, type_str='processed')
@@ -40,7 +40,7 @@ def region_count(
 
 def create_region_count_report(
     dataset: str,
-    clear_cache: bool = False,
+    clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> None:
     # Generate counts report.
     set = ds.get(dataset, type_str='processed')

@@ -5,7 +5,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
-from typing import Optional
+from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
@@ -17,7 +17,7 @@ from mymi import types
 def train_localiser(
     model_name: str,
     run_name: str,
-    dataset: str,
+    datasets: Union[str, List[str]],
     num_epochs: int = 200,
     num_gpus: int = 1,
     num_nodes: int = 1,
@@ -29,12 +29,26 @@ def train_localiser(
     slurm_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on dataset '{dataset}' with regions '{regions}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with regions '{regions}'.")
 
     # Load partitions.
-    set = ds.get(dataset, 'processed')
-    train_part = set.partition('train')
-    val_part = set.partition('validation')
+    if isinstance(datasets, str):
+        set = ds.get(datasets, 'processed')
+        spacing = eval(set.params().spacing[0])
+        train_parts = set.partition('train')
+        val_parts = set.partition('validation')
+    else:
+        set = ds.get(datasets[0], 'processed')
+        spacing = eval(set.params().spacing[0]) 
+        train_parts = []
+        val_parts = []
+        for d in datasets:
+            set = ds.get(d, 'processed')
+            d_spacing = eval(set.params().spacing[0]) 
+            if d_spacing != spacing:
+                raise ValueError(f"Can't train on datasets with inconsistent spacing.")
+            train_parts.append(set.partition('train'))
+            val_parts.append(set.partition('validation'))
 
     # Create transforms.
     rotation = (-5, 5)
@@ -47,12 +61,11 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    spacing = eval(set.params().spacing[0])
     if num_subset is not None:
-        train_loader = SubsetLoader.build(train_part, num_subset, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+        train_loader = SubsetLoader.build(train_parts, num_subset, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
     else:
-        train_loader = Loader.build(train_part, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
-    val_loader = Loader.build(val_part, num_workers=num_workers, regions=regions, shuffle=False)
+        train_loader = Loader.build(train_parts, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=regions, shuffle=False)
 
     # Create model.
     metrics = ['dice', 'hausdorff']

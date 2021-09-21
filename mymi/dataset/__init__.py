@@ -114,9 +114,6 @@ def ct_summary(*args, **kwargs):
 def patient(*args, **kwargs):
     return ds.patient(*args, **kwargs)
 
-def region_map(*args, **kwargs):
-    return ds.region_map(*args, **kwargs)
-
 def region_summary(*args, **kwargs):
     return ds.region_summary(*args, **kwargs)
 

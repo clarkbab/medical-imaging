@@ -7,7 +7,8 @@ sys.path.append(root_dir)
 
 from mymi.training import train_segmenter
 
-fire.Fire(train_segmenter)
+if __name__ == '__main__':
+    fire.Fire(train_segmenter)
 
 # Sample args:
-# --dataset HN1-SEG --num_gpus 4 --num_workers 4
+# --datasets "['HN1-SEG','HNSCC-SEG']" --num_gpus 4 --num_nodes 1 --num_workers 4 --use_logger True
