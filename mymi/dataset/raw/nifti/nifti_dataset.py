@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import pandas as pd
 from tqdm import tqdm
@@ -16,6 +17,7 @@ class NIFTIDataset(Dataset):
     def __init__(
         self,
         name: str):
+        self._global_id = f"NIFTI: {name}"
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'raw', name)
     
@@ -31,6 +33,7 @@ class NIFTIDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
+    @cache.method('_global_id')
     def list_patients(
         self,
         regions: types.PatientRegions = 'all') -> List[str]:
@@ -46,7 +49,7 @@ class NIFTIDataset(Dataset):
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
         return pats
 
-    @cache.method('_name')
+    @cache.method('_global_id')
     def ct_summary(
         self,
         clear_cache: bool = False) -> pd.DataFrame:
@@ -91,7 +94,7 @@ class NIFTIDataset(Dataset):
 
         return df
 
-    @cache.method('_name')
+    @cache.method('_global_id')
     def list_regions(
         self,
         clear_cache: bool = False) -> pd.DataFrame:
@@ -123,7 +126,7 @@ class NIFTIDataset(Dataset):
 
         return df
     
-    @cache.method('_name')
+    @cache.method('_global_id')
     def region_summary(
         self, 
         clear_cache: bool = False,

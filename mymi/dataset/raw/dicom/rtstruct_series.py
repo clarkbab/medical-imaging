@@ -94,12 +94,14 @@ class RTSTRUCTSeries:
     def list_regions(
         self,
         clear_cache: bool = False,
-        use_mapping: bool = True) -> List[str]:
+        use_mapping: bool = True,
+        whitelist: types.PatientRegions = 'all') -> List[str]:
         """
         returns: the patient's region names.
         kwargs:
             clear_cache: force the cache to clear.
             use_mapping: use region map if present.
+            whitelist: return whitelisted regions only.
         """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
@@ -114,6 +116,20 @@ class RTSTRUCTSeries:
         # Map to internal names.
         if use_mapping and self._region_map:
             names = [self._region_map.to_internal(n) for n in names]
+
+        # Filter on whitelist.
+        def filter_fn(region):
+            if isinstance(whitelist, str):
+                if whitelist == 'all':
+                    return True
+                else:
+                    return region == whitelist
+            else:
+                if region in whitelist:
+                    return True
+                else:
+                    return False
+        names = list(filter(filter_fn, names))
 
         return names
 

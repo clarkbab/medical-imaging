@@ -18,18 +18,18 @@ def train_localiser(
     model_name: str,
     run_name: str,
     datasets: Union[str, List[str]],
+    region: str,
     num_epochs: int = 200,
     num_gpus: int = 1,
     num_nodes: int = 1,
     num_subset: Optional[int] = None,
     num_workers: int = 1,
-    regions: types.PatientRegions = 'all',
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with regions '{regions}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
 
     # Load partitions.
     if isinstance(datasets, str):
@@ -62,15 +62,19 @@ def train_localiser(
 
     # Create data loaders.
     if num_subset is not None:
-        train_loader = SubsetLoader.build(train_parts, num_subset, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
+        train_loader = SubsetLoader.build(train_parts, num_subset, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
     else:
-        train_loader = Loader.build(train_parts, num_workers=num_workers, regions=regions, spacing=spacing, transform=transform)
-    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=regions, shuffle=False)
+        train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
+    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
+
+    # Create map from validation batch_idx to "dataset:partition:sample_idx".
+    index_map = dict([(batch_idx, f"{val_parts[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
 
     # Create model.
-    metrics = ['dice', 'hausdorff']
+    metrics = ['dice', 'hausdorff', 'surface']
     model = Localiser(
-        region=regions,
+        region,
+        index_map=index_map,
         metrics=metrics,
         spacing=spacing)
 

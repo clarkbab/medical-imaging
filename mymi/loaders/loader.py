@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import List, Union
+from typing import List, Tuple, Union
 
 from mymi import types
 from mymi.dataset.processed import ProcessedPartition
@@ -90,7 +90,7 @@ class LoaderDataset(Dataset):
 
     def __getitem__(
         self,
-        index: int):
+        index: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         returns: an (input, label) pair from the dataset.
         args:

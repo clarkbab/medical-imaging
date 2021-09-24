@@ -96,6 +96,7 @@ class DICOMDataset(Dataset):
         return id in self.list_patients()
 
     @require_hierarchy
+    @cache.method('_global_id')
     def list_patients(
         self,
         regions: types.PatientRegions = 'all',

@@ -28,4 +28,4 @@ RUN_NAME="pmcc-hn-train-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/segmenter --slurm_job_id $SLURM_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --regions $REGION --use_logger $USE_LOGGER
+python $SCRIPT_DIR/train/segmenter --slurm_job_id $SLURM_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --use_logger $USE_LOGGER

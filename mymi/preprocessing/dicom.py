@@ -139,7 +139,7 @@ def process(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping)
+            pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
 
             # Load data.
             input = old_ds.patient(pat).ct_data()

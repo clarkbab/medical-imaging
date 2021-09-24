@@ -4,7 +4,6 @@ import pandas as pd
 from tqdm import tqdm
 from typing import Callable, List
 
-from mymi import cache
 from mymi import logging
 from mymi import types
 
@@ -62,7 +61,6 @@ class ProcessedPartition:
             indices = []
         return indices
 
-    @cache.method('_dataset.name', '_name')
     def list_regions(self) -> pd.DataFrame:
         """
         returns: a DataFrame with partition region names.
