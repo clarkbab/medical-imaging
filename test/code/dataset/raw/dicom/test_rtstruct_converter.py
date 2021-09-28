@@ -3,6 +3,7 @@ import os
 import pydicom as dcm
 import sys
 from typing import List
+import unittest
 from unittest import TestCase
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))

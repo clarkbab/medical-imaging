@@ -23,9 +23,6 @@ def percentile_hausdorff_distance(
     if a.dtype != np.bool or b.dtype != np.bool:
         raise ValueError(f"Metric 'hausdorff_distance_95' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
-    # Get surface distances.
-
-
     # Convert types for SimpleITK.
     a = a.astype('uint8')
     b = b.astype('uint8')
@@ -49,15 +46,12 @@ def percentile_hausdorff_distance(
     b_dist_map_arr = sitk.GetArrayFromImage(b_dist_map)
 
     # Get distances between sets.
-    a_to_b = b_dist_map_arr[a_surface_arr == 1]
-    b_to_a = a_dist_map_arr[b_surface_arr == 1]
-
-    # Calculate statistics.
-    mean = np.mean(a_to_b + b_to_a)
+    a_to_b = list(b_dist_map_arr[a_surface_arr == 1])
+    b_to_a = list(a_dist_map_arr[b_surface_arr == 1])
 
     # Calculate mean value.
-    mean = (np.percentile(a_to_b, p) + np.percentile(b_to_a, p)) / 2
-    return mean
+    p_hd = np.max((np.percentile(a_to_b, p), np.percentile(b_to_a, p)))
+    return p_hd
 
 def hausdorff_distance(
     a: np.ndarray,
@@ -88,11 +82,11 @@ def hausdorff_distance(
     # Calculate Hausdorff distance.
     filter = sitk.HausdorffDistanceImageFilter()
     filter.Execute(a, b)
-    max = filter.GetHausdorffDistance()
-    mean = filter.GetAverageHausdorffDistance()
-    return max, mean
+    hd = filter.GetHausdorffDistance()
+    avg_hd = filter.GetAverageHausdorffDistance()
+    return hd, avg_hd
 
-def surface_distance(
+def symmetric_surface_distance(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D,
@@ -175,7 +169,7 @@ def batch_mean_hausdorff_distance(
         means.append(mean)
     return np.mean(maxs), np.mean(means)
 
-def batch_mean_surface_distance(
+def batch_mean_symmetric_surface_distance(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D) -> Tuple[float, float, float, float]:

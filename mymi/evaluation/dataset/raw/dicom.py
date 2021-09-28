@@ -50,32 +50,62 @@ def evaluate_model(
         dsc_data = {
             'patient-id': pat,
             'region': region,
-            'metric': 'dsc'
+            'metric': 'dice'
         }
         hd_data = {
             'patient-id': pat,
             'region': region,
-            'metric': 'hd'
+            'metric': 'hausdorff'
         }
         hd_avg_data = {
             'patient-id': pat,
             'region': region,
-            'metric': 'hd-avg'
+            'metric': 'average-hausdorff'
+        }
+        sd_avg_data = {
+            'patient-id': pat,
+            'region': region,
+            'metric': 'average-surface'
+        }
+        sd_med_data = {
+            'patient-id': pat,
+            'region': region,
+            'metric': 'median-surface'
+        }
+        sd_std_data = {
+            'patient-id': pat,
+            'region': region,
+            'metric': 'std-surface'
+        }
+        sd_max_data = {
+            'patient-id': pat,
+            'region': region,
+            'metric': 'max-surface'
         }
 
-        # DSC.
+        # Dice.
         dsc_score = dice(pred, label)
         dsc_data[region] = dsc_score
+        df = df.append(dsc_data, ignore_index=True)
 
-        # HD.
+        # Hausdorff.
         spacing = set.patient(pat).ct_spacing()
         hd, hd_avg = hausdorff_distance(pred, label, spacing)
         hd_data[region] = hd
         hd_avg_data[region] = hd_avg
-
-        df = df.append(dsc_data, ignore_index=True)
         df = df.append(hd_data, ignore_index=True)
         df = df.append(hd_avg_data, ignore_index=True)
+
+        # Symmetric surface distance.
+        sd_mean, sd_median, sd_std, sd_max = symmetric_surface_distance(pred, label, spacing)
+        sd_mean_data[region] = sd_mean
+        sd_median_data[region] = sd_median
+        sd_std_data[region] = sd_std
+        sd_max_data[region] = sd_max
+        df = df.append(sd_mean, ignore_index=True)
+        df = df.append(sd_median, ignore_index=True)
+        df = df.append(sd_std, ignore_index=True)
+        df = df.append(sd_max, ignore_index=True)
 
     # Set index.
     df = df.set_index('patient-id')
