@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --mem 32G
-#SBATCH --gres gpu:p100:4
+#SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
 #SBATCH --time 3-0:00:00
 #SBATCH -A punim1413
@@ -19,13 +19,13 @@ DATASETS="PMCC-HN-TRAIN-LOC"
 REGION="Parotid_L"
 MODEL_NAME="localiser-$REGION"
 NUM_EPOCHS=400
-NUM_GPUS=4
+NUM_GPUS=1
 NUM_NODES=1
 NUM_WORKERS=4
 NUM_SUBSET=None
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="4gpu-val-test"
+RUN_NAME="1gpu-val-test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

@@ -52,7 +52,7 @@ class ProcessedDataset(Dataset):
         clear_cache: bool = False) -> pd.DataFrame:
         p_data = []
         for p in self.list_partitions():
-            region_df = self.partition(p).list_regions(clear_cache=clear_cache)
+            region_df = self.partition(p).list_regions()
             region_df.insert(0, 'partition', p)
             p_data.append(region_df)
         region_df = pd.concat(p_data)

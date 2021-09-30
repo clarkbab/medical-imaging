@@ -9,10 +9,10 @@ from .localiser import get_patient_box
 from .segmenter import get_patient_segmentation_patch
 
 def get_patient_segmentation(
-    localiser: types.Model,
-    segmenter: types.Model,
     dataset: Dataset,
     id: types.PatientID,
+    localiser: types.Model,
+    segmenter: types.Model,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     """
@@ -24,6 +24,6 @@ def get_patient_segmentation(
         clear_cache: force the cache to clear.
         device: the device to perform network calcs on.
     """
-    box = get_patient_box(localiser, dataset, id, clear_cache=clear_cache, device=device)
-    seg = get_patient_segmentation_patch(segmenter, dataset, id, box, clear_cache=clear_cache, device=device)
+    box = get_patient_box(dataset, id, localiser, clear_cache=clear_cache, device=device)
+    seg = get_patient_segmentation_patch(dataset, id, segmenter, box, clear_cache=clear_cache, device=device)
     return seg

@@ -10,9 +10,9 @@ from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
 def get_patient_box(
-    model: types.Model,
     dataset: Dataset,
     id: types.PatientID,
+    localiser: types.Model,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     return_seg: bool = False) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:
@@ -20,6 +20,7 @@ def get_patient_box(
     returns: the bounding box (min, max) pair in voxel coordinates. Optionally returns the localiser
         segmentation prediction.
     args:
+        localiser: the localiser model.
         dataset: the dataset.
         id: the patient ID.
     kwargs:
@@ -27,11 +28,9 @@ def get_patient_box(
         device: the device to run network calcs on.
         return_seg: return the network's segmentation prediction.
     """
-    # Load localiser.
-    if type(model) == Localiser:
-        localiser = model
-    else:
-        localiser = Localiser.load(*model)
+    # Load model if not already loaded.
+    if type(localiser) == tuple:
+        localiser = Localiser.load(*localiser)
     localiser.eval()
     localiser.to(device)
     localiser_size = (128, 128, 96)

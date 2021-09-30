@@ -6,10 +6,124 @@ from typing import Optional
 from mymi import dataset as ds
 from mymi.dataset.raw import recreate
 from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
+from mymi import logging
+from mymi.models.systems import Localiser, Segmenter
 from mymi.regions import to_255, RegionColours
 from mymi import utils
+from mymi import types
 
-from ...two_stage import get_patient_segmentation
+from ...two_stage import get_patient_box, get_patient_segmentation
+
+def create_localiser_predictions(
+    dataset: str,
+    localiser: types.Model,
+    clear_cache: bool = False,
+    region: types.PatientRegions = 'all') -> None:
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Load patients.
+    set = ds.get(dataset, 'dicom')
+    pats = set.list_patients(regions=region)
+
+    # Load models.
+    localiser_args = localiser
+    localiser = Localiser.load(*localiser)
+
+    # Create RTSTRUCT info.
+    rt_info = {
+        'label': 'MYMI',
+        'institution-name': 'MYMI'
+    }
+
+    for pat in tqdm(pats):
+        # Get segmentation.
+        _, seg = get_patient_box(set, pat, localiser, clear_cache=clear_cache, device=device, return_seg=True)
+
+        # Load reference CT dicoms.
+        cts = set.patient(pat).get_cts()
+
+        # Create RTSTRUCT dicom.
+        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
+
+        # Create ROI data.
+        roi_data = ROIData(
+            colour=list(to_255(RegionColours.Parotid_L)),
+            data=seg,
+            frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+            name=region
+        )
+
+        # Add ROI.
+        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
+
+        # Save in folder.
+        filename = f"{pat}.dcm"
+        filepath = os.path.join(set.path, 'predictions', 'localiser', f"{localiser_args[0]}-{segmenter_args[0]}", f"{localiser_args[1]}-{segmenter_args[1]}", f"{localiser_args[2]}-{segmenter_args[2]}", filename) 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        rtstruct.save_as(filepath)
+
+def create_two_stage_predictions(
+    dataset: str,
+    localiser: types.Model,
+    segmenter: types.Model,
+    clear_cache: bool = False,
+    region: types.PatientRegions = 'all') -> None:
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Load patients.
+    set = ds.get(dataset, 'dicom')
+    pats = set.list_patients(regions=region)
+
+    # Load models.
+    localiser_args = localiser
+    segmenter_args = segmenter
+    localiser = Localiser.load(*localiser)
+    segmenter = Segmenter.load(*segmenter)
+
+    # Create RTSTRUCT info.
+    rt_info = {
+        'label': 'MYMI',
+        'institution-name': 'MYMI'
+    }
+
+    for pat in tqdm(pats):
+        # Get segmentation.
+        seg = get_patient_segmentation(set, pat, localiser, segmenter, clear_cache=clear_cache, device=device)
+
+        # Load reference CT dicoms.
+        cts = set.patient(pat).get_cts()
+
+        # Create RTSTRUCT dicom.
+        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
+
+        # Create ROI data.
+        roi_data = ROIData(
+            colour=list(to_255(RegionColours.Parotid_L)),
+            data=seg,
+            frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+            name=region
+        )
+
+        # Add ROI.
+        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
+
+        # Save in folder.
+        filename = f"{pat}.dcm"
+        filepath = os.path.join(set.path, 'predictions', 'two-stage', f"{localiser_args[0]}-{segmenter_args[0]}", f"{localiser_args[1]}-{segmenter_args[1]}", f"{localiser_args[2]}-{segmenter_args[2]}", filename) 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        rtstruct.save_as(filepath)
 
 def create_dataset(
     dataset: str,

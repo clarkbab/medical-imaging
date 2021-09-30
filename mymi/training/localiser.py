@@ -68,7 +68,7 @@ def train_localiser(
     val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
 
     # Create map from validation batch_idx to "dataset:partition:sample_idx".
-    index_map = dict([(batch_idx, f"{val_parts[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
+    index_map = dict([(batch_idx, f"{val_loader.dataset._partitions[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']

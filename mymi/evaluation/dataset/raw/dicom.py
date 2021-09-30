@@ -27,7 +27,7 @@ def evaluate_model(
     set = ds.get(dataset, 'dicom')
     pats = set.list_patients(regions=region)
 
-    # Pre-load model - so we don't need to reload for each prediction.
+    # Load model if not already loaded.
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
     if type(segmenter) == tuple:
@@ -43,7 +43,7 @@ def evaluate_model(
 
     for pat in tqdm(pats):
         # Get pred/ground truth.
-        pred = get_patient_segmentation(localiser, segmenter, set, pat, device=device)
+        pred = get_patient_segmentation(set, pat, localiser, segmenter, device=device)
         label = set.patient(pat).region_data()[region]
 
         # Add metrics.

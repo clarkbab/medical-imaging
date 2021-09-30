@@ -9,9 +9,9 @@ from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
 def get_patient_segmentation_patch(
-    model: types.Model,
     dataset: Dataset,
     id: types.PatientID,
+    segmenter: types.Model,
     box: types.Box3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
@@ -19,6 +19,7 @@ def get_patient_segmentation_patch(
     """
     returns: the segmentation for the patient.
     args:
+        segmenter: the segmenter model.
         dataset: the dataset.
         id: the patient ID.
         box: the box from localisation.
@@ -27,11 +28,9 @@ def get_patient_segmentation_patch(
         device: the device to use for network calcs.
         return_patch: returns the box used for the segmentation.
     """
-    # Load segmenter.
-    if type(model) == Segmenter:
-        segmenter = model
-    else:
-        segmenter = Segmenter.load(*model)
+    # Load model if not already loaded.
+    if type(segmenter) == tuple:
+        segmenter = Segmenter.load(*segmenter)
     segmenter.eval()
     segmenter.to(device)
     segmenter_size = (128, 128, 96)

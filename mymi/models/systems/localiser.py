@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from mymi import config
 from mymi.losses import DiceLoss
-from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance, batch_mean_surface_distance
+from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance, batch_mean_symmetric_surface_distance
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
@@ -141,7 +141,7 @@ class Localiser(pl.LightningModule):
 
         if 'surface' in self._metrics and self.global_step > self._surface_delay and self.current_epoch % self._surface_interval == 0:
             if y_hat.sum() > 0 and y.sum() > 0:
-                mean_sd, median_sd, std_sd, max_sd = batch_mean_surface_distance(y_hat, y, self._spacing)
+                mean_sd, median_sd, std_sd, max_sd = batch_mean_symmetric_surface_distance(y_hat, y, self._spacing)
                 self.log('val/mean-surface', mean_sd, **self._log_args, sync_dist=True)
                 self.log('val/median-surface', median_sd, **self._log_args, sync_dist=True)
                 self.log('val/std-surface', std_sd, **self._log_args, sync_dist=True)
