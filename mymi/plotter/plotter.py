@@ -7,7 +7,7 @@ import torch
 from torch import nn
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import Dict, Sequence, Tuple, Union
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
 from mymi.dataset.raw.dicom import DICOMDataset

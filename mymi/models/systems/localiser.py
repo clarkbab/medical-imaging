@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from mymi import config
 from mymi.losses import DiceLoss
-from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance, batch_mean_symmetric_surface_distance
+from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
@@ -27,14 +27,10 @@ class Localiser(pl.LightningModule):
             spacing: required to calculate the shape-based metrics.
         """
         super().__init__()
-        # Validate arguments.
-        if 'hausdorff' in metrics and spacing is None:
-            raise ValueError(f"Localiser requires 'spacing' when calculating 'Hausdorff' metric.")
-
-        self._hausdorff_delay = 50
-        self._hausdorff_interval = 20
-        self._surface_delay = 50
-        self._surface_interval = 20
+        if 'distances' in metrics and spacing is None:
+            raise ValueError(f"Localiser requires 'spacing' when calculating 'distances' metric.")
+        self._distances_delay = 50
+        self._distances_interval = 20
         self._index_map = index_map
         self._loss = DiceLoss()
         self._log_args = {
@@ -131,22 +127,20 @@ class Localiser(pl.LightningModule):
             self.log('val/dice', dice, **self._log_args, sync_dist=True)
             self.log(f"val/batch/dice/{sample_desc}", dice, on_epoch=False, on_step=True)
 
-        if 'hausdorff' in self._metrics and self.global_step > self._hausdorff_delay and self.current_epoch % self._hausdorff_interval == 0:
-            if y_hat.sum() > 0:
-                hd, mean_hd = batch_mean_hausdorff_distance(y_hat, y, self._spacing)
-                self.log('val/hausdorff', hd, **self._log_args, sync_dist=True)
-                self.log('val/average-hausdorff', mean_hd, **self._log_args, sync_dist=True)
-                self.log(f"val/batch/hausdorff/{sample_desc}", hd, on_epoch=False, on_step=True)
-                self.log(f"val/batch/average-hausdorff/{sample_desc}", mean_hd, on_epoch=False, on_step=True)
-
-        if 'surface' in self._metrics and self.global_step > self._surface_delay and self.current_epoch % self._surface_interval == 0:
+        if 'distances' in self._metrics and self.global_step > self._distances_delay and self.current_epoch % self._distances_interval == 0:
             if y_hat.sum() > 0 and y.sum() > 0:
-                mean_sd, median_sd, std_sd, max_sd = batch_mean_symmetric_surface_distance(y_hat, y, self._spacing)
-                self.log('val/mean-surface', mean_sd, **self._log_args, sync_dist=True)
-                self.log('val/median-surface', median_sd, **self._log_args, sync_dist=True)
-                self.log('val/std-surface', std_sd, **self._log_args, sync_dist=True)
-                self.log('val/max-surface', max_sd, **self._log_args, sync_dist=True)
-                self.log(f"val/batch/mean-surface/{sample_desc}", mean_sd, **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/median-surface/{sample_desc}", median_sd, **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/std-surface/{sample_desc}", std_sd, **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/max-surface/{sample_desc}", max_sd, **self._log_args, on_epoch=False, on_step=True)
+                dists = batch_mean_distances(y_hat, y, self._spacing)
+                self.log('val/assd', dists['assd'], **self._log_args, sync_dist=True)
+                self.log('val/surface-hd', dists['surface-hd'], **self._log_args, sync_dist=True)
+                # self.log('val/surface-ahd', dists['surface-ahd'], **self._log_args, sync_dist=True)
+                self.log('val/surface-95hd', dists['surface-95hd'], **self._log_args, sync_dist=True)
+                self.log('val/voxel-hd', dists['voxel-hd'], **self._log_args, sync_dist=True)
+                # self.log('val/voxel-ahd', dists['voxel-ahd'], **self._log_args, sync_dist=True)
+                self.log('val/voxel-95hd', dists['voxel-95hd'], **self._log_args, sync_dist=True)
+                self.log(f"val/batch/assd/{sample_desc}", dists['assd'], on_epoch=False, on_step=True)
+                self.log(f"val/batch/surface-hd/{sample_desc}", dists['surface-hd'], on_epoch=False, on_step=True)
+                # self.log(f"val/batch/surface-ahd/{sample_desc}", dists['surface-ahd'], on_epoch=False, on_step=True)
+                self.log(f"val/batch/surface-95hd/{sample_desc}", dists['surface-95hd'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/voxel-hd/{sample_desc}", dists['voxel-hd'], **self._log_args, on_epoch=False, on_step=True)
+                # self.log(f"val/batch/voxel-ahd/{sample_desc}", dists['voxel-ahd'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/voxel-95hd/{sample_desc}", dists['voxel-95hd'], **self._log_args, on_epoch=False, on_step=True)
