@@ -31,17 +31,17 @@ def train_segmenter(
     # Load partitions.
     if isinstance(datasets, str):
         set = ds.get(datasets, 'processed')
-        spacing = eval(set.params().spacing[0])
+        spacing = eval(set.params.spacing[0])
         train_parts = set.partition('train')
         val_parts = set.partition('validation')
     else:
         set = ds.get(datasets[0], 'processed')
-        spacing = eval(set.params().spacing[0]) 
+        spacing = eval(set.params.spacing[0]) 
         train_parts = []
         val_parts = []
         for d in datasets:
             set = ds.get(d, 'processed')
-            d_spacing = eval(set.params().spacing[0]) 
+            d_spacing = eval(set.params.spacing[0]) 
             if d_spacing != spacing:
                 raise ValueError(f"Can't train on datasets with inconsistent spacing.")
             train_parts.append(set.partition('train'))
@@ -59,7 +59,6 @@ def train_segmenter(
 
     # Create data loaders.
     patch_size = (128, 128, 96)
-    spacing = eval(set.params().spacing[0])
     train_loader = PatchLoader.build(train_parts, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
     val_loader = PatchLoader.build(val_parts, patch_size, region, num_workers=num_workers, shuffle=False)
 
