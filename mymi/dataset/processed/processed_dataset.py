@@ -29,12 +29,24 @@ class ProcessedDataset(Dataset):
         return f"PROCESSED: {self._name}"
 
     @property
+    def manifest(self) -> pd.DataFrame:
+        filepath = os.path.join(self._path, 'manifest.csv')
+        df = pd.read_csv(filepath)
+        return df
+
+    @property
     def name(self) -> str:
         return self._name
 
     @property
     def path(self) -> str:
         return self._path
+    
+    @property
+    def params(self) -> pd.DataFrame:
+        filepath = os.path.join(self._path, 'params.csv')
+        df = pd.read_csv(filepath)
+        return df
 
     @property
     def type(self) -> DatasetType:
@@ -74,22 +86,6 @@ class ProcessedDataset(Dataset):
         self,
         name: types.ProcessedPartition) -> ProcessedPartition:
         return ProcessedPartition(self, name)
-
-    def manifest(self) -> pd.DataFrame:
-        """
-        returns: the manifest table.
-        """
-        filepath = os.path.join(self._path, 'manifest.csv')
-        df = pd.read_csv(filepath)
-        return df
-
-    def params(self) -> pd.DataFrame:
-        """
-        returns: the params table.
-        """
-        filepath = os.path.join(self._path, 'params.csv')
-        df = pd.read_csv(filepath)
-        return df
 
     def append_to_manifest(
         self,

@@ -10,10 +10,10 @@ def get_largest_cc(a: np.ndarray) -> np.ndarray:
     if a.dtype != np.bool:
         raise ValueError(f"'get_batch_largest_cc' expected a boolean array, got '{a.dtype}'.")
 
-    # Check that there's at least 1 connected component.
+    # Check that there are some foreground pixels.
     labels = label(a)
     if labels.max() == 0:
-        raise ValueError(f"No foreground pixels found when calculating 'get_largest_cc'.")
+        return np.zeros_like(a)
     
     # Calculate largest component.
     largest_cc = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1

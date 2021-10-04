@@ -1,7 +1,7 @@
 from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
 import torch
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from mymi.dataset import Dataset
 from mymi.models.systems import Localiser
@@ -9,20 +9,20 @@ from mymi.postprocessing import get_largest_cc
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
-def get_patient_box(
+def get_localiser_prediction(
     dataset: Dataset,
-    id: types.PatientID,
+    pat_id: types.PatientID,
     localiser: types.Model,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    return_seg: bool = False) -> Union[types.Box3D, Tuple[types.Box3D, np.ndarray]]:
+    return_seg: bool = False) -> Union[Optional[types.Box3D], Tuple[Optional[types.Box3D], np.ndarray]]:
     """
     returns: the bounding box (min, max) pair in voxel coordinates. Optionally returns the localiser
         segmentation prediction.
     args:
         localiser: the localiser model.
         dataset: the dataset.
-        id: the patient ID.
+        pat_id: the patient ID.
     kwargs:
         clear_cache: force the cache to clear.
         device: the device to run network calcs on.
@@ -37,7 +37,7 @@ def get_patient_box(
     localiser_spacing = (4, 4, 6.625)
 
     # Get the patient CT data and spacing.
-    patient = dataset.patient(id)
+    patient = dataset.patient(pat_id)
     input = patient.ct_data(clear_cache=clear_cache)
     spacing = patient.ct_spacing(clear_cache=clear_cache)
     input_size = input.shape
@@ -70,10 +70,13 @@ def get_patient_box(
     pred = crop_or_pad_3D(pred, crop_box)
 
     # Get OAR extent.
-    non_zero = np.argwhere(pred != 0).astype(int)
-    min = tuple(non_zero.min(axis=0))
-    max = tuple(non_zero.max(axis=0))
-    box = (min, max)
+    if pred.sum() > 0:
+        non_zero = np.argwhere(pred != 0).astype(int)
+        min = tuple(non_zero.min(axis=0))
+        max = tuple(non_zero.max(axis=0))
+        box = (min, max)
+    else:
+        box = None
 
     # Create result.
     if return_seg:

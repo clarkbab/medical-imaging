@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from mymi import config
 from mymi.losses import DiceLoss
-from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance, batch_mean_symmetric_surface_distance
+from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 

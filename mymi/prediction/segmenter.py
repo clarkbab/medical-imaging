@@ -8,9 +8,9 @@ from mymi.models.systems import Segmenter
 from mymi.transforms import crop_or_pad_3D, resample_box_3D, resample_3D
 from mymi import types
 
-def get_patient_segmentation_patch(
+def get_segmenter_prediction(
     dataset: Dataset,
-    id: types.PatientID,
+    pat_id: types.PatientID,
     segmenter: types.Model,
     box: types.Box3D,
     clear_cache: bool = False,
@@ -21,7 +21,7 @@ def get_patient_segmentation_patch(
     args:
         segmenter: the segmenter model.
         dataset: the dataset.
-        id: the patient ID.
+        pat_id: the patient ID.
         box: the box from localisation.
     kwargs:
         clear_cache: forces the cache to clear.
@@ -37,7 +37,7 @@ def get_patient_segmentation_patch(
     segmenter_spacing = (1, 1, 2)
 
     # Load patient CT data and spacing.
-    patient = dataset.patient(id)
+    patient = dataset.patient(pat_id)
     input = patient.ct_data(clear_cache=clear_cache)
     spacing = patient.ct_spacing(clear_cache=clear_cache)
 

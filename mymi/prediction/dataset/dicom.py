@@ -1,7 +1,8 @@
+import numpy as np
 import os
 import torch
 from tqdm import tqdm
-from typing import Optional
+from typing import Optional, Tuple
 
 from mymi import dataset as ds
 from mymi.dataset.raw import recreate
@@ -12,11 +13,11 @@ from mymi.regions import to_255, RegionColours
 from mymi import utils
 from mymi import types
 
-from ...two_stage import get_patient_box, get_patient_segmentation
+from ..two_stage import get_localiser_prediction, get_two_stage_prediction
 
 def create_localiser_predictions(
     dataset: str,
-    localiser: types.Model,
+    localiser: Tuple[str, str, str],
     clear_cache: bool = False,
     region: types.PatientRegions = 'all') -> None:
     # Load gpu if available.
@@ -35,38 +36,22 @@ def create_localiser_predictions(
     localiser_args = localiser
     localiser = Localiser.load(*localiser)
 
-    # Create RTSTRUCT info.
-    rt_info = {
-        'label': 'MYMI',
-        'institution-name': 'MYMI'
-    }
-
     for pat in tqdm(pats):
-        # Get segmentation.
-        _, seg = get_patient_box(set, pat, localiser, clear_cache=clear_cache, device=device, return_seg=True)
-
-        # Load reference CT dicoms.
-        cts = set.patient(pat).get_cts()
-
-        # Create RTSTRUCT dicom.
-        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
-
-        # Create ROI data.
-        roi_data = ROIData(
-            colour=list(to_255(RegionColours.Parotid_L)),
-            data=seg,
-            frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
-            name=region
-        )
-
-        # Add ROI.
-        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
+        # Make prediction.
+        _, data = get_localiser_prediction(set, pat, localiser, clear_cache=clear_cache, device=device, return_seg=True)
 
         # Save in folder.
-        filename = f"{pat}.dcm"
-        filepath = os.path.join(set.path, 'predictions', 'localiser', f"{localiser_args[0]}-{segmenter_args[0]}", f"{localiser_args[1]}-{segmenter_args[1]}", f"{localiser_args[2]}-{segmenter_args[2]}", filename) 
+        spacing = set.patient(pat).ct_spacing()
+        affine = np.ndarray([
+            [spacing[0], 0, 0, 0],
+            [0, spacing[1], 0, 0],
+            [0, 0, spacing[2], 0],
+            [0, 0, 0, 1]
+        ])
+        img = nib.Nifti1Image(data, affine)
+        filepath = os.path.join(set.path, 'predictions', 'localiser', f"{localiser_args[0]}-{segmenter_args[0]}", f"{localiser_args[1]}-{segmenter_args[1]}", f"{localiser_args[2]}-{segmenter_args[2]}", f"{pat}.nii.gz") 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        rtstruct.save_as(filepath)
+        nib.save(img, filepath)
 
 def create_two_stage_predictions(
     dataset: str,

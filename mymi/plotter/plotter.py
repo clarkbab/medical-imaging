@@ -11,7 +11,7 @@ from typing import Dict, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
 from mymi.dataset.raw.dicom import DICOMDataset
-from mymi.prediction import get_patient_box, get_patient_segmentation_patch
+from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -178,7 +178,7 @@ def plot_patient_regions(
             other_region_data = dict(((n, o['region'].data.squeeze(0)) for n, o in other_region_data.items()))
 
     # Get slice data.
-    ct_slice_data = _get_slice_for_plotting(ct_data, slice_idx, view)
+    ct_slice_data = get_slice(ct_data, slice_idx, view)
 
     # Perform crop.
     if crop:
@@ -261,15 +261,14 @@ def plot_patient_regions(
                 'text.usetex': rc_params['text.usetex']
             })
 
-def _plot_regions(
+def plot_regions(
     region_data: Dict[str, np.ndarray],
+    slice_idx: int,
     alpha: float,
     aspect: float,
     crop: types.Box3D,
-    internal_regions: bool,
     latex: bool,
     perimeter: bool,
-    slice_idx: int,
     view: types.PatientView) -> bool:
     """
     effect: adds regions to the plot.
@@ -278,15 +277,11 @@ def _plot_regions(
         region_data: the region data to plot.
         others: see 'plot_patient_regions'.
     """
-    # Create palette if not using internal region colours.
-    if not internal_regions:
-        palette = plt.cm.tab20
-
     # Plot each region.
     show_legend = False     # Only show legend if slice has at least one region.
     for i, (region, data) in enumerate(region_data.items()):
         # Convert data to 'imshow' co-ordinate system.
-        slice_data = _get_slice_for_plotting(data, slice_idx, view)
+        slice_data = get_slice(data, slice_idx, view)
 
         # Crop image.
         if crop:
@@ -299,15 +294,12 @@ def _plot_regions(
             show_legend = True
         
         # Create binary colormap for each region.
-        if internal_regions:
-            colour = getattr(RegionColours, region)
-        else:
-            colour = palette(i)
+        colour = getattr(RegionColours, region)
         colours = [(1.0, 1.0, 1.0, 0), colour]
         region_cmap = ListedColormap(colours)
 
         # Plot region.
-        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=_get_origin(view))
+        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=get_origin(view))
         label = _escape_latex(region) if latex else region
         plt.plot(0, 0, c=colour, label=label)
         if perimeter:
@@ -381,7 +373,7 @@ def plot_patient_localisation(
             aspect = _get_aspect_ratio(id, view) 
 
         # Get slice data.
-        pred_slice_data = _get_slice_for_plotting(pred, slice_idx, view)
+        pred_slice_data = get_slice(pred, slice_idx, view)
 
         # Crop the image.
         if crop:
@@ -411,6 +403,62 @@ def plot_patient_localisation(
             "font.family": rc_params['font.family'],
             'text.usetex': rc_params['text.usetex']
         })
+
+def plot_localiser_prediction(
+    localiser: Tuple[str, str, str],
+    pat_id: types.PatientID,
+    slice_idx: int,
+    aspect: float = None,
+    crop: Optional[types.Box2D] = None,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
+    loc_box_colour: str = 'r',
+    show_loc_box: bool = False,
+    view: types.PatientView = 'axial',
+    **kwargs: dict) -> None:
+    # Plot patient regions.
+    plot_patient_regions(pat_id, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+
+    # Load prediction.
+
+    # Get localisation box if not given.
+    if not loc_box:
+        localisation_box = get_patient_box(id, localiser, localiser_size, localiser_spacing, clear_cache=clear_cache, device=device)
+
+    # Get segmentation prediction.
+    seg, seg_patch = get_patient_segmentation_patch(id, loc_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
+
+    # Get seg slice.
+    seg = get_slice(seg, slice_idx, view)
+
+    # Crop the segmentation.
+    if crop:
+        seg = crop_or_pad_2D(seg, _reverse_box_coords_2D(crop))
+
+    # Get aspect ratio.
+    if not aspect:
+        aspect = _get_aspect_ratio(id, view) 
+
+    # Plot segmentation.
+    colours = [(1, 1, 1, 0), segmentation_colour]
+    cmap = ListedColormap(colours)
+    plt.imshow(seg, alpha=0.5, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+    plt.plot(0, 0, c=segmentation_colour, label='Segmentation')
+
+    # Plot localisation bounding box.
+    # if show_loc_box and _should_plot_bounding_box(loc_box, view, slice_idx):
+    #     _plot_bounding_box(loc_box, view, box_colour=loc_box_colour, crop=crop, label='Localisation Box')
+
+    # Plot segmentation patch.
+    if show_seg_box and _should_plot_bounding_box(seg_patch, view, slice_idx):
+        _plot_bounding_box(seg_patch, view, box_colour=segmentation_box_colour, crop=crop, label='Segmentation Patch')
+
+    # Show legend.
+    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    for l in plt_legend.get_lines():
+        l.set_linewidth(8)
+
+    plt.show()
 
 def plot_patient_segmentation(
     id: str,
@@ -472,7 +520,7 @@ def plot_patient_segmentation(
     seg, seg_patch = get_patient_segmentation_patch(id, loc_box, segmenter, segmenter_size, segmenter_spacing, clear_cache=clear_cache, device=device, return_patch=True)
 
     # Get seg slice.
-    seg = _get_slice_for_plotting(seg, slice_idx, view)
+    seg = get_slice(seg, slice_idx, view)
 
     # Crop the segmentation.
     if crop:
@@ -517,7 +565,7 @@ def _to_image_coords(
 
     return data
 
-def _get_origin(view: types.PatientView) -> str:
+def get_origin(view: types.PatientView) -> str:
     """
     returns: whether to place image origin in lower or upper corner of plot.
     args:
@@ -554,17 +602,10 @@ def _to_internal_region(
     # Raise an error if we don't know how to translate to the internal name.
     raise ValueError(f"Region '{region}' is neither an internal region, nor listed in the region map, can't create internal name.")
 
-def _get_slice_for_plotting(
+def get_slice(
     data: np.ndarray,
     slice_idx: int,
     view: types.PatientView) -> np.ndarray:
-    """
-    returns: the slice data ready for plotting.
-    args:
-        data: the 3D volume.
-        slice_idx: the slice index.
-        view: the plotting view.
-    """
     # Check that slice index isn't too large.
     if view == 'axial' and (slice_idx >= data.shape[2]):
         raise ValueError(f"Slice '{slice_idx}' out of bounds, only '{data.shape[2]}' axial slices.")
@@ -587,9 +628,10 @@ def _get_slice_for_plotting(
 
     return slice_data
 
-def _get_aspect_ratio(
+def get_aspect_ratio(
     id: str,
     view: types.PatientView,
+    spacing: types.ImageSpacing3D,
     clear_cache: bool = False) -> float:
     """
     returns: the aspect ratio required for the patient view.
@@ -599,9 +641,6 @@ def _get_aspect_ratio(
     kwargs:
         clear_cache: forces the cache to clear.
     """
-    # Get patient spacing.
-    spacing = dataset.patient(id).ct_spacing()
-
     # Get the aspect ratio.
     if view == 'axial':
         aspect = spacing[1] / spacing[0]
@@ -612,7 +651,7 @@ def _get_aspect_ratio(
 
     return aspect
 
-def _reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
+def reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
     """
     returns: a box with (x, y) coordinates reversed.
     args:

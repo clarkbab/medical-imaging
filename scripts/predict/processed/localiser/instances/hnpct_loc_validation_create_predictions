@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="HNPCT-LOC"
+REGION="Lens_L"
+LOCALISER="('localiser-$REGION','public-400epochs','loss=-0.498481-epoch=378-step=0')"
+PARTITION="validation"
+
+python create_predictions --dataset $DATASET --localiser $LOCALISER --partition $PARTITION --region $REGION
