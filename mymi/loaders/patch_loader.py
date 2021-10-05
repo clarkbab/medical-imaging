@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
+from typing import List, Union
 
 from mymi.dataset.processed import ProcessedPartition
 from mymi.transforms import crop_or_pad_3D
@@ -12,13 +13,13 @@ from mymi import types
 class PatchLoader:
     @staticmethod
     def build(
-        partition: ProcessedPartition,
+        partitions: Union[ProcessedPartition, List[ProcessedPartition]],
         patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,
         batch_size: int = 1,
         num_workers: int = 1,
-        p_region: float = 1,
+        p_foreground: float = 1,
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
@@ -32,13 +33,16 @@ class PatchLoader:
             half_precision: load images at half precision.
             batch_size: the number of images in the batch.
             num_workers: the number of CPUs for data loading.
-            p_region: proportion of patches containing the region.
+            p_foreground: proportion of patches containing the region.
             shuffle: shuffle the data.
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
+        if type(partitions) == ProcessedPartition:
+            partitions = [partitions]
+
         # Create dataset object.
-        ds = LoaderDataset(partition, patch_size, region, half_precision=half_precision, p_region=p_region, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, patch_size, region, half_precision=half_precision, p_foreground=p_foreground, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -46,11 +50,11 @@ class PatchLoader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partition: ProcessedPartition,
+        partitions: List[ProcessedPartition],
         patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,
-        p_region: float = 1,
+        p_foreground: float = 1,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         """
@@ -60,13 +64,13 @@ class LoaderDataset(Dataset):
             region: load patients with this region.
         kwargs:
             half_precision: load images at half precision.
-            p_region: proportion of patches containing the region.
+            p_foreground: proportion of patches containing the region.
             spacing: the voxel spacing.
             transform: transformations to apply.
         """
         self._half_precision = half_precision
-        self._p_region = p_region
-        self._partition = partition
+        self._p_foreground = p_foreground
+        self._partitions = partitions
         self._patch_size = patch_size
         self._region = region
         self._spacing = spacing
@@ -74,14 +78,20 @@ class LoaderDataset(Dataset):
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
-        # Filter samples by requested regions.
-        samples = partition.list_samples(regions=region)
+        index = 0
+        map_tuples = []
+        for i, partition in enumerate(partitions):
+            # Filter samples by requested regions.
+            samples = partition.list_samples(regions=region)
+            for sample in samples:
+                map_tuples.append((index, (i, sample)))
+                index += 1
 
         # Record number of samples.
-        self._num_samples = len(samples)
+        self._num_samples = index
 
         # Map loader indices to dataset indices.
-        self._index_map = dict(zip(range(self._num_samples), samples))
+        self._index_map = dict(map_tuples)
 
     def __len__(self):
         """
@@ -98,7 +108,8 @@ class LoaderDataset(Dataset):
             index: the item to return.
         """
         # Load data.
-        input, label = self._partition.sample(self._index_map[index]).pair(regions=self._region)
+        p_idx, s_idx = self._index_map[index]
+        input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._region)
         label = label[self._region]
 
         # Perform transform.
@@ -130,8 +141,8 @@ class LoaderDataset(Dataset):
             label = label.numpy()
 
         # Roll the dice.
-        if np.random.binomial(1, self._p_region):
-            input, label = self._get_region_patch(input, label)
+        if np.random.binomial(1, self._p_foreground):
+            input, label = self._get_foreground_patch(input, label)
         else:
             input, label = self._get_background_patch(input, label)
 
@@ -147,7 +158,7 @@ class LoaderDataset(Dataset):
 
         return input, label
 
-    def _get_region_patch(
+    def _get_foreground_patch(
         self,
         input: np.ndarray,
         label: np.ndarray) -> np.ndarray:

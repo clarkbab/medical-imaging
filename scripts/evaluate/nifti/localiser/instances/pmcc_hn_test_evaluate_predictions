@@ -1,0 +1,10 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="PMCC-HN-TEST"
+REGION="Brain"
+LOCALISER="('localiser-$REGION','public-400epochs','loss=-0.936208-epoch=185-step=0')"
+
+python evaluate_predictions --dataset $DATASET --localiser $LOCALISER --region $REGION

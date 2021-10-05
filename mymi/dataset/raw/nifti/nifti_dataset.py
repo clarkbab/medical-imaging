@@ -23,7 +23,10 @@ class NIFTIDataset(Dataset):
     
     @property
     def description(self) -> str:
-        return f"NIFTI: {self._name}"
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
     
     @property
     def path(self) -> str:

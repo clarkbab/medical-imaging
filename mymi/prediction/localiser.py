@@ -44,7 +44,7 @@ def get_localiser_prediction(
 
     # Create downsampled input.
     input = resample_3D(input, spacing, localiser_spacing)
-    downsampled_size = input.shape
+    pre_crop_size = input.shape
 
     # Shape the image so it'll fit the network.
     input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
