@@ -19,6 +19,7 @@ class Localiser(pl.LightningModule):
         region: str,
         index_map: Optional[Dict[str, str]] = None,
         metrics: List[str] = [],
+        return_logits: bool = False,
         spacing: Optional[types.ImageSpacing3D] = None):
         """
         args:
@@ -60,6 +61,10 @@ class Localiser(pl.LightningModule):
     def forward(self, x):
         # Get prediction.
         pred = self._network(x)
+        if return_logits:
+            return pred
+
+        # Apply thresholding.
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.

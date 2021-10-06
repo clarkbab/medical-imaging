@@ -23,6 +23,8 @@ def train_segmenter(
     num_gpus: int = 1,
     num_nodes: int = 1,
     num_workers: int = 1,
+    resume: bool = False,
+    resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:

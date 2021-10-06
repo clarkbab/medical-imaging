@@ -18,6 +18,8 @@ def distances(
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool or b.dtype != np.bool:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+    if a.sum() == 0 or b.sum() == 0:
+        raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
 
     # Convert types for SimpleITK.
     a_itk = a.astype('uint8')

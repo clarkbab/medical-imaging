@@ -24,8 +24,8 @@ def evaluate_localiser_predictions(
     # Create dataframe.
     cols = {
         'patient-id': str,
-        'region': str,
-        'metric': str
+        'metric': str,
+        region: float
     }
     df = pd.DataFrame(columns=cols.keys())
 
@@ -57,7 +57,17 @@ def evaluate_localiser_predictions(
 
         # Distances.
         spacing = set.patient(pat).ct_spacing()
-        dists = distances(pred, label, spacing)
+        try:
+            dists = distances(pred, label, spacing)
+        except ValueError:
+            dists = {
+                'assd': 'na',
+                'surface-hd': 'na',
+                'surface-95hd': 'na',
+                'voxel-hd': 'na',
+                'voxel-95hd': 'na'
+            }
+
         data['assd'][region] = dists['assd']
         data['surface-hd'][region] = dists['surface-hd']
         data['surface-95hd'][region] = dists['surface-95hd']
@@ -69,13 +79,14 @@ def evaluate_localiser_predictions(
         df = df.append(data['voxel-hd'], ignore_index=True)
         df = df.append(data['voxel-95hd'], ignore_index=True)
 
-    # Set index.
+    # Set index and types.
     df = df.set_index('patient-id')
+    df = df.astype(cols)
 
     # Save evaluation.
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath)
+    df.to_csv(filepath, index=False)
 
 def get_localiser_evaluation(
     dataset: str,

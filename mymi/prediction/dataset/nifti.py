@@ -73,7 +73,6 @@ def create_localiser_prediction(
 
 def create_localiser_predictions(
     dataset: str,
-    partition: str,
     localiser: Tuple[str, str, str],
     region: str,
     clear_cache: bool = False) -> None:
