@@ -285,7 +285,7 @@ def plot_regions(
 
         # Crop image.
         if crop:
-            slice_data = crop_or_pad_2D(slice_data, _reverse_box_coords_2D(crop))
+            slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
 
         # Skip region if not present on this slice.
         if slice_data.max() == 0:
@@ -377,7 +377,7 @@ def plot_patient_localisation(
 
         # Crop the image.
         if crop:
-            pred_slice_data = crop_or_pad_2D(pred_slice_data, _reverse_box_coords_2D(crop))
+            pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
 
         # Plot prediction.
         colour = plt.cm.tab20(0)
@@ -433,7 +433,7 @@ def plot_localiser_prediction(
 
     # Crop the segmentation.
     if crop:
-        seg = crop_or_pad_2D(seg, _reverse_box_coords_2D(crop))
+        seg = crop_or_pad_2D(seg, reverse_box_coords_2D(crop))
 
     # Get aspect ratio.
     if not aspect:
@@ -524,7 +524,7 @@ def plot_patient_segmentation(
 
     # Crop the segmentation.
     if crop:
-        seg = crop_or_pad_2D(seg, _reverse_box_coords_2D(crop))
+        seg = crop_or_pad_2D(seg, reverse_box_coords_2D(crop))
 
     # Get aspect ratio.
     if not aspect:

@@ -12,6 +12,6 @@ REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','
 SIZE=None
 SPACING="(1,1,2)"
 
-python dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
+python process_dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
     --regions $REGIONS --size $SIZE --spacing $SPACING
 

@@ -14,4 +14,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/process/instances/hn1_seg
+bash $SCRIPT_DIR/process/dicom/instances/hn1_seg

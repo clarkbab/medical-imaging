@@ -5,6 +5,7 @@ from typing import Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.prediction.dataset.processed import get_localiser_prediction
+from mymi.transforms import crop_or_pad_2D
 from mymi import types
 
 from ..plotter import get_aspect_ratio, get_origin, get_slice, plot_regions, reverse_box_coords_2D
@@ -67,7 +68,7 @@ def plot_sample(
 
     # Perform crop.
     if crop:
-        slice_input = crop_or_pad_2D(slice_input, _reverse_box_coords_2D(crop))
+        slice_input = crop_or_pad_2D(slice_input, reverse_box_coords_2D(crop))
 
     # Determine plotting window.
     if window:

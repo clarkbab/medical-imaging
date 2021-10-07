@@ -16,6 +16,7 @@ class ProcessedDataset(Dataset):
         args:
             name: the name of the dataset.
         """
+        self._global_id = f"PROCESSED: {name}"
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'processed', name)
         self._partitions = ['train', 'validation', 'test']
@@ -26,13 +27,10 @@ class ProcessedDataset(Dataset):
 
     @property
     def description(self) -> str:
-        return f"PROCESSED: {self._name}"
+        return self._global_id
 
-    @property
-    def manifest(self) -> pd.DataFrame:
-        filepath = os.path.join(self._path, 'manifest.csv')
-        df = pd.read_csv(filepath)
-        return df
+    def __str__(self) -> str:
+        return self._global_id
 
     @property
     def name(self) -> str:
@@ -41,10 +39,14 @@ class ProcessedDataset(Dataset):
     @property
     def path(self) -> str:
         return self._path
-    
-    @property
+
     def params(self) -> pd.DataFrame:
         filepath = os.path.join(self._path, 'params.csv')
+        df = pd.read_csv(filepath)
+        return df
+
+    def manifest(self) -> pd.DataFrame:
+        filepath = os.path.join(self._path, 'manifest.csv')
         df = pd.read_csv(filepath)
         return df
 

@@ -9,7 +9,8 @@ P_TRAIN=0.8
 P_VAL=0.2
 P_TEST=0
 REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Lens_L','Lens_R','Mandible','OpticChiasm','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','Submandibular_L','Submandibular_R')"
+SIZE=None
 SPACING="(1,1,2)"
 
-python dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
+python process_dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
     --regions $REGIONS --size $SIZE --spacing $SPACING

@@ -15,12 +15,13 @@ class ProcessedPartition:
     def __init__(
         self,
         dataset: 'ProcessedDataset',
-        name: types.ProcessedPartition):
+        name: str):
         """
         args:
             dataset: the dataset name.
             name: the partition name.
         """
+        self._global_id = f"{dataset}, Partition: {name}"
         self._dataset = dataset
         self._name = name
         self._path = os.path.join(dataset.path, 'data', name)
@@ -34,6 +35,19 @@ class ProcessedPartition:
         return self._dataset
 
     @property
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
+
+    @property
+    def manifest(self) -> pd.DataFrame:
+        df = self._dataset.manifest()
+        df = df[df['partition'] == self._name].drop(columns='partition')
+        return df
+
+    @property
     def name(self) -> str:
         return self._name
 
@@ -44,6 +58,16 @@ class ProcessedPartition:
     @property
     def description(self) -> str:
         return f"Partition '{self._name}' of {self.dataset.description}"
+
+    def patient_id(
+        self,
+        sample_idx: int) -> types.PatientID:
+        df = self.manifest
+        result_df = df[df['index'] == sample_idx]
+        if len(result_df) == 0:
+            raise ValueError(f"Sample '{sample_idx}' not found for partition '{self}'.")
+        pat_id = result_df['patient-id'].iloc[0] 
+        return pat_id
 
     def list_samples(
         self,

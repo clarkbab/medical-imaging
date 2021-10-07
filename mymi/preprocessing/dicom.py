@@ -96,7 +96,7 @@ def process(
     logging.info(f"Processing '{dataset}' dataset into '{dest_dataset}' dataset.")
 
     # Load patients.
-    old_ds = ds.get(dataset, type_str='dicom')
+    old_ds = ds.get(dataset, 'dicom')
     pats = old_ds.list_patients(regions=regions) 
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
@@ -139,22 +139,33 @@ def process(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
+            print(pat)
             pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
+            print(pat_regions)
 
             # Load data.
             input = old_ds.patient(pat).ct_data()
+            print(input.shape)
             labels = old_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
+            print(labels['Parotid_L'].shape)
 
             # Resample data if requested.
             if spacing is not None:
                 old_spacing = old_ds.patient(pat).ct_spacing()
+                print(old_spacing)
+                print(spacing)
                 input = resample_3D(input, old_spacing, spacing)
+                print(input.shape)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
+                print(labels['Parotid_L'].shape)
 
             # Crop/pad if requested.
             if size is not None:
+                print(size)
                 input = centre_crop_or_pad_3D(input, size, fill=np.min(input))
+                print(input.shape)
                 labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
+                print(labels['Parotid_L'].shape)
 
             # Save input data.
             index = proc_ds.partition(partition).create_input(pat, input)

@@ -61,11 +61,11 @@ def evaluate_localiser_predictions(
             dists = distances(pred, label, spacing)
         except ValueError:
             dists = {
-                'assd': 'na',
-                'surface-hd': 'na',
-                'surface-95hd': 'na',
-                'voxel-hd': 'na',
-                'voxel-95hd': 'na'
+                'assd': np.nan,
+                'surface-hd': np.nan,
+                'surface-95hd': np.nan,
+                'voxel-hd': np.nan,
+                'voxel-95hd': np.nan
             }
 
         data['assd'][region] = dists['assd']
@@ -79,9 +79,11 @@ def evaluate_localiser_predictions(
         df = df.append(data['voxel-hd'], ignore_index=True)
         df = df.append(data['voxel-95hd'], ignore_index=True)
 
-    # Set index and types.
-    df = df.set_index('patient-id')
+    # Set column types.
     df = df.astype(cols)
+
+    # Set index.
+    df = df.set_index('patient-id')
 
     # Save evaluation.
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
