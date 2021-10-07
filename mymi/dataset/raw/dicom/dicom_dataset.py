@@ -110,8 +110,6 @@ class DICOMDataset(Dataset):
         else:
             path = os.path.join(self._path, 'hierarchy', 'data')
         pats = list(sorted(os.listdir(path)))
-        
-        pats = pats[:5]
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
