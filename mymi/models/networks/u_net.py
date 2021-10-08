@@ -96,7 +96,7 @@ class UNet(nn.Module):
 
     def transfer_encoder(
         self,
-        model: UNet) -> None:
+        model: 'UNet') -> None:
         # Copy encoder layers.
         self.first = model.first
         self.down1 = model.down1
