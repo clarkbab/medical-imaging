@@ -5,6 +5,7 @@ cd $parent_path
 
 DATASET="HN1"
 DEST_DATASET="HN1-SEG"
+DILATE_REGIONS=None
 P_TRAIN=0.8
 P_VAL=0.2
 P_TEST=0
@@ -12,6 +13,6 @@ REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','
 SIZE=None
 SPACING="(1,1,2)"
 
-python process_dicom --dataset $DATASET --dest_dataset $DEST_DATASET --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
+python process_dicom --dataset $DATASET --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
     --regions $REGIONS --size $SIZE --spacing $SPACING
 

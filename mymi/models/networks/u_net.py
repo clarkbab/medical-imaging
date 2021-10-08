@@ -93,3 +93,26 @@ class UNet(nn.Module):
         x = self.softmax(x)
 
         return x
+
+    def transfer_encoder(
+        self,
+        model: UNet) -> None:
+        # Copy encoder layers.
+        self.first = model.first
+        self.down1 = model.down1
+        self.down2 = model.down2
+        self.down3 = model.down3
+        self.down4 = model.down4
+
+        # Freeze layers.
+        modules = [
+            self.first,
+            self.down1,
+            self.down2,
+            self.down3,
+            self.down4
+        ]
+        for module in modules:
+            for layer in module.children():
+                for param in layer.parameters():
+                    param.requires_grad = False

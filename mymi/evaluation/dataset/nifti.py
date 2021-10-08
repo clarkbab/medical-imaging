@@ -32,7 +32,7 @@ def evaluate_localiser_predictions(
     for pat in tqdm(pats):
         # Get pred/ground truth.
         pred = get_localiser_prediction(dataset, pat, localiser)
-        label = set.patient(pat).region_data()[region].astype(np.bool)
+        label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
 
         # Add metrics.
         metrics = [

@@ -18,6 +18,7 @@ class Segmenter(pl.LightningModule):
         self,
         index_map: Optional[Dict[str, str]] = None,
         metrics: List[str] = [],
+        predict_logits: bool = False,
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
         if 'distances' in metrics and spacing is None:
@@ -30,18 +31,20 @@ class Segmenter(pl.LightningModule):
         self._loss = DiceLoss()
         self._metrics = metrics
         self._network = UNet()
+        self._predict_logits = predict_logits
         self._spacing = spacing
 
     @staticmethod
     def load(
         model_name: str,
         run_name: str,
-        checkpoint: str) -> pl.LightningModule:
+        checkpoint: str,
+        **kwargs: Dict) -> pl.LightningModule:
         filename = f"{checkpoint}.ckpt"
         filepath = os.path.join(config.directories.checkpoints, model_name, run_name, filename)
         if not os.path.exists(filepath):
             raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
-        return Segmenter.load_from_checkpoint(filepath)
+        return Segmenter.load_from_checkpoint(filepath, **kwargs)
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
@@ -49,6 +52,10 @@ class Segmenter(pl.LightningModule):
     def forward(self, x):
         # Get prediction.
         pred = self._network(x)
+        if self._predict_logits:
+            return pred
+
+        # Apply thresholding.
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.

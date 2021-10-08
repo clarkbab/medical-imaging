@@ -19,7 +19,8 @@ class Localiser(pl.LightningModule):
         region: str,
         index_map: Optional[Dict[str, str]] = None,
         metrics: List[str] = [],
-        return_logits: bool = False,
+        predict_logits: bool = False,
+        pretrained_model: Optional[pl.LightningModule] = None,
         spacing: Optional[types.ImageSpacing3D] = None):
         """
         args:
@@ -41,19 +42,24 @@ class Localiser(pl.LightningModule):
         self._metrics = metrics
         self._network = UNet()
         self._region = region
+        self._predict_logits = predict_logits
         self._spacing = spacing
         self.save_hyperparameters()
+
+        # Replace pretrained layers and freeze.
+        if pretrained_model is not None:
+            self._network.transfer_encoder(pretrained_model)
 
     @staticmethod
     def load(
         model_name: str,
         run_name: str,
-        checkpoint: str) -> pl.LightningModule:
-        filename = f"{checkpoint}.ckpt"
-        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, filename)
+        checkpoint: str,
+        **kwargs: Dict) -> pl.LightningModule:
+        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
-        return Localiser.load_from_checkpoint(filepath)
+        return Localiser.load_from_checkpoint(filepath, **kwargs)
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
@@ -61,7 +67,8 @@ class Localiser(pl.LightningModule):
     def forward(self, x):
         # Get prediction.
         pred = self._network(x)
-        if return_logits:
+        if self._predict_logits:
+            pred = pred.cpu().numpy()
             return pred
 
         # Apply thresholding.

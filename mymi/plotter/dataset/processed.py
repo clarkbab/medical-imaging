@@ -1,5 +1,7 @@
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.ndimage.measurements import center_of_mass
 import torchio
 from typing import Optional, Sequence, Tuple, Union
 
@@ -18,6 +20,7 @@ def plot_sample(
     alpha: float = 0.2,
     aspect: float = None,
     axes: bool = True,
+    centre_on: Optional[str] = None,
     clear_cache: bool = False,
     crop: types.Box2D = None,
     figsize: Tuple[int, int] = (8, 8),
@@ -62,6 +65,18 @@ def plot_sample(
         # if other_ds:
         #     other_ds = DICOMDataset(other_ds) 
         #     other_region_data = other_ds.patient(id).region_data(clear_cache=clear_cache, regions=other_regions)
+
+    # Get slice index if requested OAR centre.
+    if centre_on is not None:
+        # Load region data.
+        label = sample.label(regions=centre_on)[centre_on]
+        com = np.round(center_of_mass(label)).astype(int)
+        if view == 'axial':
+            slice_idx = com[2]
+        elif view == 'coronal':
+            slice_idx = com[1]
+        elif view == 'sagittal':
+            slice_idx = com[0]
 
     # Get slice data.
     slice_input = get_slice(input, slice_idx, view)
@@ -148,6 +163,7 @@ def plot_localiser_prediction(
     slice_idx: int,
     localiser: Tuple[str, str, str],
     aspect: float = None,
+    centre_on: Optional[str] = None,
     crop: Optional[types.Box2D] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
@@ -158,7 +174,7 @@ def plot_localiser_prediction(
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     # Plot patient regions.
-    plot_sample(dataset, partition, sample_idx, slice_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+    plot_sample(dataset, partition, sample_idx, slice_idx, aspect=aspect, centre_on=centre_on, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
 
     # Load prediction.
     pred = get_localiser_prediction(dataset, partition, sample_idx, localiser)
@@ -171,7 +187,7 @@ def plot_localiser_prediction(
     # Get aspect ratio.
     if not aspect:
         set = ds.get(dataset, 'processed')
-        spacing = eval(set.params['spacing'][0])
+        spacing = eval(set.params()['spacing'][0])
         aspect = get_aspect_ratio(id, view, spacing) 
 
     # Plot segmentation.

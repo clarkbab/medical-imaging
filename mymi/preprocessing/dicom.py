@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import shutil
 from tqdm import tqdm
+from scipy.ndimage import binary_dilation
 import sys
 from typing import Optional
 
@@ -68,6 +69,7 @@ def process(
     dataset: str,
     dest_dataset: str,
     clear_cache: bool = False,
+    dilate_regions: Optional[types.PatientRegions] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_val: float = 0.2,
@@ -139,33 +141,26 @@ def process(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            print(pat)
             pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
-            print(pat_regions)
 
             # Load data.
             input = old_ds.patient(pat).ct_data()
-            print(input.shape)
             labels = old_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
-            print(labels['Parotid_L'].shape)
 
             # Resample data if requested.
             if spacing is not None:
                 old_spacing = old_ds.patient(pat).ct_spacing()
-                print(old_spacing)
-                print(spacing)
                 input = resample_3D(input, old_spacing, spacing)
-                print(input.shape)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
-                print(labels['Parotid_L'].shape)
 
             # Crop/pad if requested.
             if size is not None:
-                print(size)
                 input = centre_crop_or_pad_3D(input, size, fill=np.min(input))
-                print(input.shape)
                 labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
-                print(labels['Parotid_L'].shape)
+
+            # Dilate the labels if requested.
+            if dilate_regions is not None:
+                labels = dict((r, binary_dilation(d, iterations=3) if _should_dilate(r, dilate_regions) else d) for r, d in labels.items())
 
             # Save input data.
             index = proc_ds.partition(partition).create_input(pat, input)
@@ -173,3 +168,17 @@ def process(
             # Save label data.
             for region, label in labels.items():
                 proc_ds.partition(partition).create_label(index, region, label)
+
+def _should_dilate(
+    region: str,
+    regions: types.PatientRegions) -> bool:
+    if type(regions) == str:
+        if regions == 'all':
+            return True
+        elif region == regions:
+            return True
+    else:
+        if region in regions:
+            return True
+        else:
+            return False

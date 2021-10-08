@@ -62,3 +62,44 @@ class DiceLoss(nn.Module):
         loss = loss.mean()
 
         return loss
+
+class SingleChannelDice(nn.Module):
+    def __init__(self, epsilon=1e-6, weights=None):
+        super(SingleChannelDiceLoss, self).__init__()
+        self.epsilon = epsilon
+        self.weights = weights
+
+    def forward(
+        self,
+        pred: torch.Tensor,
+        label: torch.Tensor) -> float:
+        """
+        returns: the dice loss.
+        args:
+            pred: the b x X x Y x Z x 2 batch of predictions.
+            label: the b x X x Y x Z batch of labels.
+        """
+        if label.dtype != torch.bool:
+            raise ValueError(f"SingleChannelDiceLoss expects boolean label. Got '{label.dtype}'.")
+
+        # Select foreground channel from prediction.
+        pred = pred[:, :, :, 1]
+        if label.shape != pred.shape:
+            raise ValueError(f"SingleChannelDiceLoss expects pred foreground channel and label to have same shape. Got '{pred.shape}' and '{label.shape}' respectively.")
+
+        # Flatten volumetric data.
+        pred = pred.flatten(start_dim=2)
+        label = label.flatten(start_dim=2)
+
+        # Compute dice coefficient.
+        numerator = 2 * (pred * label).sum(dim=2)
+        denominator = (pred + label).sum(dim=2)     # Some implementations square elements before summation.
+        dice = (numerator + self.epsilon) / (denominator + self.epsilon)
+
+        # Average across batch samples.
+        dice = dice.mean()
+
+        # Convert dice coef. to dice loss (smaller is better).
+        loss = -dice
+
+        return loss

@@ -16,8 +16,8 @@ version=$(python --version)
 echo $version
 
 DATASETS="PMCC-HN-TRAIN-LOC"
-BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
+BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticChiasm' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
+REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticChiasm','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
 REGION=${BASH_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
 NUM_EPOCHS=400
