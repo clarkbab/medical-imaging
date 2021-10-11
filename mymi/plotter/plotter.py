@@ -662,7 +662,7 @@ def reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
 
     return box
 
-def _should_plot_bounding_box(
+def should_plot_bounding_box(
     bounding_box: types.Box3D,
     view: types.PatientView,
     slice_idx: int) -> bool:
@@ -687,7 +687,7 @@ def _should_plot_bounding_box(
     # Return result.
     return slice_idx >= bbox_min and slice_idx < bbox_max
 
-def _plot_bounding_box(
+def plot_bounding_box(
     bounding_box: types.Box3D,
     view: types.PatientView,
     box_colour: str = 'r',

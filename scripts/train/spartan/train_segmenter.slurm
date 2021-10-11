@@ -15,17 +15,18 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASETS="PMCC-HN-TRAIN-SEG"
-REGION="Parotid_L"
+DATASETS="['HN1-SEG','HNPCT-SEG','HNSCC-SEG','OPC-SEG']"
+# DATASETS="PMCC-HN-TRAIN-SEG"
+REGION="OpticNerve_R"
 MODEL_NAME="segmenter-$REGION"
-NUM_EPOCHS=200
+NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
 NUM_SUBSET=None
-RESUME=False
-RESUME_CHECKPOINT=None
-RUN_NAME="4gpu-200epochs"
+RESUME=True
+RESUME_CHECKPOINT="last"
+RUN_NAME="public-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

@@ -10,6 +10,7 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader
+from mymi.losses import DiceLoss, SingleChannelDice
 from mymi import logging
 from mymi.models.systems import Localiser
 from mymi import types
@@ -19,6 +20,7 @@ def train_localiser(
     run_name: str,
     datasets: Union[str, List[str]],
     region: str,
+    loss: str = 'dice',
     num_epochs: int = 200,
     num_gpus: int = 1,
     num_nodes: int = 1,
@@ -36,7 +38,7 @@ def train_localiser(
         set = ds.get(datasets, 'processed')
         spacing = eval(set.params().spacing[0])
         train_parts = set.partition('train')
-        val_parts = set.partition('validation')
+        val_parts = [set.partition('validation')]
     else:
         set = ds.get(datasets[0], 'processed')
         spacing = eval(set.params().spacing[0]) 
@@ -68,13 +70,20 @@ def train_localiser(
     val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
 
     # Create map from validation batch_idx to "dataset:partition:sample_idx".
-    index_map = dict([(batch_idx, f"{val_loader.dataset._partitions[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
+    index_map = dict([(batch_idx, f"{val_parts[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
+
+    # Get loss function.
+    if loss == 'dice':
+        loss_fn = DiceLoss()
+    elif loss == 'scdice':
+        loss_fn = SingleChannelDice()
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
     model = Localiser(
         region,
         index_map=index_map,
+        loss=loss_fn,
         metrics=metrics,
         spacing=spacing)
 

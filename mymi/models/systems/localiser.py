@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
+from torch import nn
 from torch.optim import SGD
 from typing import Dict, List, Optional
 
@@ -18,6 +19,7 @@ class Localiser(pl.LightningModule):
         self,
         region: str,
         index_map: Optional[Dict[str, str]] = None,
+        loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
         pretrained_model: Optional[pl.LightningModule] = None,
@@ -34,7 +36,7 @@ class Localiser(pl.LightningModule):
         self._distances_delay = 50
         self._distances_interval = 20
         self._index_map = index_map
-        self._loss = DiceLoss()
+        self._loss = loss
         self._log_args = {
             'on_epoch': True,
             'on_step': False,

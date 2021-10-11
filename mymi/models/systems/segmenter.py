@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pytorch_lightning as pl
 import torch
+from torch import nn
 from torch.optim import SGD
 from typing import Dict, List, Optional
 
@@ -17,6 +18,7 @@ class Segmenter(pl.LightningModule):
     def __init__(
         self,
         index_map: Optional[Dict[str, str]] = None,
+        loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
         spacing: Optional[types.ImageSpacing3D] = None):
@@ -28,7 +30,7 @@ class Segmenter(pl.LightningModule):
         self._surface_delay = 50
         self._surface_interval = 20
         self._index_map = index_map
-        self._loss = DiceLoss()
+        self._loss = loss
         self._metrics = metrics
         self._network = UNet()
         self._predict_logits = predict_logits

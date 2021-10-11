@@ -6,17 +6,16 @@ import torchio
 from typing import Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
-from mymi.prediction.dataset.processed import get_localiser_prediction
+from mymi.prediction.dataset.processed import load_localiser_prediction
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
 
-from ..plotter import get_aspect_ratio, get_origin, get_slice, plot_regions, reverse_box_coords_2D
+from ..plotter import get_aspect_ratio, get_origin, get_slice, plot_bounding_box, plot_regions, reverse_box_coords_2D, should_plot_bounding_box
 
 def plot_sample(
     dataset: str,
     partition:  str,
     sample_idx: int,
-    slice_idx: int,
     alpha: float = 0.2,
     aspect: float = None,
     axes: bool = True,
@@ -35,10 +34,15 @@ def plot_sample(
     perimeter: bool = True,
     regions: types.PatientRegions = 'all',
     show: bool = True,
+    slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
+    # Validate arguments.
+    if slice_idx is None and centre_on is None:
+        raise ValueError(f"Either 'slice_idx' or 'centre_on' must be set.")
+
     # Update font size.
     plt.rcParams.update({
         'font.size': font_size
@@ -160,7 +164,6 @@ def plot_localiser_prediction(
     dataset: str,
     partition: str,
     sample_idx: int,
-    slice_idx: int,
     localiser: Tuple[str, str, str],
     aspect: float = None,
     centre_on: Optional[str] = None,
@@ -171,13 +174,34 @@ def plot_localiser_prediction(
     seg_alpha: float = 1.0, 
     seg_colour: types.Colour = (0.12, 0.47, 0.70),
     show_loc_box: bool = False,
+    slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
+    # Validate arguments.
+    if slice_idx is None and centre_on is None:
+        raise ValueError(f"Either 'slice_idx' or 'centre_on' must be set.")
+
+    # Load sample.
+    set = ds.get(dataset, 'processed')
+    sample = set.partition(partition).sample(sample_idx)
+
+    # Centre on OAR if requested.
+    if slice_idx is None:
+        # Load region data.
+        label = sample.label(regions=centre_on)[centre_on]
+        com = np.round(center_of_mass(label)).astype(int)
+        if view == 'axial':
+            slice_idx = com[2]
+        elif view == 'coronal':
+            slice_idx = com[1]
+        elif view == 'sagittal':
+            slice_idx = com[0]
+
     # Plot patient regions.
-    plot_sample(dataset, partition, sample_idx, slice_idx, aspect=aspect, centre_on=centre_on, legend=False, legend_loc=legend_loc, show=False, view=view, crop=crop, **kwargs)
+    plot_sample(dataset, partition, sample_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, slice_idx=slice_idx, view=view, crop=crop, **kwargs)
 
     # Load prediction.
-    pred = get_localiser_prediction(dataset, partition, sample_idx, localiser)
+    box, pred = load_localiser_prediction(dataset, partition, sample_idx, localiser, return_seg=True)
     pred_slice = get_slice(pred, slice_idx, view)
 
     # Crop the segmentation.
@@ -195,6 +219,10 @@ def plot_localiser_prediction(
     cmap = ListedColormap(colours)
     plt.imshow(pred_slice, alpha=seg_alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
     plt.plot(0, 0, c=seg_colour, label='Segmentation')
+
+    # Plot bounding box.
+    if should_plot_bounding_box(box, view, slice_idx):
+        plot_bounding_box(box, view, box_colour=loc_box_colour, crop=crop, label='Loc. box')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
