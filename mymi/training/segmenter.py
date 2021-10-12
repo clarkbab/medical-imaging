@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import PatchLoader
-from mymi.losses import DiceLoss, SingleChannelDice
+from mymi.losses import DiceLoss, SingleChannelDiceLoss
 from mymi import logging
 from mymi.models.systems import Segmenter
 from mymi import types
@@ -73,7 +73,7 @@ def train_segmenter(
     if loss == 'dice':
         loss_fn = DiceLoss()
     elif loss == 'scdice':
-        loss_fn = SingleChannelDice()
+        loss_fn = SingleChannelDiceLoss()
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
@@ -95,14 +95,14 @@ def train_segmenter(
         logger = None
 
     # Create callbacks.
-    path = os.path.join(config.directories.checkpoints, model_name, run_name)
+    checks_path = os.path.join(config.directories.checkpoints, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
         #     patience=5),
         ModelCheckpoint(
             auto_insert_metric_name=False,
-            dirpath=path,
+            dirpath=checks_path,
             filename='loss={val/loss:.6f}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',

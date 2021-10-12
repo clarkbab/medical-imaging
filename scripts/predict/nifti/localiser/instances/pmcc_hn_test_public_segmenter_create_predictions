@@ -5,43 +5,43 @@ cd $parent_path
 
 DATASET="PMCC-HN-TEST"
 REGIONS=(
-    'BrachialPlexus_L'
-    'BrachialPlexus_R'
+    # 'BrachialPlexus_L'
+    # 'BrachialPlexus_R'
     # 'Brain'
     # 'BrainStem'
     # 'Cochlea_L'
     # 'Cochlea_R'
     # 'Lens_L'
     # 'Lens_R'
-    # 'Mandible'
+    'Mandible'
     # 'OpticNerve_L'
     # 'OpticNerve_R'
-    'OralCavity'
+    # 'OralCavity'
     # 'Parotid_L'
     # 'Parotid_R'
-    'SpinalCord'
+    # 'SpinalCord'
     # 'Submandibular_L'
     # 'Submandibular_R'
 )
 RUN="public-400epochs"
 CHECKPOINTS=(
-    'loss=-0.627284-epoch=394-step=0' # BrachialPlexus_L
-    'loss=-0.626386-epoch=397-step=0' # BrachialPlexus_R
+    # 'loss=-0.627284-epoch=394-step=0' # BrachialPlexus_L
+    # 'loss=-0.626386-epoch=397-step=0' # BrachialPlexus_R
     # '' # Brain
     # '' # BrainStem
     # '' # Cochlea_L
     # '' # Cochlea_R
     # '' # Lens_L
     # '' # Lens_R
-    # '' # Mandible
+    'loss=-0.937279-epoch=396-step=0' # Mandible
     # '' # OpticNerve_L
     # '' # OpticNerve_R
     # '' # OralCavity
     # Parotid_L
     # Parotid_R
-    'loss=-0.896634-epoch=118-step=0' # SpinalCord
-    'loss=-0.884024-epoch=351-step=0' # Submandibular_L
-    'loss=-0.626386-epoch=397-step=0' # Submandibular_R
+    # 'loss=-0.896634-epoch=118-step=0' # SpinalCord
+    # 'loss=-0.884024-epoch=351-step=0' # Submandibular_L
+    # 'loss=-0.626386-epoch=397-step=0' # Submandibular_R
 )
 
 for i in "${!REGIONS[@]}"; do

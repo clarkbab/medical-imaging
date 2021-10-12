@@ -63,7 +63,7 @@ class DiceLoss(nn.Module):
 
         return loss
 
-class SingleChannelDice(nn.Module):
+class SingleChannelDiceLoss(nn.Module):
     def __init__(self, epsilon=1e-6, weights=None):
         super(SingleChannelDiceLoss, self).__init__()
         self.epsilon = epsilon

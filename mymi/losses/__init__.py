@@ -1,1 +1,1 @@
-from .dice import DiceLoss, SingleChannelDice
+from .dice import DiceLoss, SingleChannelDiceLoss

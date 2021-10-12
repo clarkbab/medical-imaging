@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader
-from mymi.losses import DiceLoss, SingleChannelDice
+from mymi.losses import DiceLoss, SingleChannelDiceLoss
 from mymi import logging
 from mymi.models.systems import Localiser
 from mymi import types
@@ -76,7 +76,7 @@ def train_localiser(
     if loss == 'dice':
         loss_fn = DiceLoss()
     elif loss == 'scdice':
-        loss_fn = SingleChannelDice()
+        loss_fn = SingleChannelDiceLoss()
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
