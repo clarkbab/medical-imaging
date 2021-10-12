@@ -111,9 +111,6 @@ class LoaderDataset(Dataset):
         p_idx, s_idx = self._index_map[index]
         input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._region)
         label = label[self._region]
-        print(self._partitions[p_idx])
-        print(s_idx)
-        print(label.sum())
 
         # Perform transform.
         if self._transform:

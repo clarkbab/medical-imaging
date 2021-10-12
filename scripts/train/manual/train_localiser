@@ -1,16 +1,16 @@
 #! /usr/bin/env bash
 
 DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
-REGION="BrachialPlexus_L"
+REGION="Parotid_L"
 MODEL_NAME="localiser-$REGION"
-NUM_EPOCHS=200
+NUM_EPOCHS=400
 NUM_GPUS=1
 NUM_NODES=1
 NUM_WORKERS=4
 NUM_SUBSET=None
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="multipart-test"
+RUN_NAME="test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

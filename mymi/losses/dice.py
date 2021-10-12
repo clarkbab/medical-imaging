@@ -1,17 +1,24 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+from typing import List, Optional
 
 class DiceLoss(nn.Module):
-    def __init__(self, epsilon=1e-5, weights=None):
+    def __init__(
+        self,
+        epsilon: float = 1e-6,
+        weights: Optional[List[float]] = None):
         """
         kwargs:
             epsilon: small value to ensure we don't get division by zero.
             weights: the class weights, must sum to one.
         """
         super(DiceLoss, self).__init__()
-        self.epsilon = epsilon
-        self.weights = weights
+        if weights is not None:
+            assert np.sum(weights) == 1
+        self._epsilon = epsilon
+        self._weights = weights
 
     def forward(
         self,
@@ -20,8 +27,8 @@ class DiceLoss(nn.Module):
         """
         returns: the dice loss.
         args:
-            pred: the 4D batch of network predictions (probabilities).
-            label: the 4D batch of binary labels.
+            pred: the B x C x X x Y x Z batch of network predictions probabilities.
+            label: the the B x X x Y x Z batch of binary labels.
         """
         if label.dtype != torch.bool:
             raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
@@ -41,17 +48,17 @@ class DiceLoss(nn.Module):
         # Compute dice coefficient.
         intersection = (pred * label).sum(dim=2)
         denominator = (pred + label).sum(dim=2)
-        dice = (2. * intersection).clamp(min=self.epsilon) / denominator.clamp(min=self.epsilon)
+        dice = (2. * intersection + self._epsilon) / (denominator + self._epsilon)
 
         # Convert dice coef. to dice loss (larger is worse).
         # For dice metric, larger values are worse.
         loss = -dice
 
         # Determine weights.
-        if self.weights:
-            if len(self.weights) != len(loss.shape[1]):
-                raise ValueError(f"DiceLoss expects number of weights equal to number of label classes. Got '{len(self.weights)}' and '{loss.shape[1]}'.")
-            weights = self.weights
+        if self._weights:
+            if len(self._weights) != len(loss.shape[1]):
+                raise ValueError(f"DiceLoss expects number of weights equal to number of label classes. Got '{len(self._weights)}' and '{loss.shape[1]}'.")
+            weights = self._weights
         else:
             weights = torch.ones_like(loss) / loss.shape[1]
 
@@ -60,46 +67,5 @@ class DiceLoss(nn.Module):
 
         # Get average across samples in batch.
         loss = loss.mean()
-
-        return loss
-
-class SingleChannelDiceLoss(nn.Module):
-    def __init__(self, epsilon=1e-6, weights=None):
-        super(SingleChannelDiceLoss, self).__init__()
-        self.epsilon = epsilon
-        self.weights = weights
-
-    def forward(
-        self,
-        pred: torch.Tensor,
-        label: torch.Tensor) -> float:
-        """
-        returns: the dice loss.
-        args:
-            pred: the b x X x Y x Z x 2 batch of predictions.
-            label: the b x X x Y x Z batch of labels.
-        """
-        if label.dtype != torch.bool:
-            raise ValueError(f"SingleChannelDiceLoss expects boolean label. Got '{label.dtype}'.")
-
-        # Select foreground channel from prediction.
-        pred = pred[:, :, :, 1]
-        if label.shape != pred.shape:
-            raise ValueError(f"SingleChannelDiceLoss expects pred foreground channel and label to have same shape. Got '{pred.shape}' and '{label.shape}' respectively.")
-
-        # Flatten volumetric data.
-        pred = pred.flatten(start_dim=2)
-        label = label.flatten(start_dim=2)
-
-        # Compute dice coefficient.
-        numerator = 2 * (pred * label).sum(dim=2)
-        denominator = (pred + label).sum(dim=2)     # Some implementations square elements before summation.
-        dice = (numerator + self.epsilon) / (denominator + self.epsilon)
-
-        # Average across batch samples.
-        dice = dice.mean()
-
-        # Convert dice coef. to dice loss (smaller is better).
-        loss = -dice
 
         return loss
