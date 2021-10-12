@@ -119,7 +119,7 @@ def train_localiser(
     if resume:
         if resume_checkpoint is None:
             raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
-        check_path = os.path.join(checks_path, resume_checkpoint)
+        check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
         opt_kwargs['resume_from_checkpoint'] = check_path
     
     # Perform training.

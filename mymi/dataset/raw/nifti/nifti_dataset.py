@@ -20,6 +20,8 @@ class NIFTIDataset(Dataset):
         self._global_id = f"NIFTI: {name}"
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'raw', name)
+        if not os.path.exists(self._path):
+            raise ValueError(f"Dataset '{self}' not found.")
     
     @property
     def description(self) -> str:

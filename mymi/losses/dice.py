@@ -55,14 +55,15 @@ class DiceLoss(nn.Module):
         loss = -dice
 
         # Determine weights.
-        if self._weights:
-            if len(self._weights) != len(loss.shape[1]):
+        if self._weights is not None:
+            if len(self._weights) != loss.shape[1]:
                 raise ValueError(f"DiceLoss expects number of weights equal to number of label classes. Got '{len(self._weights)}' and '{loss.shape[1]}'.")
-            weights = self._weights
+            weights = torch.Tensor(self._weights).to(loss.device)
+            weights = weights.unsqueeze(0).repeat(loss.shape[0], 1)
         else:
             weights = torch.ones_like(loss) / loss.shape[1]
 
-        # Get weighted average dice loss.
+        # Apply weights element-wise and sum for each sample.
         loss = (weights * loss).sum(1)
 
         # Get average across samples in batch.
