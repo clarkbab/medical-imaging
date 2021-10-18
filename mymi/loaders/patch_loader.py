@@ -6,6 +6,7 @@ import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Union
 
+from mymi import config
 from mymi.dataset.processed import ProcessedPartition
 from mymi.transforms import crop_or_pad_3D
 from mymi import types
@@ -111,7 +112,6 @@ class LoaderDataset(Dataset):
         p_idx, s_idx = self._index_map[index]
         input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._region)
         label = label[self._region]
-        logging.info(f"partition: {self._partitions[p_idx]}, sample: {s_idx}")
 
         # Perform transform.
         if self._transform:

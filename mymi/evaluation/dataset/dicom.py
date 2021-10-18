@@ -4,10 +4,10 @@ from tqdm import tqdm
 
 from mymi import cache
 from mymi import dataset as ds
-from mymi.metrics import dice, hausdorff_distance
+from mymi.metrics import dice, distances
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction import get_patient_segmentation
+from mymi.prediction import get_two_stage_prediction
 from mymi import types
 
 def evaluate_model(
@@ -43,7 +43,7 @@ def evaluate_model(
 
     for pat in tqdm(pats):
         # Get pred/ground truth.
-        pred = get_patient_segmentation(set, pat, localiser, segmenter, device=device)
+        pred = get_two(set, pat, localiser, segmenter, device=device)
         label = set.patient(pat).region_data()[region]
 
         # Add metrics.

@@ -1,8 +1,12 @@
+import numpy as np
 import os
 import pandas as pd
+from tqdm import tqdm
+from typing import List
 
 from mymi import dataset as ds
-from mymi.evaluation.dataset.raw.nifti import evaluate_model
+from mymi.evaluation.dataset.dicom import evaluate_model
+from mymi.metrics import label_extent
 from mymi import types
 
 def create_evaluation_report(
@@ -24,7 +28,7 @@ def region_count(
     clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     # List regions.
-    set = ds.get(dataset, type_str='nifti')
+    set = ds.get(dataset, type_str='dicom')
     regions_df = set.list_regions(clear_cache=clear_cache)
 
     # Filter on requested regions.
@@ -50,7 +54,7 @@ def create_region_count_report(
     clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> None:
     # Generate counts report.
-    set = ds.get(dataset, type_str='nifti')
+    set = ds.get(dataset, type_str='dicom')
     count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
     filename = 'region-count.csv'
     filepath = os.path.join(set.path, 'reports', filename)
@@ -62,7 +66,7 @@ def region_overlap(
     clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> int:
     # List regions.
-    set = ds.get(dataset, type_str='nifti')
+    set = ds.get(dataset, type_str='dicom')
     regions_df = set.list_regions(clear_cache=clear_cache) 
     regions_df = regions_df.drop_duplicates()
     regions_df['count'] = 1
@@ -83,3 +87,71 @@ def region_overlap(
             return keep
     regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
     return len(regions_df) 
+
+def region_summary(
+    dataset: str,
+    regions: List[str]) -> pd.DataFrame:
+    """
+    returns: stats on region shapes.
+    """
+    set = ds.get(dataset, 'dicom')
+    pats = set.list_patients(regions=regions)
+
+    cols = {
+        'patient': str,
+        'region': str,
+        'axis': str,
+        'extent-mm': float,
+        'spacing-mm': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    axes = [0, 1, 2]
+
+    # Initialise empty data structure.
+    data = {}
+    for region in regions:
+        data[region] = {}
+        for axis in axes:
+            data[region][axis] = []
+
+    for pat in tqdm(pats):
+        # Get spacing.
+        spacing = set.patient(pat).ct_spacing()
+
+        # Get region data.
+        pat_regions = set.patient(pat).list_regions(whitelist=regions)
+        rs_data = set.patient(pat).region_data(regions=pat_regions)
+
+        # Add extents for all regions.
+        for r in rs_data.keys():
+            r_data = rs_data[r]
+            min, max = label_extent(r_data)
+            for axis in axes:
+                extent_vox = max[axis] - min[axis]
+                extent_mm = extent_vox * spacing[axis]
+                df = df.append({
+                    'patient': pat,
+                    'region': r,
+                    'axis': axis,
+                    'extent-mm': extent_mm,
+                    'spacing-mm': spacing[axis]
+                }, ignore_index=True)
+
+    # Set column types as 'append' crushes them.
+    df = df.astype(cols)
+
+    return df
+
+def create_region_summary_report(
+    dataset: str,
+    regions: List[str]) -> None:
+    # Generate counts report.
+    df = region_summary(dataset, regions)
+
+    # Save report.
+    filename = 'region-summary.csv'
+    set = ds.get(dataset, 'dicom')
+    filepath = os.path.join(set.path, 'reports', filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)

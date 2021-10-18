@@ -19,7 +19,9 @@ class NIFTIPatient:
         self._id = id
         self._path = os.path.join(config.directories.datasets, 'raw', dataset)
 
-    def list_regions(self) -> List[str]:
+    def list_regions(
+        self,
+        whitelist: types.PatientRegions = 'all') -> List[str]:
         path = os.path.join(self._path, 'data')
         files = os.listdir(path)
         names = []
@@ -31,6 +33,21 @@ class NIFTIPatient:
                 id = r.replace('.nii.gz', '')
                 if id == self._id:
                     names.append(f)
+
+        # Filter on whitelist.
+        def filter_fn(region):
+            if isinstance(whitelist, str):
+                if whitelist == 'all':
+                    return True
+                else:
+                    return region == whitelist
+            else:
+                if region in whitelist:
+                    return True
+                else:
+                    return False
+        names = list(filter(filter_fn, names))
+
         return names
 
     def has_region(

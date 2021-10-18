@@ -24,7 +24,7 @@ NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
-RUN_NAME="pmcc-hn-train-400epochs"
+RUN_NAME="clinical-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

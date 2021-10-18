@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
 DATASETS="['HN1-SEG','HNPCT-SEG','HNSCC-SEG','OPC-SEG']"
-REGION="Parotid_L"
+REGION="Brain"
 MODEL_NAME="segmenter-$REGION"
 NUM_EPOCHS=400
 NUM_GPUS=1
