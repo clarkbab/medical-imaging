@@ -20,6 +20,7 @@ def train_segmenter(
     run_name: str,
     datasets: Union[str, List[str]],
     region: str,
+    patch_size: types.ImageSize3D,
     loss: str = 'dice',
     num_epochs: int = 200,
     num_gpus: int = 1,
@@ -62,7 +63,6 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    patch_size = (128, 128, 96)
     train_loader = PatchLoader.build(train_parts, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
     val_loader = PatchLoader.build(val_parts, patch_size, region, num_workers=num_workers, shuffle=False)
 

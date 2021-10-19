@@ -1,6 +1,8 @@
 import logging
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.nn.functional import pad
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -40,13 +42,19 @@ class Up(nn.Module):
     def forward(self, x, x_res):
         x = self.upsample(x)
 
-        # Concatenate feature vectors.
-        if x_res.shape != x.shape:
-            raise ValueError(f"Residual shape '{x_res.shape}', doesn't match shape of upsampled features '{x.shape}'. Input volume dimensions must be divisible by 16.")
+        # Spatial resolution may be lost due to rounding when downsampling. Pad the upsampled features
+        # if necessary.
+        if x.shape != x_res.shape:
+            num_axes = len(x.shape)
+            padding = np.zeros((num_axes, 2), dtype='uint8')
+            for axis in range(num_axes):
+                diff = x_res.shape[axis] - x.shape[axis]
+                if diff > 0:
+                    padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
+            padding = tuple(np.flip(padding, axis=0).flatten())
+            x = pad(x, padding)
 
-        assert x_res.shape == x.shape, f"Residual '{x_res.shape}' has different shape to input '{x.shape}'."
         x = torch.cat((x, x_res), dim=1)
-
         x = self.double_conv(x)
 
         return x

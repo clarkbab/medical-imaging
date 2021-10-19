@@ -1,10 +1,12 @@
 import numpy as np
 import os
 import pytorch_lightning as pl
+from scipy.ndimage import center_of_mass
 import torch
 from torch import nn
 from torch.optim import SGD
 from typing import Dict, List, Optional
+import wandb
 
 from mymi import config
 from mymi.losses import DiceLoss
@@ -31,6 +33,7 @@ class Segmenter(pl.LightningModule):
         self._surface_interval = 20
         self._index_map = index_map
         self._loss = loss
+        self._max_images = 50
         self._metrics = metrics
         self._network = UNet()
         self._predict_logits = predict_logits
@@ -133,3 +136,31 @@ class Segmenter(pl.LightningModule):
                 self.log(f"val/batch/voxel-hd/{sample_desc}", dists['voxel-hd'], **self._log_args, on_epoch=False, on_step=True)
                 # self.log(f"val/batch/voxel-ahd/{sample_desc}", dists['voxel-ahd'], **self._log_args, on_epoch=False, on_step=True)
                 self.log(f"val/batch/voxel-95hd/{sample_desc}", dists['voxel-95hd'], **self._log_args, on_epoch=False, on_step=True)
+
+        # Log prediction.
+        if batch_idx < self._max_images:
+            class_labels = {
+                0: 'background',
+                1: 'foreground'
+            }
+            x_vol, y_vol, y_hat_vol = x[0, 0].cpu().numpy(), y[0], y_hat[0]
+            com = list(np.round(center_of_mass(y_vol)).astype(int))
+            for axis, com_ax in enumerate(com):
+                slices = [com_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))]
+                x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+                image = wandb.Image(
+                    x_img,
+                    caption=sample_desc,
+                    masks={
+                        'ground_truth': {
+                            'mask_data': y_img,
+                            'class_labels': class_labels
+                        },
+                        'predictions': {
+                            'mask_data': y_hat_img,
+                            'class_labels': class_labels
+                        }
+                    }
+                )
+                title = f'{sample_desc}:axis:{axis}'
+                self.logger.experiment.log({title: image})

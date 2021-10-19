@@ -98,7 +98,8 @@ class LoaderDataset(Dataset):
         """
         returns: number of samples in the partition.
         """
-        return self._num_samples
+        # return self._num_samples
+        return 3
 
     def __getitem__(
         self,

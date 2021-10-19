@@ -16,9 +16,45 @@ version=$(python --version)
 echo $version
 
 DATASETS="['HN1-SEG','HNPCT-SEG','HNSCC-SEG','OPC-SEG']"
-BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
-REGION=${BASH_REGIONS[$SLURM_ARRAY_TASK_ID]}
+REGIONS=(
+    'BrachialPlexus_L'
+    'BrachialPlexus_R'
+    'Brain'
+    'BrainStem'
+    'Cochlea_L'
+    'Cochlea_R'
+    'Lens_L'
+    'Lens_R'
+    'Mandible'
+    'OpticNerve_L'
+    'OpticNerve_R'
+    'OralCavity'
+    'Parotid_L'
+    'Parotid_R'
+    'SpinalCord'
+    'Submandibular_L'
+    'Submandibular_R'
+)
+REGION_SIZES=(
+    'BrachialPlexus_L'
+    'BrachialPlexus_R'
+    '(170,200,90)' # 'Brain'
+    'BrainStem'
+    'Cochlea_L'
+    'Cochlea_R'
+    'Lens_L'
+    'Lens_R'
+    'Mandible'
+    'OpticNerve_L'
+    'OpticNerve_R'
+    'OralCavity'
+    'Parotid_L'
+    'Parotid_R'
+    'SpinalCord'
+    'Submandibular_L'
+    'Submandibular_R'
+)
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-${REGION}"
 NUM_EPOCHS=400
 NUM_GPUS=4
