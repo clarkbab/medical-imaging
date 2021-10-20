@@ -146,7 +146,7 @@ class Segmenter(pl.LightningModule):
             x_vol, y_vol, y_hat_vol = x[0, 0].cpu().numpy(), y[0], y_hat[0]
             com = list(np.round(center_of_mass(y_vol)).astype(int))
             for axis, com_ax in enumerate(com):
-                slices = [com_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))]
+                slices = tuple([com_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
                 x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
                 image = wandb.Image(
                     x_img,
@@ -163,4 +163,4 @@ class Segmenter(pl.LightningModule):
                     }
                 )
                 title = f'{sample_desc}:axis:{axis}'
-                self.logger.experiment.log({title: image})
+                self.logger.experiment.log({ title: image })

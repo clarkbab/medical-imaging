@@ -98,8 +98,7 @@ class LoaderDataset(Dataset):
         """
         returns: number of samples in the partition.
         """
-        # return self._num_samples
-        return 3
+        return self._num_samples
 
     def __getitem__(
         self,
@@ -144,7 +143,11 @@ class LoaderDataset(Dataset):
 
         # Roll the dice.
         if np.random.binomial(1, self._p_foreground):
-            input, label = self._get_foreground_patch(input, label)
+            # Check that foreground voxels are present.
+            if label.sum() > 0:
+                input, label = self._get_foreground_patch(input, label)
+            else:
+                input, label = self._get_background_patch(input, label)
         else:
             input, label = self._get_background_patch(input, label)
 
