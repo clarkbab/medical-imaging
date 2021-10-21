@@ -46,65 +46,59 @@ class CTSeries:
         return self._id
 
     def get_cts(self) -> List[dcm.dataset.FileDataset]:
-        """
-        returns: a list of CT DICOM objects.
-        """
         # Load CTs.
         ct_paths = [os.path.join(self._path, f) for f in os.listdir(self._path)]
         cts = [dcm.read_file(f) for f in ct_paths]
 
         # Sort by z-position.
         cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])
-
         return cts
 
-    def offset(
-        self,
-        clear_cache: bool = False) -> types.PhysPoint3D:
-        """
-        returns: the patient offset in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the offset.
-        offset = tuple(self.summary(clear_cache=clear_cache)[['offset-x', 'offset-y', 'offset-z']].iloc[0])
+    def offset(self) -> types.PhysPoint3D:
+        # Get offset.
+        offset = (
+            cts[0].ImagePositionPatient[0],
+            cts[0].ImagePositionPatient[1],
+            cts[0].ImagePositionPatient[2]
+        )
         return offset
 
-    def orientation(
-        self,
-        clear_cache: bool = False) -> types.ImageSpacing3D:
-        """
-        returns: the patient orientation in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
+    def orientation(self) -> types.ImageSpacing3D:
         # Get the orientation.
-        row_x, row_y, row_z, col_x, col_y, col_z = self.summary(clear_cache=clear_cache)[['orientation-row-x', 'orientation-row-y', 'orientation-row-z', 'orientation-col-x', 'orientation-col-y', 'orientation-col-z']].iloc[0]
-        orientation = tuple(tuple(row_x, row_y, row_z), tuple(col_x, col_y, col_z))
+        orientation = (
+            (
+                cts[0].ImageOrientationPatient[0],
+                cts[0].ImageOrientationPatient[1],
+                cts[0].ImageOrientationPatient[2]
+            ),
+            (
+                cts[0].ImageOrientationPatient[3],
+                cts[0].ImageOrientationPatient[4],
+                cts[0].ImageOrientationPatient[5]
+            )
+        )
         return orientation
 
-    def size(
-        self,
-        clear_cache: bool = False) -> types.ImageSpacing3D:
-        """
-        returns: the CT scan size in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the spacing.
-        size = tuple(self.summary(clear_cache=clear_cache)[['size-x', 'size-y', 'size-z']].iloc[0])
+    def size(self) -> types.ImageSpacing3D:
+        cts = self.get_cts()
+
+        # Get size - relies on hierarchy filtering (i.e. removing patients with missing slices).
+        size = (
+            cts[0].pixel_array.shape[1],
+            cts[0].pixel_array.shape[0],
+            len(cts)
+        )
         return size
 
-    def spacing(
-        self,
-        clear_cache: bool = False) -> types.ImageSpacing3D:
-        """
-        returns: the patient spacing in physical coordinates.
-        kwargs:
-            clear_cache: forces the cache to clear.
-        """
-        # Get the spacing.
-        spacing = tuple(self.summary(clear_cache=clear_cache)[['spacing-x', 'spacing-y', 'spacing-z']].iloc[0])
+    def spacing(self) -> types.ImageSpacing3D:
+        cts = self.get_cts()
+
+        # Get spacing - relies on hierarchy filtering (i.e. ensuring consistent voxel spacing).
+        spacing = (
+            cts[0].PixelSpacing[0],
+            cts[0].PixelSpacing[1],
+            np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
+        )
         return spacing
 
     @cache.method('_global_id')

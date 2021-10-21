@@ -13,8 +13,52 @@ from mymi.regions import to_255, RegionColours
 from mymi import utils
 from mymi import types
 
-from ..two_stage import get_localiser_prediction, get_two_stage_prediction
+def get_localiser_prediction(
+    dataset: str,
+    pat_id: types.PatientID,
+    localiser: types.Model,
+    clear_cache: bool = False,
+    device: torch.device = torch.device('cpu')) -> np.ndarray:
+    # Load model if not already loaded.
+    if type(localiser) == tuple:
+        localiser = Localiser.load(*localiser)
+    localiser.eval()
+    localiser.to(device)
+    localiser_size = (128, 128, 96)
+    localiser_spacing = (4, 4, 6.625)
 
+    # Load the patient data.
+    set = ds.get(dataset, 'dicom')
+    input = set.patient(pat_id).ct_data()
+    input_size = input.shape
+    spacing = set.patient(pat_id).ct_spacing()
+
+    # Resample/crop data for network.
+    input = resample_3D(input, spacing, localiser_spacing)
+    pre_crop_size = input.shape
+
+    # Shape the image so it'll fit the network.
+    input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
+
+    # Get localiser result.
+    input = torch.Tensor(input)
+    input = input.unsqueeze(0)      # Add 'batch' dimension.
+    input = input.unsqueeze(1)      # Add 'channel' dimension.
+    input = input.float()
+    input = input.to(device)
+    with torch.no_grad():
+        pred = localiser(input)
+    pred = pred.squeeze(0)          # Remove 'batch' dimension.
+
+    # Reverse the resample/crop.
+    pred = centre_crop_or_pad_3D(pred, pre_crop_size)
+    pred = resample_3D(pred, localiser_spacing, spacing)
+    
+    # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
+    crop_box = ((0, 0, 0), input_size)
+    pred = crop_or_pad_3D(pred, crop_box)
+
+    return pred
 def create_localiser_predictions(
     dataset: str,
     localiser: Tuple[str, str, str],
