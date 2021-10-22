@@ -68,7 +68,6 @@ def anonymise(
 def process(
     dataset: str,
     dest_dataset: str,
-    clear_cache: bool = False,
     dilate_regions: Optional[types.PatientRegions] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
@@ -85,7 +84,6 @@ def process(
         dataset: the dataset to process.
         dest_dataset: the processed dataset.
     kwargs:
-        clear_cache: force the cache to clear.
         p_test: the proportion of test patients.
         p_train: the proportion of train patients.
         p_val: the proportion of validation patients.
@@ -96,6 +94,7 @@ def process(
         use_mapping: use region map if present.
     """
     logging.info(f"Processing '{dataset}' dataset into '{dest_dataset}' dataset.")
+    logging.info(f"Using size '{size}', spacing '{spacing}'.")
 
     # Load patients.
     old_ds = ds.get(dataset, 'dicom')
@@ -145,7 +144,7 @@ def process(
 
             # Load data.
             input = old_ds.patient(pat).ct_data()
-            labels = old_ds.patient(pat).region_data(clear_cache=clear_cache, regions=pat_regions)
+            labels = old_ds.patient(pat).region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:

@@ -55,6 +55,8 @@ class CTSeries:
         return cts
 
     def offset(self) -> types.PhysPoint3D:
+        cts = self.get_cts()
+
         # Get offset.
         offset = (
             cts[0].ImagePositionPatient[0],
@@ -64,6 +66,8 @@ class CTSeries:
         return offset
 
     def orientation(self) -> types.ImageSpacing3D:
+        cts = self.get_cts()
+
         # Get the orientation.
         orientation = (
             (
@@ -328,19 +332,15 @@ class CTSeries:
         return df
 
     @cache.method('_global_id')
-    def data(
-        self,
-        clear_cache: bool = False) -> np.ndarray:
+    def data(self) -> np.ndarray:
         """
         returns: a 3D numpy ndarray of CT data in HU.
-        kwargs:
-            clear_cache: force the cache to clear.
         """
         # Load patient CT dicoms.
         cts = self.get_cts()
 
         # Load CT summary info.
-        size = self.size(clear_cache=True)
+        size = self.size()
         offset = self.offset()
         spacing = self.spacing()
         

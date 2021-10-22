@@ -1,3 +1,5 @@
+import hashlib
+import json
 import numpy as np
 import os
 import pandas as pd
@@ -16,7 +18,7 @@ def create_evaluation_report(
     region: str) -> None:
     # Save report.
     eval_df = evaluate_model(dataset, localiser, segmenter, region)
-    set = ds.get(dataset, 'dicom')
+    set = ds.get(dataset, 'nifti')
     filename = f"{name}.csv"
     filepath = os.path.join(set.path, 'reports', 'evaluation', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -154,3 +156,67 @@ def create_region_summary_report(
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def get_ct_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    # Get patients.
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=regions)
+
+    cols = {
+        'patient-id': str,
+        'axis': int,
+        'size': int,
+        'spacing': float,
+        'fov': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for pat in tqdm(pats):
+        # Load values.
+        patient = set.patient(pat)
+        size = patient.ct_size()
+        spacing = patient.ct_spacing()
+
+        # Calculate FOV.
+        fov = np.array(size) * spacing
+
+        for axis in range(3):
+            data = {
+                'patient-id': pat,
+                'axis': axis,
+                'size': size[axis],
+                'spacing': spacing[axis],
+                'fov': fov[axis]
+            }
+            df = df.append(data, ignore_index=True)
+
+    # Set column types as 'append' crushes them.
+    df = df.astype(cols)
+
+    return df
+
+def create_ct_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> None:
+    # Get summary.
+    df = get_ct_summary(dataset, regions=regions)
+
+    # Save summary.
+    set = ds.get(dataset, 'nifti')
+    hash = _hash_regions(regions)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
+def load_ct_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> None:
+    set = ds.get(dataset, 'nifti')
+    hash = _hash_regions(regions)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    return pd.read_csv(filepath)
+
+def _hash_regions(regions: types.PatientRegions) -> str:
+    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

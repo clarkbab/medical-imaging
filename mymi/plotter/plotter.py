@@ -190,7 +190,7 @@ def plot_patient_regions(
         if transform:
             aspect = 1
         else:
-            aspect = _get_aspect_ratio(id, view) 
+            aspect = get_aspect_ratio(id, view, spacing) 
 
     # Determine plotting window.
     if window:
@@ -202,7 +202,7 @@ def plot_patient_regions(
 
     # Plot CT data.
     plt.figure(figsize=figsize)
-    plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=_get_origin(view), vmin=vmin, vmax=vmax)
+    plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
     if axes:
@@ -211,14 +211,14 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        show_legend = _plot_regions(region_data, alpha, aspect, crop, internal_regions, latex, perimeter, slice_idx, view) 
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view)
 
         if other_ds:
             # Prepend other dataset name.
             other_region_data = dict((f"{r} - {other_ds.name}", d) for r, d in other_region_data.items())
  
             # Plot other regions.
-            other_show_legend = _plot_regions(other_region_data, alpha, aspect, crop, internal_regions, latex, perimeter, slice_idx, view)
+            other_show_legend = plot_regions(other_region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view)
 
         # Create legend.
         if legend and (show_legend or (other_ds and other_show_legend)): 
@@ -370,7 +370,7 @@ def plot_patient_localisation(
     if show_seg:
         # Get aspect ratio.
         if not aspect:
-            aspect = _get_aspect_ratio(id, view) 
+            aspect = get_aspect_ratio(id, view, spacing) 
 
         # Get slice data.
         pred_slice_data = get_slice(pred, slice_idx, view)
@@ -383,7 +383,7 @@ def plot_patient_localisation(
         colour = plt.cm.tab20(0)
         colours = [(1, 1, 1, 0), colour]
         cmap = ListedColormap(colours)
-        plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+        plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
         plt.plot(0, 0, c=colour, label='Segmentation')
 
     # Plot bounding box.
@@ -437,12 +437,12 @@ def plot_localiser_prediction(
 
     # Get aspect ratio.
     if not aspect:
-        aspect = _get_aspect_ratio(id, view) 
+        aspect = get_aspect_ratio(id, view, spacing) 
 
     # Plot segmentation.
     colours = [(1, 1, 1, 0), segmentation_colour]
     cmap = ListedColormap(colours)
-    plt.imshow(seg, alpha=0.5, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+    plt.imshow(seg, alpha=0.5, aspect=aspect, cmap=cmap, origin=get_origin(view))
     plt.plot(0, 0, c=segmentation_colour, label='Segmentation')
 
     # Plot localisation bounding box.
@@ -528,12 +528,12 @@ def plot_patient_segmentation(
 
     # Get aspect ratio.
     if not aspect:
-        aspect = _get_aspect_ratio(id, view) 
+        aspect = get_aspect_ratio(id, view, spacing) 
 
     # Plot segmentation.
     colours = [(1, 1, 1, 0), segmentation_colour]
     cmap = ListedColormap(colours)
-    plt.imshow(seg, alpha=0.5, aspect=aspect, cmap=cmap, origin=_get_origin(view))
+    plt.imshow(seg, alpha=0.5, aspect=aspect, cmap=cmap, origin=get_origin(view))
     plt.plot(0, 0, c=segmentation_colour, label='Segmentation')
 
     # Plot localisation bounding box.

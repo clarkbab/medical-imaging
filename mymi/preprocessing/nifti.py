@@ -2,12 +2,14 @@ import logging
 import numpy as np
 import os
 import pandas as pd
+from scipy.ndimage import binary_dilation
 from skimage.draw import polygon
 import sys
 from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Optional
 
+from mymi import dataset as ds
 from mymi.dataset.processed import recreate as recreate_processed
 from mymi.dataset.raw import recreate as recreate_raw
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
@@ -19,10 +21,10 @@ def anonymise(
     clear_cache: bool = False,
     regions: types.PatientRegions = 'all') -> None:
     # Copy dataset.
-    old_ds = dataset.get(dataset, type_str='nifti')
+    set = dataset.get(dataset, type_str='nifti')
     new_ds = recreate_raw(anon_dataset, type_str='nifti')
     logging.info('Copying dataset...')
-    copy_tree(old_ds.path, new_ds.path)
+    copy_tree(set.path, new_ds.path)
     logging.info('Copied.')
 
     # Create CT map.
@@ -32,7 +34,7 @@ def anonymise(
     map_df = pd.DataFrame(ct_ids, columns=['patient-id'])
 
     # Save map.
-    filepath = os.path.join(old_ds_path, 'map.csv')
+    filepath = os.path.join(set.path, 'map.csv')
     map_df.to_csv(filepath)
 
     for anon_id, row in tqdm(map_df.iterrows()):
@@ -55,10 +57,12 @@ def anonymise(
 def process(
     dataset: str,
     dest_dataset: str,
+    dilate_regions: Optional[types.PatientRegions] = None,
     p_test: float = 0.2,
     p_train: float = 0.6,
     p_val: float = 0.2,
-    seed: int = 42,
+    random_seed: int = 42,
+    regions: types.PatientRegions = 'all',
     size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None):
     """
@@ -76,14 +80,15 @@ def process(
         spacing: resample to the desired spacing.
     """
     logging.info(f"Processing '{dataset}' dataset into '{dest_dataset}' dataset.")
+    logging.info(f"Using size '{size}', spacing '{spacing}'.")
 
     # Load patients.
-    old_ds = ds.get(dataset, type_str='nifti')
-    pats = old_ds.list_patients()
-    logging.info(f"Found {len(pats)} patients.")
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=regions)
+    logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
-    np.random.seed(seed) 
+    np.random.seed(random_seed) 
     np.random.shuffle(pats)
 
     # Partition patients - rounding assigns more patients to the test set,
@@ -99,13 +104,13 @@ def process(
     logging.info(f"Num patients per partition: {len(train_pats)}/{len(validation_pats)}/{len(test_pats)} for train/validation/test.")
 
     # Create dataset.
-    proc_ds = recreate_processed(name)
+    proc_ds = recreate_processed(dest_dataset)
 
     # Save processing params.
     filepath = os.path.join(proc_ds.path, 'params.csv')
     with open(filepath, 'w') as f:
         f.write('dataset,p_test,p_train,p_val,seed,size,spacing\n')
-        f.write(f"{dataset},{p_test},{p_train},{p_val},{seed},\"{size}\",\"{spacing}\"")
+        f.write(f"{dataset},{p_test},{p_train},{p_val},{random_seed},\"{size}\",\"{spacing}\"")
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']
@@ -121,15 +126,15 @@ def process(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = old_ds.patient(pat).list_regions()
+            pat_regions = set.patient(pat).list_regions()
 
             # Load data.
-            input = old_ds.patient(pat).ct_data()
-            labels = old_ds.patient(pat).region_data(regions=pat_regions)
+            input = set.patient(pat).ct_data()
+            labels = set.patient(pat).region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:
-                old_spacing = old_ds.patient(pat).ct_spacing()
+                old_spacing = set.patient(pat).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 
@@ -138,9 +143,27 @@ def process(
                 input = centre_crop_or_pad_3D(input, size, fill=np.min(input))
                 labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
 
+            # Dilate the labels if requested.
+            if dilate_regions is not None:
+                labels = dict((r, binary_dilation(d, iterations=3) if _should_dilate(r, dilate_regions) else d) for r, d in labels.items())
+
             # Save input data.
             index = proc_ds.partition(partition).create_input(pat, input)
 
             # Save label data.
             for region, label in labels.items():
                 proc_ds.partition(partition).create_label(index, region, label)
+
+def _should_dilate(
+    region: str,
+    regions: types.PatientRegions) -> bool:
+    if type(regions) == str:
+        if regions == 'all':
+            return True
+        elif region == regions:
+            return True
+    else:
+        if region in regions:
+            return True
+        else:
+            return False

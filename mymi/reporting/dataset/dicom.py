@@ -41,7 +41,7 @@ def get_ct_summary(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in pats:
+    for pat in tqdm(pats):
         # Load values.
         patient = set.patient(pat)
         size = patient.ct_size()
