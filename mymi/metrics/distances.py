@@ -2,6 +2,7 @@ import numpy as np
 import SimpleITK as sitk
 from typing import Dict
 
+from mymi.postprocessing import get_extent_centre
 from mymi import types
 
 def distances(
@@ -105,3 +106,33 @@ def batch_mean_distances(
             dists[metric].append(d[metric])
     mean_dists = dict([(metric, np.mean(values)) for metric, values in dists.items()])
     return mean_dists
+
+def extent_centre_distance(
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: types.ImageSpacing3D) -> float:
+    """
+    returns: the maximum distance between extent centres across all axes.
+    args:
+        a: a boolean 3D array.
+        b: another boolean 3D array.
+        spacing: the voxel spacing.
+    """
+    if a.shape != b.shape:
+        raise ValueError(f"Metric 'extent_centre_distance' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'extent_centre_distance' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+    if a.sum() == 0 or b.sum() == 0:
+        raise ValueError(f"Metric 'extent_centre_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
+
+    # Calculate extent centres.
+    a_cent = get_extent_centre(a)
+    b_cent = get_extent_centre(b)
+
+    # Get distance between centres.
+    dists = np.abs(np.array(b_cent) - np.array(a_cent))    
+    dists_mm = spacing * dists
+
+    # Take max across axes.
+    max_dist_mm = dists_mm.max()
+    return max_dist_mm

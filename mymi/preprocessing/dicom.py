@@ -12,7 +12,6 @@ from typing import Optional
 
 from mymi import dataset as ds
 from mymi.dataset.processed import recreate as recreate_processed
-from mymi.dataset.raw import recreate as recreate_raw
 from mymi import logging
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
@@ -21,28 +20,30 @@ FILENAME_NUM_DIGITS = 5
 
 def anonymise(
     dataset: str,
-    anon_dataset: str,
+    dest_dataset: str,
     regions: types.PatientRegions = 'all') -> None:
+    logging.info(f"Anonymising dataset '{dataset}', creating NIFTI dataset '{dest_dataset}'.")
 
     # Create CT map.
-    old_ds = ds.get(dataset)
-    pats = old_ds.list_patients(regions=regions)
+    set = ds.get(dataset)
+    pats = set.list_patients(regions=regions)
     map_df = pd.DataFrame(pats, columns=['patient-id'])
 
     # Save map.
     filename = 'map.csv'
-    filepath = os.path.join(old_ds.path, filename)
+    filepath = os.path.join(set.path, filename)
     map_df.to_csv(filepath)
 
     # Create new dataset.
-    ds = recreate_raw(anon_dataset, type_str='nifti')
+    proc_ds = recreate_processed(dest_dataset)
 
     # Add patients to new dataset.
     for anon_id, row in tqdm(map_df.iterrows()):
         # Add CT data.
-        data = old_ds.patient(row['patient-id']).ct_data()
-        spacing = old_ds.patient(row['patient-id']).ct_spacing()
-        offset = old_ds.patient(row['patient-id']).ct_offset()
+        patient = set.patient(row['patient-id'])
+        data = patient.ct_data()
+        spacing = patient.ct_spacing()
+        offset = patient.ct_offset()
         affine = np.array([
             [spacing[0], 0, 0, offset[0]],
             [0, spacing[1], 0, offset[1]],
@@ -50,18 +51,17 @@ def anonymise(
             [0, 0, 0, 1]])
         img = Nifti1Image(data, affine)
         filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
-        filepath = os.path.join(ds.path, 'ct', filename)
+        filepath = os.path.join(proc_ds.path, 'ct', filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         nib.save(img, filepath)
 
         # Add region data.
-        pat_regions = old_ds.patient(row['patient-id']).list_regions()
-        regions = np.intersect1d(pat_regions, REGIONS)
-        region_data = old_ds.patient(row['patient-id']).region_data(regions=regions)
+        pat_regions = patient.list_regions(whitelist=regions)
+        region_data = patient.region_data(regions=pat_regions)
         for r, d in region_data.items():
             img = Nifti1Image(d.astype(np.int32), affine)
             filename = f"{anon_id:0{FILENAME_NUM_DIGITS}}.nii.gz"
-            filepath = os.path.join(ds.path, r, filename)
+            filepath = os.path.join(proc_ds.path, r, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
 
@@ -97,8 +97,8 @@ def process(
     logging.info(f"Using size '{size}', spacing '{spacing}'.")
 
     # Load patients.
-    old_ds = ds.get(dataset, 'dicom')
-    pats = old_ds.list_patients(regions=regions) 
+    set = ds.get(dataset, 'dicom')
+    pats = set.list_patients(regions=regions) 
     logging.info(f"Found {len(pats)} patients with (at least) one of the requested regions.")
 
     # Shuffle patients.
@@ -140,15 +140,15 @@ def process(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = old_ds.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
+            pat_regions = set.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
 
             # Load data.
-            input = old_ds.patient(pat).ct_data()
-            labels = old_ds.patient(pat).region_data(regions=pat_regions)
+            input = set.patient(pat).ct_data()
+            labels = set.patient(pat).region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing is not None:
-                old_spacing = old_ds.patient(pat).ct_spacing()
+                old_spacing = set.patient(pat).ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 

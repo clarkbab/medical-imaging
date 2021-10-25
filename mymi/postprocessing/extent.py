@@ -27,7 +27,7 @@ def get_extent_centre(a: np.ndarray) -> Optional[types.Point3D]:
 
     if extent:
         # Find the extent centre.
-        centre = tuple(np.floor(np.array(box).sum(axis=0) / 2).astype(int))
+        centre = tuple(np.floor(np.array(extent).sum(axis=0) / 2).astype(int))
     else:
         return None
 

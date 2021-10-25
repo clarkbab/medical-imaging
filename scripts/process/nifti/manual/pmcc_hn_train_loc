@@ -5,11 +5,11 @@ cd $parent_path
 
 DATASET="PMCC-HN-TRAIN"
 DEST_DATASET="PMCC-HN-TRAIN-LOC-HIGH"
-DILATE_REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Cochlea_L','Cochlea_R','OpticNerve_L','OpticNerve_R')"
+DILATE_REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Cochlea_L','Cochlea_R','Lens_L','Lens_R','OpticNerve_L','OpticNerve_R')"
 P_TRAIN=0.8
 P_VAL=0.2
 P_TEST=0
-REGIONS="('Brain','Cochlea_L','Cochlea_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
+REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 SIZE="(150,150,128)"
 SPACING="(4,4,8)"
 

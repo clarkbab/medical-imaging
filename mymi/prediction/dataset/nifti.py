@@ -158,7 +158,7 @@ def get_segmenter_prediction(
     # Pad (or crop) to size before patch extraction.
     rev_patch_box_min, rev_patch_box_max = patch_box
     rev_patch_box_max = tuple(np.array(pre_extract_size) - rev_patch_box_min)
-    rev_patch_box_min = tuple(-np.array(rev_patch_box_min)))
+    rev_patch_box_min = tuple(-np.array(rev_patch_box_min))
     rev_patch_box = (rev_patch_box_min, rev_patch_box_max)
     pred = crop_or_pad_3D(pred, rev_patch_box)
 

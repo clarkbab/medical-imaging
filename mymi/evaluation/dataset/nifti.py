@@ -7,16 +7,18 @@ from typing import Tuple
 
 from mymi import cache
 from mymi import dataset as ds
-from mymi.metrics import dice, distances
+from mymi.metrics import dice, distances, extent_centre_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nifti import get_localiser_prediction
+from mymi.prediction.dataset.nifti import load_localiser_prediction
 from mymi import types
 
 def evaluate_localiser_predictions(
     dataset: str,
-    localiser: Tuple[str, str, str],
-    region: str) -> None:
+    region: str,
+    localiser: Tuple[str, str, str]) -> None:
+    logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
+
     # Load dataset.
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=region)
@@ -31,13 +33,14 @@ def evaluate_localiser_predictions(
 
     for pat in tqdm(pats):
         # Get pred/ground truth.
-        pred = get_localiser_prediction(dataset, pat, localiser)
+        pred = load_localiser_prediction(dataset, pat, localiser)
         label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
 
         # Add metrics.
         metrics = [
             'dice',
             'assd',
+            'extent',
             'surface-hd',
             'surface-95hd',
             'voxel-hd',
@@ -79,11 +82,17 @@ def evaluate_localiser_predictions(
         df = df.append(data['voxel-hd'], ignore_index=True)
         df = df.append(data['voxel-95hd'], ignore_index=True)
 
+        # Extent distance.
+        try:
+            dist = extent_centre_distance(pred, label, spacing)
+        except ValueError:
+            dist = np.nan
+
+        data['extent'][region] = dist 
+        df = df.append(data['extent'], ignore_index=True)
+
     # Set column types.
     df = df.astype(cols)
-
-    # Set index.
-    df = df.set_index('patient-id')
 
     # Save evaluation.
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
