@@ -89,12 +89,9 @@ def region_overlap(
     regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
     return len(regions_df) 
 
-def region_summary(
+def get_region_summary(
     dataset: str,
     regions: List[str]) -> pd.DataFrame:
-    """
-    returns: stats on region shapes.
-    """
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=regions)
 
@@ -144,18 +141,26 @@ def region_summary(
 
     return df
 
-def create_region_summary_report(
+def create_region_summary(
     dataset: str,
     regions: List[str]) -> None:
     # Generate counts report.
-    df = region_summary(dataset, regions)
+    df = get_region_summary(dataset, regions)
 
     # Save report.
-    filename = 'region-summary.csv'
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'reports', filename)
+    hash = _hash_regions(regions)
+    filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def load_region_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> None:
+    set = ds.get(dataset, 'nifti')
+    hash = _hash_regions(regions)
+    filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
+    return pd.read_csv(filepath)
 
 def get_ct_summary(
     dataset: str,

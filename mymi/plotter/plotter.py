@@ -10,7 +10,6 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.dataset.raw.dicom import DICOMDataset
 from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
@@ -134,7 +133,7 @@ def plot_patient_regions(
 
         # Load other regions.
         if other_ds:
-            other_ds = DICOMDataset(other_ds) 
+            other_ds = dataset.get(other_ds, 'dicom') 
             other_region_data = other_ds.patient(id).region_data(clear_cache=clear_cache, regions=other_regions)
 
             if internal_regions:
@@ -277,7 +276,6 @@ def plot_regions(
         region_data: the region data to plot.
         others: see 'plot_patient_regions'.
     """
-    print(region_data)
     # Plot each region.
     show_legend = False     # Only show legend if slice has at least one region.
     for i, (region, data) in enumerate(region_data.items()):
@@ -327,27 +325,6 @@ def plot_patient_localisation(
     show_seg: bool = False,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
-    """
-    effect: plots the patient bounding box produced by localiser.
-    args:
-        id: the patient ID.
-        slice_idx: the slice index.
-    kwargs:
-        aspect: the aspect ratio.
-        box_colour: colour of the bounding box.
-        clear_cache: force the cache to clear.
-        crop: the crop window.
-        device: the device to perform network calcs on.
-        latex: use latex compiler for text.
-        loc_box: the 3D box from localisation.
-        loc_seg: the segmentation prediction from localisation.
-        localiser: the localiser network.
-        localiser_size: the localiser network input size.
-        localiser_spacing: the localiser network input voxel spacing.
-        show_seg: display the localiser segmentation prediction.
-        view: the view plane. 
-        **kwargs: all kwargs accepted by 'plot_patient_regions'.
-    """
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
     if latex:

@@ -114,11 +114,11 @@ class TrainingPartition:
 
     def sample(
         self,
-        index: int) -> PartitionSample:
+        index: int) -> TrainingSample:
         """
         returns: the partition sample.
         """
-        return PartitionSample(self, index)
+        return TrainingSample(self, index)
 
     def create_input(
         self,

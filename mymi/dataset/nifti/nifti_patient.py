@@ -97,7 +97,7 @@ class NIFTIPatient:
             path = os.path.join(self._dataset.path, 'data', region, f"{self._id}.nii.gz")
             img = nib.load(path)
             rdata = img.get_fdata()
-            data[region] = rdata
+            data[region] = rdata.astype(bool)
         return data
 
     @cache.method('_dataset', '_id')

@@ -147,7 +147,6 @@ class RTSTRUCTSeries:
         """
         return region in self.list_regions(use_mapping=use_mapping)
 
-    @cache.method('_global_id')
     def region_data(
         self,
         clear_cache: bool = False,

@@ -5,6 +5,6 @@ cd $parent_path
 
 DATASET="OPC"
 REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
-ANONYMISE=False
 
-python convert_to_nifti --dataset $DATASET --regions $REGIONS --anonymise $ANONYMISE
+python ct_summary --dataset $DATASET --regions $REGIONS
+

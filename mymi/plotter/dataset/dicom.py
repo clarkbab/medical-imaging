@@ -34,6 +34,7 @@ def plot_patient_regions(
     slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
+    use_mapping: bool = True,
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
     assert_position(centre_on, slice_idx)
@@ -59,7 +60,7 @@ def plot_patient_regions(
     # Get slice index if requested OAR centre.
     if centre_on:
         # Load region data.
-        label = pat.region_data(regions=centre_on)[centre_on]
+        label = pat.region_data(regions=centre_on, use_mapping=use_mapping)[centre_on]
         com = np.round(center_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]
@@ -76,7 +77,7 @@ def plot_patient_regions(
 
     # Load region data.
     if regions is not None:
-        region_data = pat.region_data(regions=regions)
+        region_data = pat.region_data(regions=regions, use_mapping=use_mapping)
 
         # Load other regions.
         if other_ds:

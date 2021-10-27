@@ -117,8 +117,19 @@ def plot_patient_regions(
 
     # Add axis labels.
     if axes:
-        plt.xlabel('voxel')
-        plt.ylabel('voxel')
+        # Determine voxel spacing per axis.
+        if view == 'axial':
+            spacing_x = spacing[0]
+            spacing_y = spacing[1]
+        elif view == 'coronal':
+            spacing_x = spacing[0]
+            spacing_y = spacing[2]
+        elif view == 'sagittal':
+            spacing_x = spacing[1]
+            spacing_y = spacing[2]
+
+        plt.xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+        plt.ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     if regions:
         # Plot regions.
@@ -171,6 +182,7 @@ def plot_patient_regions(
                 "font.family": rc_params['font.family'],
                 'text.usetex': rc_params['text.usetex']
             })
+
 
 def plot_patient_localiser_prediction(
     dataset: str,

@@ -2,8 +2,8 @@ from typing import Optional
 
 from mymi import types
 
-from ..dataset import get
-from .training import convert_to_training as ctt
+from ..nifti import NIFTIDataset
+from .processing import convert_to_training as ctt
 
 def convert_to_training(
     dataset: str,
@@ -17,6 +17,6 @@ def convert_to_training(
     size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None,
     use_mapping: bool = True):
-    set = get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     ctt(set, dest_dataset, dilate_regions=dilate_regions, p_test=p_test, p_train=p_train, p_val=p_val, 
         random_seed=random_seed, regions=regions, size=size, spacing=spacing, use_mapping=use_mapping)
