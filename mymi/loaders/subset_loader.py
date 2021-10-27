@@ -6,12 +6,12 @@ import torchio
 from torchio import LabelMap, ScalarImage, Subject
 
 from mymi import types
-from mymi.dataset.processed import ProcessedPartition
+from mymi.dataset.training import TrainingPartition
 
 class SubsetLoader:
     @staticmethod
     def build(
-        partition: ProcessedPartition,
+        partition: TrainingPartition,
         num_samples: int,
         batch_size: int = 1,
         half_precision: bool = True,
@@ -43,7 +43,7 @@ class SubsetLoader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partition: ProcessedPartition,
+        partition: TrainingPartition,
         num_samples: int,
         half_precision: bool = True,
         regions: types.PatientRegions = 'all',

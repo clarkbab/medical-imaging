@@ -6,7 +6,7 @@ import torchio
 from typing import Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
-from mymi.prediction.dataset.processed import load_localiser_prediction
+from mymi.prediction.dataset.training import load_localiser_prediction
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
 
@@ -57,7 +57,7 @@ def plot_sample(
         })
 
     # Load input.
-    set = ds.get(dataset, 'processed')
+    set = ds.get(dataset, 'training')
     sample = set.partition(partition).sample(sample_idx)
     input = sample.input()
 
@@ -182,7 +182,7 @@ def plot_localiser_prediction(
         raise ValueError(f"Either 'slice_idx' or 'centre_on' must be set.")
 
     # Load sample.
-    set = ds.get(dataset, 'processed')
+    set = ds.get(dataset, 'training')
     sample = set.partition(partition).sample(sample_idx)
 
     # Centre on OAR if requested.
@@ -210,7 +210,7 @@ def plot_localiser_prediction(
 
     # Get aspect ratio.
     if not aspect:
-        set = ds.get(dataset, 'processed')
+        set = ds.get(dataset, 'training')
         spacing = eval(set.params()['spacing'][0])
         aspect = get_aspect_ratio(id, view, spacing) 
 

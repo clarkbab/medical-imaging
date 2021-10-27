@@ -7,14 +7,14 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Union
 
 from mymi import config
-from mymi.dataset.processed import ProcessedPartition
+from mymi.dataset.training import TrainingPartition
 from mymi.transforms import crop_or_pad_3D
 from mymi import types
 
 class PatchLoader:
     @staticmethod
     def build(
-        partitions: Union[ProcessedPartition, List[ProcessedPartition]],
+        partitions: Union[TrainingPartition, List[TrainingPartition]],
         patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,
@@ -39,7 +39,7 @@ class PatchLoader:
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
-        if type(partitions) == ProcessedPartition:
+        if type(partitions) == TrainingPartition:
             partitions = [partitions]
 
         # Create dataset object.
@@ -51,7 +51,7 @@ class PatchLoader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partitions: List[ProcessedPartition],
+        partitions: List[TrainingPartition],
         patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,

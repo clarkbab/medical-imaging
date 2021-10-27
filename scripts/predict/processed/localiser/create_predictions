@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.prediction.dataset.processed import create_localiser_predictions
+from mymi.prediction.dataset.training import create_localiser_predictions
 
 fire.Fire(create_localiser_predictions)
 

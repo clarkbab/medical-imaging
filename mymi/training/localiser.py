@@ -35,17 +35,17 @@ def train_localiser(
 
     # Load partitions.
     if isinstance(datasets, str):
-        set = ds.get(datasets, 'processed')
+        set = ds.get(datasets, 'training')
         spacing = eval(set.params().spacing[0])
         train_parts = set.partition('train')
         val_parts = [set.partition('validation')]
     else:
-        set = ds.get(datasets[0], 'processed')
+        set = ds.get(datasets[0], 'training')
         spacing = eval(set.params().spacing[0]) 
         train_parts = []
         val_parts = []
         for d in datasets:
-            set = ds.get(d, 'processed')
+            set = ds.get(d, 'training')
             d_spacing = eval(set.params().spacing[0]) 
             if d_spacing != spacing:
                 raise ValueError(f"Can't train on datasets with inconsistent spacing.")

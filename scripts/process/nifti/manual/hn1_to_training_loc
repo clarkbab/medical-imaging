@@ -1,0 +1,17 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="HN1"
+DEST_DATASET="HN1-LOC-HIGH"
+DILATE_REGIONS="('Cochlea_L','Cochlea_R')"
+P_TRAIN=0.8
+P_VAL=0.2
+P_TEST=0
+REGIONS="('Brain','Cochlea_L','Cochlea_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
+SIZE="(150,150,128)"
+SPACING="(4,4,8)"
+
+python convert_to_training --dataset $DATASET --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
+    --regions $REGIONS --size $SIZE --spacing $SPACING

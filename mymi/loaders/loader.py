@@ -7,12 +7,12 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Tuple, Union
 
 from mymi import types
-from mymi.dataset.processed import ProcessedPartition
+from mymi.dataset.training import TrainingPartition
 
 class Loader:
     @staticmethod
     def build(
-        partitions: Union[ProcessedPartition, List[ProcessedPartition]],
+        partitions: Union[TrainingPartition, List[TrainingPartition]],
         batch_size: int = 1,
         half_precision: bool = True,
         num_workers: int = 1,
@@ -33,7 +33,7 @@ class Loader:
             spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
-        if type(partitions) == ProcessedPartition:
+        if type(partitions) == TrainingPartition:
             partitions = [partitions]
 
         # Create dataset object.
@@ -45,7 +45,7 @@ class Loader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partitions: List[ProcessedPartition],
+        partitions: List[TrainingPartition],
         half_precision: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,

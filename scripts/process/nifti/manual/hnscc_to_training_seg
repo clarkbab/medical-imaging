@@ -1,0 +1,17 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="HNSCC"
+DEST_DATASET="HNSCC-SEG"
+DILATE_REGIONS=None
+P_TRAIN=0.8
+P_VAL=0.2
+P_TEST=0
+REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','Submandibular_L','Submandibular_R')"
+SIZE=None
+SPACING="(1,1,2)"
+
+python convert_to_training --dataset $DATASET --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS --p_train $P_TRAIN --p_val $P_VAL --p_test $P_TEST \
+    --regions $REGIONS --size $SIZE --spacing $SPACING
