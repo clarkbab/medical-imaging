@@ -277,6 +277,7 @@ def plot_regions(
         region_data: the region data to plot.
         others: see 'plot_patient_regions'.
     """
+    print(region_data)
     # Plot each region.
     show_legend = False     # Only show legend if slice has at least one region.
     for i, (region, data) in enumerate(region_data.items()):
@@ -662,8 +663,8 @@ def reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
 
     return box
 
-def should_plot_bounding_box(
-    bounding_box: types.Box3D,
+def should_plot_box(
+    box: types.Box3D,
     view: types.PatientView,
     slice_idx: int) -> bool:
     """
@@ -680,19 +681,20 @@ def should_plot_bounding_box(
         dim = 1
     elif view == 'sagittal':
         dim = 0
-    bbox_min, bbox_max = bounding_box
-    bbox_min = bbox_min[dim]
-    bbox_max = bbox_max[dim]
+    min, max = box
+    min = min[dim]
+    max = max[dim]
 
     # Return result.
-    return slice_idx >= bbox_min and slice_idx < bbox_max
+    return slice_idx >= min and slice_idx < max
 
-def plot_bounding_box(
-    bounding_box: types.Box3D,
+def plot_box(
+    box: types.Box3D,
     view: types.PatientView,
-    box_colour: str = 'r',
+    colour: str = 'r',
     crop: types.Box2D = None,
-    label: str = 'Bounding Box') -> None:
+    label: str = 'box',
+    linestyle: str = 'solid') -> None:
     """
     effect: plots a 2D slice of the bounding box.
     args:
@@ -708,21 +710,21 @@ def plot_bounding_box(
         dims = (0, 2)
     elif view == 'sagittal':
         dims = (1, 2)
-    bbox_min, bbox_max = bounding_box
-    bbox_min = np.array(bbox_min)[[*dims]]
-    bbox_max = np.array(bbox_max)[[*dims]]
-    bbox_width = bbox_max - bbox_min
+    min, max = box
+    min = np.array(min)[[*dims]]
+    max = np.array(max)[[*dims]]
+    width = max - min
 
     # Adjust bounding box for cropped view.
     if crop:
         crop_min, _ = crop
-        bbox_min -= crop_min
+        min -= crop_min
 
     # Draw bounding box.
-    rect = Rectangle(bbox_min, *bbox_width, linewidth=1, edgecolor=box_colour, facecolor='none')
+    rect = Rectangle(min, *width, linewidth=1, edgecolor=colour, facecolor='none', linestyle=linestyle)
     ax = plt.gca()
     ax.add_patch(rect)
-    plt.plot(0, 0, c=box_colour, label=label)
+    plt.plot(0, 0, c=colour, label=label, linestyle=linestyle)
 
 def _escape_latex(text: str) -> str:
     """
@@ -747,3 +749,11 @@ def _escape_latex(text: str) -> str:
     }
     regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
     return regex.sub(lambda match: char_map[match.group()], text)
+
+def assert_position(
+    centre_on: Optional[int],
+    slice_idx: Optional[str]):
+    if not centre_on and not slice_idx:
+        raise ValueError(f"Either 'centre_on' or 'slice_idx' must be set.")
+    elif centre_on and slice_idx:
+        raise ValueError(f"Only one of 'centre_on' or 'slice_idx' can be set.")

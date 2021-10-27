@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim import SGD
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from mymi import config
 from mymi.losses import DiceLoss
@@ -59,10 +59,24 @@ class Localiser(pl.LightningModule):
         run_name: str,
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
+        # Load model.
+        model_name, run_name, checkpoint = Localiser.replace_best(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Localiser.load_from_checkpoint(filepath, **kwargs)
+
+    @staticmethod
+    def replace_best(
+        model_name: str,
+        run_name: str,
+        checkpoint: str) -> Tuple[str, str, str]:
+        # Find best checkpoint.
+        if checkpoint == 'BEST': 
+            checkpath = os.path.join(config.directories.checkpoints, model_name, run_name)
+            checkpoint = list(sorted(os.listdir(checkpath)))[-1].replace('.ckpt', '')
+
+        return (model_name, run_name, checkpoint)
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)

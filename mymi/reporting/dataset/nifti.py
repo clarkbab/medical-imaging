@@ -7,7 +7,7 @@ from tqdm import tqdm
 from typing import List
 
 from mymi import dataset as ds
-from mymi.metrics import label_extent
+from mymi.postprocessing import get_extent
 from mymi import types
 
 def create_evaluation_report(
@@ -127,7 +127,7 @@ def region_summary(
         # Add extents for all regions.
         for r in rs_data.keys():
             r_data = rs_data[r]
-            min, max = label_extent(r_data)
+            min, max = get_extent(r_data)
             for axis in axes:
                 extent_vox = max[axis] - min[axis]
                 extent_mm = extent_vox * spacing[axis]

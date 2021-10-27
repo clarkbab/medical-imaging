@@ -1,6 +1,6 @@
 import numpy as np
 import SimpleITK as sitk
-from typing import Dict
+from typing import Dict, Tuple
 
 from mymi.postprocessing import get_extent_centre
 from mymi import types
@@ -110,7 +110,7 @@ def batch_mean_distances(
 def extent_centre_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> float:
+    spacing: types.ImageSpacing3D) -> Tuple[float, float, float]:
     """
     returns: the maximum distance between extent centres across all axes.
     args:
@@ -132,7 +132,4 @@ def extent_centre_distance(
     # Get distance between centres.
     dists = np.abs(np.array(b_cent) - np.array(a_cent))    
     dists_mm = spacing * dists
-
-    # Take max across axes.
-    max_dist_mm = dists_mm.max()
-    return max_dist_mm
+    return dists_mm

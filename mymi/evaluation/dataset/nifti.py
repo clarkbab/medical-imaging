@@ -13,10 +13,11 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import load_localiser_prediction
 from mymi import types
 
-def evaluate_localiser_predictions(
+def create_localiser_evaluation(
     dataset: str,
     region: str,
     localiser: Tuple[str, str, str]) -> None:
+    localiser = Localiser.replace_best(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
     # Load dataset.
@@ -27,7 +28,8 @@ def evaluate_localiser_predictions(
     cols = {
         'patient-id': str,
         'metric': str,
-        region: float
+        'region': str,
+        'value': float
     }
     df = pd.DataFrame(columns=cols.keys())
 
@@ -40,7 +42,9 @@ def evaluate_localiser_predictions(
         metrics = [
             'dice',
             'assd',
-            'extent',
+            'extent-centre-x',
+            'extent-centre-y',
+            'extent-centre-z',
             'surface-hd',
             'surface-95hd',
             'voxel-hd',
@@ -50,12 +54,13 @@ def evaluate_localiser_predictions(
         for metric in metrics:
             data[metric] = {
                 'patient-id': pat,
-                'metric': metric
+                'metric': metric,
+                'region': region
             }
 
         # Dice.
         dsc = dice(pred, label)
-        data['dice'][region] = dsc
+        data['dice']['value'] = dsc
         df = df.append(data['dice'], ignore_index=True)
 
         # Distances.
@@ -71,11 +76,11 @@ def evaluate_localiser_predictions(
                 'voxel-95hd': np.nan
             }
 
-        data['assd'][region] = dists['assd']
-        data['surface-hd'][region] = dists['surface-hd']
-        data['surface-95hd'][region] = dists['surface-95hd']
-        data['voxel-hd'][region] = dists['voxel-hd']
-        data['voxel-95hd'][region] = dists['voxel-95hd']
+        data['assd']['value'] = dists['assd']
+        data['surface-hd']['value'] = dists['surface-hd']
+        data['surface-95hd']['value'] = dists['surface-95hd']
+        data['voxel-hd']['value'] = dists['voxel-hd']
+        data['voxel-95hd']['value'] = dists['voxel-95hd']
         df = df.append(data['assd'], ignore_index=True)
         df = df.append(data['surface-hd'], ignore_index=True)
         df = df.append(data['surface-95hd'], ignore_index=True)
@@ -86,10 +91,14 @@ def evaluate_localiser_predictions(
         try:
             dist = extent_centre_distance(pred, label, spacing)
         except ValueError:
-            dist = np.nan
+            dist = (np.nan, np.nan, np.nan)
 
-        data['extent'][region] = dist 
-        df = df.append(data['extent'], ignore_index=True)
+        data['extent-centre-x']['value'] = dist[0]
+        df = df.append(data['extent-centre-x'], ignore_index=True)
+        data['extent-centre-y']['value'] = dist[1]
+        df = df.append(data['extent-centre-y'], ignore_index=True)
+        data['extent-centre-z']['value'] = dist[2]
+        df = df.append(data['extent-centre-z'], ignore_index=True)
 
     # Set column types.
     df = df.astype(cols)
@@ -99,10 +108,11 @@ def evaluate_localiser_predictions(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def get_localiser_evaluation(
+def load_localiser_evaluation(
     dataset: str,
     localiser: Tuple[str, str, str]) -> np.ndarray:
     set = ds.get(dataset, 'nifti')
+    localiser = Localiser.replace_best(*localiser)
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")

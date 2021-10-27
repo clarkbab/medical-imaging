@@ -15,6 +15,8 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.Model,
+    loc_size: Tuple[int, int, int],
+    loc_spacing: Tuple[float, float, float],
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     # Load model if not already loaded.
@@ -22,8 +24,6 @@ def get_localiser_prediction(
         localiser = Localiser.load(*localiser)
     localiser.eval()
     localiser.to(device)
-    localiser_size = (128, 128, 96)
-    localiser_spacing = (4, 4, 6.625)
 
     # Load the patient data.
     set = ds.get(dataset, 'nifti')
@@ -31,12 +31,19 @@ def get_localiser_prediction(
     input_size = input.shape
     spacing = set.patient(pat_id).ct_spacing()
 
+    # Check patient FOV.
+    fov = np.array(input_size) * spacing
+    loc_fov = np.array(loc_size) * loc_spacing
+    for axis in len(fov):
+        if fov[axis] > loc_fov[axis]:
+            raise ValueError(f"Patient FOV larger '{fov}', larger than localiser FOV '{loc_fov}'.")
+
     # Resample/crop data for network.
-    input = resample_3D(input, spacing, localiser_spacing)
+    input = resample_3D(input, spacing, loc_spacing)
     pre_crop_size = input.shape
 
     # Shape the image so it'll fit the network.
-    input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
+    input = centre_crop_or_pad_3D(input, loc_size, fill=input.min())
 
     # Get localiser result.
     input = torch.Tensor(input)
@@ -50,7 +57,7 @@ def get_localiser_prediction(
 
     # Reverse the resample/crop.
     pred = centre_crop_or_pad_3D(pred, pre_crop_size)
-    pred = resample_3D(pred, localiser_spacing, spacing)
+    pred = resample_3D(pred, loc_spacing, spacing)
     
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
@@ -61,8 +68,9 @@ def get_localiser_prediction(
 def create_localiser_predictions(
     dataset: str,
     localiser: Tuple[str, str, str],
-    region: str,
-    clear_cache: bool = False) -> None:
+    loc_size: Tuple[int, int, int],
+    loc_spacing: Tuple[float, float, float],
+    region: str) -> None:
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
@@ -76,12 +84,12 @@ def create_localiser_predictions(
     pats = set.list_patients(regions=region)
 
     # Load models.
-    localiser_args = localiser
+    localiser_args = Localiser.replace_best(*localiser)
     localiser = Localiser.load(*localiser)
 
     for pat in tqdm(pats):
         # Make prediction.
-        seg = get_localiser_prediction(dataset, pat, localiser, device=device)
+        seg = get_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device)
 
         # Save segmentation.
         filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser_args, f'{pat}.npz') 
@@ -94,6 +102,7 @@ def load_localiser_prediction(
     localiser: Tuple[str, str, str]) -> np.ndarray:
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
+    localiser = Localiser.replace_best(*localiser)
     filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
         raise ValueError(f"Prediction not found for dataset '{set}', localiser '{localiser}'.")

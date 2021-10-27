@@ -17,15 +17,14 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.Model,
-    clear_cache: bool = False,
+    loc_size: Tuple[int, int, int],
+    loc_spacing: Tuple[float, float, float],
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     # Load model if not already loaded.
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
     localiser.eval()
     localiser.to(device)
-    localiser_size = (128, 128, 96)
-    localiser_spacing = (4, 4, 6.625)
 
     # Load the patient data.
     set = ds.get(dataset, 'dicom')
@@ -33,12 +32,19 @@ def get_localiser_prediction(
     input_size = input.shape
     spacing = set.patient(pat_id).ct_spacing()
 
+    # Check patient FOV.
+    fov = np.array(input_size) * spacing
+    loc_fov = np.array(loc_size) * loc_spacing
+    for axis in len(fov):
+        if fov[axis] > loc_fov[axis]:
+            raise ValueError(f"Patient FOV larger '{fov}', larger than localiser FOV '{loc_fov}'.")
+
     # Resample/crop data for network.
-    input = resample_3D(input, spacing, localiser_spacing)
+    input = resample_3D(input, spacing, loc_spacing)
     pre_crop_size = input.shape
 
     # Shape the image so it'll fit the network.
-    input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
+    input = centre_crop_or_pad_3D(input, loc_size, fill=input.min())
 
     # Get localiser result.
     input = torch.Tensor(input)
@@ -52,17 +58,18 @@ def get_localiser_prediction(
 
     # Reverse the resample/crop.
     pred = centre_crop_or_pad_3D(pred, pre_crop_size)
-    pred = resample_3D(pred, localiser_spacing, spacing)
+    pred = resample_3D(pred, loc_spacing, spacing)
     
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_3D(pred, crop_box)
-
     return pred
+
 def create_localiser_predictions(
     dataset: str,
     localiser: Tuple[str, str, str],
-    clear_cache: bool = False,
+    loc_size: Tuple[int, int, int],
+    loc_spacing: Tuple[float, float, float],
     region: types.PatientRegions = 'all') -> None:
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -82,7 +89,7 @@ def create_localiser_predictions(
 
     for pat in tqdm(pats):
         # Make prediction.
-        _, data = get_localiser_prediction(set, pat, localiser, clear_cache=clear_cache, device=device, return_seg=True)
+        _, data = get_localiser_prediction(set, pat, localiser, loc_size, loc_spacing, device=device, return_seg=True)
 
         # Save in folder.
         spacing = set.patient(pat).ct_spacing()
@@ -101,7 +108,6 @@ def create_two_stage_predictions(
     dataset: str,
     localiser: types.Model,
     segmenter: types.Model,
-    clear_cache: bool = False,
     region: types.PatientRegions = 'all') -> None:
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -129,7 +135,7 @@ def create_two_stage_predictions(
 
     for pat in tqdm(pats):
         # Get segmentation.
-        seg = get_patient_segmentation(set, pat, localiser, segmenter, clear_cache=clear_cache, device=device)
+        seg = get_patient_segmentation(set, pat, localiser, segmenter, device=device)
 
         # Load reference CT dicoms.
         cts = set.patient(pat).get_cts()
@@ -156,7 +162,6 @@ def create_two_stage_predictions(
 
 def create_dataset(
     dataset: str,
-    clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     output_dataset: Optional[str] = None,
     use_gpu: bool = True) -> None:
@@ -165,7 +170,6 @@ def create_dataset(
     args:
         dataset: the dataset to create predictions from.
     kwargs:
-        clear_cache: force the cache to clear.
         device: the device to perform inference on.
         output_dataset: the name of the dataset to hold the predictions.
         use_gpu: use GPU for matrix calculations.
@@ -187,7 +191,7 @@ def create_dataset(
 
     for pat in tqdm(pats):
         # Get segmentation.
-        seg = get_patient_segmentation(source_ds, pat, clear_cache=clear_cache, device=device)
+        seg = get_patient_segmentation(source_ds, pat, device=device)
 
         # Load reference CT dicoms.
         cts = ds.patient(pat).get_cts()

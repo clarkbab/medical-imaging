@@ -11,7 +11,6 @@ from mymi import types
 
 def generate_dataset_regions_report(
     dataset: str,
-    clear_cache: bool = False,
     pat_ids: types.PatientIDs = 'all',
     regions: types.PatientRegions = 'all',
     report_name: str = None) -> None:
@@ -20,7 +19,6 @@ def generate_dataset_regions_report(
     args:
         dataset: the dataset name.
     kwargs:
-        clear_cache: force the cache to clear.
         pat_ids: the patients to show.
         regions: the regions to show.
         report_name: the name of the report.

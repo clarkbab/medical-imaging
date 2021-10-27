@@ -1,16 +1,16 @@
-from typing import *
+from typing import Optional
 
 from .dataset import Dataset, DatasetType, to_type
-from .raw import list as list_raw
-from .raw import detect_type as detect_raw_type
-from .raw.dicom import DICOMDataset
-from .raw.nifti import NIFTIDataset
+from .dicom import DICOMDataset
+from .dicom import list as list_dicom
+from .nifti import NIFTIDataset
+from .nifti import list as list_nifti
 from .processed import ProcessedDataset
 from .processed import list as list_processed
 
 def get(
     name: str,
-    type_str: Optional[str] = None) -> Dataset:
+    type: Optional[str] = None) -> Dataset:
     """
     returns: the dataset.
     args:
@@ -19,29 +19,9 @@ def get(
     raises:
         ValueError: if the dataset isn't found.
     """
-    # Check if 'type' is set.
-    if type_str is None:
-        # Preference raw datasets.
-        raw_ds = list_raw()
-        if name in raw_ds:
-            # Auto-detect type.
-            type = detect_raw_type(name)
-
-            # Create raw dataset.
-            if type == DatasetType.DICOM:
-                return DICOMDataset(name)
-            elif type == DatasetType.NIFTI:
-                return NIFTIDataset(name)
-
-        # Check processed datasets secondarily.
-        proc_ds = list_processed()
-        if name in proc_ds:
-            return ProcessedDataset(name)
-        else:
-            raise ValueError(f"Dataset '{name}' not found.")
-    else:
+    if type:
         # Convert from string to type.
-        type = to_type(type_str)
+        type = to_type(type)
     
         # Create dataset.
         if type == DatasetType.DICOM:
@@ -51,21 +31,41 @@ def get(
         elif type == DatasetType.PROCESSED:
             return ProcessedDataset(name)
         else:
-            raise ValueError(f"Dataset '{type.name}: {name}' not found.")
+            raise ValueError(f"Dataset type '{type}' not found.")
+    else:
+        # Preference 1: Processed.
+        proc_ds = list_processed()
+        if name in proc_ds:
+            return ProcessedDataset(name)
+
+        # Preference 2: NIFTI.
+        nifti_ds = list_nifti()
+        if name in nifti_ds:
+            return NIFTIDataset(name)
+
+        # Preference 3: DICOM.
+        dicom_ds = list_dicom()
+        if name in dicom_ds:
+            return DICOMDataset(name) 
 
 def default() -> Optional[Dataset]:
     """
     returns: the default active dataset.
     """
-    # Preference raw datasets.
-    raw_ds = list_raw()
-    if len(raw_ds) != 0:
-        return get(raw_ds[0])
-    
-    # Check processed datasets secondarily.
+    # Preference 1: Processed.
     proc_ds = list_processed()
     if len(proc_ds) != 0:
         return get(proc_ds[0])
+
+    # Preference 2: NIFTI.
+    nifti_ds = list_nifti()
+    if len(nifti_ds) != 0:
+        return get(nifti_ds[0])
+
+    # Preference 3: DICOM.
+    dicom_ds = list_dicom()
+    if len(dicom_ds) != 0:
+        return get(dicom_ds[0])
 
     return None
 
@@ -73,26 +73,15 @@ ds = default()
 
 def select(
     name: str,
-    type_str: Optional[str] = None) -> None:
-    """
-    effect: sets the dataset as active.
-    args:
-        name: the dataset name.
-        type_str: the dataset string. Auto-detected if not present.
-    raises:
-        ValueError: if the dataset isn't found.
-    """
+    type: Optional[str] = None) -> None:
     global ds
-    ds = get(name, type_str)
+    ds = get(name, type)
 
-def active() -> str:
-    """
-    returns: active dataset name.
-    """
-    if ds is None:
-        return "No active dataset."
-    else:
+def active() -> Optional[str]:
+    if ds:
         return ds.description
+    else:
+        return None
 
 # DICOMDataset API.
 
