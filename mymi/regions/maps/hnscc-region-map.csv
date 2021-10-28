@@ -3,6 +3,8 @@ dataset,internal
 ^(r|rt|right)(\s|_)?brachial(\s|_)?plexus$,BrachialPlexus_R
 ^brain$,Brain
 ^brain(\s|_)?stem$,BrainStem
+^(l|lt|left)(\s|_)?cochlea$,Cochlea_L
+^(r|rt|right)(\s|_)?cochlea$,Cochlea_R
 ^(l|lt|left)(\s|_)?lens$,Lens_L
 ^(r|rt|right)(\s|_)?lens$,Lens_R
 ^mandible$,Mandible

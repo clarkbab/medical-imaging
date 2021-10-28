@@ -1,10 +1,16 @@
 dataset,internal
+^plexus(\s|_)?b(rac)?(\s|_)?\(l\)$,BrachialPlexus_L
 ^pl(\s|_)?brachial(\s|_)?gche$,BrachialPlexus_L
+^plexus(\s|_)?br(ac)?(\s|_)?g$,BrachialPlexus_L
+^plexus(\s|_)?g$,BrachialPlexus_L
+^plexus(\s|_)?b(rac)(\s|_)?\(r\)$,BrachialPlexus_R
 ^pl(\s|_)?brachial(\s|_)?drt$,BrachialPlexus_R
+^plexus(\s|_)?br(ac)?(\s|_)?d$,BrachialPlexus_R
+^plexus(\s|_)?d$,BrachialPlexus_L
 ^brain$,Brain
 ^cerveau$,Brain
 ^brain(\s|_)?stem$,BrainStem
-^tronc(\s|_)?cerebral$,BrainStem
+^tronc(\s|_)?(cerebral)?$,BrainStem
 ^lt(\s|_)?cochlea$,Cochlea_L
 ^cochlee(\s|_)?g$,Cochlea_L
 ^rt(\s|_)?cochlea$,Cochlea_R
@@ -14,7 +20,7 @@ dataset,internal
 ^rt(\s|_)?lens$,Lens_R
 ^lens(\s|_)?\(r\)$,Lens_R
 ^mandible$,Mandible
-^mandibule$,Mandible
+^mandibule(s)?$,Mandible
 ^optic(\s|_)?chiasm,OpticChiasm
 ^opticnerv(e)?(\s|_)?\(l\)$,OpticNerve_L
 ^lt(\s|_)?optic(\s|_)?nerve$,OpticNerve_L
@@ -38,9 +44,13 @@ dataset,internal
 ^moelle$,SpinalCord
 ^submandib(\s|_)?\(l\)$,Submandibular_L
 ^l(\s|_)?submand$,Submandibular_L
+^sub-max\(l\)$,Submandibular_L
 ^sous-max(\s|_)?(g|gche)$,Submandibular_L
+^sous-mand(id|_)g$,Submandibular_L
 ^submandib(\s|_)?\(r\)$,Submandibular_R
 ^rt(\s|_)?submandibular$,Submandibular_R
+^sub-max\(r\)$,Submandibular_R
 ^submandibular(\s|_)?rt$,Submandibular_R
 ^sous-max(\s|_)?(d|drt)$,Submandibular_R
+^sous-mand(id|_)d$,Submandibular_R
 
