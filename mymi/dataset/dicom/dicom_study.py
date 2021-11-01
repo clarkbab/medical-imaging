@@ -10,9 +10,11 @@ class DICOMStudy:
     def __init__(
         self,
         patient: 'DICOMPatient',
-        id: str):
+        id: str,
+        region_map: Optional[RegionMap] = None):
         self._patient = patient
         self._id = id
+        self._region_map = region_amp
         self._global_id = f"{patient} - {id}"
         self._path = os.path.join(patient.path, id)
     
@@ -59,8 +61,8 @@ class DICOMStudy:
         modality: str,
         **kwargs: Dict) -> DICOMSeries:
         if modality == 'ct':
-            return CTSeries(self, id, **kwargs)
+            return CTSeries(self, id, region_map=self._region_map, **kwargs)
         elif modality == 'rtstruct':
-            return RTSTRUCTSeries(self, id, **kwargs)
+            return RTSTRUCTSeries(self, id, region_map=self._region_map, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")

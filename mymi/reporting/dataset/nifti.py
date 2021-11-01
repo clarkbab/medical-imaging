@@ -10,85 +10,6 @@ from mymi import dataset as ds
 from mymi.postprocessing import get_extent
 from mymi import types
 
-def create_evaluation_report(
-    name: str,
-    dataset: str,
-    localiser: types.Model,
-    segmenter: types.Model,
-    region: str) -> None:
-    # Save report.
-    eval_df = evaluate_model(dataset, localiser, segmenter, region)
-    set = ds.get(dataset, 'nifti')
-    filename = f"{name}.csv"
-    filepath = os.path.join(set.path, 'reports', 'evaluation', filename)
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    eval_df.to_csv(filepath)
-
-def region_count(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
-    # List regions.
-    set = ds.get(dataset, type_str='nifti')
-    regions_df = set.list_regions(clear_cache=clear_cache)
-
-    # Filter on requested regions.
-    def filter_fn(row):
-        if type(regions) == str:
-            if regions == 'all':
-                return True
-            else:
-                return row['region'] == regions
-        else:
-            for region in regions:
-                if row['region'] == region:
-                    return True
-            return False
-    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
-
-    # Generate counts report.
-    count_df = regions_df.groupby('region').count().rename(columns={'patient-id': 'count'})
-    return count_df
-
-def create_region_count_report(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> None:
-    # Generate counts report.
-    set = ds.get(dataset, type_str='nifti')
-    count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
-    filename = 'region-count.csv'
-    filepath = os.path.join(set.path, 'reports', filename)
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    count_df.to_csv(filepath)
-
-def region_overlap(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> int:
-    # List regions.
-    set = ds.get(dataset, type_str='nifti')
-    regions_df = set.list_regions(clear_cache=clear_cache) 
-    regions_df = regions_df.drop_duplicates()
-    regions_df['count'] = 1
-    regions_df = regions_df.pivot(index='patient-id', columns='region', values='count')
-
-    # Filter on requested regions.
-    def filter_fn(row):
-        if type(regions) == str:
-            if regions == 'all':
-                return True
-            else:
-                return row[regions] == 1
-        else:
-            keep = True
-            for region in regions:
-                if row[region] != 1:
-                    keep = False
-            return keep
-    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
-    return len(regions_df) 
-
 def get_region_summary(
     dataset: str,
     regions: List[str]) -> pd.DataFrame:
@@ -222,6 +143,77 @@ def load_ct_summary(
     hash = _hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
     return pd.read_csv(filepath)
+
+def create_region_figures(
+    dataset: str,
+    pat_ids: types.PatientIDs = 'all',
+    regions: types.PatientRegions = 'all',
+    report_name: str = None) -> None:
+    """
+    effect: Generates a PDF report of dataset segmentations.
+    args:
+        dataset: the dataset name.
+    kwargs:
+        pat_ids: the patients to show.
+        regions: the regions to show.
+        report_name: the name of the report.
+    """
+    # Get patients.
+    ds = DicomDataset(dataset)
+    pats = ds.list_patients(regions=regions)
+
+    # Filter patients.
+    pats = list(filter(filterOnPatIDs(pat_ids), pats))
+    pats = list(filter(ds.filterOnRegions(regions), pats))
+    pats = 
+
+    # Get regions.
+    if regions == 'all':
+        regions = ds.list_regions().region.unique() 
+    elif isinstance(regions, str):
+        regions = [regions]
+
+    # Create PDF.
+    report = FPDF()
+    report.set_font('Arial', 'B', 16)
+
+    for region in tqdm(regions):
+        for pat in tqdm(pats, leave=False):
+            # Skip if patient doesn't have region.
+            if not ds.patient(pat).has_region(region):
+                continue
+
+            # Add patient/region title.
+            report.add_page()
+            text = f"Region: {region}, Patient: {pat}"
+            report.cell(0, 0, text, ln=1)
+
+            # Get region centroid.
+            summary = ds.patient(pat).region_summary(clear_cache=clear_cache, regions=region).iloc[0].to_dict()
+            centroid = (int(summary['centroid-voxels-x']), int(summary['centroid-voxels-y']), int(summary['centroid-voxels-z']))
+
+            # Save orthogonal plots.
+            views = ['sagittal', 'coronal', 'axial']
+            origins = ((0, 20), (100, 20), (0, 120))
+            for c, o, v in zip(centroid, origins, views):
+                # Set figure.
+                plotter.plot_patient_regions(pat, c, regions=region, show=False, view=v)
+
+                # Save temp file.
+                filename = f"patient-{pat}-region-{region}-view-{v}.png"
+                filepath = os.path.join(config.directories.temp, filename)
+                plt.savefig(filepath)
+
+                # Add image to report.
+                report.image(filepath, *o, w=100, h=100)
+
+    # Save PDF.
+    if report_name:
+        filename = report_name
+    else:
+        filename = f"report-{dataset}.pdf"
+    filepath = os.path.join(config.directories.files, filename) 
+    report.output(filepath, 'F')
 
 def _hash_regions(regions: types.PatientRegions) -> str:
     return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

@@ -58,7 +58,7 @@ def _build_hierarchy(dataset: 'DICOMDataset') -> None:
             # Continue if not DICOM.
             try:
                 dicom = dcm.read_file(os.path.join(root, f))
-            except InvalidDicomError:
+            except dcm.errors.InvalidDicomError:
                 continue
 
             # Get patient ID.

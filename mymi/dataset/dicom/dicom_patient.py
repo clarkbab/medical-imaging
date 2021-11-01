@@ -169,40 +169,7 @@ class DICOMPatient:
     def get_study(
         self,
         id: str) -> DICOMStudy:
-        return DICOMStudy(self, id)
-
-    def list_rtstruct_series(self) -> List[str]:
-        """
-        returns: RTSTRUCT series names for the patient.
-        raises:
-            ValueError: when patient 'rtstruct' folder not found.
-        """
-        # Check that 'rtstruct' folder exists. This is required for a patient.
-        rtstruct_path = os.path.join(self._path, 'rtstruct')
-        if not os.path.exists(rtstruct_path):
-            raise ValueError(f"No RTSTRUCTs found for patient '{self}'.")
-    
-        # Load RTSTRUCT series.
-        series = list(sorted(os.listdir(os.path.join(self._path, 'rtstruct'))))
-        return series
-
-    def rtstruct_series(
-        self,
-        id: str) -> RTSTRUCTSeries:
-        """
-        returns: a RTSTRUCTSeries object.
-        args:
-            id: the RTSTRUCT series ID.
-        """
-        # Check that series ID exists.
-        series_path = os.path.join(self._path, 'rtstruct', id)
-        if not os.path.isdir(series_path):
-            raise ValueError(f"RTSTRUCT series '{id}' not found for patient '{self}'.")
-
-        # Create RTSTRUCT series.
-        series = RTSTRUCTSeries(self._dataset, self._id, id, region_map=self._region_map)
-
-        return series
+        return DICOMStudy(self, id, region_map=self._region_map)
 
     @_require_ct
     def info(
@@ -240,7 +207,7 @@ class DICOMPatient:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
         study = self.get_study(self.list_studies()[0])
-        rt_series = study.get_series(self.list_series()[0], 'rtstruct', region_map=self._region_map)
+        rt_series = study.get_series(study.list_series('rtstruct')[0], 'rtstruct')
         self._default_rt_series = rt_series
 
     # Proxy to default RTSTRUCT series.

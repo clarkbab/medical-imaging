@@ -106,8 +106,8 @@ def patient(*args, **kwargs):
 def region_summary(*args, **kwargs):
     return ds.region_summary(*args, **kwargs)
 
-def trimmed_summary(*args, **kwargs):
-    return ds.trimmed_summary(*args, **kwargs)
+def trimmed_errors(*args, **kwargs):
+    return ds.trimmed_errors(*args, **kwargs)
 
 # NIFTIDataset API.
 

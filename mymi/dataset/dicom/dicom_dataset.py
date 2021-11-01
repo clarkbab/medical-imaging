@@ -80,8 +80,8 @@ class DICOMDataset(Dataset):
         return self._path
 
     @require_hierarchy
-    def trimmed_summary(self) -> pd.DataFrame:
-        path = os.path.join(self._path, 'hierarchy', 'trimmed', 'summary.csv')
+    def trimmed_errors(self) -> pd.DataFrame:
+        path = os.path.join(self._path, 'hierarchy', 'trimmed', 'errors.csv')
         return pd.read_csv(path)
 
     @require_hierarchy
@@ -127,7 +127,7 @@ class DICOMDataset(Dataset):
         """
         if type(id) == int:
             id = str(id)
-        return DICOMPatient(self, id, **kwargs)
+        return DICOMPatient(self, id, region_map=self._region_map, **kwargs)
 
     @require_hierarchy
     @cache.method('_global_id')
