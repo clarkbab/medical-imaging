@@ -12,53 +12,35 @@ from mymi import logging
 from mymi import types
 
 from .ct_series import CTSeries
+from .dicom_series import DICOMModality, DICOMSeries
 from .region_map import RegionMap
 from .rtstruct_converter import RTSTRUCTConverter
 
-class RTSTRUCTSeries:
+class RTSTRUCTSeries(DICOMSeries):
     def __init__(
         self,
-        patient: 'DICOMPatient',
+        study: 'DICOMStudy',
         id: str,
-        ct_from: Optional['DICOMPatient'] = None,
+        load_ref_ct: bool = True,
         region_map: Optional[RegionMap] = None):
-        """
-        args:
-            patient: the DICOMPatient to which the series belongs.
-            id: the RTSTRUCT series ID.
-        kwargs:
-            region_map: the RegionMap object.
-        """
-        self._global_id = f"{patient} - {id}"
-        self._patient = patient
+        self._global_id = f"{study} - {id}"
+        self._study = study
         self._id = id
-        self._ct_from = ct_from
         self._region_map = region_map
-        self._path = os.path.join(patient.path, 'rtstruct', id)
+        self._path = os.path.join(study.path, 'rtstruct', id)
 
         # Check that series exists.
         if not os.path.exists(self._path):
             raise ValueError(f"RTSTRUCT series '{self}' not found.")
 
-        # Check that DICOM is present.
-        rtstructs = os.listdir(self._path)
-        if len(rtstructs) != 1:
-            raise ValueError(f"Expected 1 RTSTRUCT, got '{len(rtstructs)}' for series '{self}'.")
-
-        # Get reference CT series.
-        ct_pat = ct_from if ct_from is not None else patient
-        rtstruct = self.get_rtstruct()
-        ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-        try:
-            self._ref_ct = CTSeries(ct_pat, ct_id)
-        except ValueError as e:
-            raise ValueError(f"Error occurred while loading reference CT for RTSTRUCT series '{self}'.")
+        # Load reference CT series.
+        if load_ref_ct:
+            rtstruct = self.get_rtstruct()
+            ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+            self._ref_ct = CTSeries(study, ct_id)
 
     @property
     def description(self) -> str:
-        return self._global_id
-
-    def __str__(self) -> str:
         return self._global_id
 
     @property
@@ -66,8 +48,23 @@ class RTSTRUCTSeries:
         return self._id
 
     @property
+    def modality(self) -> DICOMModality:
+        return DICOMModality.RTSTRUCT
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
     def ref_ct(self) -> str:
         return self._ref_ct
+
+    @property
+    def study(self) -> str:
+        return self._study
+
+    def __str__(self) -> str:
+        return self._global_id
 
     @cache.method('_global_id')
     def list_regions(
@@ -137,14 +134,6 @@ class RTSTRUCTSeries:
         self,
         region: str,
         use_mapping: bool = True) -> bool:
-        """
-        returns: if the patient has the region.
-        args:
-            region: the region name.
-        kwargs:
-            clear_cache: force the cache to clear.
-            use_mapping: use region map if present.
-        """
         return region in self.list_regions(use_mapping=use_mapping)
 
     def region_data(
@@ -152,13 +141,6 @@ class RTSTRUCTSeries:
         clear_cache: bool = False,
         regions: types.PatientRegions = 'all',
         use_mapping: bool = True) -> OrderedDict:
-        """
-        returns: an OrderedDict[str, np.ndarray] of region names and data.
-        kwargs:
-            clear_cache: force the cache to clear.
-            regions: the desired regions.
-            use_mapping: use region map if present.
-        """
         self._assert_requested_regions(regions, use_mapping=use_mapping)
 
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
@@ -186,105 +168,21 @@ class RTSTRUCTSeries:
 
         # Add ROI data.
         region_dict = {}
-        for name in names:
+        for name, unmapped_name in names:
             # Get binary mask.
             try:
-                data = RTSTRUCTConverter.get_roi_data(rtstruct, name[1], cts)
+                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
             except ValueError as e:
-                logging.error(f"Caught error extracting data for region '{name[1]}', patient '{patient}'.")
+                logging.error(f"Caught error extracting data for region '{unmapped_name}', series '{self}'.")
                 logging.error(f"Error message: {e}")
                 continue
 
-            region_dict[name[0]] = data
+            region_dict[name] = data
 
         # Create ordered dict.
         ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 
 
         return ordered_dict
-
-    @cache.method('_global_id')
-    def region_summary(
-        self,
-        clear_cache: bool = False,
-        columns: Union[str, Sequence[str]] = 'all',
-        regions: types.PatientRegions = 'all',
-        use_mapping: bool = True) -> pd.DataFrame:
-        """
-        returns: a DataFrame region summary information.
-        kwargs:
-            clear_cache: clear the cache.
-            columns: the columns to return.
-            regions: the desired regions.
-            use_mapping: use region map if present.
-        """
-        # Define table structure.
-        cols = {
-            'region': str,
-            'centroid-mm-x': float,
-            'centroid-mm-y': float,
-            'centroid-mm-z': float,
-            'centroid-voxels-x': int,
-            'centroid-voxels-y': int,
-            'centroid-voxels-z': int,
-            'width-mm-x': float,
-            'width-mm-y': float,
-            'width-mm-z': float,
-            'width-voxels-x': int,
-            'width-voxels-y': int,
-            'width-voxels-z': int,
-        }
-        cols = dict(filter(self._filter_on_dict_keys(columns, whitelist='region'), cols.items()))
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Get region dict.
-        region_data = self.region_data(clear_cache=clear_cache, regions=regions, use_mapping=use_mapping)
-
-        # Get voxel offset/spacing.
-        offset = self._ref_ct.offset(clear_cache=clear_cache)
-        spacing = self._ref_ct.spacing(clear_cache=clear_cache)
-
-        # Add info for each region.
-        for name, data in region_data.items():
-            # Find centre-of-mass.
-            centroid = np.round(center_of_mass(data)).astype(int)
-
-            # Convert COM to millimetres.
-            mm_centroid = (centroid * spacing) + offset
-
-            # Find bounding box co-ordinates.
-            non_zero = np.argwhere(data != 0)
-            mins = non_zero.min(axis=0)
-            maxs = non_zero.max(axis=0)
-            voxel_widths = maxs - mins
-
-            # Convert voxel widths to millimetres.
-            mm_widths = voxel_widths * spacing
-
-            data = {
-                'region': name,
-                'centroid-mm-x': mm_centroid[0],
-                'centroid-mm-y': mm_centroid[1],
-                'centroid-mm-z': mm_centroid[2],
-                'centroid-voxels-x': centroid[0],
-                'centroid-voxels-y': centroid[1],
-                'centroid-voxels-z': centroid[2],
-                'width-mm-x': mm_widths[0],
-                'width-mm-y': mm_widths[1],
-                'width-mm-z': mm_widths[2],
-                'width-voxels-x': voxel_widths[0],
-                'width-voxels-y': voxel_widths[1],
-                'width-voxels-z': voxel_widths[2]
-            }
-            data = dict(filter(self._filter_on_dict_keys(columns, whitelist='region'), data.items()))
-            df = df.append(data, ignore_index=True)
-
-        # Set column type.
-        df = df.astype(cols)
-
-        # Sort by region.
-        df = df.sort_values('region').reset_index(drop=True)
-
-        return df
 
     def _filter_on_dict_keys(
         self,

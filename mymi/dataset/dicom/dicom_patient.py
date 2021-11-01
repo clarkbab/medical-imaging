@@ -12,6 +12,8 @@ from mymi import config
 from mymi import types
 
 from .ct_series import CTSeries
+from .dicom_series import DICOMModality
+from .dicom_study import DICOMStudy
 from .region_map import RegionMap
 from .rtstruct_converter import RTSTRUCTConverter
 from .rtstruct_series import RTSTRUCTSeries
@@ -22,6 +24,7 @@ class DICOMPatient:
         dataset: 'DICOMDataset',
         id: types.PatientID,
         ct_from: Optional['DICOMPatient'] = None,
+        load_default_series: bool = True,
         region_map: Optional[RegionMap] = None,
         trimmed: bool = False):
         """
@@ -46,45 +49,24 @@ class DICOMPatient:
         # Check that patient ID exists.
         if not os.path.isdir(self._path):
             raise ValueError(f"Patient '{self}' not found.")
-
-        # Check number of RTSTRUCT series.
-        rtstruct_series = self.list_rtstruct_series()
-        if len(rtstruct_series) == 0:
-            raise ValueError(f"Expected at least 1 RTSTRUCT, got '{len(rtstruct_series)}' for patient '{self}'.")
         
-        # Set default RTSTRUCT series.
-        msgs = []
-        for s in rtstruct_series:
-            try:
-                series = RTSTRUCTSeries(self, s, ct_from=ct_from, region_map=region_map)
-                break
-            except ValueError as e:
-                msg = f"Error encountered when loading RTSTRUCT series '{s}', skipping."
-                error_msg = f"Error: {e}"
-                msgs.append(msg)
-                msgs.append(error_msg)
-
-        # Raise error if no valid series was found.
-        if series is None:
-            msg = f"No valid RTSTRUCT series found for patient '{self}', tried '{len(rtstruct_series)}' series."
-            msgs.insert(0, msg)
-            raise ValueError('\n'.join(msgs))
-        else:
-            self._default_rtstruct_series = series
-
-    def cache_key(self) -> str:
-        return self._global_id
+        if load_default_series:
+            self._load_default_series()
 
     @property
     def description(self) -> str:
         return self._global_id
 
-    def __str__(self) -> str:
-        return self._global_id
+    @property
+    def id(self) -> str:
+        return self._id
 
     @property
     def path(self) -> str:
         return self._path
+
+    def __str__(self) -> str:
+        return self._global_id
 
     def _require_ct(
         fn: Callable) -> Callable:
@@ -181,35 +163,13 @@ class DICOMPatient:
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
-    def list_ct_series(self) -> List[str]:
-        """
-        returns: CT series names for the patient.
-        """
-        # List the CT series.
-        if self._ct_from is None:
-            series = list(sorted(os.listdir(os.path.join(self._path, 'ct'))))
-        else:
-            series = DicomPatient(self._ct_from, self._id).list_ct_series()
+    def list_studies(self) -> List[str]:
+        return list(sorted(os.listdir(os.path.join(self._path))))
 
-        return series
-
-    def ct_series(
+    def get_study(
         self,
-        id: str) -> CTSeries:
-        """
-        returns: a CTSeries object.
-        args:
-            id: the CT series ID.
-        """
-        # Check that series ID exists.
-        if not id in self.list_ct_series():
-            raise ValueError(f"CT series '{id}' not found for patient '{self._id}', dataset '{self._dataset}'.")
-
-        # Create CT series.
-        ds = self._dataset if self._ct_from is None else self._ct_from
-        series = CTSeries(ds, self._id, id)
-
-        return series
+        id: str) -> DICOMStudy:
+        return DICOMStudy(self, id)
 
     def list_rtstruct_series(self) -> List[str]:
         """
@@ -275,46 +235,51 @@ class DICOMPatient:
         df = df.astype(cols)
 
         return df
+    
+    def _load_default_series(self) -> None:
+        # Preference the first study - all studies without RTSTRUCTs have been trimmed.
+        # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
+        study = self.get_study(self.list_studies()[0])
+        rt_series = study.get_series(self.list_series()[0], 'rtstruct', region_map=self._region_map)
+        self._default_rt_series = rt_series
 
-    # Proxy to default CTSeries.
-
-    def get_cts(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.get_cts(*args, **kwargs)
+    # Proxy to default RTSTRUCT series.
 
     def ct_offset(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.offset(*args, **kwargs)
+        return self._default_rt_series.ref_ct.offset(*args, **kwargs)
 
     def ct_size(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.size(*args, **kwargs)
+        return self._default_rt_series.ref_ct.size(*args, **kwargs)
 
     def ct_spacing(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.spacing(*args, **kwargs)
+        return self._default_rt_series.ref_ct.spacing(*args, **kwargs)
 
     def ct_orientation(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.orientation(*args, **kwargs)
+        return self._default_rt_series.ref_ct.orientation(*args, **kwargs)
 
     def ct_slice_summary(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.slice_summary(*args, **kwargs)
+        return self._default_rt_series.ref_ct.slice_summary(*args, **kwargs)
 
     def ct_summary(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.summary(*args, **kwargs)
+        return self._default_rt_series.ref_ct.summary(*args, **kwargs)
 
     def ct_data(self, *args, **kwargs):
-        return self._default_rtstruct_series.ref_ct.data(*args, **kwargs)
+        return self._default_rt_series.ref_ct.data(*args, **kwargs)
 
-    # Proxy to default RTSTRUCTSeries.
-
-    def list_regions(self, *args, **kwargs):
-        return self._default_rtstruct_series.list_regions(*args, **kwargs)
+    def get_cts(self, *args, **kwargs):
+        return self._default_rt_series.ref_ct.get_cts(*args, **kwargs)
  
     def get_rtstruct(self, *args, **kwargs):
-        return self._default_rtstruct_series.get_rtstruct(*args, **kwargs)
+        return self._default_rt_series.get_rtstruct(*args, **kwargs)
 
     def has_region(self, *args, **kwargs):
-        return self._default_rtstruct_series.has_region(*args, **kwargs)
+        return self._default_rt_series.has_region(*args, **kwargs)
+
+    def list_regions(self, *args, **kwargs):
+        return self._default_rt_series.list_regions(*args, **kwargs)
 
     def region_data(self, *args, **kwargs):
-        return self._default_rtstruct_series.region_data(*args, **kwargs)
+        return self._default_rt_series.region_data(*args, **kwargs)
 
     def region_summary(self, *args, **kwargs):
-        return self._default_rtstruct_series.region_summary(*args, **kwargs)
+        return self._default_rt_series.region_summary(*args, **kwargs)

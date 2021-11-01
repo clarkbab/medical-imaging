@@ -11,7 +11,7 @@ import shutil
 from skimage.draw import polygon
 from torchio import ScalarImage, Subject
 from tqdm import tqdm
-from typing import Callable, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 from mymi import cache
 from mymi import config
@@ -119,7 +119,7 @@ class DICOMDataset(Dataset):
     def patient(
         self,
         id: types.PatientID,
-        trimmed: bool = False) -> DICOMPatient:
+        **kwargs: Dict) -> DICOMPatient:
         """
         returns: a DICOMPatient object.
         args:
@@ -127,8 +127,7 @@ class DICOMDataset(Dataset):
         """
         if type(id) == int:
             id = str(id)
-        ct_from = self._ct_from.patient(id, trimmed=trimmed) if self._ct_from is not None else None
-        return DICOMPatient(self, id, ct_from=ct_from, region_map=self._region_map, trimmed=trimmed)
+        return DICOMPatient(self, id, **kwargs)
 
     @require_hierarchy
     @cache.method('_global_id')

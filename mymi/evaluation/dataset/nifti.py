@@ -65,9 +65,7 @@ def create_localiser_evaluation(
 
         # Distances.
         spacing = set.patient(pat).ct_spacing()
-        try:
-            dists = distances(pred, label, spacing)
-        except ValueError:
+        if pred.sum() == 0 or label.sum() == 0:
             dists = {
                 'assd': np.nan,
                 'surface-hd': np.nan,
@@ -75,6 +73,8 @@ def create_localiser_evaluation(
                 'voxel-hd': np.nan,
                 'voxel-95hd': np.nan
             }
+        else:
+            dists = distances(pred, label, spacing)
 
         data['assd']['value'] = dists['assd']
         data['surface-hd']['value'] = dists['surface-hd']
@@ -88,17 +88,20 @@ def create_localiser_evaluation(
         df = df.append(data['voxel-95hd'], ignore_index=True)
 
         # Extent distance.
-        try:
-            dist = extent_centre_distance(pred, label, spacing)
-        except ValueError:
+        if pred.sum() == 0 or label.sum() == 0:
             dist = (np.nan, np.nan, np.nan)
+        else:
+            dist = extent_centre_distance(pred, label, spacing)
 
         data['extent-centre-x']['value'] = dist[0]
-        df = df.append(data['extent-centre-x'], ignore_index=True)
         data['extent-centre-y']['value'] = dist[1]
-        df = df.append(data['extent-centre-y'], ignore_index=True)
         data['extent-centre-z']['value'] = dist[2]
+        df = df.append(data['extent-centre-x'], ignore_index=True)
+        df = df.append(data['extent-centre-y'], ignore_index=True)
         df = df.append(data['extent-centre-z'], ignore_index=True)
+
+        # Extent cover.
+        data['extent-cover'] = cover
 
     # Set column types.
     df = df.astype(cols)
