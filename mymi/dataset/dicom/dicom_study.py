@@ -14,7 +14,7 @@ class DICOMStudy:
         region_map: Optional[RegionMap] = None):
         self._patient = patient
         self._id = id
-        self._region_map = region_amp
+        self._region_map = region_map
         self._global_id = f"{patient} - {id}"
         self._path = os.path.join(patient.path, id)
     

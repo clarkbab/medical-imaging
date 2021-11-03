@@ -20,7 +20,8 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     centre_on: Optional[str] = None,
-    crop: types.Box2D = None,
+    crop: Optional[Union[types.Box2D, str]] = None,
+    crop_margin: float = 100,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
     latex: bool = False,
@@ -90,6 +91,30 @@ def plot_patient_regions(
 
     # Get slice data.
     ct_slice_data = get_slice(ct_data, slice_idx, view)
+
+    # If crop region specified, convert to 2D box.
+    if type(crop) == str:
+        # Get 3D crop box.
+        crop_region_data = region_data[crop]
+        extent = get_extent(crop_region_data)
+
+        # Add crop margin.
+        crop_margin = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
+        min, max = extent
+        min = tuple(np.array(min) - crop_margin)
+        max = tuple(np.array(max) + crop_margin)
+
+        # Select 2D component.
+        if view == 'axial':
+            min = (min[0], min[1])
+            max = (max[0], max[1])
+        elif view == 'coronal':
+            min = (min[0], min[2])
+            max = (max[0], max[2])
+        elif view == 'sagittal':
+            min = (min[1], min[2])
+            max = (max[1], max[2])
+        crop = (min, max)
 
     # Perform crop.
     if crop:

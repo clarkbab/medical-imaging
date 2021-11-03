@@ -10,6 +10,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
+from mymi.postprocessing import get_extent
 from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
@@ -59,7 +60,8 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     clear_cache: bool = False,
-    crop: types.Box2D = None,
+    crop: Optional[Union[types.Box2D, str]] = None,
+    crop_margin: int = 20,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
     internal_regions: bool = False,
@@ -181,7 +183,16 @@ def plot_patient_regions(
 
     # Perform crop.
     if crop:
-        ct_slice_data = crop_or_pad_2D(ct_slice_data, _reverse_box_coords_2D(crop))
+        if type(crop) == str:
+            crop_region_data = region_data[crop]
+            extent = get_extent(crop_region_data)
+            min, max = extent
+            min = tuple(np.array(min) - crop_margin)
+            max = tuple(np.array(max) + crop_margin)
+            extent_with_margin = (min, max)
+            ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(extent_with_margin))
+        else:
+            ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -265,7 +276,7 @@ def plot_regions(
     slice_idx: int,
     alpha: float,
     aspect: float,
-    crop: types.Box3D,
+    crop: types.Box2D,
     latex: bool,
     perimeter: bool,
     view: types.PatientView) -> bool:

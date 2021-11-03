@@ -1,12 +1,18 @@
+from fpdf import FPDF
 import hashlib
 import json
 import numpy as np
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from tqdm import tqdm
 from typing import List
+from uuid import uuid1
 
+from mymi import config
 from mymi import dataset as ds
+from mymi import logging
+from mymi.plotter.dataset.nifti import plot_patient_regions
 from mymi.postprocessing import get_extent
 from mymi import types
 
@@ -146,41 +152,28 @@ def load_ct_summary(
 
 def create_region_figures(
     dataset: str,
-    pat_ids: types.PatientIDs = 'all',
-    regions: types.PatientRegions = 'all',
-    report_name: str = None) -> None:
-    """
-    effect: Generates a PDF report of dataset segmentations.
-    args:
-        dataset: the dataset name.
-    kwargs:
-        pat_ids: the patients to show.
-        regions: the regions to show.
-        report_name: the name of the report.
-    """
+    regions: types.PatientRegions = 'all') -> None:
     # Get patients.
-    ds = DicomDataset(dataset)
-    pats = ds.list_patients(regions=regions)
-
-    # Filter patients.
-    pats = list(filter(filterOnPatIDs(pat_ids), pats))
-    pats = list(filter(ds.filterOnRegions(regions), pats))
-    pats = 
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=regions)
 
     # Get regions.
-    if regions == 'all':
-        regions = ds.list_regions().region.unique() 
-    elif isinstance(regions, str):
-        regions = [regions]
+    if type(regions) == str:
+        if regions == 'all':
+            regions = list(set.list_regions().region.unique())
+        else:
+            regions = [regions]
 
     # Create PDF.
     report = FPDF()
     report.set_font('Arial', 'B', 16)
 
+    logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'.")
     for region in tqdm(regions):
         for pat in tqdm(pats, leave=False):
             # Skip if patient doesn't have region.
-            if not ds.patient(pat).has_region(region):
+            patient = set.patient(pat)
+            if not patient.has_region(region):
                 continue
 
             # Add patient/region title.
@@ -188,31 +181,22 @@ def create_region_figures(
             text = f"Region: {region}, Patient: {pat}"
             report.cell(0, 0, text, ln=1)
 
-            # Get region centroid.
-            summary = ds.patient(pat).region_summary(clear_cache=clear_cache, regions=region).iloc[0].to_dict()
-            centroid = (int(summary['centroid-voxels-x']), int(summary['centroid-voxels-y']), int(summary['centroid-voxels-z']))
-
             # Save orthogonal plots.
-            views = ['sagittal', 'coronal', 'axial']
-            origins = ((0, 20), (100, 20), (0, 120))
-            for c, o, v in zip(centroid, origins, views):
+            views = ['axial', 'coronal', 'sagittal']
+            page_coords = ((0, 20), (100, 20), (0, 120))
+            for view, page_coord in zip(views, page_coords):
                 # Set figure.
-                plotter.plot_patient_regions(pat, c, regions=region, show=False, view=v)
+                plot_patient_regions(dataset, pat, centre_on=region, crop=region, regions=region, view=view)
 
                 # Save temp file.
-                filename = f"patient-{pat}-region-{region}-view-{v}.png"
-                filepath = os.path.join(config.directories.temp, filename)
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
                 plt.savefig(filepath)
 
                 # Add image to report.
-                report.image(filepath, *o, w=100, h=100)
+                report.image(filepath, *page_coord, w=100, h=100)
 
     # Save PDF.
-    if report_name:
-        filename = report_name
-    else:
-        filename = f"report-{dataset}.pdf"
-    filepath = os.path.join(config.directories.files, filename) 
+    filepath = os.path.join(set.path, 'reports', f'region-figures-{_hash_regions(regions)}.pdf') 
     report.output(filepath, 'F')
 
 def _hash_regions(regions: types.PatientRegions) -> str:
