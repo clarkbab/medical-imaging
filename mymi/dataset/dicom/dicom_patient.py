@@ -207,8 +207,6 @@ class DICOMPatient:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
         study = self.get_study(self.list_studies()[0])
-        if len(study.list_series('rtstruct')) == 0:
-            print(str(study))
         rt_series = study.get_series(study.list_series('rtstruct')[0], 'rtstruct')
         self._default_rt_series = rt_series
 
