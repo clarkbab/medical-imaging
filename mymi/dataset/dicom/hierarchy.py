@@ -53,11 +53,10 @@ def _build_hierarchy(dataset: 'DICOMDataset') -> None:
     dicom_files = []
     for root, _, files in tqdm(os.walk(raw_path)):
         for f in files:
+            # Check if DICOM file.
             filepath = os.path.join(root, f)
-            
-            # Continue if not DICOM.
             try:
-                dicom = dcm.read_file(os.path.join(root, f))
+                dicom = dcm.read_file(filepath, stop_before_pixels=True)
             except dcm.errors.InvalidDicomError:
                 continue
 
@@ -120,7 +119,8 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
                 # Series-level checks.
 
                 # CHECK: CT series has no missing slices.
-                nums = list(sorted([int(ct.InstanceNumber) for ct in cts]))
+                cts = list(sorted(cts, key=lambda c: c.InstanceNumber))
+                nums = [int(c.InstanceNumber) for c in cts]
                 nums_diff = np.unique(np.diff(nums))
                 if len(nums_diff) != 1 or nums_diff[0] != 1:
                     error_code = 'CT-MISSING-SLICES'

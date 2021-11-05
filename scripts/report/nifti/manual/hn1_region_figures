@@ -7,4 +7,3 @@ DATASET="HN1"
 REGIONS="('Brain','Cochlea_L','Cochlea_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 
 python region_figures --dataset $DATASET --regions $REGIONS
-

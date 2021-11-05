@@ -61,7 +61,7 @@ class DICOMStudy:
         modality: str,
         **kwargs: Dict) -> DICOMSeries:
         if modality == 'ct':
-            return CTSeries(self, id, region_map=self._region_map, **kwargs)
+            return CTSeries(self, id, **kwargs)
         elif modality == 'rtstruct':
             return RTSTRUCTSeries(self, id, region_map=self._region_map, **kwargs)
         else:

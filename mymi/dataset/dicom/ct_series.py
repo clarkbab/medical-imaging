@@ -55,8 +55,6 @@ class CTSeries(DICOMSeries):
         ct_paths = [os.path.join(self._path, f) for f in os.listdir(self._path)]
         cts = [dcm.read_file(f) for f in ct_paths]
 
-        # Sort by z-position.
-        cts = list(sorted(cts, key=lambda ct: ct.ImagePositionPatient[2]))
         return cts
 
     def offset(self) -> types.PhysPoint3D:
