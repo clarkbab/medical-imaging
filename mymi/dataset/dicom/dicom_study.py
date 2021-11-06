@@ -55,7 +55,7 @@ class DICOMStudy:
         else:
             return []
 
-    def get_series(
+    def series(
         self,
         id: str,
         modality: str,

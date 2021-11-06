@@ -79,12 +79,10 @@ def _build_hierarchy(dataset: 'DICOMDataset') -> None:
             if not filename.endswith('.dcm'):
                 filename = f'{filename}.dcm'
 
-            # Save file.
-            filepath = os.path.join(dataset.path, 'hierarchy', 'data', pat_id, study_UID, mod, series_UID, filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
-            # Save dicom.
-            dicom.save_as(filepath)
+            # Copy DICOM file.
+            newpath = os.path.join(dataset.path, 'hierarchy', 'data', pat_id, study_UID, mod, series_UID, filename)
+            os.makedirs(os.path.dirname(newpath), exist_ok=True)
+            shutil.copy(filepath, newpath)
 
 @_rollback_hierarchy
 def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
@@ -108,12 +106,12 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
         studies = patient.list_studies()
 
         for study_id in studies:
-            study = patient.get_study(study_id)
+            study = patient.study(study_id)
             ct_series_ids = study.list_series('ct')
             rt_series_ids = study.list_series('rtstruct')
 
             for ct_id in ct_series_ids:
-                ct_series = study.get_series(ct_id, 'ct')
+                ct_series = study.series(ct_id, 'ct')
                 cts = ct_series.get_cts()
 
                 # Series-level checks.
@@ -187,7 +185,7 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
             valid_ct_series_ids = study.list_series('ct')
 
             for rt_id in rt_series_ids:
-                rt_series = study.get_series(rt_id, 'rtstruct', load_ref_ct=False)
+                rt_series = study.series(rt_id, 'rtstruct', load_ref_ct=False)
                 rt = rt_series.get_rtstruct()
 
                 # CHECK: RTSTRUCT series has single file.

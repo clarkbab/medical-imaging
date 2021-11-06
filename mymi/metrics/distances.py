@@ -2,7 +2,7 @@ import numpy as np
 import SimpleITK as sitk
 from typing import Dict, Tuple
 
-from mymi.postprocessing import get_extent_centre
+from mymi.postprocessing import get_extent, get_extent_centre
 from mymi import types
 
 def distances(
@@ -112,7 +112,7 @@ def extent_centre_distance(
     b: np.ndarray,
     spacing: types.ImageSpacing3D) -> Tuple[float, float, float]:
     """
-    returns: the maximum distance between extent centres across all axes.
+    returns: the maximum distance between extent centres for each axis.
     args:
         a: a boolean 3D array.
         b: another boolean 3D array.
@@ -131,5 +131,36 @@ def extent_centre_distance(
 
     # Get distance between centres.
     dists = np.abs(np.array(b_cent) - np.array(a_cent))    
+    dists_mm = spacing * dists
+    return dists_mm
+
+def extent_distance(
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: types.ImageSpacing3D) -> Tuple[float, float, float]:
+    """
+    returns: the maximum distance between extent boundaries for each axis.
+    args:
+        a: a boolean 3D array.
+        b: another boolean 3D array.
+        spacing: the voxel spacing.
+    """
+    if a.shape != b.shape:
+        raise ValueError(f"Metric 'extent_distance' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'extent_distance' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+    if a.sum() == 0 or b.sum() == 0:
+        raise ValueError(f"Metric 'extent_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
+
+    # Calculate extents.
+    a_ext = get_extent(a)
+    b_ext = get_extent(b)
+
+    # Calculate distances.
+    a = np.array(a_ext)
+    a[1] = -a[1]
+    b = np.array(b_ext)
+    b[1] = -b[1]
+    dists = np.max(a - b, axis=0)
     dists_mm = spacing * dists
     return dists_mm

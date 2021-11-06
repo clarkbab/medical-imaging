@@ -164,12 +164,12 @@ def create_region_figures(
         else:
             regions = [regions]
 
-    # Create PDF.
-    report = FPDF()
-    report.set_font('Arial', 'B', 16)
-
     logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'.")
     for region in tqdm(regions):
+        # Create PDF.
+        report = FPDF()
+        report.set_font('Arial', 'B', 16)
+
         for pat in tqdm(pats, leave=False):
             # Skip if patient doesn't have region.
             patient = set.patient(pat)
@@ -186,18 +186,20 @@ def create_region_figures(
             page_coords = ((0, 20), (100, 20), (0, 120))
             for view, page_coord in zip(views, page_coords):
                 # Set figure.
-                plot_patient_regions(dataset, pat, centre_on=region, crop=region, regions=region, view=view)
+                plot_patient_regions(dataset, pat, centre_on=region, crop=region, regions=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
                 plt.savefig(filepath)
+                plt.close()
 
                 # Add image to report.
                 report.image(filepath, *page_coord, w=100, h=100)
 
-    # Save PDF.
-    filepath = os.path.join(set.path, 'reports', f'region-figures-{_hash_regions(regions)}.pdf') 
-    report.output(filepath, 'F')
+        # Save PDF.
+        filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        report.output(filepath, 'F')
 
 def _hash_regions(regions: types.PatientRegions) -> str:
     return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

@@ -166,7 +166,7 @@ class DICOMPatient:
     def list_studies(self) -> List[str]:
         return list(sorted(os.listdir(os.path.join(self._path))))
 
-    def get_study(
+    def study(
         self,
         id: str) -> DICOMStudy:
         return DICOMStudy(self, id, region_map=self._region_map)
@@ -206,8 +206,8 @@ class DICOMPatient:
     def _load_default_series(self) -> None:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
-        study = self.get_study(self.list_studies()[0])
-        rt_series = study.get_series(study.list_series('rtstruct')[0], 'rtstruct')
+        study = self.study(self.list_studies()[0])
+        rt_series = study.series(study.list_series('rtstruct')[0], 'rtstruct')
         self._default_rt_series = rt_series
 
     # Proxy to default RTSTRUCT series.

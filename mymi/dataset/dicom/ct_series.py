@@ -90,6 +90,7 @@ class CTSeries(DICOMSeries):
         cts = self.get_cts()
 
         # Get size - relies on hierarchy filtering (i.e. removing patients with missing slices).
+        print(str(self))
         size = (
             cts[0].pixel_array.shape[1],
             cts[0].pixel_array.shape[0],
