@@ -13,4 +13,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/report/nifti/manual/hnscc_region_summary
+bash $SCRIPT_DIR/report/nifti/manual/opc_region_summary

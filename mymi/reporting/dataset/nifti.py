@@ -73,6 +73,8 @@ def get_region_summary(
 def create_region_summary(
     dataset: str,
     regions: List[str]) -> None:
+    logging.info(f"Creating region summary for dataset '{dataset}', regions '{regions}'...")
+
     # Generate counts report.
     df = get_region_summary(dataset, regions)
 
@@ -247,7 +249,7 @@ def create_region_figures(
     img_height = 100
 
     logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'...")
-    for region in tqdm(regions[:1]):
+    for region in tqdm(regions):
         # Create PDF.
         pdf = FPDF()
         pdf.set_section_title_styles(
@@ -262,7 +264,7 @@ def create_region_figures(
             )
         ) 
 
-        for pat in tqdm(pats[:1], leave=False):
+        for pat in tqdm(pats, leave=False):
             # Skip if patient doesn't have region.
             patient = set.patient(pat)
             if not patient.has_region(region):
@@ -292,8 +294,9 @@ def create_region_figures(
             num_cols = 4
             cell_width = (img_width - 2 * table_2_l_padding) / num_cols
             table_2_data = [('Axis', 'Outlier', 'Extent', 'Num. IQR')]
-            for axis, column in enumerate(columns):
-                table_2_data.append((axis, reg_record[f'{column}-out'], f'{reg_record[column]:.2f}', f"{reg_record[f'{column}-out-iqr']:.2f}"))
+            axes = ['x', 'y', 'z']
+            for axis, column in zip(axes, columns):
+                table_2_data.append((axis, reg_record[f'{column}-out-dir'], f'{reg_record[column]:.2f}', f"{reg_record[f'{column}-out-iqr']:.2f}"))
             for i, row in enumerate(table_2_data):
                 if i == 0:
                     pdf.set_font('Helvetica', 'B', 12)

@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-06:00:00
+#SBATCH --time 0-00:05:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -13,4 +13,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/report/nifti/manual/hnscc_region_summary
+bash $SCRIPT_DIR/report/nifti/manual/pmcc_hn_train_ct_summary
