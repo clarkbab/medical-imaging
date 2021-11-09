@@ -15,6 +15,7 @@ from mymi import logging
 from mymi.transforms import centre_crop_or_pad_3D, resample_3D
 from mymi import types
 
+from ..dataset import DatasetType
 from ..nifti import recreate as recreate_nifti
 from ..training import recreate as recreate_training
 
@@ -131,7 +132,11 @@ def convert_to_training(
         # Write each patient to partition.
         for pat in tqdm(pats):
             # Get available requested regions.
-            pat_regions = dataset.patient(pat).list_regions(use_mapping=use_mapping, whitelist=regions)
+            if dataset.type == DatasetType.DICOM:
+                kwargs = { 'use_mapping': use_mapping }
+            else:
+                kwargs = {}
+            pat_regions = dataset.patient(pat).list_regions(whitelist=regions, **kwargs)
 
             # Load data.
             input = dataset.patient(pat).ct_data()
@@ -148,7 +153,7 @@ def convert_to_training(
                 # Log warning if we're cropping the FOV, as we might lose parts of OAR, e.g. Brain.
                 fov = np.array(input.shape) * old_spacing
                 new_fov = np.array(size) * spacing
-                for axis in range(3):
+                for axis in range(len(size)):
                     if fov[axis] > new_fov[axis]:
                         logging.error(f"Patient FOV larger '{fov}', larger than new FOV '{loc_fov}' for axis '{axis}', losing information.")
 

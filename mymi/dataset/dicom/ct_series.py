@@ -105,8 +105,8 @@ class CTSeries(DICOMSeries):
 
         # Get spacing - relies on hierarchy filtering (i.e. ensuring consistent voxel spacing).
         spacing = (
-            cts[0].PixelSpacing[0],
-            cts[0].PixelSpacing[1],
+            float(cts[0].PixelSpacing[0]),
+            float(cts[0].PixelSpacing[1]),
             np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
         )
         return spacing

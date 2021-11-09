@@ -180,7 +180,7 @@ def get_ct_summary(
         # Calculate FOV.
         fov = np.array(size) * spacing
 
-        for axis in range(3):
+        for axis in range(len(size)):
             data = {
                 'patient-id': pat,
                 'axis': axis,

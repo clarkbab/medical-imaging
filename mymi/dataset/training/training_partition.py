@@ -144,7 +144,7 @@ class TrainingPartition:
             index = 0
 
         # Save the input data.
-        filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
+        filename = f'{index}.npz'
         filepath = os.path.join(path, filename)
         np.savez_compressed(filepath, data=data)
 
