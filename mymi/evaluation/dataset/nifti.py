@@ -7,9 +7,10 @@ from typing import Optional, Tuple
 
 from mymi import cache
 from mymi import dataset as ds
-from mymi.metrics import dice, distances, extent_centre_distance
+from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
+from mymi.postprocessing import get_extent_centre
 from mymi.prediction.dataset.nifti import load_localiser_prediction
 from mymi import types
 
@@ -17,7 +18,7 @@ def create_localiser_evaluation(
     dataset: str,
     region: str,
     localiser: Tuple[str, str, str],
-    region_patch_size: types.ImageSize3D) -> None:
+    patch_size: types.ImageSize3D) -> None:
     localiser = Localiser.replace_best(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
@@ -46,9 +47,9 @@ def create_localiser_evaluation(
             'extent-centre-x',
             'extent-centre-y',
             'extent-centre-z',
-            'patch-distance-x',
-            'patch-distance-y',
-            'patch-distance-z',
+            'extent-x',
+            'extent-y',
+            'extent-z',
             'surface-hd',
             'surface-95hd',
             'voxel-hd',
@@ -109,13 +110,14 @@ def create_localiser_evaluation(
             dists = (np.nan, np.nan, np.nan)
         else:
             # Create second stage patch.
+            pred_centre = get_extent_centre(pred)
             low_sub = np.ceil(np.array(patch_size) / 2).astype(int)
-            min = tuple(ec_dist - low_sub)
+            min = tuple(pred_centre - low_sub)
             max = tuple(np.array(min) + patch_size)
 
             # Create label from patch.
             patch_label = np.zeros_like(label)
-            slices = tuple([slice(l, h) for l, h in zip(min, max)])
+            slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
             patch_label[slices] = 1
 
             # Get extent distance.

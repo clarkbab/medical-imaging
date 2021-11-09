@@ -12,7 +12,6 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-TEST"
 REGIONS=(
     'BrachialPlexus_L'
     'BrachialPlexus_R'
@@ -32,7 +31,6 @@ REGIONS=(
     'Submandibular_L'
     'Submandibular_R'
 )
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 RUNS=(
     'public-dilated-400epochs' # BrachialPlexus_L
     'public-dilated-400epochs' # BrachialPlexus_R
@@ -52,7 +50,6 @@ RUNS=(
     'public-400epochs' # Submandibular_L
     'public-400epochs' # Submandibular_R
 )
-RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
 CHECKPOINTS=(
     'BEST' # BrachialPlexus_L
     'BEST' # BrachialPlexus_R
@@ -72,8 +69,31 @@ CHECKPOINTS=(
     'BEST' # Submandibular_L
     'BEST' # Submandibular_R
 )
+PATCH_SIZES=(
+    '(200,115,70)' # 'BrachialPlexus_L'
+    '(200,115,70)' # 'BrachialPlexus_R'
+    '(170,205,90)' # 'Brain'
+    '(95,85,60)' # 'BrainStem'
+    '(70,65,25)' # 'Cochlea_L'
+    '(70,65,25)' # 'Cochlea_R'
+    '(55,50,25)' # 'Lens_L'
+    '(55,50,25)' # 'Lens_R'
+    '(180,170,75)' # 'Mandible'
+    '(70,90,30)' # 'OpticNerve_L'
+    '(70,90,30)' # 'OpticNerve_R'
+    '(180,160,155)' # 'OralCavity'
+    '(95,120,60)' # 'Parotid_L'
+    '(95,120,60)' # 'Parotid_R'
+    '(80,180,190)' # 'SpinalCord'
+    '(75,85,50)' # 'Submandibular_L'
+    '(75,85,50)' # 'Submandibular_R'
+)
 CHECKPOINT=${CHECKPOINTS[$SLURM_ARRAY_TASK_ID]}
+DATASET="PMCC-HN-TEST"
+PATCH_SIZE=${PATCH_SIZES[$SLURM_ARRAY_TASK_ID]}
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
 LOCALISER="('localiser-$REGION','$RUN','$CHECKPOINT')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation --dataset $DATASET --region $REGION --localiser $LOCALISER
+python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation --dataset $DATASET --region $REGION --localiser $LOCALISER --patch_size $PATCH_SIZE

@@ -1,4 +1,4 @@
-from fpdf import FPDF
+from fpdf import FPDF, TitleStyle
 import hashlib
 import json
 import numpy as np
@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from tqdm import tqdm
-from typing import List
+from typing import Callable, Dict, List
 from uuid import uuid1
 
 from mymi import config
 from mymi import dataset as ds
 from mymi import logging
 from mymi.plotter.dataset.nifti import plot_patient_regions
-from mymi.postprocessing import get_extent
+from mymi.postprocessing import get_extent, get_largest_cc
 from mymi import types
 
 def get_region_summary(
@@ -25,20 +25,12 @@ def get_region_summary(
     cols = {
         'patient': str,
         'region': str,
-        'axis': str,
-        'extent-mm': float,
-        'spacing': float
+        'connected': bool,
+        'extent-mm-x': float,
+        'extent-mm-y': float,
+        'extent-mm-z': float
     }
     df = pd.DataFrame(columns=cols.keys())
-
-    axes = [0, 1, 2]
-
-    # Initialise empty data structure.
-    data = {}
-    for region in regions:
-        data[region] = {}
-        for axis in axes:
-            data[region][axis] = []
 
     for pat in tqdm(pats):
         # Get spacing.
@@ -49,19 +41,29 @@ def get_region_summary(
         rs_data = set.patient(pat).region_data(regions=pat_regions)
 
         # Add extents for all regions.
-        for r in rs_data.keys():
-            r_data = rs_data[r]
-            min, max = get_extent(r_data)
-            for axis in axes:
-                extent_vox = max[axis] - min[axis]
-                extent_mm = extent_vox * spacing[axis]
-                df = df.append({
-                    'patient': pat,
-                    'region': r,
-                    'axis': axis,
-                    'extent-mm': extent_mm,
-                    'spacing': spacing[axis]
-                }, ignore_index=True)
+        for region in rs_data.keys():
+            data = {
+                'patient': pat,
+                'region': region
+            }
+
+            # See if OAR is single structure.
+            label = rs_data[region]
+            data['connected'] = True if get_largest_cc(label).sum() == label.sum() else False
+
+            # Add OAR extent.
+            extent = get_extent(label)
+            if extent:
+                min, max = extent
+                extent_vox = np.array(max) - min
+                extent_mm = extent_vox * spacing
+            else:
+                extent_mm = (0, 0, 0)
+            data['extent-mm-x'] = extent_mm[0]
+            data['extent-mm-y'] = extent_mm[1]
+            data['extent-mm-z'] = extent_mm[2]
+
+            df = df.append(data, ignore_index=True)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)
@@ -80,6 +82,68 @@ def create_region_summary(
     filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def _get_outlier_cols_func(
+    columns: List[str],
+    lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:
+    def _outlier_cols(row: pd.Series) -> Dict:
+        reg_stats = lim_df.loc[row.region]
+        data = {}
+
+        # Add outlier info.
+        for column in columns:
+            if row[column] < reg_stats[f'{column}-low']:
+                outlier = True
+                outlier_dir = 'LOW'
+                if reg_stats[f'{column}-iqr'] != 0:
+                    outlier_iqr = (reg_stats[f'{column}-q1'] - row[column]) / reg_stats[f'{column}-iqr']
+                else:
+                    outlier_iqr = np.inf
+            elif row[column] > reg_stats[f'{column}-high']:
+                outlier = True
+                outlier_dir = 'HIGH'
+                if reg_stats[f'{column}-iqr'] != 0:
+                    outlier_iqr = (row[column] - reg_stats[f'{column}-q3']) / reg_stats[f'{column}-iqr']
+                else:
+                    outlier_iqr = np.inf
+            else:
+                outlier = False
+                outlier_dir = ''
+                outlier_iqr = np.nan
+
+            data[f'{column}-out'] = outlier
+            data[f'{column}-out-dir'] = outlier_dir
+            data[f'{column}-out-iqr'] = outlier_iqr
+
+        return data
+    return _outlier_cols
+
+def add_region_summary_outliers(
+    df: pd.DataFrame,
+    columns: List[str]) -> pd.DataFrame:
+
+    # Get outlier limits.
+    q1 = df.groupby(['region']).quantile(0.25)[columns]
+    q3 = df.groupby(['region']).quantile(0.75)[columns]
+    iqr = q3 - q1
+    low = q1 - 1.5 * iqr
+    high = q3 + 1.5 * iqr
+
+    # Rename columns.
+    def colmap(cols, suffix):
+        return dict(((c, f'{c}-{suffix}') for c in cols))
+    q1 = q1.rename(columns=colmap(columns, 'q1'))
+    q3 = q3.rename(columns=colmap(columns, 'q3'))
+    iqr = iqr.rename(columns=colmap(columns, 'iqr'))
+    low = low.rename(columns=colmap(columns, 'low'))
+    high = high.rename(columns=colmap(columns, 'high'))
+    lim_df = pd.concat([q1, q3, iqr, low, high], axis=1)
+
+    # Add columns.
+    func = _get_outlier_cols_func(columns, lim_df)
+    out_df = df.apply(func, axis=1, result_type='expand')
+    df = pd.concat([df, out_df], axis=1)
+    return df
 
 def load_region_summary(
     dataset: str,
@@ -164,29 +228,87 @@ def create_region_figures(
         else:
             regions = [regions]
 
-    logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'.")
-    for region in tqdm(regions):
-        # Create PDF.
-        report = FPDF()
-        report.set_font('Arial', 'B', 16)
+    # Keep regions with patients.
+    region_df = load_region_summary(dataset, regions)
+    regions = list(region_df.region.unique())
 
-        for pat in tqdm(pats, leave=False):
+    # Add 'extent-mm' outlier info.
+    columns = ['extent-mm-x', 'extent-mm-y', 'extent-mm-z']
+    region_df = add_region_summary_outliers(region_df, columns)
+
+    # Set PDF margins.
+    table_1_t_padding = 25
+    table_1_l_padding = 5
+    table_2_t_padding = 55
+    table_2_l_padding = 5
+    img_t_margin = 30
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'...")
+    for region in tqdm(regions[:1]):
+        # Create PDF.
+        pdf = FPDF()
+        pdf.set_section_title_styles(
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=24,
+                color=0,
+                t_margin=5,
+                l_margin=15,
+                b_margin=0
+            )
+        ) 
+
+        for pat in tqdm(pats[:1], leave=False):
             # Skip if patient doesn't have region.
             patient = set.patient(pat)
             if not patient.has_region(region):
                 continue
 
             # Add patient/region title.
-            report.add_page()
-            text = f"Region: {region}, Patient: {pat}"
-            report.cell(0, 0, text, ln=1)
+            pdf.add_page()
+            pdf.start_section(pat)
 
-            # Save orthogonal plots.
+            # Save table 1.
+            num_cols = 2
+            cell_height = 2 * pdf.font_size
+            cell_width = (img_width - 2 * table_1_l_padding) / num_cols
+            table_1_data = [('Connected',)]
+            reg_record = region_df[(region_df['patient'] == pat) & (region_df['region'] == region)].iloc[0]
+            table_1_data.append((reg_record.connected,))
+            for i, row in enumerate(table_1_data):
+                if i == 0:
+                    pdf.set_font('Helvetica', 'B', 12)
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                pdf.set_xy(img_l_margin + table_1_l_padding, img_t_margin + table_1_t_padding + i * cell_height)
+                for value in row:
+                    pdf.cell(cell_width, cell_height, str(value), border=1)
+
+            # Save table 2.
+            num_cols = 4
+            cell_width = (img_width - 2 * table_2_l_padding) / num_cols
+            table_2_data = [('Axis', 'Outlier', 'Extent', 'Num. IQR')]
+            for axis, column in enumerate(columns):
+                table_2_data.append((axis, reg_record[f'{column}-out'], f'{reg_record[column]:.2f}', f"{reg_record[f'{column}-out-iqr']:.2f}"))
+            for i, row in enumerate(table_2_data):
+                if i == 0:
+                    pdf.set_font('Helvetica', 'B', 12)
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                pdf.set_xy(img_l_margin + table_2_l_padding, img_t_margin + table_2_t_padding + i * cell_height)
+                for value in row:
+                    pdf.cell(cell_width, cell_height, str(value), border=1)
+
+            # Save images.
             views = ['axial', 'coronal', 'sagittal']
-            page_coords = ((0, 20), (100, 20), (0, 120))
-            for view, page_coord in zip(views, page_coords):
+            img_coords = ((img_l_margin + img_width, img_t_margin), (img_l_margin, img_t_margin + img_height), (img_l_margin + img_width, img_t_margin + img_height))
+            for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                plot_patient_regions(dataset, pat, centre_on=region, crop=region, regions=region, view=view, window=(3000, 500))
+                plot_patient_regions(dataset, pat, centre_on=region, colours=['y'], crop=region, regions=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -194,12 +316,12 @@ def create_region_figures(
                 plt.close()
 
                 # Add image to report.
-                report.image(filepath, *page_coord, w=100, h=100)
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
 
         # Save PDF.
         filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        report.output(filepath, 'F')
+        pdf.output(filepath, 'F')
 
 def _hash_regions(regions: types.PatientRegions) -> str:
     return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
 from mymi.postprocessing import get_extent
@@ -60,6 +60,7 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     clear_cache: bool = False,
+    colours: Optional[List[str]] = None,
     crop: Optional[Union[types.Box2D, str]] = None,
     crop_margin: int = 20,
     figsize: Tuple[int, int] = (8, 8),
@@ -221,7 +222,7 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view, colours=colours)
 
         if other_ds:
             # Prepend other dataset name.
@@ -279,7 +280,8 @@ def plot_regions(
     crop: types.Box2D,
     latex: bool,
     perimeter: bool,
-    view: types.PatientView) -> bool:
+    view: types.PatientView,
+    colours: Optional[List[str]] = None) -> bool:
     """
     effect: adds regions to the plot.
     returns: whether the legend should be shown.
@@ -304,12 +306,16 @@ def plot_regions(
             show_legend = True
         
         # Create binary colormap for each region.
-        colour = getattr(RegionColours, region)
-        colours = [(1.0, 1.0, 1.0, 0), colour]
-        region_cmap = ListedColormap(colours)
+        if colours:
+            assert len(colours) == len(region_data.keys())
+            colour = colours[i]
+        else:
+            colour = getattr(RegionColours, region)
+        cols = [(1.0, 1.0, 1.0, 0), colour]
+        cmap = ListedColormap(cols)
 
         # Plot region.
-        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=region_cmap, origin=get_origin(view))
+        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
         label = _escape_latex(region) if latex else region
         plt.plot(0, 0, c=colour, label=label)
         if perimeter:

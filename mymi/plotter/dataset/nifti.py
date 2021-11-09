@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage.measurements import center_of_mass
 import torchio
-from typing import Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.postprocessing import get_extent, get_extent_centre
@@ -20,6 +20,7 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     centre_on: Optional[str] = None,
+    colours: Optional[List[str]] = None,
     crop: Optional[Union[types.Box2D, str]] = None,
     crop_margin: float = 100,
     figsize: Tuple[int, int] = (8, 8),
@@ -158,7 +159,7 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view, colours=colours)
 
         if other_ds:
             # Prepend other dataset name.
@@ -220,9 +221,8 @@ def plot_patient_localiser_prediction(
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    loc_box_colour: str = 'r',
-    loc_box_margin: Optional[float] = None,
-    seg_patch_size: Optional[types.ImageSize3D] = None,
+    patch_size: Optional[types.ImageSize3D] = None,
+    region_colour: Optional[str] = None,
     show_seg: bool = False,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
@@ -255,7 +255,8 @@ def plot_patient_localiser_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    plot_patient_regions(dataset, pat_id, aspect=aspect, crop=crop, latex=latex, legend=False, legend_loc=legend_loc, show=False, slice_idx=slice_idx, view=view, **kwargs)
+    colours = [region_colour] if region_colour else None
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=colours, crop=crop, latex=latex, legend=False, legend_loc=legend_loc, show=False, slice_idx=slice_idx, view=view, **kwargs)
 
     # Load localiser segmentation.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
@@ -288,11 +289,11 @@ def plot_patient_localiser_prediction(
         plot_box(extent, view, colour=box_colour, crop=crop, label='Loc. Box')
 
     # Plot seg box.
-    if seg_patch_size:
+    if patch_size:
         # Get extent centre.
         centre = get_extent_centre(pred)
-        low = np.floor(np.array(seg_patch_size) / 2).astype(int)
-        high = seg_patch_size - low
+        low = np.floor(np.array(patch_size) / 2).astype(int)
+        high = patch_size - low
         min = np.clip(centre - low, 0, None)
         max = centre + high
         seg_patch = (min, max)

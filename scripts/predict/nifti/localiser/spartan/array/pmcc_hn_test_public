@@ -1,9 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition physical
+#SBATCH --partition gpgpu
 #SBATCH --mem 32G
+#SBATCH --gres gpu:p100:1
+#SBATCH --cpus-per-gpu 4
 #SBATCH --time 0-1:00:00
 #SBATCH -A punim1413
+#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -12,7 +15,6 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-TEST"
 REGIONS=(
     'BrachialPlexus_L'
     'BrachialPlexus_R'
@@ -32,7 +34,6 @@ REGIONS=(
     'Submandibular_L'
     'Submandibular_R'
 )
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 RUNS=(
     'public-dilated-400epochs' # BrachialPlexus_L
     'public-dilated-400epochs' # BrachialPlexus_R
@@ -52,7 +53,6 @@ RUNS=(
     'public-400epochs' # Submandibular_L
     'public-400epochs' # Submandibular_R
 )
-RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
 CHECKPOINTS=(
     'BEST' # BrachialPlexus_L
     'BEST' # BrachialPlexus_R
@@ -73,7 +73,12 @@ CHECKPOINTS=(
     'BEST' # Submandibular_R
 )
 CHECKPOINT=${CHECKPOINTS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','$RUN','$CHECKPOINT')"
+DATASET="PMCC-HN-TEST"
+LOCALISER_SIZE="(128,128,96)"
+LOCALISER_SPACING="(4,4,6.625)"
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+LOCALISER="('localiser-$REGION','$RUN','$CHECKPOINT')"
 
-python $SCRIPT_DIR/predict/nifti/localiser/create_predictions --dataset $DATASET --localiser $LOCALISER --region $REGION
+python $SCRIPT_DIR/predict/nifti/localiser/create_predictions --dataset $DATASET --localiser $LOCALISER --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING --region $REGION

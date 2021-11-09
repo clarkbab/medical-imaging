@@ -55,6 +55,9 @@ class CTSeries(DICOMSeries):
         ct_paths = [os.path.join(self._path, f) for f in os.listdir(self._path)]
         cts = [dcm.read_file(f) for f in ct_paths]
 
+        # Sort CTs.
+        cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
+
         return cts
 
     def offset(self) -> types.PhysPoint3D:
@@ -90,7 +93,6 @@ class CTSeries(DICOMSeries):
         cts = self.get_cts()
 
         # Get size - relies on hierarchy filtering (i.e. removing patients with missing slices).
-        print(str(self))
         size = (
             cts[0].pixel_array.shape[1],
             cts[0].pixel_array.shape[0],
@@ -109,7 +111,6 @@ class CTSeries(DICOMSeries):
         )
         return spacing
 
-    # @cache.method('_global_id')
     def data(self) -> np.ndarray:
         # Load series CT dicoms.
         cts = self.get_cts()

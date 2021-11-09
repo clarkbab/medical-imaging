@@ -19,7 +19,7 @@ def get_localiser_prediction(
     loc_spacing: Tuple[float, float, float],
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
-    raise_fov_error: bool = True) -> np.ndarray:
+    raise_fov_error: bool = False) -> np.ndarray:
     # Load model if not already loaded.
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
@@ -35,13 +35,12 @@ def get_localiser_prediction(
     # Check patient FOV.
     fov = np.array(input_size) * spacing
     loc_fov = np.array(loc_size) * loc_spacing
-    for axis in len(fov):
-        if fov[axis] > loc_fov[axis]:
-            error_message = f"Patient FOV '{fov}', larger than localiser FOV '{loc_fov}'."
-            if raise_fov_error:
-                raise ValueError(error_message)
-            else:
-                logging.error(error_message)
+    if np.minimum(loc_fov - fov, 0).sum() != 0:
+        error_message = f"Patient FOV '{fov}', larger than localiser FOV '{loc_fov}'."
+        if raise_fov_error:
+            raise ValueError(error_message)
+        else:
+            logging.error(error_message)
 
     # Resample/crop data for network.
     input = resample_3D(input, spacing, loc_spacing)
