@@ -149,11 +149,20 @@ def add_region_summary_outliers(
 
 def load_region_summary(
     dataset: str,
+    blacklist: bool = False,
     regions: types.PatientRegions = 'all') -> None:
     set = ds.get(dataset, 'nifti')
     hash = _hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
-    return pd.read_csv(filepath)
+    df = pd.read_csv(filepath)
+    if blacklist:
+        # Exclude blacklisted records.
+        filepath = os.path.join(set.path, 'region-blacklist.csv')
+        black_df = pd.read_csv(filepath)
+        df = df.merge(black_df, how='left', on=['patient', 'region'], indicator=True)
+        df = df[df['_merge'] == 'left_only']
+        df = df.drop(columns='_merge')
+    return df
 
 def get_ct_summary(
     dataset: str,

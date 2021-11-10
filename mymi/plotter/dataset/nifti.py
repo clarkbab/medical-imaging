@@ -19,6 +19,7 @@ def plot_patient_regions(
     alpha: float = 0.2,
     aspect: float = None,
     axes: bool = True,
+    cca: bool = False,
     centre_on: Optional[str] = None,
     colours: Optional[List[str]] = None,
     crop: Optional[Union[types.Box2D, str]] = None,
@@ -159,7 +160,7 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view, colours=colours)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view, cca=cca, colours=colours)
 
         if other_ds:
             # Prepend other dataset name.

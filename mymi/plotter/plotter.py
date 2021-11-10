@@ -10,7 +10,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
-from mymi.postprocessing import get_extent
+from mymi.postprocessing import get_extent, get_largest_cc
 from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
@@ -281,6 +281,7 @@ def plot_regions(
     latex: bool,
     perimeter: bool,
     view: types.PatientView,
+    cca: bool = False,
     colours: Optional[List[str]] = None) -> bool:
     """
     effect: adds regions to the plot.
@@ -304,6 +305,10 @@ def plot_regions(
             continue
         else:
             show_legend = True
+
+        # Get largest component.
+        if cca:
+            slice_data = get_largest_cc(slice_data)
         
         # Create binary colormap for each region.
         if colours:
