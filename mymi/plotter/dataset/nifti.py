@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage.measurements import center_of_mass
 import torchio
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.postprocessing import get_extent, get_extent_centre
@@ -20,10 +20,13 @@ def plot_patient_regions(
     aspect: float = None,
     axes: bool = True,
     cca: bool = False,
-    centre_on: Optional[str] = None,
+    centre_of: Optional[str] = None,
     colours: Optional[List[str]] = None,
-    crop: Optional[Union[types.Box2D, str]] = None,
+    connected_extent: bool = False,
+    crop: Optional[Union[str, Tuple[Tuple[int, int], Tuple[int, int]]]] = None,
     crop_margin: float = 100,
+    extent: bool = False,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
     latex: bool = False,
@@ -40,7 +43,7 @@ def plot_patient_regions(
     transform: torchio.transforms.Transform = None,
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
-    assert_position(centre_on, slice_idx)
+    assert_position(centre_of, extent_of, slice_idx)
 
     # Update font size.
     plt.rcParams.update({
@@ -61,19 +64,31 @@ def plot_patient_regions(
     spacing = pat.ct_spacing()
 
     # Get slice index if requested OAR centre.
-    if centre_on:
-        # Load region data.
-        label = pat.region_data(regions=centre_on)[centre_on]
-        com = np.round(center_of_mass(label)).astype(int)
+    if centre_of:
+        # Get extent centre.
+        label = pat.region_data(regions=centre_of)[centre_of]
+        extent_centre = get_extent_centre(label)
+
+        # Set slice index.
         if view == 'axial':
-            slice_idx = com[2]
+            slice_idx = extent_centre[2]
         elif view == 'coronal':
-            slice_idx = com[1]
+            slice_idx = extent_centre[1]
         elif view == 'sagittal':
-            slice_idx = com[0]
-    else:
-        if not slice_idx: 
-            raise ValueError(f"Either 'centre_on' or 'slice_idx' must be given.")
+            slice_idx = extent_centre[0]
+    elif extent_of:
+        # Get extent.
+        eo_region, eo_end = extent_of
+        label = pat.region_data(regions=eo_region)[eo_region]
+        extent = get_extent(label)
+
+        # Set slice index.
+        if view == 'axial':
+            slice_idx = extent[eo_end][2]
+        elif view == 'coronal':
+            slice_idx = extent[eo_end][1]
+        elif view == 'sagittal':
+            slice_idx = extent[eo_end][0]
 
     # Load CT data.
     ct_data = pat.ct_data()
@@ -120,6 +135,8 @@ def plot_patient_regions(
 
     # Perform crop.
     if crop:
+        # Convert crop to 2D box.
+        crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
         ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
@@ -140,7 +157,7 @@ def plot_patient_regions(
 
     # Plot CT data.
     plt.figure(figsize=figsize)
-    plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, origin=get_origin(view), vmin=vmin, vmax=vmax)
+    plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
     if axes:
@@ -160,7 +177,7 @@ def plot_patient_regions(
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, crop, latex, perimeter, view, cca=cca, colours=colours)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, latex, perimeter, view, cca=cca, colours=colours, connected_extent=connected_extent, crop=crop, extent=extent)
 
         if other_ds:
             # Prepend other dataset name.
@@ -192,7 +209,7 @@ def plot_patient_regions(
         if isinstance(title, str):
             title_text = title
         else:
-            title_text = f"{view.capitalize()} slice: {slice_idx}/{num_slices - 1}" 
+            title_text = f"{pat} - {slice_idx}/{num_slices - 1} ({view})"
 
         # Escape text if using latex.
         if latex:
@@ -217,7 +234,7 @@ def plot_patient_localiser_prediction(
     localiser: Tuple[str, str, str],
     aspect: float = None,
     box_colour: str = 'r',
-    centre_on: Optional[str] = None,
+    centre_of: Optional[str] = None,
     crop: types.Box2D = None,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
@@ -228,7 +245,7 @@ def plot_patient_localiser_prediction(
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
-    assert_position(centre_on, slice_idx)
+    assert_position(centre_of, extent_of, slice_idx)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -246,7 +263,7 @@ def plot_patient_localiser_prediction(
     # Centre on OAR if requested.
     if slice_idx is None:
         # Load region data.
-        label = patient.region_data(regions=centre_on)[centre_on]
+        label = patient.region_data(regions=centre_of)[centre_of]
         com = np.round(center_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]

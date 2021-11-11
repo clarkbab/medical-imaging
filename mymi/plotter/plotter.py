@@ -10,6 +10,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
+from mymi import logging
 from mymi.postprocessing import get_extent, get_largest_cc
 from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
 from mymi.regions import is_region, RegionColours
@@ -277,11 +278,13 @@ def plot_regions(
     slice_idx: int,
     alpha: float,
     aspect: float,
-    crop: types.Box2D,
     latex: bool,
     perimeter: bool,
     view: types.PatientView,
     cca: bool = False,
+    connected_extent: bool = False,
+    crop: Optional[types.Box2D] = None,
+    extent: bool = False,
     colours: Optional[List[str]] = None) -> bool:
     """
     effect: adds regions to the plot.
@@ -291,14 +294,36 @@ def plot_regions(
         others: see 'plot_patient_regions'.
     """
     # Plot each region.
-    show_legend = False     # Only show legend if slice has at least one region.
+    show_legend = False
     for i, (region, data) in enumerate(region_data.items()):
+        # Get region colour.
+        if colours:
+            assert len(colours) == len(region_data.keys())
+            colour = colours[i]
+        else:
+            colour = getattr(RegionColours, region)
+        cols = [(1.0, 1.0, 1.0, 0), colour]
+        cmap = ListedColormap(cols)
+
         # Convert data to 'imshow' co-ordinate system.
         slice_data = get_slice(data, slice_idx, view)
 
         # Crop image.
         if crop:
             slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
+
+        # Plot extent.
+        if extent:
+            extent = get_extent(data)
+            if should_plot_box(extent, view, slice_idx):
+                show_legend = True
+                plot_box(extent, view, colour=colour, crop=crop, label=f'{region} extent', linestyle='dashed')
+
+        # Plot connected extent.
+        if connected_extent:
+            extent = get_extent(get_largest_cc(data))
+            if should_plot_box(extent, view, slice_idx):
+                plot_box(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
         # Skip region if not present on this slice.
         if slice_data.max() == 0:
@@ -309,22 +334,24 @@ def plot_regions(
         # Get largest component.
         if cca:
             slice_data = get_largest_cc(slice_data)
-        
-        # Create binary colormap for each region.
-        if colours:
-            assert len(colours) == len(region_data.keys())
-            colour = colours[i]
-        else:
-            colour = getattr(RegionColours, region)
-        cols = [(1.0, 1.0, 1.0, 0), colour]
-        cmap = ListedColormap(cols)
 
         # Plot region.
-        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
         label = _escape_latex(region) if latex else region
         plt.plot(0, 0, c=colour, label=label)
         if perimeter:
             plt.contour(slice_data, colors=[colour], levels=[0.5])
+
+        # Set ticks.
+        if crop:
+            min, max = crop
+            width = tuple(np.array(max) - min)
+            xticks = np.linspace(0, 10 * np.floor(width[0] / 10), 5).astype(int)
+            xtick_labels = xticks + min[0]
+            plt.xticks(ticks=xticks, labels=xtick_labels)
+            yticks = np.linspace(0, 10 * np.floor(width[1] / 10), 5).astype(int)
+            ytick_labels = yticks + min[1]
+            plt.yticks(ticks=yticks, labels=ytick_labels)
 
     return show_legend
 
@@ -685,7 +712,7 @@ def should_plot_box(
     max = max[dim]
 
     # Return result.
-    return slice_idx >= min and slice_idx < max
+    return slice_idx >= min and slice_idx <= max
 
 def plot_box(
     box: types.Box3D,
@@ -750,9 +777,10 @@ def _escape_latex(text: str) -> str:
     return regex.sub(lambda match: char_map[match.group()], text)
 
 def assert_position(
-    centre_on: Optional[int],
+    centre_of: Optional[int],
+    extent_of: Optional[Tuple[str, bool]],
     slice_idx: Optional[str]):
-    if not centre_on and not slice_idx:
-        raise ValueError(f"Either 'centre_on' or 'slice_idx' must be set.")
-    elif centre_on and slice_idx:
-        raise ValueError(f"Only one of 'centre_on' or 'slice_idx' can be set.")
+    if centre_of is None and extent_of is None and slice_idx is None:
+        raise ValueError(f"Either 'centre_of', 'extent_of' or 'slice_idx' must be set.")
+    elif (centre_of and extent_of) or (centre_of and slice_idx) or (extent_of and slice_idx) or (centre_of and extent_of and slice_idx):
+        raise ValueError(f"Only one of 'centre_of', 'extent_of' or 'slice_idx' can be set.")

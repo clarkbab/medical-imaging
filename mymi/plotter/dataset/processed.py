@@ -19,7 +19,7 @@ def plot_sample(
     alpha: float = 0.2,
     aspect: float = None,
     axes: bool = True,
-    centre_on: Optional[str] = None,
+    centre_of: Optional[str] = None,
     clear_cache: bool = False,
     crop: types.Box2D = None,
     figsize: Tuple[int, int] = (8, 8),
@@ -40,8 +40,8 @@ def plot_sample(
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
     # Validate arguments.
-    if slice_idx is None and centre_on is None:
-        raise ValueError(f"Either 'slice_idx' or 'centre_on' must be set.")
+    if slice_idx is None and centre_of is None:
+        raise ValueError(f"Either 'slice_idx' or 'centre_of' must be set.")
 
     # Update font size.
     plt.rcParams.update({
@@ -71,9 +71,9 @@ def plot_sample(
         #     other_region_data = other_ds.patient(id).region_data(clear_cache=clear_cache, regions=other_regions)
 
     # Get slice index if requested OAR centre.
-    if centre_on is not None:
+    if centre_of is not None:
         # Load region data.
-        label = sample.label(regions=centre_on)[centre_on]
+        label = sample.label(regions=centre_of)[centre_of]
         com = np.round(center_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]
@@ -166,7 +166,7 @@ def plot_localiser_prediction(
     sample_idx: int,
     localiser: Tuple[str, str, str],
     aspect: float = None,
-    centre_on: Optional[str] = None,
+    centre_of: Optional[str] = None,
     crop: Optional[types.Box2D] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
@@ -178,8 +178,8 @@ def plot_localiser_prediction(
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     # Validate arguments.
-    if slice_idx is None and centre_on is None:
-        raise ValueError(f"Either 'slice_idx' or 'centre_on' must be set.")
+    if slice_idx is None and centre_of is None:
+        raise ValueError(f"Either 'slice_idx' or 'centre_of' must be set.")
 
     # Load sample.
     set = ds.get(dataset, 'training')
@@ -188,7 +188,7 @@ def plot_localiser_prediction(
     # Centre on OAR if requested.
     if slice_idx is None:
         # Load region data.
-        label = sample.label(regions=centre_on)[centre_on]
+        label = sample.label(regions=centre_of)[centre_of]
         com = np.round(center_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]

@@ -26,6 +26,10 @@ def get_region_summary(
         'patient': str,
         'region': str,
         'connected': bool,
+        'connected-p': float,
+        'conneted-extent-mm-x': float,
+        'conneted-extent-mm-y': float,
+        'conneted-extent-mm-z': float,
         'extent-mm-x': float,
         'extent-mm-y': float,
         'extent-mm-z': float
@@ -49,7 +53,9 @@ def get_region_summary(
 
             # See if OAR is single structure.
             label = rs_data[region]
-            data['connected'] = True if get_largest_cc(label).sum() == label.sum() else False
+            lcc_label = get_largest_cc(label)
+            data['connected'] = True if lcc_label.sum() == label.sum() else False
+            data['connected-p'] = lcc_label.sum() / label.sum()
 
             # Add OAR extent.
             extent = get_extent(label)
@@ -62,6 +68,18 @@ def get_region_summary(
             data['extent-mm-x'] = extent_mm[0]
             data['extent-mm-y'] = extent_mm[1]
             data['extent-mm-z'] = extent_mm[2]
+
+            # Add extent of largest connected component.
+            extent = get_extent(lcc_label)
+            if extent:
+                min, max = extent
+                extent_vox = np.array(max) - min
+                extent_mm = extent_vox * spacing
+            else:
+                extent_mm = (0, 0, 0)
+            data['connected-extent-mm-x'] = extent_mm[0]
+            data['connected-extent-mm-y'] = extent_mm[1]
+            data['connected-extent-mm-z'] = extent_mm[2]
 
             df = df.append(data, ignore_index=True)
 
@@ -240,8 +258,8 @@ def create_region_figures(
             regions = [regions]
 
     # Keep regions with patients.
-    region_df = load_region_summary(dataset, regions)
-    regions = list(region_df.region.unique())
+    region_df = load_region_summary(dataset, regions=regions)
+    regions = list(sorted(region_df.region.unique()))
 
     # Add 'extent-mm' outlier info.
     columns = ['extent-mm-x', 'extent-mm-y', 'extent-mm-z']
@@ -287,9 +305,9 @@ def create_region_figures(
             num_cols = 2
             cell_height = 2 * pdf.font_size
             cell_width = (img_width - 2 * table_1_l_padding) / num_cols
-            table_1_data = [('Connected',)]
+            table_1_data = [('Connected', 'Connected Prop.')]
             reg_record = region_df[(region_df['patient'] == pat) & (region_df['region'] == region)].iloc[0]
-            table_1_data.append((reg_record.connected,))
+            table_1_data.append((reg_record.connected, f"{reg_record['connected-p']:.2f}"))
             for i, row in enumerate(table_1_data):
                 if i == 0:
                     pdf.set_font('Helvetica', 'B', 12)
@@ -320,7 +338,7 @@ def create_region_figures(
             img_coords = ((img_l_margin + img_width, img_t_margin), (img_l_margin, img_t_margin + img_height), (img_l_margin + img_width, img_t_margin + img_height))
             for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                plot_patient_regions(dataset, pat, centre_on=region, colours=['y'], crop=region, regions=region, view=view, window=(3000, 500))
+                plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, extent=True, regions=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

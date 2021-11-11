@@ -18,7 +18,7 @@ def plot_patient_regions(
     alpha: float = 0.2,
     aspect: float = None,
     axes: bool = True,
-    centre_on: Optional[str] = None,
+    centre_of: Optional[str] = None,
     crop: types.Box2D = None,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
@@ -37,7 +37,7 @@ def plot_patient_regions(
     use_mapping: bool = True,
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
-    assert_position(centre_on, slice_idx)
+    assert_position(centre_of, slice_idx)
 
     # Update font size.
     plt.rcParams.update({
@@ -58,9 +58,9 @@ def plot_patient_regions(
     spacing = pat.ct_spacing()
 
     # Get slice index if requested OAR centre.
-    if centre_on:
+    if centre_of:
         # Load region data.
-        label = pat.region_data(regions=centre_on, use_mapping=use_mapping)[centre_on]
+        label = pat.region_data(regions=centre_of, use_mapping=use_mapping)[centre_of]
         com = np.round(center_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]
@@ -70,7 +70,7 @@ def plot_patient_regions(
             slice_idx = com[0]
     else:
         if not slice_idx: 
-            raise ValueError(f"Either 'centre_on' or 'slice_idx' must be given.")
+            raise ValueError(f"Either 'centre_of' or 'slice_idx' must be given.")
 
     # Load CT data.
     ct_data = pat.ct_data()

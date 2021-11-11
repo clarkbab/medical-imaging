@@ -15,8 +15,16 @@ class NIFTIPatient:
         self,
         dataset: 'NIFTIDataset',
         id: str):
+        self._global_id = f"{dataset} - {id}"
         self._dataset = dataset
         self._id = id
+    
+    @property
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
 
     def list_regions(
         self,
