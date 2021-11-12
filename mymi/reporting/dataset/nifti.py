@@ -13,7 +13,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi import logging
 from mymi.plotter.dataset.nifti import plot_patient_regions
-from mymi.postprocessing import get_extent, get_largest_cc
+from mymi.postprocessing import get_extent, get_largest_cc, get_object_summary
 from mymi import types
 
 def get_region_summary(
@@ -266,17 +266,13 @@ def create_region_figures(
     region_df = add_region_summary_outliers(region_df, columns)
 
     # Set PDF margins.
-    table_1_t_padding = 25
-    table_1_l_padding = 5
-    table_2_t_padding = 55
-    table_2_l_padding = 5
     img_t_margin = 30
     img_l_margin = 5
     img_width = 100
     img_height = 100
 
     logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'...")
-    for region in tqdm(regions):
+    for region in tqdm(regions[:1]):
         # Create PDF.
         pdf = FPDF()
         pdf.set_section_title_styles(
@@ -285,68 +281,84 @@ def create_region_figures(
                 font_style='B',
                 font_size_pt=24,
                 color=0,
-                t_margin=5,
-                l_margin=15,
+                t_margin=3,
+                l_margin=12,
+                b_margin=0
+            ),
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=18,
+                color=0,
+                t_margin=12,
+                l_margin=12,
                 b_margin=0
             )
         ) 
 
         for pat in tqdm(pats, leave=False):
+            if pat != 'HN1102':
+                continue
+
             # Skip if patient doesn't have region.
             patient = set.patient(pat)
             if not patient.has_region(region):
                 continue
 
-            # Add patient/region title.
+            # Start info section.
             pdf.add_page()
             pdf.start_section(pat)
+            pdf.start_section('Info', level=1)
 
-            # Save table 1.
-            num_cols = 2
-            cell_height = 2 * pdf.font_size
-            cell_width = (img_width - 2 * table_1_l_padding) / num_cols
-            table_1_data = [('Connected', 'Connected Prop.')]
-            reg_record = region_df[(region_df['patient'] == pat) & (region_df['region'] == region)].iloc[0]
-            table_1_data.append((reg_record.connected, f"{reg_record['connected-p']:.2f}"))
-            for i, row in enumerate(table_1_data):
+            # Add table.
+            table_t_margin = 45
+            table_l_margin = 12
+            table_cols = 5
+            table_line_height = 2 * pdf.font_size
+            table_col_widths = (15, 35, 30, 45, 45)
+            table_width = 180
+            table_data = [('ID', 'Volume [vox]', 'Volume [p]', 'Extent Centre [vox]', 'Extent Width [vox]')]
+            obj_df = get_object_summary(dataset, pat, region)
+            for i, row in obj_df.iterrows():
+                table_data.append((
+                    str(i),
+                    str(row['volume-vox']),
+                    f"{row['volume-p']:.3f}",
+                    row['extent-centre-vox'],
+                    row['extent-width-vox']
+                ))
+            for i, row in enumerate(table_data):
                 if i == 0:
                     pdf.set_font('Helvetica', 'B', 12)
                 else:
                     pdf.set_font('Helvetica', '', 12)
-                pdf.set_xy(img_l_margin + table_1_l_padding, img_t_margin + table_1_t_padding + i * cell_height)
-                for value in row:
-                    pdf.cell(cell_width, cell_height, str(value), border=1)
+                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                for j, value in enumerate(row):
+                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
 
-            # Save table 2.
-            num_cols = 4
-            cell_width = (img_width - 2 * table_2_l_padding) / num_cols
-            table_2_data = [('Axis', 'Outlier', 'Extent', 'Num. IQR')]
-            axes = ['x', 'y', 'z']
-            for axis, column in zip(axes, columns):
-                table_2_data.append((axis, reg_record[f'{column}-out-dir'], f'{reg_record[column]:.2f}', f"{reg_record[f'{column}-out-iqr']:.2f}"))
-            for i, row in enumerate(table_2_data):
-                if i == 0:
-                    pdf.set_font('Helvetica', 'B', 12)
-                else:
-                    pdf.set_font('Helvetica', '', 12)
-                pdf.set_xy(img_l_margin + table_2_l_padding, img_t_margin + table_2_t_padding + i * cell_height)
-                for value in row:
-                    pdf.cell(cell_width, cell_height, str(value), border=1)
+            for i, row in obj_df.iterrows():
+                # Start object section.
+                pdf.add_page()
+                pdf.start_section(f'Object: {i}', level=1)
 
-            # Save images.
-            views = ['axial', 'coronal', 'sagittal']
-            img_coords = ((img_l_margin + img_width, img_t_margin), (img_l_margin, img_t_margin + img_height), (img_l_margin + img_width, img_t_margin + img_height))
-            for view, page_coord in zip(views, img_coords):
-                # Set figure.
-                plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, extent=True, regions=region, view=view, window=(3000, 500))
+                # Save images.
+                views = ['axial', 'coronal', 'sagittal']
+                img_coords = (
+                    (img_l_margin, img_t_margin),
+                    (img_l_margin + img_width, img_t_margin),
+                    (img_l_margin, img_t_margin + img_height)
+                )
+                for view, page_coord in zip(views, img_coords):
+                    # Set figure.
+                    plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, crop_margin=40, regions=region, show_extent=True, view=view, window=(3000, 500))
 
-                # Save temp file.
-                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plt.savefig(filepath)
-                plt.close()
+                    # Save temp file.
+                    filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                    plt.savefig(filepath)
+                    plt.close()
 
-                # Add image to report.
-                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+                    # Add image to report.
+                    pdf.image(filepath, *page_coord, w=img_width, h=img_height)
 
         # Save PDF.
         filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 

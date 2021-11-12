@@ -171,8 +171,7 @@ class TrainingPartition:
             os.makedirs(region_path)
 
         # Save label.
-        filename = f"{index:0{FILENAME_NUM_DIGITS}}.npz"
-        filepath = os.path.join(region_path, filename)
+        filepath = os.path.join(region_path, f'{index}.npz')
         f = open(filepath, 'wb')
         np.savez_compressed(f, data=data)
 

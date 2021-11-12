@@ -39,9 +39,14 @@ def crop_or_pad_3D(
     kwargs:
         fill: the default fill value for padded elements.
     """
+    min, max = bounding_box
+    for i in range(3):
+        width = max[i] - min[i]
+        if width <= 0:
+            raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
+
     # Perform padding.
     size = np.array(input.shape)
-    min, max = bounding_box
     pad_min = (-np.array(min)).clip(0)
     pad_max = (max - size).clip(0)
     padding = tuple(zip(pad_min, pad_max))

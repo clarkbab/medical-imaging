@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage.measurements import center_of_mass
 import torchio
-from typing import List, Literal, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.postprocessing import get_extent, get_extent_centre
@@ -18,14 +18,12 @@ def plot_patient_regions(
     pat_id: str,
     alpha: float = 0.2,
     aspect: float = None,
-    axes: bool = True,
+    axis = None,
     cca: bool = False,
     centre_of: Optional[str] = None,
     colours: Optional[List[str]] = None,
-    connected_extent: bool = False,
     crop: Optional[Union[str, Tuple[Tuple[int, int], Tuple[int, int]]]] = None,
-    crop_margin: float = 100,
-    extent: bool = False,
+    crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (8, 8),
     font_size: int = 10,
@@ -36,14 +34,24 @@ def plot_patient_regions(
     other_ds: str = None,
     other_regions: Union[str, Sequence[str]] = 'all',
     perimeter: bool = True,
+    postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     regions: Union[str, Sequence[str]] = 'all',
     show: bool = True,
+    show_axis_ticks: bool = True,
+    show_axis_xlabel: bool = True,
+    show_axis_ylabel: bool = True,
+    show_extent: bool = False,
     slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = None) -> None:
     assert_position(centre_of, extent_of, slice_idx)
+
+    # Create plot figure/axis.
+    if not axis:
+        plt.figure(figsize=figsize)
+        axis = plt.gca()
 
     # Update font size.
     plt.rcParams.update({
@@ -67,6 +75,8 @@ def plot_patient_regions(
     if centre_of:
         # Get extent centre.
         label = pat.region_data(regions=centre_of)[centre_of]
+        if postproc:
+            label = postproc(label)
         extent_centre = get_extent_centre(label)
 
         # Set slice index.
@@ -80,6 +90,8 @@ def plot_patient_regions(
         # Get extent.
         eo_region, eo_end = extent_of
         label = pat.region_data(regions=eo_region)[eo_region]
+        if postproc:
+            label = postproc(label)
         extent = get_extent(label)
 
         # Set slice index.
@@ -96,6 +108,8 @@ def plot_patient_regions(
     # Load region data.
     if regions is not None:
         region_data = pat.region_data(regions=regions)
+        if postproc:
+            region_data = dict(((r, postproc(d)) for r, d in region_data.items()))
 
         # Load other regions.
         if other_ds:
@@ -109,34 +123,37 @@ def plot_patient_regions(
     # Get slice data.
     ct_slice_data = get_slice(ct_data, slice_idx, view)
 
-    # If crop region specified, convert to 2D box.
-    if type(crop) == str:
-        # Get 3D crop box.
-        crop_region_data = region_data[crop]
-        extent = get_extent(crop_region_data)
+    # Convert to box representation.
+    if crop:
+        # Check if crop is region name.
+        if type(crop) == str:
+            # Get 3D crop box.
+            crop_region_data = region_data[crop]
+            extent = get_extent(crop_region_data)
 
-        # Add crop margin.
-        crop_margin = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
-        min, max = extent
-        min = tuple(np.array(min) - crop_margin)
-        max = tuple(np.array(max) + crop_margin)
+            # Add crop margin.
+            crop_margin_vox = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
+            min, max = extent
+            min = tuple(np.array(min) - crop_margin_vox)
+            max = tuple(np.array(max) + crop_margin_vox)
 
-        # Select 2D component.
-        if view == 'axial':
-            min = (min[0], min[1])
-            max = (max[0], max[1])
-        elif view == 'coronal':
-            min = (min[0], min[2])
-            max = (max[0], max[2])
-        elif view == 'sagittal':
-            min = (min[1], min[2])
-            max = (max[1], max[2])
-        crop = (min, max)
+            # Select 2D component.
+            if view == 'axial':
+                min = (min[0], min[1])
+                max = (max[0], max[1])
+            elif view == 'coronal':
+                min = (min[0], min[2])
+                max = (max[0], max[2])
+            elif view == 'sagittal':
+                min = (min[1], min[2])
+                max = (max[1], max[2])
+            crop = (min, max)
+        else:
+            crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
 
     # Perform crop.
     if crop:
         # Convert crop to 2D box.
-        crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
         ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
@@ -156,28 +173,27 @@ def plot_patient_regions(
         vmin, vmax = ct_data.min(), ct_data.max()
 
     # Plot CT data.
-    plt.figure(figsize=figsize)
-    plt.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
+    axis.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
-    # Add axis labels.
-    if axes:
-        # Determine voxel spacing per axis.
-        if view == 'axial':
-            spacing_x = spacing[0]
-            spacing_y = spacing[1]
-        elif view == 'coronal':
-            spacing_x = spacing[0]
-            spacing_y = spacing[2]
-        elif view == 'sagittal':
-            spacing_x = spacing[1]
-            spacing_y = spacing[2]
+    # Determine voxel spacing per axis.
+    if view == 'axial':
+        spacing_x = spacing[0]
+        spacing_y = spacing[1]
+    elif view == 'coronal':
+        spacing_x = spacing[0]
+        spacing_y = spacing[2]
+    elif view == 'sagittal':
+        spacing_x = spacing[1]
+        spacing_y = spacing[2]
 
-        plt.xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
-        plt.ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
+    if show_axis_xlabel:
+        axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+    if show_axis_ylabel:
+        axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, latex, perimeter, view, cca=cca, colours=colours, connected_extent=connected_extent, crop=crop, extent=extent)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         if other_ds:
             # Prepend other dataset name.
@@ -188,13 +204,13 @@ def plot_patient_regions(
 
         # Create legend.
         if legend and (show_legend or (other_ds and other_show_legend)): 
-            plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+            plt_legend = axis.legend(loc=legend_loc, prop={'size': legend_size})
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
 
     # Show axis markers.
-    show_axes = 'on' if axes else 'off'
-    plt.axis(show_axes)
+    show_axes = 'on' if show_axis_ticks else 'off'
+    axis.axis(show_axes)
 
     # Determine number of slices.
     if view == 'axial':
@@ -215,7 +231,7 @@ def plot_patient_regions(
         if latex:
             title_text = _escape_latex(title_text)
 
-        plt.title(title_text)
+        axis.set_title(title_text)
 
     if show:
         plt.show()
@@ -226,7 +242,6 @@ def plot_patient_regions(
                 "font.family": rc_params['font.family'],
                 'text.usetex': rc_params['text.usetex']
             })
-
 
 def plot_patient_localiser_prediction(
     dataset: str,

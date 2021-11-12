@@ -281,11 +281,12 @@ def plot_regions(
     latex: bool,
     perimeter: bool,
     view: types.PatientView,
+    axis = None,
     cca: bool = False,
     connected_extent: bool = False,
     crop: Optional[types.Box2D] = None,
-    extent: bool = False,
-    colours: Optional[List[str]] = None) -> bool:
+    colours: Optional[List[str]] = None,
+    show_extent: bool = False) -> bool:
     """
     effect: adds regions to the plot.
     returns: whether the legend should be shown.
@@ -293,6 +294,9 @@ def plot_regions(
         region_data: the region data to plot.
         others: see 'plot_patient_regions'.
     """
+    if not axis:
+        axis = plt.gca()
+
     # Plot each region.
     show_legend = False
     for i, (region, data) in enumerate(region_data.items()):
@@ -313,7 +317,7 @@ def plot_regions(
             slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
 
         # Plot extent.
-        if extent:
+        if show_extent:
             extent = get_extent(data)
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
@@ -336,11 +340,11 @@ def plot_regions(
             slice_data = get_largest_cc(slice_data)
 
         # Plot region.
-        plt.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
+        axis.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
         label = _escape_latex(region) if latex else region
-        plt.plot(0, 0, c=colour, label=label)
+        axis.plot(0, 0, c=colour, label=label)
         if perimeter:
-            plt.contour(slice_data, colors=[colour], levels=[0.5])
+            axis.contour(slice_data, colors=[colour], levels=[0.5])
 
         # Set ticks.
         if crop:
@@ -348,10 +352,12 @@ def plot_regions(
             width = tuple(np.array(max) - min)
             xticks = np.linspace(0, 10 * np.floor(width[0] / 10), 5).astype(int)
             xtick_labels = xticks + min[0]
-            plt.xticks(ticks=xticks, labels=xtick_labels)
+            axis.set_xticks(xticks)
+            axis.set_xticklabels(xtick_labels)
             yticks = np.linspace(0, 10 * np.floor(width[1] / 10), 5).astype(int)
             ytick_labels = yticks + min[1]
-            plt.yticks(ticks=yticks, labels=ytick_labels)
+            axis.set_yticks(yticks)
+            axis.set_yticklabels(ytick_labels)
 
     return show_legend
 

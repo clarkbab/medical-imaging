@@ -44,7 +44,6 @@ class TestHausdorff(TestCase):
         assert a_spacing == b_spacing
 
         p_hd = percentile_hausdorff_distance(a, b, a_spacing, p)
-        print(p_hd)
         assert_almost_equal(p_hd, 1, decimal=6) 
 
     def _load_asset(

@@ -172,7 +172,7 @@ def convert_to_training(
                 train_ds.partition(partition).create_label(index, region, label)
 
     # Indicate success.
-    _indicate_success(nifti_ds, '__CONVERT_TO_TRAINING_SUCCESS__')
+    _indicate_success(train_ds, '__CONVERT_TO_TRAINING_SUCCESS__')
 
 def _should_dilate(
     region: str,

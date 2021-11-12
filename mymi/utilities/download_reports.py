@@ -10,5 +10,4 @@ def download_reports(datasets: List[str]) -> None:
         dest_path = f'/mnt/c/Users/BACLARK/Documents/Research/Topics/Transfer\ learning/Reports/{dataset}'
         os.makedirs(dest_path, exist_ok=True)
         cmd = f'scp spartan:{report_path} {dest_path}'
-        print(cmd)
         os.system(cmd)
