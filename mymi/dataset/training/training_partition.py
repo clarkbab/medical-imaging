@@ -19,7 +19,7 @@ class TrainingPartition:
             dataset: the dataset name.
             name: the partition name.
         """
-        self._global_id = f"{dataset}, Partition: {name}"
+        self._global_id = f"{dataset} - {name}"
         self._dataset = dataset
         self._name = name
         self._path = os.path.join(dataset.path, 'data', name)

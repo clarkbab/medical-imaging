@@ -662,18 +662,8 @@ def get_slice(
     return slice_data
 
 def get_aspect_ratio(
-    id: str,
     view: types.PatientView,
-    spacing: types.ImageSpacing3D,
-    clear_cache: bool = False) -> float:
-    """
-    returns: the aspect ratio required for the patient view.
-    args:
-        id: the patient ID.
-        view: the view plane.
-    kwargs:
-        clear_cache: forces the cache to clear.
-    """
+    spacing: types.ImageSpacing3D) -> float:
     # Get the aspect ratio.
     if view == 'axial':
         aspect = spacing[1] / spacing[0]

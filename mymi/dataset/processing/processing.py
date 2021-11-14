@@ -12,7 +12,7 @@ import sys
 from typing import Optional
 
 from mymi import logging
-from mymi.transforms import centre_crop_or_pad_3D, resample_3D
+from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
 
 from ..dataset import DatasetType
@@ -122,15 +122,14 @@ def convert_to_training(
     partitions = ['train', 'validation', 'test']
     partition_pats = [train_pats, validation_pats, test_pats]
     for partition, pats in zip(partitions, partition_pats):
-        logging.info(f"Writing '{partition}' patients..")
-
+        logging.info(f"Creating partition '{partition}'...")
         # TODO: implement normalisation.
 
         # Create partition.
-        train_ds.create_partition(partition)
+        part = train_ds.create_partition(partition)
 
         # Write each patient to partition.
-        for pat in tqdm(pats):
+        for i, pat in enumerate(tqdm(pats, leave=False)):
             # Get available requested regions.
             if dataset.type == DatasetType.DICOM:
                 kwargs = { 'use_mapping': use_mapping }
@@ -157,19 +156,19 @@ def convert_to_training(
                     if fov[axis] > new_fov[axis]:
                         logging.error(f"Patient FOV larger '{fov}', larger than new FOV '{loc_fov}' for axis '{axis}', losing information.")
 
-                input = centre_crop_or_pad_3D(input, size, fill=np.min(input))
-                labels = dict((r, centre_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
+                input = top_crop_or_pad_3D(input, size, fill=np.min(input))
+                labels = dict((r, top_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())
 
             # Dilate the labels if requested.
             if dilate_regions:
                 labels = dict((r, binary_dilation(d, iterations=3) if _should_dilate(r, dilate_regions) else d) for r, d in labels.items())
 
             # Save input data.
-            index = train_ds.partition(partition).create_input(pat, input)
+            _create_training_input(part, pat, i, input)
 
             # Save label data.
             for region, label in labels.items():
-                train_ds.partition(partition).create_label(index, region, label)
+                _create_training_label(part, pat, i, region, label)
 
     # Indicate success.
     _indicate_success(train_ds, '__CONVERT_TO_TRAINING_SUCCESS__')
@@ -193,3 +192,36 @@ def _indicate_success(
     flag: str) -> None:
     path = os.path.join(dataset.path, flag)
     Path(path).touch()
+
+def _create_training_input(
+    partition: 'TrainingPartition',
+    patient: str,
+    index: int,
+    data: np.ndarray) -> None:
+    # Save the input data.
+    filepath = os.path.join(partition.path, 'inputs', f'{index}.npz')
+    if not os.path.exists(os.path.dirname(filepath)):
+        os.makedirs(os.path.dirname(filepath))
+    np.savez_compressed(filepath, data=data)
+
+    # Append to manifest.
+    manifest_path = os.path.join(partition.dataset.path, 'manifest.csv')
+    if not os.path.exists(manifest_path):
+        with open(manifest_path, 'w') as f:
+            f.write('partition,patient-id,index\n')
+
+    # Append line to manifest. 
+    with open(manifest_path, 'a') as f:
+        f.write(f"{partition.name},{patient},{index}\n")
+
+def _create_training_label(
+    partition: 'TrainingPartition',
+    patient: str,
+    index: int,
+    region: str,
+    data: np.ndarray) -> None:
+    # Save the label data.
+    filepath = os.path.join(partition.path, 'labels', f'{index}.npz')
+    if not os.path.exists(os.path.dirname(filepath)):
+        os.makedirs(os.path.dirname(filepath))
+    np.savez_compressed(filepath, data=data)

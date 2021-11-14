@@ -15,9 +15,16 @@ class TrainingSample:
         index: int):
         if index not in partition.list_samples():
             raise ValueError(f"Sample '{index}' not found for partition '{partition.name}', dataset '{partition.dataset.description}'.")
-
+        self._global_id = f'{partition} - {index}'
         self._partition = partition
         self._index = index
+
+    @property
+    def description(self) -> str:
+        return self._global_id
+
+    def __str__(self) -> str:
+        return self._global_id
 
     @property
     def patient_id(self) -> str:
@@ -34,8 +41,7 @@ class TrainingSample:
         all_regions = os.listdir(filepath)
 
         def filter_fn(region):
-            filename = f"{self._index:0{FILENAME_NUM_DIGITS}}.npz"
-            filepath = os.path.join(self._partition._path, 'labels', region, filename)
+            filepath = os.path.join(self._partition._path, 'labels', region, f'{self._index}.npz')
             if os.path.exists(filepath):
                 return True
             else:
@@ -54,8 +60,7 @@ class TrainingSample:
             index: the sample index to load.
         """
         # Load the input data.
-        filename = f"{self._index:0{FILENAME_NUM_DIGITS}}.npz"
-        filepath = os.path.join(self._partition._path, 'inputs', filename)
+        filepath = os.path.join(self._partition._path, 'inputs', f'{self._index}.npz')
         data = np.load(filepath)['data']
         return data
 
@@ -74,8 +79,7 @@ class TrainingSample:
         # Load the label data.
         data = {}
         for region in regions:
-            filename = f"{self._index:0{FILENAME_NUM_DIGITS}}.npz"
-            filepath = os.path.join(self._partition._path, 'labels', region, filename)
+            filepath = os.path.join(self._partition._path, 'labels', region, f'{self._index}.npz')
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self._index}', partition '{self._partition.name}', dataset '{self._partition._dataset.description}'.")
             label = np.load(filepath)['data']

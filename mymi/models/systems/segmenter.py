@@ -148,6 +148,18 @@ class Segmenter(pl.LightningModule):
             for axis, com_ax in enumerate(com):
                 slices = tuple([com_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
                 x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+
+                # Fix orientation.
+                if axis == 0 or axis == 1:
+                    x_img = np.rot90(y_img, k=-1)
+                    y_img = np.rot90(y_hat_img, k=-1)
+                    y_hat_img = np.rot90(x_img, k=-1)
+                elif axis == 2:
+                    x_img = np.transpose(x_img)
+                    y_img = np.transpose(y_img) 
+                    y_hat_img = np.transpose(y_hat_img)
+
+                # Send image.
                 image = wandb.Image(
                     x_img,
                     caption=sample_desc,

@@ -272,7 +272,7 @@ def create_region_figures(
     img_height = 100
 
     logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'...")
-    for region in tqdm(regions[:1]):
+    for region in tqdm(regions):
         # Create PDF.
         pdf = FPDF()
         pdf.set_section_title_styles(

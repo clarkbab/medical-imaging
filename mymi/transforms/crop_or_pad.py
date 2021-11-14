@@ -85,3 +85,22 @@ def centre_crop_or_pad_3D(
     output = crop_or_pad_3D(input, bounding_box, fill=fill)
 
     return output
+
+def top_crop_or_pad_3D(
+    input: np.ndarray,
+    size: types.ImageSize3D,
+    fill: float = 0) -> np.ndarray:
+    # Centre crop x/y axes.
+    to_crop = input.shape[:2] - np.array(size[:2])
+    xy_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    xy_max = xy_min + size[:2]
+
+    # Top crop z axis to maintain HN region.
+    z_max = input.shape[2]
+    z_min = z_max - size[2]
+
+    # Perform crop or padding.
+    bounding_box = ((*xy_min, z_min), (*xy_max, z_max)) 
+    output = crop_or_pad_3D(input, bounding_box, fill=fill)
+
+    return output

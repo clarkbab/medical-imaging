@@ -15,7 +15,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASETS="['HN1-LOC-HIGH','HNPCT-LOC-HIGH','HNSCC-LOC-HIGH','OPC-LOC-HIGH']"
+DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
 BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
 REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
 REGION=${BASH_REGIONS[$SLURM_ARRAY_TASK_ID]}
@@ -25,9 +25,9 @@ NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
-RESUME=True
-RESUME_CHECKPOINT='last'
-RUN_NAME="public-high-400epochs"
+RESUME=False
+RESUME_CHECKPOINT=None
+RUN_NAME="public-large-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

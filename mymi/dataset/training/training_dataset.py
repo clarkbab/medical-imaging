@@ -88,21 +88,3 @@ class TrainingDataset(Dataset):
         self,
         name: types.TrainingPartition) -> TrainingPartition:
         return TrainingPartition(self, name)
-
-    def append_to_manifest(
-        self,
-        partition: str,
-        index: int,
-        id: str) -> None:
-        """
-        effect: adds a line to the manifest.
-        """
-        # Create manifest if not present.
-        manifest_path = os.path.join(self._path, 'manifest.csv')
-        if not os.path.exists(manifest_path):
-            with open(manifest_path, 'w') as f:
-                f.write('partition,patient-id,index\n')
-
-        # Append line to manifest. 
-        with open(manifest_path, 'a') as f:
-            f.write(f"{partition},{id},{index}\n")

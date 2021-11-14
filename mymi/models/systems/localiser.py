@@ -5,11 +5,12 @@ import torch
 from torch import nn
 from torch.optim import SGD
 from typing import Dict, List, Optional, Tuple
+import wandb
 
 from mymi import config
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_distances
-from mymi.postprocessing import get_batch_largest_cc
+from mymi.postprocessing import get_batch_largest_cc, get_extent_centre
 from mymi import types
 
 from ..networks import UNet
@@ -181,10 +182,22 @@ class Localiser(pl.LightningModule):
                 1: 'foreground'
             }
             x_vol, y_vol, y_hat_vol = x[0, 0].cpu().numpy(), y[0], y_hat[0]
-            com = list(np.round(center_of_mass(y_vol)).astype(int))
-            for axis, com_ax in enumerate(com):
-                slices = tuple([com_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
+            coe = list(np.round(get_extent_centre(y_vol)).astype(int))
+            for axis, coe_ax in enumerate(coe):
+                slices = tuple([coe_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
                 x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+
+                # Fix orientation.
+                if axis == 0 or axis == 1:
+                    x_img = np.rot90(y_img, k=-1)
+                    y_img = np.rot90(y_hat_img, k=-1)
+                    y_hat_img = np.rot90(x_img, k=-1)
+                elif axis == 2:
+                    x_img = np.transpose(x_img)
+                    y_img = np.transpose(y_img) 
+                    y_hat_img = np.transpose(y_hat_img)
+
+                # Send image.
                 image = wandb.Image(
                     x_img,
                     caption=sample_desc,
