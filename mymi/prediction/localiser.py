@@ -6,13 +6,15 @@ from typing import Optional, Tuple, Union
 from mymi.dataset import Dataset
 from mymi.models.systems import Localiser
 from mymi.postprocessing import get_largest_cc
-from mymi.transforms import centre_crop_or_pad_3D, resample_3D
+from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
 
 def get_localiser_prediction(
     dataset: Dataset,
     pat_id: types.PatientID,
     localiser: types.Model,
+    localiser_size: types.ImageSize3D,
+    localiser_spacing: types.ImageSpacing3D,
     clear_cache: bool = False,
     device: torch.device = torch.device('cpu'),
     return_seg: bool = False) -> Union[Optional[types.Box3D], Tuple[Optional[types.Box3D], np.ndarray]]:
@@ -33,8 +35,6 @@ def get_localiser_prediction(
         localiser = Localiser.load(*localiser)
     localiser.eval()
     localiser.to(device)
-    localiser_size = (128, 128, 96)
-    localiser_spacing = (4, 4, 6.625)
 
     # Get the patient CT data and spacing.
     patient = dataset.patient(pat_id)
@@ -47,7 +47,7 @@ def get_localiser_prediction(
     pre_crop_size = input.shape
 
     # Shape the image so it'll fit the network.
-    input = centre_crop_or_pad_3D(input, localiser_size, fill=input.min())
+    input = top_crop_or_pad_3D(input, localiser_size, fill=input.min())
 
     # Get localiser result.
     input = torch.Tensor(input)
@@ -60,7 +60,7 @@ def get_localiser_prediction(
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
     # Reverse the crop/pad.
-    pred = centre_crop_or_pad_3D(pred, downsampled_size)
+    pred = top_crop_or_pad_3D(pred, downsampled_size)
 
     # Upsample to full resolution.
     pred = resample_3D(pred, localiser_spacing, spacing)

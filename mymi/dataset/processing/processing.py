@@ -221,7 +221,7 @@ def _create_training_label(
     region: str,
     data: np.ndarray) -> None:
     # Save the label data.
-    filepath = os.path.join(partition.path, 'labels', f'{index}.npz')
+    filepath = os.path.join(partition.path, 'labels', region, f'{index}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
