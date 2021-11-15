@@ -98,7 +98,11 @@ class LoaderDataset(Dataset):
         """
         # Load data.
         p_idx, s_idx = self._index_map[index]
-        input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._regions)
+        part = self._partitions[p_idx]
+        input, label = part.sample(s_idx).pair(regions=self._regions)
+
+        # Get description.
+        desc = f'{part.dataset.name}:{part.name}:{s_idx}'
 
         # Perform transform.
         if self._transform:
@@ -141,4 +145,4 @@ class LoaderDataset(Dataset):
             input = input.astype(np.single)
         label = dict((r, d.astype(np.bool)) for r, d in label.items())
 
-        return input, label
+        return desc, input, label

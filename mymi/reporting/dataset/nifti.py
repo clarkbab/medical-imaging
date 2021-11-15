@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
 from typing import Callable, Dict, List
 from uuid import uuid1
@@ -13,7 +14,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi import logging
 from mymi.plotter.dataset.nifti import plot_patient_regions
-from mymi.postprocessing import get_extent, get_largest_cc, get_object_summary
+from mymi.postprocessing import get_extent, get_extent_centre, get_largest_cc, get_object, one_hot_encode
 from mymi import types
 
 def get_region_summary(
@@ -27,9 +28,9 @@ def get_region_summary(
         'region': str,
         'connected': bool,
         'connected-p': float,
-        'conneted-extent-mm-x': float,
-        'conneted-extent-mm-y': float,
-        'conneted-extent-mm-z': float,
+        'connected-extent-mm-x': float,
+        'connected-extent-mm-y': float,
+        'connected-extent-mm-z': float,
         'extent-mm-x': float,
         'extent-mm-y': float,
         'extent-mm-z': float
@@ -253,7 +254,7 @@ def create_region_figures(
     # Get regions.
     if type(regions) == str:
         if regions == 'all':
-            regions = list(set.list_regions().region.unique())
+            regions = list(sorted(set.list_regions().region.unique()))
         else:
             regions = [regions]
 
@@ -297,9 +298,6 @@ def create_region_figures(
         ) 
 
         for pat in tqdm(pats, leave=False):
-            if pat != 'HN1102':
-                continue
-
             # Skip if patient doesn't have region.
             patient = set.patient(pat)
             if not patient.has_region(region):
@@ -350,7 +348,9 @@ def create_region_figures(
                 )
                 for view, page_coord in zip(views, img_coords):
                     # Set figure.
-                    plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, crop_margin=40, regions=region, show_extent=True, view=view, window=(3000, 500))
+                    def postproc(a: np.ndarray):
+                        return get_object(a, i)
+                    plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -367,3 +367,49 @@ def create_region_figures(
 
 def _hash_regions(regions: types.PatientRegions) -> str:
     return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()
+
+def get_object_summary(
+    dataset: str,
+    patient: str,
+    region: str) -> pd.DataFrame:
+    pat = ds.get(dataset, 'nifti').patient(patient)
+    spacing = pat.ct_spacing()
+    label = pat.region_data(regions=region)[region]
+    objs, num_objs = label_objects(label, structure=np.ones((3, 3, 3)))
+    objs = one_hot_encode(objs)
+    
+    cols = {
+        'extent-centre-vox': str,
+        'extent-width-vox': str,
+        'volume-mm3': float,
+        'volume-p': float,
+        'volume-vox': int
+    }
+    df = pd.DataFrame(columns=cols.keys())
+    
+    tot_voxels = label.sum()
+    for i in range(num_objs):
+        obj = objs[:, :, :, i]
+        data = {}
+
+        # Get extent.
+        min, max = get_extent(obj)
+        width = tuple(np.array(max) - min)
+        data['extent-width-vox'] = str(width)
+        
+        # Get centre of extent.
+        extent_centre = get_extent_centre(obj)
+        data['extent-centre-vox'] = str(extent_centre)
+
+        # Add volume.
+        vox_volume = spacing[0] * spacing[1] * spacing[2]
+        num_voxels = obj.sum()
+        volume = num_voxels * vox_volume
+        data['volume-vox'] = num_voxels
+        data['volume-p'] = num_voxels / tot_voxels
+        data['volume-mm3'] = volume
+
+        df = df.append(data, ignore_index=True)
+
+    df = df.astype(cols)
+    return df

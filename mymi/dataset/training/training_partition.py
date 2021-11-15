@@ -75,10 +75,11 @@ class TrainingPartition:
         """
         path = os.path.join(self._path, 'inputs')
         if os.path.exists(path):
-            indices = [int(f.replace('.npz', '')) for f in sorted(os.listdir(path))]
+            indices = list(sorted([int(f.replace('.npz', '')) for f in os.listdir(path)]))
 
             # Filter on sample regions.
             indices = list(filter(self._filter_sample_by_regions(regions), indices))
+
         else:
             indices = []
         return indices
@@ -119,61 +120,6 @@ class TrainingPartition:
         returns: the partition sample.
         """
         return TrainingSample(self, index)
-
-    def create_input(
-        self,
-        id: str,
-        data: np.ndarray) -> int:
-        """
-        effect: creates an input sample.
-        returns: the index of the sample.
-        args:
-            id: the object ID.
-            data: the data to save.
-        """
-        # Get next index.
-        path = os.path.join(self._path, 'inputs')
-        if os.path.exists(path):
-            inputs = os.listdir(path)
-            if len(inputs) == 0:
-                index = -1
-            else:
-                index = int(list(sorted(inputs))[-1].replace('.npz', '')) + 1
-        else:
-            os.makedirs(path)
-            index = 0
-
-        # Save the input data.
-        filename = f'{index}.npz'
-        filepath = os.path.join(path, filename)
-        np.savez_compressed(filepath, data=data)
-
-        # Update the manifest.
-        self._dataset.append_to_manifest(self._name, index, id)
-
-        return index
-
-    def create_label(
-        self,
-        index: int,
-        region: str,
-        data: np.ndarray) -> None:
-        """
-        effect: creates an input sample.
-        args:
-            pat_id: the patient ID to add to the manifest.
-            region: the region name.
-            data: the label data.
-        """
-        # Create region partition if it doesn't exist.
-        region_path = os.path.join(self._path, 'labels', region)
-        if not os.path.exists(region_path):
-            os.makedirs(region_path)
-
-        # Save label.
-        filepath = os.path.join(region_path, f'{index}.npz')
-        f = open(filepath, 'wb')
-        np.savez_compressed(f, data=data)
 
     def input_summary(self) -> pd.DataFrame:
         cols = {

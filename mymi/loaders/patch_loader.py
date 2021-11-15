@@ -8,6 +8,7 @@ from typing import List, Union
 
 from mymi import config
 from mymi.dataset.training import TrainingPartition
+from mymi.regions import get_patch_size
 from mymi.transforms import crop_or_pad_3D
 from mymi import types
 
@@ -15,7 +16,6 @@ class PatchLoader:
     @staticmethod
     def build(
         partitions: Union[TrainingPartition, List[TrainingPartition]],
-        patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,
         batch_size: int = 1,
@@ -28,7 +28,6 @@ class PatchLoader:
         returns: a data loader.
         args:
             partition: the dataset partition.
-            patch_size: the patch size.
             region: the single region to load patches for.
         kwargs:
             half_precision: load images at half precision.
@@ -43,7 +42,7 @@ class PatchLoader:
             partitions = [partitions]
 
         # Create dataset object.
-        ds = LoaderDataset(partitions, patch_size, region, half_precision=half_precision, p_foreground=p_foreground, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, region, half_precision=half_precision, p_foreground=p_foreground, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -52,7 +51,6 @@ class LoaderDataset(Dataset):
     def __init__(
         self,
         partitions: List[TrainingPartition],
-        patch_size: types.ImageSize3D,
         region: str,
         half_precision: bool = True,
         p_foreground: float = 1,
@@ -61,7 +59,6 @@ class LoaderDataset(Dataset):
         """
         args:
             partition: the dataset partition.
-            patch_size: the patch size.
             region: load patients with this region.
         kwargs:
             half_precision: load images at half precision.
@@ -72,7 +69,7 @@ class LoaderDataset(Dataset):
         self._half_precision = half_precision
         self._p_foreground = p_foreground
         self._partitions = partitions
-        self._patch_size = patch_size
+        self._patch_size = get_patch_size(region)
         self._region = region
         self._spacing = spacing
         self._transform = transform
@@ -110,8 +107,12 @@ class LoaderDataset(Dataset):
         """
         # Load data.
         p_idx, s_idx = self._index_map[index]
-        input, label = self._partitions[p_idx].sample(s_idx).pair(regions=self._region)
+        part = self._partitions[p_idx]
+        input, label = part.sample(s_idx).pair(regions=self._region)
         label = label[self._region]
+
+        # Get description.
+        desc = f'{part.dataset.name}:{part.name}:{s_idx}'
 
         # Perform transform.
         if self._transform:
@@ -161,7 +162,7 @@ class LoaderDataset(Dataset):
             input = input.astype(np.single)
         label = label.astype(np.bool)
 
-        return input, label
+        return desc, input, label
 
     def _get_foreground_patch(
         self,
@@ -196,12 +197,6 @@ class LoaderDataset(Dataset):
         self,
         input: np.ndarray,
         label: np.ndarray) -> np.ndarray:
-        """
-        returns: a random patch from the volume.
-        args:
-            input: the input data.
-            label: the label data.
-        """
         # Choose a random voxel.
         centre_voxel = tuple(map(np.random.randint, self._patch_size))
 

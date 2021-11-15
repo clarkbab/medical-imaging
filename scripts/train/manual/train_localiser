@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 
 DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
-REGION="Lens_L"
+REGION="BrachialPlexus_L"
 LOSS="dice"
 MODEL_NAME="localiser-$REGION"
 NUM_EPOCHS=400

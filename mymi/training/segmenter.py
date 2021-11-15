@@ -20,7 +20,6 @@ def train_segmenter(
     run_name: str,
     datasets: Union[str, List[str]],
     region: str,
-    patch_size: types.ImageSize3D,
     loss: str = 'dice',
     num_epochs: int = 200,
     num_gpus: int = 1,
@@ -63,11 +62,9 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader = PatchLoader.build(train_parts, patch_size, region, num_workers=num_workers, spacing=spacing, transform=transform)
-    val_loader = PatchLoader.build(val_parts, patch_size, region, num_workers=num_workers, shuffle=False)
-
-    # Create map from validation batch_idx to "dataset:partition:sample_idx".
-    index_map = dict([(batch_idx, f"{val_parts[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
+    logging.info(spacing)
+    train_loader = PatchLoader.build(train_parts, region, num_workers=num_workers, spacing=spacing, transform=transform)
+    val_loader = PatchLoader.build(val_parts, region, num_workers=num_workers, shuffle=False)
 
     # Get loss function.
     if loss == 'dice':
@@ -78,7 +75,6 @@ def train_segmenter(
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
     model = Segmenter(
-        index_map=index_map,
         loss=loss_fn,
         metrics=metrics,
         spacing=spacing)
@@ -120,7 +116,7 @@ def train_segmenter(
 
     # Perform training.
     trainer = Trainer(
-        accelerator='ddp',
+        # accelerator='ddp',
         callbacks=callbacks,
         gpus=list(range(num_gpus)),
         logger=logger,

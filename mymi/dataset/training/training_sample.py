@@ -74,7 +74,11 @@ class TrainingSample:
             regions: the regions to return.
         """
         # Convert regions to list.
-        regions = to_list(regions, self.list_regions())
+        if type(regions) == str:
+            if regions == 'all':
+                regions = list(sorted(self.list_regions))
+            else:
+                regions = [regions]
     
         # Load the label data.
         data = {}

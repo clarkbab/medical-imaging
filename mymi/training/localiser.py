@@ -69,9 +69,6 @@ def train_localiser(
         train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
     val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
 
-    # Create map from validation batch_idx to "dataset:partition:sample_idx".
-    index_map = dict([(batch_idx, f"{val_parts[part_idx].dataset.name}:validation:{sample_idx}") for batch_idx, (part_idx, sample_idx) in val_loader.dataset._index_map.items()])
-
     # Get loss function.
     if loss == 'dice':
         loss_fn = DiceLoss()
@@ -82,7 +79,6 @@ def train_localiser(
     metrics = ['dice', 'hausdorff', 'surface']
     model = Localiser(
         region,
-        index_map=index_map,
         loss=loss_fn,
         metrics=metrics,
         spacing=spacing)

@@ -138,12 +138,13 @@ def convert_to_training(
             pat_regions = dataset.patient(pat).list_regions(whitelist=regions, **kwargs)
 
             # Load data.
-            input = dataset.patient(pat).ct_data()
-            labels = dataset.patient(pat).region_data(regions=pat_regions)
+            patient = dataset.patient(pat)
+            input = patient.ct_data()
+            labels = patient.region_data(regions=pat_regions)
 
             # Resample data if requested.
             if spacing:
-                old_spacing = dataset.patient(pat).ct_spacing()
+                old_spacing = patient.ct_spacing()
                 input = resample_3D(input, old_spacing, spacing)
                 labels = dict((r, resample_3D(d, old_spacing, spacing)) for r, d in labels.items())
 
@@ -154,7 +155,7 @@ def convert_to_training(
                 new_fov = np.array(size) * spacing
                 for axis in range(len(size)):
                     if fov[axis] > new_fov[axis]:
-                        logging.error(f"Patient FOV larger '{fov}', larger than new FOV '{loc_fov}' for axis '{axis}', losing information.")
+                        logging.error(f"Patient FOV larger '{fov}', larger than new FOV '{new_fov}' for axis '{axis}', losing information for patient '{patient}'.")
 
                 input = top_crop_or_pad_3D(input, size, fill=np.min(input))
                 labels = dict((r, top_crop_or_pad_3D(d, size, fill=0)) for r, d in labels.items())

@@ -3,6 +3,7 @@ from typing import List
 from mymi import types
 
 from .colours import to_255, RegionColours
+from .patches import get_patch_size
 from .regions import Regions
 
 def is_region(name: str) -> bool:
@@ -31,3 +32,4 @@ def to_list(
             return [regions]
     else:
         return regions
+

@@ -19,30 +19,22 @@ class Localiser(pl.LightningModule):
     def __init__(
         self,
         region: str,
-        index_map: Optional[Dict[str, str]] = None,
         loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
         pretrained_model: Optional[pl.LightningModule] = None,
         spacing: Optional[types.ImageSpacing3D] = None):
-        """
-        args:
-            index_map: maps from dataloader index to sample index. Used to identify metrics for 
-                samples from validation batch.
-            spacing: required to calculate the shape-based metrics.
-        """
         super().__init__()
         if 'distances' in metrics and spacing is None:
             raise ValueError(f"Localiser requires 'spacing' when calculating 'distances' metric.")
         self._distances_delay = 50
         self._distances_interval = 20
-        self._index_map = index_map
         self._loss = loss
         self._log_args = {
             'on_epoch': True,
             'on_step': False,
         }
-        self._max_images = 50
+        self._max_images = 30
         self._metrics = metrics
         self._network = UNet()
         self._region = region
@@ -100,7 +92,7 @@ class Localiser(pl.LightningModule):
 
     def training_step(self, batch, _):
         # Forward pass.
-        x, labels = batch
+        _, x, labels = batch
         y = labels[self._region]
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
@@ -133,15 +125,10 @@ class Localiser(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         """
         args:
-            batch: the (input, label) pair of batched data.
-            batch_idx: the batch index - increasing from 0 to len(loader). Note that this is only equivalent to the
-                sample index because we use a batch size of 1 and don't shuffle validation data.
+            batch: the (desc, input, label) pair of batched data.
         """
-        # Load sample description.
-        sample_desc = self._index_map[batch_idx]
-
         # Forward pass.
-        x, labels = batch
+        descs, x, labels = batch
         y = labels[self._region]
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
@@ -150,12 +137,12 @@ class Localiser(pl.LightningModule):
         y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('val/loss', loss, **self._log_args, sync_dist=True)
-        self.log(f"val/batch/loss/{sample_desc}", loss, on_epoch=False, on_step=True)
+        self.log(f"val/batch/loss/{descs[0]}", loss, on_epoch=False, on_step=True)
 
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
             self.log('val/dice', dice, **self._log_args, sync_dist=True)
-            self.log(f"val/batch/dice/{sample_desc}", dice, on_epoch=False, on_step=True)
+            self.log(f"val/batch/dice/{descs[0]}", dice, on_epoch=False, on_step=True)
 
         if 'distances' in self._metrics and self.global_step > self._distances_delay and self.current_epoch % self._distances_interval == 0:
             if y_hat.sum() > 0 and y.sum() > 0:
@@ -167,50 +154,56 @@ class Localiser(pl.LightningModule):
                 self.log('val/voxel-hd', dists['voxel-hd'], **self._log_args, sync_dist=True)
                 # self.log('val/voxel-ahd', dists['voxel-ahd'], **self._log_args, sync_dist=True)
                 self.log('val/voxel-95hd', dists['voxel-95hd'], **self._log_args, sync_dist=True)
-                self.log(f"val/batch/assd/{sample_desc}", dists['assd'], on_epoch=False, on_step=True)
-                self.log(f"val/batch/surface-hd/{sample_desc}", dists['surface-hd'], on_epoch=False, on_step=True)
-                # self.log(f"val/batch/surface-ahd/{sample_desc}", dists['surface-ahd'], on_epoch=False, on_step=True)
-                self.log(f"val/batch/surface-95hd/{sample_desc}", dists['surface-95hd'], **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/voxel-hd/{sample_desc}", dists['voxel-hd'], **self._log_args, on_epoch=False, on_step=True)
-                # self.log(f"val/batch/voxel-ahd/{sample_desc}", dists['voxel-ahd'], **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/voxel-95hd/{sample_desc}", dists['voxel-95hd'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/assd/{descs[0]}", dists['assd'], on_epoch=False, on_step=True)
+                self.log(f"val/batch/surface-hd/{descs[0]}", dists['surface-hd'], on_epoch=False, on_step=True)
+                # self.log(f"val/batch/surface-ahd/{descs[0]}", dists['surface-ahd'], on_epoch=False, on_step=True)
+                self.log(f"val/batch/surface-95hd/{descs[0]}", dists['surface-95hd'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/voxel-hd/{descs[0]}", dists['voxel-hd'], **self._log_args, on_epoch=False, on_step=True)
+                # self.log(f"val/batch/voxel-ahd/{descs[0]}", dists['voxel-ahd'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/voxel-95hd/{descs[0]}", dists['voxel-95hd'], **self._log_args, on_epoch=False, on_step=True)
 
-        # Log prediction.
-        if batch_idx < self._max_images:
+        # Log predictions.
+        if self.logger:
             class_labels = {
-                0: 'background',
                 1: 'foreground'
             }
-            x_vol, y_vol, y_hat_vol = x[0, 0].cpu().numpy(), y[0], y_hat[0]
-            coe = list(np.round(get_extent_centre(y_vol)).astype(int))
-            for axis, coe_ax in enumerate(coe):
-                slices = tuple([coe_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
-                x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+            for i, desc in enumerate(descs):
+                if batch_idx < self._max_images:
+                    # Get images.
+                    x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i], y_hat[i]
 
-                # Fix orientation.
-                if axis == 0 or axis == 1:
-                    x_img = np.rot90(y_img, k=-1)
-                    y_img = np.rot90(y_hat_img, k=-1)
-                    y_hat_img = np.rot90(x_img, k=-1)
-                elif axis == 2:
-                    x_img = np.transpose(x_img)
-                    y_img = np.transpose(y_img) 
-                    y_hat_img = np.transpose(y_hat_img)
+                    # Get centre of extent of ground truth.
+                    centre = get_extent_centre(y_vol)
 
-                # Send image.
-                image = wandb.Image(
-                    x_img,
-                    caption=sample_desc,
-                    masks={
-                        'ground_truth': {
-                            'mask_data': y_img,
-                            'class_labels': class_labels
-                        },
-                        'predictions': {
-                            'mask_data': y_hat_img,
-                            'class_labels': class_labels
-                        }
-                    }
-                )
-                title = f'{sample_desc}:axis:{axis}'
-                self.logger.experiment.log({ title: image })
+                    for axis, centre_ax in enumerate(centre):
+                        # Get slices.
+                        slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
+                        x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+
+                        # Fix orientation.
+                        if axis == 0 or axis == 1:
+                            x_img = np.rot90(x_img)
+                            y_img = np.rot90(y_img)
+                            y_hat_img = np.rot90(y_hat_img)
+                        elif axis == 2:
+                            x_img = np.transpose(x_img)
+                            y_img = np.transpose(y_img) 
+                            y_hat_img = np.transpose(y_hat_img)
+
+                        # Send image.
+                        image = wandb.Image(
+                            x_img,
+                            caption=desc,
+                            masks={
+                                'ground_truth': {
+                                    'mask_data': y_img,
+                                    'class_labels': class_labels
+                                },
+                                'predictions': {
+                                    'mask_data': y_hat_img,
+                                    'class_labels': class_labels
+                                }
+                            }
+                        )
+                        title = f'{desc}:axis:{axis}'
+                        self.logger.experiment.log({ title: image })

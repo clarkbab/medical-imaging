@@ -61,9 +61,7 @@ class TrainingDataset(Dataset):
         else:
             return []
 
-    def list_regions(
-        self,
-        clear_cache: bool = False) -> pd.DataFrame:
+    def list_regions(self) -> pd.DataFrame:
         p_data = []
         for p in self.list_partitions():
             region_df = self.partition(p).list_regions()

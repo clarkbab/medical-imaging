@@ -3,8 +3,8 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; cd ..; pwd -P )
 cd $parent_path
 
-DATASET="HN1-SEG"
+DATASET="HN1-LOC"
 REGIONS="('Brain','Cochlea_L','Cochlea_R','MedullaOblongata','Neck_L','Neck_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
 
-python region_count --dataset $DATASET --regions $REGIONS
+python ct_figures --dataset $DATASET --regions $REGIONS
 
