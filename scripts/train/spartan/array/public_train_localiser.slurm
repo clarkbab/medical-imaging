@@ -4,7 +4,7 @@
 #SBATCH --mem 32G
 #SBATCH --gres gpu:p100:4
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 7-0:00:00
+#SBATCH --time 2-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -31,5 +31,5 @@ RUN_NAME="public-large-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --loss $LOSS --num_epochs $NUM_EPOCHS \
+python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --loss $LOSS --num_epochs $NUM_EPOCHS \
     --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER

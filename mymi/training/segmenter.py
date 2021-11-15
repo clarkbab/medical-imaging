@@ -116,7 +116,7 @@ def train_segmenter(
 
     # Perform training.
     trainer = Trainer(
-        # accelerator='ddp',
+        accelerator='ddp',
         callbacks=callbacks,
         gpus=list(range(num_gpus)),
         logger=logger,
