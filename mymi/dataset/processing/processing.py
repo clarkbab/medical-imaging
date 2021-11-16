@@ -169,6 +169,10 @@ def convert_to_training(
 
             # Save label data.
             for region, label in labels.items():
+                # Filter out labels with no foreground voxels, e.g. from resampling small OARs.
+                if label.sum() == 0:
+                    continue
+
                 _create_training_label(part, pat, i, region, label)
 
     # Indicate success.
