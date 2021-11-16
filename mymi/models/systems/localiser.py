@@ -34,7 +34,7 @@ class Localiser(pl.LightningModule):
             'on_epoch': True,
             'on_step': False,
         }
-        self._max_images = 30
+        self._max_image_batches = 30
         self._metrics = metrics
         self._network = UNet()
         self._region = region
@@ -168,12 +168,14 @@ class Localiser(pl.LightningModule):
                 1: 'foreground'
             }
             for i, desc in enumerate(descs):
-                if batch_idx < self._max_images:
+                if batch_idx < self._max_image_batches:
                     # Get images.
                     x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i], y_hat[i]
 
                     # Get centre of extent of ground truth.
                     centre = get_extent_centre(y_vol)
+                    if centre == None:
+                        logging.error(desc)
 
                     for axis, centre_ax in enumerate(centre):
                         # Get slices.

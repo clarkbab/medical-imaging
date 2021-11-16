@@ -11,7 +11,7 @@ import wandb
 from mymi import config
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_distances
-from mymi.postprocessing import get_batch_largest_cc
+from mymi.postprocessing import get_batch_largest_cc, get_extent_centre
 from mymi import types
 
 from ..networks import UNet
@@ -31,7 +31,7 @@ class Segmenter(pl.LightningModule):
         self._surface_delay = 50
         self._surface_interval = 20
         self._loss = loss
-        self._max_images = 50
+        self._max_image_batches = 50
         self._metrics = metrics
         self._network = UNet()
         self._predict_logits = predict_logits
@@ -109,12 +109,12 @@ class Segmenter(pl.LightningModule):
         y = y.cpu().numpy()
         y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(bool)
         self.log('val/loss', loss, on_epoch=True, sync_dist=True)
-        self.log(f"val/batch/loss/{sample_desc}", loss, on_epoch=False, on_step=True)
+        self.log(f"val/batch/loss/{descs[0]}", loss, on_epoch=False, on_step=True)
 
         if 'dice' in self._metrics:
             dice = batch_mean_dice(y_hat, y)
             self.log('val/dice', dice, on_epoch=True, sync_dist=True)
-            self.log(f"val/batch/dice/{sample_desc}", dice, on_epoch=False, on_step=True)
+            self.log(f"val/batch/dice/{descs[0]}", dice, on_epoch=False, on_step=True)
 
         if 'distances' in self._metrics and self.global_step > self._distances_delay and self.current_epoch % self._distances_interval == 0:
             if y_hat.sum() > 0 and y.sum() > 0:
@@ -140,7 +140,7 @@ class Segmenter(pl.LightningModule):
                 1: 'foreground'
             }
             for i, desc in enumerate(descs):
-                if batch_idx < self._max_images:
+                if batch_idx < self._max_image_batches:
                     # Get images.
                     x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i], y_hat[i]
 

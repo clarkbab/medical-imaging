@@ -16,10 +16,26 @@ version=$(python --version)
 echo $version
 
 DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
-BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
-REGION=${BASH_REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOSS='dice'
+REGIONS=(
+    'BrachialPlexus_L'
+    'BrachialPlexus_R'
+    'Brain'
+    'BrainStem'
+    'Cochlea_L'
+    'Cochlea_R'
+    'Lens_L'
+    'Lens_R'
+    'Mandible'
+    'OpticNerve_L'
+    'OpticNerve_R'
+    'OralCavity'
+    'Parotid_L'
+    'Parotid_R'
+    'SpinalCord'
+    'Submandibular_L'
+    'Submandibular_R'
+)
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
 NUM_EPOCHS=400
 NUM_GPUS=4
@@ -31,5 +47,5 @@ RUN_NAME="public-large-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --loss $LOSS --num_epochs $NUM_EPOCHS \
+python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS \
     --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER

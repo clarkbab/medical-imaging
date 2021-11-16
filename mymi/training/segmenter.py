@@ -62,7 +62,6 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    logging.info(spacing)
     train_loader = PatchLoader.build(train_parts, region, num_workers=num_workers, spacing=spacing, transform=transform)
     val_loader = PatchLoader.build(val_parts, region, num_workers=num_workers, shuffle=False)
 

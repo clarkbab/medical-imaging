@@ -413,3 +413,92 @@ def get_object_summary(
 
     df = df.astype(cols)
     return df
+
+def create_localiser_figures(
+    dataset: str,
+    regions: List[str],
+    localisers: List[Tuple[str, str, str]]) -> None:
+    assert len(regions) == len(localisers)
+
+    # Get patients.
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=regions)
+
+    # Filter regions that don't exist in dataset.
+    pat_regions = list(sorted(set.list_regions().region.unique()))
+    regions = [r for r in pat_regions if r in regions]
+
+    # Set PDF margins.
+    img_t_margin = 30
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    logging.info(f"Creating localiser figures for dataset '{dataset}', regions '{regions}'...")
+    for region, localiser in tqdm(zip(regions, localisers)):
+        # Create PDF.
+        pdf = FPDF()
+        pdf.set_section_title_styles(
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=24,
+                color=0,
+                t_margin=3,
+                l_margin=12,
+                b_margin=0
+            )
+        ) 
+
+        for pat in tqdm(pats, leave=False):
+            # Skip if patient doesn't have region.
+            patient = set.patient(pat)
+            if not patient.has_region(region):
+                continue
+
+            # Add images.
+            pdf.add_page()
+            pdf.start_section(pat)
+
+            # Save images.
+            views = ['axial', 'coronal', 'sagittal']
+            img_coords = (
+                (img_l_margin, img_t_margin),
+                (img_l_margin + img_width, img_t_margin),
+                (img_l_margin, img_t_margin + img_height)
+            )
+            for view, page_coord in zip(views, img_coords):
+                # Set figure.
+                def postproc(a: np.ndarray):
+                    return get_object(a, i)
+                plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
+                plot_patient_localiser_prediction(dataset, pat, localiser, centre_of=region, colours=['y'], regions=region, view=view, window=(3000, 500))
+
+    dataset: str,
+    pat_id: str,
+    localiser: Tuple[str, str, str],
+    aspect: float = None,
+    box_colour: str = 'r',
+    centre_of: Optional[str] = None,
+    crop: types.Box2D = None,
+    latex: bool = False,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
+    patch_size: Optional[types.ImageSize3D] = None,
+    region_colour: Optional[str] = None,
+    show_seg: bool = False,
+    slice_idx: Optional[int] = None,
+    view: types.PatientView = 'axial',
+
+                # Save temp file.
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                plt.savefig(filepath)
+                plt.close()
+
+                # Add image to report.
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+
+        # Save PDF.
+        filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        pdf.output(filepath, 'F')

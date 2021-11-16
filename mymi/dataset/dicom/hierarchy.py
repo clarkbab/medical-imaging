@@ -41,7 +41,7 @@ def _rollback_hierarchy(fn: Callable) -> Callable:
             raise e
     return _rollback_hierarchy_wrapper
 
-@_rollback_hierarchy
+# @_rollback_hierarchy
 def _build_hierarchy(dataset: 'DICOMDataset') -> None:
     logging.info(f"Building hierarchy for dataset '{dataset}'...")
 
@@ -93,6 +93,7 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
         'patient-id': str,
         'study-id': str,
         'series-id': str,
+        'instance-id': str,
         'error-desc': str,
         'error-message': str
     }
@@ -112,17 +113,28 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
 
             for ct_id in ct_series_ids:
                 ct_series = study.series(ct_id, 'ct')
-                cts = ct_series.get_cts()
+
+                # De-duplicate CT slices.
+                ct_files = list(sorted([os.path.join(ct_series.path, f) for f in os.listdir(ct_series.path)]))
+                ct_ids = []
+                for ct_file in ct_files:
+                    ct = dcm.read_file(ct_file)
+                    ct_id = ct.SOPInstanceUID
+                    if ct_id in ct_ids:
+                        error_code = 'DUPLICATE-CT-SLICE'
+                        error_message = f"Duplicate CT slice '{ct_id}' found for CT series '{ct_series}'."
+                        error_df = _trim_instance(ct_series, ct, ct_file, error_df, error_code, error_message)
+                        continue
+                    ct_ids.append(ct_id)
 
                 # Series-level checks.
-
                 # CHECK: CT series has no missing slices.
-                cts = list(sorted(cts, key=lambda c: c.InstanceNumber))
-                nums = [int(c.InstanceNumber) for c in cts]
+                cts = ct_series.get_cts()
+                nums = list(sorted([int(c.InstanceNumber) for c in cts]))
                 nums_diff = np.unique(np.diff(nums))
                 if len(nums_diff) != 1 or nums_diff[0] != 1:
-                    error_code = 'CT-MISSING-SLICES'
-                    error_message = f"Missing slices (non-contigous 'InstanceNumber') for CT series '{ct_series}'."
+                    error_code = 'CT-NON-CONTIGUOUS-SLICES'
+                    error_message = f"Non-contiguous 'InstanceNumber' for CT series '{ct_series}'."
                     error_df = _trim_series(ct_series, error_df, error_code, error_message)
                     continue
 
@@ -186,7 +198,19 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
 
             for rt_id in rt_series_ids:
                 rt_series = study.series(rt_id, 'rtstruct', load_ref_ct=False)
-                rt = rt_series.get_rtstruct()
+
+                # De-duplicate RTSTRUCT files.
+                rt_files = list(sorted([os.path.join(rt_series.path, f) for f in os.listdir(rt_series.path)]))
+                rt_ids = []
+                for rt_file in rt_files:
+                    rtstruct = dcm.read_file(rt_file)
+                    rt_id = rtstruct.SOPInstanceUID
+                    if rt_id in rt_ids:
+                        error_code = 'DUPLICATE-RTSTRUCT'
+                        error_message = f"Duplicate RTSTRUCT '{rt_id}' found for RTSTRUCT series '{rt_series}'."
+                        error_df = _trim_instance(rt_series, rtstruct, rt_file, error_df, error_code, error_message)
+                        continue
+                    rt_ids.append(rt_id)
 
                 # CHECK: RTSTRUCT series has single file.
                 if len(os.listdir(rt_series.path)) != 1:
@@ -196,6 +220,7 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
                     continue
 
                 # CHECK: RTSTRUCT series references valid CT series.
+                rt = rt_series.get_rtstruct()
                 ct_id = rt.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
                 if not ct_id in valid_ct_series_ids:
                     error_code = 'RTSTRUCT-NO-CT'
@@ -236,7 +261,7 @@ def _trim_patient(
     folders = patient.path.split(os.path.sep)
     folders.insert(-2, 'trimmed')
     trim_path = os.path.sep.join(folders)
-    _merge_copy(patient.path, trim_path)
+    _merge_move(patient.path, trim_path)
 
     # Log error.
     data = {
@@ -256,7 +281,7 @@ def _trim_study(
     folders = study.path.split(os.path.sep)
     folders.insert(-3, 'trimmed')
     trim_path = os.path.sep.join(folders)
-    _merge_copy(study.path, trim_path)
+    _merge_move(study.path, trim_path)
 
     # Log error.
     data = {
@@ -277,9 +302,9 @@ def _trim_series(
     folders = series.path.split(os.path.sep)
     folders.insert(-5, 'trimmed')
     trim_path = os.path.sep.join(folders)
-    _merge_copy(series.path, trim_path)
+    _merge_move(series.path, trim_path)
 
-# Log error.
+    # Log error.
     data = {
         'patient-id': series.study.patient.id,
         'study-id': series.study.id,
@@ -290,7 +315,33 @@ def _trim_series(
     error_df = error_df.append(data, ignore_index=True)
     return error_df
 
-def _merge_copy(
+def _trim_instance(
+    series: 'DICOMSeries',
+    ct: dcm.dataset.FileDataset,
+    filepath: str,
+    error_df: pd.DataFrame,
+    error_desc: str,
+    error_message: str) -> pd.DataFrame:
+    # Move series to trimmed folder.
+    folders = filepath.split(os.path.sep)
+    folders.insert(-6, 'trimmed')
+    trim_path = os.path.sep.join(folders)
+    os.makedirs(os.path.dirname(trim_path), exist_ok=True)
+    shutil.move(filepath, trim_path)
+
+    # Log error.
+    data = {
+        'patient-id': series.study.patient.id,
+        'study-id': series.study.id,
+        'series-id': series.id, 
+        'instance-id': ct.SOPInstanceUID,
+        'error-desc': error_desc,
+        'error-message': error_message
+    }
+    error_df = error_df.append(data, ignore_index=True)
+    return error_df
+
+def _merge_move(
     source: str,
     dest: str) -> None:
     copy_tree(source, dest)
