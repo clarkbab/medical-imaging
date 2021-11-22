@@ -7,7 +7,7 @@ from typing import Optional, Tuple, Union
 from mymi import dataset as ds
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.postprocessing import get_extent_centre
+from mymi.geometry import get_extent_centre
 from mymi.transforms import centre_crop_or_pad_3D, crop_or_pad_3D, resample_3D
 from mymi import types
 
@@ -36,7 +36,7 @@ def get_localiser_prediction(
     fov = np.array(input_size) * spacing
     loc_fov = np.array(loc_size) * loc_spacing
     if np.minimum(loc_fov - fov, 0).sum() != 0:
-        error_message = f"Patient FOV '{fov}', larger than localiser FOV '{loc_fov}'."
+        error_message = f"Patient '{pat_id}' FOV '{fov}', larger than localiser FOV '{loc_fov}'."
         if raise_fov_error:
             raise ValueError(error_message)
         else:
@@ -156,7 +156,7 @@ def get_segmenter_prediction(
 
     # Extract patch around centre.
     pre_extract_size = input.shape
-    input, patch_box = _extract_patch(input, segmenter_size, centre)
+    input, patch_box = point_crop_or_pad_3D(input, segmenter_size, centre, fill=input.min(), return_box=True)
 
     # Pass patch to segmenter.
     input = torch.Tensor(input)
@@ -202,39 +202,3 @@ def get_two_stage_prediction(
     seg = get_segmenter_prediction(dataset, pat_id, segmenter, segmenter_size, centre, clear_cache=clear_cache, device=device)
 
     return seg
-
-def _extract_patch(
-    input: np.ndarray,
-    size: types.ImageSize3D,
-    box: types.Box3D) -> Tuple[np.ndarray, types.Box3D]:
-    """
-    returns: a patch of size 'size' centred on the bounding box. Also returns the bounding
-        box that was used to extract the patch, relative to the input size.
-    args:
-        input: the input data.
-        size: the extent of the patch.
-        centre: the patch centre.
-    raises:
-        ValueError: if the OAR extent is larger than the patch size.
-    """
-    # Check bounding box size.
-    size = np.array(size)
-    min, max = box
-    min = np.array(min)
-    max = np.array(max)
-    width = max - min
-    if (width > size).any():
-        raise ValueError(f"Bounding box size '{width}' larger than patch size '{size}'.")
-
-    # Determine min/max indices of the patch.
-    size = np.array(size)
-    lower_sub = np.ceil(size_diff / 2).astype(int)
-    min = tuple(centre - lower_sub)
-    max = tuple(min + size)
-    
-    # Perform the crop or pad.
-    input_size = input.shape
-    box = (min, max)
-    patch = crop_or_pad_3D(input, box, fill=input.min())
-
-    return patch, box

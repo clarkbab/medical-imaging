@@ -7,18 +7,18 @@ from typing import Optional, Tuple
 
 from mymi import cache
 from mymi import dataset as ds
+from mymi.geometry import get_box, get_extent_centre
 from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.postprocessing import get_extent_centre
 from mymi.prediction.dataset.nifti import load_localiser_prediction
+from mymi.regions import get_patch_size
 from mymi import types
 
 def create_localiser_evaluation(
     dataset: str,
     region: str,
-    localiser: Tuple[str, str, str],
-    patch_size: types.ImageSize3D) -> None:
+    localiser: Tuple[str, str, str]) -> None:
     localiser = Localiser.replace_best(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
@@ -35,7 +35,7 @@ def create_localiser_evaluation(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats):
+    for pat in tqdm(pats[:3]):
         # Get pred/ground truth.
         pred = load_localiser_prediction(dataset, pat, localiser)
         label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
@@ -44,12 +44,12 @@ def create_localiser_evaluation(
         metrics = [
             'dice',
             'assd',
-            'extent-centre-x',
-            'extent-centre-y',
-            'extent-centre-z',
-            'extent-x',
-            'extent-y',
-            'extent-z',
+            'extent-centre-dist-x',
+            'extent-centre-dist-y',
+            'extent-centre-dist-z',
+            'extent-dist-x',
+            'extent-dist-y',
+            'extent-dist-z',
             'surface-hd',
             'surface-95hd',
             'voxel-hd',
@@ -98,22 +98,21 @@ def create_localiser_evaluation(
         else:
             ec_dist = extent_centre_distance(pred, label, spacing)
 
-        data['extent-centre-x']['value'] = ec_dist[0]
-        data['extent-centre-y']['value'] = ec_dist[1]
-        data['extent-centre-z']['value'] = ec_dist[2]
-        df = df.append(data['extent-centre-x'], ignore_index=True)
-        df = df.append(data['extent-centre-y'], ignore_index=True)
-        df = df.append(data['extent-centre-z'], ignore_index=True)
+        data['extent-centre-dist-x']['value'] = ec_dist[0]
+        data['extent-centre-dist-y']['value'] = ec_dist[1]
+        data['extent-centre-dist-z']['value'] = ec_dist[2]
+        df = df.append(data['extent-centre-dist-x'], ignore_index=True)
+        df = df.append(data['extent-centre-dist-y'], ignore_index=True)
+        df = df.append(data['extent-centre-dist-z'], ignore_index=True)
 
         # Second stage patch distance.
         if pred.sum() == 0 or label.sum() == 0:
             dists = (np.nan, np.nan, np.nan)
         else:
             # Create second stage patch.
-            pred_centre = get_extent_centre(pred)
-            low_sub = np.ceil(np.array(patch_size) / 2).astype(int)
-            min = tuple(pred_centre - low_sub)
-            max = tuple(np.array(min) + patch_size)
+            centre = get_extent_centre(pred)
+            size = get_patch_size(region)
+            min, max = get_box(centre, size)
 
             # Create label from patch.
             patch_label = np.zeros_like(label)
@@ -123,12 +122,12 @@ def create_localiser_evaluation(
             # Get extent distance.
             e_dist = extent_distance(patch_label, label, spacing)
 
-        data['extent-x']['value'] = e_dist[0]
-        data['extent-y']['value'] = e_dist[1]
-        data['extent-z']['value'] = e_dist[2]
-        df = df.append(data['extent-x'], ignore_index=True)
-        df = df.append(data['extent-y'], ignore_index=True)
-        df = df.append(data['extent-z'], ignore_index=True)
+        data['extent-dist-x']['value'] = e_dist[0]
+        data['extent-dist-y']['value'] = e_dist[1]
+        data['extent-dist-z']['value'] = e_dist[2]
+        df = df.append(data['extent-dist-x'], ignore_index=True)
+        df = df.append(data['extent-dist-y'], ignore_index=True)
+        df = df.append(data['extent-dist-z'], ignore_index=True)
 
     # Set column types.
     df = df.astype(cols)
@@ -146,6 +145,6 @@ def load_localiser_evaluation(
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")
-    data = pd.read_csv(filepath)
+    data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 

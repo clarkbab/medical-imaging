@@ -9,7 +9,7 @@ from typing import List, Union
 from mymi import config
 from mymi.dataset.training import TrainingPartition
 from mymi.regions import get_patch_size
-from mymi.transforms import crop_or_pad_3D
+from mymi.transforms import crop_or_pad_3D, point_crop_or_pad_3D
 from mymi import types
 
 class PatchLoader:
@@ -174,22 +174,14 @@ class LoaderDataset(Dataset):
             input: the input data.
             label: the label data.
         """
-        # Find foreground voxels.
-        fg_voxels = np.argwhere(label != 0)
-        
         # Choose randomly from the foreground voxels.
+        fg_voxels = np.argwhere(label != 0)
         fg_voxel_idx = np.random.choice(len(fg_voxels))
-        centre_voxel = fg_voxels[fg_voxel_idx]
+        centre = fg_voxels[fg_voxel_idx]
 
-        # Determine min/max indices of the patch.
-        shape_diff = np.array(self._patch_size) - 1
-        lower_add = np.ceil(shape_diff / 2).astype(int)
-        mins = centre_voxel - lower_add
-        maxs = mins + self._patch_size
-
-        # Crop or pad the volume.
-        input = crop_or_pad_3D(input, (mins, maxs), fill=input.min())
-        label = crop_or_pad_3D(label, (mins, maxs))
+        # Extract patch around centre.
+        input = point_crop_or_pad_3D(input, self._patch_size, centre, fill=input.min())        
+        label = point_crop_or_pad_3D(label, self._patch_size, centre)
 
         return input, label
 
@@ -198,16 +190,10 @@ class LoaderDataset(Dataset):
         input: np.ndarray,
         label: np.ndarray) -> np.ndarray:
         # Choose a random voxel.
-        centre_voxel = tuple(map(np.random.randint, self._patch_size))
+        centre = tuple(map(np.random.randint, self._patch_size))
 
-        # Determine min/max indices of the patch.
-        shape_diff = np.array(self._patch_size) - 1
-        lower_add = np.ceil(shape_diff / 2).astype(int)
-        mins = centre_voxel - lower_add
-        maxs = mins + self._patch_size
-
-        # Crop or pad the volume.
-        input = crop_or_pad_3D(input, (mins, maxs), fill=input.min())
-        label = crop_or_pad_3D(label, (mins, maxs))
+        # Extract patch around centre.
+        input = point_crop_or_pad_3D(input, self._patch_size, centre, fill=input.min())        
+        label = point_crop_or_pad_3D(label, self._patch_size, centre)
 
         return input, label

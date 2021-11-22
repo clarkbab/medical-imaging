@@ -7,14 +7,16 @@ import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 from uuid import uuid1
 
 from mymi import config
 from mymi import dataset as ds
+from mymi.evaluation.dataset.nifti import load_localiser_evaluation
+from mymi.geometry import get_extent, get_extent_centre
 from mymi import logging
-from mymi.plotter.dataset.nifti import plot_patient_regions
-from mymi.postprocessing import get_extent, get_extent_centre, get_largest_cc, get_object, one_hot_encode
+from mymi.plotter.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions
+from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
 
 def get_region_summary(
@@ -360,6 +362,9 @@ def create_region_figures(
                     # Add image to report.
                     pdf.image(filepath, *page_coord, w=img_width, h=img_height)
 
+                    # Delete temp file.
+                    os.remove(filepath)
+
         # Save PDF.
         filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -435,7 +440,7 @@ def create_localiser_figures(
     img_height = 100
 
     logging.info(f"Creating localiser figures for dataset '{dataset}', regions '{regions}'...")
-    for region, localiser in tqdm(zip(regions, localisers)):
+    for region, localiser in tqdm(list(zip(regions, localisers))):
         # Create PDF.
         pdf = FPDF()
         pdf.set_section_title_styles(
@@ -447,8 +452,48 @@ def create_localiser_figures(
                 t_margin=3,
                 l_margin=12,
                 b_margin=0
+            ),
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=18,
+                color=0,
+                t_margin=12,
+                l_margin=12,
+                b_margin=0
             )
         ) 
+        
+        # Get region evaluation.
+        eval_df = load_localiser_evaluation(dataset, localiser)
+
+        # Show localisation errors.
+        error_df = eval_df[(eval_df.metric.str.contains('extent-dist-')) & (eval_df.value > 0)]
+        pdf.add_page()
+        pdf.start_section('Errors')
+
+        # Add table.
+        table_t_margin = 45
+        table_l_margin = 12
+        table_cols = 5
+        table_line_height = 2 * pdf.font_size
+        table_col_widths = (40, 40, 40)
+        table_width = 180
+        table_data = [('Patient', 'Metric', 'Value')]
+        for _, row in error_df.iterrows():
+            table_data.append((
+                row['patient-id'],
+                row.metric,
+                f'{row.value:.3f}'
+            ))
+        for i, row in enumerate(table_data):
+            if i == 0:
+                pdf.set_font('Helvetica', 'B', 12)
+            else:
+                pdf.set_font('Helvetica', '', 12)
+            pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+            for j, value in enumerate(row):
+                pdf.cell(table_col_widths[j], table_line_height, value, border=1)
 
         for pat in tqdm(pats, leave=False):
             # Skip if patient doesn't have region.
@@ -456,9 +501,37 @@ def create_localiser_figures(
             if not patient.has_region(region):
                 continue
 
-            # Add images.
+            # Start info section.
             pdf.add_page()
             pdf.start_section(pat)
+            pdf.start_section('Info', level=1)
+
+            # Add table.
+            table_t_margin = 45
+            table_l_margin = 12
+            table_cols = 5
+            table_line_height = 2 * pdf.font_size
+            table_col_widths = (40, 40)
+            table_width = 180
+            table_data = [('Metric', 'Value')]
+            pat_eval_df = eval_df[eval_df['patient-id'] == pat]
+            for _, row in pat_eval_df.iterrows():
+                table_data.append((
+                    row.metric,
+                    f'{row.value:.3f}'
+                ))
+            for i, row in enumerate(table_data):
+                if i == 0:
+                    pdf.set_font('Helvetica', 'B', 12)
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                for j, value in enumerate(row):
+                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+
+            # Add images.
+            pdf.add_page()
+            pdf.start_section('Images', level=1)
 
             # Save images.
             views = ['axial', 'coronal', 'sagittal']
@@ -469,26 +542,7 @@ def create_localiser_figures(
             )
             for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                def postproc(a: np.ndarray):
-                    return get_object(a, i)
-                plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
-                plot_patient_localiser_prediction(dataset, pat, localiser, centre_of=region, colours=['y'], regions=region, view=view, window=(3000, 500))
-
-    dataset: str,
-    pat_id: str,
-    localiser: Tuple[str, str, str],
-    aspect: float = None,
-    box_colour: str = 'r',
-    centre_of: Optional[str] = None,
-    crop: types.Box2D = None,
-    latex: bool = False,
-    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    legend_size: int = 10,
-    patch_size: Optional[types.ImageSize3D] = None,
-    region_colour: Optional[str] = None,
-    show_seg: bool = False,
-    slice_idx: Optional[int] = None,
-    view: types.PatientView = 'axial',
+                plot_patient_localiser_prediction(dataset, pat, region, localiser, centre_of=region, colour='y', show_patch=True, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -498,7 +552,10 @@ def create_localiser_figures(
                 # Add image to report.
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
 
+                # Delete temp file.
+                os.remove(filepath)
+
         # Save PDF.
-        filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
+        filepath = os.path.join(set.path, 'reports', 'localiser-figures', f'{region}.pdf') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         pdf.output(filepath, 'F')

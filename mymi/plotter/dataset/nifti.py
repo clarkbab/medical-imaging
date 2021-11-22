@@ -6,8 +6,9 @@ import torchio
 from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
-from mymi.postprocessing import get_extent, get_extent_centre
+from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi.prediction.dataset.nifti import load_localiser_prediction
+from mymi.regions import get_patch_size
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
 
@@ -246,16 +247,18 @@ def plot_patient_regions(
 def plot_patient_localiser_prediction(
     dataset: str,
     pat_id: str,
+    region: str,
     localiser: Tuple[str, str, str],
     aspect: float = None,
-    box_colour: str = 'r',
     centre_of: Optional[str] = None,
+    colour: Optional[str] = None,
     crop: types.Box2D = None,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
     patch_size: Optional[types.ImageSize3D] = None,
-    region_colour: Optional[str] = None,
+    show_patch: bool = False,
     show_seg: bool = False,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
@@ -288,8 +291,7 @@ def plot_patient_localiser_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    colours = [region_colour] if region_colour else None
-    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=colours, crop=crop, latex=latex, legend=False, legend_loc=legend_loc, show=False, slice_idx=slice_idx, view=view, **kwargs)
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=[colour], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, slice_idx=slice_idx, view=view, **kwargs)
 
     # Load localiser segmentation.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
@@ -319,21 +321,15 @@ def plot_patient_localiser_prediction(
 
     # Plot bounding box.
     if should_plot_box(extent, view, slice_idx):
-        plot_box(extent, view, colour=box_colour, crop=crop, label='Loc. Box')
+        plot_box(extent, view, colour=colour, crop=crop, label='Loc. Box')
 
-    # Plot seg box.
-    if patch_size:
-        # Get extent centre.
-        centre = get_extent_centre(pred)
-        low = np.floor(np.array(patch_size) / 2).astype(int)
-        high = patch_size - low
-        min = np.clip(centre - low, 0, None)
-        max = centre + high
-        seg_patch = (min, max)
-        
-        # Plot segmentation patch.
-        if should_plot_box(seg_patch, view, slice_idx):
-            plot_box(seg_patch, view, colour=box_colour, crop=crop, label='Seg. Patch', linestyle='dashed')
+    # Plot second stage patch.
+    if show_patch:
+        centre = get_extent_centre(pred) 
+        size = get_patch_size(region)
+        patch = get_box(centre, size)
+        if should_plot_box(patch, view, slice_idx):
+            plot_box(patch, view, colour=colour, crop=crop, label='Seg. Patch', linestyle='dashed')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})

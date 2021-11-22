@@ -8,9 +8,10 @@ from typing import Dict, List, Optional, Tuple
 import wandb
 
 from mymi import config
+from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_distances
-from mymi.postprocessing import get_batch_largest_cc, get_extent_centre
+from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
 from ..networks import UNet

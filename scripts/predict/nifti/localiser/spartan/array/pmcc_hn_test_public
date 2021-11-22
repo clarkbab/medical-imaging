@@ -34,51 +34,12 @@ REGIONS=(
     'Submandibular_L'
     'Submandibular_R'
 )
-RUNS=(
-    'public-dilated-400epochs' # BrachialPlexus_L
-    'public-dilated-400epochs' # BrachialPlexus_R
-    'public-400epochs' # Brain
-    'public-400epochs' # BrainStem
-    'public-dilated-400epochs' # Cochlea_L
-    'public-dilated-400epochs' # Cochlea_R
-    'public-dilated-400epochs' # Lens_L
-    'public-dilated-400epochs' # Lens_R
-    'public-400epochs' # Mandible
-    'public-dilated-400epochs' # OpticNerve_L
-    'public-dilated-400epochs' # OpticNerve_R
-    'public-400epochs' # OralCavity
-    'public-400epochs' # Parotid_L
-    'public-400epochs' # Parotid_R
-    'public-400epochs' # SpinalCord
-    'public-400epochs' # Submandibular_L
-    'public-400epochs' # Submandibular_R
-)
-CHECKPOINTS=(
-    'BEST' # BrachialPlexus_L
-    'BEST' # BrachialPlexus_R
-    'BEST' # Brain
-    'BEST' # BrainStem
-    'BEST' # Cochlea_L
-    'BEST' # Cochlea_R
-    'BEST' # Lens_L
-    'BEST' # Lens_R
-    'BEST' # Mandible
-    'BEST' # OpticNerve_L
-    'BEST' # OpticNerve_R
-    'BEST' # OralCavity
-    'BEST' # Parotid_L
-    'BEST' # Parotid_R
-    'BEST' # SpinalCord
-    'BEST' # Submandibular_L
-    'BEST' # Submandibular_R
-)
-CHECKPOINT=${CHECKPOINTS[$SLURM_ARRAY_TASK_ID]}
 DATASET="PMCC-HN-TEST"
-LOCALISER_SIZE="(128,128,96)"
-LOCALISER_SPACING="(4,4,6.625)"
+LOCALISER_SIZE="(128,128,150)"
+LOCALISER_SPACING="(4,4,4)"
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
+RUN='public-large-400epochs'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-LOCALISER="('localiser-$REGION','$RUN','$CHECKPOINT')"
+LOCALISER="('localiser-$REGION','$RUN','BEST')"
 
 python $SCRIPT_DIR/predict/nifti/localiser/create_predictions --dataset $DATASET --localiser $LOCALISER --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING --region $REGION

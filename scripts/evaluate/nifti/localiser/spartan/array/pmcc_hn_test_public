@@ -31,30 +31,9 @@ REGIONS=(
     'Submandibular_L'
     'Submandibular_R'
 )
-RUNS=(
-    'public-large-400epochs' # BrachialPlexus_L
-    'public-large-400epochs' # BrachialPlexus_R
-    'public-400epochs' # Brain
-    'public-400epochs' # BrainStem
-    'public-dilated-400epochs' # Cochlea_L
-    'public-dilated-400epochs' # Cochlea_R
-    'public-dilated-400epochs' # Lens_L
-    'public-dilated-400epochs' # Lens_R
-    'public-400epochs' # Mandible
-    'public-dilated-400epochs' # OpticNerve_L
-    'public-dilated-400epochs' # OpticNerve_R
-    'public-400epochs' # OralCavity
-    'public-400epochs' # Parotid_L
-    'public-400epochs' # Parotid_R
-    'public-400epochs' # SpinalCord
-    'public-400epochs' # Submandibular_L
-    'public-400epochs' # Submandibular_R
-)
-CHECKPOINT='BEST'
 DATASET="PMCC-HN-TEST"
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-RUN=${RUNS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','$RUN','$CHECKPOINT')"
+LOCALISER="('localiser-$REGION','public-large-400epochs','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation --dataset $DATASET --region $REGION --localiser $LOCALISER

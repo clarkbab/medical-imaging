@@ -2,7 +2,7 @@ import numpy as np
 import SimpleITK as sitk
 from typing import Dict, Tuple
 
-from mymi.postprocessing import get_extent, get_extent_centre
+from mymi.geometry import get_extent, get_extent_centre
 from mymi import types
 
 def distances(

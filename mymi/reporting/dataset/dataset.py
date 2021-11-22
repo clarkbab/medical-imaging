@@ -71,6 +71,9 @@ def generate_dataset_regions_report(
                 # Add image to report.
                 report.image(filepath, *o, w=100, h=100)
 
+                # Delete temp file.
+                os.remove(filepath)
+
     # Save PDF.
     if report_name:
         filename = report_name

@@ -17,23 +17,23 @@ echo $version
 
 DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
 REGIONS=(
-    'BrachialPlexus_L'
-    'BrachialPlexus_R'
-    'Brain'
-    'BrainStem'
-    'Cochlea_L'
-    'Cochlea_R'
-    'Lens_L'
-    'Lens_R'
-    'Mandible'
-    'OpticNerve_L'
-    'OpticNerve_R'
-    'OralCavity'
-    'Parotid_L'
-    'Parotid_R'
-    'SpinalCord'
-    'Submandibular_L'
-    'Submandibular_R'
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Brain'             # 2
+    'BrainStem'         # 3
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    'OralCavity'        # 11
+    'Parotid_L'         # 12
+    'Parotid_R'         # 13
+    'SpinalCord'        # 14
+    'Submandibular_L'   # 15
+    'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
@@ -41,8 +41,8 @@ NUM_EPOCHS=400
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4
-RESUME=False
-RESUME_CHECKPOINT=None
+RESUME=True
+RESUME_CHECKPOINT='last'
 RUN_NAME="public-large-400epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True

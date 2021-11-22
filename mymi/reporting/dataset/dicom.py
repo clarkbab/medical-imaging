@@ -8,7 +8,7 @@ from typing import List
 
 from mymi import dataset as ds
 from mymi.evaluation.dataset.dicom import evaluate_model
-from mymi.postprocessing import get_extent
+from mymi.geometry import get_extent
 from mymi import types
 
 def create_evaluation_report(

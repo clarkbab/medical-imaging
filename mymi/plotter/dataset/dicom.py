@@ -6,7 +6,7 @@ import torchio
 from typing import Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
-from mymi.postprocessing import get_extent, get_extent_centre
+from mymi.geometry import get_extent, get_extent_centre
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
 

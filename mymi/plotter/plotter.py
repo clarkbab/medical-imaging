@@ -10,9 +10,9 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
+from mymi.geometry import get_extent
 from mymi import logging
-from mymi.postprocessing import get_extent, get_largest_cc
-from mymi.prediction import get_localiser_prediction, get_segmenter_prediction
+from mymi.postprocessing import get_largest_cc
 from mymi.regions import is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
