@@ -38,7 +38,7 @@ class DICOMPatient:
             self._global_id = f"{dataset} - {id}"
         self._ct_from = ct_from
         self._dataset = dataset
-        self._id = id
+        self._id = str(id)
         self._trimmed = trimmed
         self._region_map = region_map
         if trimmed:

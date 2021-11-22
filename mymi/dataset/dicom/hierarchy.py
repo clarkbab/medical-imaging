@@ -41,7 +41,7 @@ def _rollback_hierarchy(fn: Callable) -> Callable:
             raise e
     return _rollback_hierarchy_wrapper
 
-# @_rollback_hierarchy
+@_rollback_hierarchy
 def _build_hierarchy(dataset: 'DICOMDataset') -> None:
     logging.info(f"Building hierarchy for dataset '{dataset}'...")
 
