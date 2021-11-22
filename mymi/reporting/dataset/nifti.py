@@ -468,7 +468,7 @@ def create_localiser_figures(
         eval_df = load_localiser_evaluation(dataset, localiser)
 
         # Show localisation errors.
-        error_df = eval_df[(eval_df.metric.str.contains('extent-dist-')) & (eval_df.value > 0)]
+        error_df = eval_df[(eval_df.metric.str.contains('extent-dist-')) & (eval_df.value > 0 | eval_df.value.isnull())]
         pdf.add_page()
         pdf.start_section('Errors')
 

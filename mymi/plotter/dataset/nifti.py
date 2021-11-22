@@ -295,12 +295,13 @@ def plot_patient_localiser_prediction(
 
     # Load localiser segmentation.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
+    non_empty_pred = False if pred.sum() == 0 else True
 
     # Get extent.
     extent = get_extent(pred)
 
     # Plot prediction.
-    if show_seg:
+    if non_empty_pred and show_seg:
         # Get aspect ratio.
         if not aspect:
             aspect = get_aspect_ratio(view, spacing) 
@@ -320,11 +321,11 @@ def plot_patient_localiser_prediction(
         plt.plot(0, 0, c=colour, label='Segmentation')
 
     # Plot bounding box.
-    if should_plot_box(extent, view, slice_idx):
+    if non_empty_pred and should_plot_box(extent, view, slice_idx):
         plot_box(extent, view, colour=colour, crop=crop, label='Loc. Box')
 
     # Plot second stage patch.
-    if show_patch:
+    if non_empty_pred and show_patch:
         centre = get_extent_centre(pred) 
         size = get_patch_size(region)
         patch = get_box(centre, size)

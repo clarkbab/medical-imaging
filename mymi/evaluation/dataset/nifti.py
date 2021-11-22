@@ -35,7 +35,7 @@ def create_localiser_evaluation(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats[:3]):
+    for pat in tqdm(pats):
         # Get pred/ground truth.
         pred = load_localiser_prediction(dataset, pat, localiser)
         label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
