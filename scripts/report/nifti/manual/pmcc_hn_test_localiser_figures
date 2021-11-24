@@ -5,23 +5,23 @@ cd $parent_path
 
 DATASET="PMCC-HN-TEST"
 REGIONS=(
-    # 'BrachialPlexus_L'
-    # 'BrachialPlexus_R'
-    'Brain'
-    # 'BrainStem'
-    # 'Cochlea_L'
-    'Cochlea_R'
-    'Lens_L'
-    # 'Lens_R'
-    # 'Mandible'
-    # 'OpticNerve_L'
-    # 'OpticNerve_R'
-    'OralCavity'
-    # 'Parotid_L'
-    # 'Parotid_R'
-    # 'SpinalCord'
-    # 'Submandibular_L'
-    # 'Submandibular_R'
+    # 'BrachialPlexus_L'  # 0
+    # 'BrachialPlexus_R'  # 1
+    # 'Brain'             # 2
+    # 'BrainStem'         # 3
+    # 'Cochlea_L'         # 4
+    # 'Cochlea_R'         # 5
+    # 'Lens_L'            # 6
+    # 'Lens_R'            # 7
+    # 'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    # 'OralCavity'        # 11
+    # 'Parotid_L'         # 12
+    # 'Parotid_R'         # 13
+    # 'SpinalCord'        # 14
+    # 'Submandibular_L'   # 15
+    # 'Submandibular_R'   # 16
 )
 LOCALISERS=()
 for i in "${!REGIONS[@]}"; do

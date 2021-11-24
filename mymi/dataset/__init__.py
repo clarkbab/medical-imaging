@@ -7,6 +7,8 @@ from .nifti import NIFTIDataset
 from .nifti import list as list_nifti
 from .training import TrainingDataset
 from .training import list as list_training
+from .other import OtherDataset
+from .other import list as list_other
 
 def get(
     name: str,
@@ -30,6 +32,8 @@ def get(
             return NIFTIDataset(name)
         elif type == DatasetType.TRAINING:
             return TrainingDataset(name)
+        elif type == DatasetType.OTHER:
+            return OtherDataset(name)
         else:
             raise ValueError(f"Dataset type '{type}' not found.")
     else:
@@ -47,6 +51,11 @@ def get(
         dicom_ds = list_dicom()
         if name in dicom_ds:
             return DICOMDataset(name)
+
+        # Preference : OTHER.
+        other_ds = list_other()
+        if name in other_ds:
+            return OtherDataset(name)
 
 def default() -> Optional[Dataset]:
     """

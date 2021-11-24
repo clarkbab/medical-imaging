@@ -71,10 +71,12 @@ def get_localiser_prediction(
 
 def create_localiser_predictions(
     dataset: str,
+    region: str,
     localiser: Tuple[str, str, str],
     loc_size: Tuple[int, int, int],
-    loc_spacing: Tuple[float, float, float],
-    region: str) -> None:
+    loc_spacing: Tuple[float, float, float]) -> None:
+    logging.info(f"Making localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
+
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')

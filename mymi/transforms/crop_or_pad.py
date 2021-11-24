@@ -92,4 +92,4 @@ def point_crop_or_pad_3D(
     if return_box:
         return (data, box)
     else:
-        return box
+        return data

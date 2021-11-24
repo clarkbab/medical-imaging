@@ -464,11 +464,12 @@ def create_localiser_figures(
             )
         ) 
         
-        # Get region evaluation.
+        # Get errors for the region based upon 'extent-dist-x/y/z' metrics.
         eval_df = load_localiser_evaluation(dataset, localiser)
+        error_df = eval_df[eval_df.metric.str.contains('extent-dist-')]
+        error_df = error_df[(error_df.value.isnull()) | (error_df.value > 0)]
 
-        # Show localisation errors.
-        error_df = eval_df[(eval_df.metric.str.contains('extent-dist-')) & (eval_df.value > 0 | eval_df.value.isnull())]
+        # Add errors section.
         pdf.add_page()
         pdf.start_section('Errors')
 

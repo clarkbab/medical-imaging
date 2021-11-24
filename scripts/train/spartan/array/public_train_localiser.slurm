@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --mem 64G
-#SBATCH --gres gpu:p100:1
+#SBATCH --gres gpu:p100:4
 #SBATCH --cpus-per-gpu 4
 #SBATCH --time 2-0:00:00
 #SBATCH -A punim1413
@@ -37,7 +37,7 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
-NUM_EPOCHS=400
+NUM_EPOCHS=600
 NUM_GPUS=4
 NUM_NODES=1
 NUM_WORKERS=4

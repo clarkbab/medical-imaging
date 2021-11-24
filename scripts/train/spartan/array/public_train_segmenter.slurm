@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --mem 64G
-#SBATCH --gres gpu:p100:4
+#SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
 #SBATCH --time 2-0:00:00
 #SBATCH -A punim1413
@@ -37,13 +37,13 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-${REGION}"
-NUM_EPOCHS=400
-NUM_GPUS=4
+NUM_EPOCHS=100
+NUM_GPUS=1
 NUM_NODES=1
 NUM_WORKERS=4
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="public-400epochs"
+RUN_NAME="public-1gpu-100epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 

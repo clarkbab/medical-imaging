@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders import PatchLoader
+from mymi.loaders.training import PatchLoader
 from mymi.losses import DiceLoss
 from mymi import logging
 from mymi.models.systems import Segmenter
