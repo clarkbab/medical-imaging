@@ -4,8 +4,6 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 DATASET="PMCC-HN-TEST"
-LOCALISER_SIZE="(128,128,150)"
-LOCALISER_SPACING="(4,4,4)"
 REGIONS=(
     # 'BrachialPlexus_L'  # 0
     # 'BrachialPlexus_R'  # 1

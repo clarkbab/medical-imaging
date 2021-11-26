@@ -1,13 +1,13 @@
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage.measurements import center_of_mass
+from scipy.ndimage.measurements import center_of_mass as centre_of_mass
 import torchio
 from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre
-from mymi.prediction.dataset.nifti import load_localiser_prediction
+from mymi.prediction.dataset.nifti import load_localiser_prediction, load_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -125,37 +125,20 @@ def plot_patient_regions(
     ct_slice_data = get_slice(ct_data, slice_idx, view)
 
     # Convert to box representation.
+    crop_box = None
     if crop:
-        # Check if crop is region name.
         if type(crop) == str:
-            # Get 3D crop box.
-            crop_region_data = region_data[crop]
-            extent = get_extent(crop_region_data)
-
-            # Add crop margin.
-            crop_margin_vox = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
-            min, max = extent
-            min = tuple(np.array(min) - crop_margin_vox)
-            max = tuple(np.array(max) + crop_margin_vox)
-
-            # Select 2D component.
-            if view == 'axial':
-                min = (min[0], min[1])
-                max = (max[0], max[1])
-            elif view == 'coronal':
-                min = (min[0], min[2])
-                max = (max[0], max[2])
-            elif view == 'sagittal':
-                min = (min[1], min[2])
-                max = (max[1], max[2])
-            crop = (min, max)
+            # Get crop box from region name.
+            data = region_data[crop]
+            crop_box = _get_region_crop_box(data, crop_margin, spacing, view)
         else:
-            crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
+            # Get crop box from API crop.
+            crop_box = _convert_crop_to_box(crop)
 
     # Perform crop.
-    if crop:
+    if crop_box:
         # Convert crop to 2D box.
-        ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
+        ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop_box))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -176,25 +159,26 @@ def plot_patient_regions(
     # Plot CT data.
     axis.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
-    # Determine voxel spacing per axis.
-    if view == 'axial':
-        spacing_x = spacing[0]
-        spacing_y = spacing[1]
-    elif view == 'coronal':
-        spacing_x = spacing[0]
-        spacing_y = spacing[2]
-    elif view == 'sagittal':
-        spacing_x = spacing[1]
-        spacing_y = spacing[2]
+    # Show axis labels.
+    if show_axis_xlabel or show_axis_ylabel:
+        if view == 'axial':
+            spacing_x = spacing[0]
+            spacing_y = spacing[1]
+        elif view == 'coronal':
+            spacing_x = spacing[0]
+            spacing_y = spacing[2]
+        elif view == 'sagittal':
+            spacing_x = spacing[1]
+            spacing_y = spacing[2]
 
-    if show_axis_xlabel:
-        axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
-    if show_axis_ylabel:
-        axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
+        if show_axis_xlabel:
+            axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+        if show_axis_ylabel:
+            axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     if regions:
         # Plot regions.
-        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+        show_legend = plot_regions(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop_box, show_extent=show_extent)
 
         if other_ds:
             # Prepend other dataset name.
@@ -282,7 +266,7 @@ def plot_patient_localiser_prediction(
     if slice_idx is None:
         # Load region data.
         label = patient.region_data(regions=centre_of)[centre_of]
-        com = np.round(center_of_mass(label)).astype(int)
+        com = np.round(centre_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]
         elif view == 'coronal':
@@ -345,3 +329,153 @@ def plot_patient_localiser_prediction(
             "font.family": rc_params['font.family'],
             'text.usetex': rc_params['text.usetex']
         })
+
+def plot_patient_segmenter_prediction(
+    dataset: str,
+    pat_id: str,
+    region: str,
+    segmenter: Tuple[str, str, str],
+    aspect: float = None,
+    centre_of: Optional[str] = None,
+    centre_of_label: bool = True,
+    crop: types.Box2D = None,
+    crop_margin: float = 40,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
+    label_colour: str = 'deepskyblue',
+    latex: bool = False,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
+    patch_size: Optional[types.ImageSize3D] = None,
+    seg_colour: str = 'gold',
+    show_extent: bool = True,
+    show_patch: bool = True,
+    slice_idx: Optional[int] = None,
+    view: types.PatientView = 'axial',
+    **kwargs: dict) -> None:
+    assert_position(centre_of, extent_of, slice_idx)
+
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
+
+    # Load sample.
+    set = ds.get(dataset, 'nifti')
+    patient = set.patient(pat_id)
+    spacing = patient.ct_spacing()
+
+    # Load segmenter segmentation.
+    pred, loc_centre, patch_size = load_segmenter_prediction(dataset, pat_id, segmenter, return_patch_info=True)
+    non_empty_pred = False if pred.sum() == 0 else True
+
+    # Centre on OAR if requested.
+    if centre_of:
+        if centre_of_label:
+            # Get centre of label data.
+            label = patient.region_data(regions=centre_of)[centre_of]
+            com = np.round(centre_of_mass(label)).astype(int)
+        else:
+            # Get centre of segmentation data.
+            com = np.round(centre_of_mass(pred)).astype(int)
+        
+        # Get 'slice_idx'.
+        if view == 'axial':
+            slice_idx = com[2]
+        elif view == 'coronal':
+            slice_idx = com[1]
+        elif view == 'sagittal':
+            slice_idx = com[0]
+
+    # Plot patient regions.
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=[label_colour], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, slice_idx=slice_idx, view=view, **kwargs)
+
+    # Convert to box crop.
+    crop_box = None
+    if crop:
+        if type(crop) == str:
+            # Get crop box from region name.
+            label = patient.region_data(regions=region)[region]
+            crop_box = _get_region_crop_box(label, crop_margin, spacing, view)
+        else:
+            # Get crop box from API crop.
+            crop_box = _convert_crop_to_box(crop)
+
+    # Get extent.
+    extent = get_extent(pred)
+
+    # Plot prediction.
+    if non_empty_pred:
+        # Get aspect ratio.
+        if not aspect:
+            aspect = get_aspect_ratio(view, spacing) 
+
+        # Get slice data.
+        pred_slice_data = get_slice(pred, slice_idx, view)
+
+        # Crop the image.
+        if crop:
+            pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop_box))
+
+        # Plot prediction.
+        # seg_colour = plt.cm.tab20(0)
+        colours = [(1, 1, 1, 0), seg_colour]
+        cmap = ListedColormap(colours)
+        plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.plot(0, 0, c=seg_colour, label='Segmentation')
+
+    # Plot extent.
+    if non_empty_pred and show_extent and should_plot_box(extent, view, slice_idx):
+        plot_box(extent, view, colour=seg_colour, crop=crop_box, label='Seg. Extent')
+
+    # Plot patch.
+    if show_patch:
+        seg_patch = get_box(loc_centre, patch_size)
+        if should_plot_box(seg_patch, view, slice_idx):
+            plot_box(seg_patch, view, colour=seg_colour, crop=crop_box, label='Seg. Patch', linestyle='dashed')
+
+    # Show legend.
+    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    for l in plt_legend.get_lines():
+        l.set_linewidth(8)
+
+    plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })
+
+def _convert_crop_to_box(crop: Tuple[Tuple[int, int], Tuple[int, int]]) -> types.Box2D:
+    return ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
+
+def _get_region_crop_box(
+    data: np.ndarray,
+    crop_margin: float,
+    spacing: types.ImageSpacing3D,
+    view: types.PatientView) -> types.Box2D:
+    # Get 3D crop box.
+    extent = get_extent(data)
+
+    # Add crop margin.
+    crop_margin_vox = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
+    min, max = extent
+    min = tuple(np.array(min) - crop_margin_vox)
+    max = tuple(np.array(max) + crop_margin_vox)
+
+    # Select 2D component.
+    if view == 'axial':
+        min = (min[0], min[1])
+        max = (max[0], max[1])
+    elif view == 'coronal':
+        min = (min[0], min[2])
+        max = (max[0], max[2])
+    elif view == 'sagittal':
+        min = (min[1], min[2])
+        max = (max[1], max[2])
+    crop = (min, max)
+    return crop

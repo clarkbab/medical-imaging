@@ -11,7 +11,7 @@ from mymi.geometry import get_box, get_extent_centre
 from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nifti import load_localiser_prediction
+from mymi.prediction.dataset.nifti import load_localiser_prediction, load_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi import types
 
@@ -21,7 +21,6 @@ def get_patient_localiser_evaluation(
     region: str,
     localiser: Tuple[str, str, str]) -> Dict[str, float]:
     # Get pred/ground truth.
-    localiser = Localiser.replace_best(*localiser)
     pred = load_localiser_prediction(dataset, pat_id, localiser)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
@@ -139,3 +138,94 @@ def load_localiser_evaluation(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
+def get_patient_segmenter_evaluation(
+    dataset: str,
+    pat_id: str,
+    region: str,
+    segmenter: Tuple[str, str, str]) -> Dict[str, float]:
+    # Get pred/ground truth.
+    pred = load_segmenter_prediction(dataset, pat_id, segmenter)
+    set = ds.get(dataset, 'nifti')
+    label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
+
+    # Dice.
+    data = {}
+    data['dice'] = dice(pred, label)
+
+    # Distances.
+    spacing = set.patient(pat_id).ct_spacing()
+    if pred.sum() == 0 or label.sum() == 0:
+        dists = {
+            'assd': np.nan,
+            'surface-hd': np.nan,
+            'surface-95hd': np.nan,
+            'voxel-hd': np.nan,
+            'voxel-95hd': np.nan
+        }
+    else:
+        dists = distances(pred, label, spacing)
+
+    data['assd'] = dists['assd']
+    data['surface-hd'] = dists['surface-hd']
+    data['surface-95hd'] = dists['surface-95hd']
+    data['voxel-hd'] = dists['voxel-hd']
+    data['voxel-95hd'] = dists['voxel-95hd']
+
+    return data
+
+def create_segmenter_evaluation(
+    dataset: str,
+    region: str,
+    segmenter: Tuple[str, str, str]) -> None:
+    segmenter = Segmenter.replace_best(*segmenter)
+    logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
+
+    # Load dataset.
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=region)
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for pat in tqdm(pats):
+        # Get pred/ground truth.
+        pred = load_segmenter_prediction(dataset, pat, segmenter)
+        label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
+
+        # Get metrics.
+        metrics = get_patient_segmenter_evaluation(dataset, pat, region, segmenter)
+
+        # Add metrics.
+        for metric, value in metrics.items():
+            data = {
+                'patient-id': pat, 
+                'region': region,
+                'metric': metric,
+                'value': value
+            }
+            df = df.append(data, ignore_index=True)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *segmenter, 'eval.csv') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
+def load_segmenter_evaluation(
+    dataset: str,
+    segmenter: Tuple[str, str, str]) -> np.ndarray:
+    segmenter = Segmenter.replace_best(*segmenter)
+    set = ds.get(dataset, 'nifti')
+    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *segmenter, 'eval.csv') 
+    if not os.path.exists(filepath):
+        raise ValueError(f"Evaluation for dataset '{set}', segmenter '{segmenter}' not found.")
+    data = pd.read_csv(filepath, dtype={'patient-id': str})
+    return data

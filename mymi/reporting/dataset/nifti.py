@@ -12,10 +12,10 @@ from uuid import uuid1
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.evaluation.dataset.nifti import load_localiser_evaluation
+from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre
 from mymi import logging
-from mymi.plotter.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions
+from mymi.plotter.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
 
@@ -558,5 +558,116 @@ def create_localiser_figures(
 
         # Save PDF.
         filepath = os.path.join(set.path, 'reports', 'localiser-figures', f'{region}.pdf') 
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        pdf.output(filepath, 'F')
+
+def create_segmenter_figures(
+    dataset: str,
+    regions: List[str],
+    segmenters: List[Tuple[str, str, str]]) -> None:
+    assert len(regions) == len(segmenters)
+
+    # Get patients.
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=regions)
+
+    # Filter regions that don't exist in dataset.
+    pat_regions = list(sorted(set.list_regions().region.unique()))
+    regions = [r for r in pat_regions if r in regions]
+
+    # Set PDF margins.
+    img_t_margin = 30
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    logging.info(f"Creating segmenter figures for dataset '{dataset}', regions '{regions}'...")
+    for region, segmenter in tqdm(list(zip(regions, segmenters))):
+        # Create PDF.
+        pdf = FPDF()
+        pdf.set_section_title_styles(
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=24,
+                color=0,
+                t_margin=3,
+                l_margin=12,
+                b_margin=0
+            ),
+            TitleStyle(
+                font_family='Times',
+                font_style='B',
+                font_size_pt=18,
+                color=0,
+                t_margin=12,
+                l_margin=12,
+                b_margin=0
+            )
+        ) 
+        
+        # Get errors for the region based upon 'extent-dist-x/y/z' metrics.
+        eval_df = load_segmenter_evaluation(dataset, segmenter)
+
+        for pat in tqdm(pats, leave=False):
+            # Skip if patient doesn't have region.
+            patient = set.patient(pat)
+            if not patient.has_region(region):
+                continue
+
+            # Start info section.
+            pdf.add_page()
+            pdf.start_section(pat)
+            pdf.start_section('Info', level=1)
+
+            # Add table.
+            table_t_margin = 45
+            table_l_margin = 12
+            table_line_height = 2 * pdf.font_size
+            table_col_widths = (40, 40)
+            table_data = [('Metric', 'Value')]
+            pat_eval_df = eval_df[eval_df['patient-id'] == pat]
+            for _, row in pat_eval_df.iterrows():
+                table_data.append((
+                    row.metric,
+                    f'{row.value:.3f}'
+                ))
+            for i, row in enumerate(table_data):
+                if i == 0:
+                    pdf.set_font('Helvetica', 'B', 12)
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                for j, value in enumerate(row):
+                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+
+            # Add images.
+            pdf.add_page()
+            pdf.start_section('Images', level=1)
+
+            # Save images.
+            views = ['axial', 'coronal', 'sagittal']
+            img_coords = (
+                (img_l_margin, img_t_margin),
+                (img_l_margin + img_width, img_t_margin),
+                (img_l_margin, img_t_margin + img_height)
+            )
+            for view, page_coord in zip(views, img_coords):
+                # Set figure.
+                plot_patient_segmenter_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
+
+                # Save temp file.
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                plt.savefig(filepath)
+                plt.close()
+
+                # Add image to report.
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+
+                # Delete temp file.
+                os.remove(filepath)
+
+        # Save PDF.
+        filepath = os.path.join(set.path, 'reports', 'segmenter-figures', f'{region}.pdf') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         pdf.output(filepath, 'F')

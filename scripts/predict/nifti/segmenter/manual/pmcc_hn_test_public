@@ -5,8 +5,7 @@ cd $parent_path
 
 DATASET="PMCC-HN-TEST"
 CHECKPOINT='BEST'
-LOCALISER_SIZE="(128,128,150)"
-LOCALISER_SPACING="(4,4,4)"
+SEGMENTER_SPACING="(1,1,2)"
 REGIONS=(
     # 'BrachialPlexus_L'  # 0
     # 'BrachialPlexus_R'  # 1
@@ -30,5 +29,6 @@ RUN="public-1gpu-100epochs"
 
 for i in "${!REGIONS[@]}"; do
     localiser="('localiser-${REGIONS[i]}','$RUN','BEST')"
-    python create_predictions --dataset $DATASET --region ${REGIONS[i]} --localiser $localiser --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING 
+    segmenter="('segmenter-${REGIONS[i]}','$RUN','BEST')"
+    python create_predictions --dataset $DATASET --region ${REGIONS[i]} --localiser $localiser --segmenter $segmenter --seg_spacing $SEGMENTER_SPACING 
 done

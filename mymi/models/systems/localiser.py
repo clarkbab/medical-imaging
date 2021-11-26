@@ -57,7 +57,7 @@ class Localiser(pl.LightningModule):
         model_name, run_name, checkpoint = Localiser.replace_best(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
-            raise ValueError(f"Model '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+            raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")
         return Localiser.load_from_checkpoint(filepath, **kwargs)
 
     @staticmethod
@@ -67,9 +67,10 @@ class Localiser(pl.LightningModule):
         checkpoint: str) -> Tuple[str, str, str]:
         # Find best checkpoint.
         if checkpoint == 'BEST': 
-            checkpath = os.path.join(config.directories.checkpoints, model_name, run_name)
-            checkpoint = list(sorted(os.listdir(checkpath)))[-1].replace('.ckpt', '')
-
+            dirpath = os.path.join(config.directories.checkpoints, model_name, run_name)
+            if not os.path.exists(dirpath):
+                raise ValueError(f"Run '{run_name}' not found for localiser '{model_name}'.")
+            checkpoint = list(sorted(os.listdir(dirpath)))[-1].replace('.ckpt', '')
         return (model_name, run_name, checkpoint)
 
     def configure_optimizers(self):

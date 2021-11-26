@@ -33,7 +33,7 @@ def get_extent_centre(a: np.ndarray) -> Optional[Union[types.Point2D, types.Poin
 
     return centre
 
-def get_extent_width(a: np.ndarray) -> Optional[Union[types.Width2D, types.Width3D]]:
+def get_extent_width(a: np.ndarray) -> Optional[Union[types.ImageSize2D, types.ImageSize3D]]:
     if a.dtype != np.bool:
         raise ValueError(f"'get_extent_width' expected a boolean array, got '{a.dtype}'.")
 
