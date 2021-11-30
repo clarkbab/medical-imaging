@@ -13,75 +13,55 @@ from mymi import dataset
 from mymi import logging
 from mymi.metrics import dice, distances
 
-num_pats = 100
-
-# Load ID maps.
-pmcc_map_path = 'S:\ImageStore\HN_AI_Contourer\DICOM_Data\datasets\dicom\PMCC-HN-TRAIN-OLD\\anon-nifti-map.csv'
-pmcc_map_df = pd.read_csv(pmcc_map_path, names=['anon-id', 'patient-id'], header=0)
-price_map_path = 'S:\ImageStore\HN_AI_Contourer\DICOM_Data\match-hn_structures_v2.csv'
-price_map_df = pd.read_csv(price_map_path, index_col=0)
-
-# Perform inner join.
-map_df = pmcc_map_df.merge(price_map_df, left_on='patient-id', right_on='UR', how='inner')[['anon-id', 'patient-id', 'Series_UID']]
-
 # Get datasets.
-pmcc_set = dataset.get('PMCC-HN-TRAIN-OLD', 'nifti')
-price_set = dataset.get('PMCC-HN-TRAIN-PRICE', 'nifti')
+mymi_set = dataset.get('EXTRACT-MYMI', 'nifti')
+plastimatch_set = dataset.get('EXTRACT-PLASTIMATCH', 'nifti')
 
 cols = {
     'patient-id': str,
-    'pmcc-id': str,
-    'price-id': str,
     'region': str,
     'metric': str,
     'value': float
 }
 df = pd.DataFrame(columns=cols.keys())
 
-pats = list(map_df['patient-id'].unique())
-for pat in tqdm(pats[:num_pats]):
-    # Get mapped IDs.
-    row = map_df[map_df['patient-id'] == pat].iloc[0]
-    anon_id = row['anon-id']
-    series_uid = row.Series_UID
-    
+pats = mymi_set.list_patients()
+for pat in tqdm(pats):
     # Get spacing.
-    pmcc_pat = pmcc_set.patient(anon_id)
-    pmcc_spacing = pmcc_pat.ct_spacing()
-    price_pat = price_set.patient(series_uid)
-    price_spacing = price_pat.ct_spacing()
-    if pmcc_spacing != price_spacing:
-        logging.error(f"Spacing not consistent '{pmcc_spacing}' and '{price_spacing}', for patient '{pmcc_pat}' and '{price_pat}'.")
+    mymi_pat = mymi_set.patient(pat)
+    mymi_spacing = mymi_pat.ct_spacing()
+    plastimatch_pat = plastimatch_set.patient(pat)
+    plastimatch_spacing = plastimatch_pat.ct_spacing()
+    if mymi_spacing != plastimatch_spacing:
+        logging.error(f"Spacing not consistent '{mymi_spacing}' and '{plastimatch_spacing}', for patient '{mymi_pat}' and '{plastimatch_pat}'.")
         continue
     
     # Get labels.
-    pmcc_labels = pmcc_pat.region_data()
-    price_labels = price_pat.region_data()
+    mymi_labels = mymi_pat.region_data()
+    plastimatch_labels = plastimatch_pat.region_data()
     
     # Evaluate labels.
-    for region in pmcc_labels.keys():
+    for region in mymi_labels.keys():
         # Get region label.
-        pmcc_label = pmcc_labels[region]
-        if price_pat.has_region(region):
-            price_label = price_labels[region]
+        mymi_label = mymi_labels[region]
+        if plastimatch_pat.has_region(region):
+            plastimatch_label = plastimatch_labels[region]
         else:
-            logging.error(f"Region '{region}' not found for patient '{price_pat}'.")
+            logging.error(f"Region '{region}' not found for patient '{plastimatch_pat}'.")
             continue
         
         data = {
             'patient-id': pat,
             'region': region,
-            'pmcc-id': anon_id,
-            'price-id': series_uid
         }
         
         # Get DSC.
         data['metric'] = 'dice'
-        data['value'] = dice(pmcc_label, price_label)
+        data['value'] = dice(mymi_label, plastimatch_label)
         df = df.append(data, ignore_index=True)
         
         # Distances.
-        dists = distances(pmcc_label, price_label, pmcc_spacing)
+        dists = distances(mymi_label, plastimatch_label, mymi_spacing)
         for metric, value in dists.items():
             data['metric'] = metric
             data['value'] = value

@@ -17,6 +17,7 @@ from mymi.geometry import get_extent, get_extent_centre
 from mymi import logging
 from mymi.plotter.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
+from mymi.regions import hash_regions
 from mymi import types
 
 def get_region_summary(
@@ -101,7 +102,7 @@ def create_region_summary(
 
     # Save report.
     set = ds.get(dataset, 'nifti')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -170,19 +171,21 @@ def add_region_summary_outliers(
 
 def load_region_summary(
     dataset: str,
-    blacklist: bool = False,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: List[str],
+    blacklist: bool = False) -> None:
     set = ds.get(dataset, 'nifti')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
     df = pd.read_csv(filepath)
+
+    # Filter blacklisted records.
     if blacklist:
-        # Exclude blacklisted records.
         filepath = os.path.join(set.path, 'region-blacklist.csv')
         black_df = pd.read_csv(filepath)
         df = df.merge(black_df, how='left', on=['patient', 'region'], indicator=True)
         df = df[df['_merge'] == 'left_only']
         df = df.drop(columns='_merge')
+
     return df
 
 def get_ct_summary(
@@ -233,7 +236,7 @@ def create_ct_summary(
 
     # Save summary.
     set = ds.get(dataset, 'nifti')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -242,13 +245,13 @@ def load_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> None:
     set = ds.get(dataset, 'nifti')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
     return pd.read_csv(filepath)
 
 def create_region_figures(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: List[str]) -> None:
     # Get patients.
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=regions)
@@ -261,7 +264,7 @@ def create_region_figures(
             regions = [regions]
 
     # Keep regions with patients.
-    region_df = load_region_summary(dataset, regions=regions)
+    region_df = load_region_summary(dataset, regions)
     regions = list(sorted(region_df.region.unique()))
 
     # Add 'extent-mm' outlier info.
@@ -369,9 +372,6 @@ def create_region_figures(
         filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         pdf.output(filepath, 'F')
-
-def _hash_regions(regions: types.PatientRegions) -> str:
-    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()
 
 def get_object_summary(
     dataset: str,

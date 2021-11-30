@@ -9,6 +9,7 @@ from typing import List
 from mymi import dataset as ds
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
+from mymi.regions import hash_regions
 from mymi import types
 
 def create_evaluation_report(
@@ -73,7 +74,7 @@ def create_ct_summary(
 
     # Save summary.
     set = ds.get(dataset, 'dicom')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -82,12 +83,9 @@ def load_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> None:
     set = ds.get(dataset, 'dicom')
-    hash = _hash_regions(regions)
+    hash = hash_regions(regions)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
     return pd.read_csv(filepath)
-
-def _hash_regions(regions: types.PatientRegions) -> str:
-    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()
 
 def region_count(
     dataset: str,

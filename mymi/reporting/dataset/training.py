@@ -203,9 +203,6 @@ def create_region_figures(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         pdf.output(filepath, 'F')
 
-def _hash_regions(regions: types.PatientRegions) -> str:
-    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()
-
 def get_object_summary(
     dataset: str,
     partition: str,

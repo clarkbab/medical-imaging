@@ -1,4 +1,8 @@
 from enum import Enum
+import hashlib
+import json
+
+from mymi import types
 
 class Regions(Enum):
     BrachialPlexus_L = 0
@@ -23,3 +27,6 @@ class Regions(Enum):
     Submandibular_L = 19
     Submandibular_R = 20
     Thyroid = 21
+
+def hash_regions(regions: types.PatientRegions) -> str:
+    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()
