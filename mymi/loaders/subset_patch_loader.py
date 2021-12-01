@@ -1,22 +1,21 @@
 import numpy as np
-import os
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Union
 
-from mymi import config
 from mymi.dataset.training import TrainingPartition
 from mymi.regions import get_patch_size
-from mymi.transforms import crop_or_pad_3D, point_crop_or_pad_3D
+from mymi.transforms import point_crop_or_pad_3D
 from mymi import types
 
-class PatchLoader:
+class SubsetPatchLoader:
     @staticmethod
     def build(
         partitions: Union[TrainingPartition, List[TrainingPartition]],
         region: str,
+        num_samples: int,
         half_precision: bool = True,
         batch_size: int = 1,
         num_workers: int = 1,
@@ -24,25 +23,11 @@ class PatchLoader:
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
-        """
-        returns: a data loader.
-        args:
-            partition: the dataset partition.
-            region: the single region to load patches for.
-        kwargs:
-            half_precision: load images at half precision.
-            batch_size: the number of images in the batch.
-            num_workers: the number of CPUs for data loading.
-            p_foreground: proportion of patches containing the region.
-            shuffle: shuffle the data.
-            spacing: the voxel spacing of the data.
-            transform: the transform to apply.
-        """
         if type(partitions) == TrainingPartition:
             partitions = [partitions]
 
         # Create dataset object.
-        ds = LoaderDataset(partitions, region, half_precision=half_precision, p_foreground=p_foreground, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, region, num_samples, half_precision=half_precision, p_foreground=p_foreground, spacing=spacing, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -52,21 +37,13 @@ class LoaderDataset(Dataset):
         self,
         partitions: List[TrainingPartition],
         region: str,
+        num_samples: int,
         half_precision: bool = True,
         p_foreground: float = 1,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
-        """
-        args:
-            partition: the dataset partition.
-            region: load patients with this region.
-        kwargs:
-            half_precision: load images at half precision.
-            p_foreground: proportion of patches containing the region.
-            spacing: the voxel spacing.
-            transform: transformations to apply.
-        """
         self._half_precision = half_precision
+        self._num_samples = num_samples
         self._p_foreground = p_foreground
         self._partitions = partitions
         self._patch_size = get_patch_size(region)
@@ -85,8 +62,10 @@ class LoaderDataset(Dataset):
                 map_tuples.append((index, (i, sample)))
                 index += 1
 
-        # Record number of samples.
-        self._num_samples = index
+        # Check number of samples.
+        if num_samples > index:
+            part_names = [p.name for p in partitions]
+            raise ValueError(f"SubsetPatchLoader requested '{num_samples}' samples with region '{region}' for partitions '{part_names}', only '{index}' samples found.")
 
         # Map loader indices to dataset indices.
         self._index_map = dict(map_tuples)

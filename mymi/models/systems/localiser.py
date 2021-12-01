@@ -14,7 +14,7 @@ from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
-from ..networks import UNet
+from ..networks import UNet3D
 
 class Localiser(pl.LightningModule):
     def __init__(
@@ -37,7 +37,7 @@ class Localiser(pl.LightningModule):
         }
         self._max_image_batches = 30
         self._metrics = metrics
-        self._network = UNet()
+        self._network = UNet3D()
         self._region = region
         self._predict_logits = predict_logits
         self._spacing = spacing

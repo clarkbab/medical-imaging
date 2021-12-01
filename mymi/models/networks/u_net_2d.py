@@ -1,4 +1,3 @@
-import logging
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,11 +8,11 @@ class DoubleConv(nn.Module):
         super().__init__()
 
         self.double_conv = nn.Sequential(
-            nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(),
-            nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
+            nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
 
@@ -25,7 +24,7 @@ class Down(nn.Module):
         super().__init__()
 
         self.down = nn.Sequential(
-            nn.MaxPool3d(kernel_size=2),
+            nn.MaxPool2d(kernel_size=2),
             DoubleConv(in_channels, out_channels)
         )
 
@@ -36,7 +35,7 @@ class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
 
-        self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
+        self.upsample = nn.ConvTranspose2d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
         self.double_conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x, x_res):
@@ -63,12 +62,12 @@ class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
 
-        self.conv = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
 
     def forward(self, x):
         return self.conv(x)
 
-class UNet(nn.Module):
+class UNet2D(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -104,7 +103,7 @@ class UNet(nn.Module):
 
     def transfer_encoder(
         self,
-        model: 'UNet') -> None:
+        model: 'UNet2D') -> None:
         # Copy encoder layers.
         self.first = model.first
         self.down1 = model.down1

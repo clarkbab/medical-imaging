@@ -16,6 +16,7 @@ version=$(python --version)
 echo $version
 
 DATASETS="['HN1-SEG','HNPCT-SEG','HNSCC-SEG','OPC-SEG']"
+DATASETS="[PMCC-HN-TRAIN-SEG]"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1

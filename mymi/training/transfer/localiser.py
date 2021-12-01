@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders.training import Loader, SubsetLoader
+from mymi.loaders import Loader, SubsetLoader
 from mymi import logging
 from mymi.models.systems import Localiser
 from mymi import types

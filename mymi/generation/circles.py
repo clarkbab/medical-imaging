@@ -22,7 +22,7 @@ def generate_circles(
         # Get sample.
         draw = np.random.uniform(0, np.min(size))
         diameter = int(np.around(draw))
-        sample = get_sample(dataset, size, diameter)
+        sample = get_sample(size, diameter)
 
         # Save sample.
         filepath = os.path.join(set.path, 'data', f'{i}.npz')
@@ -30,7 +30,6 @@ def generate_circles(
         np.savez_compressed(filepath, data=sample)
 
 def get_sample(
-    dataset: str,
     size: Tuple[int, int],
     diameter: int) -> np.ndarray:
     centre = tuple(np.floor(np.array(size) / 2).astype(int))

@@ -9,16 +9,14 @@ from typing import List, Tuple, Union
 from mymi import types
 from mymi.dataset.training import TrainingPartition
 
-class Loader:
+class OtherLoader:
     @staticmethod
     def build(
         partitions: Union[TrainingPartition, List[TrainingPartition]],
         batch_size: int = 1,
-        half_precision: bool = True,
         num_workers: int = 1,
-        regions: types.PatientRegions = 'all',
+        precision: str = 'single',
         shuffle: bool = True,
-        spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         """
         returns: a data loader.
@@ -30,14 +28,13 @@ class Loader:
             num_workers: the number of CPUs for data loading.
             regions: only load samples with (at least) one of the requested regions.
             shuffle: shuffle the data.
-            spacing: the voxel spacing of the data.
             transform: the transform to apply.
         """
         if type(partitions) == TrainingPartition:
             partitions = [partitions]
 
         # Create dataset object.
-        ds = LoaderDataset(partitions, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, precision=precision, transform=transform)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -46,32 +43,23 @@ class LoaderDataset(Dataset):
     def __init__(
         self,
         partitions: List[TrainingPartition],
-        half_precision: bool = True,
-        regions: types.PatientRegions = 'all',
-        spacing: types.ImageSpacing3D = None,
+        precision: bool = True,
         transform: torchio.transforms.Transform = None):
         """
         args:
             partitions: the dataset partitions.
         kwargs:
-            half_precision: load images at half precision.
-            regions: only load samples with (at least) one of the requested regions.
-            spacing: the voxel spacing.
             transform: transformations to apply.
         """
-        self._half_precision = half_precision
+        self._precision = precision
         self._partitions = partitions
-        self._regions = regions
-        self._spacing = spacing
         self._transform = transform
-        if transform:
-            assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         index = 0
         map_tuples = []
         for i, partition in enumerate(partitions):
             # Filter samples by requested regions.
-            samples = partition.list_samples(regions=regions)
+            samples = partition.list_samples()
             for sample in samples:
                 map_tuples.append((index, (i, sample)))
                 index += 1
@@ -99,50 +87,20 @@ class LoaderDataset(Dataset):
         # Load data.
         p_idx, s_idx = self._index_map[index]
         part = self._partitions[p_idx]
-        input, label = part.sample(s_idx).pair(regions=self._regions)
+        input = part.sample(s_idx).input()
 
         # Get description.
         desc = f'{part.dataset.name}:{part.name}:{s_idx}'
-
-        # Perform transform.
-        if self._transform:
-            # Add 'batch' dimension.
-            input = np.expand_dims(input, axis=0)
-            label = dict((r, np.expand_dims(d, axis=0)) for r, d in label.items())
-
-            # Create 'subject'.
-            affine = np.array([
-                [self._spacing[0], 0, 0, 0],
-                [0, self._spacing[1], 0, 0],
-                [0, 0, self._spacing[2], 1],
-                [0, 0, 0, 1]
-            ])
-            input = ScalarImage(tensor=input, affine=affine)
-            label = dict((r, LabelMap(tensor=d, affine=affine)) for r, d in label.items())
-            subject_kwargs = { 'input': input }
-            for r, d in label.items():
-                subject_kwargs[r] = d
-            subject = Subject(**subject_kwargs)
-
-            # Transform the subject.
-            output = self._transform(subject)
-
-            # Extract results.
-            input = output['input'].data.squeeze(0)
-            label = dict((r, output[r].data.squeeze(0)) for r in label.keys()) 
-
-            # Convert to numpy.
-            input = input.numpy()
-            label = dict((r, d.numpy()) for r, d in label.items())
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
 
         # Convert dtypes.
-        if self._half_precision:
+        if self._precision == 'bool':
+            input = input.astype(bool)
+        elif self._precision == 'half':
             input = input.astype(np.half)
-        else:
+        elif self._precision == 'single':
             input = input.astype(np.single)
-        label = dict((r, d.astype(np.bool)) for r, d in label.items())
 
-        return desc, input, label
+        return desc, input

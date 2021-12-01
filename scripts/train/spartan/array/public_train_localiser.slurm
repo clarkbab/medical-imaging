@@ -37,11 +37,11 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
-NUM_EPOCHS=100
+NUM_EPOCHS=150
 NUM_GPUS=1
 NUM_NODES=1
 NUM_WORKERS=4
-RESUME=False
+RESUME=True
 RESUME_CHECKPOINT='last'
 RUN_NAME="public-1gpu-100epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"

@@ -173,7 +173,7 @@ def convert_to_training(
                 if label.sum() == 0:
                     continue
 
-                _create_training_label(part, pat, i, region, label)
+                _create_training_label(part, i, region, label)
 
     # Indicate success.
     _indicate_success(train_ds, '__CONVERT_TO_TRAINING_SUCCESS__')
@@ -221,7 +221,6 @@ def _create_training_input(
 
 def _create_training_label(
     partition: 'TrainingPartition',
-    patient: str,
     index: int,
     region: str,
     data: np.ndarray) -> None:

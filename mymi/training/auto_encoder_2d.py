@@ -9,22 +9,20 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders import PatchLoader
+from mymi.loaders import OtherLoader
 from mymi.losses import DiceLoss
 from mymi import logging
-from mymi.models.systems import Segmenter
-from mymi import types
+from mymi.models.systems import AutoEncoder2D
 
-def train_segmenter(
+def train_auto_encoder_2d(
     model_name: str,
     run_name: str,
     datasets: Union[str, List[str]],
-    region: str,
+    bottleneck: int,
     loss: str = 'dice',
     num_epochs: int = 200,
     num_gpus: int = 1,
     num_nodes: int = 1,
-    num_samples: Optional[int] = None,
     num_workers: int = 1,
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
@@ -32,7 +30,7 @@ def train_segmenter(
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}'...")
 
     # Load partitions.
     if isinstance(datasets, str):
@@ -42,30 +40,25 @@ def train_segmenter(
         val_parts = [set.partition('validation')]
     else:
         set = ds.get(datasets[0], 'training')
-        spacing = eval(set.params().spacing[0]) 
         train_parts = []
         val_parts = []
         for d in datasets:
             set = ds.get(d, 'training')
-            d_spacing = eval(set.params().spacing[0]) 
-            if d_spacing != spacing:
-                raise ValueError(f"Can't train on datasets with inconsistent spacing.")
             train_parts.append(set.partition('train'))
             val_parts.append(set.partition('validation'))
 
     # Create transforms.
-    rotation = (-5, 5)
-    translation = (-50, 50)
     scale = (0.8, 1.2)
     transform = RandomAffine(
-        degrees=rotation,
+        # degrees=rotation,
         scales=scale,
-        translation=translation,
+        # translation=translation,
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader = PatchLoader.build(train_parts, region, num_samples=num_samples, num_workers=num_workers, spacing=spacing, transform=transform)
-    val_loader = PatchLoader.build(val_parts, region, num_workers=num_workers, shuffle=False)
+    precision = 'half' if num_gpus > 0 else 'single'
+    train_loader = OtherLoader.build(train_parts, num_workers=num_workers, precision=precision, transform=transform)
+    val_loader = OtherLoader.build(val_parts, num_workers=num_workers, precision=precision, shuffle=False)
 
     # Get loss function.
     if loss == 'dice':
@@ -74,11 +67,11 @@ def train_segmenter(
         loss_fn = DiceLoss(weights=[0, 1])
 
     # Create model.
-    metrics = ['dice', 'hausdorff', 'surface']
-    model = Segmenter(
+    metrics = ['dice']
+    model = AutoEncoder2D(
+        bottleneck=bottleneck,
         loss=loss_fn,
-        metrics=metrics,
-        spacing=spacing)
+        metrics=metrics)
 
     # Create logger.
     if use_logger:
@@ -87,7 +80,7 @@ def train_segmenter(
             project=model_name,
             name=run_name,
             save_dir=config.directories.wandb)
-        # logger.watch(model)   # Caused multi-GPU training to hang.
+        # logger.watch(model) # Caused multi-GPU training to hang.
     else:
         logger = None
 
@@ -114,17 +107,24 @@ def train_segmenter(
             raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
         check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
         opt_kwargs['resume_from_checkpoint'] = check_path
-
+    
     # Perform training.
+    if num_gpus > 0:
+        gpus = list(range(num_gpus))
+        precision = 16
+    else:
+        gpus = None
+        precision = 32
+
     trainer = Trainer(
         accelerator='ddp',
         callbacks=callbacks,
-        gpus=list(range(num_gpus)),
+        gpus=gpus,
         logger=logger,
         max_epochs=num_epochs,
         num_nodes=num_nodes,
         num_sanity_val_steps=0,
         plugins=DDPPlugin(find_unused_parameters=False),
-        precision=16,
+        precision=precision,
         **opt_kwargs)
     trainer.fit(model, train_loader, val_loader)

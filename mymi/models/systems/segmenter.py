@@ -15,7 +15,7 @@ from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
-from ..networks import UNet
+from ..networks import UNet3D
 
 class Segmenter(pl.LightningModule):
     def __init__(
@@ -34,7 +34,7 @@ class Segmenter(pl.LightningModule):
         self._loss = loss
         self._max_image_batches = 50
         self._metrics = metrics
-        self._network = UNet()
+        self._network = UNet3D()
         self._predict_logits = predict_logits
         self._spacing = spacing
 

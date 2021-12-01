@@ -39,7 +39,7 @@ class DiceLoss(nn.Module):
         label = F.one_hot(label, num_classes=2)
         label = label.movedim(-1, 1)
         if label.shape != pred.shape:
-            raise ValueError(f"DiceLoss expects label shape (after one-hot, dim=1) and prediction shape to be equal. Got '{label.shape}' and '{pred.shape}'.")
+            raise ValueError(f"DiceLoss expects prediction shape and label shape (after one-hot, dim=1) to be equal. Got '{pred.shape}' and '{label.shape}'.")
 
         # Flatten volumetric data.
         pred = pred.flatten(start_dim=2)

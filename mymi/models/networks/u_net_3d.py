@@ -1,6 +1,8 @@
 import logging
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.nn.functional import pad
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -37,9 +39,24 @@ class Up(nn.Module):
         self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
         self.double_conv = DoubleConv(in_channels, out_channels)
 
-    def forward(self, x):
+    def forward(self, x, x_res):
         x = self.upsample(x)
+
+        # Spatial resolution may be lost due to rounding when downsampling. Pad the upsampled features
+        # if necessary.
+        if x.shape != x_res.shape:
+            num_axes = len(x.shape)
+            padding = np.zeros((num_axes, 2), dtype='uint8')
+            for axis in range(num_axes):
+                diff = x_res.shape[axis] - x.shape[axis]
+                if diff > 0:
+                    padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
+            padding = tuple(np.flip(padding, axis=0).flatten())
+            x = pad(x, padding)
+
+        x = torch.cat((x, x_res), dim=1)
         x = self.double_conv(x)
+
         return x
 
 class OutConv(nn.Module):
@@ -51,20 +68,19 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-class AutoEncoder(nn.Module):
+class UNet3D(nn.Module):
     def __init__(self):
         super().__init__()
-        self.first = DoubleConv(1, 16)
-        self.down1 = Down(16, 32)
-        self.down2 = Down(32, 64)
-        self.down3 = Down(64, 32)
-        self.down4 = Down(32, 16)
-        self.down4 = Down(16, 1)
-        self.up1 = Up(1, 16)
-        self.up2 = Up(16, 32)
-        self.up3 = Up(32, 64)
-        self.up4 = Up(64, 32)
-        self.up4 = Up(32, 16)
+
+        self.first = DoubleConv(1, 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        self.down4 = Down(512, 1024)
+        self.up1 = Up(1024, 512)
+        self.up2 = Up(512, 256)
+        self.up3 = Up(256, 128)
+        self.up4 = Up(128, 64)
         self.out = OutConv(64, 2)
         self.softmax = nn.Softmax(dim=1)
 
@@ -88,7 +104,7 @@ class AutoEncoder(nn.Module):
 
     def transfer_encoder(
         self,
-        model: 'UNet') -> None:
+        model: 'UNet3D') -> None:
         # Copy encoder layers.
         self.first = model.first
         self.down1 = model.down1

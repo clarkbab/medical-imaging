@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders.training import Loader, SubsetLoader
+from mymi.loaders import Loader
 from mymi.losses import DiceLoss
 from mymi import logging
 from mymi.models.systems import Localiser
@@ -24,10 +24,10 @@ def train_localiser(
     num_epochs: int = 200,
     num_gpus: int = 1,
     num_nodes: int = 1,
-    num_subset: Optional[int] = None,
     num_workers: int = 1,
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
+    slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     use_logger: bool = False) -> None:
@@ -63,10 +63,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    if num_subset is not None:
-        train_loader = SubsetLoader.build(train_parts, num_subset, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
-    else:
-        train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
+    train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
     val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
 
     # Get loss function.
