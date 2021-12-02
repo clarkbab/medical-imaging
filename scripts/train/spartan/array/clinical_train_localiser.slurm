@@ -2,9 +2,9 @@
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
 #SBATCH --mem 32G
-#SBATCH --gres gpu:p100:4
+#SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 7-0:00:00
+#SBATCH --time 2-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -16,16 +16,37 @@ version=$(python --version)
 echo $version
 
 DATASETS="PMCC-HN-TRAIN-LOC"
-BASH_REGIONS=('BrachialPlexus_L' 'BrachialPlexus_R' 'Brain' 'BrainStem' 'Cochlea_L' 'Cochlea_R' 'Lens_L' 'Lens_R' 'Mandible' 'OpticChiasm' 'OpticNerve_L' 'OpticNerve_R' 'OralCavity' 'Parotid_L' 'Parotid_R' 'SpinalCord' 'Submandibular_L' 'Submandibular_R')
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticChiasm','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"
-REGION=${BASH_REGIONS[$SLURM_ARRAY_TASK_ID]}
+REGIONS=(
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Brain'             # 2
+    'BrainStem'         # 3
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    'OralCavity'        # 11
+    'Parotid_L'         # 12
+    'Parotid_R'         # 13
+    'SpinalCord'        # 14
+    'Submandibular_L'   # 15
+    'Submandibular_R'   # 16
+)
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
-NUM_EPOCHS=400
-NUM_GPUS=4
+NUM_EPOCHS=150
+NUM_GPUS=1
 NUM_NODES=1
 NUM_WORKERS=4
-RUN_NAME="clinical-400epochs"
+RESUME=False
+RESUME_CHECKPOINT='last'
+RUN_NAME="clinical-1gpu-150epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --use_logger $USE_LOGGER
+python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS \
+    --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+    --use_logger $USE_LOGGER

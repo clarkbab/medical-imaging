@@ -5,7 +5,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
@@ -26,6 +26,7 @@ def train_segmenter(
     num_nodes: int = 1,
     num_samples: Optional[int] = None,
     num_workers: int = 1,
+    pretrained: Optional[Tuple[str, str, str]] = None,    
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
@@ -75,9 +76,12 @@ def train_segmenter(
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
+    if pretrained:
+        pretrained = Segmenter.load(*pretrained)
     model = Segmenter(
         loss=loss_fn,
         metrics=metrics,
+        pretrained=pretrained,
         spacing=spacing)
 
     # Create logger.

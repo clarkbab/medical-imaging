@@ -4,6 +4,7 @@ import numpy as np
 import pydicom as dcm
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
+import SimpleITK as sitk
 from typing import Dict, List, Sequence
 
 from mymi import types
@@ -11,6 +12,7 @@ from mymi import logging
 
 from .roi_data import ROIData
 
+CONTOUR_FORMATS = ['POINT', 'CLOSED_PLANAR']
 DATE_FORMAT = '%Y%m%d'
 TIME_FORMAT = '%H%M%S.%f'
 
@@ -64,6 +66,7 @@ class RTSTRUCTConverter:
         """
         # Get necessary values from CT.
         offset = ref_cts[0].ImagePositionPatient
+        offset_2D = offset[:-1]
         size_2D = ref_cts[0].pixel_array.shape
         size = (*size_2D, len(ref_cts))
         spacing_2D = ref_cts[0].PixelSpacing
@@ -92,18 +95,19 @@ class RTSTRUCTConverter:
         contour_seq = sorted(contour_seq, key=lambda c: c.ContourData[2])
 
         # Convert points into voxel data.
-        for contour in contour_seq:
+        for i, contour in enumerate(contour_seq):
             # Get contour data.
             contour_data = contour.ContourData
-            if contour.ContourGeometricType != 'CLOSED_PLANAR':
-                # raise ValueError(f"Expected contour type 'CLOSED_PLANAR', got '{contour.ContourGeometricType}'.")
-                logging.error(f"Got contour type '{contour.ContourGeometricType}'.")
+
+            # This code handles 'CLOSED_PLANAR' and 'POINT' types.
+            if not contour.ContourGeometricType in CONTOUR_FORMATS:
+                raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{i}', ROI '{name}'.")
 
             # Coords are stored in flat array.
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.
-            slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, offset[:-1])
+            slice_data = cls._get_mask_slice(points, size_2D, size, spacing_2D, spacing, offset_2D, offset)
 
             # Get z index of slice.
             z_idx = int((points[0, 2] - offset[2]) / spacing[2])
@@ -118,8 +122,11 @@ class RTSTRUCTConverter:
         cls,
         points: np.ndarray,
         size: types.ImageSize2D,
+        size3D: types.ImageSize3D,
         spacing: types.ImageSpacing2D,
-        offset: types.PhysPoint2D) -> np.ndarray:
+        spacing3D: types.ImageSpacing3D,
+        offset: types.PhysPoint2D,
+        offset3D: types.PhysPoint3D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:
@@ -128,9 +135,16 @@ class RTSTRUCTConverter:
             spacing: the (x, y) pixel spacing in mm.
             offset: the (0, 0) pixel offset in physical space.
         """
+
         # Convert from physical coordinates to array indices.
-        x_indices = (points[:, 0] - offset[0]) / spacing[0]
-        y_indices = (points[:, 1] - offset[1]) / spacing[1]
+        # x_indices = (points[:, 0] - offset[0]) / spacing[0]
+        # y_indices = (points[:, 1] - offset[1]) / spacing[1]
+        img = sitk.GetImageFromArray(np.zeros(size3D))
+        img.SetSpacing(spacing3D)
+        img.SetOrigin(offset3D)
+        indices = np.asarray([img.TransformPhysicalPointToIndex(points[i]) for i in range(points.shape[0])])
+        x_indices = indices[:, 0]
+        y_indices = indices[:, 1]
 
         # Round before typecasting to avoid truncation.
         indices = np.stack((y_indices, x_indices), axis=1)  # (y, x) as 'cv.fillPoly' expects rows, then columns.

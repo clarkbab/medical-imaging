@@ -23,7 +23,7 @@ class Localiser(pl.LightningModule):
         loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
-        pretrained_model: Optional[pl.LightningModule] = None,
+        pretrained: Optional[pl.LightningModule] = None,
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
         if 'distances' in metrics and spacing is None:
@@ -37,15 +37,15 @@ class Localiser(pl.LightningModule):
         }
         self._max_image_batches = 30
         self._metrics = metrics
-        self._network = UNet3D()
+        self._network = UNet3D(pretrained_model=pretrained.network if pretrained else None)
         self._region = region
         self._predict_logits = predict_logits
         self._spacing = spacing
         self.save_hyperparameters()
 
-        # Replace pretrained layers and freeze.
-        if pretrained_model is not None:
-            self._network.transfer_encoder(pretrained_model)
+    @property
+    def network(self) -> nn.Module:
+        return self._network
 
     @staticmethod
     def load(

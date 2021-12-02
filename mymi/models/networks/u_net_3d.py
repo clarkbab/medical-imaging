@@ -1,8 +1,8 @@
-import logging
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.functional import pad
+from typing import Optional
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -69,9 +69,12 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 class UNet3D(nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        pretrained_model: Optional[nn.Module] = None):
         super().__init__()
 
+        # Define layers.
         self.first = DoubleConv(1, 64)
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
@@ -83,6 +86,10 @@ class UNet3D(nn.Module):
         self.up4 = Up(128, 64)
         self.out = OutConv(64, 2)
         self.softmax = nn.Softmax(dim=1)
+
+        # Transfer pretrained model.
+        if pretrained_model:
+            self._transfer_model(pretrained_model)
 
     def count_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -99,20 +106,25 @@ class UNet3D(nn.Module):
         x = self.up4(x, x1)
         x = self.out(x)
         x = self.softmax(x)
-
         return x
 
-    def transfer_encoder(
+    def _transfer_model(
         self,
         model: 'UNet3D') -> None:
-        # Copy encoder layers.
+
+        # Copy all layers.
         self.first = model.first
         self.down1 = model.down1
         self.down2 = model.down2
         self.down3 = model.down3
         self.down4 = model.down4
+        self.up1 = model.up1
+        self.up2 = model.up2
+        self.up3 = model.up3
+        self.up4 = model.up4
+        self.out = model.out
 
-        # Freeze layers.
+        # Freeze encoder layers.
         modules = [
             self.first,
             self.down1,
