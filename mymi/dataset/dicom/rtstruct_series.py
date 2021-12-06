@@ -162,14 +162,7 @@ class RTSTRUCTSeries(DICOMSeries):
         # Add ROI data.
         region_dict = {}
         for name, unmapped_name in names:
-            # Get binary mask.
-            try:
-                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
-            except ValueError as e:
-                logging.error(f"Caught error extracting data for region '{unmapped_name}', series '{self}'.")
-                logging.error(f"Error message: {e}")
-                continue
-
+            data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
             region_dict[name] = data
 
         # Create ordered dict.

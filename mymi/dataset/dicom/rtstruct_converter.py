@@ -137,23 +137,18 @@ class RTSTRUCTConverter:
         """
 
         # Convert from physical coordinates to array indices.
-        # x_indices = (points[:, 0] - offset[0]) / spacing[0]
-        # y_indices = (points[:, 1] - offset[1]) / spacing[1]
-        img = sitk.GetImageFromArray(np.zeros(size3D))
-        img.SetSpacing(spacing3D)
-        img.SetOrigin(offset3D)
-        indices = np.asarray([img.TransformPhysicalPointToIndex(points[i]) for i in range(points.shape[0])])
-        x_indices = indices[:, 0]
-        y_indices = indices[:, 1]
+        x_indices = (points[:, 0] - offset[0]) / spacing[0]
+        y_indices = (points[:, 1] - offset[1]) / spacing[1]
+        x_indices = np.around(x_indices)                    # Round to avoid truncation errors.
+        y_indices = np.around(y_indices)
 
-        # Round before typecasting to avoid truncation.
+        # Convert to 'cv2' format.
         indices = np.stack((y_indices, x_indices), axis=1)  # (y, x) as 'cv.fillPoly' expects rows, then columns.
-        indices = np.around(indices)    # Round to avoid truncation errors.
-        indices = indices.astype('int32')   # 'cv.fillPoly' expects 'int32' input points.
+        indices = indices.astype('int32')                   # 'cv.fillPoly' expects 'int32' input points.
+        pts = [np.expand_dims(indices, axis=0)]
 
         # Get all voxels on the boundary and interior described by the indices.
         slice_data = np.zeros(shape=size, dtype='uint8')   # 'cv.fillPoly' expects to write to 'uint8' mask.
-        pts = [np.expand_dims(indices, axis=0)]
         cv.fillPoly(img=slice_data, pts=pts, color=1)
         slice_data = slice_data.astype(bool)
 

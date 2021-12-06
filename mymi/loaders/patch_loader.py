@@ -6,6 +6,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Optional, Union
 
 from mymi.dataset.training import TrainingPartition
+from mymi.geometry import get_extent_centre
 from mymi.regions import get_patch_size
 from mymi.transforms import point_crop_or_pad_3D
 from mymi import types
@@ -158,9 +159,12 @@ class LoaderDataset(Dataset):
             label: the label data.
         """
         # Choose randomly from the foreground voxels.
-        fg_voxels = np.argwhere(label != 0)
-        fg_voxel_idx = np.random.choice(len(fg_voxels))
-        centre = fg_voxels[fg_voxel_idx]
+        # fg_voxels = np.argwhere(label != 0)
+        # fg_voxel_idx = np.random.choice(len(fg_voxels))
+        # centre = fg_voxels[fg_voxel_idx]
+        
+        # Choose centre of OAR.
+        centre = get_extent_centre(label.astype(bool))
 
         # Extract patch around centre.
         input = point_crop_or_pad_3D(input, self._patch_size, centre, fill=input.min())        

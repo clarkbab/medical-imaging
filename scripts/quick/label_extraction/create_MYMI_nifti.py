@@ -15,14 +15,14 @@ from mymi import dataset as ds
 from mymi.dataset.nifti import recreate
 from mymi import logging
 
-num_patients = 10
+num_patients = 20
 regions = ['Brain', 'Cochlea_L', 'Cochlea_R', 'OralCavity', 'Parotid_L', 'Parotid_R', 'SpinalCord', 'Submandibular_L', 'Submandibular_R']
 
 dataset = 'HN1'
 set = ds.get(dataset, 'dicom')
 pats = set.list_patients()[:num_patients]
 
-dest_dataset = 'HN1-MYMI-SITK'
+dest_dataset = 'HN1-MYMI'
 nifti_set = recreate(dest_dataset)
 
 for pat in tqdm(pats):

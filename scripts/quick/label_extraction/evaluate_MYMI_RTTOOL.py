@@ -15,7 +15,7 @@ from mymi import logging
 from mymi.metrics import dice, distances
 
 # Get datasets.
-mymi_name = 'MYMI-SITK'
+mymi_name = 'MYMI'
 rttool_name = 'RTTOOL'
 mymi_set = dataset.get(f'HN1-{mymi_name}', 'nifti')
 rttool_set = dataset.get(f'HN1-{rttool_name}', 'nifti')
