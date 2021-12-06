@@ -6,8 +6,6 @@ import pydicom as dcm
 from scipy.ndimage import center_of_mass
 from typing import Any, Callable, List, Optional, OrderedDict, Sequence, Tuple, Union
 
-from mymi import cache
-from mymi import config
 from mymi import logging
 from mymi import types
 
@@ -66,7 +64,6 @@ class RTSTRUCTSeries(DICOMSeries):
     def __str__(self) -> str:
         return self._global_id
 
-    @cache.method('_global_id')
     def list_regions(
         self,
         use_mapping: bool = True) -> List[str]:
@@ -87,16 +84,13 @@ class RTSTRUCTSeries(DICOMSeries):
 
         return rtstruct
 
-    @cache.method('_global_id')
     def list_regions(
         self,
-        clear_cache: bool = False,
         use_mapping: bool = True,
         whitelist: types.PatientRegions = 'all') -> List[str]:
         """
         returns: the patient's region names.
         kwargs:
-            clear_cache: force the cache to clear.
             use_mapping: use region map if present.
             whitelist: return whitelisted regions only.
         """
@@ -138,7 +132,6 @@ class RTSTRUCTSeries(DICOMSeries):
 
     def region_data(
         self,
-        clear_cache: bool = False,
         regions: types.PatientRegions = 'all',
         use_mapping: bool = True) -> OrderedDict:
         self._assert_requested_regions(regions, use_mapping=use_mapping)

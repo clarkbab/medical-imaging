@@ -213,7 +213,7 @@ class Cache:
             params: the dict of cache params.
         """
         # Check if cache read is enabled.
-        if not self._read_enabled:
+        if not self.read_enabled:
             return
 
         # Get the data type.
@@ -276,8 +276,8 @@ class Cache:
             params: cache parameters for the object.
             obj: the object to cache.
         """
-        # Check if cache read is enabled.
-        if not self._write_enabled:
+        # Check if cache write is enabled.
+        if not self.write_enabled:
             return
 
         # Get the data type.
