@@ -235,13 +235,12 @@ def plot_patient_localiser_prediction(
     localiser: Tuple[str, str, str],
     aspect: float = None,
     centre_of: Optional[str] = None,
-    colour: Optional[str] = None,
     crop: types.Box2D = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    patch_size: Optional[types.ImageSize3D] = None,
+    show_extent: bool = False,
     show_patch: bool = False,
     show_seg: bool = False,
     slice_idx: Optional[int] = None,
@@ -275,7 +274,7 @@ def plot_patient_localiser_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=[colour], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, slice_idx=slice_idx, view=view, **kwargs)
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['y'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     # Load localiser segmentation.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
@@ -306,7 +305,7 @@ def plot_patient_localiser_prediction(
 
     # Plot bounding box.
     if non_empty_pred and should_plot_box(extent, view, slice_idx):
-        plot_box(extent, view, colour=colour, crop=crop, label='Loc. Box')
+        plot_box(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box')
 
     # Plot second stage patch.
     if non_empty_pred and show_patch:
@@ -314,7 +313,7 @@ def plot_patient_localiser_prediction(
         size = get_patch_size(region)
         patch = get_box(centre, size)
         if should_plot_box(patch, view, slice_idx):
-            plot_box(patch, view, colour=colour, crop=crop, label='Seg. Patch', linestyle='dashed')
+            plot_box(patch, view, colour='deepskyblue', crop=crop, label='Seg. Patch', linestyle='dashed')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})

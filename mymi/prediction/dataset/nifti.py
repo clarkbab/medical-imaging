@@ -201,32 +201,35 @@ def create_segmenter_predictions(
     pats = set.list_patients(regions=region)
 
     # Load model.
+    localiser_args = Localiser.replace_best(*localiser)
     segmenter_args = Segmenter.replace_best(*segmenter)     # Get args for filepath use.
     segmenter = Segmenter.load(*segmenter)
 
     for pat in tqdm(pats):
         # Get centre of localiser extent.
-        loc_seg = load_localiser_prediction(dataset, pat, localiser)
+        loc_seg = load_localiser_prediction(dataset, pat, localiser_args)
         centre = get_extent_centre(loc_seg)
 
         # Get segmenter prediction.
         seg = get_segmenter_prediction(dataset, pat, centre, segmenter, patch_size, seg_spacing, device=device)
 
         # Save segmentation.
-        filepath = os.path.join(set.path, 'predictions', 'segmenter', *segmenter_args, f'{pat}.npz') 
+        filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser_args, *segmenter_args, f'{pat}.npz') 
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         np.savez(filepath, data=seg, centre=centre, patch_size=patch_size)
 
 def load_segmenter_prediction(
     dataset: str,
     pat_id: types.PatientID,
+    localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str],
     return_patch_info: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Point3D, types.ImageSize3D]]:
+    localiser_args = Localiser.replace_best(*localiser)
     segmenter_args = Segmenter.replace_best(*segmenter)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'predictions', 'segmenter', *segmenter_args, f'{pat_id}.npz') 
+    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser_args, *segmenter_args, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
         raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter_args}'.")
     npz_file = np.load(filepath)

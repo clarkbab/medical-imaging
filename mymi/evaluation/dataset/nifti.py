@@ -142,9 +142,10 @@ def get_patient_segmenter_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
+    localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str]) -> Dict[str, float]:
     # Get pred/ground truth.
-    pred = load_segmenter_prediction(dataset, pat_id, segmenter)
+    pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -176,9 +177,11 @@ def get_patient_segmenter_evaluation(
 def create_segmenter_evaluation(
     dataset: str,
     region: str,
+    localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str]) -> None:
+    localiser = Localiser.replace_best(*localiser)
     segmenter = Segmenter.replace_best(*segmenter)
-    logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
+    logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Load dataset.
     set = ds.get(dataset, 'nifti')
@@ -194,12 +197,8 @@ def create_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     for pat in tqdm(pats):
-        # Get pred/ground truth.
-        pred = load_segmenter_prediction(dataset, pat, segmenter)
-        label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
-
         # Get metrics.
-        metrics = get_patient_segmenter_evaluation(dataset, pat, region, segmenter)
+        metrics = get_patient_segmenter_evaluation(dataset, pat, region, localiser, segmenter)
 
         # Add metrics.
         for metric, value in metrics.items():
@@ -215,7 +214,7 @@ def create_segmenter_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *segmenter, 'eval.csv') 
+    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
