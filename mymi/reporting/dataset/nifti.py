@@ -1,6 +1,4 @@
 from fpdf import FPDF, TitleStyle
-import hashlib
-import json
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -23,13 +21,12 @@ from mymi import types
 
 def get_region_summary(
     dataset: str,
-    regions: List[str]) -> pd.DataFrame:
+    region: str) -> pd.DataFrame:
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=regions)
+    pats = set.list_patients(regions=region)
 
     cols = {
-        'patient': str,
-        'region': str,
+        'patient-id': str,
         'connected': bool,
         'connected-p': float,
         'connected-extent-mm-x': float,
@@ -46,47 +43,43 @@ def get_region_summary(
         spacing = set.patient(pat).ct_spacing()
 
         # Get region data.
-        pat_regions = set.patient(pat).list_regions(whitelist=regions)
-        rs_data = set.patient(pat).region_data(regions=pat_regions)
+        label = set.patient(pat).region_data(regions=region)[region]
 
         # Add extents for all regions.
-        for region in rs_data.keys():
-            data = {
-                'patient': pat,
-                'region': region
-            }
+        data = {
+            'patient-id': pat,
+        }
 
-            # See if OAR is single structure.
-            label = rs_data[region]
-            lcc_label = get_largest_cc(label)
-            data['connected'] = True if lcc_label.sum() == label.sum() else False
-            data['connected-p'] = lcc_label.sum() / label.sum()
+        # See if OAR is single structure.
+        lcc_label = get_largest_cc(label)
+        data['connected'] = True if lcc_label.sum() == label.sum() else False
+        data['connected-p'] = lcc_label.sum() / label.sum()
 
-            # Add OAR extent.
-            extent = get_extent(label)
-            if extent:
-                min, max = extent
-                extent_vox = np.array(max) - min
-                extent_mm = extent_vox * spacing
-            else:
-                extent_mm = (0, 0, 0)
-            data['extent-mm-x'] = extent_mm[0]
-            data['extent-mm-y'] = extent_mm[1]
-            data['extent-mm-z'] = extent_mm[2]
+        # Add OAR extent.
+        extent = get_extent(label)
+        if extent:
+            min, max = extent
+            extent_vox = np.array(max) - min
+            extent_mm = extent_vox * spacing
+        else:
+            extent_mm = (0, 0, 0)
+        data['extent-mm-x'] = extent_mm[0]
+        data['extent-mm-y'] = extent_mm[1]
+        data['extent-mm-z'] = extent_mm[2]
 
-            # Add extent of largest connected component.
-            extent = get_extent(lcc_label)
-            if extent:
-                min, max = extent
-                extent_vox = np.array(max) - min
-                extent_mm = extent_vox * spacing
-            else:
-                extent_mm = (0, 0, 0)
-            data['connected-extent-mm-x'] = extent_mm[0]
-            data['connected-extent-mm-y'] = extent_mm[1]
-            data['connected-extent-mm-z'] = extent_mm[2]
+        # Add extent of largest connected component.
+        extent = get_extent(lcc_label)
+        if extent:
+            min, max = extent
+            extent_vox = np.array(max) - min
+            extent_mm = extent_vox * spacing
+        else:
+            extent_mm = (0, 0, 0)
+        data['connected-extent-mm-x'] = extent_mm[0]
+        data['connected-extent-mm-y'] = extent_mm[1]
+        data['connected-extent-mm-z'] = extent_mm[2]
 
-            df = df.append(data, ignore_index=True)
+        df = df.append(data, ignore_index=True)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)
@@ -95,50 +88,49 @@ def get_region_summary(
 
 def create_region_summary(
     dataset: str,
-    regions: List[str]) -> None:
-    logging.info(f"Creating region summary for dataset '{dataset}', regions '{regions}'...")
+    region: str) -> None:
+    logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
 
     # Generate counts report.
-    df = get_region_summary(dataset, regions)
+    df = get_region_summary(dataset, region)
 
     # Save report.
     set = ds.get(dataset, 'nifti')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
 def _get_outlier_cols_func(
-    columns: List[str],
     lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:
+    # Create function to operate on row of 'region summary' table.
     def _outlier_cols(row: pd.Series) -> Dict:
-        reg_stats = lim_df.loc[row.region]
         data = {}
 
         # Add outlier info.
-        for column in columns:
-            if row[column] < reg_stats[f'{column}-low']:
+        for column in lim_df.index:
+            col_stats = lim_df.loc[column]
+            if row[column] < col_stats['low']:
                 outlier = True
-                outlier_dir = 'LOW'
-                if reg_stats[f'{column}-iqr'] != 0:
-                    outlier_iqr = (reg_stats[f'{column}-q1'] - row[column]) / reg_stats[f'{column}-iqr']
+                outlier_dir = 'low'
+                if col_stats['iqr'] == 0:
+                    outlier_num_iqr = np.inf
                 else:
-                    outlier_iqr = np.inf
-            elif row[column] > reg_stats[f'{column}-high']:
+                    outlier_num_iqr = (col_stats['q1'] - row[column]) / col_stats['iqr']
+            elif row[column] > col_stats['high']:
                 outlier = True
-                outlier_dir = 'HIGH'
-                if reg_stats[f'{column}-iqr'] != 0:
-                    outlier_iqr = (row[column] - reg_stats[f'{column}-q3']) / reg_stats[f'{column}-iqr']
+                outlier_dir = 'high'
+                if col_stats['iqr'] == 0:
+                    outlier_num_iqr = np.inf
                 else:
-                    outlier_iqr = np.inf
+                    outlier_num_iqr = (row[column] - col_stats['q3']) / col_stats['iqr']
             else:
                 outlier = False
                 outlier_dir = ''
-                outlier_iqr = np.nan
+                outlier_num_iqr = np.nan
 
             data[f'{column}-out'] = outlier
             data[f'{column}-out-dir'] = outlier_dir
-            data[f'{column}-out-iqr'] = outlier_iqr
+            data[f'{column}-out-num-iqr'] = outlier_num_iqr
 
         return data
     return _outlier_cols
@@ -148,53 +140,44 @@ def add_region_summary_outliers(
     columns: List[str]) -> pd.DataFrame:
 
     # Get outlier limits.
-    q1 = df.groupby(['region']).quantile(0.25)[columns]
-    q3 = df.groupby(['region']).quantile(0.75)[columns]
-    iqr = q3 - q1
-    low = q1 - 1.5 * iqr
-    high = q3 + 1.5 * iqr
-
-    # Rename columns.
-    def colmap(cols, suffix):
-        return dict(((c, f'{c}-{suffix}') for c in cols))
-    q1 = q1.rename(columns=colmap(columns, 'q1'))
-    q3 = q3.rename(columns=colmap(columns, 'q3'))
-    iqr = iqr.rename(columns=colmap(columns, 'iqr'))
-    low = low.rename(columns=colmap(columns, 'low'))
-    high = high.rename(columns=colmap(columns, 'high'))
+    q1 = df.quantile(0.25)[columns].rename('q1')
+    q3 = df.quantile(0.75)[columns].rename('q3')
+    iqr = (q3 - q1).rename('iqr')
+    low = (q1 - 1.5 * iqr).rename('low')
+    high = (q3 + 1.5 * iqr).rename('high')
     lim_df = pd.concat([q1, q3, iqr, low, high], axis=1)
 
     # Add columns.
-    func = _get_outlier_cols_func(columns, lim_df)
+    func = _get_outlier_cols_func(lim_df)
     out_df = df.apply(func, axis=1, result_type='expand')
     df = pd.concat([df, out_df], axis=1)
     return df
 
 def load_region_summary(
     dataset: str,
-    regions: List[str],
+    region: str,
     blacklist: bool = False) -> None:
+    # Load summary.
     set = ds.get(dataset, 'nifti')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'region-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
     df = pd.read_csv(filepath)
 
     # Filter blacklisted records.
     if blacklist:
         filepath = os.path.join(set.path, 'region-blacklist.csv')
         black_df = pd.read_csv(filepath)
-        df = df.merge(black_df, how='left', on=['patient', 'region'], indicator=True)
+        df = df.merge(black_df, how='left', on=['patient-id', 'region'], indicator=True)
         df = df[df['_merge'] == 'left_only']
         df = df.drop(columns='_merge')
 
     return df
 
-def get_ct_summary(
-    dataset: str,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+def get_ct_summary(dataset: str) -> pd.DataFrame:
+    logging.info(f"Creating CT summary for dataset '{dataset}'.")
+
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=regions)
+    pats = set.list_patients()
 
     cols = {
         'patient-id': str,
@@ -229,16 +212,13 @@ def get_ct_summary(
 
     return df
 
-def create_ct_summary(
-    dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+def create_ct_summary(dataset: str) -> None:
     # Get summary.
-    df = get_ct_summary(dataset, regions=regions)
+    df = get_ct_summary(dataset)
 
     # Save summary.
     set = ds.get(dataset, 'nifti')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -252,98 +232,160 @@ def load_ct_summary(
 
 def create_region_figures(
     dataset: str,
-    regions: List[str]) -> None:
+    region: str,
+    subregions: bool = False) -> None:
+    logging.info(f"Creating region figures for dataset '{dataset}', region '{region}'.")
+
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=regions)
-
-    # Get regions.
-    if type(regions) == str:
-        if regions == 'all':
-            regions = list(sorted(set.list_regions().region.unique()))
-        else:
-            regions = [regions]
+    pats = set.list_patients(regions=region)
 
     # Keep regions with patients.
-    region_df = load_region_summary(dataset, regions)
-    regions = list(sorted(region_df.region.unique()))
+    df = load_region_summary(dataset, region)
 
     # Add 'extent-mm' outlier info.
     columns = ['extent-mm-x', 'extent-mm-y', 'extent-mm-z']
-    region_df = add_region_summary_outliers(region_df, columns)
+    df = add_region_summary_outliers(df, columns)
 
     # Set PDF margins.
-    img_t_margin = 30
+    img_t_margin = 35
     img_l_margin = 5
     img_width = 100
     img_height = 100
 
-    logging.info(f"Creating region figures for dataset '{dataset}', regions '{regions}'...")
-    for region in tqdm(regions):
-        # Create PDF.
-        pdf = FPDF()
-        pdf.set_section_title_styles(
-            TitleStyle(
-                font_family='Times',
-                font_style='B',
-                font_size_pt=24,
-                color=0,
-                t_margin=3,
-                l_margin=12,
-                b_margin=0
-            ),
-            TitleStyle(
-                font_family='Times',
-                font_style='B',
-                font_size_pt=18,
-                color=0,
-                t_margin=12,
-                l_margin=12,
-                b_margin=0
-            )
-        ) 
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
 
-        for pat in tqdm(pats, leave=False):
-            # Skip if patient doesn't have region.
-            patient = set.patient(pat)
-            if not patient.has_region(region):
-                continue
+    for pat in tqdm(pats, leave=False):
+        # Skip if patient doesn't have region.
+        patient = set.patient(pat)
+        if not patient.has_region(region):
+            continue
 
-            # Start info section.
-            pdf.add_page()
-            pdf.start_section(pat)
-            pdf.start_section('Info', level=1)
+        # Add patient.
+        pdf.add_page()
+        pdf.start_section(pat)
 
-            # Add table.
-            table_t_margin = 45
-            table_l_margin = 12
-            table_line_height = 2 * pdf.font_size
-            table_col_widths = (15, 35, 30, 45, 45)
-            table_data = [('ID', 'Volume [vox]', 'Volume [p]', 'Extent Centre [vox]', 'Extent Width [vox]')]
+        # Add region info.
+        pdf.start_section('Region Info', level=1)
+
+        # Create table.
+        table_t_margin = 50
+        table_l_margin = 12
+        table_line_height = 2 * pdf.font_size
+        table_col_widths = (15, 35, 30, 45, 45)
+        pat_info = df[df['patient-id'].astype(str) == pat].iloc[0]
+        table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
+        for axis in ['x', 'y', 'z']:
+            colnames = {
+                'extent': f'extent-mm-{axis}',
+                'extent-out': f'extent-mm-{axis}-out',
+                'extent-out-dir': f'extent-mm-{axis}-out-dir',
+                'extent-out-num-iqr': f'extent-mm-{axis}-out-num-iqr'
+            }
+            num_iqr = pat_info[colnames['extent-out-num-iqr']]
+            format = '.2f' if num_iqr and num_iqr != np.nan else ''
+            table_data.append((
+                axis,
+                f"{pat_info[colnames['extent']]:.2f}",
+                str(pat_info[colnames['extent-out']]),
+                pat_info[colnames['extent-out-dir']],
+                f"{pat_info[colnames['extent-out-num-iqr']]:{format}}",
+            ))
+
+        for i, row in enumerate(table_data):
+            if i == 0:
+                pdf.set_font('Helvetica', 'B', 12)
+            else:
+                pdf.set_font('Helvetica', '', 12)
+            pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+            for j, value in enumerate(row):
+                pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+
+        # Add subregion info.
+        if subregions:
+            # Get object info.
             obj_df = get_object_summary(dataset, pat, region)
-            for i, row in obj_df.iterrows():
-                table_data.append((
-                    str(i),
-                    str(row['volume-vox']),
-                    f"{row['volume-p']:.3f}",
-                    row['extent-centre-vox'],
-                    row['extent-width-vox']
-                ))
-            for i, row in enumerate(table_data):
-                if i == 0:
-                    pdf.set_font('Helvetica', 'B', 12)
-                else:
-                    pdf.set_font('Helvetica', '', 12)
-                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
-                for j, value in enumerate(row):
-                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
 
+            if len(obj_df) > 1:
+                pdf.start_section('Subregion Info', level=1)
+
+                # Create table.
+                table_t_margin = 105
+                table_l_margin = 12
+                table_line_height = 2 * pdf.font_size
+                table_col_widths = (15, 35, 30, 45, 45)
+                table_data = [('ID', 'Volume [mm^3]', 'Volume [prop.]', 'Extent Centre [vox]', 'Extent Width [mm]')]
+                for i, row in obj_df.iterrows():
+                    table_data.append((
+                        str(i),
+                        f"{row['volume-mm3']:.2f}",
+                        f"{row['volume-p-total']:.2f}",
+                        row['extent-centre-vox'],
+                        str(tuple([round(e, 2) for e in eval(row['extent-mm'])]))
+                    ))
+                for i, row in enumerate(table_data):
+                    if i == 0:
+                        pdf.set_font('Helvetica', 'B', 12)
+                    else:
+                        pdf.set_font('Helvetica', '', 12)
+                    pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                    for j, value in enumerate(row):
+                        pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+
+        # Add region images.
+        pdf.add_page()
+        pdf.start_section(f'Region Images', level=1)
+
+        # Create images.
+        views = ['axial', 'coronal', 'sagittal']
+        img_coords = (
+            (img_l_margin, img_t_margin),
+            (img_l_margin + img_width, img_t_margin),
+            (img_l_margin, img_t_margin + img_height)
+        )
+        for view, page_coord in zip(views, img_coords):
+            # Set figure.
+            plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], regions=region, show_extent=True, view=view, window=(3000, 500))
+
+            # Save temp file.
+            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            plt.savefig(filepath)
+            plt.close()
+
+            # Add image to report.
+            pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+
+            # Delete temp file.
+            os.remove(filepath)
+
+        # Add subregion images.
+        if subregions and len(obj_df) > 1:
             for i, row in obj_df.iterrows():
-                # Start object section.
                 pdf.add_page()
-                pdf.start_section(f'Object: {i}', level=1)
+                pdf.start_section(f'Subregion {i} Images', level=1)
 
-                # Save images.
+                # Create images.
                 views = ['axial', 'coronal', 'sagittal']
                 img_coords = (
                     (img_l_margin, img_t_margin),
@@ -367,15 +409,16 @@ def create_region_figures(
                     # Delete temp file.
                     os.remove(filepath)
 
-        # Save PDF.
-        filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        pdf.output(filepath, 'F')
+    # Save PDF.
+    filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
 
 def get_object_summary(
     dataset: str,
     patient: str,
     region: str) -> pd.DataFrame:
+    # Get objects.
     pat = ds.get(dataset, 'nifti').patient(patient)
     spacing = pat.ct_spacing()
     label = pat.region_data(regions=region)[region]
@@ -384,9 +427,10 @@ def get_object_summary(
     
     cols = {
         'extent-centre-vox': str,
-        'extent-width-vox': str,
+        'extent-mm': str,
+        'extent-vox': str,
         'volume-mm3': float,
-        'volume-p': float,
+        'volume-p-total': float,
         'volume-vox': int
     }
     df = pd.DataFrame(columns=cols.keys())
@@ -399,7 +443,9 @@ def get_object_summary(
         # Get extent.
         min, max = get_extent(obj)
         width = tuple(np.array(max) - min)
-        data['extent-width-vox'] = str(width)
+        width_mm = tuple(np.array(spacing) * width)
+        data['extent-mm'] = str(width_mm)
+        data['extent-vox'] = str(width)
         
         # Get centre of extent.
         extent_centre = get_extent_centre(obj)
@@ -410,7 +456,7 @@ def get_object_summary(
         num_voxels = obj.sum()
         volume = num_voxels * vox_volume
         data['volume-vox'] = num_voxels
-        data['volume-p'] = num_voxels / tot_voxels
+        data['volume-p-total'] = num_voxels / tot_voxels
         data['volume-mm3'] = volume
 
         df = df.append(data, ignore_index=True)

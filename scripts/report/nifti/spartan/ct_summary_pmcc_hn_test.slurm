@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-00:05:00
+#SBATCH --time 0-00:15:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -11,6 +11,7 @@ module load python/3.8.2
 version=$(python --version)
 echo $version
 
+DATASET="PMCC-HN-TEST"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-bash $SCRIPT_DIR/report/nifti/manual/ct_summary_pmcc_hn_test
+python $SCRIPT_DIR/report/nifti/create_ct_summary --dataset $DATASET

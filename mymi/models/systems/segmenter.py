@@ -51,7 +51,7 @@ class Segmenter(pl.LightningModule):
         **kwargs: Dict) -> pl.LightningModule:
         # Load model.
         model_name, run_name, checkpoint = Segmenter.replace_best(model_name, run_name, checkpoint)
-        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint}.ckpt")
+        filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
         return Segmenter.load_from_checkpoint(filepath, **kwargs)
@@ -63,7 +63,7 @@ class Segmenter(pl.LightningModule):
         checkpoint: str) -> Tuple[str, str, str]:
         # Find best checkpoint.
         if checkpoint == 'BEST': 
-            checkpath = os.path.join(config.directories.checkpoints, model_name, run_name)
+            checkpath = os.path.join(config.directories.models, model_name, run_name)
             checkpoint = list(sorted(os.listdir(checkpath)))[-1].replace('.ckpt', '')
         return (model_name, run_name, checkpoint)
 

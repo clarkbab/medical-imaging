@@ -4,6 +4,7 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 DATASET="PMCC-HN-TEST"
-REGIONS="('BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R')"
+REGION="BrachialPlexus_L"
+SUBREGIONS=True
 
-python create_region_figures --dataset $DATASET --regions $REGIONS
+python create_region_figures --dataset $DATASET --region $REGION --subregions $SUBREGIONS

@@ -40,7 +40,7 @@ class Segmenter2D(pl.LightningModule):
         **kwargs: Dict) -> pl.LightningModule:
         # Load model.
         model_name, run_name, checkpoint = Segmenter2D.replace_best(model_name, run_name, checkpoint)
-        filepath = os.path.join(config.directories.checkpoints, model_name, run_name, f"{checkpoint}.ckpt")
+        filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for auto-encoder run '{model_name}:{run_name}'.")
         return Segmenter2D.load_from_checkpoint(filepath, **kwargs)
@@ -52,7 +52,7 @@ class Segmenter2D(pl.LightningModule):
         checkpoint: str) -> Tuple[str, str, str]:
         # Find best checkpoint.
         if checkpoint == 'BEST': 
-            dirpath = os.path.join(config.directories.checkpoints, model_name, run_name)
+            dirpath = os.path.join(config.directories.models, model_name, run_name)
             if not os.path.exists(dirpath):
                 raise ValueError(f"Run '{run_name}' not found for segmenter-2D '{model_name}'.")
             checkpoint = list(sorted(os.listdir(dirpath)))[-1].replace('.ckpt', '')

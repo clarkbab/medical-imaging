@@ -82,7 +82,7 @@ def train_segmenter_2d(
         logger = None
 
     # Create callbacks.
-    checks_path = os.path.join(config.directories.checkpoints, model_name, run_name)
+    checks_path = os.path.join(config.directories.models, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
