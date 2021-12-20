@@ -210,7 +210,7 @@ def get_object_summary(
     region: str) -> pd.DataFrame:
     set = ds.get(dataset, 'training')
     samp = set.partition(partition).sample(sample)
-    spacing = eval(set.params().spacing[0])
+    spacing = eval(set.params.spacing[0])
     label = samp.label(regions=region)[region]
     objs, num_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)

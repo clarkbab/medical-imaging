@@ -70,7 +70,7 @@ def plot_sample_regions(
     # Load patient spacing.
     set = ds.get(dataset, 'training')
     sample = set.partition(partition).sample(sample_id)
-    spacing = eval(set.params().spacing[0])
+    spacing = eval(set.params.spacing[0])
 
     # Get slice index if requested OAR centre.
     if centre_of:
@@ -295,7 +295,7 @@ def plot_localiser_prediction(
     # Get aspect ratio.
     if not aspect:
         set = ds.get(dataset, 'training')
-        spacing = eval(set.params()['spacing'][0])
+        spacing = eval(set.params.spacing[0])
         aspect = get_aspect_ratio(view, spacing) 
 
     # Plot segmentation.

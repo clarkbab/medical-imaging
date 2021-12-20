@@ -164,6 +164,8 @@ class Segmenter(pl.LightningModule):
 
                     # Get centre of extent of ground truth.
                     centre = get_extent_centre(y_vol)
+                    if centre is None:
+                        raise ValueError(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
 
                     for axis, centre_ax in enumerate(centre):
                         # Get slices.

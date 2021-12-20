@@ -115,10 +115,16 @@ class TrainingPartition:
 
     def sample(
         self,
-        index: int) -> TrainingSample:
+        index: int,
+        by_patient_id: bool = False) -> TrainingSample:
         """
         returns: the partition sample.
         """
+        # Look up sample by patient ID.
+        if by_patient_id:
+            manifest_df = self.dataset.manifest()
+            index = manifest_df[(manifest_df['partition'] == self.name) & (manifest_df['patient-id'] == index)].iloc[0]['index']
+
         return TrainingSample(self, index)
 
     def input_summary(self) -> pd.DataFrame:

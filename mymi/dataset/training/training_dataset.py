@@ -40,11 +40,23 @@ class TrainingDataset(Dataset):
     def path(self) -> str:
         return self._path
 
+    @property
     def params(self) -> pd.DataFrame:
         filepath = os.path.join(self._path, 'params.csv')
         df = pd.read_csv(filepath)
-        return df
+        params = df.iloc[0].to_dict()
+        
+        # Replace special columns.
+        cols = ['size', 'spacing']
+        for col in cols:
+            if col == 'None':
+                params[col] = None
+            else:
+                params[col] = eval(params[col])
 
+        return params
+
+    @property
     def manifest(self) -> pd.DataFrame:
         filepath = os.path.join(self._path, 'manifest.csv')
         df = pd.read_csv(filepath)

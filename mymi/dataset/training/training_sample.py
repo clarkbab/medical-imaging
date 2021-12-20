@@ -27,6 +27,10 @@ class TrainingSample:
         return self._global_id
 
     @property
+    def index(self) -> str:
+        return self._index
+
+    @property
     def patient_id(self) -> str:
         manifest_df = self._partition.dataset.manifest()
         pat_id = manifest_df[(manifest_df['partition'] == self._partition.name) & (manifest_df['index'] == self._index)].iloc[0]['patient-id']

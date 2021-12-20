@@ -159,12 +159,9 @@ class LoaderDataset(Dataset):
             label: the label data.
         """
         # Choose randomly from the foreground voxels.
-        # fg_voxels = np.argwhere(label != 0)
-        # fg_voxel_idx = np.random.choice(len(fg_voxels))
-        # centre = fg_voxels[fg_voxel_idx]
-        
-        # Choose centre of OAR.
-        centre = get_extent_centre(label.astype(bool))
+        fg_voxels = np.argwhere(label != 0)
+        fg_voxel_idx = np.random.choice(len(fg_voxels))
+        centre = fg_voxels[fg_voxel_idx]
 
         # Extract patch around centre.
         input = point_crop_or_pad_3D(input, self._patch_size, centre, fill=input.min())        

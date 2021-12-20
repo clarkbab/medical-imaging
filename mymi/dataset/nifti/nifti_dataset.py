@@ -1,12 +1,9 @@
 import numpy as np
 import os
 import pandas as pd
-from tqdm import tqdm
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from mymi import config
-from mymi import logging
-from mymi import regions
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
@@ -36,6 +33,15 @@ class NIFTIDataset(Dataset):
     @property
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
+
+    @property
+    def anon_manifest(self) -> Optional[pd.DataFrame]:
+        filepath = os.path.join(config.directories.files, f'{self._name}-anon-map.csv')
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+            return df
+        else:
+            return None
 
     def list_patients(
         self,

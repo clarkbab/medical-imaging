@@ -1,11 +1,8 @@
 import nibabel as nib
 import numpy as np
 import os
-import pandas as pd
-from scipy.ndimage import center_of_mass
-from typing import Any, Callable, List, OrderedDict, Tuple, Union
+from typing import Any, List, Optional, OrderedDict
 
-from mymi import config
 from mymi.regions import is_region
 from mymi import types
 
@@ -29,6 +26,14 @@ class NIFTIPatient:
 
     def __str__(self) -> str:
         return self._global_id
+
+    @property
+    def patient_id(self) -> Optional[str]:
+        manifest = self._dataset.anon_manifest
+        if manifest is None:
+            return None
+        pat_id = manifest[manifest['anon-id'] == self._id].iloc[0]['patient-id']
+        return str(pat_id)
 
     def list_regions(
         self,

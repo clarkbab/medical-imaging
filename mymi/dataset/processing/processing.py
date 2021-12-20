@@ -5,7 +5,6 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
-import shutil
 from tqdm import tqdm
 from scipy.ndimage import binary_dilation
 import sys
@@ -114,9 +113,17 @@ def convert_to_training(
 
     # Save processing params.
     filepath = os.path.join(train_ds.path, 'params.csv')
-    with open(filepath, 'w') as f:
-        f.write('dataset,p_test,p_train,p_val,random_seed,regions,size,spacing\n')
-        f.write(f"{dataset},{p_test},{p_train},{p_val},{random_seed},\"{regions}\",\"{size}\",\"{spacing}\"")
+    params_df = pd.DataFrame({
+        'dataset': dataset,
+        'p_test': p_test,
+        'p_train': p_train,
+        'p_val': p_val,
+        'random_seed': random_seed,
+        'regions': str(regions),
+        'size': str(size) if size is not None else 'None',
+        'spacing': str(spacing) if spacing is not None else 'None'
+    })
+    pd.to_csv(params_df)
 
     # Write data to each partition.
     partitions = ['train', 'validation', 'test']

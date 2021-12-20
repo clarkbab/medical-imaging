@@ -66,7 +66,7 @@ def evaluate_localiser_predictions(
             df = df.append(data['dice'], ignore_index=True)
 
             # Distances.
-            spacing = eval(set.params().spacing[0])
+            spacing = eval(set.params.spacing[0])
             try:
                 dists = distances(pred, label, spacing)
             except ValueError:

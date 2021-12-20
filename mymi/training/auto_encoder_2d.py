@@ -35,7 +35,7 @@ def train_auto_encoder_2d(
     # Load partitions.
     if isinstance(datasets, str):
         set = ds.get(datasets, 'training')
-        spacing = eval(set.params().spacing[0])
+        spacing = eval(set.params.spacing[0])
         train_parts = set.partition('train')
         val_parts = [set.partition('validation')]
     else:
