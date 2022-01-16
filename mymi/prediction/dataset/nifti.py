@@ -5,14 +5,15 @@ from tqdm import tqdm
 from typing import Optional, Tuple, Union
 
 from mymi import dataset as ds
+from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
 from mymi.models.systems import Localiser, Segmenter
-from mymi.geometry import get_extent_centre
-from mymi.regions import get_patch_size
-from mymi.transforms import centre_crop_or_pad_3D, crop_or_pad_3D, point_crop_or_pad_3D, resample_3D
+from mymi.transforms import crop_foreground_3D
+from mymi.regions import RegionLimits, get_patch_size
+from mymi.transforms import centre_crop_or_pad_3D, crop_or_pad_3D, resample_3D
 from mymi import types
 
-def get_localiser_prediction(
+def get_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.Model,
@@ -22,7 +23,6 @@ def get_localiser_prediction(
     raise_fov_error: bool = False) -> np.ndarray:
     # Load model if not already loaded.
     if type(localiser) == tuple:
-        localiser = Localiser.replace_best(*localiser)
         localiser = Localiser.load(*localiser)
     localiser.eval()
     localiser.to(device)
@@ -70,6 +70,37 @@ def get_localiser_prediction(
 
     return pred
 
+def create_patient_localiser_prediction(
+    dataset: str,
+    pat_id: str,
+    localiser: types.Model,
+    loc_size: Tuple[int, int, int],
+    loc_spacing: Tuple[float, float, float],
+    device: Optional[torch.device] = None) -> None:
+    # Load dataset.
+    set = ds.get(dataset, 'nifti')
+
+    # Load localiser.
+    if type(localiser) == tuple:
+        localiser = Localiser.load(*localiser)
+
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
+    # Make prediction.
+    seg = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
+
+    # Save segmentation.
+    filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser.name, f'{pat_id}.npz') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    np.savez(filepath, data=seg)
+
 def create_localiser_predictions(
     dataset: str,
     region: str,
@@ -77,6 +108,9 @@ def create_localiser_predictions(
     loc_size: Tuple[int, int, int],
     loc_spacing: Tuple[float, float, float]) -> None:
     logging.info(f"Making localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
+
+    if type(localiser) == tuple:
+        localiser = Localiser.load(*localiser)
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -90,45 +124,56 @@ def create_localiser_predictions(
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=region)
 
-    # Load models.
-    localiser_args = Localiser.replace_best(*localiser)     # Get args for filepath use.
-    localiser = Localiser.load(*localiser)
-
     for pat in tqdm(pats):
-        # Make prediction.
-        seg = get_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device)
+        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device)
 
-        # Save segmentation.
-        filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser_args, f'{pat}.npz') 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        np.savez(filepath, data=seg)
-
-def load_localiser_prediction(
+def load_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
-    localiser: Tuple[str, str, str]) -> np.ndarray:
-    localiser_args = Localiser.replace_best(*localiser)
+    localiser: Tuple[str, str, str],
+    truncate_spine: bool = False) -> np.ndarray:
+    localiser = Localiser.replace_best(*localiser)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser_args, f'{pat_id}.npz') 
+    filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
-        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', localiser '{localiser_args}'.")
+        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', localiser '{localiser}'.")
     seg = np.load(filepath)['data']
+
+    # Perform truncation of 'SpinalCord'.
+    if truncate_spine:
+        spacing = ds.get(dataset, 'nifti').patient(pat_id).ct_spacing()
+        ext_width = get_extent_width_mm(seg, spacing)
+        if ext_width[2] > RegionLimits.SpinalCord[2]:
+            # Crop caudal end of spine.
+            logging.error(f"Cropping bottom end of 'SpinalCord' for patient '{pat_id}'. Got z-extent width '{ext_width[2]}mm', maximum '{RegionLimits.SpinalCord[2]}mm'.")
+            top_z = get_extent(seg)[1][2]
+            bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
+            crop = ((0, 0, bottom_z), tuple(np.array(seg.shape) - 1))
+            seg = crop_foreground_3D(seg, crop)
+
     return seg
 
-def get_segmenter_prediction(
+def load_patient_localiser_centre(
     dataset: str,
     pat_id: types.PatientID,
-    centre: types.Point3D,
+    localiser: Tuple[str, str, str],
+    truncate_spine: bool = False) -> types.Point3D:
+    seg = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    ext_centre = get_extent_centre(seg)
+    return ext_centre
+
+def get_patient_segmenter_prediction(
+    dataset: str,
+    pat_id: types.PatientID,
+    region: str,
+    loc_centre: types.Point3D,
     segmenter: types.Model,
-    seg_size: types.ImageSize3D,
     seg_spacing: types.ImageSpacing3D,
-    device: torch.device = torch.device('cpu'),
-    return_patch: bool = False) -> np.ndarray:
-    # Load model if not already loaded.
+    device: torch.device = torch.device('cpu')) -> np.ndarray:
+    # Load model.
     if type(segmenter) == tuple:
-        segmenter = Segmenter.replace_best(*segmenter)
         segmenter = Segmenter.load(*segmenter)
     segmenter.eval()
     segmenter.to(device)
@@ -139,17 +184,21 @@ def get_segmenter_prediction(
     input = patient.ct_data()
     spacing = patient.ct_spacing()
 
+    # Calculate segmentation patch.
+    patch_size = get_patch_size(region)
+    patch = get_box(loc_centre, patch_size)
+
     # Resample input to segmenter spacing.
     input_size = input.shape
     input = resample_3D(input, spacing, seg_spacing) 
 
-    # Get centre on resampled image.
-    scale = np.array(seg_spacing) / np.array(spacing)
-    centre = tuple(np.floor(scale * centre).astype(int)) 
+    # Get patch on resampled image.
+    patch_factor = np.array(spacing) / seg_spacing
+    patch = tuple([tuple(np.round(patch_factor * p).astype(int)) for p in patch])
 
     # Extract patch around centre.
-    pre_extract_size = input.shape
-    input, patch_box = point_crop_or_pad_3D(input, seg_size, centre, fill=input.min(), return_box=True)
+    pre_patch_size = input.shape
+    input = crop_or_pad_3D(input, patch, fill=input.min())
 
     # Pass patch to segmenter.
     input = torch.Tensor(input)
@@ -161,11 +210,11 @@ def get_segmenter_prediction(
         pred = segmenter(input)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
-    # Pad (or crop) to size before patch extraction.
-    rev_patch_box_min, rev_patch_box_max = patch_box
-    rev_patch_box_max = tuple(np.array(pre_extract_size) - rev_patch_box_min)
-    rev_patch_box_min = tuple(-np.array(rev_patch_box_min))
-    rev_patch_box = (rev_patch_box_min, rev_patch_box_max)
+    # Reverse the patch selection operation.
+    rev_patch_min, rev_patch_max = patch
+    rev_patch_min = tuple(-np.array(rev_patch_min))
+    rev_patch_max = tuple(np.array(rev_patch_min) + pre_patch_size)
+    rev_patch_box = (rev_patch_min, rev_patch_max)
     pred = crop_or_pad_3D(pred, rev_patch_box)
 
     # Resample to original spacing.
@@ -182,7 +231,8 @@ def create_segmenter_predictions(
     region: str,
     localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str],
-    seg_spacing: Tuple[float, float, float]) -> None:
+    seg_spacing: Tuple[float, float, float],
+    truncate_spine: bool = False) -> None:
     logging.info(f"Making segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -193,51 +243,68 @@ def create_segmenter_predictions(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Get seg size.
-    patch_size = get_patch_size(region)
-
     # Load patients.
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=region)
 
-    # Load model.
-    localiser_args = Localiser.replace_best(*localiser)
-    segmenter_args = Segmenter.replace_best(*segmenter)     # Get args for filepath use.
+    # Load segmenter.
     segmenter = Segmenter.load(*segmenter)
 
     for pat in tqdm(pats):
-        # Get centre of localiser extent.
-        loc_seg = load_localiser_prediction(dataset, pat, localiser_args)
-        centre = get_extent_centre(loc_seg)
+        if region != 'SpinalCord':
+            truncate_spine = False
+        create_patient_segmenter_prediction(dataset, pat, region, localiser, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
 
-        # Get segmenter prediction.
-        seg = get_segmenter_prediction(dataset, pat, centre, segmenter, patch_size, seg_spacing, device=device)
+def create_patient_segmenter_prediction(
+    dataset: str,
+    pat_id: str,
+    region: str,
+    localiser: types.ModelName,
+    segmenter: types.Model,
+    seg_spacing: types.ImageSpacing3D,
+    device: Optional[torch.device] = None,
+    truncate_spine: bool = False) -> None:
+    # Load dataset.
+    set = ds.get(dataset, 'nifti')
 
-        # Save segmentation.
-        filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser_args, *segmenter_args, f'{pat}.npz') 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        np.savez(filepath, data=seg, centre=centre, patch_size=patch_size)
+    # Load segmenter.
+    if type(segmenter) == tuple:
+        segmenter = Segmenter.load(*segmenter)
 
-def load_segmenter_prediction(
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
+    # Get segmenter prediction.
+    if region != 'SpinalCord':
+        truncate_spine = False
+    loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    seg = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing, device=device)
+
+    # Save segmentation.
+    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, f'{pat_id}.npz') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    np.savez(filepath, data=seg)
+
+def load_patient_segmenter_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: Tuple[str, str, str],
-    segmenter: Tuple[str, str, str],
-    return_patch_info: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Point3D, types.ImageSize3D]]:
-    localiser_args = Localiser.replace_best(*localiser)
-    segmenter_args = Segmenter.replace_best(*segmenter)
+    segmenter: Tuple[str, str, str]) -> np.ndarray:
+    localiser = Localiser.replace_best(*localiser)
+    segmenter = Segmenter.replace_best(*segmenter)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser_args, *segmenter_args, f'{pat_id}.npz') 
+    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
-        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter_args}'.")
+        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}'.")
     npz_file = np.load(filepath)
     seg = npz_file['data']
-
-    if return_patch_info:
-        centre = tuple(npz_file['centre'])
-        patch_size = tuple(npz_file['patch_size'])
-        return (seg, centre, patch_size) 
-    else:
-        return seg
+    
+    return seg

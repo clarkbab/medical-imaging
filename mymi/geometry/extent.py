@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 from mymi import types
 
@@ -33,9 +33,9 @@ def get_extent_centre(a: np.ndarray) -> Optional[Union[types.Point2D, types.Poin
 
     return centre
 
-def get_extent_width(a: np.ndarray) -> Optional[Union[types.ImageSize2D, types.ImageSize3D]]:
+def get_extent_width_vox(a: np.ndarray) -> Optional[Union[types.ImageSize2D, types.ImageSize3D]]:
     if a.dtype != np.bool:
-        raise ValueError(f"'get_extent_width' expected a boolean array, got '{a.dtype}'.")
+        raise ValueError(f"'get_extent_width_vox' expected a boolean array, got '{a.dtype}'.")
 
     # Get OAR extent.
     extent = get_extent(a)
@@ -45,3 +45,16 @@ def get_extent_width(a: np.ndarray) -> Optional[Union[types.ImageSize2D, types.I
         return width
     else:
         return None
+
+def get_extent_width_mm(
+    a: np.ndarray,
+    spacing: Tuple[float, float, float]) -> Optional[Union[Tuple[float, float], Tuple[float, float, float]]]:
+    if a.dtype != np.bool:
+        raise ValueError(f"'get_extent_width_mm' expected a boolean array, got '{a.dtype}'.")
+
+    # Get OAR extent in mm.
+    ext_width_vox = get_extent_width_vox(a)
+    if ext_width_vox is None:
+        return None
+    ext_width = tuple(np.array(ext_width_vox) * spacing)
+    return ext_width

@@ -3,7 +3,8 @@ from typing import List
 from mymi import types
 
 from .colours import to_255, RegionColours
-from .patches import get_patch_size
+from .limits import RegionLimits
+from .patch_sizes import get_patch_size
 from .regions import Regions, hash_regions
 
 def is_region(name: str) -> bool:

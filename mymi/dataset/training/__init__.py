@@ -17,6 +17,13 @@ def list() -> List[str]:
     else:
         return []
 
+def exists(name: str) -> bool:
+    """
+    returns: if the dataset exists.
+    """
+    ds_path = os.path.join(config.directories.datasets, 'training', name)
+    return os.path.exists(ds_path)
+
 def create(name: str) -> TrainingDataset:
     """
     effect: creates a dataset.

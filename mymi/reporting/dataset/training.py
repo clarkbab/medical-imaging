@@ -13,7 +13,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_extent, get_extent_centre
 from mymi import logging
-from mymi.plotter.dataset.training import plot_sample_regions
+from mymi.plotting.dataset.training import plot_sample_regions
 from mymi.postprocessing import get_object, one_hot_encode
 from mymi import types
 

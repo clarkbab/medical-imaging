@@ -11,10 +11,10 @@ from uuid import uuid1
 from mymi import config
 from mymi import dataset as ds
 from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
-from mymi.geometry import get_extent, get_extent_centre
+from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotter.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi.regions import hash_regions
 from mymi import types
@@ -56,16 +56,12 @@ def get_region_summary(
         data['connected-p'] = lcc_label.sum() / label.sum()
 
         # Add OAR extent.
-        extent = get_extent(label)
-        if extent:
-            min, max = extent
-            extent_vox = np.array(max) - min
-            extent_mm = extent_vox * spacing
-        else:
-            extent_mm = (0, 0, 0)
-        data['extent-mm-x'] = extent_mm[0]
-        data['extent-mm-y'] = extent_mm[1]
-        data['extent-mm-z'] = extent_mm[2]
+        ext_width_mm = get_extent_width_mm(label, spacing)
+        if extent is None:
+            ext_width_mm = (0, 0, 0)
+        data['extent-mm-x'] = ext_width_mm[0]
+        data['extent-mm-y'] = ext_width_mm[1]
+        data['extent-mm-z'] = ext_width_mm[2]
 
         # Add extent of largest connected component.
         extent = get_extent(lcc_label)

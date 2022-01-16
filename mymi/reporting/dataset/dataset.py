@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from mymi import config
 from mymi.dataset.dicom import DicomDataset
-from mymi import plotter
+from mymi import plotting
 from mymi.utils import filterOnPatIDs
 from mymi import types
 
@@ -61,7 +61,7 @@ def generate_dataset_regions_report(
             origins = ((0, 20), (100, 20), (0, 120))
             for c, o, v in zip(centroid, origins, views):
                 # Set figure.
-                plotter.plot_patient_regions(pat, c, regions=region, show=False, view=v)
+                plotting.plot_patient_regions(pat, c, regions=region, show=False, view=v)
 
                 # Save temp file.
                 filename = f"patient-{pat}-region-{region}-view-{v}.png"

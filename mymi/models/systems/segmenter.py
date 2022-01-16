@@ -34,6 +34,7 @@ class Segmenter(pl.LightningModule):
         self._surface_interval = 20
         self._loss = loss
         self._max_image_batches = 50
+        self._name = None
         self._metrics = metrics
         self._network = UNet3D(pretrained_model=pretrained.network if pretrained else None)
         self._predict_logits = predict_logits
@@ -42,6 +43,10 @@ class Segmenter(pl.LightningModule):
     @property
     def model(self) -> nn.Module:
         return self._network
+
+    @property
+    def name(self) -> Optional[Tuple[str, str, str]]:
+        return self._name
 
     @staticmethod
     def load(
@@ -54,7 +59,9 @@ class Segmenter(pl.LightningModule):
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
-        return Segmenter.load_from_checkpoint(filepath, **kwargs)
+        segmenter = Segmenter.load_from_checkpoint(filepath, **kwargs)
+        segmenter._name = (model_name, run_name, checkpoint)
+        return segmenter
 
     @staticmethod
     def replace_best(

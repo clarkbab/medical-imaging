@@ -37,15 +37,20 @@ class Localiser(pl.LightningModule):
         }
         self._max_image_batches = 30
         self._metrics = metrics
+        self._name = None
         self._network = UNet3D(pretrained_model=pretrained.network if pretrained else None)
-        self._region = region
         self._predict_logits = predict_logits
+        self._region = region
         self._spacing = spacing
         self.save_hyperparameters()
 
     @property
     def network(self) -> nn.Module:
         return self._network
+
+    @property
+    def name(self) -> Optional[Tuple[str, str, str]]:
+        return self._name
 
     @staticmethod
     def load(
@@ -58,7 +63,9 @@ class Localiser(pl.LightningModule):
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")
-        return Localiser.load_from_checkpoint(filepath, **kwargs)
+        localiser = Localiser.load_from_checkpoint(filepath, **kwargs)
+        localiser._name = (model_name, run_name, checkpoint)
+        return localiser
 
     @staticmethod
     def replace_best(

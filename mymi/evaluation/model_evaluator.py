@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from mymi import config
 from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
-from mymi import plotter
+from mymi import plotting
 from mymi.postprocessing import batch_largest_connected_component
 from mymi import utils
 
@@ -101,7 +101,7 @@ class ModelEvaluator:
                     centroids = utils.get_batch_centroids(label, view) 
 
                     # Create and save figures.
-                    fig = plotter.plot_batch(input, centroids, figsize=(12, 12), label=label, pred=pred, view=view, return_figure=True)
+                    fig = plotting.plot_batch(input, centroids, figsize=(12, 12), label=label, pred=pred, view=view, return_figure=True)
                     filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', 'output', f"batch-{batch}-{view}.png")
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     fig.savefig(filepath)
@@ -141,7 +141,7 @@ class ModelEvaluator:
                     centroids = utils.get_batch_centroids(label_raw, view) 
 
                     # Create and save figures.
-                    fig = plotter.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
+                    fig = plotting.plot_batch(input_raw, centroids, figsize=(12, 12), label=label_raw, pred=pred, view=view, return_figure=True)
                     filepath = os.path.join(config.directories.evaluation, self.run_name, 'figures', 'raw', f"batch-{batch:0{config.formatting.sample_digits}}-{view}.png")
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     fig.savefig(filepath)

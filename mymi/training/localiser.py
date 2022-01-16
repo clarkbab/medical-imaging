@@ -31,6 +31,7 @@ def train_localiser(
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
+    truncate_spine: bool = False,
     use_logger: bool = False) -> None:
     logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
 
@@ -64,8 +65,8 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform)
-    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False)
+    train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform, truncate_spine=truncate_spine)
+    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False, truncate_spine=truncate_spine)
 
     # Get loss function.
     if loss == 'dice':

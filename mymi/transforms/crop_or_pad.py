@@ -24,6 +24,9 @@ def crop_or_pad_3D(
     data: np.ndarray,
     bounding_box: types.Box3D,
     fill: float = 0) -> np.ndarray:
+    """
+    bounding_box: crops to this box, including limits in the result.
+    """
     min, max = bounding_box
     for i in range(3):
         width = max[i] - min[i]
@@ -44,6 +47,14 @@ def crop_or_pad_3D(
     data = data[slices]
 
     return data
+
+def crop_foreground_3D(
+    data: np.ndarray,
+    crop: types.Box3D) -> np.ndarray:
+    cropped = np.zeros_like(data).astype(bool)
+    slices = tuple(slice(min, max) for min, max in zip(*crop))
+    cropped[slices] = data[slices]
+    return cropped
 
 def centre_crop_or_pad_3D(
     data: np.ndarray,

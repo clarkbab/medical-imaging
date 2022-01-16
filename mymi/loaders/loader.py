@@ -19,7 +19,8 @@ class Loader:
         regions: types.PatientRegions = 'all',
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
-        transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
+        transform: torchio.transforms.Transform = None,
+        truncate_spine: bool = False) -> torch.utils.data.DataLoader:
         """
         returns: a data loader.
         args:
@@ -37,7 +38,7 @@ class Loader:
             partitions = [partitions]
 
         # Create dataset object.
-        ds = LoaderDataset(partitions, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform, truncate_spine=truncate_spine)
 
         # Create loader.
         return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
@@ -49,7 +50,8 @@ class LoaderDataset(Dataset):
         half_precision: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
-        transform: torchio.transforms.Transform = None):
+        transform: torchio.transforms.Transform = None,
+        truncate_spine: bool = False):
         """
         args:
             partitions: the dataset partitions.
@@ -64,6 +66,7 @@ class LoaderDataset(Dataset):
         self._regions = regions
         self._spacing = spacing
         self._transform = transform
+        self._truncate_spine = truncate_spine
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 

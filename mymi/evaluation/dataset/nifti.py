@@ -11,7 +11,7 @@ from mymi.geometry import get_box, get_extent_centre
 from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nifti import load_localiser_prediction, load_segmenter_prediction
+from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi import types
 
@@ -19,9 +19,12 @@ def get_patient_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: Tuple[str, str, str]) -> Dict[str, float]:
+    localiser: Tuple[str, str, str],
+    truncate_spine: bool = False) -> Dict[str, float]:
     # Get pred/ground truth.
-    pred = load_localiser_prediction(dataset, pat_id, localiser)
+    if region != 'SpinalCord':
+        truncate_spine = False
+    pred = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -31,7 +34,7 @@ def get_patient_localiser_evaluation(
 
     # Distances.
     spacing = set.patient(pat_id).ct_spacing()
-    if pred.sum() == 0 or label.sum() == 0:
+    if pred.sum() == 0:
         dists = {
             'assd': np.nan,
             'surface-hd': np.nan,
@@ -49,7 +52,7 @@ def get_patient_localiser_evaluation(
     data['voxel-95hd'] = dists['voxel-95hd']
 
     # Extent distance.
-    if pred.sum() == 0 or label.sum() == 0:
+    if pred.sum() == 0:
         ec_dist = (np.nan, np.nan, np.nan)
     else:
         ec_dist = extent_centre_distance(pred, label, spacing)
@@ -59,13 +62,19 @@ def get_patient_localiser_evaluation(
     data['extent-centre-dist-z'] = ec_dist[2]
 
     # Second stage patch distance.
-    if pred.sum() == 0 or label.sum() == 0:
+    if pred.sum() == 0:
         e_dist = (np.nan, np.nan, np.nan)
     else:
         # Create second stage patch.
         centre = get_extent_centre(pred)
         size = get_patch_size(region)
         min, max = get_box(centre, size)
+
+        # Squash to label size.
+        min = np.clip(min, a_min=0, a_max=None)
+        for i in range(len(max)):
+            if max[i] > label.shape[i] - 1:
+                max[i] = label.shape[i] - 1
 
         # Create label from patch.
         patch_label = np.zeros_like(label)
@@ -80,11 +89,74 @@ def get_patient_localiser_evaluation(
     data['extent-dist-z'] = e_dist[2]
 
     return data
+    
+def create_patient_localiser_evaluation(
+    dataset: str,
+    pat_id: str,
+    region: str,
+    localiser: Tuple[str, str, str],
+    df: Optional[pd.DataFrame] = None,
+    truncate_spine: bool = False) -> Optional[pd.DataFrame]:
+    pat_id = str(pat_id)
+    localiser = Localiser.replace_best(*localiser)
+
+    # Define dataframe columns.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+
+    # Create/update dataframe if not provided.
+    if df is None:
+        set = ds.get(dataset, 'nifti')
+        filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
+        if os.path.exists(filepath):
+            # Load dataframe.
+            eval_df = load_localiser_evaluation(dataset, localiser)
+        else:
+            # Create dataframe.
+            eval_df = pd.DataFrame(columns=cols.keys())
+    else:
+        eval_df = df
+
+    # Get metrics.
+    if region != 'SpinalCord':
+        truncate_spine = False
+    metrics = get_patient_localiser_evaluation(dataset, pat_id, region, localiser, truncate_spine=truncate_spine)
+
+    # Add/update each metric.
+    for metric, value in metrics.items():
+        exists = len(eval_df[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]) != 0
+        if not exists:
+            # Add metric.
+            data = {
+                'patient-id': pat_id, 
+                'region': region,
+                'metric': metric,
+                'value': value
+            }
+            eval_df = eval_df.append(data, ignore_index=True)
+        else:
+            # Update metric.
+            eval_df.loc[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
+
+    if df is None:
+        # Set column types.
+        eval_df = eval_df.astype(cols)
+
+        # Save evaluation.
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        eval_df.to_csv(filepath, index=False)
+    else:
+        return eval_df
 
 def create_localiser_evaluation(
     dataset: str,
     region: str,
-    localiser: Tuple[str, str, str]) -> None:
+    localiser: Tuple[str, str, str],
+    truncate_spine: bool = False) -> None:
     localiser = Localiser.replace_best(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
@@ -102,22 +174,9 @@ def create_localiser_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     for pat in tqdm(pats):
-        # Get pred/ground truth.
-        pred = load_localiser_prediction(dataset, pat, localiser)
-        label = set.patient(pat).region_data(regions=region)[region].astype(np.bool)
-
-        # Get metrics.
-        metrics = get_patient_localiser_evaluation(dataset, pat, region, localiser)
-
-        # Add metrics.
-        for metric, value in metrics.items():
-            data = {
-                'patient-id': pat, 
-                'region': region,
-                'metric': metric,
-                'value': value
-            }
-            df = df.append(data, ignore_index=True)
+        if region != 'SpinalCord':
+            truncate_spine = False
+        df = create_patient_localiser_evaluation(dataset, pat, region, localiser, df=df, truncate_spine=truncate_spine)
 
     # Set column types.
     df = df.astype(cols)
@@ -145,7 +204,7 @@ def get_patient_segmenter_evaluation(
     localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str]) -> Dict[str, float]:
     # Get pred/ground truth.
-    pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+    pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -220,11 +279,13 @@ def create_segmenter_evaluation(
 
 def load_segmenter_evaluation(
     dataset: str,
+    localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str]) -> np.ndarray:
+    localiser = Localiser.replace_best(*localiser)
     segmenter = Segmenter.replace_best(*segmenter)
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *segmenter, 'eval.csv') 
+    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
     if not os.path.exists(filepath):
-        raise ValueError(f"Evaluation for dataset '{set}', segmenter '{segmenter}' not found.")
+        raise ValueError(f"Segmenter evaluation for dataset '{set}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
