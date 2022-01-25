@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition physical
-#SBATCH --mem 32G
+#SBATCH --mem 64GB
 #SBATCH --time 7-00:00:00
 #SBATCH -A punim1413
 

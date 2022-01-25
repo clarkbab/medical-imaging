@@ -14,6 +14,7 @@ class Loader:
     @staticmethod
     def build_loaders(
         datasets: Union[TrainingDataset, List[TrainingDataset]],
+        region: str,
         batch_size: int = 1,
         half_precision: bool = True,
         num_folds: Optional[int] = None, 

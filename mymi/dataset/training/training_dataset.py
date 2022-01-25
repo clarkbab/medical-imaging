@@ -1,6 +1,7 @@
+import numpy as np
 import os
 import pandas as pd
-from typing import List, Union
+from typing import Callable, List, Union
 
 from mymi import config
 from mymi import types
@@ -83,10 +84,16 @@ class TrainingDataset(Dataset):
         pat_id = result_df['patient-id'].iloc[0] 
         return pat_id
 
-    def list_samples(self) -> List[int]:
+    def list_samples(
+        self,
+        regions: types.PatientRegions = 'all') -> List[int]:
         path = os.path.join(self._path, 'data', 'inputs')
         if os.path.exists(path):
             indices = list(sorted([int(f.replace('.npz', '')) for f in os.listdir(path)]))
+
+            # Filter on sample regions.
+            indices = list(filter(self._filter_sample_by_regions(regions), indices))
+
         else:
             indices = []
         return indices
@@ -98,4 +105,27 @@ class TrainingDataset(Dataset):
         # Look up sample by patient ID.
         if by_patient_id:
             index = self.manifest[(self.manifest['partition'] == self.name) & (self.manifest['patient-id'] == index)].iloc[0]['index']
+
         return TrainingSample(self, index)
+
+    def _filter_sample_by_regions(
+        self,
+        regions: types.PatientRegions) -> Callable[[str], bool]:
+        """
+        returns: a function that filters patients on region presence.
+        args:
+            regions: the passed 'regions' kwarg.
+        """
+        def fn(index):
+            if type(regions) == str:
+                if regions == 'all':
+                    return True
+                else:
+                    return self.sample(index).has_region(regions)
+            else:
+                sam_regions = self.sample(index).list_regions()
+                if len(np.intersect1d(regions, sam_regions)) != 0:
+                    return True
+                else:
+                    return False
+        return fn

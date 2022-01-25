@@ -49,6 +49,7 @@ class NIFTIPatient:
                 id = r.replace('.nii.gz', '')
                 if id == self._id:
                     names.append(f)
+        names = list(sorted(names))
 
         # Filter on whitelist.
         def filter_fn(region):
