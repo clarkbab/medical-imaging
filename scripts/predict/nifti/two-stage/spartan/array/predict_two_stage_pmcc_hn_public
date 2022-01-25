@@ -1,0 +1,50 @@
+#!/bin/bash
+#SBATCH --nodes 1
+#SBATCH --partition gpgpu
+#SBATCH --mem 32G
+#SBATCH --gres gpu:p100:1
+#SBATCH --cpus-per-gpu 4
+#SBATCH --time 0-1:00:00
+#SBATCH -A punim1413
+#SBATCH -q gpgpumse
+
+module load gcccore/8.3.0
+module load python/3.8.2
+module load web_proxy
+
+version=$(python --version)
+echo $version
+
+REGIONS=(
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Brain'             # 2
+    'BrainStem'         # 3
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    'OralCavity'        # 11
+    'Parotid_L'         # 12
+    'Parotid_R'         # 13
+    'SpinalCord'        # 14
+    'Submandibular_L'   # 15
+    'Submandibular_R'   # 16
+)
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+DATASETS="('PMCC-HN-TEST-$REGION-LOC','PMCC-HN-TRAIN-$REGION-LOC')" # Code links from 'training' set to nifti set.
+LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
+LOCALISER_SIZE="(128,128,150)"
+LOCALISER_SPACING="(4,4,4)"
+NUM_FOLDS=5
+SEGMENTER="('segmenter-$REGION','public-1gpu-100epochs','BEST')"
+SEGMENTER_SPACING="(1,1,2)"
+SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+TEST_FOLD=0
+TRUNCATE_SPINE=True
+
+python $SCRIPT_DIR/predict/nifti/segmenter/create_predictions_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING \
+    --segmenter $SEGMENTER --seg_spacing $SEGMENTER_SPACING --num_folds $NUM_FOLDS --test_fold $TEST_FOLD --truncate_spine $TRUNCATE_SPINE

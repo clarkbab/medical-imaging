@@ -14,15 +14,23 @@ echo $version
 
 DATASET="HN1"
 REGIONS=(
-    'Brain'             # 0
-    'Cochlea_L'         # 1
-    'Cochlea_R'         # 2
-    'OralCavity'        # 3
-    'Parotid_L'         # 4
-    'Parotid_R'         # 5
-    'SpinalCord'        # 6
-    'Submandibular_L'   # 7
-    'Submandibular_R'   # 8
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Brain'             # 2
+    'BrainStem'         # 3
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    'OralCavity'        # 11
+    'Parotid_L'         # 12
+    'Parotid_R'         # 13
+    'SpinalCord'        # 14
+    'Submandibular_L'   # 15
+    'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"

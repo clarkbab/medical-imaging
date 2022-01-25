@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
@@ -57,7 +57,7 @@ def get_region_summary(
 
         # Add OAR extent.
         ext_width_mm = get_extent_width_mm(label, spacing)
-        if extent is None:
+        if ext_width_mm is None:
             ext_width_mm = (0, 0, 0)
         data['extent-mm-x'] = ext_width_mm[0]
         data['extent-mm-y'] = ext_width_mm[1]
@@ -85,6 +85,13 @@ def get_region_summary(
 def create_region_summary(
     dataset: str,
     region: str) -> None:
+    set = ds.get(dataset, 'nifti')
+    pats = set.list_patients(regions=region)
+    # Allows us to pass all regions from Spartan 'array' job.
+    if len(pats) == 0:
+        logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
+        return
+
     logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
 
     # Generate counts report.
@@ -151,12 +158,24 @@ def add_region_summary_outliers(
 
 def load_region_summary(
     dataset: str,
-    region: str,
+    regions: Optional[Union[str, List[str]]] = None,
     blacklist: bool = False) -> None:
-    # Load summary.
+    # Convert to array.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-    df = pd.read_csv(filepath)
+    if regions is None:
+        filepath = os.path.join(set.path, 'reports', 'region-summaries')
+        regions = [f.replace('.csv', '') for f in os.listdir(filepath)]
+    elif type(regions) == str:
+        regions = [regions]
+
+    # Load summary.
+    dfs = []
+    for region in regions:
+        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        df = pd.read_csv(filepath)
+        df.insert(1, 'region', region)
+        dfs.append(df)
+    df = pd.concat(dfs, axis=0)
 
     # Filter blacklisted records.
     if blacklist:
@@ -166,6 +185,23 @@ def load_region_summary(
         df = df[df['_merge'] == 'left_only']
         df = df.drop(columns='_merge')
 
+    return df
+
+def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
+    if type(datasets) == str:
+        datasets = [datasets]
+
+    # Load/concat region counts.
+    dfs = []
+    for dataset in datasets:
+        df = load_region_summary(dataset)
+        df = df.groupby('region').count()[['patient-id']].rename(columns={ 'patient-id': 'count' }).reset_index()
+        df.insert(0, 'dataset', dataset)
+        dfs.append(df)
+    df = pd.concat(dfs, axis=0)
+
+    # Pivot table.
+    df = df.pivot(index='dataset', columns='region', values='count').fillna(0).astype(int)
     return df
 
 def get_ct_summary(dataset: str) -> pd.DataFrame:
@@ -237,7 +273,7 @@ def create_region_figures(
     pats = set.list_patients(regions=region)
 
     # Keep regions with patients.
-    df = load_region_summary(dataset, region)
+    df = load_region_summary(dataset, regions=region)
 
     # Add 'extent-mm' outlier info.
     columns = ['extent-mm-x', 'extent-mm-y', 'extent-mm-z']

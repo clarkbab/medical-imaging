@@ -11,12 +11,12 @@ from mymi import types
 class TrainingSample:
     def __init__(
         self,
-        partition: 'TrainingPartition',
+        dataset: 'TrainingDataset',
         index: int):
-        if index not in partition.list_samples():
-            raise ValueError(f"Sample '{index}' not found for partition '{partition.name}', dataset '{partition.dataset.description}'.")
-        self._global_id = f'{partition} - {index}'
-        self._partition = partition
+        if index not in dataset.list_samples():
+            raise ValueError(f"Sample '{index}' not found for dataset '{dataset}'.")
+        self._global_id = f'{dataset} - {index}'
+        self._dataset = dataset
         self._index = index
 
     @property
@@ -31,114 +31,27 @@ class TrainingSample:
         return self._index
 
     @property
-    def patient_id(self) -> str:
-        manifest_df = self._partition.dataset.manifest()
-        pat_id = manifest_df[(manifest_df['partition'] == self._partition.name) & (manifest_df['index'] == self._index)].iloc[0]['patient-id']
-        return pat_id
+    def origin(self) -> Tuple[str, str]:
+        manifest = self._dataset.manifest
+        record = manifest[manifest['index'] == self._index].iloc[0]
+        return record['dataset'], record['patient-id']
 
-    def list_regions(self) -> List[str]:
-        """
-        returns: the region names.
-        """
-        # List all regions.
-        filepath = os.path.join(self._partition.path, 'labels')
-        all_regions = os.listdir(filepath)
-
-        def filter_fn(region):
-            filepath = os.path.join(self._partition._path, 'labels', region, f'{self._index}.npz')
-            if os.path.exists(filepath):
-                return True
-            else:
-                return False
-        return list(filter(filter_fn, all_regions))
-
-    def has_region(
-        self,
-        region: str) -> bool:
-        return region in self.list_regions()
-
+    @property
     def input(self) -> np.ndarray:
-        """
-        returns: the input data for sample i.
-        args:
-            index: the sample index to load.
-        """
         # Load the input data.
-        filepath = os.path.join(self._partition._path, 'inputs', f'{self._index}.npz')
+        filepath = os.path.join(self._dataset.path, 'data', 'inputs', f'{self._index}.npz')
         data = np.load(filepath)['data']
         return data
 
-    def label(
-        self,
-        regions: types.PatientRegions = 'all') -> Dict[str, np.ndarray]:
-        """
-        returns: the label data for sample i.
-        args:
-            index: the sample index to load.
-            regions: the regions to return.
-        """
-        # Convert regions to list.
-        if type(regions) == str:
-            if regions == 'all':
-                regions = list(sorted(self.list_regions))
-            else:
-                regions = [regions]
-    
+    @property
+    def label(self) -> Dict[str, np.ndarray]:
         # Load the label data.
-        data = {}
-        for region in regions:
-            filepath = os.path.join(self._partition._path, 'labels', region, f'{self._index}.npz')
-            if not os.path.exists(filepath):
-                raise ValueError(f"Region '{region}' not found for sample '{self._index}', partition '{self._partition.name}', dataset '{self._partition._dataset.description}'.")
-            label = np.load(filepath)['data']
-            data[region] = label
-        return data
+        filepath = os.path.join(self._dataset.path, 'data', 'labels', f'{self._index}.npz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Label not found for sample '{self._index}', dataset '{self._dataset}'.")
+        label = np.load(filepath)['data']
+        return label
 
-    def pair(
-        self,
-        regions: types.PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
-        """
-        returns: the (input, label) pair for the given index.
-        kwargs:
-            regions: the region to return.
-        """
-        return self.input(), self.label(regions=regions)
-
-    def input_summary(self) -> pd.DataFrame:
-        cols = {
-            'size-x': int,
-            'size-y': int,
-            'size-z': int
-        }
-        df = pd.DataFrame(columns=cols.keys())
-        input = self.input()
-        data = {
-            'size-x': input.shape[0],
-            'size-y': input.shape[1],
-            'size-z': input.shape[2]
-        }
-        df = df.append(data, ignore_index=True)
-        df = df.astype(cols)
-        return df
-
-    def label_summary(
-        self,
-        regions: types.PatientRegions = 'all') -> pd.DataFrame:
-        cols = {
-            'region': str,
-            'size-x': int,
-            'size-y': int,
-            'size-z': int
-        }
-        df = pd.DataFrame(columns=cols.keys())
-        label = self.label(regions=regions)
-        for region, ldata in label.items():
-            data = {
-                'region': region,
-                'size-x': ldata.shape[0],
-                'size-y': ldata.shape[1],
-                'size-z': ldata.shape[2]
-            }
-            df = df.append(data, ignore_index=True)
-        df = df.astype(cols)
-        return df
+    @property
+    def pair(self) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        return self.input, self.label

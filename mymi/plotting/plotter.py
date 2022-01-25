@@ -321,7 +321,7 @@ def plot_regions(
             extent = get_extent(data)
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
-                plot_box(extent, view, colour=colour, crop=crop, label=f'{region} extent', linestyle='dashed')
+                plot_box(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
 
         # Plot connected extent.
         if connected_extent:

@@ -1,17 +1,18 @@
 import os
 import pandas as pd
-from typing import List
+from typing import List, Union
 
 from mymi import config
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
-from .training_partition import TrainingPartition
+from .training_sample import TrainingSample
 
 class TrainingDataset(Dataset):
     def __init__(
         self,
-        name: str):
+        name: str,
+        check_conversion: bool = True):
         """
         args:
             name: the name of the dataset.
@@ -19,11 +20,18 @@ class TrainingDataset(Dataset):
         self._global_id = f"TRAINING: {name}"
         self._name = name
         self._path = os.path.join(config.directories.datasets, 'training', name)
-        self._partitions = ['train', 'validation', 'test']
 
         # Check if dataset exists.
         if not os.path.exists(self._path):
-            raise ValueError(f"Dataset '{self.description}' not found.")
+            raise ValueError(f"Dataset '{self}' not found.")
+
+        # Check if converted successfully.
+        if check_conversion:
+            path = os.path.join(self._path, '__CONVERT_FROM_NIFTI_START__')
+            if os.path.exists(path):
+                path = os.path.join(self._path, '__CONVERT_FROM_NIFTI_END__')
+                if not os.path.exists(path):
+                    raise ValueError(f"Dataset '{self}' conversion wasn't finished.")
 
     @property
     def description(self) -> str:
@@ -53,7 +61,6 @@ class TrainingDataset(Dataset):
                 params[col] = None
             else:
                 params[col] = eval(params[col])
-
         return params
 
     @property
@@ -66,35 +73,29 @@ class TrainingDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.TRAINING
 
-    def list_partitions(self) -> List[str]:
-        path = os.path.join(self._path, 'data')
+    def patient_id(
+        self,
+        sample_idx: int) -> types.PatientID:
+        df = self.manifest
+        result_df = df[df['index'] == sample_idx]
+        if len(result_df) == 0:
+            raise ValueError(f"Sample '{sample_idx}' not found for dataset '{self}'.")
+        pat_id = result_df['patient-id'].iloc[0] 
+        return pat_id
+
+    def list_samples(self) -> List[int]:
+        path = os.path.join(self._path, 'data', 'inputs')
         if os.path.exists(path):
-            return os.listdir(path)
+            indices = list(sorted([int(f.replace('.npz', '')) for f in os.listdir(path)]))
         else:
-            return []
+            indices = []
+        return indices
 
-    def list_regions(self) -> pd.DataFrame:
-        p_data = []
-        for p in self.list_partitions():
-            region_df = self.partition(p).list_regions()
-            region_df.insert(0, 'partition', p)
-            p_data.append(region_df)
-        region_df = pd.concat(p_data)
-        return region_df
-
-    def create_partition(
+    def sample(
         self,
-        name: types.TrainingPartition) -> TrainingPartition:
-        """
-        effect: creates partition folder.
-        args:
-            name: the partition name.
-        """
-        path = os.path.join(self._path, 'data', name)
-        os.makedirs(path)
-        return self.partition(name)
-
-    def partition(
-        self,
-        name: types.TrainingPartition) -> TrainingPartition:
-        return TrainingPartition(self, name)
+        index: Union[int, str],
+        by_patient_id: bool = False) -> TrainingSample:
+        # Look up sample by patient ID.
+        if by_patient_id:
+            index = self.manifest[(self.manifest['partition'] == self.name) & (self.manifest['patient-id'] == index)].iloc[0]['index']
+        return TrainingSample(self, index)

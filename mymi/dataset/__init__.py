@@ -12,7 +12,8 @@ from .other import list as list_other
 
 def get(
     name: str,
-    type: Optional[str] = None) -> Dataset:
+    type: Optional[str] = None,
+    check_conversion: bool = True) -> Dataset:
     """
     returns: the dataset.
     args:
@@ -31,7 +32,7 @@ def get(
         elif type == DatasetType.NIFTI:
             return NIFTIDataset(name)
         elif type == DatasetType.TRAINING:
-            return TrainingDataset(name)
+            return TrainingDataset(name, check_conversion=check_conversion)
         elif type == DatasetType.OTHER:
             return OtherDataset(name)
         else:
@@ -78,7 +79,7 @@ def default() -> Optional[Dataset]:
 
     return None
 
-ds = default()
+ds = None
 
 def select(
     name: str,

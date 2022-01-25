@@ -37,7 +37,7 @@ def get_localiser_prediction(
     loc_fov = np.array(loc_size) * loc_spacing
     for axis in len(fov):
         if fov[axis] > loc_fov[axis]:
-            raise ValueError(f"Patient FOV larger '{fov}', larger than localiser FOV '{loc_fov}'.")
+            raise ValueError(f"Patient FOV '{fov}', larger than localiser FOV '{loc_fov}'.")
 
     # Resample/crop data for network.
     input = resample_3D(input, spacing, loc_spacing)

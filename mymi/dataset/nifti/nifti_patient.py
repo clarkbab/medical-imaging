@@ -11,12 +11,12 @@ class NIFTIPatient:
         self,
         dataset: 'NIFTIDataset',
         id: types.PatientID):
-        self._global_id = f"{dataset} - {id}"
         self._dataset = dataset
         self._id = str(id)
+        self._global_id = f"{dataset} - {self._id}"
 
         # Check that patient ID exists.
-        ct_path = os.path.join(dataset.path, 'data', 'ct', f'{id}.nii.gz')
+        ct_path = os.path.join(dataset.path, 'data', 'ct', f'{self._id}.nii.gz')
         if not os.path.exists(ct_path):
             raise ValueError(f"Patient '{self}' not found.")
     
@@ -111,7 +111,7 @@ class NIFTIPatient:
             if not self.has_region(region):
                 raise ValueError(f"Requested region '{region}' not found for patient '{self._id}', dataset '{self._dataset}'.")
             
-            path = os.path.join(self._dataset.path, 'data', region, f"{self._id}.nii.gz")
+            path = os.path.join(self._dataset.path, 'data', region, f'{self._id}.nii.gz')
             img = nib.load(path)
             rdata = img.get_fdata()
             data[region] = rdata.astype(bool)

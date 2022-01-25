@@ -5,7 +5,7 @@ import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Optional, Union
 
-from mymi.dataset.training import TrainingPartition
+from mymi.dataset import TrainingDataset
 from mymi.geometry import get_extent_centre
 from mymi.regions import get_patch_size
 from mymi.transforms import point_crop_or_pad_3D
@@ -14,7 +14,7 @@ from mymi import types
 class PatchLoader:
     @staticmethod
     def build(
-        partitions: Union[TrainingPartition, List[TrainingPartition]],
+        datasets: Union[TrainingDataset, List[TrainingDataset]],
         region: str,
         half_precision: bool = True,
         batch_size: int = 1,
@@ -36,7 +36,7 @@ class PatchLoader:
 class LoaderDataset(Dataset):
     def __init__(
         self,
-        partitions: List[TrainingPartition],
+        datasets: List[TrainingDataset],
         region: str,
         half_precision: bool = True,
         num_samples: Optional[int] = None,
@@ -46,12 +46,10 @@ class LoaderDataset(Dataset):
         self._half_precision = half_precision
         self._p_foreground = p_foreground
         self._partitions = partitions
-        self._patch_size = get_patch_size(region)
+        self._patch_size = get_patch_size(region, spacing)
         self._region = region
         self._spacing = spacing
         self._transform = transform
-        if transform:
-            assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         index = 0
         map_tuples = []

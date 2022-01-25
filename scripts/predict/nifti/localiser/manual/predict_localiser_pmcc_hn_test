@@ -26,9 +26,10 @@ REGIONS=(
     'Submandibular_L'   # 15
     'Submandibular_R'   # 16
 )
-RUN="public-1gpu-100epochs"
 
 for i in "${!REGIONS[@]}"; do
-    localiser="('localiser-${REGIONS[i]}','$RUN','BEST')"
-    python create_predictions --dataset $DATASET --region ${REGIONS[i]} --localiser $localiser --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING 
+    region=${REGIONS[i]}
+    datasets="['PMCC-HN-TRAIN-$region-LOC','PMCC-HN-TEST-$region-LOC']"
+    localiser="('localiser-$region','public-1gpu-100epochs','BEST')"
+    python create_predictions_from_loader --datasets $DATASET --region ${REGIONS[i]} --localiser $localiser --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING 
 done

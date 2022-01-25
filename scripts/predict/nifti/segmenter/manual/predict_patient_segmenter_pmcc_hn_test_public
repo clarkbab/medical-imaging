@@ -4,7 +4,7 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 DATASET="PMCC-HN-TEST"
-PATIENT="128"
+PATIENT="19"
 REGIONS=(
     # 'BrachialPlexus_L'  # 0
     # 'BrachialPlexus_R'  # 1
@@ -15,12 +15,12 @@ REGIONS=(
     # 'Lens_L'            # 6
     # 'Lens_R'            # 7
     # 'Mandible'          # 8
-    # 'OpticNerve_L'      # 9
+    'OpticNerve_L'      # 9
     # 'OpticNerve_R'      # 10
     # 'OralCavity'        # 11
     # 'Parotid_L'         # 12
     # 'Parotid_R'         # 13
-    'SpinalCord'        # 14
+    # 'SpinalCord'        # 14
     # 'Submandibular_L'   # 15
     # 'Submandibular_R'   # 16
 )

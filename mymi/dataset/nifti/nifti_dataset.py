@@ -25,6 +25,10 @@ class NIFTIDataset(Dataset):
 
     def __str__(self) -> str:
         return self._global_id
+
+    @property
+    def name(self) -> str:
+        return self._name
     
     @property
     def path(self) -> str:

@@ -36,10 +36,8 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER_RUN="public-1gpu-100epochs"
-SEGMENTER_RUN="clinical-1gpu-150epochs"
-LOCALISER="('localiser-$REGION','$LOCALISER_RUN','BEST')"
-SEGMENTER="('segmenter-$REGION','$SEGMENTER_RUN','BEST')"
+LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
+SEGMENTER="('segmenter-$REGION','clinical-1gpu-150epochs','BEST')"
 SEGMENTER_SPACING="(1,1,2)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 

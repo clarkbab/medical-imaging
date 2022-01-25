@@ -19,7 +19,6 @@ from ..networks import UNet3D
 class Localiser(pl.LightningModule):
     def __init__(
         self,
-        region: str,
         loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
@@ -40,7 +39,6 @@ class Localiser(pl.LightningModule):
         self._name = None
         self._network = UNet3D(pretrained_model=pretrained.network if pretrained else None)
         self._predict_logits = predict_logits
-        self._region = region
         self._spacing = spacing
         self.save_hyperparameters()
 
@@ -101,8 +99,7 @@ class Localiser(pl.LightningModule):
 
     def training_step(self, batch, _):
         # Forward pass.
-        _, x, labels = batch
-        y = labels[self._region]
+        _, x, y = batch
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
@@ -137,8 +134,7 @@ class Localiser(pl.LightningModule):
             batch: the (desc, input, label) pair of batched data.
         """
         # Forward pass.
-        descs, x, labels = batch
-        y = labels[self._region]
+        descs, x, y = batch
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 

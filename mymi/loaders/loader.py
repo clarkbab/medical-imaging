@@ -4,114 +4,131 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 from mymi import types
-from mymi.dataset.training import TrainingPartition
+from mymi.dataset import get as get_ds
+from mymi.dataset.training import TrainingDataset
 
 class Loader:
     @staticmethod
-    def build(
-        partitions: Union[TrainingPartition, List[TrainingPartition]],
+    def build_loaders(
+        datasets: Union[TrainingDataset, List[TrainingDataset]],
         batch_size: int = 1,
         half_precision: bool = True,
+        num_folds: Optional[int] = None, 
+        num_train: Optional[int] = None,
         num_workers: int = 1,
-        regions: types.PatientRegions = 'all',
-        shuffle: bool = True,
+        random_seed: int = 42,
         spacing: types.ImageSpacing3D = None,
+        test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
-        truncate_spine: bool = False) -> torch.utils.data.DataLoader:
-        """
-        returns: a data loader.
-        args:
-            partitions: the dataset partitions, e.g. 'train' partitions from both 'HN1' and 'HNSCC' datasets.
-        kwargs:
-            batch_size: the number of images in the batch.
-            half_precision: load images at half precision.
-            num_workers: the number of CPUs for data loading.
-            regions: only load samples with (at least) one of the requested regions.
-            shuffle: shuffle the data.
-            spacing: the voxel spacing of the data.
-            transform: the transform to apply.
-        """
-        if type(partitions) == TrainingPartition:
-            partitions = [partitions]
+        p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
+        if type(datasets) == TrainingDataset:
+            datasets = [datasets]
+        if num_folds and test_fold is None:
+            raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
-        # Create dataset object.
-        ds = LoaderDataset(partitions, half_precision=half_precision, regions=regions, spacing=spacing, transform=transform, truncate_spine=truncate_spine)
+        # Get all samples.
+        all_samples = []
+        for ds_i, dataset in enumerate(datasets):
+            samples = dataset.list_samples()
+            for s_i in samples:
+                all_samples.append((ds_i, s_i))
 
-        # Create loader.
-        return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
+        # Shuffle samples.
+        np.random.seed(random_seed)
+        np.random.shuffle(all_samples)
 
-class LoaderDataset(Dataset):
+        # Split samples into folds.
+        if num_folds:
+            num_samples = len(all_samples)
+            len_fold = int(np.floor(num_samples / num_folds))
+            folds = []
+            for i in range(num_folds):
+                fold = all_samples[i * len_fold:(i + 1) * len_fold]
+                folds.append(fold)
+
+            # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
+            # folds should be [3, 4, 0, 1] (for num_folds=5). This ensures that when we 
+            # take a subset of samples (num_train != None), we get different training samples
+            # for each of the k-folds.
+            train_folds = list((np.array(range(num_folds)) + (test_fold + 1)) % 5)
+            train_folds.remove(test_fold)
+
+            # Get train and test data.
+            train_samples = []
+            for i in train_folds:
+                train_samples += folds[i]
+            test_samples = folds[test_fold] 
+        else:
+            train_samples = all_samples
+
+        # Take subset of train samples.
+        if num_train is not None:
+            train_samples = train_samples[:num_train]
+
+        # Split train into NN train and validation data.
+        num_nn_train = int(len(train_samples) * (1 - p_val))
+        nn_train_samples = train_samples[:num_nn_train]
+        nn_val_samples = train_samples[num_nn_train:] 
+
+        # Create train loader.
+        train_ds = TrainingDataset(datasets, nn_train_samples, half_precision=half_precision, spacing=spacing, transform=transform)
+        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=num_workers, shuffle=True)
+
+        # Create validation loader.
+        val_ds = TrainingDataset(datasets, nn_val_samples, half_precision=half_precision)
+        val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=num_workers, shuffle=False)
+
+        # Create test loader.
+        if num_folds:
+            test_ds = TestDataset(datasets, test_samples) 
+            test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=num_workers, shuffle=False)
+            return train_loader, val_loader, test_loader
+        else:
+            return train_loader, val_loader
+
+class TrainingDataset(Dataset):
     def __init__(
         self,
-        partitions: List[TrainingPartition],
+        datasets: List[TrainingDataset],
+        samples: List[Tuple[int, int]],
         half_precision: bool = True,
-        regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
-        transform: torchio.transforms.Transform = None,
-        truncate_spine: bool = False):
-        """
-        args:
-            partitions: the dataset partitions.
-        kwargs:
-            half_precision: load images at half precision.
-            regions: only load samples with (at least) one of the requested regions.
-            spacing: the voxel spacing.
-            transform: transformations to apply.
-        """
+        transform: torchio.transforms.Transform = None):
+        self._datasets = datasets
         self._half_precision = half_precision
-        self._partitions = partitions
-        self._regions = regions
         self._spacing = spacing
         self._transform = transform
-        self._truncate_spine = truncate_spine
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
-        index = 0
-        map_tuples = []
-        for i, partition in enumerate(partitions):
-            # Filter samples by requested regions.
-            samples = partition.list_samples(regions=regions)
-            for sample in samples:
-                map_tuples.append((index, (i, sample)))
-                index += 1
-
         # Record number of samples.
-        self._num_samples = index
+        self._num_samples = len(samples)
 
         # Map loader indices to dataset indices.
-        self._index_map = dict(map_tuples)
+        self._sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
 
     def __len__(self):
-        """
-        returns: number of samples in the partition.
-        """
         return self._num_samples
 
     def __getitem__(
         self,
         index: int) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        returns: an (input, label) pair from the dataset.
-        args:
-            index: the item to return.
-        """
         # Load data.
-        p_idx, s_idx = self._index_map[index]
-        part = self._partitions[p_idx]
-        input, label = part.sample(s_idx).pair(regions=self._regions)
+        ds_i, s_i = self._sample_map[index]
+        dataset = self._datasets[ds_i]
+        input, label = dataset.sample(s_i).pair
 
         # Get description.
-        desc = f'{part.dataset.name}:{part.name}:{s_idx}'
+        desc = f'{dataset.name}:{s_i}'
 
         # Perform transform.
         if self._transform:
             # Add 'batch' dimension.
             input = np.expand_dims(input, axis=0)
-            label = dict((r, np.expand_dims(d, axis=0)) for r, d in label.items())
+            label = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
@@ -121,22 +138,25 @@ class LoaderDataset(Dataset):
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)
-            label = dict((r, LabelMap(tensor=d, affine=affine)) for r, d in label.items())
+            label = LabelMap(tensor=label, affine=affine)
             subject_kwargs = { 'input': input }
             for r, d in label.items():
                 subject_kwargs[r] = d
-            subject = Subject(**subject_kwargs)
+            subject = Subject({
+                'input': input,
+                'label': label
+            })
 
             # Transform the subject.
             output = self._transform(subject)
 
             # Extract results.
             input = output['input'].data.squeeze(0)
-            label = dict((r, output[r].data.squeeze(0)) for r in label.keys()) 
+            label = output['label'].data.squeeze(0)
 
             # Convert to numpy.
             input = input.numpy()
-            label = dict((r, d.numpy()) for r, d in label.items())
+            label = label.numpy()
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
@@ -146,6 +166,30 @@ class LoaderDataset(Dataset):
             input = input.astype(np.half)
         else:
             input = input.astype(np.single)
-        label = dict((r, d.astype(np.bool)) for r, d in label.items())
+        label = label.astype(bool)
 
         return desc, input, label
+    
+class TestDataset(Dataset):
+    def __init__(
+        self,
+        datasets: List[TrainingDataset],
+        samples: List[Tuple[int, int]]):
+        self._datasets = datasets
+
+        # Record number of samples.
+        self._num_samples = len(samples)
+
+        # Map loader indices to dataset indices.
+        self._sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
+
+    def __len__(self):
+        return self._num_samples
+
+    def __getitem__(
+        self,
+        index: int) -> Tuple[str, str]:
+        # Load data.
+        ds_i, s_i = self._sample_map[index]
+        set = self._datasets[ds_i]
+        return set.sample(s_i).origin

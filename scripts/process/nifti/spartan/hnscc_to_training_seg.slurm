@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 1-0:00:00
+#SBATCH --time 7-00:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -12,6 +12,53 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+join () {
+  local IFS="$1"
+  shift
+  echo "$*"
+}
 
-bash $SCRIPT_DIR/process/nifti/manual/hnscc_to_training_seg
+DATASET="HNSCC"
+DEST_DATASET="$DATASET-SEG"
+REGIONS=(
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Brain'             # 2
+    'BrainStem'         # 3
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'Mandible'          # 8
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+    'OralCavity'        # 11
+    'Parotid_L'         # 12
+    'Parotid_R'         # 13
+    'SpinalCord'        # 14
+    'Submandibular_L'   # 15
+    'Submandibular_R'   # 16
+)
+DILATE_REGIONS=(
+    'BrachialPlexus_L'  # 0
+    'BrachialPlexus_R'  # 1
+    'Cochlea_L'         # 4
+    'Cochlea_R'         # 5
+    'Lens_L'            # 6
+    'Lens_R'            # 7
+    'OpticNerve_L'      # 9
+    'OpticNerve_R'      # 10
+)
+DILATE=False
+if [[ " ${DILATE_REGIONS[*]} " =~ " ${REGION} " ]]; then
+    DILATE=True
+fi
+ROUND_DP=None
+SIZE=None
+SPACING="(1,1,2)"
+SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+REGIONS=$(join , "${REGIONS[@]}")
+DILATE_REGIONS=$(join , "${DILATE_REGIONS[@]}")
+
+python $SCRIPT_DIR/process/nifti/convert_to_training --dataset $DATASET --regions $REGIONS --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS \
+    --round_dp $ROUND_DP --size $SIZE --spacing $SPACING

@@ -5,7 +5,6 @@ from typing import List
 from mymi import config
 
 from .training_dataset import TrainingDataset
-from .training_partition import TrainingPartition
 
 def list() -> List[str]:
     """
@@ -34,7 +33,7 @@ def create(name: str) -> TrainingDataset:
     ds_path = os.path.join(config.directories.datasets, 'training', name)
     os.makedirs(ds_path)
 
-    return TrainingDataset(name)
+    return TrainingDataset(name, check_conversion=False)
 
 def destroy(name: str) -> None:
     """

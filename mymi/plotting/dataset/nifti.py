@@ -280,7 +280,7 @@ def plot_patient_localiser_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['y'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     # Load localiser segmentation.
     if region != 'SpinalCord':
@@ -306,11 +306,11 @@ def plot_patient_localiser_prediction(
             pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
 
         # Plot prediction.
-        colour = plt.cm.tab20(0)
+        colour = 'deepskyblue'
         colours = [(1, 1, 1, 0), colour]
         cmap = ListedColormap(colours)
         plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
-        plt.plot(0, 0, c=colour, label='Segmentation')
+        plt.plot(0, 0, c=colour, label='Loc. Prediction')
 
     # Plot localiser bounding box.
     if non_empty_pred and show_box and should_plot_box(extent, view, slice_idx):
@@ -324,11 +324,11 @@ def plot_patient_localiser_prediction(
             centre = (loc_centre[0], loc_centre[2])
         elif view == 'sagittal':
             centre = (loc_centre[1], loc_centre[2])
-        plt.scatter(*centre, c='r', label='Loc. centre')
+        plt.scatter(*centre, c='royalblue', label='Loc. Centre')
 
     # Plot second stage patch.
     if non_empty_pred and show_patch:
-        size = get_patch_size(region)
+        size = get_patch_size(region, spacing)
         min, max = get_box(loc_centre, size)
 
         # Squash min/max to label size.
@@ -339,7 +339,7 @@ def plot_patient_localiser_prediction(
                 max[i] = pred_max
 
         if should_plot_box((min, max), view, slice_idx):
-            plot_box((min, max), view, colour='deepskyblue', crop=crop, label='Seg. Patch', linestyle='dashed')
+            plot_box((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dashed')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
@@ -367,12 +367,10 @@ def plot_patient_segmenter_prediction(
     crop: types.Box2D = None,
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
-    label_colour: str = 'deepskyblue',
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
     patch_size: Optional[types.ImageSize3D] = None,
-    seg_colour: str = 'gold',
     show_extent: bool = True,
     show_loc_centre: bool = True,
     show_patch: bool = True,
@@ -423,7 +421,7 @@ def plot_patient_segmenter_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=[label_colour], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, slice_idx=slice_idx, view=view, **kwargs)
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, slice_idx=slice_idx, view=view, **kwargs)
 
     # Convert to box crop.
     crop_box = None
@@ -453,15 +451,15 @@ def plot_patient_segmenter_prediction(
             pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop_box))
 
         # Plot prediction.
-        # seg_colour = plt.cm.tab20(0)
-        colours = [(1, 1, 1, 0), seg_colour]
+        colour = 'tomato'
+        colours = [(1, 1, 1, 0), colour]
         cmap = ListedColormap(colours)
         plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
-        plt.plot(0, 0, c=seg_colour, label='Segmentation')
+        plt.plot(0, 0, c=colour, label='Segmentation')
 
     # Plot extent.
     if non_empty_pred and show_extent and should_plot_box(extent, view, slice_idx):
-        plot_box(extent, view, colour=seg_colour, crop=crop_box, label='Seg. Extent')
+        plot_box(extent, view, colour='tomato', crop=crop_box, label='Seg. Extent')
 
     # Plot localiser centre.
     if non_empty_pred and show_loc_centre:
@@ -471,14 +469,14 @@ def plot_patient_segmenter_prediction(
             centre = (loc_centre[0], loc_centre[2])
         elif view == 'sagittal':
             centre = (loc_centre[1], loc_centre[2])
-        plt.scatter(*centre, c='r', label='Loc. centre')
+        plt.scatter(*centre, c='royalblue', label='Loc. centre')
 
     # Plot patch.
     if show_patch:
-        patch_size = get_patch_size(region)
+        patch_size = get_patch_size(region, spacing)
         seg_patch = get_box(loc_centre, patch_size)
         if should_plot_box(seg_patch, view, slice_idx):
-            plot_box(seg_patch, view, colour=seg_colour, crop=crop_box, label='Seg. Patch', linestyle='dashed')
+            plot_box(seg_patch, view, colour='deepskyblue', crop=crop_box, label='Seg. Patch', linestyle='dashed')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})

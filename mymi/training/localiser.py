@@ -9,11 +9,11 @@ from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
+from mymi.dataset.training import exists
 from mymi.loaders import Loader
 from mymi.losses import DiceLoss
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi import types
 
 def train_localiser(
     model_name: str,
@@ -22,37 +22,43 @@ def train_localiser(
     region: str,
     loss: str = 'dice',
     num_epochs: int = 200,
+    num_folds: Optional[int] = None,
     num_gpus: int = 1,
     num_nodes: int = 1,
+    num_train: Optional[int] = None,
     num_workers: int = 1,
     pretrained: Optional[Tuple[str, str, str]] = None,
+    p_val: float = 0.2,
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
-    truncate_spine: bool = False,
+    test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' using '{num_folds}' folds with test fold '{test_fold}'.")
 
     # Load partitions.
     if isinstance(datasets, str):
         set = ds.get(datasets, 'training')
-        spacing = eval(set.params.spacing[0])
-        train_parts = set.partition('train')
-        val_parts = [set.partition('validation')]
+        spacing = set.params['spacing']
+        sets = [set]
     else:
-        set = ds.get(datasets[0], 'training')
-        spacing = eval(set.params.spacing[0]) 
-        train_parts = []
-        val_parts = []
+        spacing = None
+        sets = []
         for d in datasets:
+            if not exists(d):
+                logging.error(f"Skipping dataset '{d}', doesn't exist.")
+                continue
             set = ds.get(d, 'training')
-            d_spacing = eval(set.params.spacing[0]) 
-            if d_spacing != spacing:
+
+            # Check for consistent spacing.
+            d_spacing = set.params['spacing']
+            if spacing is None:
+                spacing = d_spacing
+            elif d_spacing != spacing:
                 raise ValueError(f"Can't train on datasets with inconsistent spacing.")
-            train_parts.append(set.partition('train'))
-            val_parts.append(set.partition('validation'))
+            sets.append(set)
 
     # Create transforms.
     rotation = (-5, 5)
@@ -65,8 +71,9 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader = Loader.build(train_parts, num_workers=num_workers, regions=region, spacing=spacing, transform=transform, truncate_spine=truncate_spine)
-    val_loader = Loader.build(val_parts, num_workers=num_workers, regions=region, shuffle=False, truncate_spine=truncate_spine)
+    loaders = Loader.build_loaders(sets, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, test_fold=test_fold)
+    train_loader = loaders[0]
+    val_loader = loaders[1]
 
     # Get loss function.
     if loss == 'dice':
@@ -79,7 +86,6 @@ def train_localiser(
     if pretrained:
         pretrained = Localiser.load(*pretrained)
     model = Localiser(
-        region,
         loss=loss_fn,
         metrics=metrics,
         pretrained=pretrained,

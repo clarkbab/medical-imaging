@@ -3,11 +3,12 @@ import os
 import pandas as pd
 import torch
 from tqdm import tqdm
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import cache
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent_centre
+from loaders import Loader
 from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
@@ -67,7 +68,7 @@ def get_patient_localiser_evaluation(
     else:
         # Create second stage patch.
         centre = get_extent_centre(pred)
-        size = get_patch_size(region)
+        size = get_patch_size(region, spacing)
         min, max = get_box(centre, size)
 
         # Squash to label size.
@@ -177,6 +178,46 @@ def create_localiser_evaluation(
         if region != 'SpinalCord':
             truncate_spine = False
         df = create_patient_localiser_evaluation(dataset, pat, region, localiser, df=df, truncate_spine=truncate_spine)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
+def create_localiser_evaluation_from_loader(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    truncate_spine: bool = False) -> None:
+    localiser = Localiser.replace_best(*localiser)
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}'.")
+
+    # Create test loader.
+    sets = [ds.get(d, 'training') for d in datasets]
+    _, _, test_loader = Loader.build_loaders(sets, num_folds=num_folds, test_fold=test_fold)
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for datasets, pat_ids in iter(test_loader):
+        if region != 'SpinalCord':
+            truncate_spine = False
+
+        if type(pat_ids) == torch.Tensor:
+            pat_ids = pat_ids.tolist()
+        for dataset, pat_id in zip(datasets, pat_ids):
+            df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df, truncate_spine=truncate_spine)
 
     # Set column types.
     df = df.astype(cols)
