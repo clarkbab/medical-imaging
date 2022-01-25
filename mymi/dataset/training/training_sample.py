@@ -30,6 +30,27 @@ class TrainingSample:
     def index(self) -> str:
         return self._index
 
+    def list_regions(self) -> List[str]:
+        """
+        returns: the region names.
+        """
+        # List all regions.
+        filepath = os.path.join(self._dataset.path, 'data', 'labels')
+        all_regions = os.listdir(filepath)
+
+        def filter_fn(region):
+            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._index}.npz')
+            if os.path.exists(filepath):
+                return True
+            else:
+                return False
+        return list(filter(filter_fn, all_regions))
+
+    def has_region(
+        self,
+        region: str) -> bool:
+        return region in self.list_regions()
+
     @property
     def origin(self) -> Tuple[str, str]:
         manifest = self._dataset.manifest

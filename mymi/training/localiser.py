@@ -71,7 +71,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(sets, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, test_fold=test_fold)
+    loaders = Loader.build_loaders(sets, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 

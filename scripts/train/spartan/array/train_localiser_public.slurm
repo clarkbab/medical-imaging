@@ -15,6 +15,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
+DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -35,7 +36,6 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-DATASETS="['HN1-$REGION-LOC','HNPCT-$REGION-LOC','HNSCC-$REGION-LOC','OPC-$REGION-LOC']"
 MODEL_NAME="localiser-${REGION}"
 NUM_EPOCHS=150
 NUM_FOLDS=5
@@ -46,9 +46,9 @@ RESUME=False
 RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
-VAL_FOLD=0
-RUN_NAME="public-1gpu-100epochs-fold$VAL_FOLD"
+TEST_FOLD=0
+RUN_NAME="public-1gpu-100epochs-fold$TEST_FOLD"
 
 python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS \
-    --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
-    --truncate_spine $TRUNCATE_SPINE --use_logger $USE_LOGGER
+    --num_folds $NUM_FOLDS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+    --test_fold $TEST_FOLD --truncate_spine $TRUNCATE_SPINE --use_logger $USE_LOGGER

@@ -46,10 +46,14 @@ def convert_to_training(
     # Write each patient to dataset.
     start = time()
     for i, pat in enumerate(tqdm(pats)):
-        print(pat)
         # Load input data.
         patient = set.patient(pat)
+        old_spacing = patient.ct_spacing()
         input = patient.ct_data()
+
+        # Resample input.
+        if spacing:
+            input = resample_3D(input, old_spacing, spacing)
 
         # Save input.
         _create_training_input(train_ds, i, input)
@@ -66,8 +70,6 @@ def convert_to_training(
 
             # Resample data.
             if spacing:
-                old_spacing = patient.ct_spacing()
-                input = resample_3D(input, old_spacing, spacing)
                 label = resample_3D(label, old_spacing, spacing)
 
             # Crop/pad.
