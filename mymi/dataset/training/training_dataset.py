@@ -32,7 +32,7 @@ class TrainingDataset(Dataset):
             if os.path.exists(path):
                 path = os.path.join(self._path, '__CONVERT_FROM_NIFTI_END__')
                 if not os.path.exists(path):
-                    raise ValueError(f"Dataset '{self}' conversion wasn't finished.")
+                    raise ValueError(f"Dataset '{self}' conversion isn't finished.")
 
     @property
     def description(self) -> str:

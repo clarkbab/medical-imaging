@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-01:00:00
+#SBATCH --time 0-05:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -18,8 +18,8 @@ join () {
   echo "$*"
 }
 
-DATASET="HN1"
-DEST_DATASET="$DATASET-LOC"
+DATASET="PMCC-HN-TEST"
+DEST_DATASET="$DATASET-SEG"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -54,8 +54,8 @@ if [[ " ${DILATE_REGIONS[*]} " =~ " ${REGION} " ]]; then
     DILATE=True
 fi
 ROUND_DP=None
-SIZE="(128,128,150)"
-SPACING="(4,4,4)"
+SIZE=None
+SPACING="(1,1,2)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 REGIONS=$(join , "${REGIONS[@]}")
 DILATE_REGIONS=$(join , "${DILATE_REGIONS[@]}")

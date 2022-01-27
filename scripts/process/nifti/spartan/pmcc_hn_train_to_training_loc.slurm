@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-01:00:00
+#SBATCH --time 0-04:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -18,7 +18,7 @@ join () {
   echo "$*"
 }
 
-DATASET="HN1"
+DATASET="PMCC-HN-TRAIN"
 DEST_DATASET="$DATASET-LOC"
 REGIONS=(
     'BrachialPlexus_L'  # 0

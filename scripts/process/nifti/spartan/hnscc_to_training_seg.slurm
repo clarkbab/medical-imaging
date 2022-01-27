@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition physical
-#SBATCH --mem 64G
-#SBATCH --time 7-00:00:00
+#SBATCH --mem 32G
+#SBATCH --time 0-02:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0

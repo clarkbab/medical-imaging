@@ -99,7 +99,7 @@ def convert_to_training(
 
     # Indicate success.
     _write_flag(train_ds, '__CONVERT_FROM_NIFTI_END__')
-    hours = int((end - start) / 3600)
+    hours = int(np.ceil((end - start) / 3600))
     _print_time(train_ds, hours)
 
 def _write_flag(

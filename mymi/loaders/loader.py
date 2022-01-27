@@ -33,7 +33,7 @@ class Loader:
         # Get all samples.
         all_samples = []
         for ds_i, dataset in enumerate(datasets):
-            samples = dataset.list_samples()
+            samples = dataset.list_samples(regions=region)
             for s_i in samples:
                 all_samples.append((ds_i, s_i))
 

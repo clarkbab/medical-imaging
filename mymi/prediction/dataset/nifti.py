@@ -356,8 +356,8 @@ def create_segmenter_predictions_from_loader(
 def load_patient_segmenter_prediction(
     dataset: str,
     pat_id: types.PatientID,
-    localiser: Tuple[str, str, str],
-    segmenter: Tuple[str, str, str]) -> np.ndarray:
+    localiser: types.ModelName,
+    segmenter: types.ModelName) -> np.ndarray:
     localiser = Localiser.replace_best(*localiser)
     segmenter = Segmenter.replace_best(*segmenter)
 
@@ -365,7 +365,7 @@ def load_patient_segmenter_prediction(
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
-        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}'.")
+        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'.")
     npz_file = np.load(filepath)
     seg = npz_file['data']
     
@@ -460,10 +460,10 @@ def create_two_stage_predictions_from_loader(
 
     # Create test loader.
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
-    for datasets, pat_ids in iter(test_loader):
+    for datasets, pat_ids in tqdm(iter(test_loader)):
         if type(pat_ids) == torch.Tensor:
             pat_ids = pat_ids.tolist()
         for dataset, pat_id in zip(datasets, pat_ids):
