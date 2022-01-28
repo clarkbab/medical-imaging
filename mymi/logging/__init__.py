@@ -15,6 +15,9 @@ def config(level: str) -> None:
 def info(*args, **kwargs):
     return logging.info(*args, **kwargs)
 
+def warning(*args, **kwargs):
+    return logging.warning(*args, **kwargs)
+
 def error(*args, **kwargs):
     return logging.error(*args, **kwargs)
 

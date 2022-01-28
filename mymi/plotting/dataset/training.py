@@ -15,18 +15,18 @@ from ..plotter import assert_position, get_aspect_ratio, get_origin, get_slice, 
 
 def plot_sample_regions(
     dataset: str,
-    partition: str,
     sample_id: str,
     alpha: float = 0.2,
     aspect: float = None,
     axis = None,
     cca: bool = False,
     centre_of: Optional[str] = None,
+    check_conversion: bool = True,
     colours: Optional[List[str]] = None,
     crop: Optional[Union[str, Tuple[Tuple[int, int], Tuple[int, int]]]] = None,
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
-    figsize: Tuple[int, int] = (8, 8),
+    figsize: Tuple[int, int] = (12, 12),
     font_size: int = 10,
     latex: bool = False,
     legend: bool = True,
@@ -46,7 +46,7 @@ def plot_sample_regions(
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
     view: types.PatientView = 'axial',
-    window: Tuple[float, float] = None) -> None:
+    window: Tuple[float, float] = (3000, 500)) -> None:
     assert_position(centre_of, extent_of, slice_idx)
 
     # Create plot figure/axis.
@@ -68,9 +68,9 @@ def plot_sample_regions(
         })
 
     # Load patient spacing.
-    set = ds.get(dataset, 'training')
-    sample = set.partition(partition).sample(sample_id)
-    spacing = eval(set.params.spacing[0])
+    set = ds.get(dataset, 'training', check_conversion=check_conversion)
+    sample = set.sample(sample_id)
+    spacing = set.params['spacing']
 
     # Get slice index if requested OAR centre.
     if centre_of:
@@ -104,7 +104,7 @@ def plot_sample_regions(
             slice_idx = extent[eo_end][0]
 
     # Load CT data.
-    input = sample.input()
+    input = sample.input
 
     # Load region data.
     if regions is not None:

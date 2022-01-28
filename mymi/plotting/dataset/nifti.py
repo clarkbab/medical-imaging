@@ -73,7 +73,7 @@ def plot_patient_regions(
     # Load patient spacing.
     set = ds.get(dataset, 'nifti')
     pat = set.patient(pat_id)
-    spacing = pat.ct_spacing()
+    spacing = pat.ct_spacing
 
     # Get slice index if requested OAR centre.
     if centre_of:
@@ -107,7 +107,7 @@ def plot_patient_regions(
             slice_idx = extent[eo_end][0]
 
     # Load CT data.
-    ct_data = pat.ct_data()
+    ct_data = pat.ct_data
 
     # Load region data.
     if regions is not None:
@@ -243,11 +243,11 @@ def plot_patient_localiser_prediction(
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    show_box: bool = False,
+    show_box: bool = True,
     show_centre: bool = True,
-    show_extent: bool = False,
-    show_patch: bool = False,
-    show_seg: bool = False,
+    show_extent: bool = True,
+    show_patch: bool = True,
+    show_seg: bool = True,
     slice_idx: Optional[int] = None,
     truncate_spine: bool = False,
     view: types.PatientView = 'axial',

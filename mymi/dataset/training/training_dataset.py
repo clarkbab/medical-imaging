@@ -104,7 +104,7 @@ class TrainingDataset(Dataset):
         by_patient_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
         if by_patient_id:
-            index = self.manifest[(self.manifest['partition'] == self.name) & (self.manifest['patient-id'] == index)].iloc[0]['index']
+            index = self.manifest[self.manifest['patient-id'] == index].iloc[0]['index']
 
         return TrainingSample(self, index)
 

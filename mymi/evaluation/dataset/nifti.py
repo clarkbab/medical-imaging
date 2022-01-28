@@ -103,6 +103,7 @@ def create_patient_localiser_evaluation(
 
     # Define dataframe columns.
     cols = {
+        'dataset': str,
         'patient-id': str,
         'region': str,
         'metric': str,
@@ -133,6 +134,7 @@ def create_patient_localiser_evaluation(
         if not exists:
             # Add metric.
             data = {
+                'dataset': dataset,
                 'patient-id': pat_id, 
                 'region': region,
                 'metric': metric,
@@ -141,7 +143,7 @@ def create_patient_localiser_evaluation(
             eval_df = eval_df.append(data, ignore_index=True)
         else:
             # Update metric.
-            eval_df.loc[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
+            eval_df.loc[(eval_df['dataset'] == dataset) & (eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
 
     if df is None:
         # Set column types.
@@ -168,6 +170,7 @@ def create_localiser_evaluation(
 
     # Create dataframe.
     cols = {
+        'dataset': str,
         'patient-id': str,
         'region': str,
         'metric': str,
@@ -244,12 +247,15 @@ def load_localiser_evaluation(
 
 def load_localiser_evaluation_from_loader(
     datasets: Union[str, List[str]],
-    localiser: types.ModelName) -> np.ndarray:
-    set = ds.get(dataset, 'nifti')
+    localiser: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None) -> np.ndarray:
     localiser = Localiser.replace_best(*localiser)
-    filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
+    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.files, 'evaluation', 'localiser', *localiser, folder, f'{filename}.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")
+        raise ValueError(f"Evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with evaluation fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -350,8 +356,8 @@ def create_patient_segmenter_evaluation(
 def create_segmenter_evaluation(
     dataset: str,
     region: str,
-    localiser: types.Model,
-    segmenter: types.Model) -> None:
+    localiser: types.ModelName,
+    segmenter: types.ModelName) -> None:
     localiser = Localiser.replace_best(*localiser)
     segmenter = Segmenter.replace_best(*segmenter)
     logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
@@ -362,6 +368,7 @@ def create_segmenter_evaluation(
 
     # Create dataframe.
     cols = {
+        'dataset': str,
         'patient-id': str,
         'region': str,
         'metric': str,
@@ -376,6 +383,7 @@ def create_segmenter_evaluation(
         # Add metrics.
         for metric, value in metrics.items():
             data = {
+                'dataset': dataset,
                 'patient-id': pat, 
                 'region': region,
                 'metric': metric,
@@ -445,3 +453,54 @@ def load_segmenter_evaluation(
         raise ValueError(f"Segmenter evaluation for dataset '{set}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
+
+def create_two_stage_evaluation_from_loader(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    truncate_spine: bool = False) -> None:
+    # Get unique names.
+    localiser = Localiser.replace_best(*localiser)
+    segmenter = Segmenter.replace_best(*segmenter)
+
+    logging.info(f"Evaluating two-stage predictions for NIFTI dataset '{datasets}', region '{region}', localiser '{localiser}' ,segmenter '{segmenter}', with {num_folds}-fold CV using evaluation fold {test_fold}.")
+
+    # Create test loader.
+    sets = [ds.get(d, 'training') for d in datasets]
+    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+
+    # Create dataframes.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    loc_df = pd.DataFrame(columns=cols.keys())
+    seg_df = pd.DataFrame(columns=cols.keys())
+
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
+            loc_df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df, truncate_spine=truncate_spine)
+            seg_df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
+
+    # Set column types.
+    loc_df = loc_df.astype(cols)
+    seg_df = seg_df.astype(cols)
+
+    # Save localiser evaluation.
+    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.files, 'evaluation', 'localiser', *localiser, folder, f'{filename}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    loc_df.to_csv(filepath, index=False)
+
+    # Save segmenter evaluation.
+    filepath = os.path.join(config.directories.files, 'evaluation', 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    seg_df.to_csv(filepath, index=False)

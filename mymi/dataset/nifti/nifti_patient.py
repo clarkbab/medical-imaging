@@ -72,6 +72,7 @@ class NIFTIPatient:
         region: str) -> bool:
         return region in self.list_regions()
 
+    @property
     def ct_spacing(self) -> types.ImageSpacing3D:
         path = os.path.join(self._dataset.path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
@@ -79,6 +80,7 @@ class NIFTIPatient:
         spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
         return spacing
 
+    @property
     def ct_offset(self) -> types.Point3D:
         path = os.path.join(self._dataset.path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
@@ -86,12 +88,14 @@ class NIFTIPatient:
         offset = (affine[0][3], affine[1][3], affine[2][3])
         return offset
 
+    @property
     def ct_data(self) -> np.ndarray:
         path = os.path.join(self._dataset.path, 'data', 'ct', f"{self._id}.nii.gz")
         img = nib.load(path)
         data = img.get_data()
         return data
 
+    @property
     def ct_size(self) -> np.ndarray:
         return self.ct_data().shape
 

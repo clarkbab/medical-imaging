@@ -18,6 +18,7 @@ def convert_to_training(
     regions: List[str],
     dest_dataset: str,
     dilate_regions: List[str] = [],
+    log_warnings: bool = False,
     round_dp: Optional[int] = None,
     size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None) -> None:
@@ -48,12 +49,29 @@ def convert_to_training(
     for i, pat in enumerate(tqdm(pats)):
         # Load input data.
         patient = set.patient(pat)
-        old_spacing = patient.ct_spacing()
-        input = patient.ct_data()
+        old_spacing = patient.ct_spacing
+        input = patient.ct_data
 
         # Resample input.
         if spacing:
             input = resample_3D(input, old_spacing, spacing)
+
+        # Crop/pad.
+        if size:
+            # Log warning if we're cropping the FOV as we're losing information.
+            if log_warnings:
+                if spacing:
+                    fov_spacing = spacing
+                else:
+                    fov_spacing = old_spacing
+                fov = np.array(input.shape) * fov_spacing
+                new_fov = np.array(size) * fov_spacing
+                for axis in range(len(size)):
+                    if fov[axis] > new_fov[axis]:
+                        logging.warning(f"Patient '{patient}' had FOV '{fov}', larger than new FOV after crop/pad '{new_fov}' for axis '{axis}'.")
+
+            # Perform crop/pad.
+            input = top_crop_or_pad_3D(input, size, fill=input.min())
 
         # Save input.
         _create_training_input(train_ds, i, input)
@@ -74,14 +92,7 @@ def convert_to_training(
 
             # Crop/pad.
             if size:
-                # Log warning if we're cropping the FOV, as we might lose parts of OAR, e.g. Brain.
-                fov = np.array(input.shape) * spacing
-                new_fov = np.array(size) * spacing
-                for axis in range(len(size)):
-                    if fov[axis] > new_fov[axis]:
-                        logging.error(f"Patient FOV '{fov}', larger than new FOV '{new_fov}' for axis '{axis}', losing information for patient '{patient}'.")
-                input = top_crop_or_pad_3D(input, size, fill=np.min(input))
-                label = top_crop_or_pad_3D(label, size, fill=0)
+                label = top_crop_or_pad_3D(label, size)
 
             # Round data after resampling to save on disk space.
             if round_dp is not None:

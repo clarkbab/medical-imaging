@@ -64,14 +64,26 @@ class TrainingSample:
         data = np.load(filepath)['data']
         return data
 
-    @property
-    def label(self) -> Dict[str, np.ndarray]:
+    def label(
+        self,
+        regions: types.PatientRegions = 'all') -> Dict[str, np.ndarray]:
+        # Convert regions to list.
+        if type(regions) == str:
+            if regions == 'all':
+                regions = list(sorted(self.list_regions))
+            else:
+                regions = [regions]
+
         # Load the label data.
-        filepath = os.path.join(self._dataset.path, 'data', 'labels', f'{self._index}.npz')
-        if not os.path.exists(filepath):
-            raise ValueError(f"Label not found for sample '{self._index}', dataset '{self._dataset}'.")
-        label = np.load(filepath)['data']
-        return label
+        data = {}
+        for region in regions:
+            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._index}.npz')
+            if not os.path.exists(filepath):
+                raise ValueError(f"Region '{region}' not found for sample '{self}'.")
+            label = np.load(filepath)['data']
+            data[region] = label
+
+        return data
 
     @property
     def pair(self) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:

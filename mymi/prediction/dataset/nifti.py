@@ -11,7 +11,7 @@ from mymi.loaders import Loader
 from mymi.models.systems import Localiser, Segmenter
 from mymi.transforms import crop_foreground_3D
 from mymi.regions import RegionLimits, get_patch_size
-from mymi.transforms import centre_crop_or_pad_3D, crop_or_pad_3D, resample_3D
+from mymi.transforms import top_crop_or_pad_3D, crop_or_pad_3D, resample_3D
 from mymi import types
 
 def get_patient_localiser_prediction(
@@ -38,7 +38,7 @@ def get_patient_localiser_prediction(
     fov = np.array(input_size) * spacing
     loc_fov = np.array(loc_size) * loc_spacing
     if np.minimum(loc_fov - fov, 0).sum() != 0:
-        error_message = f"Patient '{pat_id}' FOV '{fov}', larger than localiser FOV '{loc_fov}'."
+        error_message = f"Patient '{pat_id}' FOV '{fov}', larger than localiser FOV '{loc_fov}', cropping."
         if raise_fov_error:
             raise ValueError(error_message)
         else:
@@ -49,7 +49,7 @@ def get_patient_localiser_prediction(
     pre_crop_size = input.shape
 
     # Shape the image so it'll fit the network.
-    input = centre_crop_or_pad_3D(input, loc_size, fill=input.min())
+    input = top_crop_or_pad_3D(input, loc_size, fill=input.min())
 
     # Get localiser result.
     input = torch.Tensor(input)
@@ -62,7 +62,7 @@ def get_patient_localiser_prediction(
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
     # Reverse the resample/crop.
-    pred = centre_crop_or_pad_3D(pred, pre_crop_size)
+    pred = top_crop_or_pad_3D(pred, pre_crop_size)
     pred = resample_3D(pred, loc_spacing, spacing)
     
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
@@ -286,6 +286,8 @@ def create_patient_segmenter_prediction(
     if region != 'SpinalCord':
         truncate_spine = False
     loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    if loc_centre is None:
+        raise ValueError(f"Empty prediction for NIFTI dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'.")
     seg = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing, device=device)
 
     # Save segmentation.
