@@ -38,7 +38,7 @@ def train_localiser(
     use_logger: bool = False) -> None:
     logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' using '{num_folds}' folds with test fold '{test_fold}'.")
 
-    # Load partitions.
+    # Load datasets.
     if isinstance(datasets, str):
         set = ds.get(datasets, 'training')
         spacing = set.params['spacing']
@@ -71,7 +71,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(sets, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(sets, region, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -98,7 +98,7 @@ def train_localiser(
             project=model_name,
             name=run_name,
             save_dir=config.directories.wandb)
-        # logger.watch(model) # Caused multi-GPU training to hang.
+        logger.watch(model) # Caused multi-GPU training to hang.
     else:
         logger = None
 
@@ -128,14 +128,14 @@ def train_localiser(
     
     # Perform training.
     trainer = Trainer(
-        accelerator='ddp',
+        # accelerator='ddp',
         callbacks=callbacks,
         gpus=list(range(num_gpus)),
         logger=logger,
         max_epochs=num_epochs,
         num_nodes=num_nodes,
         num_sanity_val_steps=0,
-        plugins=DDPPlugin(find_unused_parameters=False),
+        # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16,
         **opt_kwargs)
     trainer.fit(model, train_loader, val_loader)

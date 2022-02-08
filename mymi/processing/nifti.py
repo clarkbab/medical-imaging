@@ -33,8 +33,8 @@ def convert_to_training(
     # Save processing params.
     filepath = os.path.join(train_ds.path, 'params.csv')
     params_df = pd.DataFrame({
-        'dilate-regions': [str(regions)],
-        'regions': [str(dilate_regions)],
+        'dilate-regions': [str(dilate_regions)],
+        'regions': [str(regions)],
         'size': [str(size)] if size is not None else ['None'],
         'spacing': [str(spacing)] if spacing is not None else ['None'],
     })

@@ -18,31 +18,41 @@ def get_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.Model,
-    loc_size: Tuple[int, int, int],
-    loc_spacing: Tuple[float, float, float],
-    device: torch.device = torch.device('cpu'),
+    loc_size: types.ImageSize3D,
+    loc_spacing: types.ImageSpacing3D,
+    device: Optional[torch.device] = None,
     raise_fov_error: bool = False) -> np.ndarray:
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
     # Load model if not already loaded.
     if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
+        localiser = Localiser.load(*localiser, track_running_stats=False)
     localiser.eval()
     localiser.to(device)
 
     # Load the patient data.
     set = ds.get(dataset, 'nifti')
-    input = set.patient(pat_id).ct_data()
+    patient = set.patient(pat_id)
+    input = patient.ct_data
     input_size = input.shape
-    spacing = set.patient(pat_id).ct_spacing()
+    spacing = patient.ct_spacing
 
     # Check patient FOV.
     fov = np.array(input_size) * spacing
     loc_fov = np.array(loc_size) * loc_spacing
     if np.minimum(loc_fov - fov, 0).sum() != 0:
-        error_message = f"Patient '{pat_id}' FOV '{fov}', larger than localiser FOV '{loc_fov}', cropping."
+        error_msg = f"Patient '{patient}' FOV '{fov}', larger than localiser FOV '{loc_fov}', cropping."
         if raise_fov_error:
-            raise ValueError(error_message)
+            raise ValueError(error_msg)
         else:
-            logging.error(error_message)
+            logging.warning(error_msg)
 
     # Resample/crop data for network.
     input = resample_3D(input, spacing, loc_spacing)
@@ -176,11 +186,11 @@ def load_patient_localiser_prediction(
 
     # Perform truncation of 'SpinalCord'.
     if truncate_spine:
-        spacing = ds.get(dataset, 'nifti').patient(pat_id).ct_spacing()
+        spacing = ds.get(dataset, 'nifti').patient(pat_id).ct_spacing
         ext_width = get_extent_width_mm(seg, spacing)
         if ext_width[2] > RegionLimits.SpinalCord[2]:
             # Crop caudal end of spine.
-            logging.error(f"Cropping bottom end of 'SpinalCord' for patient '{pat_id}'. Got z-extent width '{ext_width[2]}mm', maximum '{RegionLimits.SpinalCord[2]}mm'.")
+            logging.warning(f"Cropping bottom end of 'SpinalCord' for patient '{pat_id}'. Got z-extent width '{ext_width[2]}mm', maximum '{RegionLimits.SpinalCord[2]}mm'.")
             top_z = get_extent(seg)[1][2]
             bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
             crop = ((0, 0, bottom_z), tuple(np.array(seg.shape) - 1))
@@ -214,8 +224,8 @@ def get_patient_segmenter_prediction(
     # Load patient CT data and spacing.
     set = ds.get(dataset, 'nifti')
     patient = set.patient(pat_id)
-    input = patient.ct_data()
-    spacing = patient.ct_spacing()
+    input = patient.ct_data
+    spacing = patient.ct_spacing
 
     # Resample input to segmenter spacing.
     input_size = input.shape

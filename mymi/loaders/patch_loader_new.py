@@ -1,4 +1,3 @@
-from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
 import os
 import torch
@@ -8,27 +7,21 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, List, Optional, Tuple, Union
 
 from mymi import types
-from mymi import config
 from mymi.dataset import get as get_ds
 from mymi.dataset.training import TrainingDataset
-from mymi.geometry import get_box, get_encaps_dist_vox, get_extent_centre
-from mymi.regions import get_patch_size
-from mymi.transforms import point_crop_or_pad_3D
 
-class Loader:
+class PatchLoader:
     @staticmethod
     def build_loaders(
         datasets: Union[TrainingDataset, List[TrainingDataset]],
         region: str,
         batch_size: int = 1,
-        extract_patch: bool = False,
         half_precision: bool = True,
-        load_test_origin: bool = True,
         num_folds: Optional[int] = None, 
         num_train: Optional[int] = None,
         num_workers: int = 1,
         random_seed: int = 42,
-        spacing: Optional[types.ImageSpacing3D] = None,
+        spacing: types.ImageSpacing3D = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
         p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
@@ -36,8 +29,6 @@ class Loader:
             datasets = [datasets]
         if num_folds and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
-        if extract_patch and not spacing:
-            raise ValueError(f"'spacing' must be specified when extracting segmentation patches.") 
 
         # Get all samples.
         all_samples = []
@@ -84,16 +75,16 @@ class Loader:
         nn_val_samples = train_samples[num_nn_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing, transform=transform)
+        train_ds = TrainingDataset(datasets, region, nn_train_samples, half_precision=half_precision, spacing=spacing, transform=transform)
         train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=num_workers, shuffle=True)
 
         # Create validation loader.
-        val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing)
+        val_ds = TrainingDataset(datasets, region, nn_val_samples, half_precision=half_precision)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=num_workers, shuffle=False)
 
         # Create test loader.
         if num_folds:
-            test_ds = TestDataset(datasets, test_samples, load_origin=load_test_origin) 
+            test_ds = TestDataset(datasets, test_samples) 
             test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=num_workers, shuffle=False)
             return train_loader, val_loader, test_loader
         else:
@@ -105,12 +96,10 @@ class TrainingDataset(Dataset):
         datasets: List[TrainingDataset],
         region: str,
         samples: List[Tuple[int, int]],
-        extract_patch: bool = False,
         half_precision: bool = True,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         self._datasets = datasets
-        self._extract_patch = extract_patch
         self._half_precision = half_precision
         self._region = region
         self._spacing = spacing
@@ -171,11 +160,7 @@ class TrainingDataset(Dataset):
 
             # Convert to numpy.
             input = input.numpy()
-            label = label.numpy().astype(bool)
-
-        # Extract patch.
-        if self._extract_patch:
-            input, label = self._get_foreground_patch(input, label, desc)
+            label = label.numpy()
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
@@ -188,58 +173,13 @@ class TrainingDataset(Dataset):
         label = label.astype(bool)
 
         return desc, input, label
-
-    def _get_foreground_patch(
-        self,
-        input: np.ndarray,
-        label: np.ndarray,
-        desc: str) -> np.ndarray:
-
-        # Create segmenter patch.
-        centre = get_extent_centre(label)
-        if centre is None:
-            filepath = os.path.join(config.directories.files, f"label-{desc.replace(':', '-')}")
-            np.save(filepath, label)
-            raise ValueError(f"Label is empty for sample '{desc}', region '{self._region}'.")
-        size = get_patch_size(self._region, self._spacing)
-        min, max = get_box(centre, size)
-
-        # Squash to label size.
-        min = np.clip(min, a_min=0, a_max=None)
-        max = np.array(max)
-        for i in range(len(max)):
-            if max[i] > label.shape[i] - 1:
-                max[i] = label.shape[i] - 1
-
-        # Create label from patch.
-        label_patch = np.zeros_like(label, dtype=bool)
-        slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
-        label_patch[slices] = True
-
-        # Get encapsulation distance between patch and label.
-        dist = get_encaps_dist_vox(label_patch, label)
-        if np.any(np.array(dist) > 0):
-            pass
-            # raise ValueError(f"Segmentation patch doesn't encapsulate label for sample '{desc}', region '{self._region}'.")
-
-        # Translate patch centre whilst maintaining encapsulation.
-        t = tuple((np.random.randint(-d, d + 1) for d in np.abs(dist)))
-        centre = tuple(np.array(centre) + t)
-
-        # Extract segmentation patch.
-        input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
-        label = point_crop_or_pad_3D(label, size, centre)
-
-        return input, label
     
 class TestDataset(Dataset):
     def __init__(
         self,
         datasets: List[TrainingDataset],
-        samples: List[Tuple[int, int]],
-        load_origin: bool = True):
+        samples: List[Tuple[int, int]]):
         self._datasets = datasets
-        self._load_origin = load_origin
 
         # Record number of samples.
         self._num_samples = len(samples)
@@ -256,11 +196,4 @@ class TestDataset(Dataset):
         # Load data.
         ds_i, s_i = self._sample_map[index]
         set = self._datasets[ds_i]
-        
-        # Return 'NIFTI' location of training data.
-        if self._load_origin:
-            data = set.sample(s_i).origin
-        else:
-            data = (set.name, s_i) 
-
-        return data
+        return set.sample(s_i).origin

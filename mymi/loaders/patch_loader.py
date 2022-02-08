@@ -16,13 +16,15 @@ class PatchLoader:
     def build(
         datasets: Union[TrainingDataset, List[TrainingDataset]],
         region: str,
-        half_precision: bool = True,
         batch_size: int = 1,
+        half_precision: bool = True,
+        num_folds: Optional[int] = None,
         num_samples: Optional[int] = None,
         num_workers: int = 1,
         p_foreground: float = 1,
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
+        test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         if type(partitions) == TrainingPartition:
             partitions = [partitions]

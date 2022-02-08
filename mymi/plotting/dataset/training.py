@@ -1,14 +1,19 @@
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
+from mymi.prediction.dataset.nifti import get_patient_localiser_prediction
 import numpy as np
-from scipy.ndimage.measurements import center_of_mass
+from scipy.ndimage.measurements import center_of_mass as centre_of_mass
 import torchio
 from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
+import torch
 
 from mymi import dataset as ds
-from mymi.geometry import get_extent, get_extent_centre
+from mymi.regions import get_patch_size
+from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi.prediction.dataset.training import load_localiser_prediction
 from mymi.transforms import crop_or_pad_2D
+from mymi.models.systems import Localiser
+from mymi import logging
 from mymi import types
 
 from ..plotter import assert_position, get_aspect_ratio, get_origin, get_slice, plot_box, plot_regions, reverse_box_coords_2D, should_plot_box
@@ -41,7 +46,7 @@ def plot_sample_regions(
     show_axis_ticks: bool = True,
     show_axis_xlabel: bool = True,
     show_axis_ylabel: bool = True,
-    show_extent: bool = False,
+    show_extent: bool = True,
     slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
     transform: torchio.transforms.Transform = None,
@@ -244,36 +249,40 @@ def plot_sample_regions(
                 'text.usetex': rc_params['text.usetex']
             })
 
-def plot_localiser_prediction(
+def plot_sample_localiser_prediction(
     dataset: str,
-    partition: str,
     sample_idx: int,
-    localiser: Tuple[str, str, str],
+    region: str,
+    localiser: types.ModelName,
     aspect: float = None,
+    check_conversion: bool = True,
     centre_of: Optional[str] = None,
     crop: Optional[types.Box2D] = None,
+    device: Optional[torch.device] = None,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    loc_box_colour: str = 'r',
-    seg_alpha: float = 1.0, 
-    seg_colour: types.Colour = (0.12, 0.47, 0.70),
-    show_loc_box: bool = False,
+    show_box: bool = True,
+    show_centre: bool = True,
+    show_extent: bool = True,
+    show_patch: bool = True,
+    show_seg: bool = True,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
-    # Validate arguments.
-    if slice_idx is None and centre_of is None:
-        raise ValueError(f"Either 'slice_idx' or 'centre_of' must be set.")
+    assert_position(centre_of, extent_of, slice_idx)
 
     # Load sample.
-    set = ds.get(dataset, 'training')
-    sample = set.partition(partition).sample(sample_idx)
+    set = ds.get(dataset, 'training', check_conversion=check_conversion)
+    sample = set.sample(sample_idx)
+    spacing = sample.spacing
+    input = sample.input
 
     # Centre on OAR if requested.
     if slice_idx is None:
         # Load region data.
         label = sample.label(regions=centre_of)[centre_of]
-        com = np.round(center_of_mass(label)).astype(int)
+        com = np.round(centre_of_mass(label)).astype(int)
         if view == 'axial':
             slice_idx = com[2]
         elif view == 'coronal':
@@ -282,31 +291,82 @@ def plot_localiser_prediction(
             slice_idx = com[0]
 
     # Plot patient regions.
-    plot_sample(dataset, partition, sample_idx, aspect=aspect, legend=False, legend_loc=legend_loc, show=False, slice_idx=slice_idx, view=view, crop=crop, **kwargs)
+    plot_sample_regions(dataset, sample_idx, aspect=aspect, check_conversion=check_conversion, colours=['gold'], crop=crop, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
 
-    # Load prediction.
-    box, pred = load_localiser_prediction(dataset, partition, sample_idx, localiser, return_seg=True)
-    pred_slice = get_slice(pred, slice_idx, view)
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
 
-    # Crop the segmentation.
-    if crop:
-        pred_slice = crop_or_pad_2D(pred_slice, reverse_box_coords_2D(crop))
+    # Get localiser prediction.
+    localiser = Localiser.load(*localiser)
+    localiser = localiser.to(device)
+    input = torch.Tensor(input)
+    input = input.unsqueeze(0)      # Add 'batch' dimension.
+    input = input.unsqueeze(1)      # Add 'channel' dimension.
+    input = input.float()
+    input = input.to(device)
+    with torch.no_grad():
+        pred = localiser(input)
+    pred = pred.squeeze(0)          # Remove 'batch' dimension.
+    non_empty_pred = False if pred.sum() == 0 else True
 
-    # Get aspect ratio.
-    if not aspect:
-        set = ds.get(dataset, 'training')
-        spacing = eval(set.params.spacing[0])
-        aspect = get_aspect_ratio(view, spacing) 
+    # Get extent and centre.
+    extent = get_extent(pred)
+    loc_centre = get_extent_centre(pred)
 
-    # Plot segmentation.
-    colours = [(1, 1, 1, 0), seg_colour]
-    cmap = ListedColormap(colours)
-    plt.imshow(pred_slice, alpha=seg_alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
-    plt.plot(0, 0, c=seg_colour, label='Segmentation')
+    # Plot prediction.
+    if non_empty_pred and show_seg:
+        # Get aspect ratio.
+        if not aspect:
+            aspect = get_aspect_ratio(view, spacing) 
 
-    # Plot bounding box.
-    if should_plot_box(box, view, slice_idx):
-        plot_box(box, view, box_colour=loc_box_colour, crop=crop, label='Loc. box')
+        # Get slice data.
+        pred_slice_data = get_slice(pred, slice_idx, view)
+
+        # Crop the image.
+        if crop:
+            pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
+
+        # Plot prediction.
+        colour = 'deepskyblue'
+        colours = [(1, 1, 1, 0), colour]
+        cmap = ListedColormap(colours)
+        plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.plot(0, 0, c=colour, label='Loc. Prediction')
+
+    # Plot localiser bounding box.
+    if non_empty_pred and show_box and should_plot_box(extent, view, slice_idx):
+        plot_box(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box')
+
+    # Plot localiser centre.
+    if non_empty_pred and show_centre:
+        if view == 'axial':
+            centre = (loc_centre[0], loc_centre[1])
+        elif view == 'coronal':
+            centre = (loc_centre[0], loc_centre[2])
+        elif view == 'sagittal':
+            centre = (loc_centre[1], loc_centre[2])
+        plt.scatter(*centre, c='royalblue', label='Loc. Centre')
+
+    # Plot second stage patch.
+    if non_empty_pred and show_patch:
+        size = get_patch_size(region, spacing)
+        min, max = get_box(loc_centre, size)
+
+        # Squash min/max to label size.
+        min = np.clip(min, a_min=0, a_max=None)
+        for i in range(len(max)):
+            pred_max = pred.shape[i] - 1
+            if max[i] > pred_max: 
+                max[i] = pred_max
+
+        if should_plot_box((min, max), view, slice_idx):
+            plot_box((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dashed')
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})

@@ -37,7 +37,7 @@ LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
 SEGMENTER="('segmenter-$REGION','public-1gpu-100epochs','BEST')"
 NUM_FOLDS=5
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLD=0
+TEST_FOLD=4
 
 python $SCRIPT_DIR/evaluate/nifti/two-stage/create_evaluation_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER --segmenter $SEGMENTER \
     --num_folds $NUM_FOLDS --test_fold $TEST_FOLD

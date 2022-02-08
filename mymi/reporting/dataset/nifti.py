@@ -40,7 +40,7 @@ def get_region_summary(
 
     for pat in tqdm(pats):
         # Get spacing.
-        spacing = set.patient(pat).ct_spacing()
+        spacing = set.patient(pat).ct_spacing
 
         # Get region data.
         label = set.patient(pat).region_data(regions=region)[region]
@@ -223,8 +223,8 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
     for pat in tqdm(pats):
         # Load values.
         patient = set.patient(pat)
-        size = patient.ct_size()
-        spacing = patient.ct_spacing()
+        size = patient.ct_size
+        spacing = patient.ct_spacing
 
         # Calculate FOV.
         fov = np.array(size) * spacing
@@ -452,7 +452,7 @@ def get_object_summary(
     region: str) -> pd.DataFrame:
     # Get objects.
     pat = ds.get(dataset, 'nifti').patient(patient)
-    spacing = pat.ct_spacing()
+    spacing = pat.ct_spacing
     label = pat.region_data(regions=region)[region]
     objs, num_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)

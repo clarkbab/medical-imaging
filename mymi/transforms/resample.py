@@ -6,7 +6,7 @@ from mymi import types
 def resample_3D(
     input: np.ndarray,
     spacing: types.ImageSpacing3D,
-    new_spacing: types.ImageSpacing3D) -> sitk.Image:
+    new_spacing: types.ImageSpacing3D) -> np.ndarray:
     """
     returns: a resampled tensor.
     args:

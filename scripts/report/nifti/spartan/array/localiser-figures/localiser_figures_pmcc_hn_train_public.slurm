@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-02:00:00
+#SBATCH --time 0-1:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -12,14 +12,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-join () {
-  local IFS="$1"
-  shift
-  echo "$*"
-}
-
-DATASET="HNSCC"
-DEST_DATASET="$DATASET-SEG"
+DATASET="PMCC-HN-TRAIN"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -39,11 +32,8 @@ REGIONS=(
     'Submandibular_L'   # 15
     'Submandibular_R'   # 16
 )
-ROUND_DP=None
-SIZE=None
-SPACING="(1,1,2)"
+REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-REGIONS=$(join , "${REGIONS[@]}")
 
-python $SCRIPT_DIR/process/nifti/convert_to_training --dataset $DATASET --regions $REGIONS --dest_dataset $DEST_DATASET \
-    --round_dp $ROUND_DP --size $SIZE --spacing $SPACING
+python $SCRIPT_DIR/report/nifti/create_localiser_figures --dataset $DATASET --region $REGION --localiser $LOCALISER

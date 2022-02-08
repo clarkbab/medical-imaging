@@ -9,8 +9,7 @@ from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre
-from mymi import logging
-from mymi.prediction.dataset.nifti import get_patient_segmenter_prediction, load_patient_localiser_centre, load_patient_localiser_prediction, load_patient_segmenter_prediction
+from mymi.prediction.dataset.nifti import get_patient_localiser_prediction, load_patient_localiser_centre, load_patient_localiser_prediction, load_patient_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi.transforms import crop_or_pad_2D
 from mymi import types
@@ -243,6 +242,7 @@ def plot_patient_localiser_prediction(
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
+    load_prediction: bool = True,
     show_box: bool = True,
     show_centre: bool = True,
     show_extent: bool = True,
@@ -265,7 +265,7 @@ def plot_patient_localiser_prediction(
     # Load sample.
     set = ds.get(dataset, 'nifti')
     patient = set.patient(pat_id)
-    spacing = patient.ct_spacing()
+    spacing = patient.ct_spacing
 
     # Centre on OAR if requested.
     if slice_idx is None:
@@ -285,7 +285,10 @@ def plot_patient_localiser_prediction(
     # Load localiser segmentation.
     if region != 'SpinalCord':
         truncate_spine = False
-    pred = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    if load_prediction:
+        pred = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    else:
+        pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size=(128, 128, 150), loc_spacing=(4, 4, 4))
     non_empty_pred = False if pred.sum() == 0 else True
 
     # Get extent and centre.

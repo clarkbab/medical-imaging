@@ -18,6 +18,7 @@ class TrainingSample:
         self._global_id = f'{dataset} - {index}'
         self._dataset = dataset
         self._index = index
+        self._spacing = dataset.params['spacing']
 
     @property
     def description(self) -> str:
@@ -29,6 +30,10 @@ class TrainingSample:
     @property
     def index(self) -> str:
         return self._index
+
+    @property
+    def spacing(self) -> types.ImageSpacing3D:
+        return self._spacing
 
     def list_regions(self) -> List[str]:
         """
@@ -85,6 +90,7 @@ class TrainingSample:
 
         return data
 
-    @property
-    def pair(self) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
-        return self.input, self.label
+    def pair(
+        self,
+        regions: types.PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        return self.input, self.label(regions)

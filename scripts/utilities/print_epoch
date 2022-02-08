@@ -1,0 +1,17 @@
+import fire
+import os
+import sys
+import torch
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi import config
+
+model = ('localiser-BrainStem', 'public-1gpu-150epochs', 'last.ckpt')
+path = os.path.join(config.directories.models, *model)
+state = torch.load(path, map_location=torch.device('cpu'))
+
+print(f"""
+Epoch: {state['epoch']}
+""")

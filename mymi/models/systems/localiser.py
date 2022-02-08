@@ -37,7 +37,8 @@ class Localiser(pl.LightningModule):
         self._max_image_batches = 30
         self._metrics = metrics
         self._name = None
-        self._network = UNet3D(pretrained_model=pretrained.network if pretrained else None)
+        pretrained_model = pretrained.network if pretrained else None
+        self._network = UNet3D(pretrained_model=pretrained_model)
         self._predict_logits = predict_logits
         self._spacing = spacing
         self.save_hyperparameters()
@@ -80,6 +81,9 @@ class Localiser(pl.LightningModule):
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
+
+    def print_batch_norm_layers(self):
+        self._network.print_batch_norm_layers()
 
     def forward(self, x):
         # Get prediction.

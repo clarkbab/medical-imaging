@@ -5,15 +5,18 @@ from torch.nn.functional import pad
 from typing import Optional
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int):
         super().__init__()
 
         self.double_conv = nn.Sequential(
             nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
+            nn.InstanceNorm3d(out_channels),
             nn.ReLU(),
             nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
+            nn.InstanceNorm3d(out_channels),
             nn.ReLU()
         )
 
@@ -21,7 +24,10 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 class Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int):
         super().__init__()
 
         self.down = nn.Sequential(
@@ -33,7 +39,10 @@ class Down(nn.Module):
         return self.down(x)
 
 class Up(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int):
         super().__init__()
 
         self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
@@ -125,14 +134,14 @@ class UNet3D(nn.Module):
         self.out = model.out
 
         # Freeze encoder layers.
-        modules = [
+        frozen_modules = [
             self.first,
             self.down1,
             self.down2,
             self.down3,
             self.down4
         ]
-        for module in modules:
+        for module in frozen_modules:
             for layer in module.children():
                 for param in layer.parameters():
                     param.requires_grad = False

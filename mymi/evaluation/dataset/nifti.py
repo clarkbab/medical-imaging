@@ -9,9 +9,9 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.geometry import get_box, get_extent_centre
+from mymi.geometry import get_box, get_encaps_dist_mm, get_extent_centre
 from mymi.loaders import Loader
-from mymi.metrics import dice, distances, extent_centre_distance, extent_distance
+from mymi.metrics import dice, distances, extent_centre_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
@@ -36,7 +36,7 @@ def get_patient_localiser_evaluation(
     data['dice'] = dice(pred, label)
 
     # Distances.
-    spacing = set.patient(pat_id).ct_spacing()
+    spacing = set.patient(pat_id).ct_spacing
     if pred.sum() == 0:
         dists = {
             'assd': np.nan,
@@ -85,7 +85,7 @@ def get_patient_localiser_evaluation(
         patch_label[slices] = 1
 
         # Get extent distance.
-        e_dist = extent_distance(patch_label, label, spacing)
+        e_dist = get_encaps_dist_mm(patch_label, label, spacing)
 
     data['extent-dist-x'] = e_dist[0]
     data['extent-dist-y'] = e_dist[1]
@@ -275,7 +275,7 @@ def get_patient_segmenter_evaluation(
     data['dice'] = dice(pred, label)
 
     # Distances.
-    spacing = set.patient(pat_id).ct_spacing()
+    spacing = set.patient(pat_id).ct_spacing
     if pred.sum() == 0 or label.sum() == 0:
         dists = {
             'assd': np.nan,
