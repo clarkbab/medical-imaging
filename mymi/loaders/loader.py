@@ -175,7 +175,11 @@ class TrainingDataset(Dataset):
 
         # Extract patch.
         if self._extract_patch:
-            input, label = self._get_foreground_patch(input, label, desc)
+            # Augmentation may have moved all foreground voxels off the label.
+            if label.sum() > 0:
+                input, label = self._get_foreground_patch(input, label, desc)
+            else:
+                input, label = self._get_random_patch(input, label)
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
@@ -197,10 +201,6 @@ class TrainingDataset(Dataset):
 
         # Create segmenter patch.
         centre = get_extent_centre(label)
-        if centre is None:
-            filepath = os.path.join(config.directories.files, f"label-{desc.replace(':', '-')}")
-            np.save(filepath, label)
-            raise ValueError(f"Label is empty for sample '{desc}', region '{self._region}'.")
         size = get_patch_size(self._region, self._spacing)
         min, max = get_box(centre, size)
 
@@ -227,6 +227,20 @@ class TrainingDataset(Dataset):
         centre = tuple(np.array(centre) + t)
 
         # Extract segmentation patch.
+        input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
+        label = point_crop_or_pad_3D(label, size, centre)
+
+        return input, label
+
+    def _get_random_patch(
+        self,
+        input: np.ndarray,
+        label: np.ndarray) -> np.ndarray:
+        # Choose a random voxel.
+        centre = tuple(map(np.random.randint, input.shape))
+
+        # Extract patch around centre.
+        size = get_patch_size(self._region, self._spacing)
         input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
         label = point_crop_or_pad_3D(label, size, centre)
 
