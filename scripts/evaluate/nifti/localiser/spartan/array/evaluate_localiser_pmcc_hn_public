@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-2:00:00
+#SBATCH --time 0-8:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -33,10 +33,10 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
+LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 NUM_FOLDS=5
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLD=0
+TEST_FOLDS="all"
 
 python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER \
-    --num_folds $NUM_FOLDS --test_fold $TEST_FOLD
+    --num_folds $NUM_FOLDS --test_folds $TEST_FOLDS

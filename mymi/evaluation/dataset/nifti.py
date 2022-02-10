@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import torch
 from tqdm import tqdm
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
@@ -23,7 +23,7 @@ def get_patient_localiser_evaluation(
     pat_id: str,
     region: str,
     localiser: types.ModelName,
-    truncate_spine: bool = False) -> Dict[str, float]:
+    truncate_spine: bool = True) -> Dict[str, float]:
     # Get pred/ground truth.
     if region != 'SpinalCord':
         truncate_spine = False
@@ -68,18 +68,16 @@ def get_patient_localiser_evaluation(
     if pred.sum() == 0:
         e_dist = (np.nan, np.nan, np.nan)
     else:
-        # Create second stage patch.
+        # Get second stage patch coordinates.
         centre = get_extent_centre(pred)
         size = get_patch_size(region, spacing)
         min, max = get_box(centre, size)
 
-        # Squash to label size.
+        # Clip patch coordinates to label size.
         min = np.clip(min, a_min=0, a_max=None)
-        for i in range(len(max)):
-            if max[i] > label.shape[i] - 1:
-                max[i] = label.shape[i] - 1
+        max = np.clip(max, a_min=None, a_max=label.shape)
 
-        # Create label from patch.
+        # Convert patch coordinates into label.
         patch_label = np.zeros_like(label)
         slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
         patch_label[slices] = 1
@@ -87,9 +85,9 @@ def get_patient_localiser_evaluation(
         # Get extent distance.
         e_dist = get_encaps_dist_mm(patch_label, label, spacing)
 
-    data['extent-dist-x'] = e_dist[0]
-    data['extent-dist-y'] = e_dist[1]
-    data['extent-dist-z'] = e_dist[2]
+    data['encaps-dist-mm-x'] = e_dist[0]
+    data['encaps-dist-mm-y'] = e_dist[1]
+    data['encaps-dist-mm-z'] = e_dist[2]
 
     return data
     
@@ -99,7 +97,7 @@ def create_patient_localiser_evaluation(
     region: str,
     localiser: types.ModelName,
     df: Optional[pd.DataFrame] = None,
-    truncate_spine: bool = False) -> Optional[pd.DataFrame]:
+    truncate_spine: bool = True) -> Optional[pd.DataFrame]:
 
     # Define dataframe columns.
     cols = {
@@ -159,7 +157,7 @@ def create_localiser_evaluation(
     dataset: str,
     region: str,
     localiser: types.ModelName,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     # Load localiser.
     localiser = Localiser.load(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser.name}'.")
@@ -196,43 +194,52 @@ def create_localiser_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    truncate_spine: bool = False) -> None:
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None,
+    truncate_spine: bool = True) -> None:
     # Get unique name.
     localiser = Localiser.replace_best(*localiser)
 
-    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}'.")
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Create dataframe.
-    cols = {
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    df = pd.DataFrame(columns=cols.keys())
+    for test_fold in tqdm(test_folds):
+        # Create dataframe.
+        cols = {
+            'fold': int,
+            'patient-id': str,
+            'region': str,
+            'metric': str,
+            'value': float
+        }
+        df = pd.DataFrame(columns=cols.keys())
 
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        if region != 'SpinalCord':
-            truncate_spine = False
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
-            df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df, truncate_spine=truncate_spine)
+        # Build test loader.
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
-    # Set column types.
-    df = df.astype(cols)
+        # Add evaluations to dataframe.
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+            if region != 'SpinalCord':
+                truncate_spine = False
+            if type(pat_id_b) == torch.Tensor:
+                pat_id_b = pat_id_b.tolist()
+            for dataset, pat_id in zip(dataset_b, pat_id_b):
+                df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df, truncate_spine=truncate_spine)
 
-    # Save evaluation.
-    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.files, 'evaluation', 'localiser', *localiser, folder, f'{filename}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
+        # Set column types.
+        df = df.astype(cols)
+
+        # Save evaluation.
+        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+        filename = f'eval-folds-{num_folds}-test-{test_fold}'
+        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        df.to_csv(filepath, index=False)
 
 def load_localiser_evaluation(
     dataset: str,
@@ -253,9 +260,9 @@ def load_localiser_evaluation_from_loader(
     localiser = Localiser.replace_best(*localiser)
     folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.files, 'evaluation', 'localiser', *localiser, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"Evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with evaluation fold {test_fold} not found.")
+        raise ValueError(f"Evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -437,7 +444,7 @@ def create_segmenter_evaluation_from_loader(
     # Save evaluation.
     folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.files, 'evaluation', 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -461,12 +468,12 @@ def create_two_stage_evaluation_from_loader(
     segmenter: types.ModelName,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     # Get unique names.
     localiser = Localiser.replace_best(*localiser)
     segmenter = Segmenter.replace_best(*segmenter)
 
-    logging.info(f"Evaluating two-stage predictions for NIFTI dataset '{datasets}', region '{region}', localiser '{localiser}' ,segmenter '{segmenter}', with {num_folds}-fold CV using evaluation fold {test_fold}.")
+    logging.info(f"Evaluating two-stage predictions for NIFTI dataset '{datasets}', region '{region}', localiser '{localiser}' ,segmenter '{segmenter}', with {num_folds}-fold CV using test fold {test_fold}.")
 
     # Create test loader.
     sets = [ds.get(d, 'training') for d in datasets]
@@ -496,11 +503,11 @@ def create_two_stage_evaluation_from_loader(
     # Save localiser evaluation.
     folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.files, 'evaluation', 'localiser', *localiser, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     loc_df.to_csv(filepath, index=False)
 
     # Save segmenter evaluation.
-    filepath = os.path.join(config.directories.files, 'evaluation', 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     seg_df.to_csv(filepath, index=False)

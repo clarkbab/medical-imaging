@@ -49,7 +49,7 @@ class TrainingSample:
                 return True
             else:
                 return False
-        return list(filter(filter_fn, all_regions))
+        return list(sorted(filter(filter_fn, all_regions)))
 
     def has_region(
         self,

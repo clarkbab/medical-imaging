@@ -249,7 +249,7 @@ def plot_patient_localiser_prediction(
     show_patch: bool = True,
     show_seg: bool = True,
     slice_idx: Optional[int] = None,
-    truncate_spine: bool = False,
+    truncate_spine: bool = True,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     assert_position(centre_of, extent_of, slice_idx)
@@ -267,21 +267,6 @@ def plot_patient_localiser_prediction(
     patient = set.patient(pat_id)
     spacing = patient.ct_spacing
 
-    # Centre on OAR if requested.
-    if slice_idx is None:
-        # Load region data.
-        label = patient.region_data(regions=centre_of)[centre_of]
-        com = np.round(centre_of_mass(label)).astype(int)
-        if view == 'axial':
-            slice_idx = com[2]
-        elif view == 'coronal':
-            slice_idx = com[1]
-        elif view == 'sagittal':
-            slice_idx = com[0]
-
-    # Plot patient regions.
-    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
-
     # Load localiser segmentation.
     if region != 'SpinalCord':
         truncate_spine = False
@@ -290,6 +275,27 @@ def plot_patient_localiser_prediction(
     else:
         pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size=(128, 128, 150), loc_spacing=(4, 4, 4))
     non_empty_pred = False if pred.sum() == 0 else True
+
+    # Centre on OAR if requested.
+    if slice_idx is None:
+        if centre_of == 'loc':
+            # Centre of prediction.
+            label = pred
+        else:
+            # Centre of label.
+            label = patient.region_data(regions=centre_of)[centre_of]
+
+        # Get slice index.
+        centre = get_extent_centre(label)
+        if view == 'axial':
+            slice_idx = centre[2]
+        elif view == 'coronal':
+            slice_idx = centre[1]
+        elif view == 'sagittal':
+            slice_idx = centre[0]
+
+    # Plot patient regions.
+    plot_patient_regions(dataset, pat_id, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     # Get extent and centre.
     extent = get_extent(pred)
@@ -316,18 +322,24 @@ def plot_patient_localiser_prediction(
         plt.plot(0, 0, c=colour, label='Loc. Prediction')
 
     # Plot localiser bounding box.
-    if non_empty_pred and show_box and should_plot_box(extent, view, slice_idx):
-        plot_box(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box')
+    if non_empty_pred and show_box:
+        if should_plot_box(extent, view, slice_idx):
+            plot_box(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box')
+        else:
+            plt.plot(0, 0, c='deepskyblue', label='Loc. Box (offscreen)')
 
     # Plot localiser centre.
     if non_empty_pred and show_centre:
         if view == 'axial':
             centre = (loc_centre[0], loc_centre[1])
+            offscreen = False if slice_idx == loc_centre[2] else True
         elif view == 'coronal':
             centre = (loc_centre[0], loc_centre[2])
+            offscreen = False if slice_idx == loc_centre[1] else True
         elif view == 'sagittal':
             centre = (loc_centre[1], loc_centre[2])
-        plt.scatter(*centre, c='royalblue', label='Loc. Centre')
+            offscreen = False if slice_idx == loc_centre[0] else True
+        plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
 
     # Plot second stage patch.
     if non_empty_pred and show_patch:
@@ -336,13 +348,13 @@ def plot_patient_localiser_prediction(
 
         # Squash min/max to label size.
         min = np.clip(min, a_min=0, a_max=None)
-        for i in range(len(max)):
-            pred_max = pred.shape[i] - 1
-            if max[i] > pred_max: 
-                max[i] = pred_max
+        max = np.clip(max, a_min=None, a_max=pred.shape)
 
         if should_plot_box((min, max), view, slice_idx):
             plot_box((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dashed')
+        else:
+            plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
+
 
     # Show legend.
     plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
@@ -378,7 +390,7 @@ def plot_patient_segmenter_prediction(
     show_loc_centre: bool = True,
     show_patch: bool = True,
     slice_idx: Optional[int] = None,
-    truncate_spine: bool = False,
+    truncate_spine: bool = True,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     assert_position(centre_of, extent_of, slice_idx)

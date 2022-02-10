@@ -2,7 +2,7 @@ import numpy as np
 import os
 import torch
 from tqdm import tqdm
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
@@ -140,16 +140,17 @@ def create_localiser_predictions(
 
 def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
+    region: str,
     localiser: Tuple[str, str, str],
     loc_size: Tuple[int, int, int],
     loc_spacing: Tuple[float, float, float],
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
-    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', localiser '{localiser.name}'...")
+    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -159,22 +160,28 @@ def create_localiser_predictions_from_loader(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Make predictions.
-    for datasets, pat_ids in iter(test_loader):
-        if type(pat_ids) == torch.Tensor:
-            pat_ids = pat_ids.tolist()
-        for dataset, pat_id in zip(datasets, pat_ids):
-            create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
+    for test_fold in tqdm(test_folds):
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+
+        # Make predictions.
+        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
+            if type(pat_ids) == torch.Tensor:
+                pat_ids = pat_ids.tolist()
+            for dataset, pat_id in zip(datasets, pat_ids):
+                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
 
 def load_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.ModelName,
-    truncate_spine: bool = False) -> np.ndarray:
+    truncate_spine: bool = True) -> np.ndarray:
     localiser = Localiser.replace_best(*localiser)
 
     # Load segmentation.
@@ -202,7 +209,7 @@ def load_patient_localiser_centre(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.ModelName,
-    truncate_spine: bool = False) -> types.Point3D:
+    truncate_spine: bool = True) -> types.Point3D:
     seg = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
     ext_centre = get_extent_centre(seg)
     return ext_centre
@@ -275,7 +282,7 @@ def create_patient_segmenter_prediction(
     segmenter: types.Model,
     seg_spacing: types.ImageSpacing3D,
     device: Optional[torch.device] = None,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     # Load dataset.
     set = ds.get(dataset, 'nifti')
 
@@ -311,7 +318,7 @@ def create_segmenter_predictions(
     localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str],
     seg_spacing: Tuple[float, float, float],
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     logging.info(f"Making segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -342,7 +349,7 @@ def create_segmenter_predictions_from_loader(
     seg_spacing: types.ImageSpacing3D,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(localiser) == tuple:
@@ -362,7 +369,7 @@ def create_segmenter_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(sets, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
-    for dataset, pat_id in iter(test_loader):
+    for dataset, pat_id in tqdm(iter(test_loader)):
         create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
 
 def load_patient_segmenter_prediction(
@@ -393,7 +400,7 @@ def create_patient_two_stage_prediction(
     segmenter: types.Model,
     seg_spacing: types.ImageSpacing3D,
     device: Optional[torch.device] = None,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     # Load dataset.
     set = ds.get(dataset, 'nifti')
 
@@ -424,7 +431,7 @@ def create_two_stage_predictions(
     loc_spacing: types.ImageSpacing3D,
     segmenter: types.ModelName,
     seg_spacing: types.ImageSpacing3D,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     logging.info(f"Making two-stage predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -455,7 +462,7 @@ def create_two_stage_predictions_from_loader(
     seg_spacing: types.ImageSpacing3D,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    truncate_spine: bool = False) -> None:
+    truncate_spine: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
