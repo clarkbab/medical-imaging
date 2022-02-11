@@ -231,6 +231,9 @@ def create_localiser_evaluation_from_loader(
             for dataset, pat_id in zip(dataset_b, pat_id_b):
                 df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df, truncate_spine=truncate_spine)
 
+        # Add fold.
+        df['fold'] = test_fold
+
         # Set column types.
         df = df.astype(cols)
 

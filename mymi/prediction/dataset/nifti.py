@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 from typing import List, Literal, Optional, Tuple, Union
 
+from ..prediction import get_localiser_prediction
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
@@ -16,68 +17,20 @@ from mymi import types
 
 def get_patient_localiser_prediction(
     dataset: str,
-    pat_id: types.PatientID,
+    pat_id: str,
     localiser: types.Model,
     loc_size: types.ImageSize3D,
     loc_spacing: types.ImageSpacing3D,
     device: Optional[torch.device] = None,
-    raise_fov_error: bool = False) -> np.ndarray:
-    # Load gpu if available.
-    if device is None:
-        if torch.cuda.is_available():
-            device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
-        else:
-            device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
-
-    # Load model if not already loaded.
-    if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser, track_running_stats=False)
-    localiser.eval()
-    localiser.to(device)
-
-    # Load the patient data.
+    truncate: bool = False) -> None:
+    # Load data.
     set = ds.get(dataset, 'nifti')
     patient = set.patient(pat_id)
     input = patient.ct_data
-    input_size = input.shape
     spacing = patient.ct_spacing
 
-    # Check patient FOV.
-    fov = np.array(input_size) * spacing
-    loc_fov = np.array(loc_size) * loc_spacing
-    if np.minimum(loc_fov - fov, 0).sum() != 0:
-        error_msg = f"Patient '{patient}' FOV '{fov}', larger than localiser FOV '{loc_fov}', cropping."
-        if raise_fov_error:
-            raise ValueError(error_msg)
-        else:
-            logging.warning(error_msg)
-
-    # Resample/crop data for network.
-    input = resample_3D(input, spacing, loc_spacing)
-    pre_crop_size = input.shape
-
-    # Shape the image so it'll fit the network.
-    input = top_crop_or_pad_3D(input, loc_size, fill=input.min())
-
-    # Get localiser result.
-    input = torch.Tensor(input)
-    input = input.unsqueeze(0)      # Add 'batch' dimension.
-    input = input.unsqueeze(1)      # Add 'channel' dimension.
-    input = input.float()
-    input = input.to(device)
-    with torch.no_grad():
-        pred = localiser(input)
-    pred = pred.squeeze(0)          # Remove 'batch' dimension.
-
-    # Reverse the resample/crop.
-    pred = top_crop_or_pad_3D(pred, pre_crop_size)
-    pred = resample_3D(pred, loc_spacing, spacing)
-    
-    # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
-    crop_box = ((0, 0, 0), input_size)
-    pred = crop_or_pad_3D(pred, crop_box)
+    # Make prediction.
+    pred = get_localiser_prediction(localiser, loc_size, loc_spacing, input, spacing, device=device, truncate=truncate)
 
     return pred
 
@@ -87,7 +40,8 @@ def create_patient_localiser_prediction(
     localiser: types.Model,
     loc_size: Tuple[int, int, int],
     loc_spacing: Tuple[float, float, float],
-    device: Optional[torch.device] = None) -> None:
+    device: Optional[torch.device] = None,
+    truncate: bool = False) -> None:
     # Load dataset.
     set = ds.get(dataset, 'nifti')
 
@@ -104,13 +58,13 @@ def create_patient_localiser_prediction(
             device = torch.device('cpu')
             logging.info('Predicting on CPU...')
 
-    # Make prediction.
-    seg = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
+    # Make prediction - don't truncate saved predictions.
+    pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
     # Save segmentation.
     filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser.name, f'{pat_id}.npz') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez(filepath, data=seg)
+    np.savez(filepath, data=pred)
 
 def create_localiser_predictions(
     dataset: str,
@@ -135,8 +89,11 @@ def create_localiser_predictions(
     set = ds.get(dataset, 'nifti')
     pats = set.list_patients(regions=region)
 
+    # Set truncation if 'SpinalCord'.
+    truncate = True if region == 'SpinalCord' else False
+
     for pat in tqdm(pats):
-        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device)
+        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
 def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
@@ -167,6 +124,9 @@ def create_localiser_predictions_from_loader(
     elif type(test_folds) == int:
         test_folds = [test_folds]
 
+    # Set truncation if 'SpinalCord'.
+    truncate = True if region == 'SpinalCord' else False
+
     for test_fold in tqdm(test_folds):
         _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
@@ -175,42 +135,28 @@ def create_localiser_predictions_from_loader(
             if type(pat_ids) == torch.Tensor:
                 pat_ids = pat_ids.tolist()
             for dataset, pat_id in zip(datasets, pat_ids):
-                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
+                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
 def load_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
-    localiser: types.ModelName,
-    truncate_spine: bool = True) -> np.ndarray:
+    localiser: types.ModelName) -> np.ndarray:
     localiser = Localiser.replace_best(*localiser)
 
-    # Load segmentation.
+    # Load prediction.
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
         raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', localiser '{localiser}'.")
-    seg = np.load(filepath)['data']
+    pred = np.load(filepath)['data']
 
-    # Perform truncation of 'SpinalCord'.
-    if truncate_spine:
-        spacing = ds.get(dataset, 'nifti').patient(pat_id).ct_spacing
-        ext_width = get_extent_width_mm(seg, spacing)
-        if ext_width[2] > RegionLimits.SpinalCord[2]:
-            # Crop caudal end of spine.
-            logging.warning(f"Cropping bottom end of 'SpinalCord' for patient '{pat_id}'. Got z-extent width '{ext_width[2]}mm', maximum '{RegionLimits.SpinalCord[2]}mm'.")
-            top_z = get_extent(seg)[1][2]
-            bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
-            crop = ((0, 0, bottom_z), tuple(np.array(seg.shape) - 1))
-            seg = crop_foreground_3D(seg, crop)
-
-    return seg
+    return pred
 
 def load_patient_localiser_centre(
     dataset: str,
     pat_id: types.PatientID,
-    localiser: types.ModelName,
-    truncate_spine: bool = True) -> types.Point3D:
-    seg = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    localiser: types.ModelName) -> types.Point3D:
+    seg = load_patient_localiser_prediction(dataset, pat_id, localiser)
     ext_centre = get_extent_centre(seg)
     return ext_centre
 
@@ -399,17 +345,7 @@ def create_patient_two_stage_prediction(
     loc_spacing: types.ImageSpacing3D,
     segmenter: types.Model,
     seg_spacing: types.ImageSpacing3D,
-    device: Optional[torch.device] = None,
-    truncate_spine: bool = True) -> None:
-    # Load dataset.
-    set = ds.get(dataset, 'nifti')
-
-    # Load localiser/segmenter.
-    if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
-    if type(segmenter) == tuple:
-        segmenter = Segmenter.load(*segmenter)
-
+    device: Optional[torch.device] = None) -> None:
     # Load gpu if available.
     if device is None:
         if torch.cuda.is_available():
@@ -419,9 +355,12 @@ def create_patient_two_stage_prediction(
             device = torch.device('cpu')
             logging.info('Predicting on CPU...')
 
+    # Set truncation if 'SpinalCord'.
+    truncate = True if region == 'SpinalCord' else False
+
     # Create predictions.
-    create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device)
-    create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
+    create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+    create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)
 
 def create_two_stage_predictions(
     dataset: str,
