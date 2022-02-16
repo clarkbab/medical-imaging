@@ -12,7 +12,7 @@ REGIONS=(
     # 'BrachialPlexus_R'  # 1
     # 'Brain'             # 2
     # 'BrainStem'         # 3
-    'Cochlea_L'         # 4
+    # 'Cochlea_L'         # 4
     'Cochlea_R'         # 5
     # 'Lens_L'            # 6
     # 'Lens_R'            # 7
@@ -24,7 +24,7 @@ REGIONS=(
     # 'Parotid_R'         # 13
     # 'SpinalCord'        # 14
     # 'Submandibular_L'   # 15
-    # 'Submandibular_R'   # 16
+    'Submandibular_R'   # 16
 )
 RUN="public-1gpu-100epochs"
 

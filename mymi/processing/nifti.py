@@ -3,42 +3,75 @@ import os
 import pandas as pd
 from pathlib import Path
 from scipy.ndimage import binary_dilation
+import shutil
 from time import time
 from tqdm import tqdm
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from mymi import types
 from mymi.dataset.nifti import NIFTIDataset
-from mymi.dataset.training import recreate as recreate_training
+from mymi.dataset.training import create, exists, get, recreate
 from mymi import logging
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 
 def convert_to_training(
     dataset: str,
-    regions: List[str],
+    regions: Union[str, List[str]],
     dest_dataset: str,
+    dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
+    recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
     size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None) -> None:
+    if type(regions) == str:
+        regions = [regions]
 
     # Create the dataset.
-    train_ds = recreate_training(dest_dataset)
+    if exists(dest_dataset):
+        if recreate_dataset:
+            created = True
+            train_ds = recreate(dest_dataset)
+        else:
+            created = False
+            train_ds = get(dest_dataset)
+            _destroy_flag(train_ds, '__CONVERT_FROM_NIFTI_END__')
+
+            # Delete old labels.
+            for region in regions:
+                filepath = os.path.join(train_ds.path, 'data', 'labels', region)
+                shutil.rmtree(filepath)
+    else:
+        created = True
+        train_ds = create(dest_dataset)
     _write_flag(train_ds, '__CONVERT_FROM_NIFTI_START__')
 
     # Notify user.
-    logging.info(f"Creating dataset '{train_ds}' with regions={regions}, dilate_regions={dilate_regions}, size={size} and spacing={spacing}.")
+    logging.info(f"Creating dataset '{train_ds}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and spacing={spacing}.")
 
     # Save processing params.
-    filepath = os.path.join(train_ds.path, 'params.csv')
-    params_df = pd.DataFrame({
-        'dilate-regions': [str(dilate_regions)],
-        'regions': [str(regions)],
-        'size': [str(size)] if size is not None else ['None'],
-        'spacing': [str(spacing)] if spacing is not None else ['None'],
-    })
-    params_df.to_csv(filepath)
+    if created:
+        filepath = os.path.join(train_ds.path, 'params.csv')
+        params_df = pd.DataFrame({
+            'dilate-iter': [str(dilate_iter)],
+            'dilate-regions': [str(dilate_regions)],
+            'regions': [str(regions)],
+            'size': [str(size)] if size is not None else ['None'],
+            'spacing': [str(spacing)] if spacing is not None else ['None'],
+        })
+        params_df.to_csv(filepath)
+    else:
+        for region in regions:
+            filepath = os.path.join(train_ds.path, f'params-{region}.csv')
+            params_df = pd.DataFrame({
+                'dilate-iter': [str(dilate_iter)],
+                'dilate-regions': [str(dilate_regions)],
+                'regions': [str(regions)],
+                'size': [str(size)] if size is not None else ['None'],
+                'spacing': [str(spacing)] if spacing is not None else ['None'],
+            })
+            params_df.to_csv(filepath)
 
     # Load patients.
     set = NIFTIDataset(dataset)
@@ -79,10 +112,11 @@ def convert_to_training(
         # Add to manifest.
         _append_to_manifest(set, train_ds, pat, i)
 
-        # Get regions.
-        regions = set.patient(pat).list_regions()
-
         for region in regions:
+            # Skip if patient doesn't have region.
+            if not set.patient(pat).has_region(region):
+                continue
+
             # Load label data.
             label = patient.region_data(regions=region)[region]
 
@@ -100,7 +134,7 @@ def convert_to_training(
 
             # Dilate the labels if requested.
             if region in dilate_regions:
-                label = binary_dilation(label, iterations=3)
+                label = binary_dilation(label, iterations=dilate_iter)
 
             # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
             if label.sum() != 0:
@@ -112,6 +146,12 @@ def convert_to_training(
     _write_flag(train_ds, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     _print_time(train_ds, hours)
+
+def _destroy_flag(
+    dataset: 'Dataset',
+    flag: str) -> None:
+    path = os.path.join(dataset.path, flag)
+    os.remove(path)
 
 def _write_flag(
     dataset: 'Dataset',

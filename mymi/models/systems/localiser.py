@@ -58,7 +58,7 @@ class Localiser(pl.LightningModule):
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
         # Load model.
-        model_name, run_name, checkpoint = Localiser.replace_best(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = Localiser.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")
@@ -67,7 +67,7 @@ class Localiser(pl.LightningModule):
         return localiser
 
     @staticmethod
-    def replace_best(
+    def replace_checkpoint_aliases(
         model_name: str,
         run_name: str,
         checkpoint: str) -> Tuple[str, str, str]:

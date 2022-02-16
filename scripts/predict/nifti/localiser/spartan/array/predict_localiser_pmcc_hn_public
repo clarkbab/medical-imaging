@@ -15,6 +15,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
+DATASETS="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')" # Code links from 'training' set to nifti set.
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -35,7 +36,6 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-DATASETS="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')" # Code links from 'training' set to nifti set.
 LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 LOCALISER_SIZE="(128,128,150)"
 LOCALISER_SPACING="(4,4,4)"

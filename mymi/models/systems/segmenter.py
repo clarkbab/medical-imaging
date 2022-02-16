@@ -56,7 +56,7 @@ class Segmenter(pl.LightningModule):
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
         # Load model.
-        model_name, run_name, checkpoint = Segmenter.replace_best(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = Segmenter.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
@@ -65,7 +65,7 @@ class Segmenter(pl.LightningModule):
         return segmenter
 
     @staticmethod
-    def replace_best(
+    def replace_checkpoint_aliases(
         model_name: str,
         run_name: str,
         checkpoint: str) -> Tuple[str, str, str]:

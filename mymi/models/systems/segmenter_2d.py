@@ -39,14 +39,14 @@ class Segmenter2D(pl.LightningModule):
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
         # Load model.
-        model_name, run_name, checkpoint = Segmenter2D.replace_best(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = Segmenter2D.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for auto-encoder run '{model_name}:{run_name}'.")
         return Segmenter2D.load_from_checkpoint(filepath, **kwargs)
 
     @staticmethod
-    def replace_best(
+    def replace_checkpoint_aliases(
         model_name: str,
         run_name: str,
         checkpoint: str) -> Tuple[str, str, str]:

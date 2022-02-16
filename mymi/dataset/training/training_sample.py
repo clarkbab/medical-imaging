@@ -41,6 +41,8 @@ class TrainingSample:
         """
         # List all regions.
         filepath = os.path.join(self._dataset.path, 'data', 'labels')
+        if not os.path.exists(filepath):
+            return []
         all_regions = os.listdir(filepath)
 
         def filter_fn(region):

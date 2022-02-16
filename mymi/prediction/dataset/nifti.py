@@ -141,7 +141,7 @@ def load_patient_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.ModelName) -> np.ndarray:
-    localiser = Localiser.replace_best(*localiser)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
 
     # Load prediction.
     set = ds.get(dataset, 'nifti')
@@ -227,8 +227,7 @@ def create_patient_segmenter_prediction(
     localiser: types.ModelName,
     segmenter: types.Model,
     seg_spacing: types.ImageSpacing3D,
-    device: Optional[torch.device] = None,
-    truncate_spine: bool = True) -> None:
+    device: Optional[torch.device] = None) -> None:
     # Load dataset.
     set = ds.get(dataset, 'nifti')
 
@@ -246,9 +245,7 @@ def create_patient_segmenter_prediction(
             logging.info('Predicting on CPU...')
 
     # Get segmenter prediction.
-    if region != 'SpinalCord':
-        truncate_spine = False
-    loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
     if loc_centre is None:
         raise ValueError(f"Empty prediction for NIFTI dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'.")
     seg = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing, device=device)
@@ -263,8 +260,7 @@ def create_segmenter_predictions(
     region: str,
     localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str],
-    seg_spacing: Tuple[float, float, float],
-    truncate_spine: bool = True) -> None:
+    seg_spacing: Tuple[float, float, float]) -> None:
     logging.info(f"Making segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -283,24 +279,21 @@ def create_segmenter_predictions(
     segmenter = Segmenter.load(*segmenter)
 
     for pat in tqdm(pats):
-        if region != 'SpinalCord':
-            truncate_spine = False
-        create_patient_segmenter_prediction(dataset, pat, region, localiser, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
+        create_patient_segmenter_prediction(dataset, pat, region, localiser, segmenter, seg_spacing, device=device)
 
 def create_segmenter_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: Tuple[str, str, str],
-    segmenter: Tuple[str, str, str],
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
     seg_spacing: types.ImageSpacing3D,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    truncate_spine: bool = True) -> None:
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
-    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', localiser '{localiser.name}', segmenter '{segmenter.name}'...")
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.load(*segmenter)
+    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -310,21 +303,30 @@ def create_segmenter_predictions_from_loader(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Make predictions.
-    for dataset, pat_id in tqdm(iter(test_loader)):
-        create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
+    for test_fold in tqdm(test_folds):
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+
+        # Make predictions.
+        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
+            if type(pat_ids) == torch.Tensor:
+                pat_ids = pat_ids.tolist()
+            for dataset, pat_id in zip(datasets, pat_ids):
+                create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device)
 
 def load_patient_segmenter_prediction(
     dataset: str,
     pat_id: types.PatientID,
     localiser: types.ModelName,
     segmenter: types.ModelName) -> np.ndarray:
-    localiser = Localiser.replace_best(*localiser)
-    segmenter = Segmenter.replace_best(*segmenter)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
@@ -336,32 +338,6 @@ def load_patient_segmenter_prediction(
     
     return seg
 
-def create_patient_two_stage_prediction(
-    dataset: str,
-    pat_id: str,
-    region: str,
-    localiser: types.Model,
-    loc_size: types.ImageSize3D,
-    loc_spacing: types.ImageSpacing3D,
-    segmenter: types.Model,
-    seg_spacing: types.ImageSpacing3D,
-    device: Optional[torch.device] = None) -> None:
-    # Load gpu if available.
-    if device is None:
-        if torch.cuda.is_available():
-            device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
-        else:
-            device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
-
-    # Create predictions.
-    create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
-    create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)
-
 def create_two_stage_predictions(
     dataset: str,
     region: str,
@@ -369,8 +345,7 @@ def create_two_stage_predictions(
     loc_size: types.ImageSize3D,
     loc_spacing: types.ImageSpacing3D,
     segmenter: types.ModelName,
-    seg_spacing: types.ImageSpacing3D,
-    truncate_spine: bool = True) -> None:
+    seg_spacing: types.ImageSpacing3D) -> None:
     logging.info(f"Making two-stage predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -388,8 +363,12 @@ def create_two_stage_predictions(
     # Load segmenter.
     segmenter = Segmenter.load(*segmenter)
 
+    # Set truncation if 'SpinalCord'.
+    truncate = True if region == 'SpinalCord' else False
+
     for pat in tqdm(pats):
-        create_patient_two_stage_prediction(dataset, pat, region, localiser, loc_size, loc_spacing, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
+        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+        create_patient_segmenter_prediction(dataset, pat, region, localiser.name, segmenter, seg_spacing, device=device)
 
 def create_two_stage_predictions_from_loader(
     datasets: Union[str, List[str]],
@@ -400,13 +379,12 @@ def create_two_stage_predictions_from_loader(
     segmenter: types.ModelName,
     seg_spacing: types.ImageSpacing3D,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    truncate_spine: bool = True) -> None:
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', localiser '{localiser.name}', segmenter '{segmenter.name}'...")
+    logging.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -416,13 +394,24 @@ def create_two_stage_predictions_from_loader(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Make predictions.
-    for datasets, pat_ids in tqdm(iter(test_loader)):
-        if type(pat_ids) == torch.Tensor:
-            pat_ids = pat_ids.tolist()
-        for dataset, pat_id in zip(datasets, pat_ids):
-            create_patient_two_stage_prediction(dataset, pat_id, region, localiser, loc_size, loc_spacing, segmenter, seg_spacing, device=device, truncate_spine=truncate_spine)
+    # Set truncation if 'SpinalCord'.
+    truncate = True if region == 'SpinalCord' else False
+
+    for test_fold in tqdm(test_folds):
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+
+        # Make predictions.
+        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
+            if type(pat_ids) == torch.Tensor:
+                pat_ids = pat_ids.tolist()
+            for dataset, pat_id in zip(datasets, pat_ids):
+                # Create predictions.
+                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+                create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)

@@ -3,9 +3,9 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
-DATASET="PMCC-HN-TEST"
+DATASETS="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')" # Code links from 'training' set to nifti set.
 REGIONS=(
-    # 'BrachialPlexus_L'  # 0
+    'BrachialPlexus_L'  # 0
     # 'BrachialPlexus_R'  # 1
     # 'Brain'             # 2
     # 'BrainStem'         # 3
@@ -19,13 +19,16 @@ REGIONS=(
     # 'OralCavity'        # 11
     # 'Parotid_L'         # 12
     # 'Parotid_R'         # 13
-    'SpinalCord'        # 14
+    # 'SpinalCord'        # 14
     # 'Submandibular_L'   # 15
     # 'Submandibular_R'   # 16
 )
-RUN="public-1gpu-100epochs"
+NUM_FOLDS=5
+TEST_FOLDS="all"
 
 for i in "${!REGIONS[@]}"; do
-    segmenter="('segmenter-${REGIONS[i]}','$RUN','BEST')"
-    python create_evaluation --dataset $DATASET --segmenter $segmenter --region ${REGIONS[i]}
+    localiser="('localiser-${REGIONS[i]}','public-1gpu-150epochs','BEST')"
+    segmenter="('segmenter-${REGIONS[i]}','public-1gpu-150epochs','BEST')"
+    python create_evaluation_from_loader --datasets $DATASETS --localiser $localiser --segmenter $segmenter --region ${REGIONS[i]} \
+        --num_folds $NUM_FOLDS --test_folds $TEST_FOLDS
 done

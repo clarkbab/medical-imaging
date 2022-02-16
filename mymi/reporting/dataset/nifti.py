@@ -1,4 +1,5 @@
 from fpdf import FPDF, TitleStyle
+from functools import reduce
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -34,7 +35,8 @@ def get_region_summary(
         'connected-extent-mm-z': float,
         'extent-mm-x': float,
         'extent-mm-y': float,
-        'extent-mm-z': float
+        'extent-mm-z': float,
+        'volume-mm3': float
     }
     df = pd.DataFrame(columns=cols.keys())
 
@@ -74,6 +76,10 @@ def get_region_summary(
         data['connected-extent-mm-x'] = extent_mm[0]
         data['connected-extent-mm-y'] = extent_mm[1]
         data['connected-extent-mm-z'] = extent_mm[2]
+
+        # Add volume.
+        vox_volume = reduce(lambda x, y: x * y, spacing)
+        data['volume-mm3'] = vox_volume * label.sum() 
 
         df = df.append(data, ignore_index=True)
 
@@ -500,7 +506,7 @@ def create_localiser_figures(
     dataset: str,
     region: str,
     localiser: Tuple[str, str, str]) -> None:
-    localiser = Localiser.replace_best(*localiser)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
     logging.info(f"Creating localiser figures for dataset '{dataset}', region '{region}' and localiser '{localiser}'.")
 
     # Get patients.

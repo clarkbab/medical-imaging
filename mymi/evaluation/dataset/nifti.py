@@ -22,12 +22,9 @@ def get_patient_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: types.ModelName,
-    truncate_spine: bool = True) -> Dict[str, float]:
+    localiser: types.ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
-    if region != 'SpinalCord':
-        truncate_spine = False
-    pred = load_patient_localiser_prediction(dataset, pat_id, localiser, truncate_spine=truncate_spine)
+    pred = load_patient_localiser_prediction(dataset, pat_id, localiser)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -96,8 +93,7 @@ def create_patient_localiser_evaluation(
     pat_id: str,
     region: str,
     localiser: types.ModelName,
-    df: Optional[pd.DataFrame] = None,
-    truncate_spine: bool = True) -> Optional[pd.DataFrame]:
+    df: Optional[pd.DataFrame] = None) -> Optional[pd.DataFrame]:
 
     # Define dataframe columns.
     cols = {
@@ -122,9 +118,7 @@ def create_patient_localiser_evaluation(
         eval_df = df
 
     # Get metrics.
-    if region != 'SpinalCord':
-        truncate_spine = False
-    metrics = get_patient_localiser_evaluation(dataset, pat_id, region, localiser, truncate_spine=truncate_spine)
+    metrics = get_patient_localiser_evaluation(dataset, pat_id, region, localiser)
 
     # Add/update each metric.
     for metric, value in metrics.items():
@@ -156,8 +150,7 @@ def create_patient_localiser_evaluation(
 def create_localiser_evaluation(
     dataset: str,
     region: str,
-    localiser: types.ModelName,
-    truncate_spine: bool = True) -> None:
+    localiser: types.ModelName) -> None:
     # Load localiser.
     localiser = Localiser.load(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser.name}'.")
@@ -177,9 +170,7 @@ def create_localiser_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     for pat in tqdm(pats):
-        if region != 'SpinalCord':
-            truncate_spine = False
-        df = create_patient_localiser_evaluation(dataset, pat, region, localiser, df=df, truncate_spine=truncate_spine)
+        df = create_patient_localiser_evaluation(dataset, pat, region, localiser, df=df)
 
     # Set column types.
     df = df.astype(cols)
@@ -194,12 +185,10 @@ def create_localiser_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     num_folds: Optional[int] = None,
-    test_folds: Optional[Union[int, List[int], Literal['all']]] = None,
-    truncate_spine: bool = True) -> None:
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
-    localiser = Localiser.replace_best(*localiser)
-
-    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    localiser = Localiser.load(*localiser)
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
@@ -224,12 +213,10 @@ def create_localiser_evaluation_from_loader(
 
         # Add evaluations to dataframe.
         for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
-            if region != 'SpinalCord':
-                truncate_spine = False
             if type(pat_id_b) == torch.Tensor:
                 pat_id_b = pat_id_b.tolist()
             for dataset, pat_id in zip(dataset_b, pat_id_b):
-                df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df, truncate_spine=truncate_spine)
+                df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df)
 
         # Add fold.
         df['fold'] = test_fold
@@ -240,7 +227,7 @@ def create_localiser_evaluation_from_loader(
         # Save evaluation.
         folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
         filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
+        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser.name, folder, f'{filename}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
@@ -248,7 +235,7 @@ def load_localiser_evaluation(
     dataset: str,
     localiser: Tuple[str, str, str]) -> np.ndarray:
     set = ds.get(dataset, 'nifti')
-    localiser = Localiser.replace_best(*localiser)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")
@@ -260,12 +247,13 @@ def load_localiser_evaluation_from_loader(
     localiser: types.ModelName,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> np.ndarray:
-    localiser = Localiser.replace_best(*localiser)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
     folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"Evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with test fold {test_fold} not found.")
+        print(filepath)
+        raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -368,8 +356,8 @@ def create_segmenter_evaluation(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName) -> None:
-    localiser = Localiser.replace_best(*localiser)
-    segmenter = Segmenter.replace_best(*segmenter)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
     logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Load dataset.
@@ -415,52 +403,79 @@ def create_segmenter_evaluation_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
-    # Get unique names.
-    localiser = Localiser.replace_best(*localiser)
-    segmenter = Segmenter.replace_best(*segmenter)
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    # Get unique name.
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
-    logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
-
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Create dataframe.
-    cols = {
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    df = pd.DataFrame(columns=cols.keys())
+    for test_fold in tqdm(test_folds):
+        # Create dataframe.
+        cols = {
+            'fold': int,
+            'patient-id': str,
+            'region': str,
+            'metric': str,
+            'value': float
+        }
+        df = pd.DataFrame(columns=cols.keys())
 
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
-            df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
+        # Build test loader.
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
-    # Set column types.
-    df = df.astype(cols)
+        # Add evaluations to dataframe.
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+            if type(pat_id_b) == torch.Tensor:
+                pat_id_b = pat_id_b.tolist()
+            for dataset, pat_id in zip(dataset_b, pat_id_b):
+                df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
 
-    # Save evaluation.
-    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
+        # Add fold.
+        df['fold'] = test_fold
+
+        # Set column types.
+        df = df.astype(cols)
+
+        # Save evaluation.
+        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+        filename = f'eval-folds-{num_folds}-test-{test_fold}'
+        filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        df.to_csv(filepath, index=False)
 
 def load_segmenter_evaluation(
     dataset: str,
     localiser: Tuple[str, str, str],
     segmenter: Tuple[str, str, str]) -> np.ndarray:
-    localiser = Localiser.replace_best(*localiser)
-    segmenter = Segmenter.replace_best(*segmenter)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Segmenter evaluation for dataset '{set}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
+    data = pd.read_csv(filepath, dtype={'patient-id': str})
+    return data
+
+def load_segmenter_evaluation_from_loader(
+    datasets: Union[str, List[str]],
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None) -> np.ndarray:
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Segmenter evaluation for dataset '{datasets}', localiser '{localiser}', segmenter '{segmenter}', {num_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -470,47 +485,56 @@ def create_two_stage_evaluation_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    truncate_spine: bool = True) -> None:
-    # Get unique names.
-    localiser = Localiser.replace_best(*localiser)
-    segmenter = Segmenter.replace_best(*segmenter)
+    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    # Get unique name.
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    logging.info(f"Evaluating two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
-    logging.info(f"Evaluating two-stage predictions for NIFTI dataset '{datasets}', region '{region}', localiser '{localiser}' ,segmenter '{segmenter}', with {num_folds}-fold CV using test fold {test_fold}.")
-
-    # Create test loader.
+    # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
-    _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+    if test_folds == 'all':
+        test_folds = list(range(num_folds))
+    elif type(test_folds) == int:
+        test_folds = [test_folds]
 
-    # Create dataframes.
-    cols = {
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    loc_df = pd.DataFrame(columns=cols.keys())
-    seg_df = pd.DataFrame(columns=cols.keys())
+    for test_fold in tqdm(test_folds):
+        # Create dataframe.
+        cols = {
+            'fold': int,
+            'patient-id': str,
+            'region': str,
+            'metric': str,
+            'value': float
+        }
+        loc_df = pd.DataFrame(columns=cols.keys())
+        seg_df = pd.DataFrame(columns=cols.keys())
 
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
-            loc_df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df, truncate_spine=truncate_spine)
-            seg_df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
+        # Build test loader.
+        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
-    # Set column types.
-    loc_df = loc_df.astype(cols)
-    seg_df = seg_df.astype(cols)
+        # Add evaluations to dataframe.
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+            if type(pat_id_b) == torch.Tensor:
+                pat_id_b = pat_id_b.tolist()
+            for dataset, pat_id in zip(dataset_b, pat_id_b):
+                loc_df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df)
+                seg_df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
 
-    # Save localiser evaluation.
-    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    loc_df.to_csv(filepath, index=False)
+        # Add fold.
+        loc_df['fold'] = test_fold
+        seg_df['fold'] = test_fold
 
-    # Save segmenter evaluation.
-    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    seg_df.to_csv(filepath, index=False)
+        # Set column types.
+        loc_df = loc_df.astype(cols)
+        seg_df = seg_df.astype(cols)
+
+        # Save evaluations.
+        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
+        filename = f'eval-folds-{num_folds}-test-{test_fold}'
+        loc_filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
+        seg_filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+        os.makedirs(os.path.dirname(loc_filepath), exist_ok=True)
+        os.makedirs(os.path.dirname(seg_filepath), exist_ok=True)
+        loc_df.to_csv(loc_filepath, index=False)
+        seg_df.to_csv(seg_filepath, index=False)

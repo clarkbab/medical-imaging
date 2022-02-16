@@ -16,6 +16,12 @@ def list() -> List[str]:
     else:
         return []
 
+def get(name: str) -> TrainingDataset:
+    if exists(name):
+        return TrainingDataset(name)
+    else:
+        raise ValueError(f"TrainingDataset '{name}' doesn't exist.")
+
 def exists(name: str) -> bool:
     """
     returns: if the dataset exists.
