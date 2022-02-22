@@ -1,3 +1,5 @@
+from audioop import reverse
+from functools import reduce
 import matplotlib
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Rectangle
@@ -15,7 +17,7 @@ from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
 from mymi.postprocessing import get_largest_cc
 from mymi.regions import get_patch_size, is_region, RegionColours
-from mymi.transforms import crop_or_pad_2D
+from mymi.transforms import crop_or_pad_2D, crop_or_pad_box, crop_or_pad_point
 from mymi import types
 
 def _plot_region_data(
@@ -66,13 +68,13 @@ def _plot_region_data(
             extent = get_extent(data)
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
-                plot_box(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
+                plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
 
         # Plot connected extent.
         if connected_extent:
             extent = get_extent(get_largest_cc(data))
             if should_plot_box(extent, view, slice_idx):
-                plot_box(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
+                plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
         # Skip region if not present on this slice.
         if slice_data.max() == 0:
@@ -89,7 +91,7 @@ def _plot_region_data(
         label = _escape_latex(region) if latex else region
         axis.plot(0, 0, c=colour, label=label)
         if perimeter:
-            axis.contour(slice_data, colors=[colour], levels=[0.5])
+            axis.contour(slice_data, colors=[colour], levels=[.5])
 
         # Set ticks.
         if crop:
@@ -232,7 +234,7 @@ def should_plot_box(
     # Return result.
     return slice_idx >= min and slice_idx <= max
 
-def plot_box(
+def plot_box_slice(
     box: types.Box3D,
     view: types.PatientView,
     colour: str = 'r',
@@ -240,14 +242,14 @@ def plot_box(
     label: str = 'box',
     linestyle: str = 'solid') -> None:
     """
-    effect: plots a 2D slice of the bounding box.
+    effect: plots a 2D slice of the box.
     args:
-        bounding_box: the bounding box to plot.
+        box: the box to plot.
         view: the view direction.
     kwargs:
         crop: the cropping applied to the image.
     """
-    # Get 2D bounding box.
+    # Compress box to 2D.
     if view == 'axial':
         dims = (0, 1)
     elif view == 'coronal':
@@ -257,14 +259,17 @@ def plot_box(
     min, max = box
     min = np.array(min)[[*dims]]
     max = np.array(max)[[*dims]]
-    width = max - min
+    box_2D = (min, max)
 
-    # Adjust bounding box for cropped view.
+    # Apply crop.
     if crop:
-        crop_min, _ = crop
-        min -= crop_min
+        box_2D = crop_or_pad_box(box_2D, crop)
 
     # Draw bounding box.
+    min, max = box_2D
+    min = np.array(min) - .5
+    max = np.array(max) + .5
+    width = np.array(max) - min
     rect = Rectangle(min, *width, linewidth=1, edgecolor=colour, facecolor='none', linestyle=linestyle)
     ax = plt.gca()
     ax.add_patch(rect)
@@ -308,13 +313,13 @@ def plot_regions(
     ct_data: np.ndarray,
     region_data: Dict[str, np.ndarray],
     spacing: types.ImageSpacing3D,
-    alpha: float = 0.2,
+    alpha: float = 0.3,
     aspect: Optional[float] = None,
     axis: Optional[matplotlib.axes.Axes] = None,
     cca: bool = False,
     centre_of: Optional[str] = None,
     colours: Optional[List[str]] = None,
-    crop: Optional[Union[str, Tuple[Tuple[int, int], Tuple[int, int]]]] = None,
+    crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (12, 12),
@@ -337,7 +342,6 @@ def plot_regions(
     view: types.PatientView = 'axial',
     window: Tuple[float, float] = (3000, 500)) -> None:
     assert_position(centre_of, extent_of, slice_idx)
-    # get_region_data: (region, list of regions) -> dict of data
 
     # Create plot figure/axis.
     if axis is None:
@@ -397,20 +401,15 @@ def plot_regions(
     ct_slice_data = get_slice(ct_data, slice_idx, view)
 
     # Convert to box representation.
-    crop_box = None
     if crop:
         if type(crop) == str:
             # Get crop box from region name.
             data = region_data[crop]
-            crop_box = _get_region_crop_box(data, crop_margin, spacing, view)
-        else:
-            # Get crop box from API crop.
-            crop_box = _convert_crop_to_box(crop)
+            crop = _get_region_crop(data, crop_margin, spacing, view)
 
     # Perform crop.
-    if crop_box:
-        # Convert crop to 2D box.
-        ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop_box))
+    if crop:
+        ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -450,7 +449,7 @@ def plot_regions(
 
     if regions:
         # Plot regions.
-        show_legend = _plot_region_data(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop_box, show_extent=show_extent)
+        show_legend = _plot_region_data(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         # Create legend.
         if legend and show_legend:
@@ -507,11 +506,11 @@ def plot_localiser_prediction(
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_size: int = 10,
-    show_box: bool = True,
-    show_centre: bool = True,
-    show_extent: bool = True,
-    show_patch: bool = True,
-    show_seg: bool = True,
+    show_label_extent: bool = True,
+    show_loc_centre: bool = True,
+    show_loc_extent: bool = True,
+    show_loc_pred: bool = True,
+    show_seg_patch: bool = True,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
@@ -526,7 +525,11 @@ def plot_localiser_prediction(
         })
 
     # Load localiser segmentation.
-    non_empty_pred = False if prediction.sum() == 0 else True
+    if prediction.sum() == 0:
+        logging.info('Empty prediction')
+        empty_pred = True
+    else:
+        empty_pred = False
 
     # Centre on OAR if requested.
     if slice_idx is None:
@@ -559,14 +562,14 @@ def plot_localiser_prediction(
                 slice_idx = extent[extent_of][0]
 
     # Plot patient regions.
-    plot_regions(id, ct_data, { region: region_data }, spacing, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_regions(id, ct_data, { region: region_data }, spacing, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     # Get extent and centre.
     extent = get_extent(prediction)
     loc_centre = get_extent_centre(prediction)
 
     # Plot prediction.
-    if non_empty_pred and show_seg:
+    if not empty_pred and show_loc_pred:
         # Get aspect ratio.
         if not aspect:
             aspect = get_aspect_ratio(view, spacing) 
@@ -582,18 +585,20 @@ def plot_localiser_prediction(
         colour = 'deepskyblue'
         colours = [(1, 1, 1, 0), colour]
         cmap = ListedColormap(colours)
-        plt.imshow(pred_slice_data, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.imshow(pred_slice_data, alpha=.3, aspect=aspect, cmap=cmap, origin=get_origin(view))
         plt.plot(0, 0, c=colour, label='Loc. Prediction')
+        plt.contour(pred_slice_data, colors=[colour], levels=[.5])
 
-    # Plot localiser bounding box.
-    if non_empty_pred and show_box:
+    # Plot prediction extent.
+    if not empty_pred and show_loc_extent:
         if should_plot_box(extent, view, slice_idx):
-            plot_box(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box')
+            plot_box_slice(extent, view, colour='deepskyblue', crop=crop, label='Loc. Box', linestyle='dashed')
         else:
-            plt.plot(0, 0, c='deepskyblue', label='Loc. Box (offscreen)')
+            plt.plot(0, 0, c='deepskyblue', label='Loc. Extent (offscreen)')
 
     # Plot localiser centre.
-    if non_empty_pred and show_centre:
+    if not empty_pred and show_loc_centre:
+        # Get 2D loc centre.
         if view == 'axial':
             centre = (loc_centre[0], loc_centre[1])
             offscreen = False if slice_idx == loc_centre[2] else True
@@ -603,10 +608,17 @@ def plot_localiser_prediction(
         elif view == 'sagittal':
             centre = (loc_centre[1], loc_centre[2])
             offscreen = False if slice_idx == loc_centre[0] else True
-        plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
+            
+        # Apply crop.
+        centre = crop_or_pad_point(centre, crop)
+
+        if centre:
+            plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
+        else:
+            plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
 
     # Plot second stage patch.
-    if non_empty_pred and show_patch:
+    if not empty_pred and show_seg_patch:
         size = get_patch_size(region, spacing)
         min, max = get_box(loc_centre, size)
 
@@ -615,7 +627,7 @@ def plot_localiser_prediction(
         max = np.clip(max, a_min=None, a_max=prediction.shape)
 
         if should_plot_box((min, max), view, slice_idx):
-            plot_box((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dashed')
+            plot_box_slice((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')
         else:
             plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
 
@@ -633,10 +645,7 @@ def plot_localiser_prediction(
             'text.usetex': rc_params['text.usetex']
         })
 
-def _convert_crop_to_box(crop: Tuple[Tuple[int, int], Tuple[int, int]]) -> types.Box2D:
-    return ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
-
-def _get_region_crop_box(
+def _get_region_crop(
     data: np.ndarray,
     crop_margin: float,
     spacing: types.ImageSpacing3D,
@@ -686,3 +695,168 @@ def plot_distribution(
     plt.xlabel('HU')
     plt.ylabel('Frequency')
     plt.show()
+
+def plot_segmenter_prediction(
+    id: str,
+    region: str,
+    ct_data: np.ndarray,
+    loc_centre: types.Point3D,
+    region_data: np.ndarray,
+    spacing: types.ImageSpacing3D,
+    prediction: np.ndarray,
+    aspect: float = None,
+    centre_of: Optional[str] = None,
+    crop: Optional[Union[str, types.Box2D]] = None,
+    crop_margin: float = 40,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
+    latex: bool = False,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_size: int = 10,
+    show_label_extent: bool = True,
+    show_loc_centre: bool = True,
+    show_seg_extent: bool = True,
+    show_seg_patch: bool = True,
+    show_seg_pred: bool = True,
+    slice_idx: Optional[int] = None,
+    view: types.PatientView = 'axial',
+    **kwargs: dict) -> None:
+    assert_position(centre_of, extent_of, slice_idx)
+
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
+
+    # Check for empty pred.
+    if prediction.sum() == 0:
+        logging.info('Empty prediction')
+        empty_pred = True
+    else:
+        volume_vox = prediction.sum()
+        volume_mm3 = volume_vox * reduce(lambda x, y: x * y, spacing)
+        logging.info(f"""
+Volume (vox): {volume_vox}
+Volume (mm^3): {volume_mm3:.2f}""")
+        empty_pred = False
+
+    # Centre on OAR if requested.
+    if slice_idx is None:
+        if centre_of is not None:
+            if centre_of == 'seg':
+                # Centre of prediction.
+                label = prediction
+            else:
+                # Centre of label.
+                label = region_data
+
+            # Get slice index.
+            centre = get_extent_centre(label)
+            if view == 'axial':
+                slice_idx = centre[2]
+            elif view == 'coronal':
+                slice_idx = centre[1]
+            elif view == 'sagittal':
+                slice_idx = centre[0]
+        elif extent_of is not None:
+            # Get extent.
+            extent = get_extent(region_data)
+
+            # Set slice index.
+            if view == 'axial':
+                slice_idx = extent[extent_of][2]
+            elif view == 'coronal':
+                slice_idx = extent[extent_of][1]
+            elif view == 'sagittal':
+                slice_idx = extent[extent_of][0]
+
+    # Plot patient regions.
+    plot_regions(id, ct_data, { region: region_data }, spacing, aspect=aspect, colours=['gold'], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
+
+    if crop:
+        if type(crop) == str:
+            # Get crop box from region name.
+            data = region_data[crop]
+            crop = _get_region_crop(data, crop_margin, spacing, view)
+
+    # Get extent and centre.
+    extent = get_extent(prediction)
+
+    # Plot prediction.
+    if not empty_pred and show_seg_pred:
+        # Get aspect ratio.
+        if not aspect:
+            aspect = get_aspect_ratio(view, spacing) 
+
+        # Get slice data.
+        pred_slice_data = get_slice(prediction, slice_idx, view)
+
+        # Crop the image.
+        if crop:
+            pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
+
+        # Plot prediction.
+        colour = 'tomato'
+        colours = [(1, 1, 1, 0), colour]
+        cmap = ListedColormap(colours)
+        plt.imshow(pred_slice_data, alpha=.3, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.plot(0, 0, c=colour, label='Seg. Prediction')
+        plt.contour(pred_slice_data, colors=[colour], levels=[.5])
+
+    # Plot segmenter extent.
+    if not empty_pred and show_seg_extent:
+        if should_plot_box(extent, view, slice_idx):
+            plot_box_slice(extent, view, colour='tomato', crop=crop, label='Seg. Extent', linestyle='dashed')
+        else:
+            plt.plot(0, 0, c='tomato', label='Seg. Extent (offscreen)')
+
+    # Plot localiser centre.
+    if not empty_pred and show_loc_centre:
+        # Get 2D loc centre.
+        if view == 'axial':
+            centre = (loc_centre[0], loc_centre[1])
+            offscreen = False if slice_idx == loc_centre[2] else True
+        elif view == 'coronal':
+            centre = (loc_centre[0], loc_centre[2])
+            offscreen = False if slice_idx == loc_centre[1] else True
+        elif view == 'sagittal':
+            centre = (loc_centre[1], loc_centre[2])
+            offscreen = False if slice_idx == loc_centre[0] else True
+            
+        # Apply crop.
+        centre = crop_or_pad_point(centre, crop)
+
+        if centre:
+            plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
+        else:
+            plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
+
+    # Plot second stage patch.
+    if not empty_pred and show_seg_patch:
+        # Get 3D patch - cropped to label size.
+        size = get_patch_size(region, spacing)
+        patch = get_box(loc_centre, size)
+        label_box = ((0, 0, 0), prediction.shape)
+        patch = crop_or_pad_box(patch, label_box)
+
+        # Plot box.
+        if patch and should_plot_box(patch, view, slice_idx):
+            plot_box_slice(patch, view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')
+        else:
+            plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
+
+    # Show legend.
+    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    for l in plt_legend.get_lines():
+        l.set_linewidth(8)
+
+    plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })

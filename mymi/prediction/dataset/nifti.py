@@ -247,13 +247,16 @@ def create_patient_segmenter_prediction(
     # Get segmenter prediction.
     loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
     if loc_centre is None:
-        raise ValueError(f"Empty prediction for NIFTI dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'.")
-    seg = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing, device=device)
+        # Create empty pred.
+        ct_data = set.patient(pat_id).ct_data
+        pred = np.zeros_like(ct_data, dtype=bool) 
+    else:
+        pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing, device=device)
 
     # Save segmentation.
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, f'{pat_id}.npz') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez(filepath, data=seg)
+    np.savez(filepath, data=pred)
 
 def create_segmenter_predictions(
     dataset: str,

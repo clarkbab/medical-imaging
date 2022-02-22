@@ -45,7 +45,7 @@ NUM_WORKERS=4
 RESUME=False
 RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLD=0
+TEST_FOLD=1
 RUN_NAME="clinical-1gpu-150epochs-fold-$TEST_FOLD"
 USE_LOGGER=True
 

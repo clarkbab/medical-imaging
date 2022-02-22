@@ -94,7 +94,7 @@ def train_segmenter(
     # Create logger.
     if use_logger:
         logger = WandbLogger(
-            group=f"{model_name}-{run_name}",
+            # group=f"{model_name}-{run_name}",
             project=model_name,
             name=run_name,
             save_dir=config.directories.wandb)

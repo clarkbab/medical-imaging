@@ -12,7 +12,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-TEST"
+DATASETS="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')" # Code links from 'training' set to nifti set.
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -33,10 +33,20 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','public-1gpu-100epochs','BEST')"
-SEGMENTER="('segmenter-$REGION','clinical-1gpu-150epochs','BEST')"
+LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
+NUM_FOLDS=5
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TRUNCATE_SPINE=True
+TEST_FOLDS=(
+    0
+    # 1
+    # 2
+    # 3
+    # 4
+)
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/create_evaluation --dataset $DATASET --region $REGION --localiser $LOCALISER --segmenter $SEGMENTER \
-    --truncate_spine $TRUNCATE_SPINE
+for i in "${!TEST_FOLDS[@]}"; do
+    test_fold=${TEST_FOLDS[i]}
+    segmenter="('segmenter-$REGION','clinical-1gpu-150epochs-fold-$test_fold','BEST')"
+    python $SCRIPT_DIR/evaluate/nifti/segmenter/create_evaluation_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER --segmenter $segmenter \
+        --num_folds $NUM_FOLDS --test_folds $test_fold
+done

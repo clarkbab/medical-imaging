@@ -187,8 +187,7 @@ def create_localiser_evaluation_from_loader(
     num_folds: Optional[int] = None,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
-    localiser = Localiser.load(*localiser)
-    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
     sets = [ds.get(d, 'training') for d in datasets]
@@ -227,7 +226,7 @@ def create_localiser_evaluation_from_loader(
         # Save evaluation.
         folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
         filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser.name, folder, f'{filename}.csv')
+        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
@@ -303,6 +302,7 @@ def create_patient_segmenter_evaluation(
 
     # Define dataframe columns.
     cols = {
+        'dataset': str,
         'patient-id': str,
         'region': str,
         'metric': str,
@@ -331,6 +331,7 @@ def create_patient_segmenter_evaluation(
         if not exists:
             # Add metric.
             data = {
+                'dataset': dataset,
                 'patient-id': pat_id, 
                 'region': region,
                 'metric': metric,
@@ -420,6 +421,7 @@ def create_segmenter_evaluation_from_loader(
         # Create dataframe.
         cols = {
             'fold': int,
+            'dataset': str,
             'patient-id': str,
             'region': str,
             'metric': str,

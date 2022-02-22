@@ -8,10 +8,11 @@ sys.path.append(root_dir)
 
 from mymi import config
 
-model = ('localiser-BrainStem', 'public-1gpu-150epochs', 'last.ckpt')
+model = ('segmenter-Mandible', 'clinical-1gpu-150epochs-fold-0', 'last.ckpt')
 path = os.path.join(config.directories.models, *model)
 state = torch.load(path, map_location=torch.device('cpu'))
 
 print(f"""
+Model: {model}
 Epoch: {state['epoch']}
 """)

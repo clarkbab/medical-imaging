@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from mymi.geometry import get_box
 from mymi import types
@@ -104,3 +104,56 @@ def point_crop_or_pad_3D(
         return (data, box)
     else:
         return data
+
+def crop_or_pad_point(
+    point: Union[types.Point2D, types.Point3D],
+    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Point2D, types.Point3D]]:
+    # Check dimensions.
+    assert len(point) == len(crop[0]) and len(point) == len(crop[1])
+
+    crop = np.array(crop)
+    point = np.array(point).reshape(1, crop.shape[1])
+
+    # Get decision variables.
+    decisions = np.stack((point >= crop[0], point < crop[1]), axis=0)
+
+    # Check if point is in crop window.
+    if np.all(decisions):
+        point -= crop[0]
+        point = tuple(point.flatten())
+    else:
+        point = None
+
+    return point
+
+def crop_or_pad_box(
+    box: Union[types.Box2D, types.Box3D],
+    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Box2D, types.Box3D]]:
+    box = np.array(box, dtype=int)
+    crop = np.array(crop, dtype=int)
+
+    # Get decision variables.
+    decisions = np.stack((crop[0] < box[1], crop[1] > box[0], crop[0] < box[0], crop[1] > box[1]), axis=0)
+
+    # Check that box is contained in crop.
+    if np.all(decisions[0:2]):
+        new_box = np.zeros_like(box, dtype=int)
+
+        # Add viable box values.
+        idx = np.nonzero(decisions[2:4])
+        new_box[idx] = box[idx]
+
+        # Add crop box values.
+        idx = np.nonzero(~decisions[2:4])
+        new_box[idx] = crop[idx] - 1
+
+        # Crop points.
+        new_box[0] = crop_or_pad_point(tuple(new_box[0]), crop)
+        new_box[1] = crop_or_pad_point(tuple(new_box[1]), crop)
+
+        # Convert to tuple.
+        new_box = tuple(tuple(p) for p in new_box)
+    else:
+        new_box = None
+
+    return new_box
