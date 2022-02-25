@@ -1,5 +1,9 @@
 from collections import namedtuple
 import os
+import pandas as pd
+from typing import List
+
+from mymi import logging
 
 class Directories:
     @property
@@ -49,3 +53,27 @@ class Formatting:
 
 directories = Directories()
 formatting = Formatting()
+
+def save_csv(
+    data: pd.DataFrame,
+    *path: List[str],
+    index: bool = False,
+    overwrite: bool = False):
+    filepath = os.path.join(directories.files, *path)
+    dirpath = os.path.dirname(filepath)
+    if os.path.exists(filepath):
+        if overwrite:
+            os.makedirs(dirpath, exist_ok=True)
+            data.to_csv(filepath, index=index)
+        else:
+            logging.error(f"File '{filepath}' already exists, use overwrite=True.")
+    else:
+        os.makedirs(dirpath, exist_ok=True)
+        data.to_csv(filepath, index=index)
+
+def load_csv(*path: List[str]):
+    filepath = os.path.join(directories.files, *path)
+    if os.path.exists(filepath):
+        return pd.read_csv(filepath)
+    else:
+        return None

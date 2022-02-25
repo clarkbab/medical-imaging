@@ -77,7 +77,7 @@ class TrainingSample:
         # Convert regions to list.
         if type(regions) == str:
             if regions == 'all':
-                regions = list(sorted(self.list_regions))
+                regions = list(sorted(self.list_regions()))
             else:
                 regions = [regions]
 

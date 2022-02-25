@@ -62,9 +62,7 @@ class NIFTIDataset(Dataset):
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
         return pats
 
-    def list_regions(
-        self,
-        clear_cache: bool = False) -> pd.DataFrame:
+    def list_regions(self) -> pd.DataFrame:
         """
         returns: a DataFrame with patient region names.
         """

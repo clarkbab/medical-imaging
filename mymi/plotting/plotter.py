@@ -6,6 +6,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy import ndarray
+import pandas as pd
 import torch
 from torch import nn
 import torchio
@@ -610,7 +611,8 @@ def plot_localiser_prediction(
             offscreen = False if slice_idx == loc_centre[0] else True
             
         # Apply crop.
-        centre = crop_or_pad_point(centre, crop)
+        if crop:
+            centre = crop_or_pad_point(centre, crop)
 
         if centre:
             plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
@@ -860,3 +862,106 @@ Volume (mm^3): {volume_mm3:.2f}""")
             "font.family": rc_params['font.family'],
             'text.usetex': rc_params['text.usetex']
         })
+
+def plot_dataframe(
+    data: pd.DataFrame = None,
+    x: str = None,
+    y: str = None,
+    hue: str = None,
+    ylim: Tuple[Optional[int], Optional[int]] = (None, None),
+    inner: str ='quartiles',
+    annotate_outliers: bool = False,
+    annotation_model_offset=35,
+    offset=5,
+    n_col: int = 6,
+    point_style: str = 'strip',
+    overlap_min_diff=None,
+    annotation_overlap_offset=25,
+    split=False,
+    debug=False,
+    show_points=True,
+    show_outliers=True,
+    style: Literal['box', 'violin'] = 'box',
+    ylabel='', 
+    include_x=None,
+    exclude_x=None):
+    df = data
+    # Include/exclude.
+    if include_x:
+        if type(include_x) == str:
+            include_x = [include_x]
+        df = df[df[x].isin(include_x)]
+    if exclude_x:
+        if type(exclude_x) == str:
+            exclude_x = [exclude_x]
+        df = df[~df[x].isin(exclude_x)]
+    
+    # Add region numbers and outliers.
+    df = add_region_info(df, x, hue)
+    df = add_outlier_info(df, y)
+    
+    # Split data.
+    xs = list(sorted(df[x].unique()))
+    hues = list(sorted(df[hue].unique()))
+    num_rows = int(np.ceil(len(xs) / col_n))
+    if num_rows > 1:
+        fig, axs = plt.subplots(num_rows, 1, figsize=(18, num_rows * 6), sharey=True)
+    else:
+        plt.figure(figsize=(18, 6))
+        axs = [plt.gca()]
+    for i in range(num_rows):
+        # Set y grid lines.
+        axs[i].grid(axis='y', linestyle='dashed')
+        axs[i].set_axisbelow(True)
+        
+        # Split data.
+        split_xs = xs[i * col_n:(i + 1) * col_n]
+        split_df = df[df[x].isin(split_xs)]
+        if len(split_df) == 0:
+            continue
+            
+        # Determine category label order.
+        cats = list(sorted(split_df[f'{x}_label'].unique()))
+        if len(xs) < col_n:
+            cats += [''] * (col_n - len(cats))
+
+        # Plot outliers.
+        if outliers:
+            outlier_df = split_df[split_df.outlier]
+            if len(outlier_df) != 0:
+                sns.stripplot(ax=axs[i], data=outlier_df, x=f'{x}_label', y=y, hue=hue, dodge=True, jitter=False, edgecolor='white', linewidth=1, order=cats, hue_order=hues)
+                plt.setp(axs[i].collections, zorder=100, label="")
+                if annotate_outliers:
+                    first_region = i * col_n
+                    label(axs[i], outlier_df, f'{x}_id', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
+
+        # Plot data.
+        if style == 'box':
+            sns.boxplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, showfliers=False, order=cats, hue_order=hues)
+        elif style == 'violin':
+            # Exclude outliers manually.
+            split_df = split_df[~split_df.outlier]
+            sns.violinplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, inner=inner, split=split, showfliers=False, order=cats, hue_order=hues)
+        else:
+            raise ValueError(f"Invalid style {style}, expected 'box' or 'violin'.")
+
+        if points:
+            if point_style == 'strip':
+                sns.stripplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, dodge=True, jitter=False, order=cats, linewidth=1, label=None, hue_order=hues)
+            elif point_style == 'swarm':
+                sns.swarmplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, dodge=True, order=cats, linewidth=1, label=None, hue_order=hues)
+            else:
+                raise ValueError(f"Invalid point style {point_style}, expected 'strip' or 'swarm'.")
+          
+        # Set axis labels.
+        if ylim:
+            axs[i].set_ylim(*ylim)
+        axs[i].set_xlabel('')
+        axs[i].set_ylabel(ylabel)
+        
+        num_hues = len(split_df[hue].unique())
+        handles, labels = axs[i].get_legend_handles_labels()
+        axs[i].legend(handles[:num_hues], labels[:num_hues])
+
+    plt.show()
+

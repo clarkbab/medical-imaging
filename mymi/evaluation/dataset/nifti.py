@@ -187,6 +187,7 @@ def create_localiser_evaluation_from_loader(
     num_folds: Optional[int] = None,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
@@ -477,6 +478,7 @@ def load_segmenter_evaluation_from_loader(
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
     if not os.path.exists(filepath):
+        logging.error(f'filepath: {filepath}')
         raise ValueError(f"Segmenter evaluation for dataset '{datasets}', localiser '{localiser}', segmenter '{segmenter}', {num_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
