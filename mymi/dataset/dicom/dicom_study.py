@@ -45,7 +45,7 @@ class DICOMStudy:
         self,
         modality: str) -> List[str]:
         # Get modality folder.
-        if not modality in ('ct', 'rtstruct'):
+        if not modality in ('ct', 'rtstruct', 'rtplan', 'rtdose'):
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
 
         # Return series.
@@ -64,5 +64,9 @@ class DICOMStudy:
             return CTSeries(self, id, **kwargs)
         elif modality == 'rtstruct':
             return RTSTRUCTSeries(self, id, region_map=self._region_map, **kwargs)
+        elif modality == 'rtplan':
+            return RTPLANSeries(self, id, **kwargs)
+        elif modality == 'rtdose':
+            return RTDOSESeries(self, id, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")

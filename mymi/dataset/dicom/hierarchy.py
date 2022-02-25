@@ -50,7 +50,6 @@ def _build_hierarchy(dataset: 'DICOMDataset') -> None:
     if not os.path.exists(raw_path):
         raise ValueError(f"No 'raw' folder found for dataset '{dataset}'.")
 
-    dicom_files = []
     for root, _, files in tqdm(os.walk(raw_path)):
         for f in files:
             # Check if DICOM file.
@@ -65,7 +64,7 @@ def _build_hierarchy(dataset: 'DICOMDataset') -> None:
 
             # Get modality.
             mod = dicom.Modality.lower()
-            if not mod in ('ct', 'rtstruct'):
+            if not mod in ('ct', 'rtstruct', 'rtdose', 'rtplan'):
                 continue
 
             # Get series UID.
@@ -110,6 +109,8 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
             study = patient.study(study_id)
             ct_series_ids = study.list_series('ct')
             rt_series_ids = study.list_series('rtstruct')
+            rtplan_series_ids = study.list_series('rtplan')
+            rtdose_series_ids = study.list_series('rtdose')
 
             for ct_id in ct_series_ids:
                 ct_series = study.series(ct_id, 'ct')
@@ -226,6 +227,76 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
                     error_code = 'RTSTRUCT-NO-CT'
                     error_message = f"No valid CT series found for RTSTRUCT series '{rt_series}'."
                     error_df = _trim_series(rt_series, error_df, error_code, error_message)
+                    continue
+
+            # Reload RTSTRUCT series after trimming invalid series.
+            valid_rt_series_ids = study.list_series('rtstruct')
+
+            for rtplan_id in rtplan_series_ids:
+                rtplan_series = study.series(rtplan_id, 'rtplan', load_ref_rtstruct=False)
+
+                # De-duplicate RTPLAN files.
+                rtplan_files = list(sorted([os.path.join(rtplan_series.path, f) for f in os.listdir(rtplan_series.path)]))
+                rtplan_ids = []
+                for rtplan_file in rtplan_files:
+                    rtplan = dcm.read_file(rtplan_file)
+                    rtplan_id = rtplan.SOPInstanceUID
+                    if rtplan_id in rtplan_ids:
+                        error_code = 'DUPLICATE-RTPLAN'
+                        error_message = f"Duplicate RTPLAN '{rtplan_id}' found for RTPLAN series '{rtplan_series}'."
+                        error_df = _trim_instance(rtplan_series, rtplan, rtplan_file, error_df, error_code, error_message)
+                        continue
+                    rtplan_ids.append(rtplan_id)
+
+                # CHECK: RTPLAN series has single file.
+                if len(os.listdir(rtplan_series.path)) != 1:
+                    error_code = 'RTPLAN-MULTIPLE-FILES'
+                    error_message = f"Multiple files found for RTPLAN series '{rtplan_series}'."
+                    error_df = _trim_series(rtplan_series, error_df, error_code, error_message)
+                    continue
+
+                # CHECK: RTPLAN series references valid RTSTRUCT series.
+                rtplan = rtplan_series.get_rtplan()
+                rt_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+                if not rt_id in valid_rt_series_ids:
+                    error_code = 'RTPLAN-NO-RTSTRUCT'
+                    error_message = f"No valid RTSTRUCT series found for RTPLAN series '{rtplan_series}'."
+                    error_df = _trim_series(rtplan_series, error_df, error_code, error_message)
+                    continue
+
+            # Reload RTPLAN series after trimming invalid series.
+            valid_rtplan_series_ids = study.list_series('rtplan')
+
+            for rtdose_id in rtdose_series_ids:
+                rtdose_series = study.series(rtdose_id, 'rtdose', load_ref_rtplan=False)
+
+                # De-duplicate RTDOSE files.
+                rtdose_files = list(sorted([os.path.join(rtdose_series.path, f) for f in os.listdir(rtdose_series.path)]))
+                rtdose_ids = []
+                for rtdose_file in rtdose_files:
+                    rtdose = dcm.read_file(rtdose_file)
+                    rtdose_id = rtdose.SOPInstanceUID
+                    if rtdose_id in rtdose_ids:
+                        error_code = 'DUPLICATE-RTDOSE'
+                        error_message = f"Duplicate RTDOSE '{rtdose_id}' found for RTDOSE series '{rtdose_series}'."
+                        error_df = _trim_instance(rtdose_series, rtdose, rtdose_file, error_df, error_code, error_message)
+                        continue
+                    rtdose_ids.append(rtdose_id)
+
+                # CHECK: RTDOSE series has single file.
+                if len(os.listdir(rtdose_series.path)) != 1:
+                    error_code = 'RTDOSE-MULTIPLE-FILES'
+                    error_message = f"Multiple files found for RTDOSE series '{rtdose_series}'."
+                    error_df = _trim_series(rtdose_series, error_df, error_code, error_message)
+                    continue
+
+                # CHECK: RTDOSE series references valid RTPLAN series.
+                rtdose = rtdose_series.get_rtdose()
+                rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                if not rtplan_id in valid_rtplan_series_ids:
+                    error_code = 'RTDOSE-NO-RTPLAN'
+                    error_message = f"No valid RTPLAN series found for RTDOSE series '{rtdose_series}'."
+                    error_df = _trim_series(rtdose_series, error_df, error_code, error_message)
                     continue
 
             # Study-level checks.

@@ -73,7 +73,4 @@ def save_csv(
 
 def load_csv(*path: List[str]):
     filepath = os.path.join(directories.files, *path)
-    if os.path.exists(filepath):
-        return pd.read_csv(filepath)
-    else:
-        return None
+    return pd.read_csv(filepath)
