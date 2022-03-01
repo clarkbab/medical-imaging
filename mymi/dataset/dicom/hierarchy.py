@@ -102,7 +102,7 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
     pats = dataset.list_patients()
 
     for pat_id in tqdm(pats):
-        patient = dataset.patient(pat_id, load_default_series=False)
+        patient = dataset.patient(pat_id, load_default_rtdose=False, load_default_rtstruct=False)
         studies = patient.list_studies()
 
         for study_id in studies:
@@ -229,11 +229,12 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
                     error_df = _trim_series(rt_series, error_df, error_code, error_message)
                     continue
 
-            # Reload RTSTRUCT series after trimming invalid series.
+            # Reload valid RTSTRUCT series after trimming.
             valid_rt_series_ids = study.list_series('rtstruct')
+            valid_rt_sop_ids = list(sorted([study.series(s, 'rtstruct').get_rtstruct().SOPInstanceUID for s in valid_rt_series_ids])) 
 
             for rtplan_id in rtplan_series_ids:
-                rtplan_series = study.series(rtplan_id, 'rtplan', load_ref_rtstruct=False)
+                rtplan_series = study.series(rtplan_id, 'rtplan')
 
                 # De-duplicate RTPLAN files.
                 rtplan_files = list(sorted([os.path.join(rtplan_series.path, f) for f in os.listdir(rtplan_series.path)]))
@@ -257,18 +258,19 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
 
                 # CHECK: RTPLAN series references valid RTSTRUCT series.
                 rtplan = rtplan_series.get_rtplan()
-                rt_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
-                if not rt_id in valid_rt_series_ids:
+                ref_rt_sop_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+                if not ref_rt_sop_id in valid_rt_sop_ids:
                     error_code = 'RTPLAN-NO-RTSTRUCT'
                     error_message = f"No valid RTSTRUCT series found for RTPLAN series '{rtplan_series}'."
                     error_df = _trim_series(rtplan_series, error_df, error_code, error_message)
                     continue
 
-            # Reload RTPLAN series after trimming invalid series.
+            # Reload valid RTPLAN series after trimming.
             valid_rtplan_series_ids = study.list_series('rtplan')
+            valid_rtplan_sop_ids = list(sorted([study.series(s, 'rtplan').get_rtplan().SOPInstanceUID for s in valid_rtplan_series_ids])) 
 
             for rtdose_id in rtdose_series_ids:
-                rtdose_series = study.series(rtdose_id, 'rtdose', load_ref_rtplan=False)
+                rtdose_series = study.series(rtdose_id, 'rtdose')
 
                 # De-duplicate RTDOSE files.
                 rtdose_files = list(sorted([os.path.join(rtdose_series.path, f) for f in os.listdir(rtdose_series.path)]))
@@ -292,8 +294,8 @@ def _trim_hierarchy(dataset: 'DICOMDataset') -> None:
 
                 # CHECK: RTDOSE series references valid RTPLAN series.
                 rtdose = rtdose_series.get_rtdose()
-                rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
-                if not rtplan_id in valid_rtplan_series_ids:
+                rtplan_sop_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                if not rtplan_sop_id in valid_rtplan_sop_ids:
                     error_code = 'RTDOSE-NO-RTPLAN'
                     error_message = f"No valid RTPLAN series found for RTDOSE series '{rtdose_series}'."
                     error_df = _trim_series(rtdose_series, error_df, error_code, error_message)

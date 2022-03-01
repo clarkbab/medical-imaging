@@ -8,8 +8,7 @@ class RTDOSESeries(DICOMSeries):
     def __init__(
         self,
         study: 'DICOMStudy',
-        id: str,
-        load_ref_rtplan: bool = True) -> None:
+        id: str) -> None:
         self._global_id = f"{study} - {id}"
         self._study = study
         self._id = id
@@ -18,12 +17,6 @@ class RTDOSESeries(DICOMSeries):
         # Check that series exists.
         if not os.path.exists(self._path):
             raise ValueError(f"RTDOSE series '{self}' not found.")
-
-        # Load reference CT series.
-        if load_ref_rtplan:
-            rtdose = self.get_rtdose()
-            rtplan_id = rtdose.ReferenceRTPlanSequence[0].ReferencedSOPInstanceUID
-            self._ref_rtplan = RTPLANSeries(study, rtplan_id)
 
     @property
     def description(self) -> str:
@@ -35,15 +28,11 @@ class RTDOSESeries(DICOMSeries):
 
     @property
     def modality(self) -> DICOMModality:
-        return DICOMModality.RTSTRUCT
+        return DICOMModality.RTDOSE
 
     @property
     def path(self) -> str:
         return self._path
-
-    @property
-    def ref_rtplan(self) -> str:
-        return self._ref_rtplan
 
     @property
     def study(self) -> str:

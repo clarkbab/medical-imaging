@@ -2,8 +2,10 @@ import os
 from typing import Dict, List, Optional
 
 from .ct_series import CTSeries
-from .dicom_series import DICOMModality, DICOMSeries
+from .dicom_series import DICOMSeries
 from .region_map import RegionMap
+from .rtdose_series import RTDOSESeries
+from .rtplan_series import RTPLANSeries
 from .rtstruct_series import RTSTRUCTSeries
 
 class DICOMStudy:
