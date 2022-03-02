@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from typing import Dict, List, Optional
 
 from .ct_series import CTSeries
@@ -18,11 +19,15 @@ class DICOMStudy:
         self._id = id
         self._region_map = region_map
         self._global_id = f"{patient} - {id}"
-        self._path = os.path.join(patient.path, id)
+
+        # Get study index.
+        index = self._patient.index
+        index = index[index['study-id'] == id]
+        self._index = index 
     
-        # Check that study exists.
-        if not os.path.isdir(self._path):
-            raise ValueError(f"DICOM study '{self}' not found.")
+        # Check that study ID exists.
+        if len(index) == 0:
+            raise ValueError(f"Study '{self}' not found in index for patient '{patient}'.")
 
     @property
     def description(self) -> str:
@@ -36,39 +41,33 @@ class DICOMStudy:
         return self._global_id
 
     @property
-    def path(self) -> str:
-        return self._path
-
-    @property
     def patient(self) -> str:
         return self._patient
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
 
     def list_series(
         self,
         modality: str) -> List[str]:
-        # Get modality folder.
-        if not modality in ('ct', 'rtstruct', 'rtplan', 'rtdose'):
-            raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
-
-        # Return series.
-        path = os.path.join(self._path, modality)
-        if os.path.exists(path):
-            return list(sorted(os.listdir(path)))
-        else:
-            return []
+        index = self._index
+        index = index[index.modality == modality]
+        series = list(sorted(index['series-id'].unique()))
+        return series
 
     def series(
         self,
         id: str,
         modality: str,
         **kwargs: Dict) -> DICOMSeries:
-        if modality == 'ct':
+        if modality == 'CT':
             return CTSeries(self, id, **kwargs)
-        elif modality == 'rtstruct':
+        elif modality == 'RTSTRUCT':
             return RTSTRUCTSeries(self, id, region_map=self._region_map, **kwargs)
-        elif modality == 'rtplan':
+        elif modality == 'RTPLAN':
             return RTPLANSeries(self, id, **kwargs)
-        elif modality == 'rtdose':
+        elif modality == 'RTDOSE':
             return RTDOSESeries(self, id, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")

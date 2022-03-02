@@ -20,7 +20,7 @@ from mymi import types
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
-from .hierarchy import require_hierarchy
+from .index import build_index
 from .region_map import RegionMap
 
 Z_SPACING_ROUND_DP = 2
@@ -29,10 +29,6 @@ class DICOMDataset(Dataset):
     def __init__(
         self,
         name: str):
-        """
-        args:
-            name: the name of the dataset.
-        """
         self._path = os.path.join(config.directories.datasets, 'dicom', name)
 
         # Load 'ct_from' flag.
@@ -49,12 +45,28 @@ class DICOMDataset(Dataset):
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{self}' not found.")
 
+        # Load indexes.
+        filepath = os.path.join(self._path, 'index.csv')
+        if not os.path.exists(filepath):
+            build_index(self)
+        self._index = pd.read_csv(filepath, dtype={ 'patient-id': str })
+        filepath = os.path.join(self._path, 'index-errors.csv')
+        self._index_errors = pd.read_csv(filepath)
+
         # Load region map.
         self._region_map = self._load_region_map()
 
     @property
     def description(self) -> str:
         return self._global_id
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
+
+    @property
+    def index_errors(self) -> pd.DataFrame:
+        return self._index_errors
 
     def __str__(self) -> str:
         return self._global_id
@@ -75,12 +87,10 @@ class DICOMDataset(Dataset):
     def path(self) -> str:
         return self._path
 
-    @require_hierarchy
     def trimmed_errors(self) -> pd.DataFrame:
         path = os.path.join(self._path, 'hierarchy', 'trimmed', 'errors.csv')
         return pd.read_csv(path)
 
-    @require_hierarchy
     def has_patient(
         self,
         id: types.PatientID) -> bool:
@@ -91,53 +101,28 @@ class DICOMDataset(Dataset):
         """
         return id in self.list_patients()
 
-    @require_hierarchy
     def list_patients(
         self,
         regions: types.PatientRegions = 'all',
         trimmed: bool = False) -> List[str]:
-        """
-        returns: a list of patient IDs.
-        """
-        # Load top-level folders from 'hierarchy' dataset.
-        if trimmed:
-            path = os.path.join(self._path, 'hierarchy', 'trimmed', 'data')
-        else:
-            path = os.path.join(self._path, 'hierarchy', 'data')
-        pats = list(sorted(os.listdir(path)))
+        pats = list(sorted(self.index['patient-id'].unique()))
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
         return pats
 
-    @require_hierarchy
     def patient(
         self,
         id: types.PatientID,
         **kwargs: Dict) -> DICOMPatient:
-        """
-        returns: a DICOMPatient object.
-        args:
-            id: the patient ID.
-        """
-        if type(id) == int:
-            id = str(id)
         return DICOMPatient(self, id, region_map=self._region_map, **kwargs)
 
-    @require_hierarchy
     def list_regions(
         self,
         num_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         trimmed: bool = False,
         use_mapping: bool = True) -> pd.DataFrame:
-        """
-        returns: a DataFrame with patient region names.
-        kwargs:
-            num_pats: the number of patients to include.
-            pat_ids: include listed patients.
-            use_mapping: use region map if present.
-        """
         # Define table structure.
         cols = {
             'patient-id': str,
@@ -176,12 +161,12 @@ class DICOMDataset(Dataset):
 
         return df
 
+    def _load_index(self) -> pd.DataFrame:
+        filepath = os.path.join(self._path, 'index.csv')
+        index = pd.read_csv(filepath)
+        return index
+
     def _load_region_map(self) -> Optional[RegionMap]:
-        """
-        returns: a RegionMap object mapping dataset region names to internal names.
-        raises:
-            ValueError: if 'region-map.csv' isn't configured properly.
-        """
         # Check for region map.
         filepath = os.path.join(self._path, 'region-map.csv')
         if os.path.exists(filepath):
@@ -200,11 +185,6 @@ class DICOMDataset(Dataset):
     def _filter_patient_by_num_pats(
         self,
         num_pats: int) -> Callable[[str], bool]:
-        """
-        returns: a function to filter patients by number of patients allowed.
-        args:
-            num_pats: the number of patients to keep.
-        """
         def fn(id):
             if num_pats == 'all' or fn.num_included < num_pats:
                 fn.num_included += 1
@@ -219,11 +199,6 @@ class DICOMDataset(Dataset):
     def _filter_patient_by_pat_ids(
         self,
         pat_ids: Union[str, List[str]]) -> Callable[[str], bool]:
-        """
-        returns: a function to filter patients based on a 'pat_ids' string or list/tuple.
-        args:
-            pat_ids: the passed 'pat_ids' kwarg.
-        """
         def fn(id):
             if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
                 ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
@@ -236,13 +211,6 @@ class DICOMDataset(Dataset):
         self,
         regions: types.PatientRegions,
         use_mapping: bool = True) -> Callable[[str], bool]:
-        """
-        returns: a function that filters patients on region presence.
-        args:
-            regions: the passed 'regions' kwarg.
-        kwargs:
-            use_mapping: use region map if present.
-        """
         def fn(id):
             if type(regions) == str:
                 if regions == 'all':

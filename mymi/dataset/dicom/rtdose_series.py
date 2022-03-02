@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import pydicom as dcm
 
 from .rtplan_series import RTPLANSeries
@@ -12,11 +13,15 @@ class RTDOSESeries(DICOMSeries):
         self._global_id = f"{study} - {id}"
         self._study = study
         self._id = id
-        self._path = os.path.join(study.path, 'rtdose', id)
+
+        # Get index.
+        index = self._study.index
+        index = index[(index.modality == 'RTDOSE') & (index['series-id'] == id)]
+        self._index = index
 
         # Check that series exists.
-        if not os.path.exists(self._path):
-            raise ValueError(f"RTDOSE series '{self}' not found.")
+        if len(index) == 0:
+            raise ValueError(f"RTDOSE series '{self}' not found in index for study '{study}'.")
 
     @property
     def description(self) -> str:
@@ -31,8 +36,8 @@ class RTDOSESeries(DICOMSeries):
         return DICOMModality.RTDOSE
 
     @property
-    def path(self) -> str:
-        return self._path
+    def index(self) -> pd.DataFrame:
+        return self._index
 
     @property
     def study(self) -> str:
@@ -42,10 +47,6 @@ class RTDOSESeries(DICOMSeries):
         return self._global_id
 
     def get_rtdose(self) -> dcm.dataset.FileDataset:
-        """
-        returns: an RTDOSE DICOM object.
-        """
-        # Load RTDOSE.
-        rtdoses = os.listdir(self._path)
-        rtdose = dcm.read_file(os.path.join(self._path, rtdoses[0]))
+        filepath = self._index.iloc[0].filepath
+        rtdose = dcm.read_file(filepath)
         return rtdose

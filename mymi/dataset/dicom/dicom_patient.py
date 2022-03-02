@@ -17,11 +17,6 @@ class DICOMPatient:
         load_default_rtdose: bool = True,
         region_map: Optional[RegionMap] = None,
         trimmed: bool = False):
-        """
-        args:
-            dataset: the DICOMDataset the patient belongs to.
-            id: the patient ID.
-        """
         if trimmed:
             self._global_id = f"{dataset} - {id} (trimmed)"
         else:
@@ -31,14 +26,15 @@ class DICOMPatient:
         self._id = str(id)
         self._trimmed = trimmed
         self._region_map = region_map
-        if trimmed:
-            self._path = os.path.join(dataset.path, 'hierarchy', 'trimmed', 'data', id)
-        else:
-            self._path = os.path.join(dataset.path, 'hierarchy', 'data', id)
+
+        # Get patient index.
+        index = self._dataset.index
+        index = index[index['patient-id'] == str(id)]
+        self._index = index
 
         # Check that patient ID exists.
-        if not os.path.isdir(self._path):
-            raise ValueError(f"Patient '{self}' not found.")
+        if len(index) == 0:
+            raise ValueError(f"Patient '{self}' not found in index for dataset '{dataset}'.")
         
         if load_default_rtstruct:
             self._load_default_rtstruct()
@@ -55,33 +51,11 @@ class DICOMPatient:
         return self._id
 
     @property
-    def path(self) -> str:
-        return self._path
+    def index(self) -> pd.DataFrame:
+        return self._index
 
     def __str__(self) -> str:
         return self._global_id
-
-    def _use_internal_regions(
-        fn: Callable) -> Callable:
-        """
-        returns: a wrapped function that renames DataFrame 'regions' to internal names.
-        args:
-            fn: the function to wrap.
-        """
-        def wrapper(self, *args, **kwargs):
-            # Determine if internal region names are required.
-            use_internal = kwargs.pop('internal_regions', False)
-
-            # Call function.
-            result = fn(self, *args, **kwargs)
-
-            if use_internal:
-                # Load region map.
-                pass 
-            else:
-                return result
-
-        return wrapper
 
     @property
     def age(self) -> str:
@@ -128,19 +102,15 @@ class DICOMPatient:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
     def list_studies(self) -> List[str]:
-        return list(sorted(os.listdir(os.path.join(self._path))))
+        studies = list(sorted(self._index['study-id'].unique()))
+        return studies
 
     def study(
         self,
         id: str) -> DICOMStudy:
         return DICOMStudy(self, id, region_map=self._region_map)
 
-    def info(
-        self,
-        clear_cache: bool = False) -> pd.DataFrame:
-        """
-        returns: a table of patient info.
-        """
+    def info(self) -> pd.DataFrame:
         # Define dataframe structure.
         cols = {
             'age': str,
@@ -170,17 +140,17 @@ class DICOMPatient:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
         study = self.study(self.list_studies()[0])
-        rt_series = study.series(study.list_series('rtstruct')[0], 'rtstruct')
+        rt_series = study.series(study.list_series('RTSTRUCT')[0], 'RTSTRUCT')
         self._default_rtstruct = rt_series
 
     def _load_default_rtdose(self) -> None:
         # Get RTPLAN series linked to the default RTSTRUCT by 'SOPInstanceUID'.
         def_study = self._default_rtstruct.study
         def_rt_sop_id = self._default_rtstruct.get_rtstruct().SOPInstanceUID
-        rtplan_series_ids = def_study.list_series('rtplan')
+        rtplan_series_ids = def_study.list_series('RTPLAN')
         linked_rtplan_sop_ids = []
         for rtplan_series_id in rtplan_series_ids:
-            rtplan = def_study.series(rtplan_series_id, 'rtplan')
+            rtplan = def_study.series(rtplan_series_id, 'RTPLAN')
             rtplan_ref_rt_sop_id = rtplan.get_rtplan().ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
             if rtplan_ref_rt_sop_id == def_rt_sop_id:
                 linked_rtplan_sop_ids.append(rtplan.get_rtplan().SOPInstanceUID)
@@ -189,10 +159,10 @@ class DICOMPatient:
 
         # Select the first RTPLAN and get linked RTDOSE series.
         def_rtplan_sop_id = linked_rtplan_sop_ids[0]
-        rtdose_series_ids = def_study.list_series('rtdose')
+        rtdose_series_ids = def_study.list_series('RTDOSE')
         linked_rtdose_series = []
         for rtdose_series_id in rtdose_series_ids:
-            rtdose = def_study.series(rtdose_series_id, 'rtdose')
+            rtdose = def_study.series(rtdose_series_id, 'RTDOSE')
             rtdose_ref_rtplan_sop_id = rtdose.get_rtdose().ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
             if rtdose_ref_rtplan_sop_id == def_rtplan_sop_id:
                 linked_rtdose_series.append(rtdose)

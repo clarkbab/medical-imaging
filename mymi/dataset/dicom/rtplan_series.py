@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import pydicom as dcm
 
 from .rtstruct_series import RTSTRUCTSeries
@@ -12,15 +13,23 @@ class RTPLANSeries(DICOMSeries):
         self._global_id = f"{study} - {id}"
         self._study = study
         self._id = id
-        self._path = os.path.join(study.path, 'rtplan', id)
+
+        # Get index.
+        index = self._study.index
+        index = index[(index.modality == 'RTPLAN') & (index['series-id'] == id)]
+        self._index = index
 
         # Check that series exists.
-        if not os.path.exists(self._path):
-            raise ValueError(f"RTPLAN series '{self}' not found.")
+        if len(index) == 0:
+            raise ValueError(f"RTPLAN series '{self}' not found in index for study '{study}'.")
 
     @property
     def description(self) -> str:
         return self._global_id
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
 
     @property
     def id(self) -> str:
@@ -42,10 +51,6 @@ class RTPLANSeries(DICOMSeries):
         return self._global_id
 
     def get_rtplan(self) -> dcm.dataset.FileDataset:
-        """
-        returns: an RTPLAN DICOM object.
-        """
-        # Load RTPLAN.
-        rtplans = os.listdir(self._path)
-        rtplan = dcm.read_file(os.path.join(self._path, rtplans[0]))
+        filepath = self._index.iloc[0].filepath
+        rtplan = dcm.read_file(filepath)
         return rtplan

@@ -25,11 +25,15 @@ class RTSTRUCTSeries(DICOMSeries):
         self._study = study
         self._id = id
         self._region_map = region_map
-        self._path = os.path.join(study.path, 'rtstruct', id)
+
+        # Get index.
+        index = self._study.index
+        index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == id)]
+        self._index = index
 
         # Check that series exists.
-        if not os.path.exists(self._path):
-            raise ValueError(f"RTSTRUCT series '{self}' not found.")
+        if len(index) == 0:
+            raise ValueError(f"RTSTRUCT series '{self}' not found in index for study '{study}'.")
 
         # Load reference CT series.
         if load_ref_ct:
@@ -61,6 +65,10 @@ class RTSTRUCTSeries(DICOMSeries):
     def study(self) -> str:
         return self._study
 
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
+
     def __str__(self) -> str:
         return self._global_id
 
@@ -75,25 +83,14 @@ class RTSTRUCTSeries(DICOMSeries):
         return names
 
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
-        """
-        returns: an RTSTRUCT DICOM object.
-        """
-        # Load RTSTRUCT.
-        rtstructs = os.listdir(self._path)
-        rtstruct = dcm.read_file(os.path.join(self._path, rtstructs[0]))
-
+        filepath = self._index.iloc[0].filepath
+        rtstruct = dcm.read_file(filepath)
         return rtstruct
 
     def list_regions(
         self,
         use_mapping: bool = True,
         whitelist: types.PatientRegions = 'all') -> List[str]:
-        """
-        returns: the patient's region names.
-        kwargs:
-            use_mapping: use region map if present.
-            whitelist: return whitelisted regions only.
-        """
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 

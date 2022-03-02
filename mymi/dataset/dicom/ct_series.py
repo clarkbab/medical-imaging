@@ -21,15 +21,23 @@ class CTSeries(DICOMSeries):
         self._global_id = f"{study} - {id}"
         self._study = study
         self._id = id
-        self._path = os.path.join(study.path, 'ct', id)
+
+        # Load index.
+        index = self._study.index
+        index = index[(index.modality == 'CT') & (index['series-id'] == id)]
+        self._index = index
         
         # Check that series exists.
-        if not os.path.exists(self._path):
-            raise ValueError(f"CT series '{self}' not found.")
+        if len(index) == 0:
+            raise ValueError(f"CT series '{self}' not found in index for study '{study}'.")
 
     @property
     def description(self) -> str:
         return self._global_id
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
 
     @property
     def id(self) -> str:
@@ -51,13 +59,10 @@ class CTSeries(DICOMSeries):
         return self._global_id
 
     def get_cts(self) -> List[dcm.dataset.FileDataset]:
-        # Load CTs.
-        ct_paths = [os.path.join(self._path, f) for f in os.listdir(self._path)]
+        # Load and sort CTs.
+        ct_paths = list(self._index['filepath'])
         cts = [dcm.read_file(f) for f in ct_paths]
-
-        # Sort CTs.
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
-
         return cts
 
     def offset(self) -> types.PhysPoint3D:
