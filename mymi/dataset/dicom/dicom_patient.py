@@ -14,7 +14,7 @@ class DICOMPatient:
         id: types.PatientID,
         ct_from: Optional['DICOMPatient'] = None,
         load_default_rtstruct: bool = True,
-        load_default_rtdose: bool = True,
+        load_default_rtdose: bool = False,
         region_map: Optional[RegionMap] = None,
         trimmed: bool = False):
         if trimmed:

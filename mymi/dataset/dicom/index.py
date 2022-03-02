@@ -1,15 +1,18 @@
 from distutils.dir_util import copy_tree
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import pydicom as dcm
 import os
-import shutil
+from time import time
 from tqdm import tqdm
 from typing import Dict, List
 
 from mymi import logging
 
 def build_index(dataset: 'DICOMDataset') -> None:
+    start = time()
+
     # Load all dicom files.
     data_path = os.path.join(dataset.path, 'data')
     if not os.path.exists(data_path):
@@ -92,7 +95,6 @@ def build_index(dataset: 'DICOMDataset') -> None:
     # Create errors index.
     errors_cols = index_cols.copy()
     errors_cols['error'] = str
-    errors_cols['error-message'] = str
     errors = pd.DataFrame(columns=errors_cols.keys())
 
     # Remove duplicates by 'SOPInstanceUID'.
@@ -143,7 +145,7 @@ def build_index(dataset: 'DICOMDataset') -> None:
     # Check CT slices have consistent z spacing.
     ct = index[index.modality == 'CT']
     def consistent_z_position(series: pd.Series) -> bool:
-        pos = series.apply(lambda m: m['ImagePositionPatient'][2])
+        pos = series.apply(lambda m: m['ImagePositionPatient'][2]).sort_values()
         pos = pos.diff().dropna().round(3)
         pos = pos.drop_duplicates()
         return len(pos) == 1
@@ -171,8 +173,8 @@ def build_index(dataset: 'DICOMDataset') -> None:
     nonref_idx = ref_ct[~ref_ct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-CT'
-    errors = errors.append(dup)
-    index = index.drop(dup_idx)
+    errors = errors.append(nonref)
+    index = index.drop(nonref_idx)
 
     # Check that RTPLAN references RTSTRUCT SOP instance in index.
     rtstruct_sops = index[index.modality == 'RTSTRUCT']['sop-id'].unique()
@@ -181,8 +183,8 @@ def build_index(dataset: 'DICOMDataset') -> None:
     nonref_idx = ref_rtstruct[~ref_rtstruct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-RTSTRUCT'
-    errors = errors.append(dup)
-    index = index.drop(dup_idx)
+    errors = errors.append(nonref)
+    index = index.drop(nonref_idx)
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
     rtplan_sops = index[index.modality == 'RTPLAN']['sop-id'].unique()
@@ -190,9 +192,9 @@ def build_index(dataset: 'DICOMDataset') -> None:
     ref_rtplan = rtdose['mod-spec'].apply(lambda m: m['RefRTPLANSOPInstanceUID']).isin(rtplan_sops)
     nonref_idx = ref_rtplan[~ref_rtplan].index
     nonref = index.loc[nonref_idx]
-    nonref['error'] = 'NO-REF-RPLAN'
-    errors = errors.append(dup)
-    index = index.drop(dup_idx)
+    nonref['error'] = 'NO-REF-RTPLAN'
+    errors = errors.append(nonref)
+    index = index.drop(nonref_idx)
 
     # Check that study has RTSTRUCT series.
     incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
@@ -212,3 +214,9 @@ def build_index(dataset: 'DICOMDataset') -> None:
     errors = errors.astype(errors_cols)
     filepath = os.path.join(dataset.path, 'index-errors.csv')
     errors.to_csv(filepath, index=False)
+
+    # Save indexing time.
+    end = time()
+    mins = int(np.ceil((end - start) / 60))
+    filepath = os.path.join(dataset.path, f'__INDEXING_TIME_MINS_{mins}__')
+    Path(filepath).touch()

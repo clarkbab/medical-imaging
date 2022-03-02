@@ -51,7 +51,7 @@ class DICOMDataset(Dataset):
             build_index(self)
         self._index = pd.read_csv(filepath, dtype={ 'patient-id': str })
         filepath = os.path.join(self._path, 'index-errors.csv')
-        self._index_errors = pd.read_csv(filepath)
+        self._index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
 
         # Load region map.
         self._region_map = self._load_region_map()
