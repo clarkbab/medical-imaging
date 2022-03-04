@@ -4,13 +4,14 @@ import matplotlib
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
 import numpy as np
 from numpy import ndarray
 import pandas as pd
-import torch
-from torch import nn
+from scipy.stats import wilcoxon
+import seaborn as sns
+from statannotations.Annotator import Annotator
 import torchio
-from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from mymi import dataset
@@ -872,20 +873,28 @@ def plot_dataframe(
     inner: str ='quartiles',
     annotate_outliers: bool = False,
     annotation_model_offset=35,
-    offset=5,
+    legend_loc: str = 'best',
+    major_tick_freq: Optional[float] = None,
+    minor_tick_freq: Optional[float] = None,
     n_col: int = 6,
+    offset=5,
+    point_size: Optional[float] = None,
     point_style: str = 'strip',
     overlap_min_diff=None,
     annotation_overlap_offset=25,
-    split=False,
     debug=False,
-    show_points=True,
-    show_outliers=True,
+    rotate_x_labels: bool = False,
+    savepath: Optional[str] = None,
+    show_points: bool = True,
+    show_outliers: bool = True,
+    show_stats: bool = False,
+    stats_index: Optional[List[str]] = None,
     style: Literal['box', 'violin'] = 'box',
-    ylabel='', 
-    include_x=None,
-    exclude_x=None):
+    ylabel: str = '',
+    include_x: Union[str, List[str]] = None,
+    exclude_x: Union[str, List[str]] = None):
     df = data
+
     # Include/exclude.
     if include_x:
         if type(include_x) == str:
@@ -897,71 +906,280 @@ def plot_dataframe(
         df = df[~df[x].isin(exclude_x)]
     
     # Add region numbers and outliers.
-    df = add_region_info(df, x, hue)
-    df = add_outlier_info(df, y)
+    df = _add_x_info(df, x, hue)
+    df = _add_outlier_info(df, x, y, hue)
     
     # Split data.
     xs = list(sorted(df[x].unique()))
-    hues = list(sorted(df[hue].unique()))
-    num_rows = int(np.ceil(len(xs) / col_n))
+    hue_order = list(sorted(df[hue].unique())) if hue is not None else None
+    num_rows = int(np.ceil(len(xs) / n_col))
     if num_rows > 1:
-        fig, axs = plt.subplots(num_rows, 1, figsize=(18, num_rows * 6), sharey=True)
+        _, axs = plt.subplots(num_rows, 1, figsize=(18, num_rows * 6), sharey=True)
     else:
         plt.figure(figsize=(18, 6))
         axs = [plt.gca()]
     for i in range(num_rows):
-        # Set y grid lines.
-        axs[i].grid(axis='y', linestyle='dashed')
-        axs[i].set_axisbelow(True)
-        
         # Split data.
-        split_xs = xs[i * col_n:(i + 1) * col_n]
+        split_xs = xs[i * n_col:(i + 1) * n_col]
         split_df = df[df[x].isin(split_xs)]
         if len(split_df) == 0:
             continue
             
         # Determine category label order.
-        cats = list(sorted(split_df[f'{x}_label'].unique()))
-        if len(xs) < col_n:
-            cats += [''] * (col_n - len(cats))
-
-        # Plot outliers.
-        if outliers:
-            outlier_df = split_df[split_df.outlier]
-            if len(outlier_df) != 0:
-                sns.stripplot(ax=axs[i], data=outlier_df, x=f'{x}_label', y=y, hue=hue, dodge=True, jitter=False, edgecolor='white', linewidth=1, order=cats, hue_order=hues)
-                plt.setp(axs[i].collections, zorder=100, label="")
-                if annotate_outliers:
-                    first_region = i * col_n
-                    label(axs[i], outlier_df, f'{x}_id', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
+        x_label = f'{x}_label'
+        order = list(sorted(split_df[x_label].unique()))
+        if len(xs) < n_col:
+            order += [''] * (n_col - len(order))
 
         # Plot data.
         if style == 'box':
-            sns.boxplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, showfliers=False, order=cats, hue_order=hues)
+            sns.boxplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, showfliers=False, order=order, hue_order=hue_order)
         elif style == 'violin':
             # Exclude outliers manually.
             split_df = split_df[~split_df.outlier]
-            sns.violinplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, inner=inner, split=split, showfliers=False, order=cats, hue_order=hues)
+            sns.violinplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, inner=inner, split=True, showfliers=False, order=order, hue_order=hue_order)
         else:
             raise ValueError(f"Invalid style {style}, expected 'box' or 'violin'.")
 
-        if points:
+        # Plot points.
+        if show_points:
             if point_style == 'strip':
-                sns.stripplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, dodge=True, jitter=False, order=cats, linewidth=1, label=None, hue_order=hues)
+                sns.stripplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, dodge=True, jitter=False, order=order, linewidth=1, label=None, hue_order=hue_order, size=point_size)
             elif point_style == 'swarm':
-                sns.swarmplot(ax=axs[i], data=split_df, x=f'{x}_label', y=y, hue=hue, dodge=True, order=cats, linewidth=1, label=None, hue_order=hues)
+                sns.swarmplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, dodge=True, order=order, linewidth=1, label=None, hue_order=hue_order, size=point_size)
             else:
                 raise ValueError(f"Invalid point style {point_style}, expected 'strip' or 'swarm'.")
+
+            # Plot outliers.
+            if show_outliers:
+                outlier_df = split_df[split_df.outlier]
+                if len(outlier_df) != 0:
+                    sns.stripplot(ax=axs[i], data=outlier_df, x=x_label, y=y, hue=hue, dodge=True, jitter=False, edgecolor='white', linewidth=1, order=order, hue_order=hue_order)
+                    plt.setp(axs[i].collections, zorder=100, label="")
+                    if annotate_outliers:
+                        first_region = i * n_col
+                        _annotate_outliers(axs[i], outlier_df, f'{x}_id', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
+
+        # Plot statistical significance.
+        if hue is not None and show_stats:
+            if len(hue_order) != 2:
+                raise ValueError(f"Hue set must have cardinality 2, got '{len(hue_order)}'.")
+            if stats_index is None:
+                raise ValueError(f"Please set 'stats_index' to determine sample pairing.")
+
+            # Create pairs to compare. Only works when len(hue_order) == 2.
+            pairs = []
+            for o in order:
+                pair = []
+                for h in hue_order:
+                    pair.append((o, h))
+                pairs.append(tuple(pair))
+
+            # Calculate p-values.
+            p_vals = []
+            for o in order:
+                osplit_df = split_df[split_df[x_label] == o]
+                opivot_df = osplit_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
+                _, p_val = wilcoxon(opivot_df[y][hue_order[0]], opivot_df[y][hue_order[1]])
+                p_vals.append(p_val)
+
+            # Format p-values.
+            p_vals = _format_p_values(p_vals) 
+
+            # Remove non-significant pairs.
+            tpairs = []
+            tp_vals = []
+            for pair, p_val in zip(pairs, p_vals):
+                if p_val != '':
+                    tpairs.append(pair)
+                    tp_vals.append(p_val)
+
+            # Annotate figure.
+            annotator = Annotator(axs[i], tpairs, data=split_df, x=x_label, y=y, order=order, hue=hue, hue_order=hue_order, verbose=False)
+            annotator.set_custom_annotations(tp_vals)
+            annotator.annotate()
+
+        # Set y axis major ticks.
+        if major_tick_freq is not None:
+            major_tick_min = ylim[0]
+            if major_tick_min is None:
+                major_tick_min = axs[i].get_ylim()[0]
+            major_tick_max = ylim[1]
+            if major_tick_max is None:
+                major_tick_max = axs[i].get_ylim()[1]
+            
+            # Round range to nearest multiple of 'major_tick_freq'.
+            major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
+            major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
+            num_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
+            major_ticks = np.linspace(major_tick_min, major_tick_max, num_major_ticks)
+            major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
+            axs[i].set_yticks(major_ticks)
+            axs[i].set_yticklabels(major_tick_labels)
+
+        # Set y axis minor ticks.
+        if minor_tick_freq is not None:
+            minor_tick_min = ylim[0]
+            if minor_tick_min is None:
+                minor_tick_min = axs[i].get_ylim()[0]
+            minor_tick_max = ylim[1]
+            if minor_tick_max is None:
+                minor_tick_max = axs[i].get_ylim()[1]
+            
+            # Round range to nearest multiple of 'minor_tick_freq'.
+            minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
+            minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
+            num_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
+            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, num_minor_ticks)
+            axs[i].set_yticks(minor_ticks, minor=True)
+
+        # Set y grid lines.
+        axs[i].grid(axis='y', linestyle='dashed')
+        axs[i].set_axisbelow(True)
           
         # Set axis labels.
         if ylim:
             axs[i].set_ylim(*ylim)
         axs[i].set_xlabel('')
         axs[i].set_ylabel(ylabel)
+
+        # Rotate x labels.
+        if rotate_x_labels:
+            axs[i].set_xticklabels(axs[i].get_xticklabels(), rotation=90)
         
-        num_hues = len(split_df[hue].unique())
-        handles, labels = axs[i].get_legend_handles_labels()
-        axs[i].legend(handles[:num_hues], labels[:num_hues])
+        # Set legend location and fix multiple series problem.
+        if hue is not None:
+            num_hues = len(hue_order)
+            handles, labels = axs[i].get_legend_handles_labels()
+            handles = handles[:num_hues]
+            labels = labels[:num_hues]
+            axs[i].legend(handles, labels, loc=legend_loc)
+        else:
+            axs[i].legend(loc=legend_loc)
+
+    # Make sure x-axis tick labels aren't cut.
+    plt.tight_layout()
+
+    # Save plot to disk.
+    if savepath is not None:
+        plt.savefig(savepath)
 
     plt.show()
 
+def _add_x_info(df, x, hue):
+    if hue is not None:
+        groupby = [hue, x] 
+    else:
+        groupby = x
+    df = df.assign(**{ f'{x}_num': df.groupby(groupby).ngroup() })
+    count_map = df.groupby(groupby)['patient-id'].count()
+    def x_count_func(row):
+        if type(groupby) == list:
+            key = tuple(row[groupby])
+        else:
+            key = row[groupby]
+        return count_map[key]
+    df = df.assign(**{ f'{x}_count': df.apply(x_count_func, axis=1) })
+    def x_label_func(row):
+        return f"{row[x]}\n(n={row[f'{x}_count']})"
+    df = df.assign(**{ f'{x}_label': df.apply(x_label_func, axis=1) })
+    return df
+
+def _add_outlier_info(df, x, y, hue):
+    if hue is not None:
+        groupby = [hue, x]
+    else:
+        groupby = x
+    q1_map = df.groupby(groupby)[y].quantile(.25)
+    q3_map = df.groupby(groupby)[y].quantile(.75)
+    def q_func_build(qmap):
+        def q_func(row):
+            if type(groupby) == list:
+                key = tuple(row[groupby])
+            else:
+                key = row[groupby]
+            return qmap[key]
+        return q_func
+    df = df.assign(q1=df.apply(q_func_build(q1_map), axis=1))
+    df = df.assign(q3=df.apply(q_func_build(q3_map), axis=1))
+    df = df.assign(iqr=df.q3 - df.q1)
+    df = df.assign(outlier_lim_low=df.q1 - 1.5 * df.iqr)
+    df = df.assign(outlier_lim_high=df.q3 + 1.5 * df.iqr)
+    df = df.assign(outlier=(df[y] < df.outlier_lim_low) | (df[y] > df.outlier_lim_high))
+    return df
+
+def _annotate_outliers(ax, data, x, y, label, default_offset, overlap_min_diff, annotation_overlap_offset, annotation_offset, debug, first_region):
+    models = None
+    if 'model' in data:
+        models = data.model.unique()
+    offset_transform = lambda p: transforms.ScaledTranslation(p/72.,0, plt.gcf().dpi_scale_trans)
+    base_transform = ax.transData
+    data = data.sort_values([x, y], ascending=False)
+    prev_model = None
+    prev_x = None
+    prev_y = None
+    prev_digits = None
+    offset = default_offset
+    
+    # Print annotations.
+    for i, row in data.iterrows():
+        if debug:
+            print(f'region: {row[x]}')
+            print(f'patient: {row[label]}')
+
+        # Get model offset.
+        if models is not None:
+            if row['model'] == models[0]:
+                ann_offset = -annotation_offset
+            else:
+                ann_offset = annotation_offset
+        else:
+            ann_offset = 0
+        
+        # Apply offset to labels when outliers are overlapping.
+        if overlap_min_diff is not None:
+            # Check that model hasn't changed.
+            if prev_model is None or row['model'] == prev_model:
+                # Check that region hasn't changed.
+                if prev_x is not None and row[x] == prev_x:
+                    if debug:
+                        print('checking diff')
+                    if prev_y is not None:
+                        diff = prev_y - row[y]
+                        if debug:
+                            print(f'diff: {diff}')
+                        if diff < overlap_min_diff:
+                            if debug:
+                                print(f'offsetting point {row[label]}')
+                            offset += (annotation_overlap_offset * prev_digits / 3)
+                        else:
+                            offset = default_offset
+                else:
+                    offset = default_offset
+            else:
+                offset = default_offset
+                
+        # Save previous values.
+        if models is not None:
+            prev_model = row['model']
+        prev_y = row[y]
+        prev_x = row[x]
+        prev_digits = len(row[label])
+        x_val = row[x] - first_region
+        ax.text(x_val, row[y], row[label], transform=base_transform + offset_transform(offset) + offset_transform(ann_offset))
+
+def _format_p_values(p_vals: List[float]) -> List[str]:
+    f_p_vals = []
+    for p_val in p_vals:
+        if p_val >= 0.05:
+            p_val = ''
+        elif p_val >= 0.01:
+            p_val = '*'
+        elif p_val >= 0.001:
+            p_val = '**'
+        elif p_val >= 0.0001:
+            p_val = '***'
+        else:
+            p_val = '****'
+        f_p_vals.append(p_val)
+    return f_p_vals
