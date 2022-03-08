@@ -133,7 +133,7 @@ def crop_or_pad_box(
     crop = np.array(crop, dtype=int)
 
     # Get decision variables.
-    decisions = np.stack((crop[0] < box[1], crop[1] > box[0], crop[0] < box[0], crop[1] > box[1]), axis=0)
+    decisions = np.stack((crop[0] <= box[1], crop[1] > box[0], crop[0] <= box[0], crop[1] > box[1]), axis=0)
 
     # Check that box is contained in crop.
     if np.all(decisions[0:2]):
@@ -143,9 +143,9 @@ def crop_or_pad_box(
         idx = np.nonzero(decisions[2:4])
         new_box[idx] = box[idx]
 
-        # Add crop box values.
+        # Project outside points to crop boundaries.
         idx = np.nonzero(~decisions[2:4])
-        new_box[idx] = crop[idx] - 1
+        new_box[idx] = crop[idx]
 
         # Crop points.
         new_box[0] = crop_or_pad_point(tuple(new_box[0]), crop)

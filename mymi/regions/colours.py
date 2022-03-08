@@ -23,7 +23,7 @@ class RegionColours:
     OpticChiasm = palette_tab20(18)
     OpticNerve_L = palette_tab20(8)
     OpticNerve_R = palette_tab20(9)
-    OralCavity = palette_tab20(19)
+    OralCavity = palette_tab20(16)
     Parotid_L = palette_tab20(4)
     Parotid_R = palette_tab20(5)
     SpinalCord = palette_tab20b(0)

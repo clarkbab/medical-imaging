@@ -15,7 +15,7 @@ from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmen
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_predictions
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi.regions import hash_regions
 from mymi import types
@@ -733,7 +733,7 @@ def create_segmenter_figures(
             )
             for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                plot_patient_segmenter_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
+                plot_patient_segmenter_predictions(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

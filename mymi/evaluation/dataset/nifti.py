@@ -1,5 +1,6 @@
 import hashlib
 import json
+from mymi.transforms.crop_or_pad import crop_foreground_3D
 import numpy as np
 import os
 import pandas as pd
@@ -27,6 +28,17 @@ def get_patient_localiser_evaluation(
     pred = load_patient_localiser_prediction(dataset, pat_id, localiser)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
+
+    # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+    if region == 'SpinalCord':
+        z_min_pred = np.nonzero(pred)[2].min()
+        z_min_label = np.nonzero(label)[2].min()
+        z_min = np.max([z_min_label, z_min_pred])
+
+        # Crop pred/label foreground voxels.
+        crop = ((0, 0, z_min), label.shape)
+        pred = crop_foreground_3D(pred, crop)
+        label = crop_foreground_3D(label, crop)
 
     # Dice.
     data = {}
@@ -122,8 +134,8 @@ def create_patient_localiser_evaluation(
 
     # Add/update each metric.
     for metric, value in metrics.items():
-        exists = len(eval_df[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]) != 0
-        if not exists:
+        exists_df = eval_df[(eval_df['dataset'] == dataset) & (eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]
+        if len(exists_df) == 0:
             # Add metric.
             data = {
                 'dataset': dataset,
@@ -268,6 +280,17 @@ def get_patient_segmenter_evaluation(
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
+    # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+    if region == 'SpinalCord':
+        z_min_pred = np.nonzero(pred)[2].min()
+        z_min_label = np.nonzero(label)[2].min()
+        z_min = np.max([z_min_label, z_min_pred])
+
+        # Crop pred/label foreground voxels.
+        crop = ((0, 0, z_min), label.shape)
+        pred = crop_foreground_3D(pred, crop)
+        label = crop_foreground_3D(label, crop)
+
     # Dice.
     data = {}
     data['dice'] = dice(pred, label)
@@ -328,8 +351,8 @@ def create_patient_segmenter_evaluation(
 
     # Add/update each metric.
     for metric, value in metrics.items():
-        exists = len(eval_df[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]) != 0
-        if not exists:
+        exists_df = eval_df[(eval_df['dataset'] == dataset) & (eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]
+        if len(exists_df) == 0:
             # Add metric.
             data = {
                 'dataset': dataset,
@@ -418,7 +441,8 @@ def create_segmenter_evaluation_from_loader(
     elif type(test_folds) == int:
         test_folds = [test_folds]
 
-    for test_fold in tqdm(test_folds):
+    # for test_fold in tqdm(test_folds):
+    for test_fold in test_folds:
         # Create dataframe.
         cols = {
             'fold': int,
@@ -434,10 +458,14 @@ def create_segmenter_evaluation_from_loader(
         _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
-        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+        # for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+        for i, (dataset_b, pat_id_b) in enumerate(iter(test_loader)):
+            logging.info(f'iteration: {i}')
+            logging.info(f'batch: {dataset_b}, pat_id: {pat_id_b}')
             if type(pat_id_b) == torch.Tensor:
                 pat_id_b = pat_id_b.tolist()
             for dataset, pat_id in zip(dataset_b, pat_id_b):
+                logging.info(f'evaluating: {dataset_b}, {pat_id}')
                 df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
 
         # Add fold.
