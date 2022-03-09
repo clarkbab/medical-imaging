@@ -325,11 +325,10 @@ def plot_regions(
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (12, 12),
-    font_size: int = 10,
+    fontsize: int = 10,
     latex: bool = False,
     legend: bool = True,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    legend_size: int = 10,
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     regions: Union[str, Sequence[str]] = 'all',
@@ -350,11 +349,6 @@ def plot_regions(
     if axis is None:
         plt.figure(figsize=figsize)
         axis = plt.gca()
-
-    # Update font size.
-    plt.rcParams.update({
-        'font.size': font_size
-    })
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -456,7 +450,7 @@ def plot_regions(
 
         # Create legend.
         if legend and show_legend:
-            plt_legend = axis.legend(loc=legend_loc, prop={'size': legend_size})
+            plt_legend = axis.legend(fontsize=fontsize, loc=legend_loc)
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
 
@@ -513,9 +507,9 @@ def plot_localiser_prediction(
     centre_of: Optional[str] = None,
     crop: types.Box2D = None,
     extent_of: Optional[Literal[0, 1]] = None,
+    fontsize: float = 10,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    legend_size: int = 10,
     show_label_extent: bool = True,
     show_loc_centre: bool = True,
     show_loc_extent: bool = True,
@@ -643,7 +637,7 @@ def plot_localiser_prediction(
             plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
 
     # Show legend.
-    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    plt_legend = plt.legend(fontsize=fontsize, loc=legend_loc)
     for l in plt_legend.get_lines():
         l.set_linewidth(8)
 
@@ -720,9 +714,9 @@ def plot_segmenter_prediction(
     crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
+    fontsize: float = 10,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    legend_size: int = 10,
     savepath: Optional[str] = None,
     show_label_extent: bool = True,
     show_loc_centre: bool = True,
@@ -872,7 +866,7 @@ def plot_segmenter_prediction(
                 plt.plot(0, 0, c=colour, label='Pred. Patch (offscreen)', linestyle='dashed')
 
     # Show legend.
-    plt_legend = plt.legend(loc=legend_loc, prop={'size': legend_size})
+    plt_legend = plt.legend(fontsize=fontsize, loc=legend_loc)
     for l in plt_legend.get_lines():
         l.set_linewidth(8)
 
@@ -913,10 +907,13 @@ def plot_dataframe(
     overlap_min_diff=None,
     annotation_overlap_offset=25,
     debug=False,
+    row_height: int = 6,
+    row_width: int = 18,
     savepath: Optional[str] = None,
     show_points: bool = True,
     show_outliers: bool = True,
     show_stats: bool = False,
+    show_x_tick_labels: bool = True,
     stats_index: Optional[List[str]] = None,
     style: Literal['box', 'violin'] = 'box',
     x_label_rot: float = 0,
@@ -945,9 +942,9 @@ def plot_dataframe(
         hue_order = list(sorted(df[hue].unique())) if hue is not None else None
     num_rows = int(np.ceil(len(xs) / n_col))
     if num_rows > 1:
-        _, axs = plt.subplots(num_rows, 1, figsize=(18, num_rows * 6), sharey=True)
+        _, axs = plt.subplots(num_rows, 1, figsize=(row_width, num_rows * row_height), sharey=True)
     else:
-        plt.figure(figsize=(18, 6))
+        plt.figure(figsize=(row_width, row_height))
         axs = [plt.gca()]
     for i in range(num_rows):
         # Split data.
@@ -1074,8 +1071,14 @@ def plot_dataframe(
         axs[i].set_xlabel('')
         axs[i].set_ylabel(ylabel, fontsize=fontsize)
 
-        # Rotate x labels.
-        axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_label_rot)
+        # Set axis tick labels.
+        if show_x_tick_labels:
+            # Rotate x labels.
+            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_label_rot)
+        else:
+            axs[i].set_xticklabels([])
+
+        axs[i].set_yticklabels(axs[i].get_yticklabels(), fontsize=fontsize)
         
         # Set legend location and fix multiple series problem.
         if hue is not None:

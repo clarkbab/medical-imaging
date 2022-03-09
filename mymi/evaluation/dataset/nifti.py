@@ -442,7 +442,7 @@ def create_segmenter_evaluation_from_loader(
         test_folds = [test_folds]
 
     # for test_fold in tqdm(test_folds):
-    for test_fold in test_folds:
+    for test_fold in tqdm(test_folds):
         # Create dataframe.
         cols = {
             'fold': int,
@@ -459,13 +459,10 @@ def create_segmenter_evaluation_from_loader(
 
         # Add evaluations to dataframe.
         # for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
-        for i, (dataset_b, pat_id_b) in enumerate(iter(test_loader)):
-            logging.info(f'iteration: {i}')
-            logging.info(f'batch: {dataset_b}, pat_id: {pat_id_b}')
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
             if type(pat_id_b) == torch.Tensor:
                 pat_id_b = pat_id_b.tolist()
             for dataset, pat_id in zip(dataset_b, pat_id_b):
-                logging.info(f'evaluating: {dataset_b}, {pat_id}')
                 df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
 
         # Add fold.
