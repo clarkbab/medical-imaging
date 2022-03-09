@@ -42,7 +42,7 @@ class NIFTIDataset(Dataset):
     def anon_manifest(self) -> Optional[pd.DataFrame]:
         filepath = os.path.join(config.directories.files, f'{self._name}-anon-map.csv')
         if os.path.exists(filepath):
-            df = pd.read_csv(filepath)
+            df = pd.read_csv(filepath).astype(str)
             return df
         else:
             return None

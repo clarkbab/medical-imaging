@@ -28,12 +28,21 @@ class NIFTIPatient:
         return self._global_id
 
     @property
+    def id(self) -> str:
+        return self._id
+
+    @property
     def patient_id(self) -> Optional[str]:
         manifest = self._dataset.anon_manifest
         if manifest is None:
             return None
-        pat_id = manifest[manifest['anon-id'] == self._id].iloc[0]['patient-id']
-        return str(pat_id)
+        pat_df = manifest[manifest['anon-id'] == self._id]['patient-id']
+        if len(pat_df) == 0:
+            return None
+        elif len(pat_df) > 1:
+            raise ValueError(f"Patient {self} appears multiple times in anon. manifest.")
+        pat_id = pat_df.iloc[0]
+        return pat_id
 
     def list_regions(
         self,
