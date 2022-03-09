@@ -1,7 +1,7 @@
 from collections import namedtuple
 import os
 import pandas as pd
-from typing import List
+from typing import List, Optional
 
 from mymi import logging
 
@@ -58,7 +58,7 @@ def save_csv(
     data: pd.DataFrame,
     *path: List[str],
     index: bool = False,
-    overwrite: bool = False):
+    overwrite: bool = False) -> None:
     filepath = os.path.join(directories.files, *path)
     dirpath = os.path.dirname(filepath)
     if os.path.exists(filepath):
@@ -71,6 +71,6 @@ def save_csv(
         os.makedirs(dirpath, exist_ok=True)
         data.to_csv(filepath, index=index)
 
-def load_csv(*path: List[str]):
+def load_csv(*path: List[str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(directories.files, *path)
     return pd.read_csv(filepath)

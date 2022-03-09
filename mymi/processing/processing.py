@@ -4,12 +4,12 @@ from nibabel.nifti1 import Nifti1Image
 import numpy as np
 import os
 import pandas as pd
+from pathlib import Path
 from time import time
 from tqdm import tqdm
 from scipy.ndimage import binary_dilation
-import sys
 
-from mymi.dataset import DatasetType
+from mymi import config
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
 from mymi import types
@@ -31,9 +31,7 @@ def convert_to_nifti(
         map_df = pd.DataFrame(pats, columns=['patient-id'])
 
         # Save map.
-        filename = 'map.csv'
-        filepath = os.path.join(dataset.path, f'anon-nifti-map.csv')
-        map_df.to_csv(filepath)
+        config.save_csv(map_df, 'anon-maps', f'{dataset.name}.csv')
 
     for pat in tqdm(pats):
         # Get anonymous ID.
@@ -63,9 +61,15 @@ def convert_to_nifti(
         region_data = patient.region_data(regions=pat_regions)
         for region, data in region_data.items():
             img = Nifti1Image(data.astype(np.int32), affine)
-            filepath = os.path.join(nifti_ds.path, 'data', region, filename)
+            filepath = os.path.join(nifti_ds.path, 'data', 'regions', region, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
 
     # Indicate success.
     _write_flag(nifti_ds, '__CONVERT_FROM_NIFTI_END__')
+
+def _write_flag(
+    dataset: 'Dataset',
+    flag: str) -> None:
+    path = os.path.join(dataset.path, flag)
+    Path(path).touch()

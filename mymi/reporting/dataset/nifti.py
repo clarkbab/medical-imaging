@@ -88,26 +88,30 @@ def get_region_summary(
 
     return df
 
-def create_region_summary(
+def create_region_summaries(
     dataset: str,
-    region: str) -> None:
+    regions: Union[str, List[str]]) -> None:
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
-    # Allows us to pass all regions from Spartan 'array' job.
-    if len(pats) == 0:
-        logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
-        return
+    if type(regions) == str:
+        regions = [regions]
+    
+    for region in regions:
+        pats = set.list_patients(regions=region)
+        # Allows us to pass all regions from Spartan 'array' job.
+        if len(pats) == 0:
+            logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
+            return
 
-    logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
+        logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
 
-    # Generate counts report.
-    df = get_region_summary(dataset, region)
+        # Generate counts report.
+        df = get_region_summary(dataset, region)
 
-    # Save report.
-    set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
+        # Save report.
+        set = ds.get(dataset, 'nifti')
+        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        df.to_csv(filepath, index=False)
 
 def _get_outlier_cols_func(
     lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:

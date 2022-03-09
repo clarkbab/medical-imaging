@@ -35,4 +35,4 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/report/nifti/create_region_summary --dataset $DATASET --region $REGION
+python $SCRIPT_DIR/report/nifti/create_region_summaries --dataset $DATASET --regions $REGION

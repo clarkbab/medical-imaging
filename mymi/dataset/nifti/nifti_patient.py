@@ -47,13 +47,13 @@ class NIFTIPatient:
     def list_regions(
         self,
         whitelist: types.PatientRegions = 'all') -> List[str]:
-        path = os.path.join(self._dataset.path, 'data')
+        path = os.path.join(self._dataset.path, 'data', 'regions')
         files = os.listdir(path)
         names = []
         for f in files:
             if not is_region(f):
                 continue
-            region_path = os.path.join(self._dataset.path, 'data', f)
+            region_path = os.path.join(self._dataset.path, 'data', 'regions', f)
             for r in os.listdir(region_path):
                 id = r.replace('.nii.gz', '')
                 if id == self._id:
@@ -125,7 +125,7 @@ class NIFTIPatient:
             if not self.has_region(region):
                 raise ValueError(f"Requested region '{region}' not found for patient '{self._id}', dataset '{self._dataset}'.")
             
-            path = os.path.join(self._dataset.path, 'data', region, f'{self._id}.nii.gz')
+            path = os.path.join(self._dataset.path, 'data', 'regions', region, f'{self._id}.nii.gz')
             img = nib.load(path)
             rdata = img.get_fdata()
             data[region] = rdata.astype(bool)
