@@ -14,19 +14,16 @@ class Regions(Enum):
     Lens_L = 6
     Lens_R = 7
     Mandible = 8
-    MedullaOblongata = 9
-    Neck_L = 10
-    Neck_R = 11
-    OpticChiasm = 12
-    OpticNerve_L = 13
-    OpticNerve_R = 14
-    OralCavity = 15
-    Parotid_L = 16
-    Parotid_R = 17
-    SpinalCord = 18
-    Submandibular_L = 19
-    Submandibular_R = 20
-    Thyroid = 21
+    OpticNerve_L = 9
+    OpticNerve_R = 10
+    OralCavity = 11
+    Parotid_L = 12
+    Parotid_R = 13
+    SpinalCord = 14
+    Submandibular_L = 15
+    Submandibular_R = 16
+
+RegionNames = [r.name for r in Regions]
 
 def hash_regions(regions: types.PatientRegions) -> str:
     return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

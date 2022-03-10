@@ -122,11 +122,8 @@ class RTSTRUCTConverter:
         cls,
         points: np.ndarray,
         size: types.ImageSize2D,
-        size3D: types.ImageSize3D,
         spacing: types.ImageSpacing2D,
-        spacing3D: types.ImageSpacing3D,
-        offset: types.PhysPoint2D,
-        offset3D: types.PhysPoint3D) -> np.ndarray:
+        offset: types.PhysPoint2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:

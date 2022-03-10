@@ -104,10 +104,10 @@ def create_localiser_predictions(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         nib.save(img, filepath)
 
-def create_two_stage_predictions(
+def create_segmenter_predictions(
     dataset: str,
-    localiser: types.Model,
-    segmenter: types.Model,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
     region: types.PatientRegions = 'all') -> None:
     # Load gpu if available.
     if torch.cuda.is_available():

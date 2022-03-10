@@ -17,10 +17,6 @@ class RegionColours:
     Lens_L = palette_tab20(6)
     Lens_R = palette_tab20(7)
     Mandible = palette_tab20(16)
-    MedullaOblongata = palette_tab20(17)
-    Neck_L = palette_tab20(2)
-    Neck_R = palette_tab20(3)
-    OpticChiasm = palette_tab20(18)
     OpticNerve_L = palette_tab20(8)
     OpticNerve_R = palette_tab20(9)
     OralCavity = palette_tab20(16)
@@ -29,7 +25,6 @@ class RegionColours:
     SpinalCord = palette_tab20b(0)
     Submandibular_L = palette_tab20(12)
     Submandibular_R = palette_tab20(13)
-    Thyroid = palette_tab20b(1)
 
 def to_255(colour: types.Colour) -> Tuple[int, int, int]:
     """
