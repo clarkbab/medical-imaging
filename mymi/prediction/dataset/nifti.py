@@ -64,7 +64,7 @@ def create_patient_localiser_prediction(
     # Save segmentation.
     filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser.name, f'{pat_id}.npz') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez(filepath, data=pred)
+    np.savez_compressed(filepath, data=pred)
 
 def create_localiser_predictions(
     dataset: str,
@@ -256,7 +256,7 @@ def create_patient_segmenter_prediction(
     # Save segmentation.
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, f'{pat_id}.npz') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez(filepath, data=pred)
+    np.savez_compressed(filepath, data=pred)
 
 def create_segmenter_predictions(
     dataset: str,
@@ -340,6 +340,20 @@ def load_patient_segmenter_prediction(
     seg = npz_file['data']
     
     return seg
+
+def save_patient_segmenter_prediction(
+    dataset: str,
+    pat_id: types.PatientID,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    data: np.ndarray) -> None:
+    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+
+    # Load segmentation.
+    set = ds.get(dataset, 'nifti')
+    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
+    np.savez_compressed(filepath, data=data)
 
 def create_two_stage_predictions(
     dataset: str,

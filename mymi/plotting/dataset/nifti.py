@@ -49,7 +49,7 @@ def plot_patient_localiser_prediction(
     # Plot.
     plot_localiser_prediction(pat_id, region, ct_data, region_data, spacing, pred, **kwargs)
 
-def plot_patient_segmenter_predictions(
+def plot_patient_segmenter_prediction(
     dataset: str,
     pat_id: str,
     region: str,
@@ -61,9 +61,9 @@ def plot_patient_segmenter_predictions(
     load_loc_prediction: bool = True,
     load_seg_prediction: bool = True,
     **kwargs) -> None:
-    if type(localisers) == types.ModelName:
+    if type(localisers) == tuple:
         localisers = [localisers]
-    if type(segmenters) == types.ModelName:
+    if type(segmenters) == tuple:
         segmenters = [segmenters]
     assert len(localisers) == len(segmenters)
     
