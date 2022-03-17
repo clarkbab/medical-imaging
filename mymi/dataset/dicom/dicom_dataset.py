@@ -4,12 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import pydicom as dicom
 import re
 from scipy.ndimage import center_of_mass
-import shutil
 from skimage.draw import polygon
-from torchio import ScalarImage, Subject
 from tqdm import tqdm
 from typing import Callable, Dict, List, Optional, Union
 
@@ -63,6 +60,10 @@ class DICOMDataset(Dataset):
     @property
     def index(self) -> pd.DataFrame:
         return self._index
+
+    @property
+    def region_map(self) -> RegionMap:
+        return self._region_map
 
     @property
     def index_errors(self) -> pd.DataFrame:

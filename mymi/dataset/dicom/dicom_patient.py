@@ -16,6 +16,8 @@ class DICOMPatient:
         load_default_rtstruct: bool = True,
         load_default_rtdose: bool = False,
         region_map: Optional[RegionMap] = None,
+        rtstruct_index: int = 0,
+        study_index: int = 0,
         trimmed: bool = False):
         if trimmed:
             self._global_id = f"{dataset} - {id} (trimmed)"
@@ -37,7 +39,7 @@ class DICOMPatient:
             raise ValueError(f"Patient '{self}' not found in index for dataset '{dataset}'.")
         
         if load_default_rtstruct:
-            self._load_default_rtstruct()
+            self._load_default_rtstruct(study_index, rtstruct_index)
 
         if load_default_rtdose:
             self._load_default_rtdose()
@@ -136,11 +138,14 @@ class DICOMPatient:
 
         return df
     
-    def _load_default_rtstruct(self) -> None:
+    def _load_default_rtstruct(
+        self,
+        study_index: int = 0,
+        rtstruct_index: int = 0) -> None:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
-        study = self.study(self.list_studies()[0])
-        rt_series = study.series(study.list_series('RTSTRUCT')[0], 'RTSTRUCT')
+        study = self.study(self.list_studies()[study_index])
+        rt_series = study.series(study.list_series('RTSTRUCT')[rtstruct_index], 'RTSTRUCT')
         self._default_rtstruct = rt_series
 
     def _load_default_rtdose(self) -> None:
@@ -180,6 +185,7 @@ class DICOMPatient:
     def ct_size(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.size(*args, **kwargs)
 
+    @property
     def ct_spacing(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.spacing(*args, **kwargs)
 
@@ -192,11 +198,12 @@ class DICOMPatient:
     def ct_summary(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.summary(*args, **kwargs)
 
+    @property
     def ct_data(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.data(*args, **kwargs)
 
-    def dose_data(self, *args, **kwargs):
-        return self._default_rtdose_series.data(*args, **kwargs)
+    def get_rtdose(self, *args, **kwargs):
+        return self._default_rtdose_series.get_rtdose(*args, **kwargs)
 
     def get_cts(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.get_cts(*args, **kwargs)

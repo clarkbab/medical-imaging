@@ -705,10 +705,9 @@ def plot_segmenter_prediction(
     id: str,
     region: str,
     ct_data: np.ndarray,
-    loc_centres: Union[types.Point3D, List[types.Point3D]],
     region_data: np.ndarray,
     spacing: types.ImageSpacing3D,
-    predictions: Union[np.ndarray, List[np.ndarray]],
+    prediction: Union[np.ndarray, List[np.ndarray]],
     aspect: float = None,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
@@ -717,6 +716,7 @@ def plot_segmenter_prediction(
     fontsize: float = 10,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
     savepath: Optional[str] = None,
     show_label_extent: bool = True,
     show_loc_centre: bool = True,
@@ -729,11 +729,18 @@ def plot_segmenter_prediction(
     **kwargs: dict) -> None:
     palette = [plt.cm.tab20(16), plt.cm.tab20(12), plt.cm.tab20(4)]
     assert_position(centre_of, extent_of, slice_idx)
-    if type(loc_centres) == types.Point3D:
-        loc_centres = [loc_centres]
-    if type(predictions) == np.ndarray:
-        predictions = [predictions]
-    assert len(loc_centres) == len(predictions)
+    # Convert params to lists.
+    if type(prediction) == np.ndarray:
+        predictions = [prediction]
+    else:
+        predictions = prediction
+    if loc_centre is not None:
+        if type(loc_centre) == types.Point3D:
+            loc_centres = [loc_centre]
+        else:
+            loc_centres = loc_centre
+
+        assert len(loc_centres) == len(predictions)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -829,7 +836,7 @@ def plot_segmenter_prediction(
                 plt.plot(0, 0, c=colour, label='Pred. Extent (offscreen)')
 
         # Plot localiser centre.
-        if not empty_preds[i] and show_loc_centre:
+        if loc_centre is not None and not empty_preds[i] and show_loc_centre:
             # Get 2D loc centre.
             loc_centre = loc_centres[i]
             if view == 'axial':

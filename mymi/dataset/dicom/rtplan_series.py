@@ -18,6 +18,9 @@ class RTPLANSeries(DICOMSeries):
         index = self._study.index
         index = index[(index.modality == 'RTPLAN') & (index['series-id'] == id)]
         self._index = index
+        if len(index) != 1:
+            raise ValueError(f"Index length '{len(index)}' for  series '{self}'.")
+        self._path = index.iloc[0]['filepath']
 
         # Check that series exists.
         if len(index) == 0:

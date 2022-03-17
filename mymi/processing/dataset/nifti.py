@@ -1,3 +1,4 @@
+from tkinter import W
 import numpy as np
 import os
 import pandas as pd
@@ -9,9 +10,12 @@ from tqdm import tqdm
 from typing import List, Optional, Union
 
 from mymi import types
+from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import create, exists, get, recreate
 from mymi import logging
+from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
+from mymi.regions import RegionColours, to_255
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 
 def convert_to_training(
@@ -200,3 +204,112 @@ def _create_training_label(
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
+
+def convert_segmenter_predictions_to_dicom(
+    dataset: str,
+    regions: Union[str, List[str]],
+    localiser_runs: Union[str, List[str]],
+    segmenter_runs: Union[str, List[str]],
+    model: str) -> None:
+    if type(regions) == str:
+        regions = [regions]
+
+    # Load patients.
+    set = NIFTIDataset(dataset)
+    set_d = DICOMDataset(dataset)
+    region_map = set_d.region_map
+    def to_internal(name: str) -> str:
+        if region_map is None:
+            return name
+        else:
+            return region_map.to_internal(name)
+    pats = set.list_patients()
+
+    # Get full localiser/segmenter names.
+    localisers = {}
+    segmenters = {}
+    for i, region in enumerate(regions):
+        # Get run name for this region.
+        if type(localiser_runs) == str:
+            localiser_run = localiser_runs
+        else:
+            localiser_run = localiser_runs[i]
+        if type(segmenter_runs) == str:
+            segmenter_run = segmenter_runs
+        else:
+            segmenter_run = segmenter_runs[i]
+
+        # Get localiser checkpoint and raise error if multiple.
+        # Hack - clean up when/if path limits are removed.
+        if os.environ['PETER_MAC_HACK'] == 'True':
+            if dataset == 'PMCC-HN-TEST':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
+            elif dataset == 'PMCC-HN-TRAIN':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
+        else:
+            pred_path = os.path.join(set.path, 'predictions')
+        loc_checks_path = os.path.join(pred_path, 'segmenter', f'localiser-{region}', localiser_run)
+        loc_checks = os.listdir(loc_checks_path)
+        if len(loc_checks) != 1:
+            raise ValueError(f"localiser-{region} should have 1 checkpoint, got {len(loc_checks)}")
+        loc_check = loc_checks[0]
+
+        # Get segmenter checkpoint and raise error if multiple.
+        loc_check_path = os.path.join(loc_checks_path, loc_check)
+        seg_checks_path = os.path.join(loc_check_path, f'segmenter-{region}', segmenter_run)
+        seg_checks = os.listdir(seg_checks_path)
+        if len(seg_checks) != 1:
+            raise ValueError(f"segmenter-{region} should have 1 checkpoint, got {len(seg_checks)}")
+        seg_check = seg_checks[0]
+
+        localisers[region] = (f'localiser-{region}', localiser_run, loc_check)
+        segmenters[region] = (f'segmenter-{region}', segmenter_run, seg_check)
+
+    # RTSTRUCT info.
+    default_rt_info = {
+        'label': 'PMCC-AI',
+        'institution-name': 'PMCC-AI'
+    }
+
+    for pat in tqdm(pats):
+        # Get patient regions.
+        patient = set.patient(pat)
+        pat_regions = patient.list_regions()
+
+        # Get DICOM RTSTRUCT - predicted ROI IDs must line up for dose grid comparisons.
+        pat_d = patient.patient_id
+        patient_d = set_d.patient(pat_d)
+        rtstruct_d = patient_d.default_rtstruct.get_rtstruct()
+        region_info_d = RTSTRUCTConverter.get_roi_info(rtstruct_d)
+        region_info_d = dict((to_internal(name), id) for id, name in region_info_d)
+
+        # Create RTSTRUCT.
+        cts = patient_d.get_cts()
+        rtstruct_p = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+
+        for region in regions:
+            # Check that patient has region.
+            if region not in pat_regions:
+                continue
+
+            # Load prediction.
+            pred = load_patient_segmenter_prediction(dataset, pat, localisers[region], segmenters[region])
+            if pred is None:
+                continue
+        
+            # Add ROI.
+            roi_data = ROIData(
+                colour=list(to_255(getattr(RegionColours, region))),
+                data=pred,
+                frame_of_reference_uid=rtstruct_d.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+                name=region,
+                number=region_info_d[region]
+            )
+            RTSTRUCTConverter.add_roi(rtstruct_p, roi_data, cts)
+
+        # Save prediction.
+        filepath = os.path.join(set_d.path, 'predictions', model, f'{pat_d}.dcm')
+        folder = os.path.dirname(filepath)
+        shutil.rmtree(folder)
+        os.makedirs(folder)
+        rtstruct_p.save_as(filepath)

@@ -1,12 +1,12 @@
 import numpy as np
 import os
+import pydicom as dcm
 import torch
 from tqdm import tqdm
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import dataset as ds
-from mymi.dataset.raw import recreate
-from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
+from mymi.dataset.dicom import ROIData, RTSTRUCTConverter
 from mymi import logging
 from mymi.models.systems import Localiser, Segmenter
 from mymi.regions import to_255, RegionColours
@@ -215,3 +215,41 @@ def create_dataset(
         filepath = os.path.join(ds_pred.path, 'raw', filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         rtstruct.save_as(filepath)
+
+def load_segmenter_predictions(
+    dataset: str,
+    pat_id: str,
+    model: str,
+    regions: Union[str, List[str]]) -> Union[np.ndarray, List[np.ndarray]]:
+    if type(regions) == str:
+        regions = [regions]
+
+    # Load ref CTs.
+    set = ds.get(dataset, 'dicom')
+    region_map = set.region_map
+    patient = set.patient(pat_id)
+    ref_cts = patient.get_cts()
+
+    # Get region info.
+    filepath = os.path.join(set.path, 'predictions', model, f'{pat_id}.dcm')
+    rtstruct = dcm.read_file(filepath)
+    region_names = RTSTRUCTConverter.get_roi_names(rtstruct)
+    def to_internal(name):
+        if region_map is None:
+            return name
+        else:
+            return region_map.to_internal(name)
+    name_map = dict((to_internal(name), name) for name in region_names)
+    print(name_map)
+
+    # Extract data.
+    preds = []
+    for region in regions:
+        pred = RTSTRUCTConverter.get_roi_data(rtstruct, name_map[region], ref_cts)
+        preds.append(pred)
+    
+    # Determine return type.
+    if len(preds) == 1:
+        return preds[0]
+    else:
+        return preds

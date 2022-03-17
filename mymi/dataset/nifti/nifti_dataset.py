@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import pandas as pd
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Union
 
 from mymi import config
 from mymi import types
@@ -41,6 +41,7 @@ class NIFTIDataset(Dataset):
     @property
     def anon_manifest(self) -> Optional[pd.DataFrame]:
         man_df = config.load_csv('anon-maps', f'{self._name}.csv')
+        man_df = man_df.astype({ 'anon-id': str, 'patient-id': str })
         return man_df
 
     def list_patients(
@@ -88,7 +89,12 @@ class NIFTIDataset(Dataset):
 
     def patient(
         self,
-        id: str) -> NIFTIPatient:
+        id: Union[int, str],
+        by_dicom_id: bool = False) -> NIFTIPatient:
+        if by_dicom_id:
+            man_df = self.anon_manifest
+            man_df = man_df[man_df['patient-id'] == str(id)]
+            id = man_df.iloc[0]['anon-id']
         return NIFTIPatient(self, id)
 
     def _filter_patient_by_regions(

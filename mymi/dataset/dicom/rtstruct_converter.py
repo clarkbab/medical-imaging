@@ -73,18 +73,18 @@ class RTSTRUCTConverter:
         spacing = (*spacing_2D, ref_cts[1].ImagePositionPatient[2] - ref_cts[0].ImagePositionPatient[2])
 
         # Load the contour data.
-        rois = rtstruct.ROIContourSequence
+        roi_contours = rtstruct.ROIContourSequence
         roi_infos = rtstruct.StructureSetROISequence
-        try:
-            roi, _ = next(filter(lambda r: r[1].ROIName == name, zip(rois, roi_infos)))
-        except StopIteration:
+        info_map = dict((info.ROIName, contour) for contour, info in zip(roi_contours, roi_infos))
+        if name not in info_map:
             raise ValueError(f"RTSTRUCT doesn't contain ROI '{name}'.")
+        roi_contour = info_map[name]
 
         # Create label placeholder.
         data = np.zeros(shape=size, dtype=bool)
 
         # Skip label if no contour sequence.
-        contour_seq = getattr(roi, 'ContourSequence', None)
+        contour_seq = getattr(roi_contour, 'ContourSequence', None)
         if not contour_seq:
             raise ValueError(f"'ContourSequence' not found for ROI '{name}'.")
 
@@ -107,7 +107,7 @@ class RTSTRUCTConverter:
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.
-            slice_data = cls._get_mask_slice(points, size_2D, size, spacing_2D, spacing, offset_2D, offset)
+            slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, offset_2D)
 
             # Get z index of slice.
             z_idx = int((points[0, 2] - offset[2]) / spacing[2])
@@ -163,6 +163,19 @@ class RTSTRUCTConverter:
         # Load names.
         names = [i.ROIName for i in rtstruct.StructureSetROISequence]
         return names
+
+    @classmethod
+    def get_roi_info(
+        cls,
+        rtstruct: dcm.dataset.FileDataset) -> List[str]:
+        """
+        returns: a list of ROIs info.
+        args:
+            rtstruct: the RTSTRUCT dicom.
+        """
+        # Load info.
+        info = [(i.ROINumber, i.ROIName) for i in rtstruct.StructureSetROISequence]
+        return info
 
     @classmethod
     def create_rtstruct(
@@ -413,11 +426,11 @@ class RTSTRUCTConverter:
         # Perform checks.
         assert roi_data.data.dtype == bool
         assert roi_data.data.ndim == 3
-        assert roi_data.data.sum() != 0
+        # assert roi_data.data.sum() != 0       # Some network predictions are empty.
 
         # Add ROI number.
-        roi_number = len(rtstruct.StructureSetROISequence) + 1
-        roi_data.number = roi_number
+        if roi_data.number is None:
+            roi_data.number = len(rtstruct.StructureSetROISequence) + 1
 
         # Add ROI contours.
         cls._add_roi_contours(rtstruct, roi_data, ref_cts)
@@ -498,6 +511,7 @@ class RTSTRUCTConverter:
         # Get contour coordinates.
         slice_data = slice_data.astype('uint8')
         contours_coords, _ = cv.findContours(slice_data, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours_coords = list(contours_coords)
         
         # Format 'findContours' return values.
         for i, contour_coords in enumerate(contours_coords):

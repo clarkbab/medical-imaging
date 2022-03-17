@@ -333,7 +333,14 @@ def load_patient_segmenter_prediction(
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
+    if os.environ['PETER_MAC_HACK'] == 'True':
+        if dataset == 'PMCC-HN-TEST':
+            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
+        elif dataset == 'PMCC-HN-TRAIN':
+            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
+    else:
+        pred_path = os.path.join(set.path, 'predictions')
+    filepath = os.path.join(pred_path, 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
         raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'.")
     npz_file = np.load(filepath)

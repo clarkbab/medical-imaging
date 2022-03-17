@@ -30,6 +30,7 @@ class RTSTRUCTSeries(DICOMSeries):
         index = self._study.index
         index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == id)]
         self._index = index
+        self._path = index.iloc[0]['filepath']      # Select first RTSTRUCT from series as default.
 
         # Check that series exists.
         if len(index) == 0:
@@ -86,6 +87,26 @@ class RTSTRUCTSeries(DICOMSeries):
         filepath = self._index.iloc[0].filepath
         rtstruct = dcm.read_file(filepath)
         return rtstruct
+
+    def list_region_info(
+        self,
+        use_mapping: bool = True) -> List[Tuple[str, str]]:
+        # Load RTSTRUCT dicom.
+        rtstruct = self.get_rtstruct()
+
+        # Get region IDs.
+        info = RTSTRUCTConverter.get_roi_info(rtstruct)
+        info = list(sorted(info, lambda i: i[0]))
+
+        # Filter names on those for which data can be obtained, e.g. some may not have
+        # 'ContourData' and shouldn't be included.
+        info = list(filter(lambda i: RTSTRUCTConverter.has_roi_data(rtstruct, i[1]), info))
+
+        # Map to internal names.
+        if use_mapping and self._region_map:
+            info = [(id, self._region_map.to_internal(name)) for id, name in info]
+
+        return info
 
     def list_regions(
         self,

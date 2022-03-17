@@ -28,10 +28,10 @@ def convert_to_nifti(
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
-        map_df = pd.DataFrame(pats, columns=['patient-id'])
+        map_df = pd.DataFrame(pats, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
 
         # Save map.
-        config.save_csv(map_df, 'anon-maps', f'{dataset.name}.csv')
+        config.save_csv(map_df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
 
     for pat in tqdm(pats):
         # Get anonymous ID.

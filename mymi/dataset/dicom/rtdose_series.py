@@ -18,6 +18,7 @@ class RTDOSESeries(DICOMSeries):
         index = self._study.index
         index = index[(index.modality == 'RTDOSE') & (index['series-id'] == id)]
         self._index = index
+        self._path = index.iloc[0].filepath
 
         # Check that series exists.
         if len(index) == 0:
@@ -42,6 +43,10 @@ class RTDOSESeries(DICOMSeries):
     @property
     def study(self) -> str:
         return self._study
+
+    @property
+    def path(self) -> str:
+        return self._path
 
     def __str__(self) -> str:
         return self._global_id

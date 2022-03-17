@@ -26,10 +26,14 @@ class CTSeries(DICOMSeries):
         index = self._study.index
         index = index[(index.modality == 'CT') & (index['series-id'] == id)]
         self._index = index
+        self._path = None
         
         # Check that series exists.
         if len(index) == 0:
             raise ValueError(f"CT series '{self}' not found in index for study '{study}'.")
+
+        # Set path.
+        
 
     @property
     def description(self) -> str:

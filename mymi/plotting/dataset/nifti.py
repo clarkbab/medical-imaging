@@ -53,18 +53,23 @@ def plot_patient_segmenter_prediction(
     dataset: str,
     pat_id: str,
     region: str,
-    localisers: Union[types.ModelName, List[types.ModelName]],
-    segmenters: Union[types.ModelName, List[types.ModelName]],
-    loc_sizes: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
-    loc_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
-    seg_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
+    localiser: Union[types.ModelName, List[types.ModelName]],
+    segmenter: Union[types.ModelName, List[types.ModelName]],
+    loc_size: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
+    loc_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
+    seg_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
     load_loc_prediction: bool = True,
     load_seg_prediction: bool = True,
     **kwargs) -> None:
-    if type(localisers) == tuple:
-        localisers = [localisers]
-    if type(segmenters) == tuple:
-        segmenters = [segmenters]
+    # Convert args to list.
+    if type(localiser) == tuple:
+        localisers = [localiser]
+    else:
+        localiser = localiser
+    if type(segmenter) == tuple:
+        segmenters = [segmenter]
+    else:
+        segmenters = segmenter
     assert len(localisers) == len(segmenters)
     
     # Load data.
@@ -87,7 +92,7 @@ def plot_patient_segmenter_prediction(
                 # Set truncation if 'SpinalCord'.
                 truncate = True if region == 'SpinalCord' else False
 
-                pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_sizes, loc_spacings, truncate=truncate)     # Handle multiple spacings.
+                pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, truncate=truncate)     # Handle multiple spacings.
                 loc_centre = get_extent_centre(pred)
 
             # Make prediction.
@@ -97,4 +102,4 @@ def plot_patient_segmenter_prediction(
         preds.append(pred)
     
     # Plot.
-    plot_segmenter_prediction(pat_id, region, ct_data, loc_centres, region_data, spacing, preds, **kwargs)
+    plot_segmenter_prediction(pat_id, region, ct_data, region_data, spacing, preds, loc_centre=loc_centres, **kwargs)
