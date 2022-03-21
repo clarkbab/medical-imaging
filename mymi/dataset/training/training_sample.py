@@ -61,7 +61,7 @@ class TrainingSample:
     @property
     def patient_id(self) -> str:
         index = self._dataset.index
-        record = index[index['index'] == self._index].iloc[0]
+        record = index[index['sample-id'] == self._index].iloc[0]
         return record['patient-id']
 
     @property

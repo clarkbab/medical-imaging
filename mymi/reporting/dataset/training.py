@@ -363,7 +363,7 @@ def create_test_loader_manifest(
     df = pd.DataFrame(columns=cols.keys())
 
     # Add entries.
-    for region in regions:
+    for region in tqdm(regions):
         # Create test loader.
         _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
@@ -383,4 +383,4 @@ def create_test_loader_manifest(
     df = df.astype(cols)
 
     # Save manifest.
-    config.save_csv(df, 'test-loader-manifest', 'test.csv')
+    config.save_csv(df, 'test-loader-manifest', 'test.csv', overwrite=True)
