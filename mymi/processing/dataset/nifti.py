@@ -20,8 +20,9 @@ from mymi.transforms import resample_3D, top_crop_or_pad_3D
 
 def convert_to_training(
     dataset: str,
-    regions: Union[str, List[str], Literal['all']],
+    regions: types.PatientRegions,
     dest_dataset: str,
+    create_data: bool = True,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
@@ -39,27 +40,27 @@ def convert_to_training(
     if exists(dest_dataset):
         if recreate_dataset:
             created = True
-            train_ds = recreate(dest_dataset)
+            set_t = recreate(dest_dataset)
         else:
             created = False
-            train_ds = get(dest_dataset)
-            _destroy_flag(train_ds, '__CONVERT_FROM_NIFTI_END__')
+            set_t = get(dest_dataset)
+            _destroy_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
 
             # Delete old labels.
             for region in regions:
-                filepath = os.path.join(train_ds.path, 'data', 'labels', region)
+                filepath = os.path.join(set_t.path, 'data', 'labels', region)
                 shutil.rmtree(filepath)
     else:
         created = True
-        train_ds = create(dest_dataset)
-    _write_flag(train_ds, '__CONVERT_FROM_NIFTI_START__')
+        set_t = create(dest_dataset)
+    _write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Notify user.
-    logging.info(f"Creating dataset '{train_ds}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and spacing={spacing}.")
+    logging.info(f"Creating dataset '{set_t}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and spacing={spacing}.")
 
-    # Save processing params.
+    # Write params.
     if created:
-        filepath = os.path.join(train_ds.path, 'params.csv')
+        filepath = os.path.join(set_t.path, 'params.csv')
         params_df = pd.DataFrame({
             'dilate-iter': [str(dilate_iter)],
             'dilate-regions': [str(dilate_regions)],
@@ -70,7 +71,7 @@ def convert_to_training(
         params_df.to_csv(filepath)
     else:
         for region in regions:
-            filepath = os.path.join(train_ds.path, f'params-{region}.csv')
+            filepath = os.path.join(set_t.path, f'params-{region}.csv')
             params_df = pd.DataFrame({
                 'dilate-iter': [str(dilate_iter)],
                 'dilate-regions': [str(dilate_regions)],
@@ -83,6 +84,26 @@ def convert_to_training(
     # Load patients.
     set = NIFTIDataset(dataset)
     pats = set.list_patients()
+
+    # Write index.
+    cols = {
+        'dataset': str,
+        'patient-id': str,
+        'sample-id': str
+    }
+    data = {
+        'dataset': dataset,
+        'patient-id': pats,
+        'sample-id': list(range(len(pats)))
+    }
+    index = pd.DataFrame(data, columns=cols.keys())
+    index = index.astype(cols)
+    filepath = os.path.join(set_t.path, 'index.csv')
+    index.to_csv(filepath, index=False)
+
+    # Finish if data not required.
+    if not create_data:
+        return
 
     # Write each patient to dataset.
     start = time()
@@ -114,10 +135,7 @@ def convert_to_training(
             input = top_crop_or_pad_3D(input, size, fill=input.min())
 
         # Save input.
-        _create_training_input(train_ds, i, input)
-
-        # Add to manifest.
-        _append_to_manifest(set, train_ds, pat, i)
+        _create_training_input(set_t, i, input)
 
         for region in regions:
             # Skip if patient doesn't have region.
@@ -145,14 +163,14 @@ def convert_to_training(
 
             # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
             if label.sum() != 0:
-                _create_training_label(train_ds, i, region, label)
+                _create_training_label(set_t, i, region, label)
 
     end = time()
 
     # Indicate success.
-    _write_flag(train_ds, '__CONVERT_FROM_NIFTI_END__')
+    _write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
-    _print_time(train_ds, hours)
+    _print_time(set_t, hours)
 
 def _destroy_flag(
     dataset: 'Dataset',
@@ -181,21 +199,6 @@ def _create_training_input(
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
-
-def _append_to_manifest(
-    source_dataset: 'Dataset',
-    dataset: 'Dataset',
-    patient: str,
-    index: int) -> None:
-    # Append to manifest.
-    manifest_path = os.path.join(dataset.path, 'manifest.csv')
-    if not os.path.exists(manifest_path):
-        with open(manifest_path, 'w') as f:
-            f.write('dataset,patient-id,dest-dataset,index\n')
-
-    # Append line to manifest. 
-    with open(manifest_path, 'a') as f:
-        f.write(f"{source_dataset.name},{patient},{dataset.name},{index}\n")
 
 def _create_training_label(
     dataset: 'Dataset',

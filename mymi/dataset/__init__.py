@@ -132,8 +132,8 @@ def object(*args, **kwargs):
 
 # TrainingDataset API.
 
-def manifest(*args, **kwargs):
-    return ds.manifest(*args, **kwargs)
+def index(*args, **kwargs):
+    return ds.index(*args, **kwargs)
 
 def params(*args, **kwargs):
     return ds.params(*args, **kwargs)

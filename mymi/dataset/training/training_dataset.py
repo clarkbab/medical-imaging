@@ -65,8 +65,8 @@ class TrainingDataset(Dataset):
         return params
 
     @property
-    def manifest(self) -> pd.DataFrame:
-        filepath = os.path.join(self._path, 'manifest.csv')
+    def index(self) -> pd.DataFrame:
+        filepath = os.path.join(self._path, 'index.csv')
         df = pd.read_csv(filepath)
         return df
 
@@ -77,7 +77,7 @@ class TrainingDataset(Dataset):
     def patient_id(
         self,
         sample_idx: int) -> types.PatientID:
-        df = self.manifest
+        df = self.index
         result_df = df[df['index'] == sample_idx]
         if len(result_df) == 0:
             raise ValueError(f"Sample '{sample_idx}' not found for dataset '{self}'.")
@@ -104,7 +104,7 @@ class TrainingDataset(Dataset):
         by_patient_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
         if by_patient_id:
-            index = self.manifest[self.manifest['patient-id'] == index].iloc[0]['index']
+            index = self.index[self.index['patient-id'] == index].iloc[0]['index']
 
         return TrainingSample(self, index)
 

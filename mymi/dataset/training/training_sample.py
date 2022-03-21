@@ -60,8 +60,8 @@ class TrainingSample:
 
     @property
     def patient_id(self) -> str:
-        manifest = self._dataset.manifest
-        record = manifest[manifest['index'] == self._index].iloc[0]
+        index = self._dataset.index
+        record = index[index['index'] == self._index].iloc[0]
         return record['patient-id']
 
     @property

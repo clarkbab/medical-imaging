@@ -371,7 +371,8 @@ def create_test_loader_manifest(
         values = test_loader.dataset._sample_map.values()
         ndf = pd.DataFrame(values, columns=['dataset-id', 'sample-id'])
         ndf.insert(0, 'dataset', ndf['dataset-id'].map(lambda i: datasets[i]))
-        ndf = ndf.assign({ 'patient-id': ndf.map(lambda _, row: sets[row['dataset-id']].sample(row['sample-id']).patient_id) })
+        pat_ids = ndf.apply(lambda row: sets[row['dataset-id']].sample(row['sample-id']).patient_id, axis=1)
+        ndf = ndf.assign(**{ 'patient-id': pat_ids })
         ndf = ndf.drop(columns='dataset-id')
         ndf['region'] = region
 
@@ -382,4 +383,4 @@ def create_test_loader_manifest(
     df = df.astype(cols)
 
     # Save manifest.
-    config.save_csv('test-loader-manifest', 'all.csv')
+    config.save_csv(df, 'test-loader-manifest', 'test.csv')
