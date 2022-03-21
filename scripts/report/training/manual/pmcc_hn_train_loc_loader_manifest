@@ -5,5 +5,5 @@ cd $parent_path
 
 DATASET="PMCC-HN-TRAIN-LOC"
 
-python region_count --dataset $DATASET --regions 'all'
+python test_loader_manifest --dataset $DATASET --regions 'all' --num_folds 5 --test_fold 0
 

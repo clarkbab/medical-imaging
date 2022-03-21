@@ -5,15 +5,17 @@ import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
-from typing import List, Loader, Optional, Union
+from typing import List, Optional, Union
 from uuid import uuid1
 
 from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_extent, get_extent_centre
+from mymi.loaders import Loader
 from mymi import logging
 from mymi.plotting.dataset.training import plot_sample_regions
 from mymi.postprocessing import get_object, one_hot_encode
+from mymi.regions import RegionNames
 from mymi import types
 
 def region_count(
@@ -341,5 +343,43 @@ def create_test_loader_manifest(
     regions: types.PatientRegions,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
-    # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, )
+    if type(datasets) == str:
+        sets = [ds.get(datasets, 'training')]
+    else:
+        sets = [ds.get(d) for d in datasets]
+    if type(regions) == str:
+        if regions == 'all':
+            regions = RegionNames
+        else:
+            regions = [regions]
+
+    # Create empty dataframe.
+    cols = {
+        'dataset': str,
+        'sample-id': str,
+        'patient-id': str,
+        'region': str
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Add entries.
+    for region in regions:
+        # Create test loader.
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+
+        # Get values for this region.
+        values = test_loader.dataset._sample_map.values()
+        ndf = pd.DataFrame(values, columns=['dataset-id', 'sample-id'])
+        ndf.insert(0, 'dataset', ndf['dataset-id'].map(lambda i: datasets[i]))
+        ndf = ndf.assign({ 'patient-id': ndf.map(lambda _, row: sets[row['dataset-id']].sample(row['sample-id']).patient_id) })
+        ndf = ndf.drop(columns='dataset-id')
+        ndf['region'] = region
+
+        # Add to list.
+        df = pd.concat([df, ndf], axis=0)
+
+    # Set type.
+    df = df.astype(cols)
+
+    # Save manifest.
+    config.save_csv('test-loader-manifest', 'all.csv')
