@@ -203,7 +203,6 @@ def create_localiser_evaluation_from_loader(
     logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
@@ -221,7 +220,7 @@ def create_localiser_evaluation_from_loader(
         df = pd.DataFrame(columns=cols.keys())
 
         # Build test loader.
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
         for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
@@ -435,7 +434,6 @@ def create_segmenter_evaluation_from_loader(
     logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
@@ -455,7 +453,7 @@ def create_segmenter_evaluation_from_loader(
         df = pd.DataFrame(columns=cols.keys())
 
         # Build test loader.
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
         # for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
@@ -521,7 +519,6 @@ def create_two_stage_evaluation_from_loader(
     logging.info(f"Evaluating two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
@@ -540,7 +537,7 @@ def create_two_stage_evaluation_from_loader(
         seg_df = pd.DataFrame(columns=cols.keys())
 
         # Build test loader.
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
         for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):

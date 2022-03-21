@@ -7,7 +7,7 @@ from scipy.ndimage import binary_dilation
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from mymi import types
 from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
@@ -15,12 +15,12 @@ from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import create, exists, get, recreate
 from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
-from mymi.regions import RegionColours, to_255
+from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 
 def convert_to_training(
     dataset: str,
-    regions: Union[str, List[str]],
+    regions: Union[str, List[str], Literal['all']],
     dest_dataset: str,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -30,7 +30,10 @@ def convert_to_training(
     size: Optional[types.ImageSize3D] = None,
     spacing: Optional[types.ImageSpacing3D] = None) -> None:
     if type(regions) == str:
-        regions = [regions]
+        if regions == 'all':
+            regions = RegionNames
+        else:
+            regions = [regions]
 
     # Create the dataset.
     if exists(dest_dataset):
@@ -271,6 +274,10 @@ def convert_segmenter_predictions_to_dicom(
         'institution-name': 'PMCC-AI'
     }
 
+    # Remove old predictions folder.
+    folderpath = os.path.join(set_d.path, 'predictions', model)
+    shutil.rmtree(folderpath)
+
     for pat in tqdm(pats):
         # Get patient regions.
         patient = set.patient(pat)
@@ -293,8 +300,9 @@ def convert_segmenter_predictions_to_dicom(
                 continue
 
             # Load prediction.
-            pred = load_patient_segmenter_prediction(dataset, pat, localisers[region], segmenters[region])
-            if pred is None:
+            try:
+                pred = load_patient_segmenter_prediction(dataset, pat, localisers[region], segmenters[region])
+            except ValueError as e:
                 continue
         
             # Add ROI.
@@ -308,8 +316,7 @@ def convert_segmenter_predictions_to_dicom(
             RTSTRUCTConverter.add_roi(rtstruct_p, roi_data, cts)
 
         # Save prediction.
-        filepath = os.path.join(set_d.path, 'predictions', model, f'{pat_d}.dcm')
+        filepath = os.path.join(folderpath, f'{pat_d}.dcm')
         folder = os.path.dirname(filepath)
-        shutil.rmtree(folder)
-        os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
         rtstruct_p.save_as(filepath)

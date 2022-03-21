@@ -1,12 +1,11 @@
 from fpdf import FPDF, TitleStyle
-import hashlib
-import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
+from typing import List, Loader, Optional, Union
 from uuid import uuid1
 
 from mymi import config
@@ -336,3 +335,11 @@ def create_ct_figures(
     filepath = os.path.join(set.path, 'reports', 'ct-figures.pdf') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
+
+def create_test_loader_manifest(
+    datasets: Union[str, List[str]],
+    regions: types.PatientRegions,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None) -> None:
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, )

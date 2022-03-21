@@ -39,26 +39,16 @@ def train_segmenter(
     logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
 
     # Load datasets.
-    if isinstance(datasets, str):
-        set = ds.get(datasets, 'training')
-        spacing = set.params['spacing']
-        sets = [set]
+    if type(datasets) == str:
+        datasets = [datasets]
+        spacing = ds.get(datasets[0], 'training').params['spacing']
     else:
-        spacing = None
-        sets = []
-        for d in datasets:
-            if not exists(d):
-                logging.error(f"Skipping dataset '{d}', doesn't exist.")
-                continue
-            set = ds.get(d, 'training')
-
+        spacing = ds.get(datasets[0], 'training').params['spacing']
+        for dataset in datasets[1:]:
             # Check for consistent spacing.
-            d_spacing = set.params['spacing']
-            if spacing is None:
-                spacing = d_spacing
-            elif d_spacing != spacing:
-                raise ValueError(f"Can't train on datasets with inconsistent spacing.")
-            sets.append(set)
+            new_spacing = ds.get(dataset, 'training').params['spacing']
+            if new_spacing != spacing:
+                raise ValueError(f'Datasets must have consistent spacing.')
 
     # Create transforms.
     rotation = (-5, 5)
@@ -71,7 +61,7 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(sets, region, extract_patch=True, num_folds=num_folds, num_train=num_samples, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, extract_patch=True, num_folds=num_folds, num_train=num_samples, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 

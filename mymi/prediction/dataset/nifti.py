@@ -118,7 +118,6 @@ def create_localiser_predictions_from_loader(
         logging.info('Predicting on CPU...')
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
@@ -128,7 +127,7 @@ def create_localiser_predictions_from_loader(
     truncate = True if region == 'SpinalCord' else False
 
     for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Make predictions.
         for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
@@ -307,14 +306,13 @@ def create_segmenter_predictions_from_loader(
         logging.info('Predicting on CPU...')
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
         test_folds = [test_folds]
 
     for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Make predictions.
         for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
@@ -419,7 +417,6 @@ def create_two_stage_predictions_from_loader(
         logging.info('Predicting on CPU...')
 
     # Perform for specified folds
-    sets = [ds.get(d, 'training') for d in datasets]
     if test_folds == 'all':
         test_folds = list(range(num_folds))
     elif type(test_folds) == int:
@@ -429,7 +426,7 @@ def create_two_stage_predictions_from_loader(
     truncate = True if region == 'SpinalCord' else False
 
     for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(sets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Make predictions.
         for datasets, pat_ids in tqdm(iter(test_loader), leave=False):

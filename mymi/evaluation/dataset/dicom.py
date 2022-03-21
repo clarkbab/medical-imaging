@@ -1,14 +1,23 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from typing import List, Optional, Union
 
 from mymi import cache
 from mymi import dataset as ds
 from mymi.metrics import dice, distances
 from mymi.models.systems import Localiser, Segmenter
+from mymi.loaders import Loader
 from mymi import logging
 from mymi.prediction import get_two_stage_prediction
 from mymi import types
+
+def evaluate_model_dose_predictions(
+    datasets: Union[str, List[str]],
+    num_folds: Optional[int],
+    test_fold: Optional[int]) -> None:
+    # Build test loader.
+    _, _, Loader.build_loaders(datasets, )
 
 def evaluate_model(
     dataset: str,

@@ -1,15 +1,11 @@
-from mymi.transforms.crop_or_pad import crop_or_pad_3D
 import numpy as np
-import os
-import torch
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
-from typing import Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from mymi import types
-from mymi import config
-from mymi.dataset import get as get_ds
+from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_box, get_encaps_dist_vox, get_extent_centre
 from mymi.regions import get_patch_size
@@ -18,7 +14,7 @@ from mymi.transforms import point_crop_or_pad_3D
 class Loader:
     @staticmethod
     def build_loaders(
-        datasets: Union[TrainingDataset, List[TrainingDataset]],
+        datasets: Union[str, List[str]],
         region: str,
         batch_size: int = 1,
         extract_patch: bool = False,
@@ -32,7 +28,7 @@ class Loader:
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
         p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
-        if type(datasets) == TrainingDataset:
+        if type(datasets) == str:
             datasets = [datasets]
         if num_folds and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
@@ -40,6 +36,7 @@ class Loader:
             raise ValueError(f"'spacing' must be specified when extracting segmentation patches.") 
 
         # Get all samples.
+        datasets = [ds.get(d, 'training') for d in datasets]
         all_samples = []
         for ds_i, dataset in enumerate(datasets):
             samples = dataset.list_samples(regions=region)

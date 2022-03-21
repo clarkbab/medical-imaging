@@ -1,0 +1,9 @@
+#! /usr/bin/env bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; cd ..; pwd -P )
+cd $parent_path
+
+DATASET="PMCC-HN-TRAIN-LOC"
+
+python region_count --dataset $DATASET --regions 'all'
+
