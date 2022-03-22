@@ -707,7 +707,7 @@ def plot_segmenter_prediction(
     ct_data: np.ndarray,
     region_data: np.ndarray,
     spacing: types.ImageSpacing3D,
-    prediction: Union[np.ndarray, List[np.ndarray]],
+    preds: Union[np.ndarray, List[np.ndarray]],
     aspect: float = None,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
@@ -730,17 +730,19 @@ def plot_segmenter_prediction(
     palette = [plt.cm.tab20(16), plt.cm.tab20(12), plt.cm.tab20(4)]
     assert_position(centre_of, extent_of, slice_idx)
     # Convert params to lists.
-    if type(prediction) == np.ndarray:
-        predictions = [prediction]
+    if type(preds) == np.ndarray:
+        preds = [preds]
     else:
-        predictions = prediction
+        preds = preds
+    if pred_labels is None:
+        pred_labels = ['Prediction'] * len(preds)
     if loc_centre is not None:
         if type(loc_centre) == types.Point3D:
             loc_centres = [loc_centre]
         else:
             loc_centres = loc_centre
 
-        assert len(loc_centres) == len(predictions)
+        assert len(loc_centres) == len(preds)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -750,11 +752,11 @@ def plot_segmenter_prediction(
             'text.usetex': True
         })
 
-    # Check for empty pred.
-    empty_preds = [False] * len(predictions)
-    for i, prediction in enumerate(predictions):
+    # Print prediction info.
+    empty_preds = [False] * len(preds)
+    for i, prediction in enumerate(preds):
         if prediction.sum() == 0:
-            logging.info(f'Prediction {i} is empty')
+            logging.info(f"Prediction {i} ('{pred_labels[i]}') is empty.")
             empty_preds[i] = True
         else:
             volume_vox = prediction.sum()
@@ -767,12 +769,13 @@ def plot_segmenter_prediction(
     # Centre on OAR if requested.
     if slice_idx is None:
         if centre_of is not None:
-            if centre_of == 'pred':         # TODO: Handle multiple predictions.
-                # Centre of prediction.
-                label = prediction
-            else:
-                # Centre of label.
-                label = region_data
+            if type(centre_of) == str:
+                if centre_of == region:
+                    label = region_data
+                elif centre_of in pred_labels:
+                    label = preds[pred_labels.index(centre_of)]
+                else:
+                    raise ValueError(f"'centre_of={centre_of}' not valid.")
 
             # Get slice index.
             centre = get_extent_centre(label)
@@ -794,8 +797,10 @@ def plot_segmenter_prediction(
             elif view == 'sagittal':
                 slice_idx = extent[extent_of][0]
 
-    if crop == 'label':
-            crop = _get_region_crop(region_data, crop_margin, spacing, view)
+    # Convert crop from 'region' name 
+    if type(crop) == str:
+        assert crop == region
+        crop = _get_region_crop(region_data, crop_margin, spacing, view)
 
     # Plot patient regions.
     plot_regions(id, ct_data, { region: region_data }, spacing, aspect=aspect, colours=[palette[0]], crop=crop, latex=latex, legend=False, legend_loc=legend_loc, regions=region, show=False, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
@@ -803,7 +808,7 @@ def plot_segmenter_prediction(
     # Get extent and centre.
     extent = get_extent(prediction)
 
-    for i, prediction in enumerate(predictions):
+    for i, prediction in enumerate(preds):
         # Get prediction colour.
         colour = palette[i + 1]
 
@@ -824,14 +829,13 @@ def plot_segmenter_prediction(
             colours = [(1, 1, 1, 0), colour]
             cmap = ListedColormap(colours)
             plt.imshow(pred_slice_data, alpha=.3, aspect=aspect, cmap=cmap, origin=get_origin(view))
-            label = pred_labels[i] if pred_labels is not None else 'prediction'
-            plt.plot(0, 0, c=colour, label=label)
+            plt.plot(0, 0, c=colour, label=pred_labels[i])
             plt.contour(pred_slice_data, colors=[colour], levels=[.5])
 
         # Plot prediction extent.
         if not empty_preds[i] and show_pred_extent:
             if should_plot_box(extent, view, slice_idx):
-                plot_box_slice(extent, view, colour=colour, crop=crop, label='Pred. Extent', linestyle='dashed')
+                plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{pred_labels[i]} Extent', linestyle='dashed')
             else:
                 plt.plot(0, 0, c=colour, label='Pred. Extent (offscreen)')
 
@@ -859,7 +863,7 @@ def plot_segmenter_prediction(
                 plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
 
         # Plot second stage patch.
-        if not empty_preds[i] and show_pred_patch:
+        if loc_centre is not None and not empty_preds[i] and show_pred_patch:
             # Get 3D patch - cropped to label size.
             size = get_patch_size(region, spacing)
             patch = get_box(loc_centre, size)

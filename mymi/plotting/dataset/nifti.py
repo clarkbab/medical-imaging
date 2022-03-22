@@ -53,24 +53,33 @@ def plot_patient_segmenter_prediction(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: Union[types.ModelName, List[types.ModelName]],
-    segmenter: Union[types.ModelName, List[types.ModelName]],
-    loc_size: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
+    localisers: Union[types.ModelName, List[types.ModelName]],
+    segmenters: Union[types.ModelName, List[types.ModelName]],
+    loc_sizes: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
     loc_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
     seg_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
     load_loc_prediction: bool = True,
     load_seg_prediction: bool = True,
     **kwargs) -> None:
     # Convert args to list.
-    if type(localiser) == tuple:
-        localisers = [localiser]
-    else:
-        localiser = localiser
-    if type(segmenter) == tuple:
-        segmenters = [segmenter]
-    else:
-        segmenters = segmenter
+    if type(localisers) == tuple:
+        localisers = [localisers]
+    if type(segmenters) == tuple:
+        segmenters = [segmenters]
     assert len(localisers) == len(segmenters)
+    # Broadcast sizes/spacings to model list length.
+    if type(loc_sizes) == tuple:
+        loc_sizes = [loc_sizes] * len(localisers)
+    elif len(loc_sizes) == 1 and len(localisers) > 1:
+        loc_sizes = loc_sizes * len(localisers)
+    if type(loc_spacings) == tuple:
+        loc_spacings = [loc_spacings] * len(localisers)
+    elif len(loc_spacings) == 1 and len(localisers) > 1:
+        loc_spacings = loc_spacings * len(localisers)
+    if type(seg_spacings) == tuple:
+        seg_spacings = [seg_spacings] * len(localisers)
+    elif len(seg_spacings) == 1 and len(localisers) > 1:
+        seg_spacings = seg_spacings * len(localisers)
     
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
@@ -81,7 +90,7 @@ def plot_patient_segmenter_prediction(
     # Load predictions.
     loc_centres = []
     preds = []
-    for localiser, segmenter in zip(localisers, segmenters):
+    for localiser, segmenter, loc_size, loc_spacing, seg_spacing in zip(localisers, segmenters, loc_sizes, loc_spacings, seg_spacings):
         if load_seg_prediction:
             loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
             pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
@@ -96,7 +105,7 @@ def plot_patient_segmenter_prediction(
                 loc_centre = get_extent_centre(pred)
 
             # Make prediction.
-            pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacings)           # Handle multiple spacings.
+            pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing)           # Handle multiple spacings.
 
         loc_centres.append(loc_centre)
         preds.append(pred)
