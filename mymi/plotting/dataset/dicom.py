@@ -37,6 +37,7 @@ def plot_patient_segmenter_prediction(
     # Load model predictions.
     preds = []
     for model in models:
+        print(model)
         pred = load_segmenter_predictions(dataset, pat_id, model, region)
         preds.append(pred)
 

@@ -365,6 +365,7 @@ def create_test_loader_manifest(
     # Add entries.
     for region in tqdm(regions):
         # Create test loader.
+        print(region)
         _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Get values for this region.

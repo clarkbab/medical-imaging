@@ -240,7 +240,6 @@ def load_segmenter_predictions(
         else:
             return region_map.to_internal(name)
     name_map = dict((to_internal(name), name) for name in region_names)
-    print(name_map)
 
     # Extract data.
     preds = []

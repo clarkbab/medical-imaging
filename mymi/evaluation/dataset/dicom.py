@@ -1,23 +1,115 @@
-import numpy as np
+from tkinter import W
+from dicompylercore import dvhcalc
+import os
 import pandas as pd
+import pydicom as dcm
 from tqdm import tqdm
-from typing import List, Optional, Union
+from typing import List, Union
 
-from mymi import cache
+from mymi import config
 from mymi import dataset as ds
-from mymi.metrics import dice, distances
+from mymi.dataset.dicom import RTSTRUCTConverter
+from mymi.metrics import dice
 from mymi.models.systems import Localiser, Segmenter
-from mymi.loaders import Loader
 from mymi import logging
-from mymi.prediction import get_two_stage_prediction
 from mymi import types
 
-def evaluate_model_dose_predictions(
-    datasets: Union[str, List[str]],
-    num_folds: Optional[int],
-    test_fold: Optional[int]) -> None:
-    # Build test loader.
-    _, _, Loader.build_loaders(datasets, )
+def create_dose_evaluation(
+    pat_file: str,
+    models: Union[str, List[str]],
+    output_file: str) -> None:
+    if type(models) == str:
+        models = [models]
+
+    # Load patients.
+    pdf = config.load_csv(pat_file)
+
+    # Get datasets.
+    datasets = list(sorted(pdf.dataset.unique())) 
+
+    # Convert regions to comma-delimited string.
+    pdf = pdf.assign(regions=pdf.groupby(['dataset', 'patient-id'])['region'].transform(','.join))
+    pdf = pdf.drop(columns=['region'])
+    pdf = pdf.drop_duplicates()
+
+    # Get sets.
+    sets = dict((d, ds.get(d, 'dicom')) for d in datasets)
+    region_maps = dict((d, sets[d].region_map) for d in datasets)
+
+    # Create dataframe.
+    cols = {
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'model': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for i in tqdm(range(len(pdf))):
+        # Get row.
+        row = pdf.iloc[i]
+
+        # Load ground truth RTSTRUCT. Catch exception when RTDOSE isn't present.
+        try:
+            patient_gt = sets[row.dataset].patient(row['patient-id'], load_default_rtdose=True)
+            rtstruct_gt = patient_gt.default_rtstruct
+        except ValueError as e:
+            logging.error(str(e))
+            continue
+
+        # Load ground truth map from region name to ROI number.
+        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt.get_rtstruct())
+        region_map_gt = region_maps[row.dataset]
+        if region_map_gt is not None:
+            info_gt = dict((region_map_gt.to_internal(name), int(id)) for id, name in info_gt)
+        else:
+            info_gt = dict((name, int(id)) for id, name in info_gt)
+
+        # Load ground truth RTDOSE.
+        rtdose_gt = patient_gt.default_rtdose
+        for model in models:
+            # Load model prediction.
+            filepath = os.path.join(sets[row.dataset].path, 'predictions', model, f"{row['patient-id']}.dcm")
+            rtstruct_pred = dcm.read_file(filepath)
+            
+            # Get prediction info.
+            info_pred = RTSTRUCTConverter.get_roi_info(rtstruct_pred)
+            info_pred = dict((name, int(id)) for id, name in info_pred)
+
+            for region in row.regions.split(','):
+                # Check region IDs.
+                region_id_gt = info_gt[region]
+                region_id_pred = info_pred[region]
+                assert region_id_pred == region_id_gt
+                
+                # Get DVH calcs.
+                dvh_gt = dvhcalc.get_dvh(rtstruct_gt.path, rtdose_gt.path, region_id_gt)
+                dvh_pred = dvhcalc.get_dvh(rtstruct_pred, rtdose_gt.path, region_id_pred)
+                
+                # Add metrics.
+                metrics = ['mean-dose', 'max-dose']
+                metric_attrs = ['mean', 'max']
+                for metric, metric_attr in zip(metrics, metric_attrs):
+                    # Get value.
+                    value_gt = getattr(dvh_gt, metric_attr)
+                    value_pred = getattr(dvh_pred, metric_attr)
+                    value = value_pred - value_gt
+                    
+                    data = {
+                        'dataset': row.dataset,
+                        'patient-id': row['patient-id'],
+                        'region': region,
+                        'model': model,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = df.append(data, ignore_index=True)
+
+        # Write evaluation.
+        df = df.astype(cols)
+        config.save_csv(df, 'dose-evals', output_file, overwrite=True)
 
 def evaluate_model(
     dataset: str,

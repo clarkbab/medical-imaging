@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import pandas as pd
-from typing import Callable, List, Union
+from typing import Callable, List, Optional, Union
 
 from mymi import config
 from mymi import types
@@ -86,17 +86,15 @@ class TrainingDataset(Dataset):
 
     def list_samples(
         self,
-        regions: types.PatientRegions = 'all') -> List[int]:
-        path = os.path.join(self._path, 'data', 'inputs')
-        if os.path.exists(path):
-            indices = list(sorted([int(f.replace('.npz', '')) for f in os.listdir(path)]))
+        regions: Optional[Union[str, List[str]]] = None) -> List[int]:
+        if type(regions) == str:
+            regions = [regions]
 
-            # Filter on sample regions.
-            indices = list(filter(self._filter_sample_by_regions(regions), indices))
-
-        else:
-            indices = []
-        return indices
+        index = self.index
+        if regions is not None:
+            index = index[index.region.isin(regions)]
+        sample_ids = list(sorted(index['sample-id'].unique()))
+        return sample_ids
 
     def sample(
         self,

@@ -85,85 +85,92 @@ def convert_to_training(
     set = NIFTIDataset(dataset)
     pats = set.list_patients()
 
-    # Write index.
+    # Create index.
     cols = {
         'dataset': str,
         'patient-id': str,
         'sample-id': str
     }
-    data = {
-        'dataset': dataset,
-        'patient-id': pats,
-        'sample-id': list(range(len(pats)))
-    }
-    index = pd.DataFrame(data, columns=cols.keys())
+    index = pd.DataFrame(columns=cols.keys())
+    for i, pat in enumerate(pats):
+        # Get patient regions.
+        pat_regions = set.patient(pat).list_regions()
+        
+        # Add entries.
+        for region in pat_regions:
+            data = {
+                'dataset': dataset,
+                'patient-id': pat,
+                'sample-id': i,
+                'region': region
+            }
+            index = index.append(data, ignore_index=True)
+
+    # Write index.
     index = index.astype(cols)
     filepath = os.path.join(set_t.path, 'index.csv')
     index.to_csv(filepath, index=False)
 
-    # Finish if data not required.
-    if not create_data:
-        return
-
     # Write each patient to dataset.
     start = time()
-    for i, pat in enumerate(tqdm(pats)):
-        # Load input data.
-        patient = set.patient(pat)
-        old_spacing = patient.ct_spacing
-        input = patient.ct_data
+    if create_data:
+        for i, pat in enumerate(tqdm(pats)):
+            # Load input data.
+            patient = set.patient(pat)
+            old_spacing = patient.ct_spacing
+            input = patient.ct_data
 
-        # Resample input.
-        if spacing:
-            input = resample_3D(input, old_spacing, spacing)
-
-        # Crop/pad.
-        if size:
-            # Log warning if we're cropping the FOV as we're losing information.
-            if log_warnings:
-                if spacing:
-                    fov_spacing = spacing
-                else:
-                    fov_spacing = old_spacing
-                fov = np.array(input.shape) * fov_spacing
-                new_fov = np.array(size) * fov_spacing
-                for axis in range(len(size)):
-                    if fov[axis] > new_fov[axis]:
-                        logging.warning(f"Patient '{patient}' had FOV '{fov}', larger than new FOV after crop/pad '{new_fov}' for axis '{axis}'.")
-
-            # Perform crop/pad.
-            input = top_crop_or_pad_3D(input, size, fill=input.min())
-
-        # Save input.
-        _create_training_input(set_t, i, input)
-
-        for region in regions:
-            # Skip if patient doesn't have region.
-            if not set.patient(pat).has_region(region):
-                continue
-
-            # Load label data.
-            label = patient.region_data(regions=region)[region]
-
-            # Resample data.
+            # Resample input.
             if spacing:
-                label = resample_3D(label, old_spacing, spacing)
+                input = resample_3D(input, old_spacing, spacing)
 
             # Crop/pad.
             if size:
-                label = top_crop_or_pad_3D(label, size)
+                # Log warning if we're cropping the FOV as we're losing information.
+                if log_warnings:
+                    if spacing:
+                        fov_spacing = spacing
+                    else:
+                        fov_spacing = old_spacing
+                    fov = np.array(input.shape) * fov_spacing
+                    new_fov = np.array(size) * fov_spacing
+                    for axis in range(len(size)):
+                        if fov[axis] > new_fov[axis]:
+                            logging.warning(f"Patient '{patient}' had FOV '{fov}', larger than new FOV after crop/pad '{new_fov}' for axis '{axis}'.")
 
-            # Round data after resampling to save on disk space.
-            if round_dp is not None:
-                input = np.around(input, decimals=round_dp)
+                # Perform crop/pad.
+                input = top_crop_or_pad_3D(input, size, fill=input.min())
 
-            # Dilate the labels if requested.
-            if region in dilate_regions:
-                label = binary_dilation(label, iterations=dilate_iter)
+            # Save input.
+            _create_training_input(set_t, i, input)
 
-            # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
-            if label.sum() != 0:
-                _create_training_label(set_t, i, region, label)
+            for region in regions:
+                # Skip if patient doesn't have region.
+                if not set.patient(pat).has_region(region):
+                    continue
+
+                # Load label data.
+                label = patient.region_data(regions=region)[region]
+
+                # Resample data.
+                if spacing:
+                    label = resample_3D(label, old_spacing, spacing)
+
+                # Crop/pad.
+                if size:
+                    label = top_crop_or_pad_3D(label, size)
+
+                # Round data after resampling to save on disk space.
+                if round_dp is not None:
+                    input = np.around(input, decimals=round_dp)
+
+                # Dilate the labels if requested.
+                if region in dilate_regions:
+                    label = binary_dilation(label, iterations=dilate_iter)
+
+                # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
+                if label.sum() != 0:
+                    _create_training_label(set_t, i, region, label)
 
     end = time()
 
@@ -279,7 +286,8 @@ def convert_segmenter_predictions_to_dicom(
 
     # Remove old predictions folder.
     folderpath = os.path.join(set_d.path, 'predictions', model)
-    shutil.rmtree(folderpath)
+    if os.path.exists(folderpath):
+        shutil.rmtree(folderpath)
 
     for pat in tqdm(pats):
         # Get patient regions.

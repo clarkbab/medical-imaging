@@ -35,10 +35,12 @@ class RTSTRUCTConverter:
             ref_cts: the reference CT dicoms.
         """
         # Load the contour data.
-        rois = rtstruct.ROIContourSequence
+        roi_contours = rtstruct.ROIContourSequence
         roi_infos = rtstruct.StructureSetROISequence
+        if len(roi_infos) != len(roi_contours):
+            raise ValueError(f"Length of 'StructureSetROISequence' and 'ROIContourSequence' must be the same, got '{len(roi_infos)}' and '{len(roi_contours)}' respectively.")
         try:
-            roi, _ = next(filter(lambda r: r[1].ROIName == name, zip(rois, roi_infos)))
+            roi, _ = next(filter(lambda r: r[1].ROIName == name, zip(roi_contours, roi_infos)))
         except StopIteration:
             return False
 
@@ -73,8 +75,10 @@ class RTSTRUCTConverter:
         spacing = (*spacing_2D, ref_cts[1].ImagePositionPatient[2] - ref_cts[0].ImagePositionPatient[2])
 
         # Load the contour data.
-        roi_contours = rtstruct.ROIContourSequence
         roi_infos = rtstruct.StructureSetROISequence
+        roi_contours = rtstruct.ROIContourSequence
+        if len(roi_infos) != len(roi_contours):
+            raise ValueError(f"Length of 'StructureSetROISequence' and 'ROIContourSequence' must be the same, got '{len(roi_infos)}' and '{len(roi_contours)}' respectively.")
         info_map = dict((info.ROIName, contour) for contour, info in zip(roi_contours, roi_infos))
         if name not in info_map:
             raise ValueError(f"RTSTRUCT doesn't contain ROI '{name}'.")
@@ -454,9 +458,6 @@ class RTSTRUCTConverter:
             roi_data: ROI information.
             ref_cts: the reference CT dicoms.
         """
-        # Create ROI contour sequence.
-        rtstruct.ROIContourSequence = dcm.sequence.Sequence()
-
         # Create ROI contour.
         roi_contour = Dataset()
         roi_contour.ROIDisplayColor = roi_data.colour
