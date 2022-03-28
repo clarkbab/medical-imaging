@@ -69,6 +69,7 @@ class CTSeries(DICOMSeries):
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
 
+    @property
     def offset(self) -> types.PhysPoint3D:
         cts = self.get_cts()
 
@@ -98,6 +99,7 @@ class CTSeries(DICOMSeries):
         )
         return orientation
 
+    @property
     def size(self) -> types.ImageSpacing3D:
         cts = self.get_cts()
 
@@ -109,10 +111,11 @@ class CTSeries(DICOMSeries):
         )
         return size
 
+    @property
     def spacing(self) -> types.ImageSpacing3D:
         cts = self.get_cts()
 
-        # Get spacing - relies on hierarchy filtering (i.e. ensuring consistent voxel spacing).
+        # Get spacing - relies on consistent spacing checks during index building.
         spacing = (
             float(cts[0].PixelSpacing[0]),
             float(cts[0].PixelSpacing[1]),
@@ -120,14 +123,15 @@ class CTSeries(DICOMSeries):
         )
         return spacing
 
+    @property
     def data(self) -> np.ndarray:
         # Load series CT dicoms.
         cts = self.get_cts()
 
         # Load CT summary info.
-        size = self.size()
-        offset = self.offset()
-        spacing = self.spacing()
+        size = self.size
+        offset = self.offset
+        spacing = self.spacing
         
         # Create CT data array.
         data = np.zeros(shape=size)

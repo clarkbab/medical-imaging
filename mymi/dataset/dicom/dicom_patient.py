@@ -179,15 +179,17 @@ class DICOMPatient:
 
     # Proxy to default RTSTRUCT series.
 
-    def ct_offset(self, *args, **kwargs):
-        return self._default_rtstruct.ref_ct.offset(*args, **kwargs)
-
-    def ct_size(self, *args, **kwargs):
-        return self._default_rtstruct.ref_ct.size(*args, **kwargs)
+    @property
+    def ct_offset(self):
+        return self._default_rtstruct.ref_ct.offset
 
     @property
-    def ct_spacing(self, *args, **kwargs):
-        return self._default_rtstruct.ref_ct.spacing(*args, **kwargs)
+    def ct_size(self):
+        return self._default_rtstruct.ref_ct.size
+
+    @property
+    def ct_spacing(self):
+        return self._default_rtstruct.ref_ct.spacing
 
     def ct_orientation(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.orientation(*args, **kwargs)
@@ -199,8 +201,8 @@ class DICOMPatient:
         return self._default_rtstruct.ref_ct.summary(*args, **kwargs)
 
     @property
-    def ct_data(self, *args, **kwargs):
-        return self._default_rtstruct.ref_ct.data(*args, **kwargs)
+    def ct_data(self):
+        return self._default_rtstruct.ref_ct.data
 
     def get_rtdose(self, *args, **kwargs):
         return self._default_rtdose_series.get_rtdose(*args, **kwargs)

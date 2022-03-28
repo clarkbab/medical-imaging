@@ -1,12 +1,10 @@
 import collections
 import numpy as np
-import os
 import pandas as pd
 import pydicom as dcm
 from scipy.ndimage import center_of_mass
-from typing import Any, Callable, List, Optional, OrderedDict, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, OrderedDict, Sequence, Tuple, Union
 
-from mymi import logging
 from mymi import types
 
 from .ct_series import CTSeries
@@ -88,9 +86,9 @@ class RTSTRUCTSeries(DICOMSeries):
         rtstruct = dcm.read_file(filepath)
         return rtstruct
 
-    def list_region_info(
+    def get_region_info(
         self,
-        use_mapping: bool = True) -> List[Tuple[str, str]]:
+        use_mapping: bool = True) -> Dict[int, Dict[str, str]]:
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()
 

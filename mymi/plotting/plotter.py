@@ -1082,14 +1082,14 @@ def plot_dataframe(
         axs[i].set_xlabel('')
         axs[i].set_ylabel(ylabel, fontsize=fontsize)
 
-        # Set axis tick labels.
+        # Set axis tick labels fontsize/rotation.
         if show_x_tick_labels:
             # Rotate x labels.
             axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_label_rot)
         else:
             axs[i].set_xticklabels([])
 
-        axs[i].set_yticklabels(axs[i].get_yticklabels(), fontsize=fontsize)
+        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
         
         # Set legend location and fix multiple series problem.
         if hue is not None:

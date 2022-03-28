@@ -41,7 +41,7 @@ def create_dose_evaluation(
         'dataset': str,
         'patient-id': str,
         'region': str,
-        'model': str,
+        'rtstruct': str,
         'metric': str,
         'value': float
     }
@@ -59,7 +59,7 @@ def create_dose_evaluation(
             logging.error(str(e))
             continue
 
-        # Load ground truth map from region name to ROI number.
+        # Load ground truth map from region name to ROI number - predictions should have same mapping.
         info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt.get_rtstruct())
         region_map_gt = region_maps[row.dataset]
         if region_map_gt is not None:
@@ -69,47 +69,58 @@ def create_dose_evaluation(
 
         # Load ground truth RTDOSE.
         rtdose_gt = patient_gt.default_rtdose
+        assert rtdose_gt.get_rtdose().DoseUnits == 'GY'
+
+        # load model RTSTRUCTs.
+        rtstructs = [rtstruct_gt.get_rtstruct()]
+        names = ['ground-truth']
+        paths = [rtstruct_gt.path]
         for model in models:
             # Load model prediction.
             filepath = os.path.join(sets[row.dataset].path, 'predictions', model, f"{row['patient-id']}.dcm")
-            rtstruct_pred = dcm.read_file(filepath)
-            
-            # Get prediction info.
-            info_pred = RTSTRUCTConverter.get_roi_info(rtstruct_pred)
-            info_pred = dict((name, int(id)) for id, name in info_pred)
+            rtstruct = dcm.read_file(filepath)
+            rtstructs.append(rtstruct)
+            names.append(model)
+            paths.append(filepath)
+
+        # Add dose metrics.
+        for name, path, rtstruct in zip(names, paths, rtstructs):
+            # Get ROI info. 
+            info = RTSTRUCTConverter.get_roi_info(rtstruct)
+            def to_internal(name):
+                if region_maps[row.dataset] is None:
+                    return name
+                else:
+                    return region_maps[row.dataset].to_internal(name)
+            info = dict((to_internal(name), int(id)) for id, name in info)
 
             for region in row.regions.split(','):
                 # Check region IDs.
-                region_id_gt = info_gt[region]
-                region_id_pred = info_pred[region]
-                assert region_id_pred == region_id_gt
+                assert info[region] == info_gt[region]
                 
                 # Get DVH calcs.
-                dvh_gt = dvhcalc.get_dvh(rtstruct_gt.path, rtdose_gt.path, region_id_gt)
-                dvh_pred = dvhcalc.get_dvh(rtstruct_pred, rtdose_gt.path, region_id_pred)
+                res = dvhcalc.get_dvh(path, rtdose_gt.path, info[region])
                 
                 # Add metrics.
                 metrics = ['mean-dose', 'max-dose']
                 metric_attrs = ['mean', 'max']
                 for metric, metric_attr in zip(metrics, metric_attrs):
                     # Get value.
-                    value_gt = getattr(dvh_gt, metric_attr)
-                    value_pred = getattr(dvh_pred, metric_attr)
-                    value = value_pred - value_gt
+                    value = getattr(res, metric_attr)
                     
                     data = {
                         'dataset': row.dataset,
                         'patient-id': row['patient-id'],
                         'region': region,
-                        'model': model,
+                        'rtstruct': name,
                         'metric': metric,
                         'value': value
                     }
                     df = df.append(data, ignore_index=True)
 
-        # Write evaluation.
-        df = df.astype(cols)
-        config.save_csv(df, 'dose-evals', output_file, overwrite=True)
+    # Write evaluation.
+    df = df.astype(cols)
+    config.save_csv(df, 'dose-evals', output_file, overwrite=True)
 
 def evaluate_model(
     dataset: str,

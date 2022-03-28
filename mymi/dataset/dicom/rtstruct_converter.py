@@ -178,7 +178,10 @@ class RTSTRUCTConverter:
             rtstruct: the RTSTRUCT dicom.
         """
         # Load info.
-        info = [(i.ROINumber, i.ROIName) for i in rtstruct.StructureSetROISequence]
+        info = dict((int(i.ROINumber), {
+            'id': int(i.ROINumber),
+            'name': i.ROIName,
+        }) for i in rtstruct.StructureSetROISequence)
         return info
 
     @classmethod
