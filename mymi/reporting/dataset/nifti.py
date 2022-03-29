@@ -17,8 +17,8 @@ from mymi import logging
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_predictions
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
-from mymi.regions import hash_regions
 from mymi import types
+from mymi.utils import encode
 
 def get_region_summary(
     dataset: str,
@@ -268,8 +268,7 @@ def load_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> None:
     set = ds.get(dataset, 'nifti')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
 def create_region_figures(

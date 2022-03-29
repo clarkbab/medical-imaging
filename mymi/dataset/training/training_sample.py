@@ -65,6 +65,12 @@ class TrainingSample:
         return record['patient-id']
 
     @property
+    def origin_dataset(self) -> str:
+        index = self._dataset.index
+        record = index[index['sample-id'] == self._index].iloc[0]
+        return record['dataset']
+
+    @property
     def input(self) -> np.ndarray:
         # Load the input data.
         filepath = os.path.join(self._dataset.path, 'data', 'inputs', f'{self._index}.npz')

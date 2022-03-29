@@ -5,6 +5,7 @@ from tqdm import tqdm
 from typing import List, Literal, Optional, Tuple, Union
 
 from ..prediction import get_localiser_prediction
+from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
@@ -331,7 +332,7 @@ def load_patient_segmenter_prediction(
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
-    if os.environ['PETER_MAC_HACK'] == 'True':
+    if config.environ('PETER_MAC_HACK') == 'True':
         if dataset == 'PMCC-HN-TEST':
             pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
         elif dataset == 'PMCC-HN-TRAIN':

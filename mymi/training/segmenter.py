@@ -14,6 +14,7 @@ from mymi.dataset.training import exists
 from mymi.losses import DiceLoss
 from mymi import logging
 from mymi.models.systems import Segmenter
+from mymi import types
 
 def train_segmenter(
     model_name: str,
@@ -25,9 +26,9 @@ def train_segmenter(
     num_folds: Optional[int] = None,
     num_gpus: int = 1,
     num_nodes: int = 1,
-    num_samples: Optional[int] = None,
+    num_train: Optional[int] = None,
     num_workers: int = 1,
-    pretrained: Optional[Tuple[str, str, str]] = None,    
+    pretrained_model: Optional[types.ModelName] = None,    
     p_val: float = 0.2,
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
@@ -61,7 +62,7 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, extract_patch=True, num_folds=num_folds, num_train=num_samples, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, extract_patch=True, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -73,12 +74,12 @@ def train_segmenter(
 
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
-    if pretrained:
-        pretrained = Segmenter.load(*pretrained)
+    if pretrained_model:
+        pretrained_model = Segmenter.load(*pretrained_model)
     model = Segmenter(
         loss=loss_fn,
         metrics=metrics,
-        pretrained=pretrained,
+        pretrained_model=pretrained_model,
         spacing=spacing)
 
     # Create logger.

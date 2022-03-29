@@ -24,6 +24,3 @@ class Regions(Enum):
     Submandibular_R = 16
 
 RegionNames = [r.name for r in Regions]
-
-def hash_regions(regions: types.PatientRegions) -> str:
-    return hashlib.sha1(json.dumps(regions).encode('utf-8')).hexdigest()

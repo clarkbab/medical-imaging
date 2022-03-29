@@ -98,13 +98,13 @@ class TrainingDataset(Dataset):
 
     def sample(
         self,
-        index: Union[int, str],
+        sample_id: Union[int, str],
         by_patient_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
         if by_patient_id:
-            index = self.index[self.index['patient-id'] == index].iloc[0]['index']
+            sample_id = self.index[self.index['patient-id'] == sample_id].iloc[0]['sample-id']
 
-        return TrainingSample(self, index)
+        return TrainingSample(self, sample_id)
 
     def _filter_sample_by_regions(
         self,

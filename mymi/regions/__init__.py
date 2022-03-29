@@ -5,7 +5,7 @@ from mymi import types
 from .colours import to_255, RegionColours
 from .limits import RegionLimits
 from .patch_sizes import get_patch_size
-from .regions import RegionNames, Regions, hash_regions
+from .regions import RegionNames, Regions
 
 def is_region(name: str) -> bool:
     """

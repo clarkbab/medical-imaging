@@ -270,7 +270,9 @@ class TestDataset(Dataset):
         
         # Return 'NIFTI' location of training data.
         if self._load_origin:
-            data = set.sample(s_i).origin
+            ds_name = set.sample(s_i).origin_dataset
+            pat_id = set.sample(s_i).patient_id
+            data = (ds_name, pat_id)
         else:
             data = (set.name, s_i) 
 

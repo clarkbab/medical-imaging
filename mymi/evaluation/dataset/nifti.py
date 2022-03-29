@@ -1,5 +1,3 @@
-import hashlib
-import json
 from mymi.transforms.crop_or_pad import crop_foreground_3D
 import numpy as np
 import os
@@ -18,6 +16,7 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi import types
+from mymi.utils import encode
 
 def get_patient_localiser_evaluation(
     dataset: str,
@@ -236,9 +235,8 @@ def create_localiser_evaluation_from_loader(
         df = df.astype(cols)
 
         # Save evaluation.
-        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
         filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
+        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
@@ -259,9 +257,8 @@ def load_localiser_evaluation_from_loader(
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> np.ndarray:
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
         print(filepath)
         raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with test fold {test_fold} not found.")
@@ -470,9 +467,8 @@ def create_segmenter_evaluation_from_loader(
         df = df.astype(cols)
 
         # Save evaluation.
-        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
         filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+        filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
@@ -497,9 +493,8 @@ def load_segmenter_evaluation_from_loader(
     test_fold: Optional[int] = None) -> np.ndarray:
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
-    folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
     filename = f'eval-folds-{num_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+    filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
         logging.error(f'filepath: {filepath}')
         raise ValueError(f"Segmenter evaluation for dataset '{datasets}', localiser '{localiser}', segmenter '{segmenter}', {num_folds}-fold CV with test fold {test_fold} not found.")
@@ -556,10 +551,9 @@ def create_two_stage_evaluation_from_loader(
         seg_df = seg_df.astype(cols)
 
         # Save evaluations.
-        folder = hashlib.sha1(json.dumps(datasets).encode('utf-8')).hexdigest()
         filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        loc_filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, folder, f'{filename}.csv')
-        seg_filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, folder, f'{filename}.csv')
+        loc_filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+        seg_filepath = os.path.join(config.directories.evaluation, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
         os.makedirs(os.path.dirname(loc_filepath), exist_ok=True)
         os.makedirs(os.path.dirname(seg_filepath), exist_ok=True)
         loc_df.to_csv(loc_filepath, index=False)

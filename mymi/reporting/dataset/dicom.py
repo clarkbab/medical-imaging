@@ -1,5 +1,3 @@
-import hashlib
-import json
 import numpy as np
 import os
 import pandas as pd
@@ -9,8 +7,8 @@ from typing import List
 from mymi import dataset as ds
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
-from mymi.regions import hash_regions
 from mymi import types
+from mymi.utils import encode
 
 def create_evaluation_report(
     name: str,
@@ -74,8 +72,7 @@ def create_ct_summary(
 
     # Save summary.
     set = ds.get(dataset, 'dicom')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -83,8 +80,7 @@ def load_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> None:
     set = ds.get(dataset, 'dicom')
-    hash = hash_regions(regions)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{hash}.csv')
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
 def region_count(

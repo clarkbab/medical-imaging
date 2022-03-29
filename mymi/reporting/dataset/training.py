@@ -17,6 +17,7 @@ from mymi.plotting.dataset.training import plot_sample_regions
 from mymi.postprocessing import get_object, one_hot_encode
 from mymi.regions import RegionNames
 from mymi import types
+from mymi.utils import encode
 
 def region_count(
     dataset: str,
@@ -338,50 +339,42 @@ def create_ct_figures(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 
-def create_test_loader_manifest(
+def create_loader_manifest(
     datasets: Union[str, List[str]],
-    regions: types.PatientRegions,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         sets = [ds.get(datasets, 'training')]
     else:
         sets = [ds.get(d) for d in datasets]
-    if type(regions) == str:
-        if regions == 'all':
-            regions = RegionNames
-        else:
-            regions = [regions]
 
     # Create empty dataframe.
     cols = {
         'dataset': str,
-        'sample-id': str,
         'patient-id': str,
         'region': str
     }
     df = pd.DataFrame(columns=cols.keys())
 
     # Add entries.
-    for region in tqdm(regions):
+    for region in tqdm(RegionNames):
         # Create test loader.
-        print(region)
         _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Get values for this region.
-        values = test_loader.dataset._sample_map.values()
-        ndf = pd.DataFrame(values, columns=['dataset-id', 'sample-id'])
-        ndf.insert(0, 'dataset', ndf['dataset-id'].map(lambda i: datasets[i]))
-        pat_ids = ndf.apply(lambda row: sets[row['dataset-id']].sample(row['sample-id']).patient_id, axis=1)
-        ndf = ndf.assign(**{ 'patient-id': pat_ids })
-        ndf = ndf.drop(columns='dataset-id')
-        ndf['region'] = region
-
-        # Add to list.
-        df = pd.concat([df, ndf], axis=0)
+        for ds_b, pat_b in iter(test_loader):
+            data = {
+                'dataset': ds_b[0],
+                'patient-id': pat_b[0].item(),
+                'region': region
+            }
+            df = df.append(data, ignore_index=True)
 
     # Set type.
     df = df.astype(cols)
 
     # Save manifest.
-    config.save_csv(df, 'test-loader-manifest', 'test.csv', overwrite=True)
+    config.save_csv(df, 'loader-manifests', f'{encode(datasets)}.csv', overwrite=True)
+
+def load_loader_manifest(datasets) -> pd.DataFrame:
+    return config.load_csv('loader-manifests', f'{encode(datasets)}.csv')

@@ -54,6 +54,12 @@ class Formatting:
 directories = Directories()
 formatting = Formatting()
 
+def environ(name: str) -> Optional[str]:
+    if name in os.environ:
+        return os.environ[name]
+    else:
+        return None
+
 def save_csv(
     data: pd.DataFrame,
     *path: List[str],

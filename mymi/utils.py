@@ -1,12 +1,24 @@
-from colorlog import ColoredFormatter
-import gc
-import logging
-from matplotlib.colors import ListedColormap
-import matplotlib.pyplot as plt
+import json
+import hashlib
 import numpy as np
-import re
-import torch
-from typing import *
+from typing import Any
+
+from mymi.loaders import Loader
+
+def encode(o: Any) -> str:
+    return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
+
+def get_manifest():
+    datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+    region = 'BrainStem'
+    num_folds = 5
+    num_train = 5
+    test_fold = 0
+    _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, num_folds=num_folds, num_train=num_train, test_fold=test_fold)
+    samples = []
+    for ds_b, samp_b in iter(test_loader):
+        samples.append((ds_b[0], samp_b[0].item()))
+    return samples
 
 def get_batch_centroids(label_batch, plane):
     """

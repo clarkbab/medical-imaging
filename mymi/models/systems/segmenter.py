@@ -23,7 +23,7 @@ class Segmenter(pl.LightningModule):
         loss: nn.Module = DiceLoss(),
         metrics: List[str] = [],
         predict_logits: bool = False,
-        pretrained: Optional[pl.LightningModule] = None,
+        pretrained_model: Optional[pl.LightningModule] = None,
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
         if 'distances' in metrics and spacing is None:
@@ -36,13 +36,13 @@ class Segmenter(pl.LightningModule):
         self._max_image_batches = 50
         self._name = None
         self._metrics = metrics
-        pretrained_model = pretrained.network if pretrained else None
+        pretrained_model = pretrained_model.network if pretrained_model else None
         self._network = UNet3D(pretrained_model=pretrained_model)
         self._predict_logits = predict_logits
         self._spacing = spacing
 
     @property
-    def model(self) -> nn.Module:
+    def network(self) -> nn.Module:
         return self._network
 
     @property
