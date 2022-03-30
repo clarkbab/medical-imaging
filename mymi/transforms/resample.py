@@ -1,19 +1,22 @@
 import numpy as np
 import SimpleITK as sitk
+from typing import Optional
 
 from mymi import types
 
 def resample_3D(
     input: np.ndarray,
-    spacing: types.ImageSpacing3D,
-    new_spacing: types.ImageSpacing3D) -> np.ndarray:
-    """
-    returns: a resampled tensor.
-    args:
-        input: the input data.
-        spacing: the old spacing.
-        new_spacing: the new spacing.
-    """
+    origin: Optional[types.PhysPoint3D] = None,
+    spacing: Optional[types.ImageSpacing3D] = None,
+    output_origin: Optional[types.PhysPoint3D] = None,
+    output_size: Optional[types.ImageSize3D] = None,
+    output_spacing: Optional[types.ImageSpacing3D] = None) -> np.ndarray:
+    assert origin is not None or spacing is not None
+    if origin is not None:
+        assert output_origin is not None
+    if spacing is not None:
+        assert output_spacing is not None
+    
     # Convert boolean data to sitk-friendly type.
     boolean = input.dtype == bool
     if boolean:
@@ -21,19 +24,33 @@ def resample_3D(
 
     # Create sitk image.
     image = sitk.GetImageFromArray(input)
-    image.SetSpacing(tuple(reversed(spacing)))
+    if origin is not None:
+        image.SetOrigin(tuple(reversed(origin)))
+    if spacing is not None:
+        image.SetSpacing(tuple(reversed(spacing)))
 
     # Create resample filter.
     resample = sitk.ResampleImageFilter()
     if boolean:
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
-    resample.SetOutputOrigin(image.GetOrigin())
-    resample.SetOutputSpacing(tuple(reversed(new_spacing)))
-    image_size = np.array(image.GetSize())
-    image_spacing = np.array(image.GetSpacing())
-    new_size = np.ceil(image_size * (image_spacing / tuple(reversed(new_spacing))))
-    new_size = tuple(int(s) for s in new_size)
-    resample.SetSize(new_size)
+    if output_origin is None:
+        output_origin = image.GetOrigin()
+    else:
+        output_origin = tuple(reversed(output_origin))
+    resample.SetOutputOrigin(tuple(reversed(output_origin)))
+    if output_spacing is None:
+        output_spacing = image.GetSpacing()
+    else:
+        output_spacing = tuple(reversed(output_spacing))
+    resample.SetOutputSpacing(tuple(reversed(output_spacing)))
+    if output_size is None:
+        image_size = np.array(image.GetSize())
+        image_spacing = np.array(image.GetSpacing())
+        output_size = np.ceil(image_size * (image_spacing / tuple(reversed(output_spacing))))
+        output_size = tuple(int(s) for s in output_size)
+    else:
+        output_size = tuple(reversed(output_size))
+    resample.SetSize(output_size)
 
     # Perform resampling.
     image = resample.Execute(image)

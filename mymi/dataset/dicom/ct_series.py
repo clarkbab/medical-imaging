@@ -72,13 +72,8 @@ class CTSeries(DICOMSeries):
     @property
     def offset(self) -> types.PhysPoint3D:
         cts = self.get_cts()
-
-        # Get offset.
-        offset = (
-            cts[0].ImagePositionPatient[0],
-            cts[0].ImagePositionPatient[1],
-            cts[0].ImagePositionPatient[2]
-        )
+        offset = cts[0].ImagePositionPatient
+        offset = tuple(int(s) for s in offset)
         return offset
 
     def orientation(self) -> types.ImageSpacing3D:

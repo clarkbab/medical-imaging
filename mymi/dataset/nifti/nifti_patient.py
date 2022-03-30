@@ -133,3 +133,10 @@ class NIFTIPatient:
             data[region] = rdata.astype(bool)
         return data
 
+    @property
+    def dose_data(self) -> np.ndarray:
+        filepath = os.path.join(self._dataset.path, 'data', 'dose', f'{self._id}.nii.gz')
+        img = nib.load(filepath)
+        data = img.get_fdata()
+        return data
+

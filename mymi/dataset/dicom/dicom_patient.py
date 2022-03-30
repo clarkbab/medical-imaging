@@ -204,6 +204,18 @@ class DICOMPatient:
     def ct_data(self):
         return self._default_rtstruct.ref_ct.data
 
+    @property
+    def dose_data(self):
+        return self._default_rtdose.data
+
+    @property
+    def dose_offset(self):
+        return self._default_rtdose.offset
+
+    @property
+    def dose_spacing(self):
+        return self._default_rtdose.spacing
+
     def get_rtdose(self, *args, **kwargs):
         return self._default_rtdose_series.get_rtdose(*args, **kwargs)
 

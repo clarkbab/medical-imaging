@@ -1,8 +1,8 @@
-import os
+import numpy as np
 import pandas as pd
 import pydicom as dcm
+from mymi import types
 
-from .rtplan_series import RTPLANSeries
 from .dicom_series import DICOMModality, DICOMSeries
 
 class RTDOSESeries(DICOMSeries):
@@ -55,3 +55,26 @@ class RTDOSESeries(DICOMSeries):
         filepath = self._index.iloc[0].filepath
         rtdose = dcm.read_file(filepath)
         return rtdose
+
+    @property
+    def data(self) -> np.ndarray:
+        rtdose = self.get_rtdose()
+        data = np.transpose(rtdose.pixel_array)
+        return data
+
+    @property
+    def offset(self) -> types.PhysPoint3D:
+        rtdose = self.get_rtdose()
+        offset = rtdose.ImagePositionPatient
+        offset = tuple(int(s) for s in offset)
+        return offset
+
+    @property
+    def spacing(self) -> types.ImageSpacing3D:
+        rtdose = self.get_rtdose()
+        spacing_x_y = rtdose.PixelSpacing 
+        z_diffs = np.unique(np.diff(rtdose.GridFrameOffsetVector))
+        assert len(z_diffs) == 1
+        spacing_z = z_diffs[0]
+        spacing = tuple(np.append(spacing_x_y, spacing_z))
+        return spacing

@@ -12,6 +12,7 @@ from scipy.ndimage import binary_dilation
 from mymi import config
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
+from mymi.transforms import resample_3D
 from mymi import types
 
 def convert_to_nifti(
@@ -43,9 +44,9 @@ def convert_to_nifti(
 
         # Create CT NIFTI.
         patient = dataset.patient(pat)
-        data = patient.ct_data()
-        spacing = patient.ct_spacing()
-        offset = patient.ct_offset()
+        data = patient.ct_data
+        spacing = patient.ct_spacing
+        offset = patient.ct_offset
         affine = np.array([
             [spacing[0], 0, 0, offset[0]],
             [0, spacing[1], 0, offset[1]],
@@ -64,6 +65,18 @@ def convert_to_nifti(
             filepath = os.path.join(nifti_ds.path, 'data', 'regions', region, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
+
+        # Create RTDOSE NIFTI.
+        try:
+            patient = dataset.patient(pat, load_default_rtdose=True) 
+            rtdose = patient.default_rtdose
+            dose_data = resample_3D(rtdose.data, origin=rtdose.offset, spacing=rtdose.spacing, output_origin=patient.ct_offset, output_size=patient.ct_size, output_spacing=patient.ct_spacing)
+            img = Nifti1Image(dose_data, affine)
+            filepath = os.path.join(nifti_ds.path, 'data', 'dose', filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            nib.save(img, filepath)
+        except ValueError as e:
+            logging.error(str(e))
 
     # Indicate success.
     _write_flag(nifti_ds, '__CONVERT_FROM_NIFTI_END__')
