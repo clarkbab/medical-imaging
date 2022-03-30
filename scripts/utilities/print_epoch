@@ -8,8 +8,9 @@ sys.path.append(root_dir)
 
 from mymi import config
 
-region = 'BrainStem'
-model = (f'segmenter-{region}', 'transfer-fold-0-samples-None', 'last.ckpt')
+region = sys.argv[1]
+run = sys.argv[2]
+model = (f'segmenter-{region}', run, 'last.ckpt')
 path = os.path.join(config.directories.models, *model)
 state = torch.load(path, map_location=torch.device('cpu'))
 

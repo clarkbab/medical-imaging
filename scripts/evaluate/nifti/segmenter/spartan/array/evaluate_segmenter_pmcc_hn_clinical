@@ -35,10 +35,11 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 NUM_FOLDS=5
+# NUM_TRAIN=5
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLDS=(
-    # 0
-    1
+    0
+    # 1
     # 2
     # 3
     # 4
@@ -46,7 +47,12 @@ TEST_FOLDS=(
 
 for i in "${!TEST_FOLDS[@]}"; do
     test_fold=${TEST_FOLDS[i]}
-    segmenter="('segmenter-$REGION','clinical-1gpu-150epochs-fold-$test_fold','BEST')"
-    python $SCRIPT_DIR/evaluate/nifti/segmenter/create_evaluation_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER --segmenter $segmenter \
-        --num_folds $NUM_FOLDS --test_folds $test_fold
+    segmenter="('segmenter-$REGION','clinical-fold-$test_fold-samples-$NUM_TRAIN','BEST')"
+    python $SCRIPT_DIR/evaluate/nifti/segmenter/create_evaluation_from_loader \
+        --datasets $DATASETS \
+        --localiser $LOCALISER \
+        --num_folds $NUM_FOLDS \
+        --region $REGION \
+        --segmenter $segmenter \
+        --test_folds $test_fold
 done
