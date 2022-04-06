@@ -11,15 +11,17 @@ def plot_patient_regions(
     dataset: str,
     pat_id: str,
     regions: types.PatientRegions = 'all',
+    show_dose: bool = False,
     **kwargs) -> None:
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data
     region_data = patient.region_data(regions=regions)
     spacing = patient.ct_spacing
+    dose_data = patient.dose_data if show_dose else None
     
     # Plot.
-    plot_regions(pat_id, ct_data, region_data, spacing, regions=regions, **kwargs)
+    plot_regions(pat_id, ct_data, region_data, spacing, dose_data=dose_data, regions=regions, **kwargs)
 
 def plot_patient_localiser_prediction(
     dataset: str,

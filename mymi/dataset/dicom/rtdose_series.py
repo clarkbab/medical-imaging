@@ -4,6 +4,7 @@ import pydicom as dcm
 from mymi import types
 
 from .dicom_series import DICOMModality, DICOMSeries
+from mymi.transforms import resample_3D
 
 class RTDOSESeries(DICOMSeries):
     def __init__(
@@ -58,8 +59,11 @@ class RTDOSESeries(DICOMSeries):
 
     @property
     def data(self) -> np.ndarray:
+        patient = self.study.patient
         rtdose = self.get_rtdose()
         data = np.transpose(rtdose.pixel_array)
+        data = rtdose.DoseGridScaling * data
+        data = resample_3D(data, origin=self.offset, spacing=self.spacing, output_origin=patient.ct_offset, output_size=patient.ct_size, output_spacing=patient.ct_spacing) 
         return data
 
     @property
@@ -68,6 +72,10 @@ class RTDOSESeries(DICOMSeries):
         offset = rtdose.ImagePositionPatient
         offset = tuple(int(s) for s in offset)
         return offset
+
+    @property
+    def size(self) -> types.ImageSize3D:
+        return self.data.shape
 
     @property
     def spacing(self) -> types.ImageSpacing3D:

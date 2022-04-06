@@ -69,8 +69,7 @@ def convert_to_nifti(
         # Create RTDOSE NIFTI.
         try:
             patient = dataset.patient(pat, load_default_rtdose=True) 
-            rtdose = patient.default_rtdose
-            dose_data = resample_3D(rtdose.data, origin=rtdose.offset, spacing=rtdose.spacing, output_origin=patient.ct_offset, output_size=patient.ct_size, output_spacing=patient.ct_spacing)
+            dose_data = patient.dose_data
             img = Nifti1Image(dose_data, affine)
             filepath = os.path.join(nifti_ds.path, 'data', 'dose', filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)

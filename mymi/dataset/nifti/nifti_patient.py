@@ -136,6 +136,8 @@ class NIFTIPatient:
     @property
     def dose_data(self) -> np.ndarray:
         filepath = os.path.join(self._dataset.path, 'data', 'dose', f'{self._id}.nii.gz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Dose data not found for patient '{self}'.")
         img = nib.load(filepath)
         data = img.get_fdata()
         return data

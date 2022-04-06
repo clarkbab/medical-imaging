@@ -315,14 +315,16 @@ def plot_regions(
     ct_data: np.ndarray,
     region_data: Dict[str, np.ndarray],
     spacing: types.ImageSpacing3D,
-    alpha: float = 0.3,
     aspect: Optional[float] = None,
     axis: Optional[matplotlib.axes.Axes] = None,
     cca: bool = False,
     centre_of: Optional[str] = None,
     colours: Optional[List[str]] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
-    crop_margin: float = 40,
+    crop_margin: float = 100,
+    dose_alpha: float = 0.3,
+    dose_data: Optional[np.ndarray] = None,
+    dose_legend_size: float = 0.03,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (8, 8),
     fontsize: int = 10,
@@ -332,10 +334,11 @@ def plot_regions(
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     regions: Union[str, Sequence[str]] = 'all',
+    region_alpha: float = 0.3,
     savepath: Optional[str] = None,
     show: bool = True,
+    show_axis_labels: bool = True,
     show_axis_ticks: bool = True,
-    show_axis_label: bool = True,
     show_extent: bool = False,
     slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
@@ -395,6 +398,8 @@ def plot_regions(
 
     # Get slice data.
     ct_slice_data = get_slice(ct_data, slice_idx, view)
+    if dose_data is not None:
+        dose_slice_data = get_slice(dose_data, slice_idx, view)
 
     # Convert to box representation.
     if crop:
@@ -406,6 +411,8 @@ def plot_regions(
     # Perform crop.
     if crop:
         ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
+        if dose_data is not None:
+            dose_slice_data = crop_or_pad_2D(dose_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -427,7 +434,7 @@ def plot_regions(
     axis.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
     # Show axis labels.
-    if show_axis_label:
+    if show_axis_labels:
         if view == 'axial':
             spacing_x = spacing[0]
             spacing_y = spacing[1]
@@ -443,13 +450,22 @@ def plot_regions(
 
     if regions:
         # Plot regions.
-        show_legend = _plot_region_data(region_data, slice_idx, alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+        show_legend = _plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         # Create legend.
         if legend and show_legend:
             plt_legend = axis.legend(fontsize=fontsize, loc=legend_loc)
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
+
+    # Plot dose data.
+    if dose_data is not None:
+        axim = axis.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=get_origin(view))
+        cbar = plt.colorbar(axim, fraction=dose_legend_size)
+        print('here')
+        print(fontsize)
+        cbar.set_label(label='Dose [Gray]', size=fontsize)
+        cbar.ax.tick_params(labelsize=fontsize)
 
     # Show axis markers.
     show_axes = 'on' if show_axis_ticks else 'off'
@@ -708,7 +724,7 @@ def plot_segmenter_prediction(
     aspect: float = None,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
-    crop_margin: float = 40,
+    crop_margin: float = 100,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     fontsize: float = 10,
     latex: bool = False,
@@ -1049,6 +1065,12 @@ def plot_dataframe(
             major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
             num_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
             major_ticks = np.linspace(major_tick_min, major_tick_max, num_major_ticks)
+            integers = True
+            for t in major_ticks:
+                if not t.is_integer():
+                    integers = False
+            if integers:
+                major_ticks = [int(t) for t in major_ticks]
             major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
             axs[i].set_yticks(major_ticks)
             axs[i].set_yticklabels(major_tick_labels)

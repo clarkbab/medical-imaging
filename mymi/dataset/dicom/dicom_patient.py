@@ -213,6 +213,10 @@ class DICOMPatient:
         return self._default_rtdose.offset
 
     @property
+    def dose_size(self):
+        return self._default_rtdose.size
+
+    @property
     def dose_spacing(self):
         return self._default_rtdose.spacing
 

@@ -25,9 +25,11 @@ def resample_3D(
     # Create sitk image.
     image = sitk.GetImageFromArray(input)
     if origin is not None:
-        image.SetOrigin(tuple(reversed(origin)))
+        origin = tuple(reversed(origin))
+        image.SetOrigin(origin)
     if spacing is not None:
-        image.SetSpacing(tuple(reversed(spacing)))
+        spacing = tuple(reversed(spacing)) 
+        image.SetSpacing(spacing)
 
     # Create resample filter.
     resample = sitk.ResampleImageFilter()
@@ -37,16 +39,16 @@ def resample_3D(
         output_origin = image.GetOrigin()
     else:
         output_origin = tuple(reversed(output_origin))
-    resample.SetOutputOrigin(tuple(reversed(output_origin)))
+    resample.SetOutputOrigin(output_origin)
     if output_spacing is None:
         output_spacing = image.GetSpacing()
     else:
         output_spacing = tuple(reversed(output_spacing))
-    resample.SetOutputSpacing(tuple(reversed(output_spacing)))
+    resample.SetOutputSpacing(output_spacing)
     if output_size is None:
         image_size = np.array(image.GetSize())
         image_spacing = np.array(image.GetSpacing())
-        output_size = np.ceil(image_size * (image_spacing / tuple(reversed(output_spacing))))
+        output_size = np.ceil(image_size * (image_spacing / output_spacing))
         output_size = tuple(int(s) for s in output_size)
     else:
         output_size = tuple(reversed(output_size))
