@@ -324,7 +324,7 @@ def plot_regions(
     crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 40,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
-    figsize: Tuple[int, int] = (12, 12),
+    figsize: Tuple[int, int] = (8, 8),
     fontsize: int = 10,
     latex: bool = False,
     legend: bool = True,
@@ -335,8 +335,7 @@ def plot_regions(
     savepath: Optional[str] = None,
     show: bool = True,
     show_axis_ticks: bool = True,
-    show_axis_xlabel: bool = True,
-    show_axis_ylabel: bool = True,
+    show_axis_label: bool = True,
     show_extent: bool = False,
     slice_idx: Optional[int] = None,
     title: Union[bool, str] = True,
@@ -428,7 +427,7 @@ def plot_regions(
     axis.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
     # Show axis labels.
-    if show_axis_xlabel or show_axis_ylabel:
+    if show_axis_label:
         if view == 'axial':
             spacing_x = spacing[0]
             spacing_y = spacing[1]
@@ -439,10 +438,8 @@ def plot_regions(
             spacing_x = spacing[1]
             spacing_y = spacing[2]
 
-        if show_axis_xlabel:
-            axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
-        if show_axis_ylabel:
-            axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
+        axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+        axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     if regions:
         # Plot regions.

@@ -41,12 +41,12 @@ NUM_EPOCHS=150
 NUM_FOLDS=5
 NUM_GPUS=1
 NUM_NODES=1
-# NUM_TRAIN=20
+# NUM_TRAIN=5
 NUM_WORKERS=4
-RESUME=False
+# RESUME=False
 RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLD=0
+# TEST_FOLD=0
 RUN_NAME="clinical-fold-$TEST_FOLD-samples-$NUM_TRAIN"
 USE_LOGGER=True
 

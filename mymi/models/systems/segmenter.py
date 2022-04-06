@@ -55,11 +55,19 @@ class Segmenter(pl.LightningModule):
         run_name: str,
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
+        # Check that model completed 150 epochs training.
+        filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
+        state = torch.load(filepath)
+        num_epochs = 150
+        if state['epoch'] != num_epochs:
+            raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
+
         # Load model.
         model_name, run_name, checkpoint = Segmenter.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+
         segmenter = Segmenter.load_from_checkpoint(filepath, **kwargs)
         segmenter._name = (model_name, run_name, checkpoint)
         return segmenter
