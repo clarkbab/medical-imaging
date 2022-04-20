@@ -182,7 +182,7 @@ def get_patient_segmenter_prediction(
 
     # Resample input to segmenter spacing.
     input_size = input.shape
-    input = resample_3D(input, spacing, seg_spacing) 
+    input = resample_3D(input, spacing=spacing, output_spacing=seg_spacing) 
 
     # Get localiser centre on downsampled image.
     scale_factor = np.array(spacing) / seg_spacing
@@ -212,7 +212,7 @@ def get_patient_segmenter_prediction(
     pred = crop_or_pad_3D(pred, rev_patch_box)
 
     # Resample to original spacing.
-    pred = resample_3D(pred, seg_spacing, spacing)
+    pred = resample_3D(pred, spacing=seg_spacing, output_spacing=spacing)
 
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
@@ -291,12 +291,12 @@ def create_segmenter_predictions_from_loader(
     segmenter: types.ModelName,
     seg_spacing: types.ImageSpacing3D,
     num_folds: Optional[int] = None,
-    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -306,21 +306,15 @@ def create_segmenter_predictions_from_loader(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Perform for specified folds
-    if test_folds == 'all':
-        test_folds = list(range(num_folds))
-    elif type(test_folds) == int:
-        test_folds = [test_folds]
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
-    for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
-
-        # Make predictions.
-        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-            if type(pat_ids) == torch.Tensor:
-                pat_ids = pat_ids.tolist()
-            for dataset, pat_id in zip(datasets, pat_ids):
-                create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device)
+    # Make predictions.
+    for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
+        if type(pat_ids) == torch.Tensor:
+            pat_ids = pat_ids.tolist()
+        for dataset, pat_id in zip(datasets, pat_ids):
+            create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device)
 
 def load_patient_segmenter_prediction(
     dataset: str,

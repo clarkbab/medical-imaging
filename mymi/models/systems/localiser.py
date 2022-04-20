@@ -57,6 +57,13 @@ class Localiser(pl.LightningModule):
         run_name: str,
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
+        # Check that model completed 150 epochs training.
+        filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
+        state = torch.load(filepath, map_location=torch.device('cpu'))
+        num_epochs = 150
+        if state['epoch'] != num_epochs:
+            raise ValueError(f"Can't load localiser ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
+
         # Load model.
         model_name, run_name, checkpoint = Localiser.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")

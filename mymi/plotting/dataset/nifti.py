@@ -58,8 +58,8 @@ def plot_patient_segmenter_prediction(
     localisers: Union[types.ModelName, List[types.ModelName]],
     segmenters: Union[types.ModelName, List[types.ModelName]],
     loc_sizes: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
-    loc_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
-    seg_spacing: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
+    loc_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
+    seg_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
     load_loc_prediction: bool = True,
     load_seg_prediction: bool = True,
     **kwargs) -> None:

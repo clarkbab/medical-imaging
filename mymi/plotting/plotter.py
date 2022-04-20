@@ -853,7 +853,7 @@ def plot_segmenter_prediction(
                 plt.plot(0, 0, c=colour, label='Pred. Extent (offscreen)')
 
         # Plot localiser centre.
-        if loc_centre is not None and not empty_preds[i] and show_loc_centre:
+        if loc_centre is not None and show_loc_centre:
             # Get 2D loc centre.
             loc_centre = loc_centres[i]
             if view == 'axial':
@@ -1010,7 +1010,7 @@ def plot_dataframe(
                     plt.setp(axs[i].collections, zorder=100, label="")
                     if annotate_outliers:
                         first_region = i * n_col
-                        _annotate_outliers(axs[i], outlier_df, f'{x}_id', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
+                        _annotate_outliers(axs[i], outlier_df, f'{x}_num', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
 
         # Plot statistical significance.
         if hue is not None and show_stats:
@@ -1185,7 +1185,7 @@ def _annotate_outliers(ax, data, x, y, label, default_offset, overlap_min_diff, 
     offset = default_offset
     
     # Print annotations.
-    for i, row in data.iterrows():
+    for _, row in data.iterrows():
         if debug:
             print(f'region: {row[x]}')
             print(f'patient: {row[label]}')
@@ -1246,3 +1246,161 @@ def _format_p_values(p_vals: List[float]) -> List[str]:
             p_val = '****'
         f_p_vals.append(p_val)
     return f_p_vals
+
+def plot_dataframe_v2(
+    data=None,
+    x=None,
+    y=None,
+    hue=None,
+    box_line_colour: str = 'black',
+    box_line_width: float = 1,
+    fontsize: float = 10,
+    hue_order: Optional[List[str]] = None,
+    legend_loc: str = 'upper right',
+    major_tick_freq: Optional[float] = None,
+    minor_tick_freq: Optional[float] = None,
+    n_col: int = 6,
+    point_size: float = 10,
+    row_height: float = 6,
+    row_width: float = 18,
+    savepath: Optional[str] = None,
+    show_x_labels: bool = True,
+    x_width: float = 0.8,
+    xlabel_rot: float = 0,
+    ylabel: Optional[str] = None,
+    ylim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
+    # Add x/outlier info.
+    data = _add_x_info(data, x, hue)
+    data = _add_outlier_info(data, x, y, hue)
+
+    # Split data.
+    xs = list(sorted(data[x].unique()))
+    x_labels = [data[data[x] == i].iloc[0][f'{x}_label'] for i in xs]
+    num_rows = int(np.ceil(len(xs) / n_col))
+    if num_rows > 1:
+        _, axs = plt.subplots(num_rows, 1, figsize=(row_width, num_rows * row_height), sharey=True)
+    else:
+        plt.figure(figsize=(row_width, row_height))
+        axs = [plt.gca()]
+
+    # Get hue order/colours.
+    if hue is not None:
+        if hue_order is None:
+            hue_order = list(sorted(data[hue].unique()))
+        palette = sns.color_palette()
+        hue_colours = [palette[i] for i in range(len(hue_order))]
+        hue_width = x_width / len(hue_order)
+
+    # Plot rows.
+    for i in range(num_rows):
+        # Split data.
+        row_xs = xs[i * n_col:(i + 1) * n_col]
+        row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
+        row_data = data[data[x].isin(row_xs)]
+        if len(row_data) == 0:
+            continue
+    
+        # Add x positions.
+        for j, row_x in enumerate(row_xs):
+            # Get hue positions.
+            if hue is not None:
+                for k, hue_name in enumerate(hue_order):
+                    # Add hue x positions.
+                    x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
+                    data.loc[(data[x] == row_x) & (data[hue] == hue_name), 'x_pos'] = x_pos
+            else:
+                pass
+                
+        # Plot boxes.
+        for row_x in row_xs:
+            if hue is not None:
+                box_labels = []
+                for j, hue_name in enumerate(hue_order):
+                    # Get hue data and pos.
+                    hue_data = data[(data[x] == row_x) & (data[hue] == hue_name)]
+                    hue_pos = hue_data.iloc[0]['x_pos']
+
+                    # Plot box.
+                    bplot = axs[i].boxplot(hue_data[y], boxprops=dict(color=box_line_colour, facecolor=hue_colours[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                    box_labels.append((bplot['boxes'][0], hue_name)) 
+
+                # Add legend.
+                boxes, labels = list(zip(*box_labels))
+                axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
+
+        # Plot points.
+        for row_x in row_xs:
+            if hue is not None:
+                for j, hue_name in enumerate(hue_order):
+                    # Get hue data and pos.
+                    hue_data = data[(data[x] == row_x) & (data[hue] == hue_name)]
+                    hue_pos = hue_data.iloc[0]['x_pos']
+
+                    # Plot points.
+                    axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                
+        # Set axis ticks and labels.
+        axs[i].set_xticks(list(range(len(row_x_labels))))
+        axs[i].set_xticklabels(row_x_labels)
+
+        # Set y axis major ticks.
+        if major_tick_freq is not None:
+            major_tick_min = ylim[0]
+            if major_tick_min is None:
+                major_tick_min = axs[i].get_ylim()[0]
+            major_tick_max = ylim[1]
+            if major_tick_max is None:
+                major_tick_max = axs[i].get_ylim()[1]
+            
+            # Round range to nearest multiple of 'major_tick_freq'.
+            major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
+            major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
+            num_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
+            major_ticks = np.linspace(major_tick_min, major_tick_max, num_major_ticks)
+            major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
+            axs[i].set_yticks(major_ticks)
+            axs[i].set_yticklabels(major_tick_labels)
+
+        # Set y axis minor ticks.
+        if minor_tick_freq is not None:
+            minor_tick_min = ylim[0]
+            if minor_tick_min is None:
+                minor_tick_min = axs[i].get_ylim()[0]
+            minor_tick_max = ylim[1]
+            if minor_tick_max is None:
+                minor_tick_max = axs[i].get_ylim()[1]
+            
+            # Round range to nearest multiple of 'minor_tick_freq'.
+            minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
+            minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
+            num_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
+            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, num_minor_ticks)
+            axs[i].set_yticks(minor_ticks, minor=True)
+
+        # Set y grid lines.
+        axs[i].grid(axis='y', linestyle='dashed')
+        axs[i].set_axisbelow(True)
+
+        # Set axis limits.
+        axs[i].set_ylim(*ylim)
+          
+        # Set axis labels.
+        axs[i].set_xlabel('')
+        if ylabel is None:
+            ylabel = ''
+        axs[i].set_ylabel(ylabel, fontsize=fontsize)
+
+        # Set axis tick labels fontsize/rotation.
+        if show_x_labels:
+            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=xlabel_rot)
+        else:
+            axs[i].set_xticklabels([])
+
+        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
+
+    # Make sure x-axis tick labels aren't cut.
+    plt.tight_layout()
+
+    # Save plot to disk.
+    if savepath is not None:
+        plt.savefig(savepath)
