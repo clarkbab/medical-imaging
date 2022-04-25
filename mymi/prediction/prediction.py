@@ -38,7 +38,7 @@ def get_localiser_prediction(
     # Resample/crop data for network.
     resample = True if spacing != loc_spacing else False
     if resample:
-        input = resample_3D(input, spacing, loc_spacing)
+        input = resample_3D(input, spacing=spacing, output_spacing=loc_spacing)
 
     # Crop the image so it won't overflow network memory. Perform 'top' crop
     # as we're interested in the cranial end of z-axis.
@@ -60,7 +60,7 @@ def get_localiser_prediction(
 
     # Reverse the resample.
     if resample:
-        pred = resample_3D(pred, loc_spacing, spacing)
+        pred = resample_3D(pred, spacing=loc_spacing, output_spacing=spacing)
     
     # Crop to input size to clean up any resampling rounding errors.
     crop_box = ((0, 0, 0), input_size)

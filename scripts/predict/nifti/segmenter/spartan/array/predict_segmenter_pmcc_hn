@@ -1,9 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition physical
+#SBATCH --partition gpgpu
 #SBATCH --mem 32G
+#SBATCH --gres gpu:p100:1
+#SBATCH --cpus-per-gpu 4
 #SBATCH --time 0-2:00:00
 #SBATCH -A punim1413
+#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -34,16 +37,19 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
+# MODEL='clinical'
 NUM_FOLDS=5
-# NUM_TRAIN=5
+# NUM_SAMPLES=5
+SEGMENTER_SPACING="(1,1,2)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
-SEGMENTER="('segmenter-$REGION','transfer-fold-$TEST_FOLD-samples-$NUM_TRAIN','BEST')"
+SEGMENTER="('segmenter-$REGION','$MODEL-fold-$TEST_FOLD-samples-$NUM_SAMPLES','BEST')"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/create_evaluation_from_loader \
+python $SCRIPT_DIR/predict/nifti/segmenter/create_predictions_from_loader \
     --datasets $DATASETS \
-    --region $REGION \
     --localiser $LOCALISER \
-    --segmenter $SEGMENTER \
     --num_folds $NUM_FOLDS \
+    --region $REGION \
+    --segmenter $SEGMENTER \
+    --seg_spacing $SEGMENTER_SPACING \
     --test_fold $TEST_FOLD

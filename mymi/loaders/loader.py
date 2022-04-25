@@ -21,7 +21,7 @@ class Loader:
         half_precision: bool = True,
         load_test_origin: bool = True,
         num_folds: Optional[int] = None, 
-        num_train: Optional[int] = None,
+        num_samples: Optional[int] = None,
         num_workers: int = 1,
         random_seed: int = 42,
         spacing: Optional[types.ImageSpacing3D] = None,
@@ -58,7 +58,7 @@ class Loader:
 
             # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
             # folds should be [3, 4, 0, 1] (for num_folds=5). This ensures that when we 
-            # take a subset of samples (num_train != None), we get different training samples
+            # take a subset of samples (num_samples != None), we get different training samples
             # for each of the k-folds.
             train_folds = list((np.array(range(num_folds)) + (test_fold + 1)) % 5)
             train_folds.remove(test_fold)
@@ -72,8 +72,8 @@ class Loader:
             train_samples = all_samples
 
         # Take subset of train samples.
-        if num_train is not None:
-            train_samples = train_samples[:num_train]
+        if num_samples is not None:
+            train_samples = train_samples[:num_samples]
 
         # Split train into NN train and validation data.
         num_nn_train = int(len(train_samples) * (1 - p_val))

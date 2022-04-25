@@ -36,12 +36,19 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','public-1gpu-150epochs-dilate-5','BEST')"
+LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 LOCALISER_SIZE="(128,128,150)"
 LOCALISER_SPACING="(4,4,4)"
 NUM_FOLDS=5
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLDS="all"
+# TEST_FOLD=0
 
-python $SCRIPT_DIR/predict/nifti/localiser/create_predictions_from_loader --datasets $DATASETS --region $REGION --localiser $LOCALISER --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING \
-    --num_folds $NUM_FOLDS --region $REGION --test_folds $TEST_FOLDS
+python $SCRIPT_DIR/predict/nifti/localiser/create_predictions_from_loader \
+    --datasets $DATASETS \
+    --region $REGION \
+    --localiser $LOCALISER \
+    --loc_size $LOCALISER_SIZE \
+    --loc_spacing $LOCALISER_SPACING \
+    --num_folds $NUM_FOLDS \
+    --region $REGION \
+    --test_fold $TEST_FOLD

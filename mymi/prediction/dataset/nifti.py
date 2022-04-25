@@ -103,12 +103,12 @@ def create_localiser_predictions_from_loader(
     loc_size: Tuple[int, int, int],
     loc_spacing: Tuple[float, float, float],
     num_folds: Optional[int] = None,
-    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
-    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -118,24 +118,20 @@ def create_localiser_predictions_from_loader(
         device = torch.device('cpu')
         logging.info('Predicting on CPU...')
 
-    # Perform for specified folds
-    if test_folds == 'all':
-        test_folds = list(range(num_folds))
-    elif type(test_folds) == int:
-        test_folds = [test_folds]
-
     # Set truncation if 'SpinalCord'.
     truncate = True if region == 'SpinalCord' else False
 
-    for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
-        # Make predictions.
-        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-            if type(pat_ids) == torch.Tensor:
-                pat_ids = pat_ids.tolist()
-            for dataset, pat_id in zip(datasets, pat_ids):
-                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+    # Make predictions.
+    print('here')
+    for datasets, pat_ids in tqdm(iter(test_loader)):
+        logging.info(f"{datasets}, {pat_ids}")
+        if type(pat_ids) == torch.Tensor:
+            pat_ids = pat_ids.tolist()
+        for dataset, pat_id in zip(datasets, pat_ids):
+            create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
 def load_patient_localiser_prediction(
     dataset: str,
@@ -310,7 +306,9 @@ def create_segmenter_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
+    print('here')
     for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
+        logging.info(f"{datasets}, {pat_ids}")
         if type(pat_ids) == torch.Tensor:
             pat_ids = pat_ids.tolist()
         for dataset, pat_id in zip(datasets, pat_ids):

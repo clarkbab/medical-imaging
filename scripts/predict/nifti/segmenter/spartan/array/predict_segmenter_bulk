@@ -1,0 +1,17 @@
+import subprocess
+
+# regions = '0-2,4-10,12-16'
+regions = '9'
+script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter_pmcc_hn'
+test_folds = [0]
+models = ['clinical', 'transfer']
+num_samples_list = [5, 10, 20, 50, 100, 200, 'None']
+
+for model in models:
+    for test_fold in test_folds:
+        for num_samples in num_samples_list:
+            # Create slurm command.
+            export = f'ALL,MODEL={model},NUM_SAMPLES={num_samples},TEST_FOLD={test_fold}'
+            command = f'sbatch --array={regions} --export={export} {script}' 
+            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+            process.communicate()

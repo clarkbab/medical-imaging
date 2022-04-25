@@ -25,7 +25,7 @@ def train_localiser(
     num_folds: Optional[int] = None,
     num_gpus: int = 1,
     num_nodes: int = 1,
-    num_train: Optional[int] = None,
+    num_samples: Optional[int] = None,
     num_workers: int = 1,
     pretrained: Optional[Tuple[str, str, str]] = None,
     p_val: float = 0.2,
@@ -61,7 +61,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, num_folds=num_folds, num_samples=num_samples, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 

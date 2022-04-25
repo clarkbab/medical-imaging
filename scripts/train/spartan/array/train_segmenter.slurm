@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --nodes 1
 #SBATCH --partition gpgpu
-#SBATCH --mem 32G
+#SBATCH --mem 64G
 #SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 0-2:00:00
+#SBATCH --time 2-0:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -15,7 +15,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASETS="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')" # Code links from 'training' set to nifti set.
+DATASETS="['PMCC-HN-TEST-SEG','PMCC-HN-TRAIN-SEG']"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -36,19 +36,35 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
+MODEL_NAME="segmenter-${REGION}"
+# MODEL="clinical"
+NUM_EPOCHS=150
 NUM_FOLDS=5
-# NUM_TRAIN=5
-SEGMENTER_SPACING="(1,1,2)"
+NUM_GPUS=1
+NUM_NODES=1
+# NUM_SAMPLES=5
+NUM_WORKERS=4
+# RESUME=False
+RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
-SEGMENTER="('segmenter-$REGION','clinical-fold-$TEST_FOLD-samples-$NUM_TRAIN','BEST')"
+RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN"
+USE_LOGGER=True
 
-python $SCRIPT_DIR/predict/nifti/segmenter/create_predictions_from_loader \
+python $SCRIPT_DIR/train/segmenter \
     --datasets $DATASETS \
-    --localiser $LOCALISER \
+    --model_name $MODEL_NAME \
+    --num_epochs $NUM_EPOCHS \
     --num_folds $NUM_FOLDS \
+    --num_gpus $NUM_GPUS \
+    --num_nodes $NUM_NODES \
+    --num_samples $NUM_SAMPLES \
+    --num_workers $NUM_WORKERS \
+    --use_logger $USE_LOGGER \
     --region $REGION \
-    --segmenter $SEGMENTER \
-    --seg_spacing $SEGMENTER_SPACING \
+    --resume $RESUME \
+    --resume_checkpoint $RESUME_CHECKPOINT \
+    --run_name $RUN_NAME \
+    --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
+    --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --test_fold $TEST_FOLD
