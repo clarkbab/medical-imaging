@@ -196,49 +196,43 @@ def create_localiser_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     num_folds: Optional[int] = None,
-    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    test_fold: Optional[int] = None) -> None:
     # Get unique name.
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
-    # Perform for specified folds
-    if test_folds == 'all':
-        test_folds = list(range(num_folds))
-    elif type(test_folds) == int:
-        test_folds = [test_folds]
+    # Create dataframe.
+    cols = {
+        'fold': int,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
 
-    for test_fold in tqdm(test_folds):
-        # Create dataframe.
-        cols = {
-            'fold': int,
-            'patient-id': str,
-            'region': str,
-            'metric': str,
-            'value': float
-        }
-        df = pd.DataFrame(columns=cols.keys())
+    # Build test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
-        # Build test loader.
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    # Add evaluations to dataframe.
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
+            df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df)
 
-        # Add evaluations to dataframe.
-        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-            if type(pat_ids) == torch.Tensor:
-                pat_ids = pat_ids.tolist()
-            for dataset, pat_id in zip(datasets, pat_ids):
-                df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df)
+    # Add fold.
+    df['fold'] = test_fold
 
-        # Add fold.
-        df['fold'] = test_fold
+    # Set column types.
+    df = df.astype(cols)
 
-        # Set column types.
-        df = df.astype(cols)
-
-        # Save evaluation.
-        filename = f'eval-folds-{num_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        df.to_csv(filepath, index=False)
+    # Save evaluation.
+    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluation, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def load_localiser_evaluation(
     dataset: str,
@@ -444,11 +438,10 @@ def create_segmenter_evaluation_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Add evaluations to dataframe.
-    for datasets, pat_ids in tqdm(iter(test_loader)):
-        logging.info(f"{datasets}, {pat_ids}")
-        if type(pat_ids) == torch.Tensor:
-            pat_ids = pat_ids.tolist()
-        for dataset, pat_id in zip(datasets, pat_ids):
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
             df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
 
     # Add fold.
@@ -526,10 +519,10 @@ def create_two_stage_evaluation_from_loader(
         _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
-        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-            if type(pat_ids) == torch.Tensor:
-                pat_ids = pat_ids.tolist()
-            for dataset, pat_id in zip(datasets, pat_ids):
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+            if type(pat_id_b) == torch.Tensor:
+                pat_id_b = pat_id_b.tolist()
+            for dataset, pat_id in zip(dataset_b, pat_id_b):
                 loc_df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df)
                 seg_df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
 

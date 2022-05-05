@@ -126,11 +126,11 @@ def create_localiser_predictions_from_loader(
 
     # Make predictions.
     print('here')
-    for datasets, pat_ids in tqdm(iter(test_loader)):
-        logging.info(f"{datasets}, {pat_ids}")
-        if type(pat_ids) == torch.Tensor:
-            pat_ids = pat_ids.tolist()
-        for dataset, pat_id in zip(datasets, pat_ids):
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
+        logging.info(f"{dataset_b}, {pat_id_b}")
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
             create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
 def load_patient_localiser_prediction(
@@ -306,12 +306,10 @@ def create_segmenter_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
-    print('here')
-    for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-        logging.info(f"{datasets}, {pat_ids}")
-        if type(pat_ids) == torch.Tensor:
-            pat_ids = pat_ids.tolist()
-        for dataset, pat_id in zip(datasets, pat_ids):
+    for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
             create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing, device=device)
 
 def load_patient_segmenter_prediction(
@@ -422,10 +420,10 @@ def create_two_stage_predictions_from_loader(
         _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
         # Make predictions.
-        for datasets, pat_ids in tqdm(iter(test_loader), leave=False):
-            if type(pat_ids) == torch.Tensor:
-                pat_ids = pat_ids.tolist()
-            for dataset, pat_id in zip(datasets, pat_ids):
+        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+            if type(pat_id_b) == torch.Tensor:
+                pat_id_b = pat_id_b.tolist()
+            for dataset, pat_id in zip(dataset_b, pat_id_b):
                 # Create predictions.
                 create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
                 create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)

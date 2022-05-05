@@ -1256,27 +1256,59 @@ def plot_dataframe_v2(
     box_line_width: float = 1,
     fontsize: float = 10,
     hue_order: Optional[List[str]] = None,
+    include_x: Optional[Union[str, List[str]]] = None,
+    exclude_x: Optional[Union[str, List[str]]] = None,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
-    n_col: int = 6,
+    n_col: Optional[int] = None,
+    outlier_cols: Optional[Union[str, List[str]]] = None,
+    outlier_legend_loc: str = 'upper left',
     point_size: float = 10,
     row_height: float = 6,
     row_width: float = 18,
     savepath: Optional[str] = None,
+    show_legend: bool = True,
+    show_outliers: bool = False,
     show_x_labels: bool = True,
     x_width: float = 0.8,
     xlabel_rot: float = 0,
     ylabel: Optional[str] = None,
     ylim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
-    # Add x/outlier info.
-    data = _add_x_info(data, x, hue)
+    if type(include_x) == str:
+        include_x = [include_x]
+    if type(exclude_x) == str:
+        exclude_x = [exclude_x]
+        
+    # Include/exclude.
+    if include_x:
+        if type(include_x) == str:
+            include_x = [include_x]
+        data = data[data[x].isin(include_x)]
+    if exclude_x:
+        if type(exclude_x) == str:
+            exclude_x = [exclude_x]
+        data = data[~data[x].isin(exclude_x)]
+
+    # Add outlier data.
     data = _add_outlier_info(data, x, y, hue)
 
-    # Split data.
-    xs = list(sorted(data[x].unique()))
-    x_labels = [data[data[x] == i].iloc[0][f'{x}_label'] for i in xs]
-    num_rows = int(np.ceil(len(xs) / n_col))
+    # Get x values.
+    x_vals = list(sorted(data[x].unique()))
+
+    # Get x labels.
+    groupby = x if hue is None else [x, hue]
+    count_map = data.groupby(groupby)[y].count()
+    x_labels = []
+    for x_val in x_vals:
+        ns = list(count_map.loc[x_val].unique())
+        label = f'{x_val}\n(n={ns[0]})' if len(ns) == 1 else x_val
+        x_labels.append(label)
+
+    # Create subplots if required.
+    if n_col is None:
+        n_col = len(x_vals)
+    num_rows = int(np.ceil(len(x_vals) / n_col))
     if num_rows > 1:
         _, axs = plt.subplots(num_rows, 1, figsize=(row_width, num_rows * row_height), sharey=True)
     else:
@@ -1287,57 +1319,97 @@ def plot_dataframe_v2(
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
-        palette = sns.color_palette()
-        hue_colours = [palette[i] for i in range(len(hue_order))]
+        hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
         hue_width = x_width / len(hue_order)
 
     # Plot rows.
     for i in range(num_rows):
         # Split data.
-        row_xs = xs[i * n_col:(i + 1) * n_col]
+        row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
         row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
-        row_data = data[data[x].isin(row_xs)]
-        if len(row_data) == 0:
-            continue
     
         # Add x positions.
-        for j, row_x in enumerate(row_xs):
+        for j, row_x_val in enumerate(row_x_vals):
             # Get hue positions.
             if hue is not None:
                 for k, hue_name in enumerate(hue_order):
                     # Add hue x positions.
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
-                    data.loc[(data[x] == row_x) & (data[hue] == hue_name), 'x_pos'] = x_pos
+                    data.loc[(data[x] == row_x_val) & (data[hue] == hue_name), 'x_pos'] = x_pos
             else:
                 pass
                 
         # Plot boxes.
-        for row_x in row_xs:
+        for row_x_val in row_x_vals:
             if hue is not None:
                 box_labels = []
                 for j, hue_name in enumerate(hue_order):
                     # Get hue data and pos.
-                    hue_data = data[(data[x] == row_x) & (data[hue] == hue_name)]
+                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot box.
-                    bplot = axs[i].boxplot(hue_data[y], boxprops=dict(color=box_line_colour, facecolor=hue_colours[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                    bplot = axs[i].boxplot(hue_data[y], boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
                     box_labels.append((bplot['boxes'][0], hue_name)) 
 
                 # Add legend.
-                boxes, labels = list(zip(*box_labels))
-                axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
+                if show_legend:
+                    boxes, labels = list(zip(*box_labels))
+                    axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
 
         # Plot points.
-        for row_x in row_xs:
-            if hue is not None:
+        if hue is not None:
+            for row_x_val in row_x_vals:
                 for j, hue_name in enumerate(hue_order):
                     # Get hue data and pos.
-                    hue_data = data[(data[x] == row_x) & (data[hue] == hue_name)]
+                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot points.
-                    axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                    axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+
+        # Identify outliers - plot line connecting outliers across hue levels.
+        if show_outliers and hue is not None:
+            for row_x_val in row_x_vals:
+                # Get column/value pairs to group across hue levels.
+                line_ids = data[(data[x] == row_x_val) & data['outlier']][outlier_cols]
+
+                # Drop duplicates.
+                line_ids = line_ids.drop_duplicates()
+
+                # Get palette.
+                line_palette = sns.color_palette('husl', n_colors=len(line_ids))
+
+                # Plot lines.
+                artists = []
+                labels = []
+                for j, (_, line_id) in enumerate(line_ids.iterrows()):
+                    # Get line data.
+                    line_data = data[(data[x] == row_x_val)]
+                    for k, v in zip(line_ids.columns, line_id):
+                        line_data = line_data[line_data[k] == v]
+                    line_data = line_data.sort_values('x_pos')
+                    x_data = line_data['x_pos'].tolist()
+                    y_data = line_data[y].tolist()
+
+                    # Plot line.
+                    lines = axs[i].plot(x_data, y_data, color=line_palette[j])
+
+                    # Save line/label for legend.
+                    artists.append(lines[0])
+                    label = ':'.join(line_id.tolist())
+                    labels.append(label)
+
+                # Annotate outlier legend.
+                if show_legend:
+                    # Save main legend.
+                    main_legend = axs[i].get_legend()
+
+                    # Show outlier legend.
+                    axs[i].legend(artists, labels, fontsize=fontsize, loc=outlier_legend_loc)
+
+                    # Re-add main legend.
+                    axs[i].add_artist(main_legend)
                 
         # Set axis ticks and labels.
         axs[i].set_xticks(list(range(len(row_x_labels))))
@@ -1382,6 +1454,8 @@ def plot_dataframe_v2(
         axs[i].set_axisbelow(True)
 
         # Set axis limits.
+        xlim = (-0.5, n_col - 0.5)
+        axs[i].set_xlim(*xlim)
         axs[i].set_ylim(*ylim)
           
         # Set axis labels.

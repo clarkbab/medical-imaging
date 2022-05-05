@@ -21,7 +21,7 @@ class Loader:
         half_precision: bool = True,
         load_test_origin: bool = True,
         num_folds: Optional[int] = None, 
-        num_samples: Optional[int] = None,
+        num_train: Optional[int] = None,
         num_workers: int = 1,
         random_seed: int = 42,
         spacing: Optional[types.ImageSpacing3D] = None,
@@ -72,8 +72,8 @@ class Loader:
             train_samples = all_samples
 
         # Take subset of train samples.
-        if num_samples is not None:
-            train_samples = train_samples[:num_samples]
+        if num_train is not None:
+            train_samples = train_samples[:num_train]
 
         # Split train into NN train and validation data.
         num_nn_train = int(len(train_samples) * (1 - p_val))

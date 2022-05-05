@@ -42,7 +42,7 @@ NUM_EPOCHS=150
 NUM_FOLDS=5
 NUM_GPUS=1
 NUM_NODES=1
-# NUM_SAMPLES=5
+# NUM_TRAIN=5
 NUM_WORKERS=4
 # RESUME=False
 RESUME_CHECKPOINT='last'
@@ -58,7 +58,7 @@ python $SCRIPT_DIR/train/segmenter \
     --num_folds $NUM_FOLDS \
     --num_gpus $NUM_GPUS \
     --num_nodes $NUM_NODES \
-    --num_samples $NUM_SAMPLES \
+    --num_train $NUM_TRAIN \
     --num_workers $NUM_WORKERS \
     --use_logger $USE_LOGGER \
     --region $REGION \
