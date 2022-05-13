@@ -1271,6 +1271,7 @@ def plot_dataframe_v2(
     show_legend: bool = True,
     show_outliers: bool = False,
     show_x_labels: bool = True,
+    xlim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_width: float = 0.8,
     xlabel_rot: float = 0,
     ylabel: Optional[str] = None,
@@ -1320,32 +1321,42 @@ def plot_dataframe_v2(
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
         hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
-        hue_width = x_width / len(hue_order)
 
     # Plot rows.
     for i in range(num_rows):
         # Split data.
         row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
         row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
-    
-        # Add x positions.
+
         for j, row_x_val in enumerate(row_x_vals):
-            # Get hue positions.
+            # Filter out missing hue values.
             if hue is not None:
-                for k, hue_name in enumerate(hue_order):
+                hue_order_f = []
+                for hue_name in hue_order:
+                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    if len(hue_data) != 0:
+                        hue_order_f.append(hue_name)
+
+            # Calculate hue width.
+            hue_width = x_width / len(hue_order_f)
+
+            # Add x positions.
+            if hue is not None:
+                for k, hue_name in enumerate(hue_order_f):
                     # Add hue x positions.
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
                     data.loc[(data[x] == row_x_val) & (data[hue] == hue_name), 'x_pos'] = x_pos
             else:
                 pass
                 
-        # Plot boxes.
-        for row_x_val in row_x_vals:
+            # Plot boxes.
             if hue is not None:
                 box_labels = []
-                for j, hue_name in enumerate(hue_order):
+                for j, hue_name in enumerate(hue_order_f):
                     # Get hue data and pos.
                     hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    if len(hue_data) == 0:
+                        continue
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot box.
@@ -1356,21 +1367,25 @@ def plot_dataframe_v2(
                 if show_legend:
                     boxes, labels = list(zip(*box_labels))
                     axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
+            else:
+                pass
 
-        # Plot points.
-        if hue is not None:
-            for row_x_val in row_x_vals:
-                for j, hue_name in enumerate(hue_order):
+            # Plot points.
+            if hue is not None:
+                for j, hue_name in enumerate(hue_order_f):
                     # Get hue data and pos.
                     hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    if len(hue_data) == 0:
+                        continue
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot points.
                     axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+            else:
+                pass
 
-        # Identify outliers - plot line connecting outliers across hue levels.
-        if show_outliers and hue is not None:
-            for row_x_val in row_x_vals:
+            # Identify outliers - plot line connecting outliers across hue levels.
+            if show_outliers and hue is not None:
                 # Get column/value pairs to group across hue levels.
                 line_ids = data[(data[x] == row_x_val) & data['outlier']][outlier_cols]
 
@@ -1454,7 +1469,11 @@ def plot_dataframe_v2(
         axs[i].set_axisbelow(True)
 
         # Set axis limits.
-        xlim = (-0.5, n_col - 0.5)
+        xlim = list(xlim)
+        if xlim[0] is None:
+            xlim[0] = -0.5
+        if xlim[1] is None:
+            xlim[1] = n_col - 0.5
         axs[i].set_xlim(*xlim)
         axs[i].set_ylim(*ylim)
           

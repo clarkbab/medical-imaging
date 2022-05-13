@@ -73,6 +73,8 @@ class Loader:
 
         # Take subset of train samples.
         if num_train is not None:
+            if num_train > len(train_samples):
+               raise ValueError(f"'num_train={num_train}' requested larger number than training samples '{len(train_samples)}'.") 
             train_samples = train_samples[:num_train]
 
         # Split train into NN train and validation data.

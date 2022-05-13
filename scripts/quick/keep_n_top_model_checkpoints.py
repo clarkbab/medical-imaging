@@ -10,7 +10,8 @@ from mymi import config
 from mymi.regions import RegionNames
 
 dry_run = False
-keep = 2
+keep = 1
+assert keep >= 1
 types = ['segmenter']
 regions = RegionNames
 models = ['clinical', 'transfer']
@@ -48,8 +49,8 @@ for type in types:
 
             if dry_run:
                 for ckpt in del_ckpts:
-                    print(f'\t{ckpt}')
+                    print(f'\tDELETE - {ckpt}')
             else:
                 for ckpt in del_ckpts:
-                    print(f'\t{ckpt}')
+                    print(f'\tDELETE - {ckpt}')
                     os.remove(ckpt)
