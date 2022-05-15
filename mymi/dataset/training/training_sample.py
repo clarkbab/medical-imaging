@@ -12,13 +12,22 @@ class TrainingSample:
     def __init__(
         self,
         dataset: 'TrainingDataset',
-        index: int):
-        if index not in dataset.list_samples():
-            raise ValueError(f"Sample '{index}' not found for dataset '{dataset}'.")
-        self._global_id = f'{dataset} - {index}'
+        id: int):
+        if id not in dataset.list_samples():
+            raise ValueError(f"Sample '{id}' not found for dataset '{dataset}'.")
+        self._global_id = f'{dataset} - {id}'
         self._dataset = dataset
-        self._index = index
+        self._id = id
         self._spacing = dataset.params['spacing']
+
+        # Get sample index.
+        index = self._dataset.index
+        index = index[index['sample-id'] == id]
+        self._index = index
+
+    @property
+    def index(self) -> str:
+        return self._index
 
     @property
     def description(self) -> str:
@@ -28,30 +37,15 @@ class TrainingSample:
         return self._global_id
 
     @property
-    def index(self) -> str:
-        return self._index
+    def id(self) -> str:
+        return self._id
 
     @property
     def spacing(self) -> types.ImageSpacing3D:
         return self._spacing
 
     def list_regions(self) -> List[str]:
-        """
-        returns: the region names.
-        """
-        # List all regions.
-        filepath = os.path.join(self._dataset.path, 'data', 'labels')
-        if not os.path.exists(filepath):
-            return []
-        all_regions = os.listdir(filepath)
-
-        def filter_fn(region):
-            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._index}.npz')
-            if os.path.exists(filepath):
-                return True
-            else:
-                return False
-        return list(sorted(filter(filter_fn, all_regions)))
+        return list(sorted(self._index.region))
 
     def has_region(
         self,
@@ -61,19 +55,19 @@ class TrainingSample:
     @property
     def patient_id(self) -> str:
         index = self._dataset.index
-        record = index[index['sample-id'] == self._index].iloc[0]
+        record = index[index['sample-id'] == self._id].iloc[0]
         return record['patient-id']
 
     @property
     def origin_dataset(self) -> str:
         index = self._dataset.index
-        record = index[index['sample-id'] == self._index].iloc[0]
+        record = index[index['sample-id'] == self._id].iloc[0]
         return record['dataset']
 
     @property
     def input(self) -> np.ndarray:
         # Load the input data.
-        filepath = os.path.join(self._dataset.path, 'data', 'inputs', f'{self._index}.npz')
+        filepath = os.path.join(self._dataset.path, 'data', 'inputs', f'{self._id}.npz')
         data = np.load(filepath)['data']
         return data
 
@@ -90,7 +84,7 @@ class TrainingSample:
         # Load the label data.
         data = {}
         for region in regions:
-            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._index}.npz')
+            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._id}.npz')
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']

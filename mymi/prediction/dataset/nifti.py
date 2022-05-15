@@ -306,7 +306,7 @@ def create_segmenter_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
-    for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
         if type(pat_id_b) == torch.Tensor:
             pat_id_b = pat_id_b.tolist()
         for dataset, pat_id in zip(dataset_b, pat_id_b):

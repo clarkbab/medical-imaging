@@ -34,6 +34,14 @@ class TrainingDataset(Dataset):
                 if not os.path.exists(path):
                     raise ValueError(f"Dataset '{self}' conversion isn't finished.")
 
+        # Load data index.
+        filepath = os.path.join(self._path, 'index.csv')
+        self._index = pd.read_csv(filepath, dtype={ 'sample-id': str })
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self._index
+
     @property
     def description(self) -> str:
         return self._global_id
@@ -77,11 +85,10 @@ class TrainingDataset(Dataset):
     def patient_id(
         self,
         sample_idx: int) -> types.PatientID:
-        df = self.index
-        result_df = df[df['index'] == sample_idx]
-        if len(result_df) == 0:
+        df = self._index[self._index['sample-id'] == sample_idx]
+        if len(df) == 0:
             raise ValueError(f"Sample '{sample_idx}' not found for dataset '{self}'.")
-        pat_id = result_df['patient-id'].iloc[0] 
+        pat_id = df['patient-id'].iloc[0] 
         return pat_id
 
     def list_samples(
@@ -90,9 +97,12 @@ class TrainingDataset(Dataset):
         if type(regions) == str:
             regions = [regions]
 
-        index = self.index
+        index = self._index
+
+        # Filter by regions.
         if regions is not None:
             index = index[index.region.isin(regions)]
+
         sample_ids = list(sorted(index['sample-id'].unique()))
         return sample_ids
 
@@ -102,28 +112,6 @@ class TrainingDataset(Dataset):
         by_patient_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
         if by_patient_id:
-            sample_id = self.index[self.index['patient-id'] == sample_id].iloc[0]['sample-id']
+            sample_id = self._index[self._index['patient-id'] == sample_id].iloc[0]['sample-id']
 
         return TrainingSample(self, sample_id)
-
-    def _filter_sample_by_regions(
-        self,
-        regions: types.PatientRegions) -> Callable[[str], bool]:
-        """
-        returns: a function that filters patients on region presence.
-        args:
-            regions: the passed 'regions' kwarg.
-        """
-        def fn(index):
-            if type(regions) == str:
-                if regions == 'all':
-                    return True
-                else:
-                    return self.sample(index).has_region(regions)
-            else:
-                sam_regions = self.sample(index).list_regions()
-                if len(np.intersect1d(regions, sam_regions)) != 0:
-                    return True
-                else:
-                    return False
-        return fn
