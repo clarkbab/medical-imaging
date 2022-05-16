@@ -36,7 +36,7 @@ class TrainingDataset(Dataset):
 
         # Load data index.
         filepath = os.path.join(self._path, 'index.csv')
-        self._index = pd.read_csv(filepath, dtype={ 'sample-id': str })
+        self._index = pd.read_csv(filepath)
 
     @property
     def index(self) -> pd.DataFrame:
@@ -71,12 +71,6 @@ class TrainingDataset(Dataset):
             else:
                 params[col] = eval(params[col])
         return params
-
-    @property
-    def index(self) -> pd.DataFrame:
-        filepath = os.path.join(self._path, 'index.csv')
-        df = pd.read_csv(filepath)
-        return df
 
     @property
     def type(self) -> DatasetType:
