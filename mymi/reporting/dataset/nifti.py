@@ -15,7 +15,7 @@ from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmen
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_predictions
+from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
 from mymi.utils import encode
@@ -27,43 +27,44 @@ def get_region_summary(
     pats = set.list_patients(regions=region)
 
     cols = {
+        'dataset': str,
         'patient-id': str,
-        'connected': bool,
-        'connected-p': float,
-        'connected-extent-mm-x': float,
-        'connected-extent-mm-y': float,
-        'connected-extent-mm-z': float,
-        'extent-mm-x': float,
-        'extent-mm-y': float,
-        'extent-mm-z': float,
-        'volume-mm3': float
+        'metric': str,
+        'value': float
     }
     df = pd.DataFrame(columns=cols.keys())
 
     for pat in tqdm(pats):
-        # Get spacing.
         spacing = set.patient(pat).ct_spacing
-
-        # Get region data.
         label = set.patient(pat).region_data(regions=region)[region]
 
-        # Add extents for all regions.
         data = {
+            'dataset': dataset,
             'patient-id': pat,
         }
 
-        # See if OAR is single structure.
+        # Add 'connected' metrics.
         lcc_label = get_largest_cc(label)
-        data['connected'] = True if lcc_label.sum() == label.sum() else False
-        data['connected-p'] = lcc_label.sum() / label.sum()
+        data['metric'] = 'connected'
+        data['value'] = 1 if lcc_label.sum() == label.sum() else 0
+        df = df.append(data, ignore_index=True)
+        data['metric'] = 'connected-largest-p'
+        data['value'] = lcc_label.sum() / label.sum()
+        df = df.append(data, ignore_index=True)
 
         # Add OAR extent.
         ext_width_mm = get_extent_width_mm(label, spacing)
         if ext_width_mm is None:
             ext_width_mm = (0, 0, 0)
-        data['extent-mm-x'] = ext_width_mm[0]
-        data['extent-mm-y'] = ext_width_mm[1]
-        data['extent-mm-z'] = ext_width_mm[2]
+        data['metric'] = 'extent-mm-x'
+        data['value'] = ext_width_mm[0]
+        df = df.append(data, ignore_index=True)
+        data['metric'] = 'extent-mm-y'
+        data['value'] = ext_width_mm[1]
+        df = df.append(data, ignore_index=True)
+        data['metric'] = 'extent-mm-z'
+        data['value'] = ext_width_mm[2]
+        df = df.append(data, ignore_index=True)
 
         # Add extent of largest connected component.
         extent = get_extent(lcc_label)
@@ -73,14 +74,20 @@ def get_region_summary(
             extent_mm = extent_vox * spacing
         else:
             extent_mm = (0, 0, 0)
-        data['connected-extent-mm-x'] = extent_mm[0]
-        data['connected-extent-mm-y'] = extent_mm[1]
-        data['connected-extent-mm-z'] = extent_mm[2]
+        data['metric'] = 'connected-extent-mm-x'
+        data['value'] = extent_mm[0]
+        df = df.append(data, ignore_index=True)
+        data['metric'] = 'connected-extent-mm-y'
+        data['value'] = extent_mm[1]
+        df = df.append(data, ignore_index=True)
+        data['metric'] = 'connected-extent-mm-z'
+        data['value'] = extent_mm[2]
+        df = df.append(data, ignore_index=True)
 
         # Add volume.
         vox_volume = reduce(lambda x, y: x * y, spacing)
-        data['volume-mm3'] = vox_volume * label.sum() 
-
+        data['metric'] = 'volume-mm3'
+        data['value'] = vox_volume * label.sum() 
         df = df.append(data, ignore_index=True)
 
     # Set column types as 'append' crushes them.
@@ -88,30 +95,28 @@ def get_region_summary(
 
     return df
 
-def create_region_summaries(
+def create_region_summary(
     dataset: str,
-    regions: Union[str, List[str]]) -> None:
+    region: str) -> None:
+    # List patients.
     set = ds.get(dataset, 'nifti')
-    if type(regions) == str:
-        regions = [regions]
-    
-    for region in regions:
-        pats = set.list_patients(regions=region)
-        # Allows us to pass all regions from Spartan 'array' job.
-        if len(pats) == 0:
-            logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
-            return
+    pats = set.list_patients(regions=region)
 
-        logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
+    # Allows us to pass all regions from Spartan 'array' job.
+    if len(pats) == 0:
+        logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
+        return
 
-        # Generate counts report.
-        df = get_region_summary(dataset, region)
+    logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
 
-        # Save report.
-        set = ds.get(dataset, 'nifti')
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        df.to_csv(filepath, index=False)
+    # Generate counts report.
+    df = get_region_summary(dataset, region)
+
+    # Save report.
+    set = ds.get(dataset, 'nifti')
+    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def _get_outlier_cols_func(
     lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:
@@ -736,7 +741,7 @@ def create_segmenter_figures(
             )
             for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                plot_patient_segmenter_predictions(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
+                plot_patient_segmenter_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

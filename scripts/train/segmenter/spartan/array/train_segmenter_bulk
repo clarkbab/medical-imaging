@@ -1,0 +1,18 @@
+import subprocess
+
+regions = '0-2,4-10,12-16'
+script = 'scripts/train/segmenter/spartan/array/train_segmenter'
+test_folds = [1, 2, 3, 4]
+models = ['transfer']
+num_trains = [5, 10, 20, 50, 100, 200, None]
+resume = False
+
+for model in models:
+    for test_fold in test_folds:
+        for num_train in num_trains:
+            # Create slurm command.
+            export = f'ALL,MODEL={model},NUM_TRAIN={num_train},RESUME={resume},TEST_FOLD={test_fold}'
+            command = f'sbatch --array={regions} --export={export} {script}' 
+            print(command)
+            process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+            process.communicate()

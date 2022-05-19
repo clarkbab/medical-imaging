@@ -1,7 +1,7 @@
 from collections import namedtuple
 import os
 import pandas as pd
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from mymi import logging
 
@@ -23,8 +23,8 @@ class Directories:
         return os.path.join(self.root, 'files')
     
     @property
-    def evaluation(self):
-        return os.path.join(self.root, 'evaluation')
+    def evaluations(self):
+        return os.path.join(self.root, 'evaluations')
 
     @property
     def root(self):
@@ -36,11 +36,11 @@ class Directories:
 
     @property
     def tensorboard(self):
-        return os.path.join(self.root, 'reporting', 'tensorboard')
+        return os.path.join(self.root, 'reports', 'tensorboard')
 
     @property
     def wandb(self):
-        return os.path.join(self.root, 'reporting')
+        return os.path.join(self.root, 'reports')
 
 class Formatting:
     @property
@@ -77,6 +77,6 @@ def save_csv(
         os.makedirs(dirpath, exist_ok=True)
         data.to_csv(filepath, index=index)
 
-def load_csv(*path: List[str]) -> Optional[pd.DataFrame]:
+def load_csv(*path: List[str], **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(directories.files, *path)
-    return pd.read_csv(filepath)
+    return pd.read_csv(filepath, **kwargs)

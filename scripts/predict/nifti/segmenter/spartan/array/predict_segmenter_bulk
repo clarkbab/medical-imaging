@@ -2,7 +2,7 @@ import subprocess
 
 regions = '0'
 script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter_pmcc_hn'
-test_folds = [0, 1, 2, 3, 4]
+test_folds = [4]
 models = ['clinical', 'transfer']
 num_trains = [5, 10, 20, 50, 100, 200, 'None']
 

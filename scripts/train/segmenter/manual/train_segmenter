@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+
+DATASETS="['PMCC-HN-TEST-SEG','PMCC-HN-TRAIN-SEG']"
+REGION="BrainStem"
+MODEL_NAME="segmenter-$REGION"
+NUM_EPOCHS=5
+NUM_FOLDS=5
+NUM_GPUS=1
+NUM_NODES=1
+NUM_WORKERS=4
+NUM_TRAIN=5
+PRETRAINED_MODEL="('$MODEL_NAME','public-1gpu-150epochs','BEST')"
+RESUME=False
+RESUME_CHECKPOINT=None
+RUN_NAME="test-tl"
+SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+TEST_FOLD=0
+USE_LOGGER=True
+
+python $SCRIPT_DIR/train/segmenter --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --region $REGION --num_epochs $NUM_EPOCHS \
+    --num_folds $NUM_FOLDS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_train $NUM_TRAIN --num_workers $NUM_WORKERS --pretrained_model $PRETRAINED_MODEL --resume $RESUME \
+    --resume_checkpoint $RESUME_CHECKPOINT --test_fold $TEST_FOLD --use_logger $USE_LOGGER

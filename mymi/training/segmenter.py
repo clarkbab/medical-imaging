@@ -37,7 +37,7 @@ def train_segmenter(
     slurm_array_task_id: Optional[str] = None,
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}'.")
 
     # Load datasets.
     if type(datasets) == str:

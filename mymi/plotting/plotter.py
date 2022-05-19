@@ -915,7 +915,7 @@ def plot_dataframe(
     x: str = None,
     y: str = None,
     hue: str = None,
-    ylim: Tuple[Optional[int], Optional[int]] = (None, None),
+    y_lim: Tuple[Optional[int], Optional[int]] = (None, None),
     inner: str ='quartiles',
     annotate_outliers: bool = False,
     annotation_model_offset=35,
@@ -941,7 +941,7 @@ def plot_dataframe(
     stats_index: Optional[List[str]] = None,
     style: Literal['box', 'violin'] = 'box',
     x_label_rot: float = 0,
-    ylabel: str = '',
+    y_label: str = '',
     include_x: Union[str, List[str]] = None,
     exclude_x: Union[str, List[str]] = None):
     df = data
@@ -1053,10 +1053,10 @@ def plot_dataframe(
 
         # Set y axis major ticks.
         if major_tick_freq is not None:
-            major_tick_min = ylim[0]
+            major_tick_min = y_lim[0]
             if major_tick_min is None:
                 major_tick_min = axs[i].get_ylim()[0]
-            major_tick_max = ylim[1]
+            major_tick_max = y_lim[1]
             if major_tick_max is None:
                 major_tick_max = axs[i].get_ylim()[1]
             
@@ -1077,10 +1077,10 @@ def plot_dataframe(
 
         # Set y axis minor ticks.
         if minor_tick_freq is not None:
-            minor_tick_min = ylim[0]
+            minor_tick_min = y_lim[0]
             if minor_tick_min is None:
                 minor_tick_min = axs[i].get_ylim()[0]
-            minor_tick_max = ylim[1]
+            minor_tick_max = y_lim[1]
             if minor_tick_max is None:
                 minor_tick_max = axs[i].get_ylim()[1]
             
@@ -1096,10 +1096,10 @@ def plot_dataframe(
         axs[i].set_axisbelow(True)
           
         # Set axis labels.
-        if ylim:
-            axs[i].set_ylim(*ylim)
+        if y_lim:
+            axs[i].set_ylim(*y_lim)
         axs[i].set_xlabel('')
-        axs[i].set_ylabel(ylabel, fontsize=fontsize)
+        axs[i].set_ylabel(y_label, fontsize=fontsize)
 
         # Set axis tick labels fontsize/rotation.
         if show_x_tick_labels:
@@ -1271,11 +1271,11 @@ def plot_dataframe_v2(
     show_legend: bool = True,
     show_outliers: bool = False,
     show_x_labels: bool = True,
-    xlim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
+    x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_width: float = 0.8,
-    xlabel_rot: float = 0,
-    ylabel: Optional[str] = None,
-    ylim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
+    x_tick_label_rot: float = 0,
+    y_label: Optional[str] = None,
+    y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
     if type(include_x) == str:
         include_x = [include_x]
     if type(exclude_x) == str:
@@ -1293,6 +1293,31 @@ def plot_dataframe_v2(
 
     # Add outlier data.
     data = _add_outlier_info(data, x, y, hue)
+
+    # Get min/max values for y-lim.
+    min_y = data[y].min()
+    max_y = data[y].max()
+
+    # Get axis limits.
+    x_lim = list(x_lim)
+    if x_lim[0] is None:
+        x_lim[0] = -0.5
+    if x_lim[1] is None:
+        x_lim[1] = n_col - 0.5
+    y_lim = list(y_lim)
+    y_margin = 0.05
+    if y_lim[0] is None:
+        if y_lim[1] is None:
+            width = max_y - min_y
+            y_lim[0] = min_y - y_margin * width
+            y_lim[1] = max_y + y_margin * width
+        else:
+            width = y_lim[1] - min_y
+            y_lim[0] = min_y - y_margin * width
+    else:
+        if y_lim[1] is None:
+            width = max_y - y_lim[0]
+            y_lim[1] = max_y + y_margin * width
 
     # Get x values.
     x_vals = list(sorted(data[x].unique()))
@@ -1377,7 +1402,6 @@ def plot_dataframe_v2(
                     hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
                     if len(hue_data) == 0:
                         continue
-                    hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot points.
                     axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
@@ -1430,12 +1454,16 @@ def plot_dataframe_v2(
         axs[i].set_xticks(list(range(len(row_x_labels))))
         axs[i].set_xticklabels(row_x_labels)
 
+        # Set axis limits.
+        axs[i].set_xlim(*x_lim)
+        axs[i].set_ylim(*y_lim)
+
         # Set y axis major ticks.
         if major_tick_freq is not None:
-            major_tick_min = ylim[0]
+            major_tick_min = y_lim[0]
             if major_tick_min is None:
                 major_tick_min = axs[i].get_ylim()[0]
-            major_tick_max = ylim[1]
+            major_tick_max = y_lim[1]
             if major_tick_max is None:
                 major_tick_max = axs[i].get_ylim()[1]
             
@@ -1450,10 +1478,10 @@ def plot_dataframe_v2(
 
         # Set y axis minor ticks.
         if minor_tick_freq is not None:
-            minor_tick_min = ylim[0]
+            minor_tick_min = y_lim[0]
             if minor_tick_min is None:
                 minor_tick_min = axs[i].get_ylim()[0]
-            minor_tick_max = ylim[1]
+            minor_tick_max = y_lim[1]
             if minor_tick_max is None:
                 minor_tick_max = axs[i].get_ylim()[1]
             
@@ -1467,25 +1495,16 @@ def plot_dataframe_v2(
         # Set y grid lines.
         axs[i].grid(axis='y', linestyle='dashed')
         axs[i].set_axisbelow(True)
-
-        # Set axis limits.
-        xlim = list(xlim)
-        if xlim[0] is None:
-            xlim[0] = -0.5
-        if xlim[1] is None:
-            xlim[1] = n_col - 0.5
-        axs[i].set_xlim(*xlim)
-        axs[i].set_ylim(*ylim)
           
         # Set axis labels.
         axs[i].set_xlabel('')
-        if ylabel is None:
-            ylabel = ''
-        axs[i].set_ylabel(ylabel, fontsize=fontsize)
+        if y_label is None:
+            y_label = ''
+        axs[i].set_ylabel(y_label, fontsize=fontsize)
 
         # Set axis tick labels fontsize/rotation.
         if show_x_labels:
-            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=xlabel_rot)
+            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_tick_label_rot)
         else:
             axs[i].set_xticklabels([])
 
