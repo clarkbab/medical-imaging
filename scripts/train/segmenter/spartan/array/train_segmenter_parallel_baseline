@@ -45,14 +45,13 @@ NUM_NODES=1
 # NUM_TRAIN=5
 NUM_WORKERS=4
 # RESUME=False
-RESUME_RUN=None
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 if [ "$MODEL" = "public" ]; then
-    RUN_NAME="public-1gpu-150epochs"
+    RUN_NAME="public-1gpu-150epochs-parallel-baseline"
 else
-    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN"
+    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN-parallel-baseline"
 fi
 if [ "$MODEL" = "transfer" ]; then
     PRETRAINED_MODEL="('segmenter-$REGION','public-1gpu-150epochs','BEST')"

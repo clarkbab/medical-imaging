@@ -1,3 +1,4 @@
+from fairscale.nn import auto_wrap
 import numpy as np
 import os
 import pytorch_lightning as pl
@@ -10,6 +11,7 @@ import wandb
 
 from mymi import config
 from mymi.geometry import get_extent_centre
+from mymi import logging
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
@@ -17,7 +19,7 @@ from mymi import types
 
 from ..networks import UNet3D
 
-class Segmenter(pl.LightningModule):
+class SegmenterParallel(pl.LightningModule):
     def __init__(
         self,
         loss: nn.Module = DiceLoss(),
@@ -37,7 +39,7 @@ class Segmenter(pl.LightningModule):
         self._name = None
         self._metrics = metrics
         pretrained_model = pretrained_model.network if pretrained_model else None
-        self._network = UNet3D(pretrained_model=pretrained_model)
+        self._network = auto_wrap(UNet3D(pretrained_model=pretrained_model))
         self._predict_logits = predict_logits
         self._spacing = spacing
 
@@ -58,17 +60,17 @@ class Segmenter(pl.LightningModule):
         # Check that model completed 150 epochs training.
         filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
         state = torch.load(filepath, map_location=torch.device('cpu'))
-        num_epochs = 149
-        if state['epoch'] < num_epochs:
-            raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
+        num_epochs = 150
+        if state['epoch'] != num_epochs:
+            raise ValueError(f"Can't load SegmenterParallel ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = Segmenter.replace_checkpoint_aliases(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = SegmenterParallel.replace_checkpoint_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
-            raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
+            raise ValueError(f"SegmenterParallel '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
 
-        segmenter = Segmenter.load_from_checkpoint(filepath, **kwargs)
+        segmenter = SegmenterParallel.load_from_checkpoint(filepath, **kwargs)
         segmenter._name = (model_name, run_name, checkpoint)
         return segmenter
 
@@ -84,7 +86,7 @@ class Segmenter(pl.LightningModule):
         return (model_name, run_name, checkpoint)
 
     def configure_optimizers(self):
-        return SGD(self.parameters(), lr=1e-3, momentum=0.9)
+        return SGD(self.parameters(), lr=4e-3, momentum=0.9)
 
     def forward(self, x):
         # Get prediction.
@@ -104,7 +106,9 @@ class Segmenter(pl.LightningModule):
     def training_step(self, batch, _):
         # Forward pass.
         _, x, y = batch
+        logging.info(f'Input shape: {x.shape}')
         y_hat = self._network(x)
+        logging.info(f'Pred shape: {y_hat.shape}')
         loss = self._loss(y_hat, y)
 
         # Log metrics.

@@ -13,10 +13,10 @@ from mymi.loaders import Loader
 from mymi.dataset.training import exists
 from mymi.losses import DiceLoss
 from mymi import logging
-from mymi.models.systems import Segmenter
+from mymi.models.systems import SegmenterParallel
 from mymi import types
 
-def train_segmenter(
+def train_segmenter_parallel(
     model_name: str,
     run_name: str,
     datasets: Union[str, List[str]],
@@ -31,8 +31,7 @@ def train_segmenter(
     pretrained_model: Optional[types.ModelName] = None,    
     p_val: float = 0.2,
     resume: bool = False,
-    resume_run: Optional[str] = None,
-    resume_ckpt: str = 'last',
+    resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
@@ -76,8 +75,8 @@ def train_segmenter(
     # Create model.
     metrics = ['dice', 'hausdorff', 'surface']
     if pretrained_model:
-        pretrained_model = Segmenter.load(*pretrained_model)
-    model = Segmenter(
+        pretrained_model = SegmenterParallel.load(*pretrained_model)
+    model = SegmenterParallel(
         loss=loss_fn,
         metrics=metrics,
         pretrained_model=pretrained_model,
@@ -90,7 +89,7 @@ def train_segmenter(
             project=model_name,
             name=run_name,
             save_dir=config.directories.wandb)
-        logger.watch(model)   # Caused multi-GPU training to hang.
+        # logger.watch(model)   # Caused multi-GPU training to hang.
     else:
         logger = None
 
@@ -113,23 +112,21 @@ def train_segmenter(
     # Add optional trainer args.
     opt_kwargs = {}
     if resume:
-        # Get the checkpoint path.
-        resume_run = resume_run if resume_run is not None else run_name
-        logging.info(f'Loading ckpt {model_name}, {resume_run}, {resume_ckpt}')
-        ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
-        opt_kwargs['ckpt_path'] = ckpt_path
+        if resume_checkpoint is None:
+            raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
+        check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
+        opt_kwargs['ckpt_path'] = check_path
 
-    # Perform training.
+    # Create trainer.
     trainer = Trainer(
-        # accelerator='ddp',
         callbacks=callbacks,
         gpus=list(range(num_gpus)),
         logger=logger,
         max_epochs=num_epochs,
         num_nodes=num_nodes,
         num_sanity_val_steps=0,
-        # plugins=DDPPlugin(find_unused_parameters=False),
-        precision=16)
+        precision=16,
+        strategy='fsdp')
 
     # Train the model.
     trainer.fit(model, train_loader, val_loader, **opt_kwargs)

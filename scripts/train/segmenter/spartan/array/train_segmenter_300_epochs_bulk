@@ -1,11 +1,11 @@
 import subprocess
 
-regions = '16'
-script = 'scripts/train/segmenter/spartan/array/train_segmenter'
-test_folds = [2, 3]
-models = ['transfer']
-num_trains = [None]
-resume = True
+regions = '3,4,5'
+script = 'scripts/train/segmenter/spartan/array/train_segmenter_300_epochs'
+test_folds = [0, 1, 2, 3, 4]
+models = ['clinical', 'transfer']
+num_trains = [5, 10, 20]
+resume = False
 
 for model in models:
     for test_fold in test_folds:
