@@ -10,11 +10,11 @@ from mymi.transforms import crop_foreground_3D, crop_or_pad_3D, resample_3D, top
 from mymi import types
 
 def get_localiser_prediction(
-    localiser: types.Model,
-    loc_size: types.ImageSize3D,
-    loc_spacing: types.ImageSpacing3D,
     input: np.ndarray,
     spacing: types.ImageSpacing3D,
+    localiser: types.Model,
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None,
     truncate: bool = False) -> np.ndarray:
     # Load gpu if available.

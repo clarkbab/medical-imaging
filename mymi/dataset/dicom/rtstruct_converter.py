@@ -532,7 +532,9 @@ class RTSTRUCTConverter:
             contour_coords = np.array(contour_coords)
 
             # Translate to physical space.
-            contour_coords = cls._translate_to_physical_coordinates(contour_coords, ref_ct)
+            offset = ref_ct.ImagePositionPatient
+            spacing = ref_ct.PixelSpacing
+            contour_coords = spacing * contour_coords + offset[:-1]
 
             # Format for DICOM.
             contour_coords = cls._format_coordinates(contour_coords, ref_ct)
@@ -548,25 +550,6 @@ class RTSTRUCTConverter:
 
             # Append contour to ROI contour.
             roi_contour.ContourSequence.append(contour)
-
-    @classmethod
-    def _translate_to_physical_coordinates(
-        cls,
-        coords: np.ndarray,
-        ref_ct: dcm.dataset.FileDataset) -> np.ndarray:
-        """
-        returns: coordinates translated from voxel to physical space.
-        args:
-            coords: the coordinates in voxel space.
-            ref_ct: the reference CT dicom.
-        """
-        # Load offset/spacing.
-        offset = ref_ct.ImagePositionPatient
-        spacing = ref_ct.PixelSpacing
-
-        # Perform affine transform.
-        coords = coords * spacing + offset[:-1]
-        return coords
 
     @classmethod
     def _format_coordinates(

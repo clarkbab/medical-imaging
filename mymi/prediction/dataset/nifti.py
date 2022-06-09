@@ -20,10 +20,10 @@ def get_patient_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: types.Model,
-    loc_size: types.ImageSize3D,
-    loc_spacing: types.ImageSpacing3D,
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None,
-    truncate: bool = False) -> None:
+    truncate: bool = False) -> np.ndarray:
     # Load data.
     set = ds.get(dataset, 'nifti')
     patient = set.patient(pat_id)
@@ -31,7 +31,7 @@ def get_patient_localiser_prediction(
     spacing = patient.ct_spacing
 
     # Make prediction.
-    pred = get_localiser_prediction(localiser, loc_size, loc_spacing, input, spacing, device=device, truncate=truncate)
+    pred = get_localiser_prediction(input, spacing, localiser, loc_size=loc_size, loc_spacing=loc_spacing, device=device, truncate=truncate)
 
     return pred
 
@@ -39,8 +39,8 @@ def create_patient_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: types.Model,
-    loc_size: Tuple[int, int, int],
-    loc_spacing: Tuple[float, float, float],
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None,
     truncate: bool = False) -> None:
     # Load dataset.
@@ -70,9 +70,9 @@ def create_patient_localiser_prediction(
 def create_localiser_predictions(
     dataset: str,
     region: str,
-    localiser: Tuple[str, str, str],
-    loc_size: Tuple[int, int, int],
-    loc_spacing: Tuple[float, float, float]) -> None:
+    localiser: types.Model,
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4)) -> None:
     logging.info(f"Making localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
     if type(localiser) == tuple:
@@ -99,9 +99,9 @@ def create_localiser_predictions(
 def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: Tuple[str, str, str],
-    loc_size: Tuple[int, int, int],
-    loc_spacing: Tuple[float, float, float],
+    localiser: types.Model,
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
@@ -125,7 +125,6 @@ def create_localiser_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Make predictions.
-    print('here')
     for dataset_b, pat_id_b in tqdm(iter(test_loader)):
         logging.info(f"{dataset_b}, {pat_id_b}")
         if type(pat_id_b) == torch.Tensor:
@@ -162,7 +161,7 @@ def get_patient_segmenter_prediction(
     region: str,
     loc_centre: types.Point3D,
     segmenter: types.Model,
-    seg_spacing: types.ImageSpacing3D,
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
     # Load model.
     if type(segmenter) == tuple:
@@ -221,8 +220,8 @@ def create_patient_segmenter_prediction(
     pat_id: str,
     region: str,
     localiser: types.ModelName,
-    segmenter: types.Model,
-    seg_spacing: types.ImageSpacing3D,
+    segmenter: Union[types.ModelName, types.Model],
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     device: Optional[torch.device] = None) -> None:
     # Load dataset.
     set = ds.get(dataset, 'nifti')
@@ -257,9 +256,9 @@ def create_patient_segmenter_prediction(
 def create_segmenter_predictions(
     dataset: str,
     region: str,
-    localiser: Tuple[str, str, str],
-    segmenter: Tuple[str, str, str],
-    seg_spacing: Tuple[float, float, float]) -> None:
+    localiser: types.Model,
+    segmenter: types.Model,
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2)) -> None:
     logging.info(f"Making segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -285,7 +284,7 @@ def create_segmenter_predictions_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    seg_spacing: types.ImageSpacing3D,
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
@@ -355,10 +354,10 @@ def create_two_stage_predictions(
     dataset: str,
     region: str,
     localiser: types.ModelName,
-    loc_size: types.ImageSize3D,
-    loc_spacing: types.ImageSpacing3D,
     segmenter: types.ModelName,
-    seg_spacing: types.ImageSpacing3D) -> None:
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2)) -> None:
     logging.info(f"Making two-stage predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
 
     # Load gpu if available.
@@ -387,11 +386,11 @@ def create_two_stage_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
-    loc_size: types.ImageSize3D,
-    loc_spacing: types.ImageSpacing3D,
     segmenter: types.ModelName,
-    seg_spacing: types.ImageSpacing3D,
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     num_folds: Optional[int] = None,
+    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]

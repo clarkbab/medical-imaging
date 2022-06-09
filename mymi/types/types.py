@@ -6,6 +6,7 @@ Point3D = Tuple[int, int, int]
 Box2D = Tuple[Point2D, Point2D]
 Box3D = Tuple[Point3D, Point3D]
 Colour = Union[str, Tuple[float, float, float]]
+Crop2D = Tuple[Tuple[int, int], Tuple[int, int]]
 ModelName = Tuple[str, str, str]
 Model = pl.LightningModule
 PatientID = Union[int, str]
