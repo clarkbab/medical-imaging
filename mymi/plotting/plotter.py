@@ -30,7 +30,7 @@ def _plot_region_data(
     latex: bool,
     perimeter: bool,
     view: types.PatientView,
-    axis = None,
+    ax = None,
     cca: bool = False,
     connected_extent: bool = False,
     crop: Optional[types.Box2D] = None,
@@ -43,8 +43,8 @@ def _plot_region_data(
         region_data: the region data to plot.
         others: see 'plot_patient_regions'.
     """
-    if not axis:
-        axis = plt.gca()
+    if not ax:
+        ax = plt.gca()
 
     # Plot each region.
     show_legend = False
@@ -89,11 +89,11 @@ def _plot_region_data(
             slice_data = get_largest_cc(slice_data)
 
         # Plot region.
-        axis.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
+        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
         label = _escape_latex(region) if latex else region
-        axis.plot(0, 0, c=colour, label=label)
+        ax.plot(0, 0, c=colour, label=label)
         if perimeter:
-            axis.contour(slice_data, colors=[colour], levels=[.5])
+            ax.contour(slice_data, colors=[colour], levels=[.5])
 
         # Set ticks.
         if crop:
@@ -101,12 +101,12 @@ def _plot_region_data(
             width = tuple(np.array(max) - min)
             xticks = np.linspace(0, 10 * np.floor(width[0] / 10), 5).astype(int)
             xtick_labels = xticks + min[0]
-            axis.set_xticks(xticks)
-            axis.set_xticklabels(xtick_labels)
+            ax.set_xticks(xticks)
+            ax.set_xticklabels(xtick_labels)
             yticks = np.linspace(0, 10 * np.floor(width[1] / 10), 5).astype(int)
             ytick_labels = yticks + min[1]
-            axis.set_yticks(yticks)
-            axis.set_yticklabels(ytick_labels)
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(ytick_labels)
 
     return show_legend
 
@@ -321,7 +321,7 @@ def plot_regions(
     size: types.ImageSize3D,
     spacing: types.ImageSpacing3D,
     aspect: Optional[float] = None,
-    axis: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[matplotlib.axes.Axes] = None,
     cca: bool = False,
     centre_of: Optional[str] = None,
     colours: Optional[List[str]] = None,
@@ -348,8 +348,8 @@ def plot_regions(
     show_legend: bool = True,
     show_title: bool = True,
     show_x_label: bool = True,
-    show_y_label: bool = True,
     show_x_ticks: bool = True,
+    show_y_label: bool = True,
     show_y_ticks: bool = True,
     slice_idx: Optional[int] = None,
     title: Optional[str] = None,
@@ -358,9 +358,9 @@ def plot_regions(
     __assert_position(centre_of, extent_of, slice_idx)
 
     # Create plot figure/axis.
-    if axis is None:
+    if ax is None:
         plt.figure(figsize=figsize)
-        axis = plt.gca()
+        ax = plt.gca()
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -451,7 +451,7 @@ def plot_regions(
     else:
         vmin = 0
         vmax = 0
-    axis.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
+    ax.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
 
     # Add axis labels.
     if show_x_label:
@@ -464,7 +464,7 @@ def plot_regions(
             spacing_x = spacing[1]
 
         # Write label.
-        axis.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+        ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
     if show_y_label:
         # Show axis labels.
         if view == 'axial':
@@ -475,21 +475,21 @@ def plot_regions(
             spacing_y = spacing[2]
 
         # Write label.
-        axis.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
+        ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     # Plot regions.
     if regions is not None:
-        should_show_legend = _plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, axis=axis, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+        should_show_legend = _plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
-            plt_legend = axis.legend(fontsize=fontsize, loc=legend_loc)
+            plt_legend = ax.legend(fontsize=fontsize, loc=legend_loc)
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
 
     # Plot dose data.
     if dose_data is not None:
-        axim = axis.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=get_origin(view))
+        axim = ax.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=get_origin(view))
         cbar = plt.colorbar(axim, fraction=dose_legend_size)
         print('here')
         print(fontsize)
@@ -498,9 +498,9 @@ def plot_regions(
 
     # Show axis markers.
     if not show_x_ticks:
-        axis.get_xaxis().set_ticks([])
+        ax.get_xaxis().set_ticks([])
     if not show_y_ticks:
-        axis.get_yaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
 
     # Add title.
     if show_title:
@@ -520,7 +520,7 @@ def plot_regions(
         if latex:
             title = _escape_latex(title)
 
-        axis.set_title(title)
+        ax.set_title(title)
 
     # Remove whitespace around figure.
     plt.tight_layout()
@@ -1311,10 +1311,10 @@ def _format_p_values(p_vals: List[float]) -> List[str]:
     return f_p_vals
 
 def plot_dataframe_v2(
-    data=None,
-    x=None,
-    y=None,
-    hue=None,
+    data: Optional[pd.DataFrame] = None,
+    x: Optional[str] = None,
+    y: Optional[str] = None,
+    hue: Optional[str] = None,
     box_line_colour: str = 'black',
     box_line_width: float = 1,
     fontsize: float = 10,
@@ -1373,7 +1373,7 @@ def plot_dataframe_v2(
     for x_val in x_vals:
         counts = count_map.loc[x_val]
         ns = list(counts.unique()) if hasattr(counts, '__iter__') else [counts]
-        label = f'{x_val}\n(n={ns[0]})' if len(ns) == 1 else x_val
+        label = f"{x_val}\n(n={','.join([str(n) for n in ns])})"
         x_labels.append(label)
 
     # Create subplots if required.
@@ -1419,12 +1419,12 @@ def plot_dataframe_v2(
         row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
         row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
 
-        for j, row_x_val in enumerate(row_x_vals):
+        for j, x_val in enumerate(row_x_vals):
             # Filter hue from 'hue_order' if it doesn't have any data.
             if hue is not None:
                 hue_order_f = []
                 for hue_name in hue_order:
-                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
                     if len(hue_data) != 0:
                         hue_order_f.append(hue_name)
 
@@ -1433,52 +1433,55 @@ def plot_dataframe_v2(
                 hue_width = x_width / len(hue_order_f)
 
             # Add x positions.
-            if hue is not None:
-                for k, hue_name in enumerate(hue_order_f):
-                    # Add hue x positions.
-                    x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
-                    data.loc[(data[x] == row_x_val) & (data[hue] == hue_name), 'x_pos'] = x_pos
+            if hue is None:
+                x_pos = j
+                data.loc[data[x] == x_val, 'x_pos'] = x_pos
             else:
-                pass
+                for k, hue_name in enumerate(hue_order_f):
+                    x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
+                    data.loc[(data[x] == x_val) & (data[hue] == hue_name), 'x_pos'] = x_pos
                 
             # Plot boxes.
-            if hue is not None:
+            if hue is None:
+                # Plot box.
+                x_data = data[data[x] == x_val]
+                if len(x_data) == 0:
+                    continue
+                x_pos = x_data.iloc[0]['x_pos']
+                axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
+            else:
                 box_labels = []
                 for j, hue_name in enumerate(hue_order_f):
                     # Get hue data and pos.
-                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
                     if len(hue_data) == 0:
                         continue
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot box.
-                    bplot = axs[i].boxplot(hue_data[y], boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                    bplot = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
                     box_labels.append((bplot['boxes'][0], hue_name)) 
 
                 # Add legend.
                 if show_legend:
                     boxes, labels = list(zip(*box_labels))
                     axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
-            else:
-                pass
 
             # Plot points.
-            if hue is not None:
+            if hue is None:
+                x_data = data[data[x] == x_val]
+                axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+            else:
                 for j, hue_name in enumerate(hue_order_f):
-                    # Get hue data and pos.
-                    hue_data = data[(data[x] == row_x_val) & (data[hue] == hue_name)]
+                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
                     if len(hue_data) == 0:
                         continue
-
-                    # Plot points.
                     axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
-            else:
-                pass
 
             # Identify outliers - plot line connecting outliers across hue levels.
             if hue is not None and show_outliers:
                 # Get column/value pairs to group across hue levels.
-                line_ids = data[(data[x] == row_x_val) & data['outlier']][outlier_cols]
+                line_ids = data[(data[x] == x_val) & data['outlier']][outlier_cols]
 
                 # Drop duplicates.
                 line_ids = line_ids.drop_duplicates()
@@ -1491,7 +1494,7 @@ def plot_dataframe_v2(
                 labels = []
                 for j, (_, line_id) in enumerate(line_ids.iterrows()):
                     # Get line data.
-                    line_data = data[(data[x] == row_x_val)]
+                    line_data = data[(data[x] == x_val)]
                     for k, v in zip(line_ids.columns, line_id):
                         line_data = line_data[line_data[k] == v]
                     line_data = line_data.sort_values('x_pos')
