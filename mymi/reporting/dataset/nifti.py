@@ -219,14 +219,17 @@ def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
     df = df.pivot(index='dataset', columns='region', values='count').fillna(0).astype(int)
     return df
 
-def get_ct_summary(dataset: str) -> pd.DataFrame:
+def get_ct_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> pd.DataFrame:
     logging.info(f"Creating CT summary for dataset '{dataset}'.")
 
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients()
+    pats = set.list_patients(regions=regions)
 
     cols = {
+        'dataset': str,
         'patient-id': str,
         'axis': int,
         'size': int,
@@ -246,6 +249,7 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
 
         for axis in range(len(size)):
             data = {
+                'dataset': dataset,
                 'patient-id': pat,
                 'axis': axis,
                 'size': size[axis],
@@ -259,22 +263,27 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
 
     return df
 
-def create_ct_summary(dataset: str) -> None:
+def create_ct_summary(
+    dataset: str,
+    regions: types.PatientRegions = 'all') -> None:
     # Get summary.
     df = get_ct_summary(dataset)
 
     # Save summary.
     set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
 def load_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: types.PatientRegions = 'all') -> Optional[pd.DataFrame]:
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
-    return pd.read_csv(filepath)
+    if os.path.exists(filepath):
+        return pd.read_csv(filepath)
+    else:
+        return None
 
 def create_region_figures(
     dataset: str,

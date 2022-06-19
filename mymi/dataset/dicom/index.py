@@ -8,13 +8,15 @@ from time import time
 from tqdm import tqdm
 from typing import Dict, List
 
+from mymi import config
 from mymi import logging
 
-def build_index(dataset: 'DICOMDataset') -> None:
+def build_index(dataset: str) -> None:
     start = time()
 
     # Load all dicom files.
-    data_path = os.path.join(dataset.path, 'data')
+    dataset_path = os.path.join(config.directories.datasets, 'dicom', dataset) 
+    data_path = os.path.join(dataset_path, 'data')
     if not os.path.exists(data_path):
         raise ValueError(f"No 'data' folder found for dataset '{dataset}'.")
 
@@ -25,6 +27,7 @@ def build_index(dataset: 'DICOMDataset') -> None:
         'modality': str,
         'series-id': str,
         'sop-id': str,
+        'filepath': str,
         'mod-spec': object
     }
     index = pd.DataFrame(columns=index_cols.keys())
@@ -119,7 +122,7 @@ def build_index(dataset: 'DICOMDataset') -> None:
     # Check CT slices have consistent x/y position.
     ct = index[index.modality == 'CT']
     def consistent_xy_position(series: pd.Series) -> bool:
-        pos = series.apply(lambda m: m['ImagePositionPatient'][:2])
+        pos = series.apply(lambda m: pd.Series(m['ImagePositionPatient'][:2]))
         pos = pos.drop_duplicates()
         return len(pos) == 1
     cons_xy = ct[['series-id', 'mod-spec']].groupby('series-id')['mod-spec'].transform(consistent_xy_position)
@@ -132,13 +135,13 @@ def build_index(dataset: 'DICOMDataset') -> None:
     # Check CT slices have consistent x/y spacing.
     ct = index[index.modality == 'CT']
     def consistent_xy_spacing(series: pd.Series) -> bool:
-        pos = series.apply(lambda m: m['PixelSpacing'])
+        pos = series.apply(lambda m: pd.Series(m['PixelSpacing']))
         pos = pos.drop_duplicates()
         return len(pos) == 1
     cons_xy = ct[['series-id', 'mod-spec']].groupby('series-id')['mod-spec'].transform(consistent_xy_spacing)
     incons_idx = cons_xy[~cons_xy].index
     incons = index.loc[incons_idx]
-    incons['error'] = 'INCONSISTENT-POSITION-XY'
+    incons['error'] = 'INCONSISTENT-SPACING-XY'
     errors = errors.append(incons)
     index = index.drop(incons_idx)
 
@@ -152,7 +155,7 @@ def build_index(dataset: 'DICOMDataset') -> None:
     cons_z = ct.groupby('series-id')['mod-spec'].transform(consistent_z_position)
     incons_idx = cons_z[~cons_z].index
     incons = index.loc[incons_idx]
-    incons['error'] = 'INCONSISTENT-POSITION-Z'
+    incons['error'] = 'INCONSISTENT-SPACING-Z'
     errors = errors.append(incons)
     index = index.drop(incons_idx)
 
@@ -206,17 +209,17 @@ def build_index(dataset: 'DICOMDataset') -> None:
     # Save index.
     logging.info(f"Saving index for dataset '{dataset}'...")
     index = index.astype(index_cols)
-    filepath = os.path.join(dataset.path, 'index.csv')
+    filepath = os.path.join(dataset_path, 'index.csv')
     index.to_csv(filepath, index=False)
 
     # Save errors index.
     logging.info(f"Saving index errors for dataset '{dataset}'...")
     errors = errors.astype(errors_cols)
-    filepath = os.path.join(dataset.path, 'index-errors.csv')
+    filepath = os.path.join(dataset_path, 'index-errors.csv')
     errors.to_csv(filepath, index=False)
 
     # Save indexing time.
     end = time()
     mins = int(np.ceil((end - start) / 60))
-    filepath = os.path.join(dataset.path, f'__INDEXING_TIME_MINS_{mins}__')
+    filepath = os.path.join(dataset_path, f'__INDEXING_TIME_MINS_{mins}__')
     Path(filepath).touch()

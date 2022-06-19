@@ -18,12 +18,10 @@ dry_run = False
 datasets_for_loader = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 datasets = ['PMCC-HN-TEST', 'PMCC-HN-TRAIN']
 regions = RegionNames
-regions.remove('BrainStem')
-regions.remove('OralCavity')
-models = ['transfer']
+models = ['clinical']
 num_folds = 5
 num_trains = [5, 10, 20, 50, 100, 200, None]
-test_folds = [1, 2, 3, 4]
+test_folds = [0, 1, 2, 3, 4]
 
 # Load localiser checkpoints.
 loc_ckpts = {}

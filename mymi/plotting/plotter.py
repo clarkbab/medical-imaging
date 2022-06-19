@@ -1317,10 +1317,11 @@ def plot_dataframe_v2(
     hue: Optional[str] = None,
     box_line_colour: str = 'black',
     box_line_width: float = 1,
-    fontsize: float = 10,
     hue_order: Optional[List[str]] = None,
     include_x: Optional[Union[str, List[str]]] = None,
     exclude_x: Optional[Union[str, List[str]]] = None,
+    figsize: Tuple[float, float] = (16, 6),
+    fontsize: float = 10,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
@@ -1328,8 +1329,6 @@ def plot_dataframe_v2(
     outlier_cols: Optional[Union[str, List[str]]] = None,
     outlier_legend_loc: str = 'upper left',
     point_size: float = 10,
-    row_height: float = 6,
-    row_width: float = 18,
     savepath: Optional[str] = None,
     show_legend: bool = True,
     show_outliers: bool = False,
@@ -1381,9 +1380,9 @@ def plot_dataframe_v2(
         n_col = len(x_vals)
     num_rows = int(np.ceil(len(x_vals) / n_col))
     if num_rows > 1:
-        _, axs = plt.subplots(num_rows, 1, figsize=(row_width, num_rows * row_height), sharey=True)
+        _, axs = plt.subplots(num_rows, 1, figsize=(figsize[0], num_rows * figsize[1]), sharey=True)
     else:
-        plt.figure(figsize=(row_width, row_height))
+        plt.figure(figsize=figsize)
         axs = [plt.gca()]
 
     # Get axis limits.

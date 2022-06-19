@@ -1,7 +1,7 @@
 import subprocess
 
-regions = '15,16'
-script = 'scripts/train/segmenter/spartan/array/train_segmenter_600_epochs'
+regions = '0-16'
+script = 'scripts/train/segmenter/spartan/array/train_segmenter_750_epochs'
 test_folds = [0, 1, 2, 3, 4]
 models = ['clinical', 'transfer']
 num_trains = [5]

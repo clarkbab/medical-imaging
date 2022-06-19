@@ -18,12 +18,10 @@ from mymi.utils import encode
 dry_run = False
 datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 regions = RegionNames
-regions.remove('BrainStem')
-regions.remove('OralCavity')
-models = ['transfer']
+models = ['clinical', 'transfer']
 num_folds = 5
 num_trains = [5, 10, 20, 50, 100, 200, None]
-test_folds = [1, 2, 3, 4]
+test_folds = [0, 1, 2, 3, 4]
 
 # Load localiser checkpoints.
 loc_ckpts = {}

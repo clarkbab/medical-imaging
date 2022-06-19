@@ -10,6 +10,7 @@ import wandb
 
 from mymi import config
 from mymi.geometry import get_extent_centre
+from mymi import logging
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_distances
 from mymi.postprocessing import get_batch_largest_cc
@@ -58,8 +59,16 @@ class Segmenter(pl.LightningModule):
         # Check that model completed 150 epochs training.
         filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
         state = torch.load(filepath, map_location=torch.device('cpu'))
-        num_epochs = 149
-        if state['epoch'] < num_epochs:
+        num_samples = int(run_name.split('-')[-1])
+        if num_samples == 5:
+            num_epochs = 900
+        elif num_samples == 10:
+            num_epochs = 450
+        elif num_samples == 20:
+            num_epochs = 300
+        else:
+            num_epochs = 150
+        if state['epoch'] < num_epochs - 1:
             raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
 
         # Load model.
@@ -181,7 +190,9 @@ class Segmenter(pl.LightningModule):
                     # Get centre of extent of ground truth.
                     centre = get_extent_centre(y_vol)
                     if centre is None:
-                        raise ValueError(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
+                        logging.info(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
+                        continue
+                        # raise ValueError(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
 
                     for axis, centre_ax in enumerate(centre):
                         # Get slices.

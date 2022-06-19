@@ -38,7 +38,7 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-${REGION}"
 # MODEL="clinical"
-NUM_EPOCHS=300
+NUM_EPOCHS=750
 NUM_FOLDS=5
 NUM_GPUS=1
 NUM_NODES=1
@@ -54,9 +54,9 @@ RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 if [ "$MODEL" = "public" ]; then
-    RUN_NAME="public-1gpu-300epochs"
+    RUN_NAME="public-1gpu-750epochs"
 else
-    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN-300epochs"
+    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN-750epochs"
 fi
 if [ "$MODEL" = "transfer" ]; then
     PRETRAINED_MODEL="('segmenter-$REGION','public-1gpu-150epochs','BEST')"

@@ -79,4 +79,7 @@ def save_csv(
 
 def load_csv(*path: List[str], **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(directories.files, *path)
-    return pd.read_csv(filepath, **kwargs)
+    if os.path.exists(filepath):
+        return pd.read_csv(filepath, **kwargs)
+    else:
+        return None

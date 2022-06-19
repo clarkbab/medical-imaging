@@ -108,7 +108,7 @@ class NIFTIPatient:
 
     @property
     def ct_size(self) -> np.ndarray:
-        return self.ct_data().shape
+        return self.ct_data.shape
 
     def region_data(
         self,

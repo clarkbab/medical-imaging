@@ -45,7 +45,7 @@ class DICOMDataset(Dataset):
         # Load indexes.
         filepath = os.path.join(self._path, 'index.csv')
         if not os.path.exists(filepath):
-            build_index(self)
+            build_index(name)
         self._index = pd.read_csv(filepath, dtype={ 'patient-id': str })
         filepath = os.path.join(self._path, 'index-errors.csv')
         self._index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })

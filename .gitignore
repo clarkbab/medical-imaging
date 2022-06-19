@@ -6,3 +6,5 @@ build
 dist
 lightning_logs
 mymi.egg-info
+
+MNIST
