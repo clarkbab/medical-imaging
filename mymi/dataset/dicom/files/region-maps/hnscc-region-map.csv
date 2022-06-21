@@ -8,8 +8,6 @@ Cochlea_R,^(r|rt|right)(\s|_)?cochlea$
 Lens_L,^(l|lt|left)(\s|_)?lens$
 Lens_R,^(r|rt|right)(\s|_)?lens$
 Mandible,^mandible$
-OpticChiasm,^chiasm$
-OpticChiasm,^optic(\s|_)?chiasm$
 OpticNerve_L,^(l|lt|left)(\s|_)?optic(\s|_)?nerve$
 OpticNerve_L,^(l|lt|left)(\s|_)?optic(\s|_)?n$
 OpticNerve_R,^(r|rt|right)(\s|_)?optic(\s|_)?nerve$

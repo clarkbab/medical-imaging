@@ -25,6 +25,7 @@ def distances(
     # Convert types for SimpleITK.
     a_itk = a.astype('uint8')
     b_itk = b.astype('uint8')
+    spacing = tuple(reversed(spacing))
 
     # Convert to SimpleITK images.
     a_itk = sitk.GetImageFromArray(a_itk)
@@ -58,22 +59,18 @@ def distances(
     # Calculate statistics.
     assd = np.mean(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
     surface_hd = np.max(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
-    # surface_ahd = np.mean([np.mean(a_to_b_surface_min_dists), np.mean(b_to_a_surface_min_dists)])     # These values don't match SimpleITK closely.
     surface_hd_mean = np.mean([np.mean(a_to_b_surface_min_dists), np.mean(b_to_a_surface_min_dists)])
     surface_95hd = np.max([np.percentile(a_to_b_surface_min_dists, 95), np.percentile(b_to_a_surface_min_dists, 95)])
     voxel_hd = np.max(np.concatenate((a_to_b_voxel_min_dists, b_to_a_voxel_min_dists)))
-    # voxel_ahd = np.mean([np.mean(a_to_b_voxel_min_dists), np.mean(b_to_a_voxel_min_dists)])           # These values don't match SimpleITK closely.
     voxel_hd_mean = np.mean([np.mean(a_to_b_voxel_min_dists), np.mean(b_to_a_voxel_min_dists)])
     voxel_95hd = np.max([np.percentile(a_to_b_voxel_min_dists, 95), np.percentile(b_to_a_voxel_min_dists, 95)])
      
     return {
         'assd': assd,
         'surface-hd': surface_hd,
-        # 'surface-ahd': surface_ahd,
         'surface-95hd': surface_95hd,
         'surface-hd-mean': surface_hd_mean,
         'voxel-hd': voxel_hd,
-        # 'voxel-ahd': voxel_ahd,
         'voxel-95hd': voxel_95hd,
         'voxel-hd-mean': voxel_hd_mean
     }

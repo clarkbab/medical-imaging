@@ -7,11 +7,6 @@ BrainStem,^brain(\s|_)?stem$
 Lens_L,^(l|lt)(\s|_)?lens$
 Lens_R,^(r|rt)(\s|_)?lens$
 Mandible,^mandible$
-Neck_L,^l(\s|_)?neck$
-Neck_R,^r(\s|_)?neck$
-OpticChiasm,^chiasm$
-OpticChiasm,^optic(\s|_)?chiasm$
-OpticChiasm,^chiasma(\s|_)?optic$
 OpticNerve_L,^loptic$
 OpticNerve_L,^(l|lt)(\s|_)?optic(\s|_)?nerve$
 OpticNerve_L,^optic(\s|_)?nerve(\s|_)?l$

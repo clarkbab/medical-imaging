@@ -1,9 +1,6 @@
 internal,dataset
 Cochlea_L,Cochlea-Left
 Cochlea_R,Cochlea-Right
-MedullaOblongata,Medulla-Oblongata
-Neck_L,Neck-Left
-Neck_R,Neck-Right
 OralCavity,Oral-Cavity
 Parotid_L,Parotid-Left
 Parotid_R,Parotid-Right

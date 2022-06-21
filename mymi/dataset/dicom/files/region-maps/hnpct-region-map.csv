@@ -21,7 +21,6 @@ Lens_R,^rt(\s|_)?lens$
 Lens_R,^lens(\s|_)?\(r\)$
 Mandible,^mandible$
 Mandible,^mandibule(s)?$
-OpticChiasm,^optic(\s|_)?chiasm
 OpticNerve_L,^opticnerv(e)?(\s|_)?\(l\)$
 OpticNerve_L,^lt(\s|_)?optic(\s|_)?nerve$
 OpticNerve_L,^nerf(\s|_)?opt(ique)?(\s|_)?(g|gch|gche)?$
