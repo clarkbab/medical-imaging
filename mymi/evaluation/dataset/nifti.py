@@ -287,17 +287,22 @@ def get_patient_segmenter_evaluation(
     # Distances.
     spacing = set.patient(pat_id).ct_spacing
     if pred.sum() == 0 or label.sum() == 0:
-        data = {
-            'assd': np.nan,
-            'surface-hd': np.nan,
-            'surface-95hd': np.nan,
-            'surface-hd-mean': np.nan,
-            'voxel-hd': np.nan,
-            'voxel-95hd': np.nan,
-            'voxel-hd-mean': np.nan
-        }
+        data['assd'] = np.nan
+        data['surface-hd'] = np.nan
+        data['surface-95hd'] = np.nan
+        data['surface-hd-mean'] = np.nan
+        data['voxel-hd'] = np.nan
+        data['voxel-95hd'] = np.nan
+        data['voxel-hd-mean'] = np.nan
     else:
-        data = distances(pred, label, spacing)
+        dists = distances(pred, label, spacing)
+        data['assd'] = dists['assd']
+        data['surface-hd'] = dists['surface-hd']
+        data['surface-95hd'] = dists['surface-95hd']
+        data['surface-hd-mean'] = dists['surface-hd-mean']
+        data['voxel-hd'] = dists['voxel-hd']
+        data['voxel-95hd'] = dists['voxel-95hd']
+        data['voxel-hd-mean'] = dists['voxel-hd-mean']
 
     return data
     
