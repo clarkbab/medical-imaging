@@ -48,8 +48,8 @@ def distances(
     b_to_a_surface_min_dists = a_dist_map[b_surface == 1]
 
     # Voxel - set negative distances to zero as these indicate overlapping voxels.
-    a_to_b_voxel_min_dists[a_to_b_voxel_min_dists < 0] = 1
-    b_to_a_voxel_min_dists[b_to_a_voxel_min_dists < 0] = 1
+    a_to_b_voxel_min_dists[a_to_b_voxel_min_dists < 0] = 0
+    b_to_a_voxel_min_dists[b_to_a_voxel_min_dists < 0] = 0
 
     # Surface - take absolute distances as we're only interested in distance to the nearest
     # surface voxel.
@@ -60,10 +60,10 @@ def distances(
     assd = np.mean(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
     surface_hd = np.max(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
     surface_hd_mean = np.mean([np.mean(a_to_b_surface_min_dists), np.mean(b_to_a_surface_min_dists)])
-    surface_95hd = np.max([np.percentile(a_to_b_surface_min_dists, 95), np.percentile(b_to_a_surface_min_dists, 95)])
+    surface_95hd = np.mean([np.percentile(a_to_b_surface_min_dists, 95), np.percentile(b_to_a_surface_min_dists, 95)])
     voxel_hd = np.max(np.concatenate((a_to_b_voxel_min_dists, b_to_a_voxel_min_dists)))
     voxel_hd_mean = np.mean([np.mean(a_to_b_voxel_min_dists), np.mean(b_to_a_voxel_min_dists)])
-    voxel_95hd = np.max([np.percentile(a_to_b_voxel_min_dists, 95), np.percentile(b_to_a_voxel_min_dists, 95)])
+    voxel_95hd = np.mean([np.percentile(a_to_b_voxel_min_dists, 95), np.percentile(b_to_a_voxel_min_dists, 95)])
      
     return {
         'assd': assd,
