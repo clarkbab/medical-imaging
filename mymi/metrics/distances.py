@@ -66,10 +66,10 @@ def distances(
     return {
         'assd': assd,
         'surface-hd': surface_hd,
-        'surface-95hd': surface_95hd,
+        'surface-hd-95': surface_95hd,
         'surface-hd-mean': surface_hd_mean,
         'voxel-hd': voxel_hd,
-        'voxel-95hd': voxel_95hd,
+        'voxel-hd-95': voxel_95hd,
         'voxel-hd-mean': voxel_hd_mean
     }
 
