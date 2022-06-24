@@ -56,15 +56,15 @@ class Segmenter(pl.LightningModule):
         run_name: str,
         checkpoint: str,
         **kwargs: Dict) -> pl.LightningModule:
-        # Check that model completed 150 epochs training.
+        # Check that training has finished before predicting.
         filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
         state = torch.load(filepath, map_location=torch.device('cpu'))
-        num_samples = int(run_name.split('-')[-1])
-        if num_samples == 5:
+        num_samples = run_name.split('-')[-1]
+        if num_samples == '5':
             num_epochs = 900
-        elif num_samples == 10:
+        elif num_samples == '10':
             num_epochs = 450
-        elif num_samples == 20:
+        elif num_samples == '20':
             num_epochs = 300
         else:
             num_epochs = 150
@@ -90,6 +90,7 @@ class Segmenter(pl.LightningModule):
         if checkpoint == 'BEST': 
             checkpath = os.path.join(config.directories.models, model_name, run_name)
             checkpoint = list(sorted(os.listdir(checkpath)))[-1].replace('.ckpt', '')
+
         return (model_name, run_name, checkpoint)
 
     def configure_optimizers(self):

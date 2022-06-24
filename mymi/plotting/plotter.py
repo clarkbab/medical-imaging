@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import numpy as np
 from numpy import ndarray
+import os
 import pandas as pd
 from scipy.stats import wilcoxon
 import seaborn as sns
@@ -21,6 +22,8 @@ from mymi.postprocessing import get_largest_cc
 from mymi.regions import get_patch_size, is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D, crop_or_pad_box, crop_or_pad_point
 from mymi import types
+
+DEFAULT_FONT_SIZE = 15
 
 def _plot_region_data(
     region_data: Dict[str, np.ndarray],
@@ -334,7 +337,7 @@ def plot_regions(
     dose_legend_size: float = 0.03,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[int, int] = (8, 8),
-    fontsize: int = 10,
+    fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     perimeter: bool = True,
@@ -442,7 +445,15 @@ def plot_regions(
     # Plot CT data or placeholder.
     if ct_data is not None:
         if ct_window is not None:
-            width, level = ct_window
+            if type(ct_window) == str:
+                if ct_window == 'bone':
+                    width, level = (2000, 300)
+                elif ct_window == 'lung':
+                    width, level = (2000, -200)
+                elif ct_window == 'tissue':
+                    width, level = (350, 50)
+            else:
+                width, level = ct_window
             vmin = level - (width / 2)
             vmax = level + (width / 2)
         else:
@@ -527,6 +538,9 @@ def plot_regions(
 
     # Save plot to disk.
     if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
         plt.savefig(savepath)
 
     if show:
@@ -549,7 +563,7 @@ def plot_localiser_prediction(
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Literal[0, 1]] = None,
     figsize: Tuple[int, int] = (8, 8),
-    fontsize: float = 10,
+    fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     pred_centre_colour: str = 'deepskyblue',
@@ -706,6 +720,9 @@ def plot_localiser_prediction(
 
     # Save plot to disk.
     if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
         plt.savefig(savepath)
 
     plt.show()
@@ -778,7 +795,7 @@ def plot_segmenter_prediction(
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
-    fontsize: float = 10,
+    fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
@@ -789,9 +806,9 @@ def plot_segmenter_prediction(
     show_label_extent: bool = True,
     show_legend: bool = True,
     show_loc_centre: bool = True,
+    show_pred: bool = True,
     show_pred_extent: bool = True,
     show_pred_patch: bool = True,
-    show_seg_pred: bool = True,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
@@ -883,7 +900,7 @@ Prediction: {i}
         colour = palette[i + 1]
 
         # Plot prediction.
-        if not empty_preds[i] and show_seg_pred:
+        if not empty_preds[i] and show_pred:
             # Get aspect ratio.
             if not aspect:
                 aspect = get_aspect_ratio(view, spacing) 
@@ -962,6 +979,9 @@ Prediction: {i}
 
     # Save plot to disk.
     if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
         plt.savefig(savepath)
 
     plt.show()
@@ -982,7 +1002,7 @@ def plot_dataframe(
     inner: str ='quartiles',
     annotate_outliers: bool = False,
     annotation_model_offset=35,
-    fontsize: float = 10,
+    fontsize: float = DEFAULT_FONT_SIZE,
     hue_order: Optional[List[str]] = None,
     legend_loc: str = 'best',
     major_tick_freq: Optional[float] = None,
@@ -1188,6 +1208,9 @@ def plot_dataframe(
 
     # Save plot to disk.
     if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
         plt.savefig(savepath)
 
     plt.show()
@@ -1321,7 +1344,7 @@ def plot_dataframe_v2(
     include_x: Optional[Union[str, List[str]]] = None,
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
-    fontsize: float = 10,
+    fontsize: float = DEFAULT_FONT_SIZE,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
@@ -1584,8 +1607,10 @@ def plot_dataframe_v2(
 
     # Save plot to disk.
     if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
         plt.savefig(savepath)
-
 
 def style_rows(
     series: pd.Series,

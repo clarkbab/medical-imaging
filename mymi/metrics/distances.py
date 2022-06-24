@@ -42,19 +42,17 @@ def distances(
     b_dist_map = sitk.GetArrayFromImage(sitk.SignedMaurerDistanceMap(b_itk, useImageSpacing=True, squaredDistance=False, insideIsPositive=False))
 
     # Get voxel/surface min distances.
-    a_to_b_voxel_min_dists = b_dist_map[a == 1]
     a_to_b_surface_min_dists = b_dist_map[a_surface == 1]
-    b_to_a_voxel_min_dists = a_dist_map[b == 1]
     b_to_a_surface_min_dists = a_dist_map[b_surface == 1]
+    a_to_b_voxel_min_dists = b_dist_map[a == 1]
+    b_to_a_voxel_min_dists = a_dist_map[b == 1]
 
     # Voxel - set negative distances to zero as these indicate overlapping voxels.
+    # Set negative distances to zero as these indicate overlapping voxels (hence "min dist" to other set is zero).
+    a_to_b_surface_min_dists[a_to_b_surface_min_dists < 0] = 0
+    b_to_a_surface_min_dists[b_to_a_surface_min_dists < 0] = 0
     a_to_b_voxel_min_dists[a_to_b_voxel_min_dists < 0] = 0
     b_to_a_voxel_min_dists[b_to_a_voxel_min_dists < 0] = 0
-
-    # Surface - take absolute distances as we're only interested in distance to the nearest
-    # surface voxel.
-    a_to_b_surface_min_dists = np.abs(a_to_b_surface_min_dists)
-    b_to_a_surface_min_dists = np.abs(b_to_a_surface_min_dists)
 
     # Calculate statistics.
     assd = np.mean(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
