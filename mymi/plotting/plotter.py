@@ -1071,8 +1071,7 @@ def plot_dataframe(
         elif style == 'violin':
             # Exclude outliers manually.
             split_df = split_df[~split_df.outlier]
-            sns.violinplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, inner=inner, split=True, showfliers=False, order=order, hue_order=h = None,ue_order)
-        logging.info(f"Saved plot to '{savepath}'.")
+            sns.violinplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, inner=inner, split=True, showfliers=False, order=order, hue_order=hue_order)
         else:
             raise ValueError(f"Invalid style {style}, expected 'box' or 'violin'.")
 
@@ -1432,9 +1431,10 @@ def plot_dataframe_v2(
             y_lim[1] = max_y + y_margin * width
 
     # Sort by x values.
-    data[x] = data[x].astype('category')
-    data[x].cat = data[x].cat.set_categories(x_order)
-    data = data.sort_values(x)
+    if x_order is not None:
+        data[x] = data[x].astype('category')
+        data[x].cat = data[x].cat.set_categories(x_order)
+        data = data.sort_values(x)
 
     # Get hue order/colours.
     if hue is not None:
