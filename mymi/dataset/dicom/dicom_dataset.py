@@ -14,6 +14,7 @@ from mymi import config
 from mymi import logging
 from mymi import regions
 from mymi import types
+from mymi.utils import append_row
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
@@ -155,7 +156,7 @@ class DICOMDataset(Dataset):
                     'patient-id': pat,
                     'region': pat_region
                 }
-                df = df.append(data, ignore_index=True)
+                df = append_row(df, data)
 
         # Set column types.
         df = df.astype(cols)

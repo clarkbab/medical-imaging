@@ -18,7 +18,7 @@ from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
-from mymi.utils import encode
+from mymi.utils import append_row, encode
 
 def get_region_summary(
     dataset: str,
@@ -47,10 +47,10 @@ def get_region_summary(
         lcc_label = get_largest_cc(label)
         data['metric'] = 'connected'
         data['value'] = 1 if lcc_label.sum() == label.sum() else 0
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
         data['metric'] = 'connected-largest-p'
         data['value'] = lcc_label.sum() / label.sum()
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
         # Add OAR extent.
         ext_width_mm = get_extent_width_mm(label, spacing)
@@ -58,13 +58,13 @@ def get_region_summary(
             ext_width_mm = (0, 0, 0)
         data['metric'] = 'extent-mm-x'
         data['value'] = ext_width_mm[0]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
         data['metric'] = 'extent-mm-y'
         data['value'] = ext_width_mm[1]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
         data['metric'] = 'extent-mm-z'
         data['value'] = ext_width_mm[2]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
         # Add extent of largest connected component.
         extent = get_extent(lcc_label)
@@ -76,19 +76,19 @@ def get_region_summary(
             extent_mm = (0, 0, 0)
         data['metric'] = 'connected-extent-mm-x'
         data['value'] = extent_mm[0]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
         data['metric'] = 'connected-extent-mm-y'
         data['value'] = extent_mm[1]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
         data['metric'] = 'connected-extent-mm-z'
         data['value'] = extent_mm[2]
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
         # Add volume.
         vox_volume = reduce(lambda x, y: x * y, spacing)
         data['metric'] = 'volume-mm3'
         data['value'] = vox_volume * label.sum() 
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)
@@ -256,7 +256,7 @@ def get_ct_summary(
                 'spacing': spacing[axis],
                 'fov': fov[axis]
             }
-            df = df.append(data, ignore_index=True)
+            df = append_row(df, data)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)
@@ -297,6 +297,7 @@ def create_region_figures(
 
     # Keep regions with patients.
     df = load_region_summary(dataset, regions=region)
+    df = df.pivot(index=['dataset', 'region', 'patient-id'], columns='metric', values='value').reset_index()
 
     # Add 'extent-mm' outlier info.
     columns = ['extent-mm-x', 'extent-mm-y', 'extent-mm-z']
@@ -421,18 +422,12 @@ def create_region_figures(
         )
         for view, page_coord in zip(views, img_coords):
             # Set figure.
-            plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], regions=region, show_extent=True, view=view, window=(3000, 500))
-
-            # Save temp file.
-            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plt.savefig(filepath)
-            plt.close()
+            savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, regions=region, show_extent=True, savepath=savepath, view=view)
 
             # Add image to report.
-            pdf.image(filepath, *page_coord, w=img_width, h=img_height)
-
-            # Delete temp file.
-            os.remove(filepath)
+            pdf.image(savepath, *page_coord, w=img_width, h=img_height)
+            os.remove(savepath)
 
         # Add subregion images.
         if subregions and len(obj_df) > 1:
@@ -513,8 +508,7 @@ def get_object_summary(
         data['volume-vox'] = num_voxels
         data['volume-p-total'] = num_voxels / tot_voxels
         data['volume-mm3'] = volume
-
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
     df = df.astype(cols)
     return df

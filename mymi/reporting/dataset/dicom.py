@@ -8,7 +8,7 @@ from mymi import dataset as ds
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
 from mymi import types
-from mymi.utils import encode
+from mymi.utils import append_row, encode
 
 def create_evaluation_report(
     name: str,
@@ -57,7 +57,7 @@ def get_ct_summary(
                 'spacing': spacing[axis],
                 'fov': fov[axis]
             }
-            df = df.append(data, ignore_index=True)
+            df = append_row(df, data)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)
@@ -190,13 +190,14 @@ def region_summary(
             for axis in axes:
                 extent_vox = max[axis] - min[axis]
                 extent_mm = extent_vox * spacing[axis]
-                df = df.append({
+                data = {
                     'patient': pat,
                     'region': r,
                     'axis': axis,
                     'extent-mm': extent_mm,
                     'spacing-mm': spacing[axis]
-                }, ignore_index=True)
+                }
+                df = append_row(df, data)
 
     # Set column types as 'append' crushes them.
     df = df.astype(cols)

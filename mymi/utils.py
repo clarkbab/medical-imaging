@@ -1,24 +1,30 @@
 import json
 import hashlib
 import numpy as np
-from typing import Any
+import pandas as pd
+from typing import Any, Dict, Union
 
-from mymi.loaders import Loader
+# Commented due to circular import.
+# from mymi.loaders import Loader
+
+def append_row(df: pd.DataFrame, data: Dict[str, Union[str, int, float]]) -> pd.DataFrame:
+    return pd.concat((df, pd.DataFrame(data, index=[0])), axis=0)
 
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
 
-def get_manifest():
-    datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
-    region = 'BrainStem'
-    num_folds = 5
-    num_train = 5
-    test_fold = 0
-    _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, num_folds=num_folds, num_train=num_train, test_fold=test_fold)
-    samples = []
-    for ds_b, samp_b in iter(test_loader):
-        samples.append((ds_b[0], samp_b[0].item()))
-    return samples
+# Commented due to circular import.
+# def get_manifest():
+#     datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+#     region = 'BrainStem'
+#     num_folds = 5
+#     num_train = 5
+#     test_fold = 0
+#     _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, num_folds=num_folds, num_train=num_train, test_fold=test_fold)
+#     samples = []
+#     for ds_b, samp_b in iter(test_loader):
+#         samples.append((ds_b[0], samp_b[0].item()))
+#     return samples
 
 def get_batch_centroids(label_batch, plane):
     """

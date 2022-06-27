@@ -16,7 +16,7 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
 from mymi.regions import get_patch_size
 from mymi import types
-from mymi.utils import encode
+from mymi.utils import append_row, encode
 
 def get_patient_localiser_evaluation(
     dataset: str,
@@ -49,18 +49,22 @@ def get_patient_localiser_evaluation(
         dists = {
             'assd': np.nan,
             'surface-hd': np.nan,
-            'surface-95hd': np.nan,
+            'surface-hd-95': np.nan,
+            'surface-hd-mean': np.nan,
             'voxel-hd': np.nan,
-            'voxel-95hd': np.nan
+            'voxel-hd-95': np.nan,
+            'voxel-hd-mean': np.nan
         }
     else:
         dists = distances(pred, label, spacing)
 
     data['assd'] = dists['assd']
     data['surface-hd'] = dists['surface-hd']
-    data['surface-95hd'] = dists['surface-95hd']
+    data['surface-hd-95'] = dists['surface-hd-95']
+    data['surface-hd-mean'] = dists['surface-hd-mean']
     data['voxel-hd'] = dists['voxel-hd']
-    data['voxel-95hd'] = dists['voxel-95hd']
+    data['voxel-hd-95'] = dists['voxel-hd-95']
+    data['voxel-hd-mean'] = dists['voxel-hd-mean']
 
     # Extent distance.
     if pred.sum() == 0:
@@ -143,7 +147,7 @@ def create_patient_localiser_evaluation(
                 'metric': metric,
                 'value': value
             }
-            eval_df = eval_df.append(data, ignore_index=True)
+            eval_df = append_row(eval_df, data)
         else:
             # Update metric.
             eval_df.loc[(eval_df['dataset'] == dataset) & (eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
@@ -289,19 +293,19 @@ def get_patient_segmenter_evaluation(
     if pred.sum() == 0 or label.sum() == 0:
         data['assd'] = np.nan
         data['surface-hd'] = np.nan
-        data['surface-95hd'] = np.nan
+        data['surface-hd-95'] = np.nan
         data['surface-hd-mean'] = np.nan
         data['voxel-hd'] = np.nan
-        data['voxel-95hd'] = np.nan
+        data['voxel-hd-95'] = np.nan
         data['voxel-hd-mean'] = np.nan
     else:
         dists = distances(pred, label, spacing)
         data['assd'] = dists['assd']
         data['surface-hd'] = dists['surface-hd']
-        data['surface-95hd'] = dists['surface-95hd']
+        data['surface-hd-95'] = dists['surface-hd-95']
         data['surface-hd-mean'] = dists['surface-hd-mean']
         data['voxel-hd'] = dists['voxel-hd']
-        data['voxel-95hd'] = dists['voxel-95hd']
+        data['voxel-hd-95'] = dists['voxel-hd-95']
         data['voxel-hd-mean'] = dists['voxel-hd-mean']
 
     return data
@@ -351,7 +355,7 @@ def create_patient_segmenter_evaluation(
                 'metric': metric,
                 'value': value
             }
-            eval_df = eval_df.append(data, ignore_index=True)
+            eval_df = append_row(eval_df, data)
         else:
             # Update metric.
             eval_df.loc[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
@@ -402,7 +406,7 @@ def create_segmenter_evaluation(
                 'metric': metric,
                 'value': value
             }
-            df = df.append(data, ignore_index=True)
+            df = append_row(df, data)
 
     # Set column types.
     df = df.astype(cols)

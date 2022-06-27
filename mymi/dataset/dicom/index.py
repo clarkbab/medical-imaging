@@ -10,6 +10,7 @@ from typing import Dict, List
 
 from mymi import config
 from mymi import logging
+from mymi.utils import append_row
 
 def build_index(dataset: str) -> None:
     start = time()
@@ -93,7 +94,7 @@ def build_index(dataset: str) -> None:
                 'filepath': filepath,
                 'mod-spec': mod_spec,
             }
-            index = index.append(data, ignore_index=True)
+            index = append_row(index, data)
 
     # Create errors index.
     errors_cols = index_cols.copy()
@@ -104,7 +105,7 @@ def build_index(dataset: str) -> None:
     dup_rows = index['sop-id'].duplicated()
     dup = index[dup_rows]
     dup['error'] = 'DUPLICATE'
-    errors = errors.append(dup)
+    errors = append_row(errors, dup)
     index = index[~dup_rows]
 
     # Check CT slices have standard orientation.
@@ -116,7 +117,7 @@ def build_index(dataset: str) -> None:
     nonstand_idx = stand_orient[~stand_orient].index
     nonstand = index.loc[nonstand_idx]
     nonstand['error'] = 'NON-STANDARD-ORIENTATION'
-    errors = errors.append(nonstand)
+    errors = append_row(errors, nonstand)
     index = index.drop(nonstand_idx)
 
     # Check CT slices have consistent x/y position.
@@ -129,7 +130,7 @@ def build_index(dataset: str) -> None:
     incons_idx = cons_xy[~cons_xy].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-POSITION-XY'
-    errors = errors.append(incons)
+    errors = append_row(errors, incons)
     index = index.drop(incons_idx)
 
     # Check CT slices have consistent x/y spacing.
@@ -142,7 +143,7 @@ def build_index(dataset: str) -> None:
     incons_idx = cons_xy[~cons_xy].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-SPACING-XY'
-    errors = errors.append(incons)
+    errors = append_row(errors, incons)
     index = index.drop(incons_idx)
 
     # Check CT slices have consistent z spacing.
@@ -156,7 +157,7 @@ def build_index(dataset: str) -> None:
     incons_idx = cons_z[~cons_z].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-SPACING-Z'
-    errors = errors.append(incons)
+    errors = append_row(errors, incons)
     index = index.drop(incons_idx)
 
     # If multiple RT files included for a series, keep most recent.
@@ -166,7 +167,7 @@ def build_index(dataset: str) -> None:
         dup_idx = rt[rt['series-id'].duplicated()].index
         dup = index.loc[dup_idx]
         dup['error'] = 'MULTIPLE-FILES'
-        errors = errors.append(dup)
+        errors = append_row(errors, dup)
         index = index.drop(dup_idx)
 
     # Check that RTSTRUCT references CT series in index.
@@ -176,7 +177,7 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_ct[~ref_ct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-CT'
-    errors = errors.append(nonref)
+    errors = append_row(errors, nonref)
     index = index.drop(nonref_idx)
 
     # Check that RTPLAN references RTSTRUCT SOP instance in index.
@@ -186,7 +187,7 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_rtstruct[~ref_rtstruct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-RTSTRUCT'
-    errors = errors.append(nonref)
+    errors = append_row(errors, nonref)
     index = index.drop(nonref_idx)
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
@@ -196,14 +197,14 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_rtplan[~ref_rtplan].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-RTPLAN'
-    errors = errors.append(nonref)
+    errors = append_row(errors, nonref)
     index = index.drop(nonref_idx)
 
     # Check that study has RTSTRUCT series.
     incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
     nonincl = index[~incl_rows]
     nonincl['error'] = 'STUDY-NO-RTSTRUCT'
-    errors = errors.append(nonincl)
+    errors = append_row(errors, nonincl)
     index = index[incl_rows]
 
     # Save index.

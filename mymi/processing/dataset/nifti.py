@@ -17,6 +17,7 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
+from mymi.utils import append_row
 
 def convert_to_training(
     dataset: str,
@@ -104,7 +105,7 @@ def convert_to_training(
                 'sample-id': i,
                 'region': region
             }
-            index = index.append(data, ignore_index=True)
+            index = append_row(index, data)
 
     # Write index.
     index = index.astype(cols)

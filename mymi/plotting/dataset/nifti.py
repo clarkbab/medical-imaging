@@ -1,3 +1,4 @@
+import re
 from typing import List, Optional, Union
 
 from mymi import dataset as ds
@@ -158,6 +159,11 @@ def plot_patient_segmenter_prediction(
 
     # Add 'centre_of' region data.
     if centre_of is not None:
+        pattern = r'^pred-([0-9]+)$'
+        match = re.search(pattern, centre_of)
+        if match is not None:
+            pred = preds[int(match.group(1))]
+            region_data[match.group(0)] = pred
         if region_data is None:
             centre_of_data = patient.region_data(regions=centre_of)
             region_data = centre_of_data
