@@ -13,6 +13,7 @@ from mymi.metrics import dice
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi import types
+from mymi.utils import append_row
 
 def create_dose_evaluation(
     pat_file: str,
@@ -116,7 +117,7 @@ def create_dose_evaluation(
                         'metric': metric,
                         'value': value
                     }
-                    df = df.append(data, ignore_index=True)
+                    df = append_row(df, data)
 
     # Write evaluation.
     df = df.astype(cols)
@@ -205,8 +206,8 @@ def evaluate_model(
         hd, hd_avg = hausdorff_distance(pred, label, spacing)
         hd_data[region] = hd
         hd_avg_data[region] = hd_avg
-        df = df.append(hd_data, ignore_index=True)
-        df = df.append(hd_avg_data, ignore_index=True)
+        df = append_row(df, hd_data)
+        df = append_row(df, hd_avg_data)
 
         # Symmetric surface distance.
         sd_mean, sd_median, sd_std, sd_max = symmetric_surface_distance(pred, label, spacing)
@@ -214,10 +215,10 @@ def evaluate_model(
         sd_median_data[region] = sd_median
         sd_std_data[region] = sd_std
         sd_max_data[region] = sd_max
-        df = df.append(sd_mean, ignore_index=True)
-        df = df.append(sd_median, ignore_index=True)
-        df = df.append(sd_std, ignore_index=True)
-        df = df.append(sd_max, ignore_index=True)
+        df = append_row(df, sd_mean)
+        df = append_row(df, sd_median)
+        df = append_row(df, sd_std)
+        df = append_row(df, sd_max)
 
     # Set index.
     df = df.set_index('patient-id')

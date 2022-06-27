@@ -25,7 +25,8 @@ from mymi import types
 
 DEFAULT_FONT_SIZE = 15
 
-def _plot_region_data(
+def __plot_region_data(
+    regions: types.PatientRegions,
     region_data: Dict[str, np.ndarray],
     slice_idx: int,
     alpha: float,
@@ -34,27 +35,22 @@ def _plot_region_data(
     perimeter: bool,
     view: types.PatientView,
     ax = None,
-    cca: bool = False,
-    connected_extent: bool = False,
+    cca: bool = False, connected_extent: bool = False,
     crop: Optional[types.Box2D] = None,
     colours: Optional[List[str]] = None,
     show_extent: bool = False) -> bool:
-    """
-    effect: adds regions to the plot.
-    returns: whether the legend should be shown.
-    args:
-        region_data: the region data to plot.
-        others: see 'plot_patient_regions'.
-    """
+    if type(regions) == str:
+        regions = [regions]
     if not ax:
         ax = plt.gca()
+    if colours is not None:
+        assert len(colours) == len(regions)
 
     # Plot each region.
     show_legend = False
-    for i, (region, data) in enumerate(region_data.items()):
+    for i, region in enumerate(regions):
         # Get region colour.
         if colours:
-            assert len(colours) == len(region_data.keys())
             colour = colours[i]
         else:
             colour = getattr(RegionColours, region)
@@ -62,7 +58,7 @@ def _plot_region_data(
         cmap = ListedColormap(cols)
 
         # Convert data to 'imshow' co-ordinate system.
-        slice_data = get_slice(data, slice_idx, view)
+        slice_data = get_slice(region_data[region], slice_idx, view)
 
         # Crop image.
         if crop:
@@ -70,14 +66,14 @@ def _plot_region_data(
 
         # Plot extent.
         if show_extent:
-            extent = get_extent(data)
+            extent = get_extent(region_data[region])
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
                 plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
 
         # Plot connected extent.
         if connected_extent:
-            extent = get_extent(get_largest_cc(data))
+            extent = get_extent(get_largest_cc(region_data[region]))
             if should_plot_box(extent, view, slice_idx):
                 plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
@@ -331,7 +327,7 @@ def plot_regions(
     crop: Optional[Union[str, types.Crop2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
-    ct_window: Tuple[float, float] = (3000, 500),
+    window: Tuple[float, float] = (3000, 500),
     dose_alpha: float = 0.3,
     dose_data: Optional[np.ndarray] = None,
     dose_legend_size: float = 0.03,
@@ -444,16 +440,16 @@ def plot_regions(
 
     # Plot CT data or placeholder.
     if ct_data is not None:
-        if ct_window is not None:
-            if type(ct_window) == str:
-                if ct_window == 'bone':
+        if window is not None:
+            if type(window) == str:
+                if window == 'bone':
                     width, level = (2000, 300)
-                elif ct_window == 'lung':
+                elif window == 'lung':
                     width, level = (2000, -200)
-                elif ct_window == 'tissue':
+                elif window == 'tissue':
                     width, level = (350, 50)
             else:
-                width, level = ct_window
+                width, level = window
             vmin = level - (width / 2)
             vmax = level + (width / 2)
         else:
@@ -490,7 +486,7 @@ def plot_regions(
 
     # Plot regions.
     if regions is not None:
-        should_show_legend = _plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+        should_show_legend = __plot_region_data(regions, region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -541,7 +537,8 @@ def plot_regions(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
+        logging.info(f"Saved plot to '{savepath}'.")
 
     if show:
         plt.show()
@@ -723,7 +720,8 @@ def plot_localiser_prediction(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
+        logging.info(f"Saved plot to '{savepath}'.")
 
     plt.show()
 
@@ -808,7 +806,7 @@ def plot_segmenter_prediction(
     show_loc_centre: bool = True,
     show_pred: bool = True,
     show_pred_extent: bool = True,
-    show_pred_patch: bool = True,
+    show_pred_patch: bool = False,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
@@ -956,7 +954,7 @@ Prediction: {i}
         # Plot second stage patch.
         if loc_centre is not None and not empty_preds[i] and show_pred_patch:
             # Get 3D patch - cropped to label size.
-            region = segmenter[0].split('-')[1]
+            region = segmenter[i][0].split('-')[1]
             size = get_patch_size(region, spacing)
             patch = get_box(loc_centre, size)
             label_box = ((0, 0, 0), prediction.shape)
@@ -982,7 +980,8 @@ Prediction: {i}
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
+        logging.info(f"Saved plot to '{savepath}'.")
 
     plt.show()
 
@@ -1073,6 +1072,7 @@ def plot_dataframe(
             # Exclude outliers manually.
             split_df = split_df[~split_df.outlier]
             sns.violinplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, inner=inner, split=True, showfliers=False, order=order, hue_order=hue_order)
+        logging.info(f"Saved plot to '{savepath}'.")
         else:
             raise ValueError(f"Invalid style {style}, expected 'box' or 'violin'.")
 
@@ -1211,7 +1211,8 @@ def plot_dataframe(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
+        logging.info(f"Saved plot to '{savepath}'.")
 
     plt.show()
 
@@ -1357,6 +1358,7 @@ def plot_dataframe_v2(
     show_outliers: bool = False,
     show_x_labels: bool = True,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
+    x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
@@ -1428,6 +1430,11 @@ def plot_dataframe_v2(
         if y_lim[1] is None:
             width = max_y - y_lim[0]
             y_lim[1] = max_y + y_margin * width
+
+    # Sort by x values.
+    data[x] = data[x].astype('category')
+    data[x].cat = data[x].cat.set_categories(x_order)
+    data = data.sort_values(x)
 
     # Get hue order/colours.
     if hue is not None:
@@ -1610,7 +1617,8 @@ def plot_dataframe_v2(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
+        logging.info(f"Saved plot to '{savepath}'.")
 
 def style_rows(
     series: pd.Series,

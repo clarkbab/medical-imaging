@@ -3,6 +3,7 @@ import pandas as pd
 from typing import Any, Callable, List, Optional
 
 from mymi import types
+from mymi.utils import append_row
 
 from .dicom_study import DICOMStudy
 from .region_map import RegionMap
@@ -131,7 +132,7 @@ class DICOMPatient:
             data[col] = getattr(self, col_method)
 
         # Add row.
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
         # Set column types as 'append' crushes them.
         df = df.astype(cols)

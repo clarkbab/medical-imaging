@@ -63,7 +63,7 @@ def evaluate_localiser_predictions(
             # Dice.
             dsc = dice(pred, label)
             data['dice'][region] = dsc
-            df = df.append(data['dice'], ignore_index=True)
+            df = append_row(df, data['dice'])
 
             # Distances.
             spacing = eval(set.params.spacing[0])

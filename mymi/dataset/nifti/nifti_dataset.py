@@ -5,6 +5,7 @@ from typing import Callable, List, Optional, Union
 
 from mymi import config
 from mymi import types
+from mymi.utils import append_row
 
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
@@ -54,6 +55,7 @@ class NIFTIDataset(Dataset):
         ct_path = os.path.join(self._path, 'data', 'ct')
         files = list(sorted(os.listdir(ct_path)))
         pats = [f.replace('.nii.gz', '') for f in files]
+        print(pats)
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))
@@ -80,7 +82,7 @@ class NIFTIDataset(Dataset):
                     'patient-id': id,
                     'region': region,
                 }
-                df = df.append(data, ignore_index=True)
+                df = append_row(df, data)
 
         # Set column types.
         df = df.astype(cols)
@@ -100,12 +102,7 @@ class NIFTIDataset(Dataset):
     def _filter_patient_by_regions(
         self,
         regions: types.PatientRegions) -> Callable[[str], bool]:
-        """
-        returns: a function that filters patients on region presence.
-        args:
-            regions: the passed 'regions' kwarg.
-        """
-        def fn(id):
+        def func(id):
             if type(regions) == str:
                 if regions == 'all':
                     return True
@@ -117,4 +114,4 @@ class NIFTIDataset(Dataset):
                     return True
                 else:
                     return False
-        return fn
+        return func
