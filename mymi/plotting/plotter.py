@@ -1378,7 +1378,10 @@ def plot_dataframe_v2(
     max_y = data[y].max()
 
     # Get x values.
-    x_vals = list(sorted(data[x].unique()))
+    if x_order is None:
+        x_vals = list(sorted(data[x].unique()))
+    else:
+        x_vals = x_order
 
     # Get x labels.
     # Show number of data points in x-label (e.g. "Parotid_L (n=99)") if all hue
@@ -1422,12 +1425,6 @@ def plot_dataframe_v2(
         if y_lim[1] is None:
             width = max_y - y_lim[0]
             y_lim[1] = max_y + y_margin * width
-
-    # Sort by x values.
-    if x_order is not None:
-        data[x] = data[x].astype('category')
-        data[x].cat = data[x].cat.set_categories(x_order)
-        data = data.sort_values(x)
 
     # Get hue order/colours.
     if hue is not None:
