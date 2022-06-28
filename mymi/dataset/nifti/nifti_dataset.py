@@ -55,7 +55,6 @@ class NIFTIDataset(Dataset):
         ct_path = os.path.join(self._path, 'data', 'ct')
         files = list(sorted(os.listdir(ct_path)))
         pats = [f.replace('.nii.gz', '') for f in files]
-        print(pats)
 
         # Filter by 'regions'.
         pats = list(filter(self._filter_patient_by_regions(regions), pats))

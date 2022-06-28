@@ -801,6 +801,7 @@ def plot_segmenter_prediction(
     regions: Optional[types.PatientRegions] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
+    show: bool = True,
     show_label_extent: bool = True,
     show_legend: bool = True,
     show_loc_centre: bool = True,
@@ -853,15 +854,8 @@ Prediction: {i}
     # Centre on OAR if requested.
     if slice_idx is None:
         if centre_of is not None:
-            if centre_of == 'pred':
-                # Centre of prediction.
-                centre_of_data = prediction
-            else:
-                # Centre of 
-                centre_of_data = region_data[centre_of]
-
-            # Get slice index.
-            centre = get_extent_centre(centre_of_data)
+            # Get slice index of centre.
+            centre = get_extent_centre(region_data[centre_of])
             if view == 'axial':
                 slice_idx = centre[2]
             elif view == 'coronal':
@@ -869,10 +863,8 @@ Prediction: {i}
             elif view == 'sagittal':
                 slice_idx = centre[0]
         elif extent_of is not None:
-            # Get extent.
-            extent = get_extent(region_data)
-
-            # Set slice index.
+            # Set slice index of extent.
+            extent = get_extent(region_data[extent_of])
             if view == 'axial':
                 slice_idx = extent[extent_of][2]
             elif view == 'coronal':
@@ -983,7 +975,8 @@ Prediction: {i}
         plt.savefig(savepath, bbox_inches='tight')
         logging.info(f"Saved plot to '{savepath}'.")
 
-    plt.show()
+    if show:
+        plt.show()
 
     # Revert latex settings.
     if latex:

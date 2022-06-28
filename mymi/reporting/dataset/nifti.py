@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
+import torch
 from tqdm import tqdm
 from typing import Callable, Dict, List, Optional, Tuple, Union
 from uuid import uuid1
@@ -13,6 +14,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
+from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
@@ -284,6 +286,77 @@ def load_ct_summary(
         return pd.read_csv(filepath)
     else:
         return None
+
+def create_prediction_figures(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    logging.info(f"Creating prediction figures for datasets '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
+
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+
+    # Set PDF margins.
+    img_t_margin = 35
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    # Make predictions.
+    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
+        if type(pat_id_b) == torch.Tensor:
+            pat_id_b = pat_id_b.tolist()
+        for dataset, pat_id in zip(dataset_b, pat_id_b):
+            # Add patient.
+            pdf.add_page()
+            pdf.start_section(str(pat_id))
+
+            # Create images.
+            views = ['axial', 'coronal', 'sagittal']
+            img_coords = (
+                (img_l_margin, img_t_margin),
+                (img_l_margin + img_width, img_t_margin),
+                (img_l_margin, img_t_margin + img_height)
+            )
+            for view, page_coord in zip(views, img_coords):
+                # Add image to report.
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                plot_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of='pred', crop='pred', savepath=filepath, show=False, view=view)
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+                os.remove(filepath)
+
+    # Save PDF.
+    filepath = os.path.join(set.path, 'reports', 'prediction-figures', region, *localiser, *segmenter, f'figures-fold-{test_fold}.pdf') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
 
 def create_region_figures(
     dataset: str,
