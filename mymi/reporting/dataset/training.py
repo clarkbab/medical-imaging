@@ -341,12 +341,12 @@ def create_ct_figures(
 
 def create_loader_manifest(
     datasets: Union[str, List[str]],
+    region: str,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
-        sets = [ds.get(datasets, 'training')]
-    else:
-        sets = [ds.get(d) for d in datasets]
+        datasets = [datasets]
+    logging.info(f"Creating loader manifest for datasets '{datasets}', num_folds '{num_folds}', test_fold '{test_fold}'.")
 
     # Create empty dataframe.
     cols = {
@@ -356,25 +356,23 @@ def create_loader_manifest(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    # Add entries.
-    for region in tqdm(RegionNames):
-        # Create test loader.
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
-        # Get values for this region.
-        for ds_b, pat_b in iter(test_loader):
-            data = {
-                'dataset': ds_b[0],
-                'patient-id': pat_b[0].item(),
-                'region': region
-            }
-            df = df.append(data, ignore_index=True)
+    # Get values for this region.
+    for ds_b, pat_b in iter(test_loader):
+        data = {
+            'dataset': ds_b[0],
+            'patient-id': pat_b[0].item(),
+            'region': region
+        }
+        df = df.append(data, ignore_index=True)
 
     # Set type.
     df = df.astype(cols)
 
     # Save manifest.
-    config.save_csv(df, 'loader-manifests', f'{encode(datasets)}.csv', overwrite=True)
+    config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}.csv', overwrite=True)
 
 def load_loader_manifest(datasets) -> pd.DataFrame:
     return config.load_csv('loader-manifests', f'{encode(datasets)}.csv')

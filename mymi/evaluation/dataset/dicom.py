@@ -1,4 +1,3 @@
-from tkinter import W
 from dicompylercore import dvhcalc
 import os
 import pandas as pd

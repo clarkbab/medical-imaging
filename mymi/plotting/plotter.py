@@ -1338,6 +1338,7 @@ def plot_dataframe_v2(
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
+    legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
@@ -1346,6 +1347,7 @@ def plot_dataframe_v2(
     outlier_legend_loc: str = 'upper left',
     point_size: float = 10,
     savepath: Optional[str] = None,
+    share_y: bool = False,
     show_legend: bool = True,
     show_outliers: bool = False,
     show_x_labels: bool = True,
@@ -1374,8 +1376,9 @@ def plot_dataframe_v2(
     data = _add_outlier_info(data, x, y, hue)
 
     # Get min/max values for y-lim.
-    min_y = data[y].min()
-    max_y = data[y].max()
+    if share_y:
+        min_y = data[y].min()
+        max_y = data[y].max()
 
     # Get x values.
     if x_order is None:
@@ -1400,31 +1403,17 @@ def plot_dataframe_v2(
         n_col = len(x_vals)
     num_rows = int(np.ceil(len(x_vals) / n_col))
     if num_rows > 1:
-        _, axs = plt.subplots(num_rows, 1, figsize=(figsize[0], num_rows * figsize[1]), sharey=True)
+        _, axs = plt.subplots(num_rows, 1, figsize=(figsize[0], num_rows * figsize[1]), sharey=share_y)
     else:
         plt.figure(figsize=figsize)
         axs = [plt.gca()]
 
-    # Get axis limits.
+    # Get x-axis limits.
     x_lim = list(x_lim)
     if x_lim[0] is None:
         x_lim[0] = -0.5
     if x_lim[1] is None:
         x_lim[1] = n_col - 0.5
-    y_lim = list(y_lim)
-    y_margin = 0.05
-    if y_lim[0] is None:
-        if y_lim[1] is None:
-            width = max_y - min_y
-            y_lim[0] = min_y - y_margin * width
-            y_lim[1] = max_y + y_margin * width
-        else:
-            width = y_lim[1] - min_y
-            y_lim[0] = min_y - y_margin * width
-    else:
-        if y_lim[1] is None:
-            width = max_y - y_lim[0]
-            y_lim[1] = max_y + y_margin * width
 
     # Get hue order/colours.
     if hue is not None:
@@ -1438,12 +1427,15 @@ def plot_dataframe_v2(
         row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
         row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
 
+        # Get row data.
+        row_data = data[data[x].isin(row_x_vals)].copy()
+
         for j, x_val in enumerate(row_x_vals):
             # Filter hue from 'hue_order' if it doesn't have any data.
             if hue is not None:
                 hue_order_f = []
                 for hue_name in hue_order:
-                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
+                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                     if len(hue_data) != 0:
                         hue_order_f.append(hue_name)
 
@@ -1454,16 +1446,16 @@ def plot_dataframe_v2(
             # Add x positions.
             if hue is None:
                 x_pos = j
-                data.loc[data[x] == x_val, 'x_pos'] = x_pos
+                row_data.loc[row_data[x] == x_val, 'x_pos'] = x_pos
             else:
                 for k, hue_name in enumerate(hue_order_f):
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
-                    data.loc[(data[x] == x_val) & (data[hue] == hue_name), 'x_pos'] = x_pos
+                    row_data.loc[(row_data[x] == x_val) & (row_data[hue] == hue_name), 'x_pos'] = x_pos
                 
             # Plot boxes.
             if hue is None:
                 # Plot box.
-                x_data = data[data[x] == x_val]
+                x_data = row_data[row_data[x] == x_val]
                 if len(x_data) == 0:
                     continue
                 x_pos = x_data.iloc[0]['x_pos']
@@ -1472,7 +1464,7 @@ def plot_dataframe_v2(
                 box_labels = []
                 for j, hue_name in enumerate(hue_order_f):
                     # Get hue data and pos.
-                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
+                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                     if len(hue_data) == 0:
                         continue
                     hue_pos = hue_data.iloc[0]['x_pos']
@@ -1484,15 +1476,15 @@ def plot_dataframe_v2(
                 # Add legend.
                 if show_legend:
                     boxes, labels = list(zip(*box_labels))
-                    axs[i].legend(boxes, labels, fontsize=fontsize, loc=legend_loc)
+                    axs[i].legend(boxes, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
 
             # Plot points.
             if hue is None:
-                x_data = data[data[x] == x_val]
+                x_data = row_data[row_data[x] == x_val]
                 axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
             else:
                 for j, hue_name in enumerate(hue_order_f):
-                    hue_data = data[(data[x] == x_val) & (data[hue] == hue_name)]
+                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                     if len(hue_data) == 0:
                         continue
                     axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
@@ -1500,7 +1492,7 @@ def plot_dataframe_v2(
             # Identify outliers - plot line connecting outliers across hue levels.
             if hue is not None and show_outliers:
                 # Get column/value pairs to group across hue levels.
-                line_ids = data[(data[x] == x_val) & data['outlier']][outlier_cols]
+                line_ids = row_data[(row_data[x] == x_val) & row_data['outlier']][outlier_cols]
 
                 # Drop duplicates.
                 line_ids = line_ids.drop_duplicates()
@@ -1513,7 +1505,7 @@ def plot_dataframe_v2(
                 labels = []
                 for j, (_, line_id) in enumerate(line_ids.iterrows()):
                     # Get line data.
-                    line_data = data[(data[x] == x_val)]
+                    line_data = row_data[(row_data[x] == x_val)]
                     for k, v in zip(line_ids.columns, line_id):
                         line_data = line_data[line_data[k] == v]
                     line_data = line_data.sort_values('x_pos')
@@ -1545,7 +1537,24 @@ def plot_dataframe_v2(
 
         # Set axis limits.
         axs[i].set_xlim(*x_lim)
-        axs[i].set_ylim(*y_lim)
+        y_margin = 0.05
+        if not share_y:
+            min_y = row_data[y].min()
+            max_y = row_data[y].max()
+        y_lim_row = list(y_lim)
+        if y_lim_row[0] is None:
+            if y_lim_row[1] is None:
+                width = max_y - min_y
+                y_lim_row[0] = min_y - y_margin * width
+                y_lim_row[1] = max_y + y_margin * width
+            else:
+                width = y_lim_row[1] - min_y
+                y_lim_row[0] = min_y - y_margin * width
+        else:
+            if y_lim_row[1] is None:
+                width = max_y - y_lim_row[0]
+                y_lim_row[1] = max_y + y_margin * width
+        axs[i].set_ylim(*y_lim_row)
 
         # Set y axis major ticks.
         if major_tick_freq is not None:

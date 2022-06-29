@@ -52,7 +52,7 @@ class DICOMDataset(Dataset):
         self._index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
 
         # Load region map.
-        self._region_map = self._load_region_map()
+        self.__region_map = self._load_region_map()
 
     @property
     def description(self) -> str:
@@ -64,7 +64,7 @@ class DICOMDataset(Dataset):
 
     @property
     def region_map(self) -> RegionMap:
-        return self._region_map
+        return self.__region_map
 
     @property
     def index_errors(self) -> pd.DataFrame:
@@ -88,6 +88,9 @@ class DICOMDataset(Dataset):
     @property
     def path(self) -> str:
         return self._path
+
+    def to_internal(self, region: str) -> str:
+        return self.__region_map.to_internal(region) if self.__region_map is not None else region
 
     def trimmed_errors(self) -> pd.DataFrame:
         path = os.path.join(self._path, 'hierarchy', 'trimmed', 'errors.csv')
@@ -117,7 +120,7 @@ class DICOMDataset(Dataset):
         self,
         id: types.PatientID,
         **kwargs: Dict) -> DICOMPatient:
-        return DICOMPatient(self, id, region_map=self._region_map, **kwargs)
+        return DICOMPatient(self, id, region_map=self.__region_map, **kwargs)
 
     def list_regions(
         self,
