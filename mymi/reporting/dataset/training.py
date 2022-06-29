@@ -17,7 +17,7 @@ from mymi.plotting.dataset.training import plot_sample_regions
 from mymi.postprocessing import get_object, one_hot_encode
 from mymi.regions import RegionNames
 from mymi import types
-from mymi.utils import encode
+from mymi.utils import append_row, encode
 
 def region_count(
     dataset: str,
@@ -346,10 +346,11 @@ def create_loader_manifest(
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    logging.info(f"Creating loader manifest for datasets '{datasets}', num_folds '{num_folds}', test_fold '{test_fold}'.")
+    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', num_folds '{num_folds}', test_fold '{test_fold}'.")
 
     # Create empty dataframe.
     cols = {
+        'fold': int,
         'dataset': str,
         'patient-id': str,
         'region': str
@@ -360,19 +361,24 @@ def create_loader_manifest(
     _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
 
     # Get values for this region.
-    for ds_b, pat_b in iter(test_loader):
+    for ds_b, pat_b in tqdm(iter(test_loader)):
         data = {
+            'fold': test_fold,
             'dataset': ds_b[0],
             'patient-id': pat_b[0].item(),
             'region': region
         }
-        df = df.append(data, ignore_index=True)
+        df = append_row(df, data)
 
     # Set type.
     df = df.astype(cols)
 
     # Save manifest.
-    config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}.csv', overwrite=True)
+    config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
 
-def load_loader_manifest(datasets) -> pd.DataFrame:
-    return config.load_csv('loader-manifests', f'{encode(datasets)}.csv')
+def load_loader_manifest(
+    datasets: Union[str, List[str]],
+    region: str,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None) -> pd.DataFrame:
+    return config.load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
