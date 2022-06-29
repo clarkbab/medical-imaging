@@ -18,6 +18,7 @@ from mymi import logging
 from mymi.models.systems import Localiser, Segmenter
 from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
+from mymi.reporting.dataset.training import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi.utils import append_row
 
@@ -227,14 +228,21 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     num_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
+    test_fold: Optional[int] = None,
+    use_manifest: bool = False) -> None:
     # Get unique name.
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
     logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    if use_manifest:
+        man_df = load_loader_manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        samples = man_df[['dataset', 'patient-id']].to_numpy()
+    else:
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        test_dataset = test_loader.dataset
+        samples = [test_dataset.__get_item(i) for i in range(len(test_dataset))]
 
     # RTSTRUCT info.
     default_rt_info = {
@@ -242,47 +250,44 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         'institution-name': 'PMCC-AI'
     }
 
-    # Create DICOM RTSTRUCT predictions.
-    for dataset_nifti_b, pat_id_nifti_b in tqdm(iter(test_loader)):
-        if type(pat_id_nifti_b) == torch.Tensor:
-            pat_id_nifti_b = pat_id_nifti_b.tolist()
-        for dataset, pat_id_nifti in zip(dataset_nifti_b, pat_id_nifti_b):
-            # Get ROI ID from DICOM dataset.
-            nifti_set = NIFTIDataset(dataset)
-            pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
-            set_dicom = DICOMDataset(dataset)
-            patient_dicom = set_dicom.patient(pat_id_dicom)
-            rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
-            info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
-            region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
+    # Create prediction RTSTRUCTs.
+    for dataset, pat_id_nifti in samples:
+        # Get ROI ID from DICOM dataset.
+        nifti_set = NIFTIDataset(dataset)
+        pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
+        set_dicom = DICOMDataset(dataset)
+        patient_dicom = set_dicom.patient(pat_id_dicom)
+        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
+        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
-            # Create RTSTRUCT.
-            cts = patient_dicom.get_cts()
-            rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        # Create RTSTRUCT.
+        cts = patient_dicom.get_cts()
+        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
 
-            # Load prediction.
-            pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
-            
-            # Add ROI.
-            roi_data = ROIData(
-                colour=list(to_255(getattr(RegionColours, region))),
-                data=pred,
-                frame_of_reference_uid=rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
-                name=region,
-                number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
-            )
-            RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+        # Load prediction.
+        pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
+        
+        # Add ROI.
+        roi_data = ROIData(
+            colour=list(to_255(getattr(RegionColours, region))),
+            data=pred,
+            frame_of_reference_uid=rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+            name=region,
+            number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
+        )
+        RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
 
-            # Save prediction.
-            # Get localiser checkpoint and raise error if multiple.
-            # Hack - clean up when/if path limits are removed.
-            if os.environ['PETER_MAC_HACK'] == 'True':
-                if dataset == 'PMCC-HN-TEST':
-                    pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
-                elif dataset == 'PMCC-HN-TRAIN':
-                    pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
-            else:
-                pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
-            filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            rtstruct_pred.save_as(filepath)
+        # Save prediction.
+        # Get localiser checkpoint and raise error if multiple.
+        # Hack - clean up when/if path limits are removed.
+        if os.environ['PETER_MAC_HACK'] == 'True':
+            if dataset == 'PMCC-HN-TEST':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
+            elif dataset == 'PMCC-HN-TRAIN':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
+        else:
+            pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
+        filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        rtstruct_pred.save_as(filepath)
