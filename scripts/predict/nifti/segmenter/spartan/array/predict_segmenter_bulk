@@ -1,6 +1,6 @@
 import subprocess
 
-regions = '15,16'
+regions = '12,13,14'
 script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter'
 test_folds = [0, 1, 2, 3, 4]
 models = ['public', 'clinical', 'transfer']

@@ -3,19 +3,12 @@ import torch
 from typing import List, Tuple
 
 from mymi import config
-from mymi.models import load_model_manifest
+from mymi.reporting.models import load_model_manifest
 
 CHECKPOINT_KEYS = [
     'epoch',
     'global_step'
 ]
-
-def list_checkpoints(
-    name: str,
-    run: str) -> List[str]:
-    ckptspath = os.path.join(config.directories.models, name, run)
-    ckpts = list(sorted([c.replace('.ckpt', '') for c in os.listdir(ckptspath)]))
-    return ckpts
 
 def print_checkpoint(model: Tuple[str, str, str]) -> None:
     # Load data.

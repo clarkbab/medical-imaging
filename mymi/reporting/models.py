@@ -1,10 +1,10 @@
 import os
 import pandas as pd
 from tqdm import tqdm
+from typing import List
 
 from mymi import config
 from mymi.loaders import Loader
-from mymi.models import list_checkpoints
 from mymi.regions import RegionNames
 from mymi.utils import append_row, encode
 
@@ -64,3 +64,10 @@ def create_model_manifest() -> None:
     
 def load_model_manifest():
     return config.load_csv('model-manifest.csv')
+
+def list_checkpoints(
+    name: str,
+    run: str) -> List[str]:
+    ckptspath = os.path.join(config.directories.models, name, run)
+    ckpts = list(sorted([c.replace('.ckpt', '') for c in os.listdir(ckptspath)]))
+    return ckpts
