@@ -229,14 +229,15 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     segmenter: types.ModelName,
     num_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    use_manifest: bool = False) -> None:
+    use_loader_manifest: bool = False,
+    use_model_manifest: bool = False) -> None:
     # Get unique name.
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = Localiser.replace_checkpoint_aliases(*localiser, use_manifest=use_model_manifest)
+    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter, use_manifest=use_model_manifest)
     logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.
-    if use_manifest:
+    if use_loader_manifest:
         man_df = load_loader_manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
         samples = man_df[['dataset', 'patient-id']].to_numpy()
     else:

@@ -1,18 +1,106 @@
+from dataclasses import replace
 from dicompylercore import dvhcalc
 import os
 import pandas as pd
 import pydicom as dcm
 from tqdm import tqdm
-from typing import List, Union
+from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
 from mymi.dataset.dicom import RTSTRUCTConverter
-from mymi.metrics import dice
-from mymi.models.systems import Localiser, Segmenter
+from mymi.loaders import Loader
 from mymi import logging
+from mymi.metrics import dice
+from mymi.models import replace_checkpoint_alias
+from mymi.reporting.dataset.training import load_loader_manifest
 from mymi import types
-from mymi.utils import append_row
+from mymi.utils import append_row, encode
+
+def create_dose_evaluation_from_loader(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_manifest: bool = False,
+    use_model_manifest: bool = False) -> None:
+    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
+    logging.info(f"Creating dose evaluation for region '{region}', fold '{test_fold}', with localiser '{localiser}' and segmenter '{segmenter}'.")
+
+    # Build test loader.
+    if use_loader_manifest:
+        man_df = load_loader_manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        samples = man_df[['dataset', 'patient-id']].to_numpy()
+    else:
+        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        test_dataset = test_loader.dataset
+        samples = [test_dataset.__get_item(i) for i in range(len(test_dataset))]
+
+    cols = {
+        'fold': int,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # for model in models:
+    set_cache = {}
+    for dataset, pat_id in tqdm(samples):
+        # Get GT dose.
+        if dataset in set_cache:
+            set = set_cache[dataset]
+        else:
+            set_cache[dataset] = ds.get(dataset, 'dicom')
+            set = set_cache[dataset]
+        try:
+            patient = set.patient(pat_id, load_default_rtdose=True)
+        except ValueError as e:
+            logging.error(str(e))
+            continue
+        rtstruct_gt_path = patient.default_rtstruct.path
+        rtdose_gt_path = patient.default_rtdose.path
+        roi_info_gt = patient.default_rtstruct.get_region_info()
+        roi_info_gt = dict((info['name'], id) for id, info in roi_info_gt.items())
+        dose_gt = dvhcalc.get_dvh(rtstruct_gt_path, rtdose_gt_path, roi_info_gt[region])
+        max_dose_gt = dose_gt.dose_constraint(0.03, volume_units='cc').value
+        mean_dose_gt = dose_gt.mean
+
+        # Get predicted dose.
+        if os.environ['PETER_MAC_HACK'] == 'True':
+            if dataset == 'PMCC-HN-TEST':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
+            elif dataset == 'PMCC-HN-TRAIN':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
+        else:
+            pred_path = os.path.join(set.path, 'predictions', 'segmenter')
+        rtstruct_pred_path = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id}.dcm')
+        dose_pred = dvhcalc.get_dvh(rtstruct_pred_path, rtdose_gt_path, roi_info_gt[region])
+        max_dose_pred = dose_pred.dose_constraint(0.03, volume_units='cc').value
+        mean_dose_pred = dose_pred.mean
+
+        # Get diff.
+        metrics = {}
+        max_dose_diff = max_dose_pred - max_dose_gt
+        metrics['max-dose-diff'] = max_dose_diff
+        mean_dose_diff = mean_dose_pred - mean_dose_gt
+        metrics['mean-dose-diff'] = mean_dose_diff
+
+        for metric, value in metrics.items():
+            data = {
+                'fold': test_fold,
+                'region': region,
+                'metric': metric,
+                'value': value
+            }
+            df = append_row(df, data)
+            
+    df = df.astype(cols)
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{num_folds}-test-{test_fold}.csv')
+    df.to_csv(filepath, index=False)
 
 def create_dose_evaluation(
     pat_file: str,
