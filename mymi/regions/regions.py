@@ -1,8 +1,4 @@
 from enum import Enum
-import hashlib
-import json
-
-from mymi import types
 
 class Regions(Enum):
     BrachialPlexus_L = 0

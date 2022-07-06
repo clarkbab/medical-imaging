@@ -5,9 +5,8 @@ from pathlib import Path
 from scipy.ndimage import binary_dilation
 import shutil
 from time import time
-import torch
 from tqdm import tqdm
-from typing import List, Literal, Optional, Union
+from typing import List, Optional, Union
 
 from mymi import types
 from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
@@ -15,7 +14,7 @@ from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import create, exists, get, recreate
 from mymi.loaders import Loader
 from mymi import logging
-from mymi.models.systems import Localiser, Segmenter
+from mymi.models import replace_checkpoint_alias
 from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.dataset.training import load_loader_manifest
@@ -232,8 +231,8 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
     # Get unique name.
-    localiser = Localiser.replace_checkpoint_aliases(*localiser, use_manifest=use_model_manifest)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter, use_manifest=use_model_manifest)
+    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
     logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.
@@ -252,7 +251,7 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     }
 
     # Create prediction RTSTRUCTs.
-    for dataset, pat_id_nifti in samples:
+    for dataset, pat_id_nifti in tqdm(samples):
         # Get ROI ID from DICOM dataset.
         nifti_set = NIFTIDataset(dataset)
         pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
@@ -284,9 +283,9 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         # Hack - clean up when/if path limits are removed.
         if os.environ['PETER_MAC_HACK'] == 'True':
             if dataset == 'PMCC-HN-TEST':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
             elif dataset == 'PMCC-HN-TRAIN':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
         else:
             pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
         filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')

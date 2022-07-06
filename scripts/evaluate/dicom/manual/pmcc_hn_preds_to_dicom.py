@@ -5,17 +5,17 @@ import sys
 filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(up(filepath)))))
 sys.path.append(mymi_dir)
-from mymi.processing.dataset.nifti import convert_segmenter_predictions_to_dicom_from_loader
+from mymi.evaluation.dataset.dicom import create_dose_evaluation
 
 DATASETS = ('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC') # Code links from 'training' set to nifti set.
 REGIONS = (
-    # 'BrachialPlexus_L', # 0
-    # 'BrachialPlexus_R', # 1
-    # 'Brain',            # 2
-    # 'BrainStem',        # 3
-    # 'Cochlea_L',        # 4
-    # 'Cochlea_R',        # 5
-    # 'Lens_L',           # 6
+    'BrachialPlexus_L', # 0
+    'BrachialPlexus_R', # 1
+    'Brain',            # 2
+    'BrainStem',        # 3
+    'Cochlea_L',        # 4
+    'Cochlea_R',        # 5
+    'Lens_L',           # 6
     'Lens_R',           # 7
     'Mandible',         # 8
     'OpticNerve_L',     # 9
@@ -29,11 +29,11 @@ REGIONS = (
 )
 NUM_FOLDS = 5
 TEST_FOLDS = (0, 1, 2, 3, 4)
-# TEST_FOLDS = (0,)
+TEST_FOLDS = (0,)
 NUM_TRAINS = (5, 10, 20, 50, 100, None)
-# NUM_TRAINS = (None,)
+NUM_TRAINS = (None,)
 MODELS = ('clinical', 'public', 'transfer')
-# MODELS = ('clinical', 'public')
+MODELS = ('clinical', 'public')
 USE_LOADER_MANIFEST = True
 USE_MODEL_MANIFEST = True
 
@@ -44,7 +44,7 @@ for test_fold in TEST_FOLDS:
         for model in MODELS:
             if model == 'public':
                 segmenter = (f'segmenter-{region}', 'public-1gpu-150epochs', 'BEST')
-                convert_segmenter_predictions_to_dicom_from_loader(DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
+                (DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
             else:
                 for num_train in NUM_TRAINS:
                     segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{num_train}', 'BEST')

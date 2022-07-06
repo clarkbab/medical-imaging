@@ -1,4 +1,5 @@
 from dataclasses import replace
+from tkinter import W
 from dicompylercore import dvhcalc
 import os
 import pandas as pd
@@ -17,7 +18,22 @@ from mymi.reporting.dataset.training import load_loader_manifest
 from mymi import types
 from mymi.utils import append_row, encode
 
-def create_dose_evaluation_from_loader(
+def load_segmenter_dose_evaluation(
+    datasets: Union[str, List[str]],
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    num_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_model_manifest: bool = False) -> pd.DataFrame:
+    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{num_folds}-test-{test_fold}.csv') 
+    if not os.path.exists(filepath):
+        raise ValueError(f"Segmenter dose evaluation for datasets '{datasets}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
+    data = pd.read_csv(filepath, dtype={'patient-id': str})
+    return data
+
+def create_segmenter_dose_evaluation_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
@@ -41,13 +57,14 @@ def create_dose_evaluation_from_loader(
 
     cols = {
         'fold': int,
+        'dataset': str,
+        'patient-id': str,
         'region': str,
         'metric': str,
         'value': float
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    # for model in models:
     set_cache = {}
     for dataset, pat_id in tqdm(samples):
         # Get GT dose.
@@ -92,6 +109,8 @@ def create_dose_evaluation_from_loader(
         for metric, value in metrics.items():
             data = {
                 'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
                 'region': region,
                 'metric': metric,
                 'value': value

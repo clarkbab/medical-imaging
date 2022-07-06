@@ -323,9 +323,9 @@ def load_patient_segmenter_prediction(
     set = ds.get(dataset, 'nifti')
     if config.environ('PETER_MAC_HACK') == 'True':
         if dataset == 'PMCC-HN-TEST':
-            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Test'
+            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\nifti\\test'
         elif dataset == 'PMCC-HN-TRAIN':
-            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\Train'
+            pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\nifti\\train'
     else:
         pred_path = os.path.join(set.path, 'predictions')
     filepath = os.path.join(pred_path, 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 

@@ -24,9 +24,9 @@ def replace_checkpoint_alias(
     name: str,
     run: str,
     ckpt: str,
-    use_model_manifest: bool = False) -> Tuple[str, str, str]:
+    use_manifest: bool = False) -> Tuple[str, str, str]:
     if ckpt == 'BEST': 
-        if use_model_manifest:
+        if use_manifest:
             man_df = load_model_manifest()
             ckpts = man_df[(man_df.name == name) & (man_df.run == run) & (man_df.checkpoint != 'last')].sort_values('checkpoint')
             assert len(ckpts) >= 1

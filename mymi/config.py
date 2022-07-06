@@ -77,9 +77,14 @@ def save_csv(
         os.makedirs(dirpath, exist_ok=True)
         data.to_csv(filepath, index=index)
 
-def load_csv(*path: List[str], **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
+def load_csv(
+    *path: List[str],
+    raise_error: bool = True,
+    **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(directories.files, *path)
     if os.path.exists(filepath):
         return pd.read_csv(filepath, **kwargs)
+    elif raise_error:
+        raise ValueError(f"CSV at path '{path}' not found.")
     else:
         return None

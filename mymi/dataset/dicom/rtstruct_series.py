@@ -22,7 +22,7 @@ class RTSTRUCTSeries(DICOMSeries):
         self._global_id = f"{study} - {id}"
         self._study = study
         self._id = id
-        self._region_map = region_map
+        self.__region_map = region_map
 
         # Get index.
         index = self._study.index
@@ -77,8 +77,8 @@ class RTSTRUCTSeries(DICOMSeries):
         rtstruct = self.get_rtstruct()
         names = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
         names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
-        if use_mapping and self._region_map:
-            names = [self._region_map.to_internal(n) for n in names]
+        if use_mapping and self.__region_map:
+            names = [self.__region_map.to_internal(n) for n in names]
         return names
 
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
@@ -93,18 +93,20 @@ class RTSTRUCTSeries(DICOMSeries):
         rtstruct = self.get_rtstruct()
 
         # Get region IDs.
-        info = RTSTRUCTConverter.get_roi_info(rtstruct)
-        info = list(sorted(info, lambda i: i[0]))
+        roi_info = RTSTRUCTConverter.get_roi_info(rtstruct)
 
         # Filter names on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        info = list(filter(lambda i: RTSTRUCTConverter.has_roi_data(rtstruct, i[1]), info))
+        roi_info = dict(filter(lambda i: RTSTRUCTConverter.has_roi_data(rtstruct, i[1]['name']), roi_info.items()))
 
         # Map to internal names.
-        if use_mapping and self._region_map:
-            info = [(id, self._region_map.to_internal(name)) for id, name in info]
+        if use_mapping and self.__region_map:
+            def map_name(info):
+                info['name'] = self.__region_map.to_internal(info['name'])
+                return info
+            roi_info = dict((id, map_name(info)) for id, info in roi_info.items())
 
-        return info
+        return roi_info
 
     def list_regions(
         self,
@@ -121,8 +123,8 @@ class RTSTRUCTSeries(DICOMSeries):
         names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
 
         # Map to internal names.
-        if use_mapping and self._region_map:
-            names = [self._region_map.to_internal(n) for n in names]
+        if use_mapping and self.__region_map:
+            names = [self.__region_map.to_internal(n) for n in names]
 
         # Filter on whitelist.
         def filter_fn(region):
