@@ -1032,7 +1032,7 @@ def plot_dataframe(
         df = df[~df[x].isin(exclude_x)]
     
     # Add region numbers and outliers.
-    df = _add_x_info(df, x, hue)
+    df = _add_x_info(df, x, y, hue)
     df = _add_outlier_info(df, x, y, hue)
     
     # Split data.
@@ -1208,13 +1208,13 @@ def plot_dataframe(
 
     plt.show()
 
-def _add_x_info(df, x, hue):
+def _add_x_info(df, x, y, hue):
     if hue is not None:
         groupby = [hue, x] 
     else:
         groupby = x
     df = df.assign(**{ f'{x}_num': df.groupby(groupby).ngroup() })
-    count_map = df.groupby(groupby)['patient-id'].count()
+    count_map = df.groupby(groupby)[y].count()
     def x_count_func(row):
         if type(groupby) == list:
             key = tuple(row[groupby])
