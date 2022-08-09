@@ -11,7 +11,6 @@ def resample_3D(
     output_origin: Optional[types.PhysPoint3D] = None,
     output_size: Optional[types.ImageSize3D] = None,
     output_spacing: Optional[types.ImageSpacing3D] = None) -> np.ndarray:
-    assert origin is not None or spacing is not None
     if origin is not None:
         assert output_origin is not None
     if spacing is not None:
@@ -25,34 +24,26 @@ def resample_3D(
     # Create sitk image.
     image = sitk.GetImageFromArray(input)
     if origin is not None:
-        origin = tuple(reversed(origin))
-        image.SetOrigin(origin)
+        image.SetOrigin(tuple(reversed(origin)))
     if spacing is not None:
-        spacing = tuple(reversed(spacing)) 
-        image.SetSpacing(spacing)
+        image.SetSpacing(tuple(reversed(spacing)))
 
     # Create resample filter.
     resample = sitk.ResampleImageFilter()
     if boolean:
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
-    if output_origin is None:
-        output_origin = image.GetOrigin()
+    if output_origin is not None:
+        resample.SetOutputOrigin(tuple(reversed(output_origin)))
+    if output_spacing is not None:
+        resample.SetOutputSpacing(tuple(reversed(output_spacing)))
+    if output_size is not None:
+        resample.SetSize(tuple(reversed(output_size)))
     else:
-        output_origin = tuple(reversed(output_origin))
-    resample.SetOutputOrigin(output_origin)
-    if output_spacing is None:
-        output_spacing = image.GetSpacing()
-    else:
-        output_spacing = tuple(reversed(output_spacing))
-    resample.SetOutputSpacing(output_spacing)
-    if output_size is None:
         image_size = np.array(image.GetSize())
         image_spacing = np.array(image.GetSpacing())
         output_size = np.ceil(image_size * (image_spacing / output_spacing))
         output_size = tuple(int(s) for s in output_size)
-    else:
-        output_size = tuple(reversed(output_size))
-    resample.SetSize(output_size)
+        resample.SetSize(output_size)
 
     # Perform resampling.
     image = resample.Execute(image)

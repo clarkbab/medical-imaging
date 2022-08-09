@@ -9,7 +9,7 @@ sys.path.append(mymi_dir)
 from mymi import config
 from mymi.regions import RegionNames
 
-dry_run = False
+dry_run = True
 keep = 1
 assert keep >= 1
 types = ['segmenter']

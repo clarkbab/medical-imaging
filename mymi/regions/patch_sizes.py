@@ -22,7 +22,7 @@ class RegionPatchSizes:
     Submandibular_L = (80, 85, 110)
     Submandibular_R = (80, 85, 110)
 
-def get_patch_size(
+def get_region_patch_size(
     region: str,
     spacing: types.ImageSpacing3D) -> types.ImageSize3D:
     size_mm = getattr(RegionPatchSizes, region)

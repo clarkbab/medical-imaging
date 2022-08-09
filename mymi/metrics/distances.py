@@ -1,20 +1,99 @@
 import numpy as np
 import SimpleITK as sitk
-from typing import Dict, Tuple
+from typing import Dict, List, Literal, Tuple, Union
 
 from mymi.geometry import get_extent, get_extent_centre
 from mymi import types
+from surface_distance import compute_average_surface_distance, compute_robust_hausdorff, compute_surface_dice_at_tolerance, compute_surface_distances
 
-def distances(
+def distances_deepmind(
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: types.ImageSpacing3D,
+    tolerances: Union[float, List[float]]) -> Dict[str, float]:
+    if a.shape != b.shape:
+        raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+    if a.sum() == 0 or b.sum() == 0:
+        raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
+    if type(tolerances) == int or type(tolerances) == float:
+        tolerances = [tolerances]
+
+    surf_dists = compute_surface_distances(a, b, spacing) 
+    metrics = {
+        'surface-hd': compute_robust_hausdorff(surf_dists, 100),
+        'surface-hd-mean': np.mean(compute_average_surface_distance(surf_dists)),
+        'surface-hd-95': compute_robust_hausdorff(surf_dists, 95)
+    }
+    for tol in tolerances:
+        metrics[f'surface-dice-tol-{tol}'] = compute_surface_dice_at_tolerance(surf_dists, tol)
+
+    return metrics
+
+def apl(
+    surf_dists: Tuple[np.ndarray, np.array],
+    spacing: types.ImageSpacing3D,
+    tol: float,
+    unit: Literal['mm', 'voxels'] = 'mm') -> float:
+    b_to_a_surf_dists = surf_dists[1]   # Only look at dists from 'GT' back to 'pred'. 
+    b_to_a_overlap = b_to_a_surf_dists[b_to_a_surf_dists > tol]
+    assert spacing[0] == spacing[1], f"In-plane spacing should be equal when calculating APL, got '{spacing}'."
+    if unit == 'mm':
+        return len(b_to_a_overlap) * spacing[0]
+    else:
+        return len(b_to_a_overlap)
+
+def hausdorff_distance(
+    surf_dists: Tuple[np.ndarray, np.ndarray],
+    p: float = 100) -> float:
+    return np.max((np.percentile(surf_dists[0], p), np.percentile(surf_dists[1], p)))
+
+def mean_surface_distance(
+    surf_dists: Tuple[np.ndarray, np.ndarray]) -> float:
+    return np.mean((np.mean(surf_dists[0]), np.mean(surf_dists[1])))
+
+def surface_dice(
+    surf_dists: Tuple[np.ndarray, np.ndarray],
+    tol: float) -> float:
+    a_to_b_overlap = surf_dists[0][surf_dists[0] <= tol]
+    b_to_a_overlap = surf_dists[1][surf_dists[1] <= tol]
+    return (len(a_to_b_overlap) + len(b_to_a_overlap)) / (len(surf_dists[0]) + len(surf_dists[1]))
+
+def all_distances(
+    a: np.ndarray,
+    b: np.ndarray,
+    spacing: types.ImageSpacing3D,
+    tols: Union[int, float, List[Union[int, float]]]) -> Dict[str, float]:
+    if a.shape != b.shape:
+        raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    if a.dtype != np.bool or b.dtype != np.bool:
+        raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+    if a.sum() == 0 or b.sum() == 0:
+        raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
+    if type(tols) == int or type(tols) == float:
+        tols = [tols]
+
+    # Add metrics.
+    surf_dists = surface_distances(a, b, spacing)
+    metrics = {
+        'hd': hausdorff_distance(surf_dists),
+        'hd-95': hausdorff_distance(surf_dists, 95),
+        'msd': mean_surface_distance(surf_dists)
+    }
+    
+    # Add metrics with 'tolerances'.
+    for tol in tols:
+        metrics[f'apl-mm-tol-{tol}'] = apl(surf_dists, spacing, tol, unit='mm')
+        metrics[f'apl-voxel-tol-{tol}'] = apl(surf_dists, spacing, tol, unit='voxel')
+        metrics[f'surface-dice-tol-{tol}'] = surface_dice(surf_dists, tol)
+
+    return metrics
+
+def surface_distances(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D) -> Dict[str, float]:
-    """
-    args:
-        a: a 3D boolean array.
-        b: another 3D boolean array.
-        spacing: the voxel spacing used.
-    """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool or b.dtype != np.bool:
@@ -22,88 +101,51 @@ def distances(
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
 
-    # Convert types for SimpleITK.
-    a_itk = a.astype('uint8')
-    b_itk = b.astype('uint8')
-    spacing = tuple(reversed(spacing))
-
     # Convert to SimpleITK images.
-    a_itk = sitk.GetImageFromArray(a_itk)
-    a_itk.SetSpacing(spacing)
-    b_itk = sitk.GetImageFromArray(b_itk)
-    b_itk.SetSpacing(spacing)
+    a_itk = sitk.GetImageFromArray(a.astype('uint8'))
+    a_itk.SetSpacing(tuple(reversed(spacing)))
+    b_itk = sitk.GetImageFromArray(b.astype('uint8'))
+    b_itk.SetSpacing(tuple(reversed(spacing)))
 
     # Get surface voxels.
-    a_surface = sitk.GetArrayFromImage(sitk.LabelContour(a_itk, False))
-    b_surface = sitk.GetArrayFromImage(sitk.LabelContour(b_itk, False))
+    a_surface = sitk.LabelContour(a_itk, False)
+    b_surface = sitk.LabelContour(b_itk, False)
 
-    # Compute distance maps.
-    a_dist_map = sitk.GetArrayFromImage(sitk.SignedMaurerDistanceMap(a_itk, useImageSpacing=True, squaredDistance=False, insideIsPositive=False))
-    b_dist_map = sitk.GetArrayFromImage(sitk.SignedMaurerDistanceMap(b_itk, useImageSpacing=True, squaredDistance=False, insideIsPositive=False))
+    # Compute distance maps - calculate 'absolute' distances as direction of deviation from other surface doesn't matter.
+    a_dist_map = sitk.Abs(sitk.SignedMaurerDistanceMap(a_surface, useImageSpacing=True, squaredDistance=False, insideIsPositive=False))
+    b_dist_map = sitk.Abs(sitk.SignedMaurerDistanceMap(b_surface, useImageSpacing=True, squaredDistance=False, insideIsPositive=False))
+
+    # Convert 'sitk' images to 'numpy' arrays.
+    a_dist_map = sitk.GetArrayFromImage(a_dist_map)
+    b_dist_map = sitk.GetArrayFromImage(b_dist_map)
+    a_surface = sitk.GetArrayFromImage(a_surface)
+    b_surface = sitk.GetArrayFromImage(b_surface)
 
     # Get voxel/surface min distances.
     a_to_b_surface_min_dists = b_dist_map[a_surface == 1]
     b_to_a_surface_min_dists = a_dist_map[b_surface == 1]
-    a_to_b_voxel_min_dists = b_dist_map[a == 1]
-    b_to_a_voxel_min_dists = a_dist_map[b == 1]
 
-    # Voxel - set negative distances to zero as these indicate overlapping voxels.
-    # Set negative distances to zero as these indicate overlapping voxels (hence "min dist" to other set is zero).
-    a_to_b_surface_min_dists[a_to_b_surface_min_dists < 0] = 0
-    b_to_a_surface_min_dists[b_to_a_surface_min_dists < 0] = 0
-    a_to_b_voxel_min_dists[a_to_b_voxel_min_dists < 0] = 0
-    b_to_a_voxel_min_dists[b_to_a_voxel_min_dists < 0] = 0
+    return a_to_b_surface_min_dists, b_to_a_surface_min_dists
 
-    # Calculate statistics.
-    assd = np.mean(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
-    surface_hd = np.max(np.concatenate((a_to_b_surface_min_dists, b_to_a_surface_min_dists)))
-    surface_hd_mean = np.mean([np.mean(a_to_b_surface_min_dists), np.mean(b_to_a_surface_min_dists)])
-    surface_95hd = np.mean([np.percentile(a_to_b_surface_min_dists, 95), np.percentile(b_to_a_surface_min_dists, 95)])
-    voxel_hd = np.max(np.concatenate((a_to_b_voxel_min_dists, b_to_a_voxel_min_dists)))
-    voxel_hd_mean = np.mean([np.mean(a_to_b_voxel_min_dists), np.mean(b_to_a_voxel_min_dists)])
-    voxel_95hd = np.mean([np.percentile(a_to_b_voxel_min_dists, 95), np.percentile(b_to_a_voxel_min_dists, 95)])
-     
-    return {
-        'assd': assd,
-        'surface-hd': surface_hd,
-        'surface-hd-95': surface_95hd,
-        'surface-hd-mean': surface_hd_mean,
-        'voxel-hd': voxel_hd,
-        'voxel-hd-95': voxel_95hd,
-        'voxel-hd-mean': voxel_hd_mean
-    }
-
-def batch_mean_distances(
+def batch_mean_all_distances(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> Dict[str, float]:
-    """
-    returns: the mean batch distance metrics.
-    args:
-        a: a boolean 4D array.
-        b: another boolean 4D array.
-        spacing: the voxel spacing.
-    """
+    spacing: types.ImageSpacing3D,
+    tols: Union[float, List[float]]) -> Dict[str, float]:
     if a.shape != b.shape:
-        raise ValueError(f"Metric 'batch_mean_distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+        raise ValueError(f"Metric 'batch_mean_all_distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool or b.dtype != np.bool:
-        raise ValueError(f"Metric 'batch_mean_distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
+        raise ValueError(f"Metric 'batch_mean_all_distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
-    dists = {
-        'assd': [],
-        'surface-hd': [],
-        # 'surface-ahd': [],
-        'surface-95hd': [],
-        'voxel-hd': [],
-        # 'voxel-ahd': [],
-        'voxel-95hd': []
-    }
-
+    # Average metrics over all batch items.
+    mean_dists = {}
     for a, b in zip(a, b):
-        d = distances(a, b, spacing)
-        for metric in dists.keys():
-            dists[metric].append(d[metric])
-    mean_dists = dict([(metric, np.mean(values)) for metric, values in dists.items()])
+        dists = all_distances(a, b, spacing, tols)
+        for metric, value in dists.items():
+            if metric not in mean_dists:
+                dists[metric] = []
+            dists[metric].append(value)
+    mean_dists = dict((metric, np.mean(values)) for metric, values in mean_dists.items())
     return mean_dists
 
 def extent_centre_distance(

@@ -35,6 +35,4 @@ def replace_checkpoint_alias(
             ckptspath = os.path.join(config.directories.models, name, run)
             ckpts = list(sorted([c.replace('.ckpt', '') for c in os.listdir(ckptspath)]))
             ckpt = ckpts[-1]
-    else:
-        raise ValueError(f"Checkpoint alias '{ckpt}' not recognised.")
     return (name, run, ckpt)

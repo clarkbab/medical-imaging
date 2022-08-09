@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 
 from mymi.dataset import TrainingDataset
 from mymi.geometry import get_extent_centre
-from mymi.regions import get_patch_size
+from mymi.regions import get_region_patch_size
 from mymi.transforms import point_crop_or_pad_3D
 from mymi import types
 
@@ -48,7 +48,7 @@ class LoaderDataset(Dataset):
         self._half_precision = half_precision
         self._p_foreground = p_foreground
         self._partitions = partitions
-        self._patch_size = get_patch_size(region, spacing)
+        self._patch_size = get_region_patch_size(region, spacing)
         self._region = region
         self._spacing = spacing
         self._transform = transform

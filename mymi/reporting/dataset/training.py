@@ -351,6 +351,7 @@ def create_loader_manifest(
     # Create empty dataframe.
     cols = {
         'fold': int,
+        'loader': str,
         'dataset': str,
         'patient-id': str,
         'region': str
@@ -358,17 +359,21 @@ def create_loader_manifest(
     df = pd.DataFrame(columns=cols.keys())
 
     # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    # Create loaders.
+    tl, vl, tsl = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    loaders = ['train', 'validate', 'test']
 
     # Get values for this region.
-    for ds_b, pat_b in tqdm(iter(test_loader)):
-        data = {
-            'fold': test_fold,
-            'dataset': ds_b[0],
-            'patient-id': pat_b[0].item(),
-            'region': region
-        }
-        df = append_row(df, data)
+    for name, loader in zip(loaders, (tl, vl, tsl)):
+        for ds_b, pat_b in tqdm(iter(loader)):
+            data = {
+                'fold': test_fold,
+                'loader': name,
+                'dataset': ds_b[0],
+                'patient-id': pat_b[0].item(),
+                'region': region
+            }
+            df = append_row(df, data)
 
     # Set type.
     df = df.astype(cols)

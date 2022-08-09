@@ -12,7 +12,7 @@ import wandb
 from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
-from mymi.metrics import batch_mean_dice, batch_mean_distances
+from mymi.metrics import batch_mean_dice, batch_mean_all_distances
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
@@ -161,21 +161,13 @@ class SegmenterTest(pl.LightningModule):
 
         if 'distances' in self._metrics and self.global_step > self._distances_delay and self.current_epoch % self._distances_interval == 0:
             if y_hat.sum() > 0 and y.sum() > 0:
-                dists = batch_mean_distances(y_hat, y, self._spacing)
-                self.log('val/assd', dists['assd'], **self._log_args, sync_dist=True)
-                self.log('val/surface-hd', dists['surface-hd'], **self._log_args, sync_dist=True)
-                # self.log('val/surface-ahd', dists['surface-ahd'], **self._log_args, sync_dist=True)
-                self.log('val/surface-95hd', dists['surface-95hd'], **self._log_args, sync_dist=True)
-                self.log('val/voxel-hd', dists['voxel-hd'], **self._log_args, sync_dist=True)
-                # self.log('val/voxel-ahd', dists['voxel-ahd'], **self._log_args, sync_dist=True)
-                self.log('val/voxel-95hd', dists['voxel-95hd'], **self._log_args, sync_dist=True)
-                self.log(f"val/batch/assd/{descs[0]}", dists['assd'], on_epoch=False, on_step=True)
-                self.log(f"val/batch/surface-hd/{descs[0]}", dists['surface-hd'], on_epoch=False, on_step=True)
-                # self.log(f"val/batch/surface-ahd/{descs[0]}", dists['surface-ahd'], on_epoch=False, on_step=True)
-                self.log(f"val/batch/surface-95hd/{descs[0]}", dists['surface-95hd'], **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/voxel-hd/{descs[0]}", dists['voxel-hd'], **self._log_args, on_epoch=False, on_step=True)
-                # self.log(f"val/batch/voxel-ahd/{descs[0]}", dists['voxel-ahd'], **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/voxel-95hd/{descs[0]}", dists['voxel-95hd'], **self._log_args, on_epoch=False, on_step=True)
+                dists = batch_mean_all_distances(y_hat, y, self._spacing)
+                self.log('val/hd', dists['hd'], **self._log_args, sync_dist=True)
+                self.log('val/hd-95', dists['hd-95'], **self._log_args, sync_dist=True)
+                self.log('val/msd', dists['msd'], **self._log_args, sync_dist=True)
+                self.log(f"val/batch/hd/{descs[0]}", dists['hd'], on_epoch=False, on_step=True)
+                self.log(f"val/batch/hd-95/{descs[0]}", dists['hd-95'], **self._log_args, on_epoch=False, on_step=True)
+                self.log(f"val/batch/msd/{descs[0]}", dists['msd'], **self._log_args, on_epoch=False, on_step=True)
 
         # Log predictions.
         if self.logger:

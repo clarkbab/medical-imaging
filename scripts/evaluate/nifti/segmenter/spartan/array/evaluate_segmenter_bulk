@@ -1,10 +1,10 @@
 import subprocess
 
-regions = '0-16'
+regions = '0'
 script = 'scripts/evaluate/nifti/segmenter/spartan/array/evaluate_segmenter'
 test_folds = [0]
-models = ['public', 'clinical']
-num_trains = [None]
+models = ['public', 'clinical', 'transfer']
+num_trains = [5, 10, 20, 50, 100, 200, 'all']
 
 for model in models:
     for test_fold in test_folds:

@@ -19,7 +19,7 @@ from mymi import dataset
 from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
 from mymi.postprocessing import get_largest_cc
-from mymi.regions import get_patch_size, is_region, RegionColours
+from mymi.regions import get_region_patch_size, is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D, crop_or_pad_box, crop_or_pad_point
 from mymi import types
 
@@ -44,7 +44,9 @@ def __plot_region_data(
     if not ax:
         ax = plt.gca()
     if colours is not None:
-        assert len(colours) == len(regions)
+        if type(colours) == str or type(colours) == tuple:
+            colours = [colours]
+            assert len(colours) == len(regions)
 
     # Plot each region.
     show_legend = False
@@ -419,7 +421,7 @@ def plot_regions(
         if type(crop) == str:
             # Convert from region name to 'Box2D'.
             data = region_data[crop]
-            crop = _get_region_crop(data, crop_margin, spacing, view)
+            crop = __get_region_crop(data, crop_margin, spacing, view)
         else:
             # Convert from 'Crop2D' to 'Box2D'.
             crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
@@ -633,7 +635,7 @@ def plot_localiser_prediction(
         if type(crop) == str:
             # Convert from region name to 'Box2D'.
             data = region_data[crop]
-            crop = _get_region_crop(data, crop_margin, spacing, view)
+            crop = __get_region_crop(data, crop_margin, spacing, view)
         else:
             # Convert from 'Crop2D' to 'Box2D'.
             crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
@@ -697,7 +699,7 @@ def plot_localiser_prediction(
 
     # Plot second stage patch.
     if not empty_pred and show_seg_patch:
-        size = get_patch_size(region, spacing)
+        size = get_region_patch_size(region, spacing)
         min, max = get_box(loc_centre, size)
 
         # Squash min/max to label size.
@@ -732,7 +734,7 @@ def plot_localiser_prediction(
             'text.usetex': rc_params['text.usetex']
         })
 
-def _get_region_crop(
+def __get_region_crop(
     data: np.ndarray,
     crop_margin: float,
     spacing: types.ImageSpacing3D,
@@ -786,9 +788,10 @@ def plot_distribution(
 def plot_segmenter_prediction(
     id: str,
     spacing: types.ImageSpacing3D,
-    prediction: Union[np.ndarray, List[np.ndarray]],
+    predictions: Union[np.ndarray, List[np.ndarray]],
     aspect: float = None,
     centre_of: Optional[str] = None,
+    colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
@@ -812,22 +815,25 @@ def plot_segmenter_prediction(
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     __assert_position(centre_of, extent_of, slice_idx)
-
-    # Convert params to lists.
-    if type(prediction) == np.ndarray:
-        prediction = [prediction]
+    # Handle args.
+    if type(colours) == str:
+        colours = [colours]
+    if type(predictions) == np.ndarray:
+        predictions = [predictions]
+    if type(regions) == str:
+        regions = [regions]
+    if colours is None:
+        colours = [plt.cm.tab20(16), plt.cm.tab20(12), plt.cm.tab20(4)]
+    else:
+        assert len(colours) == len(regions) + len(predictions)
     if pred_labels is None:
-        pred_labels = ['Prediction'] * len(prediction)
+        pred_labels = ['Prediction'] * len(predictions)
     if loc_centre is not None:
         if type(loc_centre) == types.Point3D:
             loc_centres = [loc_centre]
         else:
             loc_centres = loc_centre
-
-        assert len(loc_centres) == len(prediction)
-
-    # Define colour palette.
-    palette = [plt.cm.tab20(16), plt.cm.tab20(12), plt.cm.tab20(4)]
+        assert len(loc_centres) == len(predictions)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -838,8 +844,8 @@ def plot_segmenter_prediction(
         })
 
     # Print prediction info.
-    empty_preds = [False] * len(prediction)
-    for i, pred in enumerate(prediction):
+    empty_preds = [False] * len(predictions)
+    for i, pred in enumerate(predictions):
         if pred.sum() == 0:
             logging.info(f"Prediction {i} ('{pred_labels[i]}') is empty.")
             empty_preds[i] = True
@@ -873,22 +879,19 @@ Prediction: {i}
                 slice_idx = extent[extent_of][0]
 
     # Plot patient regions.
-    plot_regions(id, prediction[0].shape, spacing, aspect=aspect, colours=[palette[0]], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, regions=regions, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+    plot_regions(id, region_data[regions[0]].shape, spacing, aspect=aspect, colours=colours[:len(regions)], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, regions=regions, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     # Convert crop to box representation.
     if crop:
         if type(crop) == str:
             # Convert from region name to 'Box2D'.
             data = region_data[crop]
-            crop = _get_region_crop(data, crop_margin, spacing, view)
+            crop = __get_region_crop(data, crop_margin, spacing, view)
         else:
             # Convert from 'Crop2D' to 'Box2D'.
             crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
 
-    for i, pred in enumerate(prediction):
-        # Get prediction colour.
-        colour = palette[i + 1]
-
+    for i, (pred, colour) in enumerate(zip(predictions, colours[len(regions):])):
         # Plot prediction.
         if not empty_preds[i] and show_pred:
             # Get aspect ratio.
@@ -947,7 +950,7 @@ Prediction: {i}
         if loc_centre is not None and not empty_preds[i] and show_pred_patch:
             # Get 3D patch - cropped to label size.
             region = segmenter[i][0].split('-')[1]
-            size = get_patch_size(region, spacing)
+            size = get_region_patch_size(region, spacing)
             patch = get_box(loc_centre, size)
             label_box = ((0, 0, 0), prediction.shape)
             patch = crop_or_pad_box(patch, label_box)
@@ -1111,7 +1114,7 @@ def plot_dataframe(
                 p_vals.append(p_val)
 
             # Format p-values.
-            p_vals = _format_p_values(p_vals) 
+            p_vals = __format_p_values(p_vals) 
 
             # Remove non-significant pairs.
             tpairs = []
@@ -1310,7 +1313,7 @@ def _annotate_outliers(ax, data, x, y, label, default_offset, overlap_min_diff, 
         x_val = row[x] - first_region
         ax.text(x_val, row[y], row[label], transform=base_transform + offset_transform(offset) + offset_transform(ann_offset))
 
-def _format_p_values(p_vals: List[float]) -> List[str]:
+def __format_p_values(p_vals: List[float]) -> List[str]:
     f_p_vals = []
     for p_val in p_vals:
         if p_val >= 0.05:
@@ -1338,19 +1341,23 @@ def plot_dataframe_v2(
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
+    hue_connections_index: Optional[Union[str, List[str]]] = None,
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
     n_col: Optional[int] = None,
-    outlier_cols: Optional[Union[str, List[str]]] = None,
     outlier_legend_loc: str = 'upper left',
     point_size: float = 10,
     savepath: Optional[str] = None,
     share_y: bool = False,
+    show_hue_connections: bool = False,
+    show_hue_connections_inliers: bool = False,
     show_legend: bool = True,
-    show_outliers: bool = False,
+    show_stats: bool = False,
     show_x_labels: bool = True,
+    stats_index: Optional[Union[str, List[str]]] = None,
+    style: Optional[Literal['box', 'violin']] = 'box',
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
@@ -1361,6 +1368,10 @@ def plot_dataframe_v2(
         include_x = [include_x]
     if type(exclude_x) == str:
         exclude_x = [exclude_x]
+    if show_hue_connections and hue_connections_index is None:
+        raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
+    if show_stats and stats_index is None:
+        raise ValueError(f"Please set 'stats_index' to determine sample pairing.")
         
     # Include/exclude.
     if include_x:
@@ -1419,7 +1430,8 @@ def plot_dataframe_v2(
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
-        hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
+        # hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
+        hue_palette = sns.color_palette('tab10')
 
     # Plot rows.
     for i in range(num_rows):
@@ -1459,9 +1471,12 @@ def plot_dataframe_v2(
                 if len(x_data) == 0:
                     continue
                 x_pos = x_data.iloc[0]['x_pos']
-                axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
+                if style == 'box':
+                    axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
+                elif style == 'violin':
+                    axs[i].violinplot(x_data[y], positions=[x_pos])
             else:
-                box_labels = []
+                obj_labels = []
                 for j, hue_name in enumerate(hue_order_f):
                     # Get hue data and pos.
                     hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
@@ -1470,13 +1485,17 @@ def plot_dataframe_v2(
                     hue_pos = hue_data.iloc[0]['x_pos']
 
                     # Plot box.
-                    bplot = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
-                    box_labels.append((bplot['boxes'][0], hue_name)) 
+                    if style == 'box':
+                        res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                        obj_labels.append((res['boxes'][0], hue_name))
+                    elif style == 'violin':
+                        res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
+                        obj_labels.append((res['bodies'], hue_name))
 
                 # Add legend.
                 if show_legend:
-                    boxes, labels = list(zip(*box_labels))
-                    axs[i].legend(boxes, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
+                    objs, labels = list(zip(*obj_labels))
+                    axs[i].legend(objs, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
 
             # Plot points.
             if hue is None:
@@ -1489,10 +1508,15 @@ def plot_dataframe_v2(
                         continue
                     axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
 
-            # Identify outliers - plot line connecting outliers across hue levels.
-            if hue is not None and show_outliers:
+            # Identify connections between hues.
+            if hue is not None and show_hue_connections:
                 # Get column/value pairs to group across hue levels.
-                line_ids = row_data[(row_data[x] == x_val) & row_data['outlier']][outlier_cols]
+                # line_ids = row_data[(row_data[x] == x_val) & row_data['outlier']][outlier_cols]
+                x_data = row_data[(row_data[x] == x_val)]
+                if not show_hue_connections_inliers:
+                    line_ids = x_data[x_data['outlier']][hue_connections_index]
+                else:
+                    line_ids = x_data[hue_connections_index]
 
                 # Drop duplicates.
                 line_ids = line_ids.drop_duplicates()
@@ -1530,6 +1554,43 @@ def plot_dataframe_v2(
 
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)
+
+        # Plot statistical significance.
+        if hue is not None and show_stats:
+            if len(hue_order) != 2:
+                raise ValueError(f"Hue set must have cardinality 2, got '{len(hue_order)}'.")
+
+            # Create pairs to compare. Only works when len(hue_order) == 2.
+            pairs = []
+            for o in x_vals:
+                pair = []
+                for h in hue_order:
+                    pair.append((o, h))
+                pairs.append(tuple(pair))
+
+            # Calculate p-values.
+            p_vals = []
+            for o in x_vals:
+                x_df = row_data[row_data[x] == o]
+                x_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
+                _, p_val = wilcoxon(x_df[y][hue_order[0]], x_df[y][hue_order[1]])
+                p_vals.append(p_val)
+
+            # Format p-values.
+            p_vals = __format_p_values(p_vals) 
+
+            # Remove non-significant pairs.
+            tpairs = []
+            tp_vals = []
+            for pair, p_val in zip(pairs, p_vals):
+                if p_val != '':
+                    tpairs.append(pair)
+                    tp_vals.append(p_val)
+
+            # Annotate figure.
+            annotator = Annotator(axs[i], tpairs, data=row_data, x=x, y=y, order=x_order, hue=hue, hue_order=hue_order, verbose=False)
+            annotator.set_custom_annotations(tp_vals)
+            annotator.annotate()
                 
         # Set axis ticks and labels.
         axs[i].set_xticks(list(range(len(row_x_labels))))

@@ -10,11 +10,11 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_encaps_dist_mm, get_extent_centre
 from mymi.loaders import Loader
-from mymi.metrics import dice, distances, extent_centre_distance
+from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
-from mymi.regions import get_patch_size
+from mymi.regions import get_region_patch_size, get_region_tolerance
 from mymi import types
 from mymi.utils import append_row, encode
 
@@ -82,7 +82,7 @@ def get_patient_localiser_evaluation(
     else:
         # Get second stage patch coordinates.
         centre = get_extent_centre(pred)
-        size = get_patch_size(region, spacing)
+        size = get_region_patch_size(region, spacing)
         min, max = get_box(centre, size)
 
         # Clip patch coordinates to label size.
@@ -291,22 +291,25 @@ def get_patient_segmenter_evaluation(
     # Distances.
     spacing = set.patient(pat_id).ct_spacing
     if pred.sum() == 0 or label.sum() == 0:
-        data['assd'] = np.nan
-        data['surface-hd'] = np.nan
-        data['surface-hd-95'] = np.nan
-        data['surface-hd-mean'] = np.nan
-        data['voxel-hd'] = np.nan
-        data['voxel-hd-95'] = np.nan
-        data['voxel-hd-mean'] = np.nan
+        data['apl'] = np.nan
+        data['hd'] = np.nan
+        data['hd-95'] = np.nan
+        data['msd'] = np.nan
+        data['surface-dice'] = np.nan
     else:
-        dists = distances(pred, label, spacing)
-        data['assd'] = dists['assd']
-        data['surface-hd'] = dists['surface-hd']
-        data['surface-hd-95'] = dists['surface-hd-95']
-        data['surface-hd-mean'] = dists['surface-hd-mean']
-        data['voxel-hd'] = dists['voxel-hd']
-        data['voxel-hd-95'] = dists['voxel-hd-95']
-        data['voxel-hd-mean'] = dists['voxel-hd-mean']
+        # Calculate distances for OAR tolerance.
+        tols = [0.5, 1, 1.5, 2]
+        tol = get_region_tolerance(region)
+        if tol is not None:
+            tols.append(tol)
+        dists = all_distances(pred, label, spacing, tols)
+        for metric, value in dists.items():
+            data[metric] = value
+
+        # Add 'deepmind' comparison.
+        dists = distances_deepmind(pred, label, spacing, tols)
+        for metric, value in dists.items():
+            data[f'dm-{metric}'] = value
 
     return data
     

@@ -9,7 +9,7 @@ import wandb
 
 from mymi import config
 from mymi.losses import DiceLoss
-from mymi.metrics import batch_mean_dice, batch_mean_distances
+from mymi.metrics import batch_mean_dice, batch_mean_all_distances
 from mymi import types
 
 from ..networks import AutoEncoder2D as AE2D

@@ -24,9 +24,8 @@ def crop_or_pad_3D(
     data: np.ndarray,
     bounding_box: types.Box3D,
     fill: float = 0) -> np.ndarray:
-    """
-    bounding_box: crops to this box, including limits in the result.
-    """
+    assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
+
     min, max = bounding_box
     for i in range(3):
         width = max[i] - min[i]

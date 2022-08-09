@@ -1,1 +1,1 @@
-from .circles import generate_circles
+from .generation import create_cylinder, create_n_sphere

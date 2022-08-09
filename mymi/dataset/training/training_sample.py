@@ -16,12 +16,12 @@ class TrainingSample:
         if id not in dataset.list_samples():
             raise ValueError(f"Sample '{id}' not found for dataset '{dataset}'.")
         self._global_id = f'{dataset} - {id}'
-        self._dataset = dataset
-        self._id = id
+        self.__dataset = dataset
+        self.__id = id
         self._spacing = dataset.params['spacing']
 
         # Get sample index.
-        index = self._dataset.index
+        index = self.__dataset.index
         index = index[index['sample-id'] == id]
         self._index = index
 
@@ -38,7 +38,7 @@ class TrainingSample:
 
     @property
     def id(self) -> str:
-        return self._id
+        return self.__id
 
     @property
     def spacing(self) -> types.ImageSpacing3D:
@@ -53,21 +53,15 @@ class TrainingSample:
         return region in self.list_regions()
 
     @property
-    def patient_id(self) -> str:
-        index = self._dataset.index
-        record = index[index['sample-id'] == self._id].iloc[0]
-        return record['patient-id']
-
-    @property
-    def origin_dataset(self) -> str:
-        index = self._dataset.index
-        record = index[index['sample-id'] == self._id].iloc[0]
-        return record['dataset']
+    def origin(self) -> Tuple:
+        idx = self.__dataset.index
+        record = idx[idx['sample-id'] == self.__id].iloc[0]
+        return (record.dataset, record['patient-id'])
 
     @property
     def input(self) -> np.ndarray:
         # Load the input data.
-        filepath = os.path.join(self._dataset.path, 'data', 'inputs', f'{self._id}.npz')
+        filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}.npz')
         data = np.load(filepath)['data']
         return data
 
@@ -84,7 +78,7 @@ class TrainingSample:
         # Load the label data.
         data = {}
         for region in regions:
-            filepath = os.path.join(self._dataset._path, 'data', 'labels', region, f'{self._id}.npz')
+            filepath = os.path.join(self.__dataset._path, 'data', 'labels', region, f'{self.__id}.npz')
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']
