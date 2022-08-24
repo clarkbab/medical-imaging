@@ -138,7 +138,7 @@ def load_patient_localiser_prediction(
     pat_id: types.PatientID,
     localiser: types.ModelName,
     raise_error: bool = True) -> Optional[np.ndarray]:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = replace_checkpoint_alias(*localiser)
 
     # Load prediction.
     set = ds.get(dataset, 'nifti')
@@ -168,7 +168,7 @@ def get_patient_segmenter_prediction(
     pat_id: types.PatientID,
     region: str,
     loc_centre: types.Point3D,
-    segmenter: types.Model,
+    segmenter: Union[types.Model, types.ModelName],
     probs: bool = False,
     seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
@@ -189,8 +189,8 @@ def get_patient_segmenter_prediction(
     input = resample_3D(input, spacing=spacing, output_spacing=seg_spacing) 
 
     # Get localiser centre on downsampled image.
-    scale_factor = np.array(spacing) / seg_spacing
-    loc_centre = np.round(tuple(np.array(scale_factor) * loc_centre)).astype(int)
+    scaling = np.array(spacing) / seg_spacing
+    loc_centre = tuple(int(el) for el in scaling * loc_centre)
 
     # Extract segmentation patch.
     resampled_size = input.shape
@@ -229,8 +229,9 @@ def create_patient_segmenter_prediction(
     pat_id: str,
     region: str,
     localiser: types.ModelName,
-    segmenter: Union[types.ModelName, types.Model],
+    segmenter: Union[types.Model, types.ModelName],
     probs: bool = False,
+    raise_error: bool = False,
     seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     device: Optional[torch.device] = None) -> None:
     localiser = replace_checkpoint_alias(*localiser)
@@ -255,8 +256,11 @@ def create_patient_segmenter_prediction(
     loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
     if loc_centre is None:
         # Create empty pred.
-        ct_data = set.patient(pat_id).ct_data
-        pred = np.zeros_like(ct_data, dtype=bool) 
+        if raise_error:
+            raise ValueError(f"No 'loc_centre' returned from localiser.")
+        else:
+            ct_data = set.patient(pat_id).ct_data
+            pred = np.zeros_like(ct_data, dtype=bool) 
     else:
         pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing=seg_spacing, device=device)
 
@@ -333,8 +337,8 @@ def load_patient_segmenter_prediction(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     raise_error: bool = True) -> Optional[np.ndarray]:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')
@@ -348,7 +352,7 @@ def load_patient_segmenter_prediction(
     filepath = os.path.join(pred_path, 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     if not os.path.exists(filepath):
         if raise_error:
-            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'.")
+            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
         else:
             return None
     npz_file = np.load(filepath)

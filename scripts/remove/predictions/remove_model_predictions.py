@@ -14,7 +14,7 @@ from mymi.loaders import Loader
 from mymi.models.systems import Localiser, Segmenter
 from mymi.regions import RegionNames
 
-dry_run = False
+for_real = True
 datasets_for_loader = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 datasets = ['PMCC-HN-TEST', 'PMCC-HN-TRAIN']
 regions = RegionNames
@@ -40,11 +40,11 @@ for region in regions:
                 # Get path.
                 run_path = os.path.join(config.directories.datasets, 'nifti', dataset, 'predictions', 'segmenter', f'localiser-{region}', 'public-1gpu-150epochs', loc_ckpts[region], f'segmenter-{region}', seg_run)
                 if os.path.exists(run_path):
-                    if dry_run:
-                        print(f'\t{run_path}')
-                    else:
+                    if for_real:
                         print(f'\t{run_path}')
                         shutil.rmtree(run_path)
+                    else:
+                        print(f'\t{run_path}')
         else:
             for test_fold in test_folds:
                 # Get test cases per dataset.
@@ -64,8 +64,8 @@ for region in regions:
                         # Get path.
                         run_path = os.path.join(config.directories.datasets, 'nifti', dataset, 'predictions', 'segmenter', f'localiser-{region}', 'public-1gpu-150epochs', loc_ckpts[region], f'segmenter-{region}', seg_run)
                         if os.path.exists(run_path):
-                            if dry_run:
-                                print(f'\t{run_path}')
-                            else:
+                            if for_real:
                                 print(f'\t{run_path}')
                                 shutil.rmtree(run_path)
+                            else:
+                                print(f'\t{run_path}')

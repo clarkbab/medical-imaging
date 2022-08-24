@@ -48,23 +48,17 @@ def get_patient_localiser_evaluation(
     if pred.sum() == 0:
         dists = {
             'assd': np.nan,
-            'surface-hd': np.nan,
-            'surface-hd-95': np.nan,
-            'surface-hd-mean': np.nan,
-            'voxel-hd': np.nan,
-            'voxel-hd-95': np.nan,
-            'voxel-hd-mean': np.nan
+            'hd': np.nan,
+            'hd-95': np.nan,
+            'hd-mean': np.nan,
         }
     else:
         dists = distances(pred, label, spacing)
 
     data['assd'] = dists['assd']
-    data['surface-hd'] = dists['surface-hd']
-    data['surface-hd-95'] = dists['surface-hd-95']
-    data['surface-hd-mean'] = dists['surface-hd-mean']
-    data['voxel-hd'] = dists['voxel-hd']
-    data['voxel-hd-95'] = dists['voxel-hd-95']
-    data['voxel-hd-mean'] = dists['voxel-hd-mean']
+    data['hd'] = dists['hd']
+    data['hd-95'] = dists['hd-95']
+    data['hd-mean'] = dists['hd-mean']
 
     # Extent distance.
     if pred.sum() == 0:
@@ -298,7 +292,7 @@ def get_patient_segmenter_evaluation(
         data['surface-dice'] = np.nan
     else:
         # Calculate distances for OAR tolerance.
-        tols = [0.5, 1, 1.5, 2]
+        tols = [0, 0.5, 1, 1.5, 2, 2.5]
         tol = get_region_tolerance(region)
         if tol is not None:
             tols.append(tol)
@@ -332,46 +326,35 @@ def create_patient_segmenter_evaluation(
 
     # Create/update dataframe if not provided.
     if df is None:
+        # Try to load existing dataframe, we don't want to overwrite other values.
         set = ds.get(dataset, 'nifti')
         filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, *segmenter, 'eval.csv') 
         if os.path.exists(filepath):
-            # Load dataframe.
-            eval_df = load_segmenter_evaluation(dataset, localiser, segmenter)
+            df = load_segmenter_evaluation(dataset, localiser, segmenter)
         else:
-            # Create dataframe.
-            eval_df = pd.DataFrame(columns=cols.keys())
-    else:
-        eval_df = df
+            df = pd.DataFrame(columns=cols.keys())
 
-    # Get metrics.
+    # Add metrics to dataframe.
     metrics = get_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
-
-    # Add/update each metric.
     for metric, value in metrics.items():
-        exists_df = eval_df[(eval_df['dataset'] == dataset) & (eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric)]
-        if len(exists_df) == 0:
-            # Add metric.
-            data = {
-                'dataset': dataset,
-                'patient-id': pat_id, 
-                'region': region,
-                'metric': metric,
-                'value': value
-            }
-            eval_df = append_row(eval_df, data)
-        else:
-            # Update metric.
-            eval_df.loc[(eval_df['patient-id'] == pat_id) & (eval_df.region == region) & (eval_df.metric == metric), 'value'] = value
+        data = {
+            'dataset': dataset,
+            'patient-id': pat_id, 
+            'region': region,
+            'metric': metric,
+            'value': value
+        }
+        df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
 
     if df is None:
-        # Set column types.
-        eval_df = eval_df.astype(cols)
-
         # Save evaluation.
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         eval_df.to_csv(filepath, index=False)
     else:
-        return eval_df
+        return df
 
 def create_segmenter_evaluation(
     dataset: str,
@@ -450,10 +433,17 @@ def create_segmenter_evaluation_from_loader(
         if type(pat_id_b) == torch.Tensor:
             pat_id_b = pat_id_b.tolist()
         for dataset, pat_id in zip(dataset_b, pat_id_b):
-            df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=df)
-
-    # Add fold.
-    df['fold'] = test_fold
+            metrics = get_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
+            for metric, value in metrics.items():
+                data = {
+                    'fold': test_fold,
+                    'dataset': dataset,
+                    'patient-id': pat_id,
+                    'region': region,
+                    'metric': metric,
+                    'value': value
+                }
+                df = append_row(df, data)
 
     # Set column types.
     df = df.astype(cols)

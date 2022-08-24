@@ -22,9 +22,9 @@ def distances_deepmind(
 
     surf_dists = compute_surface_distances(a, b, spacing) 
     metrics = {
-        'surface-hd': compute_robust_hausdorff(surf_dists, 100),
-        'surface-hd-mean': np.mean(compute_average_surface_distance(surf_dists)),
-        'surface-hd-95': compute_robust_hausdorff(surf_dists, 95)
+        'hd': compute_robust_hausdorff(surf_dists, 100),
+        'msd': np.mean(compute_average_surface_distance(surf_dists)),
+        'hd-95': compute_robust_hausdorff(surf_dists, 95)
     }
     for tol in tolerances:
         metrics[f'surface-dice-tol-{tol}'] = compute_surface_dice_at_tolerance(surf_dists, tol)

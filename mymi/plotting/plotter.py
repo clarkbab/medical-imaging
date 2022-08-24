@@ -26,8 +26,7 @@ from mymi import types
 DEFAULT_FONT_SIZE = 15
 
 def __plot_region_data(
-    regions: types.PatientRegions,
-    region_data: Dict[str, np.ndarray],
+    data: Dict[str, np.ndarray],
     slice_idx: int,
     alpha: float,
     aspect: float,
@@ -36,31 +35,22 @@ def __plot_region_data(
     view: types.PatientView,
     ax = None,
     cca: bool = False, connected_extent: bool = False,
-    crop: Optional[types.Box2D] = None,
     colours: Optional[List[str]] = None,
+    crop: Optional[types.Box2D] = None,
     show_extent: bool = False) -> bool:
-    if type(regions) == str:
-        regions = [regions]
+    regions = list(data.keys()) 
+    colours = sns.color_palette('husl', n_colors=len(regions)) if colours is None else colours
     if not ax:
         ax = plt.gca()
-    if colours is not None:
-        if type(colours) == str or type(colours) == tuple:
-            colours = [colours]
-            assert len(colours) == len(regions)
 
     # Plot each region.
     show_legend = False
-    for i, region in enumerate(regions):
-        # Get region colour.
-        if colours:
-            colour = colours[i]
-        else:
-            colour = getattr(RegionColours, region)
-        cols = [(1.0, 1.0, 1.0, 0), colour]
-        cmap = ListedColormap(cols)
+    for region, colour in zip(regions, colours):
+        # Define cmap.
+        cmap = ListedColormap(((1, 1, 1, 0), colour))
 
         # Convert data to 'imshow' co-ordinate system.
-        slice_data = get_slice(region_data[region], slice_idx, view)
+        slice_data = get_slice(data[region], slice_idx, view)
 
         # Crop image.
         if crop:
@@ -68,14 +58,14 @@ def __plot_region_data(
 
         # Plot extent.
         if show_extent:
-            extent = get_extent(region_data[region])
+            extent = get_extent(data[region])
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
                 plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
 
         # Plot connected extent.
         if connected_extent:
-            extent = get_extent(get_largest_cc(region_data[region]))
+            extent = get_extent(get_largest_cc(data[region]))
             if should_plot_box(extent, view, slice_idx):
                 plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
@@ -340,7 +330,6 @@ def plot_regions(
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    regions: Union[str, Sequence[str]] = 'all',
     region_data: Optional[Dict[str, np.ndarray]] = None,
     region_alpha: float = 0.3,
     savepath: Optional[str] = None,
@@ -402,8 +391,8 @@ def plot_regions(
         elif view == 'sagittal':
             slice_idx = extent[eo_end][0]
 
-    # Load region data.
-    if regions is not None:
+    # Apply postprocessing.
+    if region_data is not None:
         if postproc:
             region_data = dict(((r, postproc(d)) for r, d in region_data.items()))
 
@@ -487,8 +476,8 @@ def plot_regions(
         ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     # Plot regions.
-    if regions is not None:
-        should_show_legend = __plot_region_data(regions, region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+    if region_data is not None:
+        should_show_legend = __plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -628,7 +617,7 @@ def plot_localiser_prediction(
                 slice_idx = extent[extent_of][0]
 
     # Plot patient regions.
-    plot_regions(id, prediction.shape, spacing, aspect=aspect, colours=['gold'], crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, regions=regions, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_regions(id, prediction.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, regions=regions, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     # Convert crop to box representation.
     if crop:
@@ -788,20 +777,17 @@ def plot_distribution(
 def plot_segmenter_prediction(
     id: str,
     spacing: types.ImageSpacing3D,
-    predictions: Union[np.ndarray, List[np.ndarray]],
+    ct_data: np.ndarray,
+    pred_data: Dict[str, np.ndarray],
     aspect: float = None,
     centre_of: Optional[str] = None,
-    colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 100,
-    ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
-    pred_labels: Optional[Union[str, List[str]]] = None,
-    regions: Optional[types.PatientRegions] = None,
+    loc_centres: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
@@ -816,24 +802,19 @@ def plot_segmenter_prediction(
     **kwargs: dict) -> None:
     __assert_position(centre_of, extent_of, slice_idx)
     # Handle args.
-    if type(colours) == str:
-        colours = [colours]
-    if type(predictions) == np.ndarray:
-        predictions = [predictions]
-    if type(regions) == str:
-        regions = [regions]
-    if colours is None:
-        colours = [plt.cm.tab20(16), plt.cm.tab20(12), plt.cm.tab20(4)]
-    else:
-        assert len(colours) == len(regions) + len(predictions)
-    if pred_labels is None:
-        pred_labels = ['Prediction'] * len(predictions)
-    if loc_centre is not None:
-        if type(loc_centre) == types.Point3D:
-            loc_centres = [loc_centre]
+    preds = tuple(pred_data.keys())
+    if loc_centres is not None:
+        if type(loc_centres) == types.Point3D:
+            loc_centres = [loc_centres]
         else:
-            loc_centres = loc_centre
-        assert len(loc_centres) == len(predictions)
+            loc_centres = loc_centres
+        assert len(loc_centres) == len(preds)
+    regions = tuple(region_data.keys()) if region_data is not None else None
+
+    # Get unique colours.
+    n_colours = len(preds)
+    n_colours += len(regions) if regions is not None else 0
+    colours = sns.color_palette('husl', n_colours)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -843,19 +824,17 @@ def plot_segmenter_prediction(
             'text.usetex': True
         })
 
-    # Print prediction info.
-    empty_preds = [False] * len(predictions)
-    for i, pred in enumerate(predictions):
-        if pred.sum() == 0:
-            logging.info(f"Prediction {i} ('{pred_labels[i]}') is empty.")
-            empty_preds[i] = True
-        else:
-            volume_vox = pred.sum()
+    # Print prediction stats.
+    for pred, data in pred_data.items():
+        if data.sum() != 0:
+            volume_vox = data.sum()
             volume_mm3 = volume_vox * reduce(lambda x, y: x * y, spacing)
             logging.info(f"""
-Prediction: {i}
+Prediction: {pred}
     Volume (vox): {volume_vox}
     Volume (mm^3): {volume_mm3:.2f}""")
+        else:
+            logging.info(f"Prediction '{pred}' empty.")
 
     # Centre on OAR if requested.
     if slice_idx is None:
@@ -879,7 +858,8 @@ Prediction: {i}
                 slice_idx = extent[extent_of][0]
 
     # Plot patient regions.
-    plot_regions(id, region_data[regions[0]].shape, spacing, aspect=aspect, colours=colours[:len(regions)], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, regions=regions, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+    if regions is not None:
+        plot_regions(id, region_data[regions[0]].shape, spacing, aspect=aspect, colours=colours[:len(regions)], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     # Convert crop to box representation.
     if crop:
@@ -891,37 +871,36 @@ Prediction: {i}
             # Convert from 'Crop2D' to 'Box2D'.
             crop = ((crop[0][0], crop[1][0]), (crop[0][1], crop[1][1]))
 
-    for i, (pred, colour) in enumerate(zip(predictions, colours[len(regions):])):
-        # Plot prediction.
-        if not empty_preds[i] and show_pred:
+    # Plot predictions.
+    for i, ((pred, data), colour) in enumerate(zip(pred_data.items(), colours[len(regions):])):
+        if data.sum() != 0 and show_pred:
             # Get aspect ratio.
             if not aspect:
                 aspect = get_aspect_ratio(view, spacing) 
 
             # Get slice data.
-            pred_slice_data = get_slice(pred, slice_idx, view)
+            slice_data = get_slice(data, slice_idx, view)
 
             # Crop the image.
             if crop:
-                pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
+                slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
 
             # Plot prediction.
-            colours = [(1, 1, 1, 0), colour]
-            cmap = ListedColormap(colours)
-            plt.imshow(pred_slice_data, alpha=.3, aspect=aspect, cmap=cmap, origin=get_origin(view))
-            plt.plot(0, 0, c=colour, label=pred_labels[i])
-            plt.contour(pred_slice_data, colors=[colour], levels=[.5])
+            cmap = ListedColormap(((1, 1, 1, 0), colour))
+            plt.imshow(slice_data, alpha=.3, aspect=aspect, cmap=cmap, origin=get_origin(view))
+            plt.plot(0, 0, c=colour, label=pred)
+            plt.contour(slice_data, colors=[colour], levels=[.5])
 
         # Plot prediction extent.
-        if not empty_preds[i] and show_pred_extent:
+        if data.sum() != 0 and show_pred_extent:
             # Get prediction extent.
-            pred_extent = get_extent(pred)
+            pred_extent = get_extent(data)
 
             # Plot if extent box is in view.
             if should_plot_box(pred_extent, view, slice_idx):
-                plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=f'{pred_labels[i]} Extent', linestyle='dashed')
+                plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=f'{pred} Extent', linestyle='dashed')
             else:
-                plt.plot(0, 0, c=colour, label='Pred. Extent (offscreen)')
+                plt.plot(0, 0, c=colour, label=f'{pred} Extent (offscreen)')
 
         # Plot localiser centre.
         if show_loc_centre:
@@ -947,7 +926,7 @@ Prediction: {i}
                 plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
 
         # Plot second stage patch.
-        if loc_centre is not None and not empty_preds[i] and show_pred_patch:
+        if loc_centre is not None and data.sum() != 0 and show_pred_patch:
             # Get 3D patch - cropped to label size.
             region = segmenter[i][0].split('-')[1]
             size = get_region_patch_size(region, spacing)
@@ -1430,8 +1409,8 @@ def plot_dataframe_v2(
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
-        # hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
-        hue_palette = sns.color_palette('tab10')
+        hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
+        # hue_palette = sns.color_palette('tab10')
 
     # Plot rows.
     for i in range(num_rows):

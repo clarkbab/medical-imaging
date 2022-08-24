@@ -4,13 +4,22 @@ from typing import List, Tuple
 
 from mymi import config
 from mymi.reporting.models import load_model_manifest
+from mymi import types
 
 CHECKPOINT_KEYS = [
     'epoch',
     'global_step'
 ]
 
-def print_checkpoint(model: Tuple[str, str, str]) -> None:
+def get_localiser(region: str) -> types.ModelName:
+    return (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
+
+def get_segmenter(
+    region: str,
+    run: str) -> types.ModelName:
+    return (f'segmenter-{region}', run, 'BEST')
+
+def print_checkpoint(model: types.ModelName) -> None:
     # Load data.
     checkpoint = f'{model[2]}.ckpt'
     path = os.path.join(config.directories.models, *model[:2], checkpoint)
@@ -25,7 +34,7 @@ def replace_checkpoint_alias(
     run: str,
     ckpt: str,
     use_manifest: bool = False) -> Tuple[str, str, str]:
-    if ckpt == 'BEST': 
+    if ckpt.lower() == 'best': 
         if use_manifest:
             man_df = load_model_manifest()
             ckpts = man_df[(man_df.name == name) & (man_df.run == run) & (man_df.checkpoint != 'last')].sort_values('checkpoint')
