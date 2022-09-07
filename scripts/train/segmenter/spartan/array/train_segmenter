@@ -38,12 +38,12 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-${REGION}"
 # MODEL="clinical"
-NUM_EPOCHS=150
-NUM_FOLDS=5
-NUM_GPUS=1
-NUM_NODES=1
-# NUM_TRAIN=5
-NUM_WORKERS=4
+n_EPOCHS=150
+N_FOLDS=5
+n_GPUS=1
+n_NODES=1
+# N_TRAIN=5
+n_WORKERS=4
 # RESUME=False
 RESUME_RUN=None
 RESUME_CKPT='last'
@@ -52,7 +52,7 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 if [ "$MODEL" = "public" ]; then
     RUN_NAME="public-1gpu-150epochs"
 else
-    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN"
+    RUN_NAME="$MODEL-fold-$TEST_FOLD-samples-$N_TRAIN"
 fi
 if [ "$MODEL" = "transfer" ]; then
     PRETRAINED_MODEL="('segmenter-$REGION','public-1gpu-150epochs','BEST')"
@@ -64,12 +64,12 @@ USE_LOGGER=True
 python $SCRIPT_DIR/train/segmenter/train.py \
     --datasets $DATASETS \
     --model_name $MODEL_NAME \
-    --num_epochs $NUM_EPOCHS \
-    --num_folds $NUM_FOLDS \
-    --num_gpus $NUM_GPUS \
-    --num_nodes $NUM_NODES \
-    --num_train $NUM_TRAIN \
-    --num_workers $NUM_WORKERS \
+    --n_epochs $n_EPOCHS \
+    --n_folds $N_FOLDS \
+    --n_gpus $n_GPUS \
+    --n_nodes $n_NODES \
+    --n_train $N_TRAIN \
+    --n_workers $n_WORKERS \
     --pretrained_model $PRETRAINED_MODEL \
     --use_logger $USE_LOGGER \
     --region $REGION \

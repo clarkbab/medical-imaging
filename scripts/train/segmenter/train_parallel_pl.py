@@ -8,7 +8,7 @@ from torchmetrics import Accuracy
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
-NUM_GPUS=2
+n_GPUS=2
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 AVAIL_GPUS = min(1, torch.cuda.device_count())
 BATCH_SIZE = 256 if AVAIL_GPUS else 64
@@ -38,7 +38,7 @@ train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE)
 
 trainer = Trainer(
     accelerator="gpu",
-    devices=NUM_GPUS,
+    devices=n_GPUS,
     max_epochs=100,
     precision=16,
     strategy="ddp")

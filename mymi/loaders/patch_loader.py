@@ -18,9 +18,9 @@ class PatchLoader:
         region: str,
         batch_size: int = 1,
         half_precision: bool = True,
-        num_folds: Optional[int] = None,
-        num_samples: Optional[int] = None,
-        num_workers: int = 1,
+        n_folds: Optional[int] = None,
+        n_samples: Optional[int] = None,
+        n_workers: int = 1,
         p_foreground: float = 1,
         shuffle: bool = True,
         spacing: types.ImageSpacing3D = None,
@@ -30,10 +30,10 @@ class PatchLoader:
             partitions = [partitions]
 
         # Create dataset object.
-        ds = LoaderDataset(partitions, region, half_precision=half_precision, num_samples=num_samples, p_foreground=p_foreground, spacing=spacing, transform=transform)
+        ds = LoaderDataset(partitions, region, half_precision=half_precision, n_samples=n_samples, p_foreground=p_foreground, spacing=spacing, transform=transform)
 
         # Create loader.
-        return DataLoader(batch_size=batch_size, dataset=ds, num_workers=num_workers, shuffle=shuffle)
+        return DataLoader(batch_size=batch_size, dataset=ds, num_workers=n_workers, shuffle=shuffle)
 
 class LoaderDataset(Dataset):
     def __init__(
@@ -41,7 +41,7 @@ class LoaderDataset(Dataset):
         datasets: List[TrainingDataset],
         region: str,
         half_precision: bool = True,
-        num_samples: Optional[int] = None,
+        n_samples: Optional[int] = None,
         p_foreground: float = 1,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
@@ -63,14 +63,14 @@ class LoaderDataset(Dataset):
                 index += 1
 
         # Set number of samples.
-        if num_samples:
-            if num_samples > index:
+        if n_samples:
+            if n_samples > index:
                 part_names = [p.name for p in partitions]
-                raise ValueError(f"Requested '{num_samples}' samples for PatchLoader with region '{region}' from partitions '{part_names}', only '{index}' samples found.")
+                raise ValueError(f"Requested '{n_samples}' samples for PatchLoader with region '{region}' from partitions '{part_names}', only '{index}' samples found.")
             else:
-                self._num_samples = num_samples
+                self._n_samples = n_samples
         else:
-            self._num_samples = index
+            self._n_samples = index
 
         # Map loader indices to dataset indices.
         self._index_map = dict(map_tuples)
@@ -79,7 +79,7 @@ class LoaderDataset(Dataset):
         """
         returns: number of samples in the partition.
         """
-        return self._num_samples
+        return self._n_samples
 
     def __getitem__(
         self,

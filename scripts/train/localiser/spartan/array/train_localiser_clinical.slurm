@@ -37,10 +37,10 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-${REGION}"
-NUM_EPOCHS=150
-NUM_GPUS=1
-NUM_NODES=1
-NUM_WORKERS=4
+n_EPOCHS=150
+n_GPUS=1
+n_NODES=1
+n_WORKERS=4
 RESUME=False
 RESUME_CHECKPOINT='last'
 RUN_NAME="clinical-1gpu-150epochs"
@@ -49,5 +49,5 @@ TRUNCATE_SPINE=True
 USE_LOGGER=True
 
 python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS \
-    --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+    --n_epochs $n_EPOCHS --n_gpus $n_GPUS --n_nodes $n_NODES --n_workers $n_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
     --truncate_spine $TRUNCATE_SPINE --use_logger $USE_LOGGER

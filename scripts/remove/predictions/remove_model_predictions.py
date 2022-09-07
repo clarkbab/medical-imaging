@@ -19,8 +19,8 @@ datasets_for_loader = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 datasets = ['PMCC-HN-TEST', 'PMCC-HN-TRAIN']
 regions = RegionNames
 models = ['public', 'clinical', 'transfer']
-num_folds = 5
-num_trains = [5, 10, 20, 50, 100, 200, None]
+n_folds = 5
+n_trains = [5, 10, 20, 50, 100, 200, None]
 test_folds = [0, 1, 2, 3, 4]
 
 # Load localiser checkpoints.
@@ -48,16 +48,16 @@ for region in regions:
         else:
             for test_fold in test_folds:
                 # Get test cases per dataset.
-                tl, vl, _ = Loader.build_loaders(datasets_for_loader, region, num_folds=num_folds, test_fold=test_fold)
-                num_train_max = len(tl) + len(vl)
+                tl, vl, _ = Loader.build_loaders(datasets_for_loader, region, n_folds=n_folds, test_fold=test_fold)
+                n_train_max = len(tl) + len(vl)
             
-                for num_train in num_trains:
+                for n_train in n_trains:
                     # Check that number of training cases are available.
-                    if num_train is not None and num_train > num_train_max:
+                    if n_train is not None and n_train > n_train_max:
                         continue
 
                     # Get model run.
-                    seg_run = f'{model}-fold-{test_fold}-samples-{num_train}'
+                    seg_run = f'{model}-fold-{test_fold}-samples-{n_train}'
                     print(f'region:{region}, model:{seg_run}')
 
                     for dataset in datasets:

@@ -424,8 +424,8 @@ class Cache:
         default_kwargs = {}
         argspec = inspect.getfullargspec(fn)
         if argspec.defaults:
-            num_defaults = len(argspec.defaults)
-            kwarg_names = argspec.args[-num_defaults:]
+            n_defaults = len(argspec.defaults)
+            kwarg_names = argspec.args[-n_defaults:]
             kwarg_values = argspec.defaults
             for k, v in zip(kwarg_names, kwarg_values):
                 default_kwargs[k] = v
@@ -494,8 +494,8 @@ class Cache:
             default_kwargs = {}
             argspec = inspect.getfullargspec(fn)
             if argspec.defaults:
-                num_defaults = len(argspec.defaults)
-                kwarg_names = argspec.args[-num_defaults:]
+                n_defaults = len(argspec.defaults)
+                kwarg_names = argspec.args[-n_defaults:]
                 kwarg_values = argspec.defaults
                 for k, v in zip(kwarg_names, kwarg_values):
                     default_kwargs[k] = v

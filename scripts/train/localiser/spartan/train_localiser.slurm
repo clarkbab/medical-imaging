@@ -19,10 +19,10 @@ DATASETS="['HN1-LOC','HNPCT-LOC','HNSCC-LOC','OPC-LOC']"
 # DATASETS="PMCC-HN-TRAIN-LOC"
 REGION="Parotid_L"
 MODEL_NAME="localiser-$REGION"
-NUM_EPOCHS=100
-NUM_GPUS=1
-NUM_NODES=1
-NUM_WORKERS=4
+n_EPOCHS=100
+n_GPUS=1
+n_NODES=1
+n_WORKERS=4
 PRETRAINED="('localiser-$REGION','public-1gpu-100epochs','BEST')"
 RESUME=False
 RESUME_CHECKPOINT="last"
@@ -30,6 +30,6 @@ RUN_NAME="tl-100epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS --num_gpus $NUM_GPUS \
-    --num_nodes $NUM_NODES --num_subset $NUM_SUBSET --num_workers $NUM_WORKERS --pretrained $PRETRAINED --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --n_epochs $n_EPOCHS --n_gpus $n_GPUS \
+    --n_nodes $n_NODES --n_subset $n_SUBSET --n_workers $n_WORKERS --pretrained $PRETRAINED --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
     --use_logger $USE_LOGGER

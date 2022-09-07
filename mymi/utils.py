@@ -1,8 +1,9 @@
 import json
 import hashlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
@@ -17,10 +18,10 @@ def encode(o: Any) -> str:
 # def get_manifest():
 #     datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 #     region = 'BrainStem'
-#     num_folds = 5
-#     num_train = 5
+#     n_folds = 5
+#     n_train = 5
 #     test_fold = 0
-#     _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, num_folds=num_folds, num_train=num_train, test_fold=test_fold)
+#     _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
 #     samples = []
 #     for ds_b, samp_b in iter(test_loader):
 #         samples.append((ds_b[0], samp_b[0].item()))
@@ -63,3 +64,37 @@ def get_batch_centroids(label_batch, plane):
         centroids = np.append(centroids, centroid)
 
     return centroids
+
+def fplot(
+    f_str: str, 
+    figsize: Tuple[float, float] = (8, 6),
+    x: Optional[List[float]] = None,
+    y: Optional[List[float]] = None, 
+    xres: float = 1e-1,
+    xlim: Tuple[float, float] = (-10, 10),
+    **kwargs) -> None:
+    # Rename x so it can be used in 'eval'.
+    x_data, y_data = x, y
+    
+    # Replace params in 'f'.
+    f = f_str
+    params = dict(((k, v) for k, v in kwargs.items() if len(k) == 1 and k not in ('x', 'y')))
+    for k, v in params.items():
+        f = f.replace(k, str(v))
+
+    # Plot function.
+    x = np.linspace(xlim[0], xlim[1], int((xlim[1] - xlim[0]) / xres))
+    y = eval(f)
+    plt.figure(figsize=figsize)
+    plt.plot(x, y)
+    
+    # Plot points.
+    if x_data is not None or y_data is not None:
+        assert x_data is not None and y_data is not None
+        assert len(x_data) == len(y_data)
+        plt.scatter(x_data, y_data, marker='x')
+        
+    param_str = ','.join((f'{k}={v:.3f}' for k, v in params.items()))
+    plt.title(f"{f_str}, {param_str}")
+
+    plt.show()

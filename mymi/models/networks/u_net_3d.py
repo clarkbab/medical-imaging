@@ -54,9 +54,9 @@ class Up(nn.Module):
         # Spatial resolution may be lost due to rounding when downsampling. Pad the upsampled features
         # if necessary.
         if x.shape != x_res.shape:
-            num_axes = len(x.shape)
-            padding = np.zeros((num_axes, 2), dtype='uint8')
-            for axis in range(num_axes):
+            n_axes = len(x.shape)
+            padding = np.zeros((n_axes, 2), dtype='uint8')
+            for axis in range(n_axes):
                 diff = x_res.shape[axis] - x.shape[axis]
                 if diff > 0:
                     padding[axis] = np.floor([diff / 2, (diff + 1) / 2])

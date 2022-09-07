@@ -12,4 +12,4 @@ if __name__ == '__main__':
     fire.Fire(train_auto_encoder)
 
 # Sample args:
-# --datasets "['CIRCLES']" --num_gpus 4 --num_nodes 1 --num_workers 4 --use_logger True
+# --datasets "['CIRCLES']" --n_gpus 4 --n_nodes 1 --n_workers 4 --use_logger True

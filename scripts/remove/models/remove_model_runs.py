@@ -18,10 +18,10 @@ regions.remove('BrainStem')
 regions.remove('OralCavity')
 runs = []
 folds = [1, 2, 3, 4]
-num_trains = [5, 10, 20, 50, 100, 200, None]
+n_trains = [5, 10, 20, 50, 100, 200, None]
 for fold in folds:
-    for num_train in num_trains:
-        runs.append(f'transfer-fold-{fold}-samples-{num_train}')
+    for n_train in n_trains:
+        runs.append(f'transfer-fold-{fold}-samples-{n_train}')
 
 for type in types:
     for region in regions:

@@ -59,17 +59,17 @@ class Segmenter(pl.LightningModule):
         # Check that training has finished before predicting.
         filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
         state = torch.load(filepath, map_location=torch.device('cpu'))
-        num_samples = run_name.split('-')[-1]
-        if num_samples == '5':
-            num_epochs = 900
-        elif num_samples == '10':
-            num_epochs = 450
-        elif num_samples == '20':
-            num_epochs = 300
+        n_samples = run_name.split('-')[-1]
+        if n_samples == '5':
+            n_epochs = 900
+        elif n_samples == '10':
+            n_epochs = 450
+        elif n_samples == '20':
+            n_epochs = 300
         else:
-            num_epochs = 150
-        if state['epoch'] < num_epochs - 1:
-            raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {num_epochs} epochs training.")
+            n_epochs = 150
+        if state['epoch'] < n_epochs - 1:
+            raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
         model_name, run_name, checkpoint = Segmenter.replace_checkpoint_aliases(model_name, run_name, checkpoint)

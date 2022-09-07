@@ -21,12 +21,12 @@ def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_model_manifest: bool = False) -> pd.DataFrame:
     localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
     segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
-    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{num_folds}-test-{test_fold}.csv') 
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{n_folds}-test-{test_fold}.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Segmenter dose evaluation for datasets '{datasets}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
@@ -37,7 +37,7 @@ def create_segmenter_dose_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
@@ -47,10 +47,10 @@ def create_segmenter_dose_evaluation_from_loader(
 
     # Build test loader.
     if use_loader_manifest:
-        man_df = load_loader_manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        man_df = load_loader_manifest(datasets, region, n_folds=n_folds, test_fold=test_fold)
         samples = man_df[['dataset', 'patient-id']].to_numpy()
     else:
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
         test_dataset = test_loader.dataset
         samples = [test_dataset.__get_item(i) for i in range(len(test_dataset))]
 
@@ -117,7 +117,7 @@ def create_segmenter_dose_evaluation_from_loader(
             df = append_row(df, data)
             
     df = df.astype(cols)
-    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{num_folds}-test-{test_fold}.csv')
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{n_folds}-test-{test_fold}.csv')
     df.to_csv(filepath, index=False)
 
 def create_dose_evaluation(

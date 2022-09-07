@@ -22,12 +22,12 @@ def train_segmenter(
     datasets: Union[str, List[str]],
     region: str,
     loss: str = 'dice',
-    num_epochs: int = 200,
-    num_folds: Optional[int] = None,
-    num_gpus: int = 1,
-    num_nodes: int = 1,
-    num_train: Optional[int] = None,
-    num_workers: int = 1,
+    n_epochs: int = 200,
+    n_folds: Optional[int] = None,
+    n_gpus: int = 1,
+    n_nodes: int = 1,
+    n_train: Optional[int] = None,
+    n_workers: int = 1,
     pretrained_model: Optional[types.ModelName] = None,    
     p_val: float = 0.2,
     resume: bool = False,
@@ -63,7 +63,7 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, extract_patch=True, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, extract_patch=True, n_folds=n_folds, n_train=n_train, num_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -123,11 +123,11 @@ def train_segmenter(
     trainer = Trainer(
         # accelerator='ddp',
         callbacks=callbacks,
-        gpus=list(range(num_gpus)),
+        gpus=list(range(n_gpus)),
         logger=logger,
-        max_epochs=num_epochs,
-        num_nodes=num_nodes,
-        num_sanity_val_steps=0,
+        max_epochs=n_epochs,
+        n_nodes=n_nodes,
+        n_sanity_val_steps=0,
         # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
 

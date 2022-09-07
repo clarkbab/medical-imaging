@@ -193,11 +193,11 @@ def create_localiser_evaluation_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {num_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
     cols = {
@@ -211,7 +211,7 @@ def create_localiser_evaluation_from_loader(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Add evaluations to dataframe.
     for dataset_b, pat_id_b in tqdm(iter(test_loader)):
@@ -227,7 +227,7 @@ def create_localiser_evaluation_from_loader(
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -246,13 +246,13 @@ def load_localiser_evaluation(
 def load_localiser_evaluation_from_loader(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> np.ndarray:
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {num_folds}-fold CV with test fold {test_fold} not found.")
+        raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {n_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -407,12 +407,12 @@ def create_segmenter_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
-    logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
     cols = {
@@ -426,7 +426,7 @@ def create_segmenter_evaluation_from_loader(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Add evaluations to dataframe.
     for dataset_b, pat_id_b in tqdm(iter(test_loader)):
@@ -449,7 +449,7 @@ def create_segmenter_evaluation_from_loader(
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -471,15 +471,15 @@ def load_segmenter_evaluation_from_loader(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> np.ndarray:
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
-    filename = f'eval-folds-{num_folds}-test-{test_fold}'
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
         logging.error(f'filepath: {filepath}')
-        raise ValueError(f"Segmenter evaluation for dataset '{datasets}', localiser '{localiser}', segmenter '{segmenter}', {num_folds}-fold CV with test fold {test_fold} not found.")
+        raise ValueError(f"Segmenter evaluation for dataset '{datasets}', localiser '{localiser}', segmenter '{segmenter}', {n_folds}-fold CV with test fold {test_fold} not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
@@ -488,16 +488,16 @@ def create_two_stage_evaluation_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
-    logging.info(f"Evaluating two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Evaluating two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds
     if test_folds == 'all':
-        test_folds = list(range(num_folds))
+        test_folds = list(range(n_folds))
     elif type(test_folds) == int:
         test_folds = [test_folds]
 
@@ -514,7 +514,7 @@ def create_two_stage_evaluation_from_loader(
         seg_df = pd.DataFrame(columns=cols.keys())
 
         # Build test loader.
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
         # Add evaluations to dataframe.
         for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
@@ -533,7 +533,7 @@ def create_two_stage_evaluation_from_loader(
         seg_df = seg_df.astype(cols)
 
         # Save evaluations.
-        filename = f'eval-folds-{num_folds}-test-{test_fold}'
+        filename = f'eval-folds-{n_folds}-test-{test_fold}'
         loc_filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
         seg_filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
         os.makedirs(os.path.dirname(loc_filepath), exist_ok=True)

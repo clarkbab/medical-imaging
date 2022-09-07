@@ -34,9 +34,9 @@ class Loader:
         extract_patch: bool = False,
         half_precision: bool = True,
         load_test_origin: bool = True,
-        num_folds: Optional[int] = None, 
-        num_train: Optional[int] = None,
-        num_workers: int = 1,
+        n_folds: Optional[int] = None, 
+        n_train: Optional[int] = None,
+        n_workers: int = 1,
         random_seed: int = 42,
         spacing: Optional[types.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,
@@ -44,7 +44,7 @@ class Loader:
         p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         if type(datasets) == str:
             datasets = [datasets]
-        if num_folds and test_fold is None:
+        if n_folds and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
         if extract_patch and not spacing:
             raise ValueError(f"'spacing' must be specified when extracting segmentation patches.") 
@@ -62,19 +62,19 @@ class Loader:
         np.random.shuffle(all_samples)
 
         # Split samples into folds.
-        if num_folds:
-            num_samples = len(all_samples)
-            len_fold = int(np.floor(num_samples / num_folds))
+        if n_folds:
+            n_samples = len(all_samples)
+            len_fold = int(np.floor(n_samples / n_folds))
             folds = []
-            for i in range(num_folds):
+            for i in range(n_folds):
                 fold = all_samples[i * len_fold:(i + 1) * len_fold]
                 folds.append(fold)
 
             # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
-            # folds should be [3, 4, 0, 1] (for num_folds=5). This ensures that when we 
-            # take a subset of samples (num_samples != None), we get different training samples
+            # folds should be [3, 4, 0, 1] (for n_folds=5). This ensures that when we 
+            # take a subset of samples (n_samples != None), we get different training samples
             # for each of the k-folds.
-            train_folds = list((np.array(range(num_folds)) + (test_fold + 1)) % 5)
+            train_folds = list((np.array(range(n_folds)) + (test_fold + 1)) % 5)
             train_folds.remove(test_fold)
 
             # Get train and test data.
@@ -86,28 +86,28 @@ class Loader:
             train_samples = all_samples
 
         # Take subset of train samples.
-        if num_train is not None:
-            if num_train > len(train_samples):
-               raise ValueError(f"'num_train={num_train}' requested larger number than training samples '{len(train_samples)}'.") 
-            train_samples = train_samples[:num_train]
+        if n_train is not None:
+            if n_train > len(train_samples):
+               raise ValueError(f"'n_train={n_train}' requested larger number than training samples '{len(train_samples)}'.") 
+            train_samples = train_samples[:n_train]
 
         # Split train into NN train and validation data.
-        num_nn_train = int(len(train_samples) * (1 - p_val))
-        nn_train_samples = train_samples[:num_nn_train]
-        nn_val_samples = train_samples[num_nn_train:] 
+        n_nn_train = int(len(train_samples) * (1 - p_val))
+        nn_train_samples = train_samples[:n_nn_train]
+        nn_val_samples = train_samples[n_nn_train:] 
 
         # Create train loader.
         train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing, transform=transform)
-        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=num_workers, shuffle=True)
+        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=True)
 
         # Create validation loader.
         val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing)
-        val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=num_workers, shuffle=False)
+        val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
-        if num_folds:
+        if n_folds:
             test_ds = TestDataset(datasets, test_samples, load_origin=load_test_origin) 
-            test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=num_workers, shuffle=False)
+            test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=n_workers, shuffle=False)
             return train_loader, val_loader, test_loader
         else:
             return train_loader, val_loader
@@ -132,7 +132,7 @@ class TrainingDataset(Dataset):
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         # Record number of samples.
-        self._num_samples = len(samples)
+        self._n_samples = len(samples)
 
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
@@ -161,7 +161,7 @@ class TrainingDataset(Dataset):
         return df
 
     def __len__(self):
-        return self._num_samples
+        return self._n_samples
 
     def __getitem__(
         self,
@@ -292,7 +292,7 @@ class TestDataset(Dataset):
         self._load_origin = load_origin
 
         # Record number of samples.
-        self._num_samples = len(samples)
+        self._n_samples = len(samples)
 
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
@@ -321,7 +321,7 @@ class TestDataset(Dataset):
         return df
 
     def __len__(self):
-        return self._num_samples
+        return self._n_samples
 
     def __getitem__(
         self,

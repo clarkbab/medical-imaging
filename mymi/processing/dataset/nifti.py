@@ -226,21 +226,21 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
     # Get unique name.
     localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
     segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
-    logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {num_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.
     if use_loader_manifest:
-        man_df = load_loader_manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        man_df = load_loader_manifest(datasets, region, n_folds=n_folds, test_fold=test_fold)
         samples = man_df[['dataset', 'patient-id']].to_numpy()
     else:
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
         test_dataset = test_loader.dataset
         samples = [test_dataset.__get_item(i) for i in range(len(test_dataset))]
 

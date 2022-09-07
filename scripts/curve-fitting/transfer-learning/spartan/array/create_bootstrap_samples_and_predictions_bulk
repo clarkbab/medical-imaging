@@ -1,0 +1,15 @@
+import subprocess
+
+regions = '0'
+script = 'scripts/curve-fitting/transfer-learning/spartan/array/create_bootstrap_samples_and_predictions'
+models = ['clinical', 'transfer']
+metrics = ['apl-mm-tol-1', 'dice', 'dm-surface-dice-tol-1', 'hd', 'hd-95', 'msd']
+
+for model in models:
+    for metric in metrics:
+        # Create slurm command.
+        export = f'ALL,MODELS={model},METRICS={metric}'
+        command = f'sbatch --array={regions} --export={export} {script}' 
+        print(command)
+        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+        process.communicate()

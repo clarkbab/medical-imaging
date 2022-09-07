@@ -103,13 +103,13 @@ def create_localiser_predictions_from_loader(
     localiser: types.Model,
     loc_size: types.ImageSize3D = (128, 128, 150),
     loc_spacing: types.ImageSpacing3D = (4, 4, 4),
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(localiser) == tuple:
         localiser = Localiser.load(*localiser)
-    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {num_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -123,7 +123,7 @@ def create_localiser_predictions_from_loader(
     truncate = True if region == 'SpinalCord' else False
 
     # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Make predictions.
     for dataset_b, pat_id_b in tqdm(iter(test_loader)):
@@ -305,13 +305,13 @@ def create_segmenter_predictions_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     seg_spacing: types.ImageSpacing3D = (1, 1, 2),
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -322,7 +322,7 @@ def create_segmenter_predictions_from_loader(
         logging.info('Predicting on CPU...')
 
     # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Make predictions.
     for dataset_b, pat_id_b in tqdm(iter(test_loader)):
@@ -413,14 +413,14 @@ def create_two_stage_predictions_from_loader(
     segmenter: types.ModelName,
     loc_size: types.ImageSize3D = (128, 128, 150),
     loc_spacing: types.ImageSpacing3D = (4, 4, 4),
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {num_folds}-fold CV using test folds '{test_folds}'.")
+    logging.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -432,7 +432,7 @@ def create_two_stage_predictions_from_loader(
 
     # Perform for specified folds
     if test_folds == 'all':
-        test_folds = list(range(num_folds))
+        test_folds = list(range(n_folds))
     elif type(test_folds) == int:
         test_folds = [test_folds]
 
@@ -440,7 +440,7 @@ def create_two_stage_predictions_from_loader(
     truncate = True if region == 'SpinalCord' else False
 
     for test_fold in tqdm(test_folds):
-        _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
         # Make predictions.
         for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):

@@ -16,14 +16,14 @@ model_types = ['segmenter']
 regions = RegionNames
 model_methods = ['clinical', 'transfer']
 folds = list(range(5))
-# num_trains = [5, 10, 20]
-num_trains = [5]
-# num_epochses = [
+# n_trains = [5, 10, 20]
+n_trains = [5]
+# n_epochses = [
 #     [300, 450, 600, 750, 900],
 #     [300, 450],
 #     [300]
 # ]
-num_epochses = [
+n_epochses = [
     [750, 900]
 ]
 
@@ -31,10 +31,10 @@ for model_type in model_types:
     for model_method in model_methods:
         for region in regions:
             for fold in folds:
-                for num_epochs, num_train in zip(num_epochses, num_trains):
+                for n_epochs, n_train in zip(n_epochses, n_trains):
                     # Check that base run has finished.
                     model = f'{model_type}-{region}'
-                    run = f'{model_method}-fold-{fold}-samples-{num_train}'
+                    run = f'{model_method}-fold-{fold}-samples-{n_train}'
                     print(model, run)
                     ckptspath = os.path.join(config.directories.models, model, run)
                     lastpath = os.path.join(ckptspath, 'last.ckpt')
@@ -44,14 +44,14 @@ for model_type in model_types:
 
                     ckptspath_base = ckptspath
                     lastpath_base = lastpath
-                    for num_epoch in num_epochs:
+                    for n_epoch in n_epochs:
                         # Check that run has finished.
-                        run = f'{model_method}-fold-{fold}-samples-{num_train}-{num_epoch}epochs'
+                        run = f'{model_method}-fold-{fold}-samples-{n_train}-{n_epoch}epochs'
                         ckptspath = os.path.join(config.directories.models, model, run)
                         lastpath = os.path.join(ckptspath, 'last.ckpt')
                         state = torch.load(lastpath, map_location=torch.device('cpu'))
                         epoch = state['epoch']
-                        assert epoch >= num_epoch - 1
+                        assert epoch >= n_epoch - 1
 
                         # Copy any checkpoints to the base folder.
                         ckpts = os.listdir(ckptspath)
@@ -66,7 +66,7 @@ for model_type in model_types:
                                 os.rename(ckptpath, newpath)
 
                         # Copy 'last.ckpt' to base folder if we're at largest number of epochs.
-                        if num_epoch == num_epochs[-1]:
+                        if n_epoch == n_epochs[-1]:
                             if dry_run:
                                 print(f'{lastpath}=>{lastpath_base}')
                             else:

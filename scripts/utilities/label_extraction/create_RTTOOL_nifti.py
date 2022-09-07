@@ -14,14 +14,14 @@ sys.path.append(mymi_dir)
 from mymi import dataset as ds
 from mymi.dataset.nifti import recreate
 
-num_patients = 20
+n_patients = 20
 hn1_regions = ['Brain', 'Cochlea-Left', 'Cochlea-Right', 'Oral-Cavity', 'Parotid-Left', 'Parotid-Right', 'Spinal-Cord', 'Submandibular-Gland-Left', 'Submandibular-Gland-Right']
 regions = ['Brain', 'Cochlea_L', 'Cochlea_R', 'OralCavity', 'Parotid_L', 'Parotid_R', 'SpinalCord', 'Submandibular_L', 'Submandibular_R']
 assert len(hn1_regions) == len(regions)
 
 dataset = 'HN1'
 set = ds.get(dataset, 'dicom')
-pats = set.list_patients()[:num_patients]
+pats = set.list_patients()[:n_patients]
 
 dest_dataset = 'HN1-RTTOOL'
 nifti_set = recreate(dest_dataset)

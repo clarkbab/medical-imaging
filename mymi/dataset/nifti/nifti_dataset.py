@@ -61,9 +61,6 @@ class NIFTIDataset(Dataset):
         return pats
 
     def list_regions(self) -> pd.DataFrame:
-        """
-        returns: a DataFrame with patient region names.
-        """
         # Define table structure.
         cols = {
             'patient-id': str,

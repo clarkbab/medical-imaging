@@ -4,14 +4,14 @@ regions = '16'
 script = 'scripts/train/segmenter/spartan/array/train_segmenter'
 test_folds = [2, 3]
 models = ['transfer']
-num_trains = [None]
+n_trains = [None]
 resume = True
 
 for model in models:
     for test_fold in test_folds:
-        for num_train in num_trains:
+        for n_train in n_trains:
             # Create slurm command.
-            export = f'ALL,MODEL={model},NUM_TRAIN={num_train},RESUME={resume},TEST_FOLD={test_fold}'
+            export = f'ALL,MODEL={model},N_TRAIN={n_train},RESUME={resume},TEST_FOLD={test_fold}'
             command = f'sbatch --array={regions} --export={export} {script}' 
             print(command)
             process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)

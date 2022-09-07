@@ -505,14 +505,14 @@ def plot_regions(
         if title is None:
             # Determine number of slices.
             if view == 'axial':
-                num_slices = size[2]
+                n_slices = size[2]
             elif view == 'coronal':
-                num_slices = size[1]
+                n_slices = size[1]
             elif view == 'sagittal':
-                num_slices = size[0]
+                n_slices = size[0]
 
             # Set default title.
-            title = f"patient: {id}, slice: {slice_idx}/{num_slices - 1} ({view} view)"
+            title = f"patient: {id}, slice: {slice_idx}/{n_slices - 1} ({view} view)"
 
         # Escape text if using latex.
         if latex:
@@ -758,7 +758,7 @@ def plot_distribution(
     # Calculate bin width.
     min = data.min()
     max = data.max()
-    num_bins = int(np.ceil((max - min) / resolution))
+    n_bins = int(np.ceil((max - min) / resolution))
 
     # Get limits.
     if range:
@@ -768,7 +768,7 @@ def plot_distribution(
         
     # Plot histogram.
     plt.figure(figsize=figsize)
-    plt.hist(data.flatten(), bins=num_bins, range=range, histtype='step',edgecolor='r',linewidth=3)
+    plt.hist(data.flatten(), bins=n_bins, range=range, histtype='step',edgecolor='r',linewidth=3)
     plt.title(f'Hist. of voxel values, range={tuple(np.array(limits).round().astype(int))}')
     plt.xlabel('HU')
     plt.ylabel('Frequency')
@@ -1021,13 +1021,13 @@ def plot_dataframe(
     xs = list(sorted(df[x].unique()))
     if hue_order is None:
         hue_order = list(sorted(df[hue].unique())) if hue is not None else None
-    num_rows = int(np.ceil(len(xs) / n_col))
-    if num_rows > 1:
-        _, axs = plt.subplots(num_rows, 1, figsize=(row_width, num_rows * row_height), sharey=True)
+    n_rows = int(np.ceil(len(xs) / n_col))
+    if n_rows > 1:
+        _, axs = plt.subplots(n_rows, 1, figsize=(row_width, n_rows * row_height), sharey=True)
     else:
         plt.figure(figsize=(row_width, row_height))
         axs = [plt.gca()]
-    for i in range(num_rows):
+    for i in range(n_rows):
         # Split data.
         split_xs = xs[i * n_col:(i + 1) * n_col]
         split_df = df[df[x].isin(split_xs)]
@@ -1120,8 +1120,8 @@ def plot_dataframe(
             # Round range to nearest multiple of 'major_tick_freq'.
             major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
             major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
-            num_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
-            major_ticks = np.linspace(major_tick_min, major_tick_max, num_major_ticks)
+            n_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
+            major_ticks = np.linspace(major_tick_min, major_tick_max, n_major_ticks)
             integers = True
             for t in major_ticks:
                 if not t.is_integer():
@@ -1144,8 +1144,8 @@ def plot_dataframe(
             # Round range to nearest multiple of 'minor_tick_freq'.
             minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
             minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
-            num_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
-            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, num_minor_ticks)
+            n_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
+            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, n_minor_ticks)
             axs[i].set_yticks(minor_ticks, minor=True)
 
         # Set y grid lines.
@@ -1169,10 +1169,10 @@ def plot_dataframe(
         
         # Set legend location and fix multiple series problem.
         if hue is not None:
-            num_hues = len(hue_order)
+            n_hues = len(hue_order)
             handles, labels = axs[i].get_legend_handles_labels()
-            handles = handles[:num_hues]
-            labels = labels[:num_hues]
+            handles = handles[:n_hues]
+            labels = labels[:n_hues]
             axs[i].legend(handles, labels, fontsize=fontsize, loc=legend_loc)
         else:
             axs[i].legend(fontsize=fontsize, loc=legend_loc)
@@ -1391,9 +1391,9 @@ def plot_dataframe_v2(
     # Create subplots if required.
     if n_col is None:
         n_col = len(x_vals)
-    num_rows = int(np.ceil(len(x_vals) / n_col))
-    if num_rows > 1:
-        _, axs = plt.subplots(num_rows, 1, figsize=(figsize[0], num_rows * figsize[1]), sharey=share_y)
+    n_rows = int(np.ceil(len(x_vals) / n_col))
+    if n_rows > 1:
+        _, axs = plt.subplots(n_rows, 1, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
     else:
         plt.figure(figsize=figsize)
         axs = [plt.gca()]
@@ -1413,7 +1413,7 @@ def plot_dataframe_v2(
         # hue_palette = sns.color_palette('tab10')
 
     # Plot rows.
-    for i in range(num_rows):
+    for i in range(n_rows):
         # Split data.
         row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
         row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
@@ -1608,8 +1608,8 @@ def plot_dataframe_v2(
             # Round range to nearest multiple of 'major_tick_freq'.
             major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
             major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
-            num_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
-            major_ticks = np.linspace(major_tick_min, major_tick_max, num_major_ticks)
+            n_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
+            major_ticks = np.linspace(major_tick_min, major_tick_max, n_major_ticks)
             major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
             axs[i].set_yticks(major_ticks)
             axs[i].set_yticklabels(major_tick_labels)
@@ -1626,8 +1626,8 @@ def plot_dataframe_v2(
             # Round range to nearest multiple of 'minor_tick_freq'.
             minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
             minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
-            num_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
-            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, num_minor_ticks)
+            n_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
+            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, n_minor_ticks)
             axs[i].set_yticks(minor_ticks, minor=True)
 
         # Set y grid lines.

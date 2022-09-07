@@ -124,7 +124,7 @@ class DICOMDataset(Dataset):
 
     def list_regions(
         self,
-        num_pats: Union[str, int] = 'all',
+        n_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         trimmed: bool = False,
         use_mapping: bool = True) -> pd.DataFrame:
@@ -140,7 +140,7 @@ class DICOMDataset(Dataset):
 
         # Filter patients.
         pats = list(filter(self._filter_patient_by_pat_ids(pat_ids), pats))
-        pats = list(filter(self._filter_patient_by_num_pats(num_pats), pats))
+        pats = list(filter(self._filter_patient_by_n_pats(n_pats), pats))
 
         # Add patient regions.
         logging.info(f"Loading regions for dataset '{self._name}'..")
@@ -187,18 +187,18 @@ class DICOMDataset(Dataset):
         else:
             return None
 
-    def _filter_patient_by_num_pats(
+    def _filter_patient_by_n_pats(
         self,
-        num_pats: int) -> Callable[[str], bool]:
+        n_pats: int) -> Callable[[str], bool]:
         def fn(id):
-            if num_pats == 'all' or fn.num_included < num_pats:
-                fn.num_included += 1
+            if n_pats == 'all' or fn.n_included < n_pats:
+                fn.n_included += 1
                 return True
             else:
                 return False
 
         # Assign state to the function.
-        fn.num_included = 0
+        fn.n_included = 0
         return fn
 
     def _filter_patient_by_pat_ids(

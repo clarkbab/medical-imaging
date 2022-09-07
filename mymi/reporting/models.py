@@ -12,10 +12,10 @@ def create_model_manifest() -> None:
     datasets = ('PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC')
     model_types = ['localiser', 'segmenter']
     model_subtypes = ['clinical', 'public', 'transfer']
-    num_folds = 5
-    num_trains = (5, 10, 20, 50, 100, 200, None)
+    n_folds = 5
+    n_trains = (5, 10, 20, 50, 100, 200, None)
     regions = RegionNames
-    test_folds = tuple(range(num_folds))
+    test_folds = tuple(range(n_folds))
 
     cols = {
         'name': str,
@@ -41,14 +41,14 @@ def create_model_manifest() -> None:
                         df = append_row(df, data)
                 elif model_type == 'segmenter':
                     for test_fold in test_folds:
-                        for num_train in num_trains:
+                        for n_train in n_trains:
                             # Check model exists.
-                            tl, vl, _ = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
-                            num_train_max = len(tl) + len(vl)
-                            if num_train != None and num_train > num_train_max:
+                            tl, vl, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
+                            n_train_max = len(tl) + len(vl)
+                            if n_train != None and n_train > n_train_max:
                                 continue
 
-                            run = f'{model_subtype}-fold-{test_fold}-samples-{num_train}'
+                            run = f'{model_subtype}-fold-{test_fold}-samples-{n_train}'
                             ckpts = list_checkpoints(name, run)
                             for ckpt in ckpts:
                                 data = {

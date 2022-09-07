@@ -10,14 +10,14 @@ from mymi.utils import append_row, encode
 def create_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', num_folds '{num_folds}', test_fold '{test_fold}'.")
+    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', n_folds '{n_folds}', test_fold '{test_fold}'.")
 
     # Create loaders.
-    df = Loader.manifest(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    df = Loader.manifest(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Save manifest.
     config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
@@ -25,6 +25,6 @@ def create_loader_manifest(
 def load_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> pd.DataFrame:
     return config.load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')

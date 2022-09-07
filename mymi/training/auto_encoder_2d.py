@@ -20,10 +20,10 @@ def train_auto_encoder_2d(
     datasets: Union[str, List[str]],
     bottleneck: int,
     loss: str = 'dice',
-    num_epochs: int = 200,
-    num_gpus: int = 1,
-    num_nodes: int = 1,
-    num_workers: int = 1,
+    n_epochs: int = 200,
+    n_gpus: int = 1,
+    n_nodes: int = 1,
+    n_workers: int = 1,
     resume: bool = False,
     resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
@@ -56,9 +56,9 @@ def train_auto_encoder_2d(
         default_pad_value='minimum')
 
     # Create data loaders.
-    precision = 'half' if num_gpus > 0 else 'single'
-    train_loader = OtherLoader.build(train_parts, num_workers=num_workers, precision=precision, transform=transform)
-    val_loader = OtherLoader.build(val_parts, num_workers=num_workers, precision=precision, shuffle=False)
+    precision = 'half' if n_gpus > 0 else 'single'
+    train_loader = OtherLoader.build(train_parts, num_workers=n_workers, precision=precision, transform=transform)
+    val_loader = OtherLoader.build(val_parts, num_workers=n_workers, precision=precision, shuffle=False)
 
     # Get loss function.
     if loss == 'dice':
@@ -109,8 +109,8 @@ def train_auto_encoder_2d(
         opt_kwargs['resume_from_checkpoint'] = check_path
     
     # Perform training.
-    if num_gpus > 0:
-        gpus = list(range(num_gpus))
+    if n_gpus > 0:
+        gpus = list(range(n_gpus))
         precision = 16
     else:
         gpus = None
@@ -121,9 +121,9 @@ def train_auto_encoder_2d(
         callbacks=callbacks,
         gpus=gpus,
         logger=logger,
-        max_epochs=num_epochs,
-        num_nodes=num_nodes,
-        num_sanity_val_steps=0,
+        max_epochs=n_epochs,
+        n_nodes=n_nodes,
+        n_sanity_val_steps=0,
         plugins=DDPPlugin(find_unused_parameters=False),
         precision=precision,
         **opt_kwargs)

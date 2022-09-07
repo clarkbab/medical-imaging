@@ -3,12 +3,12 @@
 DATASETS="['PMCC-HN-TEST-SEG','PMCC-HN-TRAIN-SEG']"
 REGION="BrainStem"
 MODEL_NAME="segmenter-$REGION"
-NUM_EPOCHS=5
-NUM_FOLDS=5
-NUM_GPUS=1
-NUM_NODES=1
-NUM_WORKERS=4
-NUM_TRAIN=5
+n_EPOCHS=5
+N_FOLDS=5
+n_GPUS=1
+n_NODES=1
+n_WORKERS=4
+N_TRAIN=5
 PRETRAINED_MODEL=None
 RESUME=False
 RESUME_CHECKPOINT=None
@@ -20,12 +20,12 @@ USE_LOGGER=True
 python $SCRIPT_DIR/train/segmenter/segmenter \
     --datasets $DATASETS \
     --model_name $MODEL_NAME \
-    --num_epochs $NUM_EPOCHS \
-    --num_folds $NUM_FOLDS \
-    --num_gpus $NUM_GPUS \
-    --num_nodes $NUM_NODES \
-    --num_train $NUM_TRAIN \
-    --num_workers $NUM_WORKERS \
+    --n_epochs $n_EPOCHS \
+    --n_folds $N_FOLDS \
+    --n_gpus $n_GPUS \
+    --n_nodes $n_NODES \
+    --n_train $N_TRAIN \
+    --n_workers $n_WORKERS \
     --pretrained_model $PRETRAINED_MODEL \
     --use_logger $USE_LOGGER \
     --region $REGION \

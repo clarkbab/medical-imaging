@@ -38,22 +38,22 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 # MODEL='clinical'
-NUM_FOLDS=5
-# NUM_TRAIN=5
+N_FOLDS=5
+# N_TRAIN=5
 SEGMENTER_SPACING="(1,1,2)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 if [ "$MODEL" = "public" ]; then
     run_name="public-1gpu-150epochs"
 else
-    run_name="$MODEL-fold-$TEST_FOLD-samples-$NUM_TRAIN"
+    run_name="$MODEL-fold-$TEST_FOLD-samples-$N_TRAIN"
 fi
 SEGMENTER="('segmenter-$REGION','$run_name','BEST')"
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict_from_loader.py \
     --datasets $DATASETS \
     --localiser $LOCALISER \
-    --num_folds $NUM_FOLDS \
+    --n_folds $N_FOLDS \
     --region $REGION \
     --segmenter $SEGMENTER \
     --seg_spacing $SEGMENTER_SPACING \

@@ -214,7 +214,7 @@ def get_object_summary(
     samp = set.partition(partition).sample(sample)
     spacing = eval(set.params.spacing[0])
     label = samp.label(regions=region)[region]
-    objs, num_objs = label_objects(label, structure=np.ones((3, 3, 3)))
+    objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     
     cols = {
@@ -227,7 +227,7 @@ def get_object_summary(
     df = pd.DataFrame(columns=cols.keys())
     
     tot_voxels = label.sum()
-    for i in range(num_objs):
+    for i in range(n_objs):
         obj = objs[:, :, :, i]
         data = {}
 
@@ -242,10 +242,10 @@ def get_object_summary(
 
         # Add volume.
         vox_volume = spacing[0] * spacing[1] * spacing[2]
-        num_voxels = obj.sum()
-        volume = num_voxels * vox_volume
-        data['volume-vox'] = num_voxels
-        data['volume-p'] = num_voxels / tot_voxels
+        n_voxels = obj.sum()
+        volume = n_voxels * vox_volume
+        data['volume-vox'] = n_voxels
+        data['volume-p'] = n_voxels / tot_voxels
         data['volume-mm3'] = volume
 
         df = df.append(data, ignore_index=True)
@@ -342,11 +342,11 @@ def create_ct_figures(
 def create_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', num_folds '{num_folds}', test_fold '{test_fold}'.")
+    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', n_folds '{n_folds}', test_fold '{test_fold}'.")
 
     # Create empty dataframe.
     cols = {
@@ -360,7 +360,7 @@ def create_loader_manifest(
 
     # Create test loader.
     # Create loaders.
-    tl, vl, tsl = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    tl, vl, tsl = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
     loaders = ['train', 'validate', 'test']
 
     # Get values for this region.
@@ -384,6 +384,6 @@ def create_loader_manifest(
 def load_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> pd.DataFrame:
     return config.load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')

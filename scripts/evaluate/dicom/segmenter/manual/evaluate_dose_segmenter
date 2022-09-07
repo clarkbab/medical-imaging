@@ -27,9 +27,9 @@ REGIONS = (
     'Submandibular_L',  # 15
     'Submandibular_R'   # 16
 )
-NUM_FOLDS = 5
+N_FOLDS = 5
 TEST_FOLDS = (0, 1, 2, 3, 4)
-NUM_TRAINS = (5, 10, 20, 50, 100, None)
+N_TRAINS = (5, 10, 20, 50, 100, None)
 MODELS = ['clinical', 'public', 'transfer']
 USE_MANIFEST = True
 
@@ -40,9 +40,9 @@ for test_fold in TEST_FOLDS:
         for model in MODELS:
             if model == 'public':
                 segmenter = (f'segmenter-{region}', 'public-1gpu-150epochs', 'BEST')
-                create_dose_evaluation_from_loader(DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold)
+                create_dose_evaluation_from_loader(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold)
             else:
-                for num_train in NUM_TRAINS:
-                    segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{num_train}', 'BEST')
-                    create_dose_evaluation_from_loader(DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold)
+                for n_train in N_TRAINS:
+                    segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{n_train}', 'BEST')
+                    create_dose_evaluation_from_loader(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold)
             

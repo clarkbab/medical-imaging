@@ -18,8 +18,8 @@ for_real = True
 datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
 regions = RegionNames
 models = ['clinical', 'public', 'transfer']
-num_folds = 5
-num_trains = [5, 10, 20, 50, 100, 200, None]
+n_folds = 5
+n_trains = [5, 10, 20, 50, 100, 200, None]
 test_folds = list(range(5))
 
 # Load localiser checkpoints - localiser is shared by segmenter stage models.
@@ -31,8 +31,8 @@ for region in regions:
 for region in regions:
     for test_fold in test_folds:
         # Get test cases per dataset.
-        tl, vl, _ = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
-        num_train_max = len(tl) + len(vl)
+        tl, vl, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
+        n_train_max = len(tl) + len(vl)
 
         # Remove public model run evaluations.
         if 'public' in models:
@@ -50,13 +50,13 @@ for region in regions:
         
         # Remove evaluations for other models.
         for model in (m for m in models if m != 'public'):
-            for num_train in num_trains:
+            for n_train in n_trains:
                 # Check that number of training cases are available.
-                if num_train is not None and num_train > num_train_max:
+                if n_train is not None and n_train > n_train_max:
                     continue
 
                 # Get model run.
-                run = f'{model}-fold-{test_fold}-samples-{num_train}'
+                run = f'{model}-fold-{test_fold}-samples-{n_train}'
                 print(f'region:{region}, model:{run}')
 
                 # Delete evaluation.

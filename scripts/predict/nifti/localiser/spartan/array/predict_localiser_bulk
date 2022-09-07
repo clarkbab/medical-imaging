@@ -5,10 +5,10 @@ import subprocess
 regions = '0-2,4-10,12-16'
 script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser_pmcc_hn_public'
 test_folds = [0]
-num_trains = [5, 10, 20, 50, 100, 200, 'None']
+n_trains = [5, 10, 20, 50, 100, 200, 'None']
 
 for test_fold in test_folds:
-    for num_train in num_trains:
+    for n_train in n_trains:
         # Create slurm command.
         export = f'ALL,TEST_FOLD={test_fold}'
         command = f'sbatch --array={regions} --export={export} {script}' 

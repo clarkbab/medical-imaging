@@ -133,24 +133,24 @@ def _get_outlier_cols_func(
                 outlier = True
                 outlier_dir = 'low'
                 if col_stats['iqr'] == 0:
-                    outlier_num_iqr = np.inf
+                    outlier_n_iqr = np.inf
                 else:
-                    outlier_num_iqr = (col_stats['q1'] - row[column]) / col_stats['iqr']
+                    outlier_n_iqr = (col_stats['q1'] - row[column]) / col_stats['iqr']
             elif row[column] > col_stats['high']:
                 outlier = True
                 outlier_dir = 'high'
                 if col_stats['iqr'] == 0:
-                    outlier_num_iqr = np.inf
+                    outlier_n_iqr = np.inf
                 else:
-                    outlier_num_iqr = (row[column] - col_stats['q3']) / col_stats['iqr']
+                    outlier_n_iqr = (row[column] - col_stats['q3']) / col_stats['iqr']
             else:
                 outlier = False
                 outlier_dir = ''
-                outlier_num_iqr = np.nan
+                outlier_n_iqr = np.nan
 
             data[f'{column}-out'] = outlier
             data[f'{column}-out-dir'] = outlier_dir
-            data[f'{column}-out-num-iqr'] = outlier_num_iqr
+            data[f'{column}-out-num-iqr'] = outlier_n_iqr
 
         return data
     return _outlier_cols
@@ -292,14 +292,14 @@ def create_prediction_figures(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    num_folds: Optional[int] = None,
+    n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     logging.info(f"Creating prediction figures for datasets '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, num_folds=num_folds, test_fold=test_fold)
+    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Set PDF margins.
     img_t_margin = 35
@@ -432,8 +432,8 @@ def create_region_figures(
                 'extent-out-dir': f'extent-mm-{axis}-out-dir',
                 'extent-out-num-iqr': f'extent-mm-{axis}-out-num-iqr'
             }
-            num_iqr = pat_info[colnames['extent-out-num-iqr']]
-            format = '.2f' if num_iqr and num_iqr != np.nan else ''
+            n_iqr = pat_info[colnames['extent-out-num-iqr']]
+            format = '.2f' if n_iqr and n_iqr != np.nan else ''
             table_data.append((
                 axis,
                 f"{pat_info[colnames['extent']]:.2f}",
@@ -545,7 +545,7 @@ def get_object_summary(
     pat = ds.get(dataset, 'nifti').patient(patient)
     spacing = pat.ct_spacing
     label = pat.region_data(regions=region)[region]
-    objs, num_objs = label_objects(label, structure=np.ones((3, 3, 3)))
+    objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     
     cols = {
@@ -559,7 +559,7 @@ def get_object_summary(
     df = pd.DataFrame(columns=cols.keys())
     
     tot_voxels = label.sum()
-    for i in range(num_objs):
+    for i in range(n_objs):
         obj = objs[:, :, :, i]
         data = {}
 
@@ -576,10 +576,10 @@ def get_object_summary(
 
         # Add volume.
         vox_volume = spacing[0] * spacing[1] * spacing[2]
-        num_voxels = obj.sum()
-        volume = num_voxels * vox_volume
-        data['volume-vox'] = num_voxels
-        data['volume-p-total'] = num_voxels / tot_voxels
+        n_voxels = obj.sum()
+        volume = n_voxels * vox_volume
+        data['volume-vox'] = n_voxels
+        data['volume-p-total'] = n_voxels / tot_voxels
         data['volume-mm3'] = volume
         df = append_row(df, data)
 

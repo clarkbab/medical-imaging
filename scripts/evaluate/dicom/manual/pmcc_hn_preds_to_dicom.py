@@ -27,11 +27,11 @@ REGIONS = (
     'Submandibular_L',  # 15
     'Submandibular_R'   # 16
 )
-NUM_FOLDS = 5
+N_FOLDS = 5
 TEST_FOLDS = (0, 1, 2, 3, 4)
 TEST_FOLDS = (0,)
-NUM_TRAINS = (5, 10, 20, 50, 100, None)
-NUM_TRAINS = (None,)
+N_TRAINS = (5, 10, 20, 50, 100, None)
+N_TRAINS = (None,)
 MODELS = ('clinical', 'public', 'transfer')
 MODELS = ('clinical', 'public')
 USE_LOADER_MANIFEST = True
@@ -44,8 +44,8 @@ for test_fold in TEST_FOLDS:
         for model in MODELS:
             if model == 'public':
                 segmenter = (f'segmenter-{region}', 'public-1gpu-150epochs', 'BEST')
-                (DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
+                (DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
             else:
-                for num_train in NUM_TRAINS:
-                    segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{num_train}', 'BEST')
-                    convert_segmenter_predictions_to_dicom_from_loader(DATASETS, region, localiser, segmenter, num_folds=NUM_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
+                for n_train in N_TRAINS:
+                    segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{n_train}', 'BEST')
+                    convert_segmenter_predictions_to_dicom_from_loader(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)

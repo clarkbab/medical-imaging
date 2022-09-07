@@ -17,16 +17,16 @@ echo $version
 
 DATASETS=['CIRCLES']
 MODEL_NAME="circle-segmenter"
-NUM_EPOCHS=500
-NUM_GPUS=1
-NUM_NODES=1
-NUM_WORKERS=4
-NUM_SUBSET=None
+n_EPOCHS=500
+n_GPUS=1
+n_NODES=1
+n_WORKERS=4
+n_SUBSET=None
 RESUME=False
 RESUME_CHECKPOINT=None
 RUN_NAME="500epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/segmenter_2d --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --bottleneck $BOTTLENECK --num_epochs $NUM_EPOCHS \
-    --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_subset $NUM_SUBSET --num_workers $NUM_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER
+python $SCRIPT_DIR/train/segmenter_2d --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --bottleneck $BOTTLENECK --n_epochs $n_EPOCHS \
+    --n_gpus $n_GPUS --n_nodes $n_NODES --n_subset $n_SUBSET --n_workers $n_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER

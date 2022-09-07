@@ -21,12 +21,12 @@ def train_localiser(
     datasets: Union[str, List[str]],
     region: str,
     loss: str = 'dice',
-    num_epochs: int = 200,
-    num_folds: Optional[int] = None,
-    num_gpus: int = 1,
-    num_nodes: int = 1,
-    num_train: Optional[int] = None,
-    num_workers: int = 1,
+    n_epochs: int = 200,
+    n_folds: Optional[int] = None,
+    n_gpus: int = 1,
+    n_nodes: int = 1,
+    n_train: Optional[int] = None,
+    n_workers: int = 1,
     pretrained: Optional[Tuple[str, str, str]] = None,
     p_val: float = 0.2,
     resume: bool = False,
@@ -36,7 +36,7 @@ def train_localiser(
     slurm_array_task_id: Optional[str] = None,
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' using '{num_folds}' folds with test fold '{test_fold}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' using '{n_folds}' folds with test fold '{test_fold}'.")
 
     # Load datasets.
     if type(datasets) == str:
@@ -61,7 +61,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, num_folds=num_folds, num_train=num_train, num_workers=num_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, num_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -120,11 +120,11 @@ def train_localiser(
     trainer = Trainer(
         # accelerator='ddp',
         callbacks=callbacks,
-        gpus=list(range(num_gpus)),
+        gpus=list(range(n_gpus)),
         logger=logger,
-        max_epochs=num_epochs,
-        num_nodes=num_nodes,
-        num_sanity_val_steps=0,
+        max_epochs=n_epochs,
+        n_nodes=n_nodes,
+        n_sanity_val_steps=0,
         # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16,
         **opt_kwargs)

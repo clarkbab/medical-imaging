@@ -39,8 +39,8 @@ REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 LOCALISER="('localiser-$REGION','public-1gpu-150epochs','BEST')"
 LOCALISER_SIZE="(128,128,150)"
 LOCALISER_SPACING="(4,4,4)"
-NUM_FOLDS=5
-NUM_TRAIN=5
+N_FOLDS=5
+N_TRAIN=5
 SEGMENTER_SPACING="(1,1,2)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLDS=(
@@ -53,7 +53,7 @@ TEST_FOLDS=(
 
 for i in "${!TEST_FOLDS[@]}"; do
     test_fold=${TEST_FOLDS[i]}
-    segmenter="('segmenter-$REGION','transfer-fold-$test_fold-samples-$NUM_TRAIN','BEST')"
+    segmenter="('segmenter-$REGION','transfer-fold-$test_fold-samples-$N_TRAIN','BEST')"
 
     python $SCRIPT_DIR/predict/nifti/two-stage/create_predictions_from_loader \
         --datasets $DATASETS \
@@ -62,8 +62,8 @@ for i in "${!TEST_FOLDS[@]}"; do
         --segmenter $segmenter \
         --loc_size $LOCALISER_SIZE \
         --loc_spacing $LOCALISER_SPACING \
-        --num_folds $NUM_FOLDS \
-        --num_train $NUM_TRAIN \
+        --n_folds $N_FOLDS \
+        --n_train $N_TRAIN \
         --seg_spacing $SEGMENTER_SPACING \
         --test_folds $test_fold
 done

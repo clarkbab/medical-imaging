@@ -3,13 +3,13 @@
 REGION="Lens_L"
 DATASETS="['HN1-$REGION-LOC','HNPCT-$REGION-LOC','HNSCC-$REGION-LOC','OPC-$REGION-LOC']"
 MODEL_NAME="localiser-$REGION"
-NUM_EPOCHS=20
-NUM_FOLDS=5
-NUM_GPUS=1
-NUM_NODES=1
-NUM_WORKERS=4
-NUM_SUBSET=None
-NUM_TRAIN=None
+n_EPOCHS=20
+N_FOLDS=5
+n_GPUS=1
+n_NODES=1
+n_WORKERS=4
+n_SUBSET=None
+N_TRAIN=None
 RESUME=False
 RESUME_CHECKPOINT=None
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
@@ -17,6 +17,6 @@ USE_LOGGER=False
 TEST_FOLD=0
 RUN_NAME="test-k-fold-fold$TEST_FOLD"
 
-python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --num_epochs $NUM_EPOCHS --num_folds $NUM_FOLDS \
-    --num_gpus $NUM_GPUS --num_nodes $NUM_NODES --num_subset $NUM_SUBSET --num_train $NUM_TRAIN --num_workers $NUM_WORKERS --region $REGION --resume $RESUME \
+python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --n_epochs $n_EPOCHS --n_folds $N_FOLDS \
+    --n_gpus $n_GPUS --n_nodes $n_NODES --n_subset $n_SUBSET --n_train $N_TRAIN --n_workers $n_WORKERS --region $REGION --resume $RESUME \
     --resume_checkpoint $RESUME_CHECKPOINT --use_logger $USE_LOGGER --test_fold $TEST_FOLD

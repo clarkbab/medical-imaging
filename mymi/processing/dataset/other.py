@@ -30,14 +30,14 @@ def convert_to_training(
 
     # Partition patients - rounding assigns more patients to the test set,
     # unless p_test=0, when these are assigned to the validation set.
-    num_train = int(np.floor(p_train * len(samples)))
+    n_train = int(np.floor(p_train * len(samples)))
     if p_test == 0:
-        num_validation = len(samples) - num_train
+        n_validation = len(samples) - n_train
     else:
-        num_validation = int(np.floor(p_val * len(samples)))
-    train_samples = samples[:num_train]
-    validation_samples = samples[num_train:(num_train + num_validation)]
-    test_samples = samples[(num_train + num_validation):]
+        n_validation = int(np.floor(p_val * len(samples)))
+    train_samples = samples[:n_train]
+    validation_samples = samples[n_train:(n_train + n_validation)]
+    test_samples = samples[(n_train + n_validation):]
     logging.info(f"Num patients per partition: {len(train_samples)}/{len(validation_samples)}/{len(test_samples)} for train/validation/test.")
 
     # Write data to each partition.

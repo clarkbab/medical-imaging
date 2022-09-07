@@ -4,7 +4,7 @@ parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")"; cd ..; pwd -P )
 cd $parent_path
 
 DATASET="CIRCLES"
-NUM_SAMPLES=500
+n_SAMPLES=500
 SIZE="(128,128)"
 
-python generate_circles --dataset $DATASET --size $SIZE --num_samples $NUM_SAMPLES
+python generate_circles --dataset $DATASET --size $SIZE --n_samples $n_SAMPLES
