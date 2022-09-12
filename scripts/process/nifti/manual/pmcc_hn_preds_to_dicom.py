@@ -16,11 +16,11 @@ REGIONS = (
     # 'Cochlea_L',        # 4
     # 'Cochlea_R',        # 5
     # 'Lens_L',           # 6
-    'Lens_R',           # 7
-    'Mandible',         # 8
-    'OpticNerve_L',     # 9
-    'OpticNerve_R',     # 10
-    'OralCavity',       # 11
+    # 'Lens_R',           # 7
+    # 'Mandible',         # 8
+    # 'OpticNerve_L',     # 9
+    # 'OpticNerve_R',     # 10
+    # 'OralCavity',       # 11
     'Parotid_L',        # 12
     'Parotid_R',        # 13
     'SpinalCord',       # 14
