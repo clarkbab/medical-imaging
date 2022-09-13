@@ -1,22 +1,53 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from mymi.regions.tolerances import get_region_tolerance
 import numpy as np
 import os
 import pandas as pd
 from scipy.optimize import least_squares
 import seaborn as sns
 from tqdm import tqdm
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Literal, Optional, Tuple, Union
 
-from .p_init import get_p_init_b
 from mymi import config
 from mymi.evaluation.dataset.nifti import load_segmenter_evaluation_from_loader
 from mymi.loaders import Loader, get_loader_n_train
 from mymi import logging
+from mymi.regions import RegionNames
 
+DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
+DEFAULT_METRIC_LEGEND_LOCS = {
+    'dice': 'lower right',
+    'hd': 'upper right',
+    'hd-95': 'upper right',
+    'msd': 'upper right'
+}
+DEFAULT_METRIC_LABELS = {
+    'dice': 'DSC',
+    'hd': 'HD [mm]',
+    'hd-95': '95HD [mm]',
+    'msd': 'MSD [mm]',
+}
+DEFAULT_METRIC_Y_LIMS = {
+    'dice': (0, 1),
+    'hd': (0, None),
+    'hd-95': (0, None),
+    'msd': (0, None)
+}
+for region in RegionNames:
+    tol = get_region_tolerance(region)
+    DEFAULT_METRIC_LEGEND_LOCS[f'apl-mm-tol-{tol}'] = 'upper right'
+    DEFAULT_METRIC_LEGEND_LOCS[f'dm-surface-dice-tol-{tol}'] = 'lower right'
+    DEFAULT_METRIC_LABELS[f'apl-mm-tol-{tol}'] = fr'APL, $\tau$={tol}mm'
+    DEFAULT_METRIC_LABELS[f'dm-surface-dice-tol-{tol}'] = fr'Surface DSC, $\tau$={tol}mm'
+    DEFAULT_METRIC_Y_LIMS[f'apl-mm-tol-{tol}'] = (0, None)
+    DEFAULT_METRIC_Y_LIMS[f'dm-surface-dice-tol-{tol}'] = (0, 1)
+
 DEFAULT_N_SAMPLES = int(1e4)
+LOG_SCALE_X_UPPER_LIMS = [100, 150, 200, 300, 400, 600, 800]
+LOG_SCALE_X_TICK_LABELS = [5, 10, 20, 50, 100, 200, 400, 800]
 
 def __bootstrap_n_train_sample(x, n_samples, seed=42):
     np.random.seed(seed)
@@ -26,11 +57,12 @@ def create_bootstrap_predictions(
     region: str,
     model: str,
     metric: str, 
+    stat: str,
     samples: np.ndarray,
     n_trains: Union[int, List[int]],
     raise_error: bool = True,
     weights: bool = False) -> None:
-    logging.info(f"Creating bootstrap predictions for metric '{metric}', model '{model}', n_trains '{n_trains}', region '{region}'...")
+    logging.info(f"Creating bootstrap predictions for metric '{metric}', model '{model}', stat '{stat}', n_trains '{n_trains}', region '{region}'...")
 
     # Get placeholders.
     n_preds = np.max(n_trains) + 1
@@ -57,8 +89,7 @@ def create_bootstrap_predictions(
             
         # Fit curve.
         try:
-            # b = get_p_init_b(region, model, metric)
-            p_init = get_p_init(x, y)
+            p_init = get_p_init_v2(metric)
             p_opt, _, _ = fit_curve(p_init, x, y, weights=w)
         except ValueError as e:
             if raise_error:
@@ -79,7 +110,7 @@ def create_bootstrap_predictions(
         preds[:, :5] = np.nan
         
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
@@ -90,18 +121,19 @@ def create_bootstrap_samples(
     region: str, 
     model: str, 
     metric: str, 
+    stat: str,
     data: pd.DataFrame, 
     n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[np.ndarray, List[int]]:
-    logging.info(f"Creating bootstrap samples for metric '{metric}', model '{model}', region '{region}', n_samples '{n_samples}'...")
+    logging.info(f"Creating bootstrap samples for region '{region}', model '{model}', metric '{metric}', stat '{stat}', n_samples '{n_samples}'...")
 
     # Bootstrap each 'n_train=...' sample to create a 3D array of 'n_samples' samples for each 'n_train'.
     boot_df = data[(data.metric == metric) & (data['model-type'] == model) & (data.region == region)]
-    boot_df = boot_df.pivot(index=['region', 'model-type', 'n-train', 'metric'], columns='fold', values='mean-value')
+    boot_df = boot_df.pivot(index=['region', 'model-type', 'n-train', 'metric'], columns='fold', values='value')
     boot_data = np.moveaxis(np.apply_along_axis(lambda x: __bootstrap_n_train_sample(x, n_samples), arr=boot_df.values, axis=1), 2, 0)
     n_trains = boot_df.reset_index()['n-train'].values
     
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
@@ -111,32 +143,53 @@ def create_bootstrap_samples(
     return boot_data, list(n_trains)
 
 def create_bootstrap_samples_and_predictions(
-    datasets: Tuple[str],
+    datasets: List[str],
     region: str,
     models: Union[str, List[str]],
     metrics: Union[str, List[str]],
+    stats: Union[str, List[str]],
     n_trains: Union[Optional[int], List[Optional[int]]] = [5, 10, 20, 50, 100, 200, None],
     n_folds: int = 5,
     n_samples: int = DEFAULT_N_SAMPLES,
     test_folds: Union[int, List[int]] = list(range(5))) -> None:
-    metrics = [metrics] if metrics is None or type(metrics) == str else metrics
-    models = [models] if models is None or type(models) == str else models
-    n_trains = [n_trains] if n_trains is None or type(n_trains) == int else n_trains
-    test_folds = [test_folds] if test_folds is None or type(test_folds) == int else test_folds
+    metrics = [metrics] if type(metrics) == str else metrics
+    models = [models] if type(models) == str else models
+    stats = [stats] if type(stats) == str else stats
+    test_folds = [test_folds] if type(test_folds) == int else test_folds
 
     # Load data.
-    data = load_mean_evaluation(datasets, region, models, n_trains, n_folds=n_folds, test_folds=test_folds)
+    _, mean_df, min_df, max_df = load_evaluation(datasets, region, models, n_trains, n_folds=n_folds, test_folds=test_folds)
 
     # Create samples and prediction from curve fitting.
     for metric in metrics:
         for model in models:
-            samples, n_trains = create_bootstrap_samples(region, model, metric, data, n_samples=n_samples)
-            create_bootstrap_predictions(region, model, metric, samples, n_trains)
+            if 'mean' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model, metric, 'mean', mean_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model, metric, 'mean', samples, n_trains)
+            if 'min' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model, metric, 'min', min_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model, metric, 'min', samples, n_trains)
+            if 'max' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model, metric, 'max', max_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model, metric, 'max', samples, n_trains)
 
 def f(
     x: np.ndarray,
     params: Tuple[float]) -> Union[float, List[float]]:
     return -params[0] / (x - params[1]) + params[2]
+
+def get_p_init_v2(metric: str) -> Tuple[float, float, float]:
+    if 'apl-mm-tol-' in metric:
+        return (-1, -1, 1)
+    if 'dm-surface-dice-tol-' in metric:
+        return (1, -1, 1)
+    metric_p_inits = {
+        'dice': (1, -1, 1),
+        'hd': (-1, -1, 1),
+        'hd-95': (-1, -1, 1),
+        'msd': (-1, -1, 1)
+    }
+    return metric_p_inits[metric]
 
 def get_p_init(
     x: List[float],
@@ -203,12 +256,34 @@ def fit_curve_to_points(
     
     return a, b, c
 
+def get_bootstrap_statistic(
+    region: str,
+    model: str,
+    metric: str, 
+    stat: str,
+    n_train: int,
+    n_samples: int = DEFAULT_N_SAMPLES):
+    # Get data for 'n_train'.
+    data, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+    data_n_train = data[:, n_train]
+
+    # Calculate statistic.
+    if stat == 'mean':
+        value = data_n_train.mean()
+    elif stat == 'min':
+        value = data_n_train.min()
+    elif stat == 'max':
+        value = data_n_train.max()
+    
+    return value
+
 def load_bootstrap_predictions(
     region: str,
     model: str,
     metric: str, 
+    stat: str,
     n_samples: int = DEFAULT_N_SAMPLES):
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
@@ -219,8 +294,9 @@ def load_bootstrap_samples(
     region: str,
     model: str,
     metric: str,
+    stat: str, 
     n_samples: int = DEFAULT_N_SAMPLES):
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
@@ -273,7 +349,6 @@ def load_evaluation(
 
     # Add num-train (same for each fold).
     df = df.assign(**{ 'n-train': df['model-type'].str.split('-').apply(lambda x: x[-1]) })
-    none_models = df[df['model-type'].str.contains('-None')]['model-type'].unique()
     none_nums = {}
     for region in regions:
         tl, vl, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=0)
@@ -293,83 +368,96 @@ def load_evaluation(
     # count_df = df.groupby(['fold', 'region', 'model-type', 'metric'])['patient-id'].count().reset_index()
 
     # Get mean values.
-    mean_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].mean().rename('mean-value').reset_index()
+    mean_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].mean().reset_index()
 
-    return df, mean_df
+    # Get min values.
+    min_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.05).reset_index()
+    max_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.95).reset_index()
+
+    return df, mean_df, min_df, max_df
 
 def megaplot(
     regions: Union[str, List[str]],
     models: Union[str, List[str]],
-    metrics: Union[str, List[str]],
+    metrics: Union[str, List[str], np.ndarray],
+    stat: str,
     df: pd.DataFrame,
+    fontsize: float = DEFAULT_FONT_SIZE,
+    inner_wspace: float = 0.05,
+    legend_locs: Optional[Union[str, List[str]]] = None,
+    model_labels: Optional[Union[str, List[str]]] = None,
+    outer_hspace: float = 0.2,
+    outer_wspace: float = 0.2,
     savepath: Optional[str] = None,
     y_lim: bool = True) -> None:
-    metrics = [metrics] if type(metrics) == str else metrics
+    if type(metrics) == str:
+        metrics = np.repeat([[metrics]], len(regions), axis=0)
+    elif type(metrics) == list:
+        metrics = np.repeat([metrics], len(regions), axis=0)
+    if legend_locs is not None:
+        if type(legend_locs) == str:
+            legend_locs = [legend_locs]
+        assert len(legend_locs) == metrics.shape[1]
     models = [models] if type(models) == str else models
+    if model_labels is not None:
+        if type(model_labels) == str:
+            model_labels = [model_labels]
+        assert len(model_labels) == len(models)
     regions = [regions] if type(regions) == str else regions
 
     # Lookup tables.
-    metric_labels = {
-        'apl-mm-tol-1': r'APL, $\tau$=1mm',
-        'dice': 'DSC',
-        'dm-surface-dice-tol-1': r'Surface DSC, $\tau$=1mm',
-        'hd-95': '95HD [mm]',
-        'msd': 'MSD [mm]',
-    }
-    metric_legend_locs = {
-        'apl-mm-tol-1': 'upper right',
-        'dice': 'lower right',
-        'dm-surface-dice-tol-1': 'lower right',
-        'hd-95': 'upper right',
-        'msd': 'upper right'
-    }
-    metric_y_lims = {
-        'apl-mm-tol-1': (0, None),
-        'dice': (0, 1),
-        'dm-surface-dice-tol-1': (0, 1),
-        'hd-95': (0, None),
-        'msd': (0, None)
-    }
+    # matplotlib.rc('text', usetex=True)
+    # matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
     # Create nested subplots.
-    fig = plt.figure(constrained_layout=False, figsize=(6 * len(metrics), 6 * len(regions)))
-    outer_gs = fig.add_gridspec(nrows=len(regions), ncols=len(metrics), wspace=0.2)
+    fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * len(regions)))
+    outer_gs = fig.add_gridspec(hspace=outer_hspace, nrows=len(regions), ncols=metrics.shape[1], wspace=outer_wspace)
     for i, region in enumerate(regions):
-        for j, metric in enumerate(metrics):
+        for j in range(metrics.shape[1]):
+            metric = metrics[i, j]
             inner_gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer_gs[i, j], width_ratios=[1, 19], wspace=0.05)
             axs = [plt.subplot(cell) for cell in inner_gs]
-            y_lim = metric_y_lims[metric] if y_lim else (None, None)
-            plot_bootstrap_fit(region, models, metric, df, axs=axs, legend_loc=metric_legend_locs[metric], split=True, x_scale='log', y_label=metric_labels[metric], y_lim=y_lim)
+            y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
+            legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
+            plot_bootstrap_fit(region, models, metric, stat, df, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim)
 
     if savepath is not None:
-        plt.savefig(savepath)
+        plt.savefig(savepath, bbox_inches='tight')
 
 def plot_bootstrap_fit(
     region: str, 
     models: Union[str, List[str]],
     metric: str,
+    stat: str,
     df: pd.DataFrame,
     alpha_ci: float = 0.2,
     alpha_points: float = 1.0,
     axs: Optional[Union[matplotlib.axes.Axes, List[matplotlib.axes.Axes]]] = None,
     figsize: Tuple[float, float] = (8, 6),
-    legend_loc: str = 'upper right',
+    fontsize: float = DEFAULT_FONT_SIZE,
+    fontweight: Literal['normal', 'bold'] = 'normal',
+    index: Optional[int] = None,
+    legend_loc: Optional[str] = None,
+    model_labels: Optional[Union[str, List[str]]] = None,
     n_samples: int = DEFAULT_N_SAMPLES,
     show_ci: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
-    split: bool = False,
+    split: bool = True,
     title: str = '',
-    x_scale: str = 'linear',
+    wspace: float = 0.05,
+    x_scale: str = 'log',
     y_label: str = '',
     y_lim: Optional[Tuple[float, float]] = None):
-    if type(models) == str:
-        models = [models]
     colours = sns.color_palette('colorblind')[:len(models)]
+    legend_loc = DEFAULT_METRIC_LEGEND_LOCS[metric] if legend_loc is None else legend_loc
+    models = [models] if type(models) == str else models
+    if model_labels is not None:
+        model_labels = [model_labels] if type(model_labels) == str else model_labels
+        assert len(model_labels) == len(models)
         
     if axs is None:
         plt.figure(figsize=figsize)
-
         if split:
             _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={'width_ratios': [1, 19]})
         else:
@@ -377,53 +465,111 @@ def plot_bootstrap_fit(
     
     for ax in axs:
         # Plot data.
-        for model, colour in zip(models, colours):
-            # Load data.
-            x_raw, y_raw = raw_data(region, model, metric, df)
-            preds, _ = load_bootstrap_predictions(region, model, metric, n_samples=n_samples)
+        for i, model in enumerate(models):
+            colour = colours[i]
+            model_label = model_labels[i] if model_labels is not None else model
 
-            # Calculate means.
-            means = preds.mean(axis=0)
+            if index is not None:
+                # Load bootstrapped sample.
+                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, n_samples=n_samples)
+                sample = samples[index]
+                x_raw = np.array([])
+                y_raw = np.array([])
+                for n_train, n_train_sample in zip(n_trains, sample):
+                    x_raw = np.concatenate((x_raw, n_train * np.ones(len(n_train_sample))))
+                    y_raw = np.concatenate((y_raw, n_train_sample))
 
-            # Plot.
-            x = np.linspace(0, len(means) - 1, num=len(means))
-            ax.plot(x, means, color=colour, label=model)
-            if show_ci:
-                low_ci = np.quantile(preds, 0.025, axis=0)
-                high_ci = np.quantile(preds, 0.975, axis=0)
-                ax.fill_between(x, low_ci, high_ci, color=colour, alpha=alpha_ci)
-            if show_limits:
-                min = preds.min(axis=0)
-                max = preds.max(axis=0)
-                ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
-                ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
-            if show_points:
-                ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+                # Load prediction on bootstrapped sample.
+                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+                pred = preds[index]
 
-        if not split:
-            ax.set_xscale(x_scale)
+                # Plot.
+                x = np.linspace(0, len(pred) - 1, num=len(pred))
+                ax.plot(x, pred, color=colour, label=model_label)
+                if show_points:
+                    ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+            else:
+                # Load raw data and bootstrapped predictions.
+                x_raw, y_raw = raw_data(region, model, metric, df)
+                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+
+                # Calculate means.
+                means = preds.mean(axis=0)
+
+                # Plot.
+                x = np.linspace(0, len(means) - 1, num=len(means))
+                ax.plot(x, means, color=colour, label=model_label)
+                if show_ci:
+                    low_ci = np.quantile(preds, 0.025, axis=0)
+                    high_ci = np.quantile(preds, 0.975, axis=0)
+                    ax.fill_between(x, low_ci, high_ci, color=colour, alpha=alpha_ci)
+                if show_limits:
+                    min = preds.min(axis=0)
+                    max = preds.max(axis=0)
+                    ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
+                    ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
+                if show_points:
+                    ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+
+    # Set axis scale.
+    if split:
+        axs[1].set_xscale(x_scale)
+    else:
+        axs[0].set_xscale(x_scale)
+
+    # Set x tick labels.
+    x_upper_lim = None
+    if split:
+        axs[0].set_xticks([0])
+        if x_scale == 'log':
+            x_upper_lim = axs[1].get_xlim()[1]      # Record x upper lim as setting ticks overrides this.
+            axs[1].set_xticks(LOG_SCALE_X_TICK_LABELS)
+            axs[1].get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+    # Set axis limits.
+    if split:
+        axs[0].set_xlim(-0.5, 0.5)
+        axs[1].set_xlim(4.5, x_upper_lim)
+        # if x_scale == 'log':
+        #     axs[1].set_xlim(4.5, x_upper_lim)
+        # else:
+        #     axs[1].set_xlim(4.5, None)
+
+    # Set y label.
+    axs[0].set_ylabel(y_label, fontsize=fontsize, weight=fontweight)
+
+    # Set y limits.
+    axs[0].set_ylim(y_lim)
+    if split:
+        axs[1].set_ylim(y_lim)
+
+    # Set y tick label fontsize.
+    axs[0].tick_params(axis='x', which='major', labelsize=fontsize)
+    axs[0].tick_params(axis='y', which='major', labelsize=fontsize)
+    if split:
+        axs[1].tick_params(axis='x', which='major', labelsize=fontsize)
+
+    # Set title.
+    title = title if title else region
+    if split:
+        axs[1].set_title(title, fontsize=fontsize, weight=fontweight)
+    else:
+        axs[0].set_title(title, fontsize=fontsize, weight=fontweight)
+
+    # Add legend.
+    if split:
+        axs[1].legend(fontsize=fontsize, loc=legend_loc)
+    else:
+        axs[0].legend(fontsize=fontsize, loc=legend_loc)
 
     if split:
-        # Configure axes.
+        # Hide axes' spines.
         axs[0].spines['right'].set_visible(False)
-        axs[0].set_xlim(-0.5, 0.5)
-        axs[0].set_xticks([0])
-        axs[0].set_ylabel(y_label)
-        axs[0].set_ylim(y_lim)
         axs[1].spines['left'].set_visible(False)
         axs[1].set_yticks([])
-        axs[1].set_xscale('log')
-        axs[1].set_xlim(4.5, None)
-        exclude_ticks = [0, 104, 228, 236, 264]
-        x_ticks = [t for t in x_raw.unique() if t not in exclude_ticks]
-        axs[1].set_xticks(x_ticks)
-        axs[1].get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-        title = title if title else region
-        axs[1].set_title(title)
-        axs[1].set_ylim(y_lim)
-        axs[1].legend(loc=legend_loc)
 
-        # Add breaks.
+        # Add split between axes.
+        plt.subplots_adjust(wspace=wspace)
         d_x_0 = .1
         d_x_1 = .006
         d_y = .03
@@ -434,11 +580,6 @@ def plot_bootstrap_fit(
         axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
         axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
 
-        # Shrink space between plots. 
-        plt.subplots_adjust(wspace=0.05)
-    else:
-        axs.set_ylabel(y_label)
-
 def raw_data(
     region: str,
     model: str,
@@ -446,7 +587,7 @@ def raw_data(
     df: pd.DataFrame) -> np.ndarray:
     data_df = df[(df.metric == metric) & (df['model-type'] == model) & (df.region == region)]
     x = data_df['n-train']
-    y = data_df['mean-value']
+    y = data_df['value']
     return x, y
 
 def residuals(f):
