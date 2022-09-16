@@ -56,7 +56,7 @@ class TrainingSample:
     def origin(self) -> Tuple:
         idx = self.__dataset.index
         record = idx[idx['sample-id'] == self.__id].iloc[0]
-        return (record.dataset, record['patient-id'])
+        return (record['origin-dataset'], record['patient-id'])
 
     @property
     def input(self) -> np.ndarray:
@@ -79,7 +79,6 @@ class TrainingSample:
         data = {}
         for region in regions:
             filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
-            print(filepath)
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']

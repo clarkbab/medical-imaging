@@ -91,8 +91,10 @@ def convert_to_training(
     # Create index.
     cols = {
         'dataset': str,
+        'sample-id': str,
+        'origin-dataset': str,
         'patient-id': str,
-        'sample-id': str
+        'region': str
     }
     index = pd.DataFrame(columns=cols.keys())
     for i, pat_id in enumerate(pat_ids):
@@ -102,9 +104,10 @@ def convert_to_training(
         # Add entries.
         for region in pat_regions:
             data = {
-                'dataset': dataset,
-                'patient-id': pat_id,
+                'dataset': set_t.name,
                 'sample-id': i,
+                'origin-dataset': set.name,
+                'patient-id': pat_id,
                 'region': region
             }
             index = append_row(index, data)

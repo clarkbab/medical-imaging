@@ -29,7 +29,7 @@ class TrainingDataset(Dataset):
             if os.path.exists(path):
                 path = os.path.join(self.__path, '__CONVERT_FROM_NIFTI_END__')
                 if not os.path.exists(path):
-                    raise ValueError(f"Dataset '{self}' processing from NIFTI not completed.")
+                    raise ValueError(f"Dataset '{self}' processing from NIFTI not completed. To override check use 'check_processed=False'.")
 
         # Load data index.
         if load_index:

@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
@@ -9,21 +10,24 @@ from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.loaders import Loader
 from mymi.dataset.training import exists
-from mymi.losses import DiceLoss
+from mymi.loaders import Loader
 from mymi import logging
+from mymi.losses import DiceLoss
 from mymi.models.systems import Segmenter
+from mymi.reporting.loaders import get_loader_manifest
 from mymi import types
 
+DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
+
 def train_segmenter(
-    model_name: str,
-    run_name: str,
     datasets: Union[str, List[str]],
     region: str,
+    model: str,
+    run: str,
     loss: str = 'dice',
     n_epochs: int = 200,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     n_gpus: int = 1,
     n_nodes: int = 1,
     n_train: Optional[int] = None,
@@ -38,7 +42,8 @@ def train_segmenter(
     slurm_array_task_id: Optional[str] = None,
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}'.")
+    model_name = model
+    logging.info(f"Training model '({model_name}, {run})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}'.")
 
     # Load datasets.
     if type(datasets) == str:
@@ -63,7 +68,7 @@ def train_segmenter(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, extract_patch=True, n_folds=n_folds, n_train=n_train, num_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, extract_patch=True, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -74,7 +79,7 @@ def train_segmenter(
         loss_fn = DiceLoss(weights=[0, 1])
 
     # Create model.
-    metrics = ['dice', 'hausdorff', 'surface']
+    metrics = ['dice']
     if pretrained_model:
         pretrained_model = Segmenter.load(*pretrained_model)
     model = Segmenter(
@@ -86,16 +91,16 @@ def train_segmenter(
     # Create logger.
     if use_logger:
         logger = WandbLogger(
-            # group=f"{model_name}-{run_name}",
+            # group=f"{model_name}-{run}",
             project=model_name,
-            name=run_name,
+            name=run,
             save_dir=config.directories.wandb)
         logger.watch(model)   # Caused multi-GPU training to hang.
     else:
         logger = None
 
     # Create callbacks.
-    checks_path = os.path.join(config.directories.models, model_name, run_name)
+    checks_path = os.path.join(config.directories.models, model_name, run)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
@@ -114,7 +119,7 @@ def train_segmenter(
     opt_kwargs = {}
     if resume:
         # Get the checkpoint path.
-        resume_run = resume_run if resume_run is not None else run_name
+        resume_run = resume_run if resume_run is not None else run
         logging.info(f'Loading ckpt {model_name}, {resume_run}, {resume_ckpt}')
         ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
         opt_kwargs['ckpt_path'] = ckpt_path
@@ -126,10 +131,16 @@ def train_segmenter(
         gpus=list(range(n_gpus)),
         logger=logger,
         max_epochs=n_epochs,
-        n_nodes=n_nodes,
-        n_sanity_val_steps=0,
+        num_nodes=n_nodes,
         # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16)
+
+    # Save training information.
+    man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
+    folderpath = os.path.join(config.directories.runs, model_name, run, datetime.now().strftime(DATETIME_FORMAT))
+    os.makedirs(folderpath, exist_ok=True)
+    filepath = os.path.join(folderpath, 'loader-manifest.csv')
+    man_df.to_csv(filepath, index=False)
 
     # Train the model.
     trainer.fit(model, train_loader, val_loader, **opt_kwargs)

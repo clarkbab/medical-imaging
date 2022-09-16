@@ -8,14 +8,15 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.utils import append_row, encode
 
-def create_loader_manifest(
+def get_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
+    check_processed: bool = True,
     n_folds: Optional[int] = 5,
+    n_train: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', n_folds '{n_folds}', test_fold '{test_fold}'.")
 
     # Create empty dataframe.
     cols = {
@@ -31,11 +32,11 @@ def create_loader_manifest(
     df = pd.DataFrame(columns=cols.keys())
 
     # Cache datasets in memory.
-    dataset_map = dict((d, ds.get(d, 'training')) for d in datasets)
+    dataset_map = dict((d, ds.get(d, 'training', check_processed=check_processed)) for d in datasets)
 
     # Create test loader.
     # Create loaders.
-    tl, vl, tsl = Loader.build_loaders(datasets, region, load_data=False, load_test_origin=False, n_folds=n_folds, shuffle_train=False, test_fold=test_fold)
+    tl, vl, tsl = Loader.build_loaders(datasets, region, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_train=n_train, shuffle_train=False, test_fold=test_fold)
     loader_names = ['train', 'validate', 'test']
 
     # Get values for this region.
@@ -58,6 +59,21 @@ def create_loader_manifest(
 
     # Set type.
     df = df.astype(cols)
+
+    return df
+
+def create_loader_manifest(
+    datasets: Union[str, List[str]],
+    region: str,
+    check_processed: bool = True,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    logging.info(f"Creating loader manifest for datasets '{datasets}', region '{region}', n_folds '{n_folds}', test_fold '{test_fold}'.")
+
+    # Get manifest.
+    df = get_loader_manifest(datasets, region, check_processed=check_processed, n_folds=n_folds, test_fold=test_fold)
 
     # Save manifest.
     config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)

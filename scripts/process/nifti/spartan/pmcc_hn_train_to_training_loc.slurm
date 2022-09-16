@@ -19,7 +19,7 @@ join () {
 }
 
 DATASET="PMCC-HN-TRAIN"
-DEST_DATASET="$DATASET-LOC-TEST"
+DEST_DATASET="$DATASET-LOC"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1

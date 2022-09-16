@@ -19,6 +19,7 @@ class Loader:
         datasets: Union[str, List[str]],
         region: str,
         batch_size: int = 1,
+        check_processed: bool = True,
         extract_patch: bool = False,
         half_precision: bool = True,
         load_data: bool = True,
@@ -40,7 +41,7 @@ class Loader:
             raise ValueError(f"'spacing' must be specified when extracting segmentation patches.") 
 
         # Get all samples.
-        datasets = [ds.get(d, 'training') for d in datasets]
+        datasets = [ds.get(d, 'training', check_processed=check_processed) for d in datasets]
         all_samples = []
         for ds_i, dataset in enumerate(datasets):
             samples = dataset.list_samples(regions=region)
@@ -51,7 +52,7 @@ class Loader:
         np.random.seed(random_seed)
         np.random.shuffle(all_samples)
 
-        # Split samples into folds.
+        # Split samples into folds of equal size.
         if n_folds:
             n_samples = len(all_samples)
             len_fold = int(np.floor(n_samples / n_folds))
@@ -149,16 +150,16 @@ class TrainingDataset(Dataset):
         label = labels[self.__region]
 
         # Perform transform.
-        if self._transform:
+        if self.__transform:
             # Add 'batch' dimension.
             input = np.expand_dims(input, axis=0)
             label = np.expand_dims(label, axis=0)
 
             # Create 'subject'.
             affine = np.array([
-                [self._spacing[0], 0, 0, 0],
-                [0, self._spacing[1], 0, 0],
-                [0, 0, self._spacing[2], 1],
+                [self.__spacing[0], 0, 0, 0],
+                [0, self.__spacing[1], 0, 0],
+                [0, 0, self.__spacing[2], 1],
                 [0, 0, 0, 1]
             ])
             input = ScalarImage(tensor=input, affine=affine)

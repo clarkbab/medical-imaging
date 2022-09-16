@@ -31,6 +31,10 @@ class Directories:
         return os.environ['MYMI_DATA']
 
     @property
+    def runs(self):
+        return os.path.join(self.root, 'runs')
+
+    @property
     def temp(self):
         return os.path.join(self.root, 'tmp')
 
