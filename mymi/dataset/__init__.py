@@ -13,15 +13,7 @@ from .other import list as list_other
 def get(
     name: str,
     type: Optional[str] = None,
-    check_conversion: bool = True) -> Dataset:
-    """
-    returns: the dataset.
-    args:
-        name: the dataset name.
-        type_str: the dataset string. Auto-detected if not present.
-    raises:
-        ValueError: if the dataset isn't found.
-    """
+    check_processed: bool = True) -> Dataset:
     if type:
         # Convert from string to type.
         type = to_type(type)
@@ -32,7 +24,7 @@ def get(
         elif type == DatasetType.NIFTI:
             return NIFTIDataset(name)
         elif type == DatasetType.TRAINING:
-            return TrainingDataset(name, check_conversion=check_conversion)
+            return TrainingDataset(name, check_processed=check_processed)
         elif type == DatasetType.OTHER:
             return OtherDataset(name)
         else:

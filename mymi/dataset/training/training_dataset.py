@@ -13,53 +13,51 @@ class TrainingDataset(Dataset):
     def __init__(
         self,
         name: str,
-        check_conversion: bool = True):
-        """
-        args:
-            name: the name of the dataset.
-        """
-        self._global_id = f"TRAINING: {name}"
-        self._name = name
-        self._path = os.path.join(config.directories.datasets, 'training', name)
+        check_processed: bool = True,
+        load_index: bool = True):
+        self.__name = name
+        self.__global_id = f"TRAINING: {self.__name}"
+        self.__path = os.path.join(config.directories.datasets, 'training', self.__name)
 
         # Check if dataset exists.
-        if not os.path.exists(self._path):
+        if not os.path.exists(self.__path):
             raise ValueError(f"Dataset '{self}' not found.")
 
-        # Check if converted successfully.
-        if check_conversion:
-            path = os.path.join(self._path, '__CONVERT_FROM_NIFTI_START__')
+        # Check if processing from NIFTI has completed.
+        if check_processed:
+            path = os.path.join(self.__path, '__CONVERT_FROM_NIFTI_START__')
             if os.path.exists(path):
-                path = os.path.join(self._path, '__CONVERT_FROM_NIFTI_END__')
+                path = os.path.join(self.__path, '__CONVERT_FROM_NIFTI_END__')
                 if not os.path.exists(path):
-                    raise ValueError(f"Dataset '{self}' conversion isn't finished.")
+                    raise ValueError(f"Dataset '{self}' processing from NIFTI not completed.")
 
         # Load data index.
-        filepath = os.path.join(self._path, 'index.csv')
-        self._index = pd.read_csv(filepath)
+        if load_index:
+            filepath = os.path.join(self.__path, 'index.csv')
+            self.__index = pd.read_csv(filepath).astype({ 'patient-id': str, 'sample-id': str })
 
     @property
     def index(self) -> pd.DataFrame:
-        return self._index
+        return self.__index
 
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
     def name(self) -> str:
-        return self._name
+        return self.__name
 
     @property
     def path(self) -> str:
-        return self._path
+        return self.__path
 
     @property
     def params(self) -> pd.DataFrame:
-        filepath = os.path.join(self._path, 'params.csv')
+        filepath = os.path.join(self.__path, 'params.csv')
         df = pd.read_csv(filepath)
         params = df.iloc[0].to_dict()
         
@@ -79,7 +77,7 @@ class TrainingDataset(Dataset):
     def patient_id(
         self,
         sample_idx: int) -> types.PatientID:
-        df = self._index[self._index['sample-id'] == sample_idx]
+        df = self.__index[self.__index['sample-id'] == sample_idx]
         if len(df) == 0:
             raise ValueError(f"Sample '{sample_idx}' not found for dataset '{self}'.")
         pat_id = df['patient-id'].iloc[0] 
@@ -91,13 +89,15 @@ class TrainingDataset(Dataset):
         if type(regions) == str:
             regions = [regions]
 
-        index = self._index
-
         # Filter by regions.
         if regions is not None:
-            index = index[index.region.isin(regions)]
+            index = self.__index[self.__index.region.isin(regions)]
+        else:
+            index = self.__index
 
+        # Get sample IDs.
         sample_ids = list(sorted(index['sample-id'].unique()))
+
         return sample_ids
 
     def sample(
@@ -106,6 +106,6 @@ class TrainingDataset(Dataset):
         by_patient_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
         if by_patient_id:
-            sample_id = self._index[self._index['patient-id'] == sample_id].iloc[0]['sample-id']
+            sample_id = self.__index[self.__index['patient-id'] == sample_id].iloc[0]['sample-id']
 
         return TrainingSample(self, sample_id)

@@ -309,7 +309,7 @@ def load_evaluation(
     models: Union[str, List[str]],
     n_trains: Union[Optional[int], List[Optional[int]]],
     n_folds: int = 5,
-    test_folds: Union[int, List[int]] = list(range(5))) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    test_folds: Union[int, List[int]] = list(range(5))) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     datasets = [datasets] if type(datasets) == str else datasets
     models = [models] if type(models) == str else models
     n_trains = [n_trains] if type(n_trains) == str else n_trains
@@ -380,8 +380,8 @@ def megaplot(
     regions: Union[str, List[str]],
     models: Union[str, List[str]],
     metrics: Union[str, List[str], np.ndarray],
-    stat: str,
-    df: pd.DataFrame,
+    stats: Union[str, List[str]],
+    dfs: Union[pd.DataFrame, List[pd.DataFrame]],
     fontsize: float = DEFAULT_FONT_SIZE,
     inner_wspace: float = 0.05,
     legend_locs: Optional[Union[str, List[str]]] = None,
@@ -394,27 +394,36 @@ def megaplot(
         metrics = np.repeat([[metrics]], len(regions), axis=0)
     elif type(metrics) == list:
         metrics = np.repeat([metrics], len(regions), axis=0)
+    n_metrics = metrics.shape[1]
+    dfs = [dfs] if type(dfs) == pd.DataFrame else dfs
+    dfs = dfs * n_metrics if len(dfs) == 1 else dfs         # Broadcast 'dfs' to 'n_metrics'.
     if legend_locs is not None:
         if type(legend_locs) == str:
             legend_locs = [legend_locs]
-        assert len(legend_locs) == metrics.shape[1]
+        assert len(legend_locs) == n_metrics
     models = [models] if type(models) == str else models
+    n_models = len(models)
     if model_labels is not None:
         if type(model_labels) == str:
             model_labels = [model_labels]
-        assert len(model_labels) == len(models)
+        assert len(model_labels) == n_models
     regions = [regions] if type(regions) == str else regions
+    n_regions = len(regions)
+    stats = [stats] if type(stats) == str else stats
+    stats = stats * n_metrics if len(stats) == 1 else stats         # Broadcast 'stats' to 'n_metrics'.
 
     # Lookup tables.
     # matplotlib.rc('text', usetex=True)
     # matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
     # Create nested subplots.
-    fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * len(regions)))
-    outer_gs = fig.add_gridspec(hspace=outer_hspace, nrows=len(regions), ncols=metrics.shape[1], wspace=outer_wspace)
+    fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * n_regions))
+    outer_gs = fig.add_gridspec(hspace=outer_hspace, nrows=n_regions, ncols=metrics.shape[1], wspace=outer_wspace)
     for i, region in enumerate(regions):
-        for j in range(metrics.shape[1]):
+        for j in range(n_metrics):
+            df = dfs[j]
             metric = metrics[i, j]
+            stat = stats[j]
             inner_gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer_gs[i, j], width_ratios=[1, 19], wspace=0.05)
             axs = [plt.subplot(cell) for cell in inner_gs]
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
@@ -422,7 +431,9 @@ def megaplot(
             plot_bootstrap_fit(region, models, metric, stat, df, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim)
 
     if savepath is not None:
-        plt.savefig(savepath, bbox_inches='tight')
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+
+    plt.show()
 
 def plot_bootstrap_fit(
     region: str, 

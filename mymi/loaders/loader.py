@@ -15,29 +15,19 @@ from mymi.utils import append_row
 
 class Loader:
     @staticmethod
-    def manifest(*args, **kwargs):
-        tl, vl, tsl = Loader.build_loaders(*args, **kwargs)
-        tl_df = tl.dataset.manifest
-        tl_df.insert(0, 'loader', 'train')
-        vl_df = vl.dataset.manifest
-        vl_df.insert(0, 'loader', 'validate')
-        tsl_df = tsl.dataset.manifest
-        tsl_df.insert(0, 'loader', 'test')
-        df = pd.concat((tl_df, vl_df, tsl_df), axis=0)
-        return df
-    
-    @staticmethod
     def build_loaders(
         datasets: Union[str, List[str]],
         region: str,
         batch_size: int = 1,
         extract_patch: bool = False,
         half_precision: bool = True,
+        load_data: bool = True,
         load_test_origin: bool = True,
-        n_folds: Optional[int] = None, 
+        n_folds: Optional[int] = 5, 
         n_train: Optional[int] = None,
         n_workers: int = 1,
         random_seed: int = 42,
+        shuffle_train: bool = True,
         spacing: Optional[types.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
@@ -97,11 +87,11 @@ class Loader:
         nn_val_samples = train_samples[n_nn_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing, transform=transform)
-        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=True)
+        train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, half_precision=half_precision, load_data=load_data, spacing=spacing, transform=transform)
+        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
-        val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, half_precision=half_precision, spacing=spacing)
+        val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, half_precision=half_precision, load_data=load_data, spacing=spacing)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -120,60 +110,43 @@ class TrainingDataset(Dataset):
         samples: List[Tuple[int, int]],
         extract_patch: bool = False,
         half_precision: bool = True,
+        load_data: bool = True,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         self.__datasets = datasets
-        self._extract_patch = extract_patch
-        self._half_precision = half_precision
-        self._region = region
-        self._spacing = spacing
-        self._transform = transform
+        self.__extract_patch = extract_patch
+        self.__half_precision = half_precision
+        self.__load_data = load_data
+        self.__region = region
+        self.__spacing = spacing
+        self.__transform = transform
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         # Record number of samples.
-        self._n_samples = len(samples)
+        self.__n_samples = len(samples)
 
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
 
-    @property
-    def manifest(self):
-        cols = {
-            'index': int,
-            'dataset': str,
-            'sample-id': str,
-            'origin-dataset': str,
-            'origin-patient-id': str
-        }
-        df = pd.DataFrame(columns=cols.keys())
-        for i, (dataset_i, sample_id) in self.__sample_map.items():
-            origin_ds, origin_pat_id = self.__datasets[dataset_i].sample(sample_id).origin
-            data = {
-                'index': i,
-                'dataset': self.__datasets[dataset_i].name,
-                'sample-id': sample_id,
-                'origin-dataset': origin_ds,
-                'origin-patient-id': origin_pat_id
-            }
-            df = append_row(df, data)
-        df = df.astype(cols)
-        return df
-
     def __len__(self):
-        return self._n_samples
+        return self.__n_samples
 
     def __getitem__(
         self,
         index: int) -> Tuple[np.ndarray, np.ndarray]:
-        # Load data.
+        # Get dataset/sample.
         ds_i, s_i = self.__sample_map[index]
         dataset = self.__datasets[ds_i]
-        input, labels = dataset.sample(s_i).pair(regions=self._region)
-        label = labels[self._region]
 
         # Get description.
         desc = f'{dataset.name}:{s_i}'
+        if not self.__load_data:
+            return desc
+
+        # Load data.
+        input, labels = dataset.sample(s_i).pair(regions=self.__region)
+        label = labels[self.__region]
 
         # Perform transform.
         if self._transform:
@@ -199,7 +172,7 @@ class TrainingDataset(Dataset):
             })
 
             # Transform the subject.
-            output = self._transform(subject)
+            output = self.__transform(subject)
 
             # Extract results.
             input = output['input'].data.squeeze(0)
@@ -210,18 +183,18 @@ class TrainingDataset(Dataset):
             label = label.numpy().astype(bool)
 
         # Extract patch.
-        if self._extract_patch:
+        if self.__extract_patch:
             # Augmentation may have moved all foreground voxels off the label.
             if label.sum() > 0:
-                input, label = self._get_foreground_patch(input, label, desc)
+                input, label = self.__get_foreground_patch(input, label)
             else:
-                input, label = self._get_random_patch(input, label)
+                input, label = self.__get_random_patch(input, label)
 
         # Add 'channel' dimension.
         input = np.expand_dims(input, axis=0)
 
         # Convert dtypes.
-        if self._half_precision:
+        if self.__half_precision:
             input = input.astype(np.half)
         else:
             input = input.astype(np.single)
@@ -229,15 +202,14 @@ class TrainingDataset(Dataset):
 
         return desc, input, label
 
-    def _get_foreground_patch(
+    def __get_foreground_patch(
         self,
         input: np.ndarray,
-        label: np.ndarray,
-        desc: str) -> np.ndarray:
+        label: np.ndarray) -> np.ndarray:
 
         # Create segmenter patch.
         centre = get_extent_centre(label)
-        size = get_region_patch_size(self._region, self._spacing)
+        size = get_region_patch_size(self.__region, self.__spacing)
         min, max = get_box(centre, size)
 
         # Squash to label size.
@@ -268,7 +240,7 @@ class TrainingDataset(Dataset):
 
         return input, label
 
-    def _get_random_patch(
+    def __get_random_patch(
         self,
         input: np.ndarray,
         label: np.ndarray) -> np.ndarray:
@@ -276,7 +248,7 @@ class TrainingDataset(Dataset):
         centre = tuple(map(np.random.randint, input.shape))
 
         # Extract patch around centre.
-        size = get_region_patch_size(self._region, self._spacing)
+        size = get_region_patch_size(self.__region, self.__spacing)
         input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
         label = point_crop_or_pad_3D(label, size, centre)
 
@@ -289,51 +261,28 @@ class TestDataset(Dataset):
         samples: List[Tuple[int, int]],
         load_origin: bool = True):
         self.__datasets = datasets
-        self._load_origin = load_origin
+        self.__load_origin = load_origin
 
         # Record number of samples.
-        self._n_samples = len(samples)
+        self.__n_samples = len(samples)
 
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
 
-    @property
-    def manifest(self):
-        cols = {
-            'index': int,
-            'dataset': str,
-            'sample-id': str,
-            'origin-dataset': str,
-            'origin-patient-id': str
-        }
-        df = pd.DataFrame(columns=cols.keys())
-        for i, (dataset_i, sample_id) in self.__sample_map.items():
-            origin_ds, origin_pat_id = self.__datasets[dataset_i].sample(sample_id).origin
-            data = {
-                'index': i,
-                'dataset': self.__datasets[dataset_i].name,
-                'sample-id': sample_id,
-                'origin-dataset': origin_ds,
-                'origin-patient-id': origin_pat_id
-            }
-            df = append_row(df, data)
-        df = df.astype(cols)
-        return df
-
     def __len__(self):
-        return self._n_samples
+        return self.__n_samples
 
     def __getitem__(
         self,
-        index: int) -> Tuple[str, str]:
+        index: int) -> Tuple[str]:
         # Load data.
         ds_i, s_i = self.__sample_map[index]
         set = self.__datasets[ds_i]
         
-        # Return 'NIFTI' location of training data.
-        if self._load_origin:
-            data = set.sample(s_i).origin
+        if self.__load_origin:
+            # Return 'NIFTI' location of training sample.
+            desc = ':'.join((str(el) for el in set.sample(s_i).origin))
         else:
-            data = (set.name, s_i) 
+            desc = f'{set.name}:{s_i}'
 
-        return data
+        return desc

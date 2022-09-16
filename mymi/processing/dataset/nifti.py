@@ -17,7 +17,7 @@ from mymi import logging
 from mymi.models import replace_checkpoint_alias
 from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
-from mymi.reporting.dataset.training import load_loader_manifest
+from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi.utils import append_row
 
@@ -86,7 +86,7 @@ def convert_to_training(
 
     # Load patients.
     set = NIFTIDataset(dataset)
-    pats = set.list_patients()
+    pat_ids = set.list_patients()
 
     # Create index.
     cols = {
@@ -95,15 +95,15 @@ def convert_to_training(
         'sample-id': str
     }
     index = pd.DataFrame(columns=cols.keys())
-    for i, pat in enumerate(pats):
+    for i, pat_id in enumerate(pat_ids):
         # Get patient regions.
-        pat_regions = set.patient(pat).list_regions()
+        pat_regions = set.patient(pat_id).list_regions()
         
         # Add entries.
         for region in pat_regions:
             data = {
                 'dataset': dataset,
-                'patient-id': pat,
+                'patient-id': pat_id,
                 'sample-id': i,
                 'region': region
             }
@@ -117,9 +117,9 @@ def convert_to_training(
     # Write each patient to dataset.
     start = time()
     if create_data:
-        for i, pat in enumerate(tqdm(pats)):
+        for i, pat_id in enumerate(tqdm(pat_ids)):
             # Load input data.
-            patient = set.patient(pat)
+            patient = set.patient(pat_id)
             old_spacing = patient.ct_spacing
             input = patient.ct_data
 
@@ -149,7 +149,7 @@ def convert_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat).has_region(region):
+                if not set.patient(pat_id).has_region(region):
                     continue
 
                 # Load label data.

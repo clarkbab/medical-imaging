@@ -3,7 +3,7 @@ from mymi.types.types import PatientRegions
 import numpy as np
 import os
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 from mymi.regions import to_list
 from mymi import types
@@ -12,17 +12,17 @@ class TrainingSample:
     def __init__(
         self,
         dataset: 'TrainingDataset',
-        id: int):
-        if id not in dataset.list_samples():
-            raise ValueError(f"Sample '{id}' not found for dataset '{dataset}'.")
-        self._global_id = f'{dataset} - {id}'
+        id: Union[str, int]):
         self.__dataset = dataset
-        self.__id = id
-        self._spacing = dataset.params['spacing']
+        self.__id = str(id)
+        self.__global_id = f'{self.__dataset} - {self.__id}'
+        self.__spacing = self.__dataset.params['spacing']
 
-        # Get sample index.
+        # Load sample index.
+        if self.__id not in self.__dataset.list_samples():
+            raise ValueError(f"Sample '{self.__id}' not found for dataset '{self.__dataset}'.")
         index = self.__dataset.index
-        index = index[index['sample-id'] == id]
+        index = index[index['sample-id'] == self.__id]
         self._index = index
 
     @property
@@ -31,10 +31,10 @@ class TrainingSample:
 
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
     def id(self) -> str:
@@ -42,7 +42,7 @@ class TrainingSample:
 
     @property
     def spacing(self) -> types.ImageSpacing3D:
-        return self._spacing
+        return self.__spacing
 
     def list_regions(self) -> List[str]:
         return list(sorted(self._index.region))
@@ -78,7 +78,8 @@ class TrainingSample:
         # Load the label data.
         data = {}
         for region in regions:
-            filepath = os.path.join(self.__dataset._path, 'data', 'labels', region, f'{self.__id}.npz')
+            filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
+            print(filepath)
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']

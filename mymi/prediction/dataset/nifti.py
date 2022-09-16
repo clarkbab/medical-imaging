@@ -126,11 +126,11 @@ def create_localiser_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Make predictions.
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        logging.info(f"{dataset_b}, {pat_id_b}")
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
             create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
 
 def load_patient_localiser_prediction(
@@ -325,10 +325,11 @@ def create_segmenter_predictions_from_loader(
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
     # Make predictions.
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
             create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing=seg_spacing, device=device)
 
 def load_patient_segmenter_prediction(
@@ -443,10 +444,9 @@ def create_two_stage_predictions_from_loader(
         _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
         # Make predictions.
-        for dataset_b, pat_id_b in tqdm(iter(test_loader), leave=False):
+        for dataset_b, pat_id_b in tqdm(iter(test_loader)):
             if type(pat_id_b) == torch.Tensor:
                 pat_id_b = pat_id_b.tolist()
             for dataset, pat_id in zip(dataset_b, pat_id_b):
-                # Create predictions.
                 create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
                 create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)

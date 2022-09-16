@@ -69,13 +69,13 @@ class NIFTIDataset(Dataset):
         df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
-        ids = self.list_patients()
+        pat_ids = self.list_patients()
 
         # Add patient regions.
-        for id in ids:
-            for region in self.patient(id).list_regions():
+        for pat_id in pat_ids:
+            for region in self.patient(pat_id).list_regions():
                 data = {
-                    'patient-id': id,
+                    'patient-id': pat_id,
                     'region': region,
                 }
                 df = append_row(df, data)

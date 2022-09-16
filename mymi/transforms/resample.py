@@ -52,7 +52,8 @@ def resample_3D(
         resample.SetSize(tuple(reversed(output_size)))
     else:
         scaling = np.array(image.GetSpacing()) / resample.GetOutputSpacing()
-        size = tuple(int(el) for el in np.ceil(scaling * image.GetSize()))
+        # Magic formula is: n_new = f * (n - 1) + 1
+        size = tuple(int(np.ceil(f * (n - 1) + 1)) for f, n in zip(scaling, image.GetSize()))
         resample.SetSize(size)
 
     # Perform resampling.

@@ -19,7 +19,7 @@ join () {
 }
 
 DATASET="PMCC-HN-TRAIN"
-DEST_DATASET="$DATASET-LOC"
+DEST_DATASET="$DATASET-LOC-TEST"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -60,5 +60,11 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 REGIONS=$(join , "${REGIONS[@]}")
 DILATE_REGIONS=$(join , "${DILATE_REGIONS[@]}")
 
-python $SCRIPT_DIR/process/nifti/convert_to_training --dataset $DATASET --regions $REGIONS --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS \
-    --round_dp $ROUND_DP --size $SIZE --spacing $SPACING
+python $SCRIPT_DIR/process/nifti/convert_to_training \
+    --dataset $DATASET \
+    --regions $REGIONS \
+    --dest_dataset $DEST_DATASET \
+    --dilate_regions $DILATE_REGIONS \
+    --round_dp $ROUND_DP \
+    --size $SIZE \
+    --spacing $SPACING

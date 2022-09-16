@@ -30,16 +30,11 @@ def exists(name: str) -> bool:
     return os.path.exists(ds_path)
 
 def create(name: str) -> TrainingDataset:
-    """
-    effect: creates a dataset.
-    args:
-        name: the name of the dataset.
-    """
-    # Create root folder.
+    # Create dataset folder.
     ds_path = os.path.join(config.directories.datasets, 'training', name)
     os.makedirs(ds_path)
 
-    return TrainingDataset(name, check_conversion=False)
+    return TrainingDataset(name, check_processed=False, load_index=False)
 
 def destroy(name: str) -> None:
     """
