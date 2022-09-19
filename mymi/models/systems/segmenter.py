@@ -5,7 +5,7 @@ from scipy.ndimage import center_of_mass
 import torch
 from torch import nn
 from torch.optim import SGD
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, OrderedDict, Tuple
 import wandb
 
 from mymi import config
@@ -13,10 +13,10 @@ from mymi.geometry import get_extent_centre
 from mymi import logging
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
+from mymi.models import replace_checkpoint_alias
+from mymi.models.networks import UNet3D
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
-
-from ..networks import UNet3D
 
 class Segmenter(pl.LightningModule):
     def __init__(
@@ -51,30 +51,51 @@ class Segmenter(pl.LightningModule):
         model_name: str,
         run_name: str,
         checkpoint: str,
+        check_epochs: bool = True,
         **kwargs: Dict) -> pl.LightningModule:
-        # Check that training has finished before predicting.
-        filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
-        state = torch.load(filepath, map_location=torch.device('cpu'))
-        n_samples = run_name.split('-')[-1]
-        if n_samples == '5':
-            n_epochs = 900
-        elif n_samples == '10':
-            n_epochs = 450
-        elif n_samples == '20':
-            n_epochs = 300
-        else:
-            n_epochs = 150
-        if state['epoch'] < n_epochs - 1:
-            raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
+        # Check that model training has finished.
+        if check_epochs:
+            filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
+            state = torch.load(filepath, map_location=torch.device('cpu'))
+            n_samples = run_name.split('-')[-1]
+            if n_samples == '5':
+                n_epochs = 900
+            elif n_samples == '10':
+                n_epochs = 450
+            elif n_samples == '20':
+                n_epochs = 300
+            else:
+                n_epochs = 150
+            if state['epoch'] < n_epochs - 1:
+                raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = Segmenter.replace_checkpoint_aliases(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = replace_checkpoint_alias(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
 
+        # Update keys by adding '_Segmenter_' prefix if required.
+        checkpoint = torch.load(filepath, map_location=torch.device('cpu'))
+        pairs = []
+        update = False
+        for k, v in checkpoint['state_dict'].items():
+            # Get new key.
+            if not k.startswith('_Segmenter_'):
+                update = True
+                new_key = '_Segmenter_' + k
+            else:
+                new_key = k
+
+            pairs.append((new_key, v))
+        checkpoint['state_dict'] = OrderedDict(pairs)
+        if update:
+            logging.info(f"Updating checkpoint keys for model '{(model_name, run_name, checkpoint)}'.")
+            torch.save(checkpoint, filepath)
+
+        # Load checkpoint.
         segmenter = Segmenter.load_from_checkpoint(filepath, **kwargs)
-        segmenter._name = (model_name, run_name, checkpoint)
+        segmenter.__name = (model_name, run_name, checkpoint)
         return segmenter
 
     @staticmethod
