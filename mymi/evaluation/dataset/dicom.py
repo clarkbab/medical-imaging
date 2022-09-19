@@ -15,7 +15,7 @@ from mymi.metrics import dice
 from mymi.models import replace_checkpoint_alias
 from mymi.reporting.dataset.training import load_loader_manifest
 from mymi import types
-from mymi.utils import append_row, encode
+from mymi.utils import append_row, encode, load_csv, save_csv
 
 def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],
@@ -128,7 +128,7 @@ def create_dose_evaluation(
         models = [models]
 
     # Load patients.
-    pdf = config.load_csv(pat_file)
+    pdf = load_csv(pat_file)
 
     # Get datasets.
     datasets = list(sorted(pdf.dataset.unique())) 
@@ -226,7 +226,7 @@ def create_dose_evaluation(
 
     # Write evaluation.
     df = df.astype(cols)
-    config.save_csv(df, 'dose-evals', output_file, overwrite=True)
+    save_csv(df, 'dose-evals', output_file, overwrite=True)
 
 def evaluate_model(
     dataset: str,

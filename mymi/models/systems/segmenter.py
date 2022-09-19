@@ -76,10 +76,10 @@ class Segmenter(pl.LightningModule):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
 
         # Update keys by adding '_Segmenter_' prefix if required.
-        checkpoint = torch.load(filepath, map_location=torch.device('cpu'))
+        checkpoint_data = torch.load(filepath, map_location=torch.device('cpu'))
         pairs = []
         update = False
-        for k, v in checkpoint['state_dict'].items():
+        for k, v in checkpoint_data['state_dict'].items():
             # Get new key.
             if not k.startswith('_Segmenter_'):
                 update = True
@@ -88,10 +88,10 @@ class Segmenter(pl.LightningModule):
                 new_key = k
 
             pairs.append((new_key, v))
-        checkpoint['state_dict'] = OrderedDict(pairs)
+        checkpoint_data['state_dict'] = OrderedDict(pairs)
         if update:
             logging.info(f"Updating checkpoint keys for model '{(model_name, run_name, checkpoint)}'.")
-            torch.save(checkpoint, filepath)
+            torch.save(checkpoint_data, filepath)
 
         # Load checkpoint.
         segmenter = Segmenter.load_from_checkpoint(filepath, **kwargs)

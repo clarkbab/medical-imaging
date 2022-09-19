@@ -6,7 +6,7 @@ from typing import List
 from mymi import config
 from mymi.loaders import Loader
 from mymi.regions import RegionNames
-from mymi.utils import append_row, encode
+from mymi.utils import append_row, load_csv, save_csv
 
 def create_model_manifest() -> None:
     datasets = ('PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC')
@@ -60,10 +60,10 @@ def create_model_manifest() -> None:
 
     # Save manifest.
     df = df.astype(cols)
-    config.save_csv(df, 'model-manifest.csv', overwrite=True) 
+    save_csv(df, 'model-manifest.csv', overwrite=True) 
     
 def load_model_manifest():
-    return config.load_csv('model-manifest.csv')
+    return load_csv('model-manifest.csv')
 
 def list_checkpoints(
     name: str,

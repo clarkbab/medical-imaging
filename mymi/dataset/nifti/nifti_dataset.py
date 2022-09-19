@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Union
 
 from mymi import config
 from mymi import types
-from mymi.utils import append_row
+from mymi.utils import append_row, load_csv
 
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
@@ -41,7 +41,7 @@ class NIFTIDataset(Dataset):
 
     @property
     def anon_manifest(self) -> Optional[pd.DataFrame]:
-        man_df = config.load_csv('anon-maps', f'{self._name}.csv')
+        man_df = load_csv('anon-maps', f'{self._name}.csv')
         man_df = man_df.astype({ 'anon-id': str, 'patient-id': str })
         return man_df
 

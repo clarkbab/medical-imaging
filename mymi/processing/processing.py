@@ -9,11 +9,10 @@ from time import time
 from tqdm import tqdm
 from scipy.ndimage import binary_dilation
 
-from mymi import config
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
-from mymi.transforms import resample_3D
 from mymi import types
+from mymi.utils import save_csv
 
 def convert_to_nifti(
     dataset: 'Dataset',
@@ -32,7 +31,7 @@ def convert_to_nifti(
         map_df = pd.DataFrame(pats, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
 
         # Save map.
-        config.save_csv(map_df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
+        save_csv(map_df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
 
     for pat in tqdm(pats):
         # Get anonymous ID.

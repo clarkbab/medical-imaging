@@ -6,7 +6,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader
 from mymi import logging
-from mymi.utils import append_row, encode
+from mymi.utils import append_row, encode, load_csv, save_csv
 
 def get_loader_manifest(
     datasets: Union[str, List[str]],
@@ -76,10 +76,10 @@ def create_loader_manifest(
     df = get_loader_manifest(datasets, region, check_processed=check_processed, n_folds=n_folds, test_fold=test_fold)
 
     # Save manifest.
-    config.save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
+    save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
 
 def load_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    return config.load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
+    return load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
