@@ -63,32 +63,3 @@ def environ(name: str) -> Optional[str]:
         return os.environ[name]
     else:
         return None
-
-def save_csv(
-    data: pd.DataFrame,
-    *path: List[str],
-    index: bool = False,
-    overwrite: bool = False) -> None:
-    filepath = os.path.join(directories.files, *path)
-    dirpath = os.path.dirname(filepath)
-    if os.path.exists(filepath):
-        if overwrite:
-            os.makedirs(dirpath, exist_ok=True)
-            data.to_csv(filepath, index=index)
-        else:
-            logging.error(f"File '{filepath}' already exists, use overwrite=True.")
-    else:
-        os.makedirs(dirpath, exist_ok=True)
-        data.to_csv(filepath, index=index)
-
-def load_csv(
-    *path: List[str],
-    raise_error: bool = True,
-    **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
-    filepath = os.path.join(directories.files, *path)
-    if os.path.exists(filepath):
-        return pd.read_csv(filepath, **kwargs)
-    elif raise_error:
-        raise ValueError(f"CSV at path '{path}' not found.")
-    else:
-        return None

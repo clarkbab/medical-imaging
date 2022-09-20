@@ -226,6 +226,9 @@ class DICOMPatient:
 
     def get_cts(self, *args, **kwargs):
         return self._default_rtstruct.ref_ct.get_cts(*args, **kwargs)
+
+    def get_first_ct(self, *args, **kwargs):
+        return self._default_rtstruct.ref_ct.get_first_ct(*args, **kwargs)
  
     def get_rtstruct(self, *args, **kwargs):
         return self._default_rtstruct.get_rtstruct(*args, **kwargs)

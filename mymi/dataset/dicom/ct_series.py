@@ -63,11 +63,15 @@ class CTSeries(DICOMSeries):
         return self._global_id
 
     def get_cts(self) -> List[dcm.dataset.FileDataset]:
-        # Load and sort CTs.
         ct_paths = list(self._index['filepath'])
         cts = [dcm.read_file(f) for f in ct_paths]
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
+
+    def get_first_ct(self) -> dcm.dataset.FileDataset:
+        ct_paths = list(self._index['filepath'])
+        ct = dcm.read_file(ct_paths[0])
+        return ct
 
     @property
     def offset(self) -> types.PhysPoint3D:

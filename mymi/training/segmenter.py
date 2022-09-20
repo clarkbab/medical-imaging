@@ -44,6 +44,9 @@ def train_segmenter(
     use_logger: bool = False) -> None:
     model_name = model
     logging.info(f"Training model '({model_name}, {run})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}'.")
+    # 'libgcc'
+    import ctypes
+    libgcc_s = ctypes.CDLL('libgcc_s.so.1')
 
     # Load datasets.
     if type(datasets) == str:
