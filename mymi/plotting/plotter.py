@@ -1297,6 +1297,7 @@ def __format_p_values(p_vals: List[float]) -> List[str]:
     return f_p_vals
 
 def plot_dataframe_v2(
+    ax: Optional[matplotlib.axes.Axes] = None,
     data: Optional[pd.DataFrame] = None,
     x: Optional[str] = None,
     y: Optional[str] = None,
@@ -1309,7 +1310,7 @@ def plot_dataframe_v2(
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
-    legend_bbox: Optional[Tuple[float, float]] = None,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
@@ -1322,9 +1323,11 @@ def plot_dataframe_v2(
     show_hue_connections_inliers: bool = False,
     show_legend: bool = True,
     show_stats: bool = False,
-    show_x_labels: bool = True,
+    show_x_tick_labels: bool = True,
+    show_x_tick_label_counts: bool = True,
     stats_index: Optional[Union[str, List[str]]] = None,
     style: Optional[Literal['box', 'violin']] = 'box',
+    x_label: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
@@ -1369,22 +1372,27 @@ def plot_dataframe_v2(
     # classes have the same number of data points.
     groupby = x if hue is None else [x, hue]
     count_map = data.groupby(groupby)[y].count()
-    x_labels = []
+    x_tick_labels = []
     for x_val in x_vals:
         counts = count_map.loc[x_val]
         ns = list(counts.unique()) if hasattr(counts, '__iter__') else [counts]
-        label = f"{x_val}\n(n={','.join([str(n) for n in ns])})"
-        x_labels.append(label)
+        label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
+        x_tick_labels.append(label)
 
     # Create subplots if required.
     if n_col is None:
         n_col = len(x_vals)
     n_rows = int(np.ceil(len(x_vals) / n_col))
-    if n_rows > 1:
-        _, axs = plt.subplots(n_rows, 1, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
+    if ax is not None:
+        assert n_rows == 1
+        axs = [ax]
+        # Figsize will have been handled externally.
     else:
-        plt.figure(figsize=figsize)
-        axs = [plt.gca()]
+        if n_rows > 1:
+            _, axs = plt.subplots(n_rows, 1, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
+        else:
+            plt.figure(figsize=figsize)
+            axs = [plt.gca()]
 
     # Get x-axis limits.
     x_lim = list(x_lim)
@@ -1397,14 +1405,15 @@ def plot_dataframe_v2(
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
-        hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
+        # hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
         # hue_palette = sns.color_palette('tab10')
+        hue_palette = sns.color_palette('colorblind')
 
     # Plot rows.
     for i in range(n_rows):
         # Split data.
         row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
-        row_x_labels = x_labels[i * n_col:(i + 1) * n_col]
+        row_x_tick_labels = x_tick_labels[i * n_col:(i + 1) * n_col]
 
         # Get row data.
         row_data = data[data[x].isin(row_x_vals)].copy()
@@ -1462,7 +1471,7 @@ def plot_dataframe_v2(
                 # Add legend.
                 if show_legend:
                     objs, labels = list(zip(*obj_labels))
-                    axs[i].legend(objs, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
+                    axs[i].legend(objs, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
             # Plot points.
             if hue is None:
@@ -1560,8 +1569,8 @@ def plot_dataframe_v2(
             annotator.annotate()
                 
         # Set axis ticks and labels.
-        axs[i].set_xticks(list(range(len(row_x_labels))))
-        axs[i].set_xticklabels(row_x_labels)
+        axs[i].set_xticks(list(range(len(row_x_tick_labels))))
+        axs[i].set_xticklabels(row_x_tick_labels)
 
         # Set axis limits.
         axs[i].set_xlim(*x_lim)
@@ -1623,13 +1632,13 @@ def plot_dataframe_v2(
         axs[i].set_axisbelow(True)
           
         # Set axis labels.
-        axs[i].set_xlabel('')
-        if y_label is None:
-            y_label = ''
+        x_label = x_label if x_label is not None else ''
+        y_label = y_label if y_label is not None else ''
+        axs[i].set_xlabel(x_label, fontsize=fontsize)
         axs[i].set_ylabel(y_label, fontsize=fontsize)
 
         # Set axis tick labels fontsize/rotation.
-        if show_x_labels:
+        if show_x_tick_labels:
             axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_tick_label_rot)
         else:
             axs[i].set_xticklabels([])

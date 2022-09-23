@@ -63,6 +63,10 @@ def build_index(dataset: str) -> None:
 
             # Get modality-specific info.
             if modality == 'CT':
+                if not hasattr(dicom, 'ImageOrientationPatient'):
+                    logging.error(f"No 'ImageOrientationPatient' found for CT dicom '{filepath}'.")
+                    continue
+
                 mod_spec = {
                     'ImageOrientationPatient': dicom.ImageOrientationPatient,
                     'ImagePositionPatient': dicom.ImagePositionPatient,

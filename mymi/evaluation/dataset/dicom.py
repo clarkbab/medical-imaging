@@ -13,7 +13,7 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import dice
 from mymi.models import replace_checkpoint_alias
-from mymi.reporting.dataset.training import load_loader_manifest
+from mymi.reporting.loaders import load_loader_manifest
 from mymi import types
 from mymi.utils import append_row, encode, load_csv, save_csv
 

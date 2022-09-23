@@ -1,10 +1,8 @@
 import subprocess
 
 regions = '0-16'
-regions = '4'
 script = 'scripts/report/loaders/spartan/array/create_loader_manifest'
 test_folds = [0, 1, 2, 3, 4]
-test_folds = [4]
 
 for test_fold in test_folds:
     # Create slurm command.
