@@ -8,7 +8,8 @@ from typing import List, Optional, Tuple, Union
 from mymi import types
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
-from mymi.geometry import get_box, get_encaps_dist_vox, get_extent_centre
+from mymi.geometry import get_box, get_extent_centre
+from mymi.metrics import get_encaps_dist_vox
 from mymi.regions import get_region_patch_size
 from mymi.transforms import point_crop_or_pad_3D
 from mymi.utils import append_row

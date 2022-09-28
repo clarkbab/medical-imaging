@@ -8,9 +8,9 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.geometry import get_box, get_encaps_dist_mm, get_extent_centre
+from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader
-from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance
+from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
@@ -45,20 +45,26 @@ def get_patient_localiser_evaluation(
 
     # Distances.
     spacing = set.patient(pat_id).ct_spacing
-    if pred.sum() == 0:
-        dists = {
-            'assd': np.nan,
-            'hd': np.nan,
-            'hd-95': np.nan,
-            'hd-mean': np.nan,
-        }
+    if pred.sum() == 0 or label.sum() == 0:
+        data['apl'] = np.nan
+        data['hd'] = np.nan
+        data['hd-95'] = np.nan
+        data['msd'] = np.nan
+        data['surface-dice'] = np.nan
     else:
-        dists = distances(pred, label, spacing)
+        # Calculate distances for OAR tolerance.
+        tols = [0, 0.5, 1, 1.5, 2, 2.5]
+        tol = get_region_tolerance(region)
+        if tol is not None:
+            tols.append(tol)
+        dists = all_distances(pred, label, spacing, tols)
+        for metric, value in dists.items():
+            data[metric] = value
 
-    data['assd'] = dists['assd']
-    data['hd'] = dists['hd']
-    data['hd-95'] = dists['hd-95']
-    data['hd-mean'] = dists['hd-mean']
+        # Add 'deepmind' comparison.
+        dists = distances_deepmind(pred, label, spacing, tols)
+        for metric, value in dists.items():
+            data[f'dm-{metric}'] = value
 
     # Extent distance.
     if pred.sum() == 0:
@@ -74,16 +80,16 @@ def get_patient_localiser_evaluation(
     if pred.sum() == 0:
         e_dist = (np.nan, np.nan, np.nan)
     else:
-        # Get second stage patch coordinates.
+        # Get second-stage patch min/max coordinates.
         centre = get_extent_centre(pred)
         size = get_region_patch_size(region, spacing)
         min, max = get_box(centre, size)
 
-        # Clip patch coordinates to label size.
+        # Clip second-stage patch to label size - if necessary.
         min = np.clip(min, a_min=0, a_max=None)
         max = np.clip(max, a_min=None, a_max=label.shape)
 
-        # Convert patch coordinates into label.
+        # Convert second-stage patch coordinates into a label of ones so we can use 'get_encaps_dist_mm'.
         patch_label = np.zeros_like(label)
         slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
         patch_label[slices] = 1

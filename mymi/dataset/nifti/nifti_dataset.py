@@ -39,12 +39,6 @@ class NIFTIDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
-    @property
-    def anon_manifest(self) -> Optional[pd.DataFrame]:
-        man_df = load_csv('anon-maps', f'{self._name}.csv')
-        man_df = man_df.astype({ 'anon-id': str, 'patient-id': str })
-        return man_df
-
     def list_patients(
         self,
         regions: types.PatientRegions = 'all') -> List[str]:

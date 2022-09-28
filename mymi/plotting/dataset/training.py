@@ -25,8 +25,6 @@ def plot_sample_localiser_prediction(
     sample_idx: str,
     region: str,
     localiser: types.ModelName,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     **kwargs) -> None:
     # Load data.
     sample = ds.get(dataset, 'training').sample(sample_idx)
@@ -38,7 +36,7 @@ def plot_sample_localiser_prediction(
     truncate = True if region == 'SpinalCord' else False
 
     # Make prediction.
-    pred = get_sample_localiser_prediction(dataset, sample_idx, localiser, loc_size, loc_spacing, truncate=truncate)
+    pred = get_sample_localiser_prediction(dataset, sample_idx, localiser, truncate=truncate)
     
     # Plot.
     plot_localiser_prediction(sample_idx, region, input, label, spacing, pred, **kwargs)

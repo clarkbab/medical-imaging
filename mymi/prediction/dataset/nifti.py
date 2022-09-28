@@ -8,7 +8,7 @@ from ..prediction import get_localiser_prediction
 from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
-from mymi import logging
+from mymi import logging as log
 from mymi.loaders import Loader
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
@@ -16,6 +16,7 @@ from mymi.transforms import crop_foreground_3D
 from mymi.regions import RegionLimits, get_region_patch_size
 from mymi.transforms import top_crop_or_pad_3D, crop_or_pad_3D, resample_3D
 from mymi import types
+from mymi.utils import load_csv
 
 def get_patient_localiser_prediction(
     dataset: str,
@@ -23,8 +24,7 @@ def get_patient_localiser_prediction(
     localiser: types.Model,
     loc_size: types.ImageSize3D = (128, 128, 150),
     loc_spacing: types.ImageSpacing3D = (4, 4, 4),
-    device: Optional[torch.device] = None,
-    truncate: bool = False) -> np.ndarray:
+    device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = ds.get(dataset, 'nifti')
     patient = set.patient(pat_id)
@@ -32,20 +32,25 @@ def get_patient_localiser_prediction(
     spacing = patient.ct_spacing
 
     # Make prediction.
-    pred = get_localiser_prediction(input, spacing, localiser, loc_size=loc_size, loc_spacing=loc_spacing, device=device, truncate=truncate)
+    pred = get_localiser_prediction(input, spacing, localiser, loc_size=loc_size, loc_spacing=loc_spacing, device=device)
 
     return pred
 
 def create_patient_localiser_prediction(
-    dataset: str,
-    pat_id: str,
-    localiser: Union[types.Model, types.ModelName],
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
+    datasets: Union[str, List[str]],
+    pat_ids: Union[str, List[str]],
+    localiser: Union[types.ModelName, types.Model],
     device: Optional[torch.device] = None,
-    truncate: bool = False) -> None:
-    # Load dataset.
-    set = ds.get(dataset, 'nifti')
+    logging: bool = True,
+    savefolder: Optional[str] = None) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    if type(pat_ids) == str:
+        pat_ids = [pat_ids]
+    if len(datasets) == 1 and len(pat_ids) != 1:
+        # Broadcast datasets.
+        datasets = datasets * len(pat_ids)
+    assert len(datasets) == len(pat_ids)
 
     # Load localiser.
     if type(localiser) == tuple:
@@ -55,72 +60,67 @@ def create_patient_localiser_prediction(
     if device is None:
         if torch.cuda.is_available():
             device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
+            log.info('Predicting on GPU...')
         else:
             device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
+            log.info('Predicting on CPU...')
 
-    # Make prediction - don't truncate saved predictions.
-    pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+    for dataset, pat_id in zip(datasets, pat_ids):
+        if logging:
+            log.info(f"Creating prediction for patient '({dataset}, {pat_id})', localiser '{localiser.name}'.")
 
-    # Save segmentation.
-    filepath = os.path.join(set.path, 'predictions', 'localiser', *localiser.name, f'{pat_id}.npz') 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez_compressed(filepath, data=pred)
+        # Load dataset.
+        set = ds.get(dataset, 'nifti')
 
-def create_localiser_predictions(
-    dataset: str,
+        # Make prediction.
+        pred = get_patient_localiser_prediction(dataset, pat_id, localiser, device=device)
+
+        # Save segmentation.
+        if savefolder is None:
+            savefolder = os.path.join(set.path, 'predictions', 'localiser', *localiser.name) 
+        os.makedirs(savefolder, exist_ok=True)
+        np.savez_compressed(os.path.join(savefolder, f'{pat_id}.npz'), data=pred)
+
+def create_localiser_predictions_for_first_n_pats(
+    n_pats: int,
     region: str,
-    localiser: types.Model,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4)) -> None:
-    logging.info(f"Making localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}'.")
+    localiser: types.ModelName,
+    savefolder: Optional[str] = None) -> None:
+    localiser = Localiser.load(*localiser)
+    log.info(f"Making localiser predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
 
-    if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
+    # Load 'all-patients.csv'.
+    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
+        log.info('Predicting on CPU...')
 
-    # Load patients.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
-
-    for pat in tqdm(pats):
-        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+    # Get dataset/patient IDs.
+    create_patient_localiser_prediction(*df, localiser, device=device, logging=False, savefolder=savefolder)
 
 def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.Model,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
+    localiser: types.ModelName,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
-    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+    localiser = Localiser.load(*localiser)
+    log.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
+        log.info('Predicting on CPU...')
 
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
@@ -131,7 +131,7 @@ def create_localiser_predictions_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
+            create_patient_localiser_prediction(dataset, pat_id, localiser, device=device, logging=False)
 
 def load_patient_localiser_prediction(
     dataset: str,
@@ -225,19 +225,25 @@ def get_patient_segmenter_prediction(
     return pred
 
 def create_patient_segmenter_prediction(
-    dataset: str,
-    pat_id: str,
+    datasets: Union[str, List[str]],
+    pat_ids: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
     segmenter: Union[types.Model, types.ModelName],
+    device: Optional[torch.device] = None,
+    logging: bool = True,
     probs: bool = False,
     raise_error: bool = False,
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
-    device: Optional[torch.device] = None) -> None:
+    savefolder: Optional[str] = None) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    if type(pat_ids) == str:
+        pat_ids = [pat_ids]
+    if len(datasets) == 1 and len(pat_ids) != 1:
+        # Broadcast datasets.
+        datasets = datasets * len(pat_ids)
+    assert len(datasets) == len(pat_ids)
     localiser = replace_checkpoint_alias(*localiser)
-
-    # Load dataset.
-    set = ds.get(dataset, 'nifti')
 
     # Load segmenter.
     if type(segmenter) == tuple:
@@ -247,79 +253,80 @@ def create_patient_segmenter_prediction(
     if device is None:
         if torch.cuda.is_available():
             device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
+            log.info('Predicting on GPU...')
         else:
             device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
+            log.info('Predicting on CPU...')
 
-    # Get segmenter prediction.
-    loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
-    if loc_centre is None:
-        # Create empty pred.
-        if raise_error:
-            raise ValueError(f"No 'loc_centre' returned from localiser.")
+    for dataset, pat_id in zip(datasets, pat_ids):
+        if logging:
+            log.info(f"Creating prediction for patient '({dataset}, {pat_id})', localiser '{localiser.name}'.")
+
+        # Get segmenter prediction.
+        loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
+        if loc_centre is None:
+            # Create empty pred.
+            if raise_error:
+                raise ValueError(f"No 'loc_centre' returned from localiser.")
+            else:
+                ct_data = set.patient(pat_id).ct_data
+                pred = np.zeros_like(ct_data, dtype=bool) 
         else:
-            ct_data = set.patient(pat_id).ct_data
-            pred = np.zeros_like(ct_data, dtype=bool) 
-    else:
-        pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, seg_spacing=seg_spacing, device=device)
+            pred = get_patient_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, device=device)
 
-    # Save segmentation.
-    if probs:
-        filename = f'{pat_id}-prob.npz'
-    else:
-        filename = f'{pat_id}.npz'
-    filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, filename) 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    np.savez_compressed(filepath, data=pred)
+        # Save segmentation.
+        if probs:
+            filename = f'{pat_id}-prob.npz'
+        else:
+            filename = f'{pat_id}.npz'
+        if savefolder is None:
+            savefolder = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, filename) 
+        os.makedirs(savefolder, exist_ok=True)
+        np.savez_compressed(os.path.join(savefolder, filename), data=pred)
 
-def create_segmenter_predictions(
-    dataset: str,
+def create_segmenter_predictions_for_first_n_pats(
+    n_pats: int,
     region: str,
-    localiser: types.Model,
-    segmenter: types.Model,
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2)) -> None:
-    logging.info(f"Making segmenter predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    savefolder: Optional[str] = None) -> None:
+    log.info(f"Making segmenter predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
+
+    # Load 'all-patients.csv'.
+    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
+        log.info('Predicting on CPU...')
 
-    # Load patients.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
-
-    # Load segmenter.
-    segmenter = Segmenter.load(*segmenter)
-
-    for pat in tqdm(pats):
-        create_patient_segmenter_prediction(dataset, pat, region, localiser, segmenter, seg_spacing, device=device)
+    for _, (dataset, pat_id) in df.iterrows():
+        # Get segmenter that wasn't trained using this patient.
+        create_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device, logging=False, savefolder=savefolder)
 
 def create_segmenter_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+    log.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
+        log.info('Predicting on CPU...')
 
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
@@ -330,7 +337,7 @@ def create_segmenter_predictions_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, seg_spacing=seg_spacing, device=device)
+            create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, device=device, logging=False)
 
 def load_patient_segmenter_prediction(
     dataset: str,
@@ -375,37 +382,31 @@ def save_patient_segmenter_prediction(
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     np.savez_compressed(filepath, data=data)
 
-def create_two_stage_predictions(
-    dataset: str,
+def create_two_stage_predictions_for_first_n_pats(
+    n_pats: int,
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2)) -> None:
-    logging.info(f"Making two-stage predictions for NIFTI dataset '{dataset}', region '{region}', segmenter '{segmenter}'.")
+    savefolder: Optional[str] = None) -> None:
+    log.info(f"Making segmenter predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
+
+    # Load 'all-patients.csv'.
+    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
+        log.info('Predicting on CPU...')
 
-    # Load patients.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
+    loc_savefolder = os.path.join(savefolder, 'localiser') if savefolder is not None else None
+    seg_savefolder = os.path.join(savefolder, 'segmenter') if savefolder is not None else None
 
-    # Load segmenter.
-    segmenter = Segmenter.load(*segmenter)
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
-
-    for pat in tqdm(pats):
-        create_patient_localiser_prediction(dataset, pat, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
-        create_patient_segmenter_prediction(dataset, pat, region, localiser.name, segmenter, seg_spacing, device=device)
+    for _, (dataset, pat_id) in df.iterrows():
+        create_patient_localiser_prediction(*df, localiser, device=device, logging=False, savefolder=loc_savefolder)
+        create_patient_segmenter_prediction(*df, region, localiser, segmenter, device=device, logging=False, savefolder=seg_savefolder)
 
 def create_two_stage_predictions_from_loader(
     datasets: Union[str, List[str]],
@@ -413,32 +414,27 @@ def create_two_stage_predictions_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     n_folds: Optional[int] = None,
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
     segmenter = Segmenter.load(*segmenter)
-    logging.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test folds '{test_folds}'.")
+    log.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
+        log.info('Predicting on GPU...')
     else:
         device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
+        log.info('Predicting on CPU...')
 
     # Perform for specified folds
     if test_folds == 'all':
         test_folds = list(range(n_folds))
     elif type(test_folds) == int:
         test_folds = [test_folds]
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
 
     for test_fold in tqdm(test_folds):
         _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
@@ -448,5 +444,5 @@ def create_two_stage_predictions_from_loader(
             if type(pat_id_b) == torch.Tensor:
                 pat_id_b = pat_id_b.tolist()
             for dataset, pat_id in zip(dataset_b, pat_id_b):
-                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, device=device, truncate=truncate)
-                create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, seg_spacing, device=device)
+                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, device=device, logging=False)
+                create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, device=device)

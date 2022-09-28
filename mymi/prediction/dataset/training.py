@@ -16,8 +16,7 @@ def get_sample_localiser_prediction(
     localiser: types.Model,
     loc_size: types.ImageSize3D,
     loc_spacing: types.ImageSpacing3D,
-    device: Optional[torch.device] = None,
-    truncate: bool = False) -> None:
+    device: Optional[torch.device] = None) -> None:
     # Load data.
     set = ds.get(dataset, 'training')
     sample = set.sample(sample_idx)
@@ -25,6 +24,6 @@ def get_sample_localiser_prediction(
     spacing = sample.spacing
 
     # Make prediction.
-    pred = get_localiser_prediction(localiser, loc_size, loc_spacing, input, spacing, device=device, truncate=truncate)
+    pred = get_localiser_prediction(localiser, loc_size, loc_spacing, input, spacing, device=device)
 
     return pred

@@ -15,8 +15,7 @@ def get_localiser_prediction(
     localiser: types.Model,
     loc_size: types.ImageSize3D = (128, 128, 150),
     loc_spacing: types.ImageSpacing3D = (4, 4, 4),
-    device: Optional[torch.device] = None,
-    truncate: bool = False) -> np.ndarray:
+    device: Optional[torch.device] = None) -> np.ndarray:
     # Load gpu if available.
     if device is None:
         if torch.cuda.is_available():
@@ -65,16 +64,5 @@ def get_localiser_prediction(
     # Crop to input size to clean up any resampling rounding errors.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_3D(pred, crop_box)
-
-    # Perform truncation to 'SpinalCord' z-extent.
-    if truncate:
-        ext_width = get_extent_width_mm(pred, spacing)
-        if ext_width and ext_width[2] > RegionLimits.SpinalCord[2]:
-            # Crop caudal end of spine.
-            logging.warning(f"Cropping bottom end of 'SpinalCord'. Got z-extent width '{ext_width[2]}mm', maximum '{RegionLimits.SpinalCord[2]}mm'.")
-            top_z = get_extent(pred)[1][2]
-            bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
-            crop = ((0, 0, bottom_z), tuple(np.array(pred.shape) - 1))
-            pred = crop_foreground_3D(pred, crop)
 
     return pred

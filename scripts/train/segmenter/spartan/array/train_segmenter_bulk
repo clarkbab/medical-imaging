@@ -1,6 +1,6 @@
 import subprocess
 
-regions = '8-11'
+regions = '12-15'
 script = 'scripts/train/segmenter/spartan/array/train_segmenter'
 test_folds = [0, 1, 2, 3, 4]
 models = ['clinical', 'transfer']

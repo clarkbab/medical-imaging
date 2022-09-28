@@ -61,8 +61,6 @@ def plot_patient_localiser_prediction(
     localiser: types.ModelName,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Crop2D]] = None,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     load_prediction: bool = True,
     regions: Optional[types.PatientRegions] = None,
     region_labels: Optional[Dict[str, str]] = None,
@@ -82,7 +80,7 @@ def plot_patient_localiser_prediction(
         truncate = True if 'SpinalCord' in localiser[0] else False
 
         # Make prediction.
-        pred = get_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, truncate=truncate)
+        pred = get_patient_localiser_prediction(dataset, pat_id, localiser, truncate=truncate)
 
     if centre_of is not None:
         if type(crop) == str:
@@ -118,8 +116,6 @@ def plot_patient_segmenter_prediction(
     crop: Optional[Union[str, types.Crop2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
-    loc_sizes: Optional[Union[types.ImageSize3D, List[types.ImageSize3D]]] = (128, 128, 150),
-    loc_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (4, 4, 4),
     regions: Optional[types.PatientRegions] = None,
     region_labels: Optional[Dict[str, str]] = None,
     show_ct: bool = True,
@@ -135,16 +131,6 @@ def plot_patient_segmenter_prediction(
     assert len(localisers) == len(segmenters)
     n_models = len(localisers)
     model_names = tuple(f'model-{i}' for i in range(n_models))
-
-    # Broadcast arguments to 'n_models' length.
-    if type(loc_sizes) == tuple:
-        loc_sizes = [loc_sizes] * n_models
-    else:
-        assert len(loc_sizes) == n_models
-    if type(loc_spacings) == tuple:
-        loc_spacings = [loc_spacings] * n_models
-    else:
-        assert len(loc_spacings) == n_models
 
     # Infer 'pred_regions' from localiser model names.
     pred_regions = [l[0].split('-')[1] for l in localisers]
@@ -166,8 +152,6 @@ def plot_patient_segmenter_prediction(
         localiser = localisers[i]
         segmenter = segmenters[i]
         model_name = model_names[i]
-        loc_size = loc_sizes[i]
-        loc_spacing = loc_spacings[i]
         pred_region = pred_regions[i]
         seg_spacing = seg_spacings[i]
 
@@ -181,7 +165,7 @@ def plot_patient_segmenter_prediction(
         if loc_centre is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
             truncate = True if pred_region == 'SpinalCord' else False
-            create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, loc_spacing, truncate=truncate)
+            create_patient_localiser_prediction(dataset, pat_id, localiser, truncate=truncate)
             loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
 
         # Get segmenter prediction.
