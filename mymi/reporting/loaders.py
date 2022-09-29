@@ -21,7 +21,6 @@ def get_loader_manifest(
     # Create empty dataframe.
     cols = {
         'region': str,
-        'fold': int,
         'loader': str,
         'loader-batch': int,
         'dataset': str,
@@ -47,7 +46,6 @@ def get_loader_manifest(
                 origin_ds, origin_pat_id = dataset_map[dataset].sample(sample_id).origin
                 data = {
                     'region': region,
-                    'fold': test_fold,
                     'loader': loader_name,
                     'loader-batch': b,
                     'dataset': dataset,
@@ -82,4 +80,6 @@ def load_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    return load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
+    df = load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
+    df.astype({ 'patient-id': str })
+    return df
