@@ -86,11 +86,12 @@ def create_segmenter_dose_evaluation_from_loader(
         mean_dose_gt = dose_gt.mean
 
         # Get predicted dose.
-        if os.environ['PETER_MAC_HACK'] == 'True':
+        if config.environ('PETER_MAC_HACK') == 'True':
+            base_path = 'S:\\ImageStore\\HN_AI_Contourer\\short\\dicom'
             if dataset == 'PMCC-HN-TEST':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
+                pred_path = os.path.join(base_path, 'test')
             elif dataset == 'PMCC-HN-TRAIN':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
+                pred_path = os.path.join(base_path, 'train')
         else:
             pred_path = os.path.join(set.path, 'predictions', 'segmenter')
         rtstruct_pred_path = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id}.dcm')

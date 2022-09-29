@@ -8,7 +8,7 @@ from time import time
 from tqdm import tqdm
 from typing import List, Optional, Union
 
-from mymi import types
+from mymi import config
 from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import create, exists, get, recreate
@@ -19,6 +19,7 @@ from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
+from mymi import types
 from mymi.utils import append_row
 
 def convert_to_training(
@@ -284,11 +285,12 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         # Save prediction.
         # Get localiser checkpoint and raise error if multiple.
         # Hack - clean up when/if path limits are removed.
-        if os.environ['PETER_MAC_HACK'] == 'True':
+        if config.environ('PETER_MAC_HACK') == 'True':
+            base_path = 'S:\\ImageStore\\HN_AI_Contourer\\short\\dicom'
             if dataset == 'PMCC-HN-TEST':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
+                pred_path = os.path.join(base_path, 'test')
             elif dataset == 'PMCC-HN-TRAIN':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
+                pred_path = os.path.join(base_path, 'train')
         else:
             pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
         filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')
