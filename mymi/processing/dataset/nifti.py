@@ -1,3 +1,4 @@
+from re import I
 import numpy as np
 import os
 import pandas as pd
@@ -9,6 +10,7 @@ from tqdm import tqdm
 from typing import List, Optional, Union
 
 from mymi import config
+from mymi import dataset as ds
 from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import create, exists, get, recreate
@@ -224,6 +226,113 @@ def _create_training_label(
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
+
+def convert_segmenter_predictions_to_dicom_aggregate(n_pats: int = 20) -> None:
+    # RTSTRUCT info.
+    default_rt_info = {
+        'label': 'PMCC-AI',
+        'institution-name': 'PMCC-AI'
+    }
+
+    # Load patients. 
+    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'all-patients.csv')
+    df = pd.read_csv(filepath).head(n_pats).astype({ 'patient-id': str })
+    datasets = df.dataset
+    pat_ids = df['patient-id']
+
+    for dataset, pat_id in tqdm(zip(datasets, pat_ids)):
+        # Get ROI ID from DICOM dataset.
+        nifti_set = NIFTIDataset(dataset)
+        pat_id_dicom = nifti_set.patient(pat_id).patient_id
+        set_dicom = DICOMDataset(dataset)
+        patient_dicom = set_dicom.patient(pat_id_dicom)
+        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
+        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
+
+        # Create RTSTRUCT.
+        cts = patient_dicom.get_cts()
+        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
+
+        # Create index to track which model was used to predict each region.
+        cols = {
+            'region': str,
+            'model': str
+        }
+        index_df = pd.DataFrame(columns=cols.keys())
+
+        for region in RegionNames:
+            # Localiser is always 'public' model.
+            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+
+            # Get segmenter that wasn't trained on this patient.
+            for test_fold in range(5):
+                loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+                df = load_loader_manifest(loader_datasets, region, test_fold=test_fold)
+                if pat_id in df['patient-id']:
+                    break
+                elif test_fold == 4:
+                    raise ValueError(f"NIFTI patient '{pat_id}' not found in loader manifest for region '{region}'.")
+            segmenter = (f'segmenter-{region}', 'clinical-fold-{test_fold}-samples-None', 'best')
+
+            # Add index entry.
+            data = {
+                'region': region,
+                'model': segmenter[1]
+            }
+            index_df = append_row(index_df, data)
+
+            # Load prediction.
+            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+            
+            # Match ROI number to ground truth if available.
+            if region in region_map_gt:
+                number = region_map_gt[region]
+            else:
+                for i in range(1, 1000):
+                    if i not in region_map_gt[region].values():
+                        region_map_gt[region] = i
+                        break
+                    elif i == 999:
+                        raise ValueError(f'Unlikely')
+                number = i 
+
+            # Add ROI data.
+            roi_data = ROIData(
+                colour=list(to_255(getattr(RegionColours, region))),
+                data=pred,
+                frame_of_reference_uid=frame_of_reference_uid,
+                name=region,
+                number=number
+            )
+            RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+
+        # Save prediction.
+        # Hack - clean up when/if path limits are removed.
+        if os.environ['PETER_MAC_HACK'] == 'True':
+            if dataset == 'PMCC-HN-TEST':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
+            elif dataset == 'PMCC-HN-TRAIN':
+                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
+        else:
+            pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
+        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'pred.dcm')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        rtstruct_pred.save_as(filepath)
+
+        # Copy CTs.
+        for i, path in enumerate(patient_dicom.default_rtstruct.ref_ct.paths):
+            filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, f'ct-{i}.dcm')
+            shutil.copyfile(path, filepath)
+
+        # Copy ground truth RTSTRUCT.
+        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'rtstruct.dcm')
+        shutil.copyfile(patient_dicom.default_rtstruct.path, filepath)
+
+        # Save index.
+        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'index.csv')
+        index_df.to_csv(filepath, index=False)
 
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],

@@ -18,58 +18,55 @@ class CTSeries(DICOMSeries):
         self,
         study: 'DICOMStudy',
         id: str):
-        self._global_id = f"{study} - {id}"
-        self._study = study
-        self._id = id
+        self.__global_id = f"{study} - {id}"
+        self.__study = study
+        self.__id = id
 
         # Load index.
-        index = self._study.index
+        index = self.__study.index
         index = index[(index.modality == 'CT') & (index['series-id'] == id)]
-        self._index = index
-        self._path = None
+        self.__index = index
+        self.__paths = list(self.__index['filepath'])
         
         # Check that series exists.
         if len(index) == 0:
             raise ValueError(f"CT series '{self}' not found in index for study '{study}'.")
 
-        # Set path.
-        
-
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
     def index(self) -> pd.DataFrame:
-        return self._index
+        return self.__index
 
     @property
     def id(self) -> str:
-        return self._id
+        return self.__id
 
     @property
     def modality(self) -> DICOMModality:
         return DICOMModality.CT
 
     @property
-    def path(self) -> str:
-        return self._path
+    def paths(self) -> str:
+        return self.__paths
 
     @property
     def study(self) -> str:
-        return self._study
+        return self.__study
     
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     def get_cts(self) -> List[dcm.dataset.FileDataset]:
-        ct_paths = list(self._index['filepath'])
+        ct_paths = list(self.__index['filepath'])
         cts = [dcm.read_file(f) for f in ct_paths]
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
 
     def get_first_ct(self) -> dcm.dataset.FileDataset:
-        ct_paths = list(self._index['filepath'])
+        ct_paths = list(self.__index['filepath'])
         ct = dcm.read_file(ct_paths[0])
         return ct
 
