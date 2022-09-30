@@ -344,9 +344,10 @@ def load_patient_segmenter_prediction(
     pat_id: types.PatientID,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    raise_error: bool = True) -> Optional[np.ndarray]:
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
+    raise_error: bool = True,
+    use_model_manifest: bool = False) -> Optional[np.ndarray]:
+    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')

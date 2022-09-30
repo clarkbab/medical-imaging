@@ -79,7 +79,11 @@ def create_loader_manifest(
 def load_loader_manifest(
     datasets: Union[str, List[str]],
     region: str,
+    apply_typing: bool = True,
     test_fold: Optional[int] = None) -> pd.DataFrame:
     df = load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
-    df.astype({ 'patient-id': str })
+    if apply_typing:
+        if 'patient-id' not in df:
+            raise ValueError(f"Column 'patient-id' not found in loader manifest for dataset hash '{encode(datasets)}', file '{region}-fold-{test_fold}.csv'.")
+        df = df.astype({ 'patient-id': str })
     return df

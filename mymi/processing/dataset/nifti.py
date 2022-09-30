@@ -227,20 +227,32 @@ def _create_training_label(
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
 
-def convert_segmenter_predictions_to_dicom_aggregate(n_pats: int = 20) -> None:
+def convert_segmenter_predictions_to_dicom_aggregate(
+    n_pats: int = 20,
+    use_model_manifest: bool = False) -> None:
     # RTSTRUCT info.
     default_rt_info = {
         'label': 'PMCC-AI',
         'institution-name': 'PMCC-AI'
     }
 
-    # Load patients. 
-    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'all-patients.csv')
-    df = pd.read_csv(filepath).head(n_pats).astype({ 'patient-id': str })
-    datasets = df.dataset
-    pat_ids = df['patient-id']
+    # Load patients - from Mandible as (fold=0) is missing. 
+    loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+    df = load_loader_manifest(loader_datasets, 'Mandible', apply_typing=False, test_fold=0)
+    df = df.head(n_pats)
+    df = df.astype({ 'origin-patient-id': str })
+    datasets = df['origin-dataset']
+    pat_ids = df['origin-patient-id']
 
-    for dataset, pat_id in tqdm(zip(datasets, pat_ids)):
+    # Save missing patients.
+    cols = {
+        'region': str,
+        'dataset': str,
+        'patient-id': str
+    }
+    miss_df = pd.DataFrame(columns=cols.keys())
+
+    for dataset, pat_id in tqdm(list(zip(datasets, pat_ids))):
         # Get ROI ID from DICOM dataset.
         nifti_set = NIFTIDataset(dataset)
         pat_id_dicom = nifti_set.patient(pat_id).patient_id
@@ -268,13 +280,29 @@ def convert_segmenter_predictions_to_dicom_aggregate(n_pats: int = 20) -> None:
 
             # Get segmenter that wasn't trained on this patient.
             for test_fold in range(5):
-                loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+                # This file has a different format - so we can't trust the loader matches the trained models.
+                if region == 'Mandible' and test_fold == 0:
+                    continue
                 df = load_loader_manifest(loader_datasets, region, test_fold=test_fold)
-                if pat_id in df['patient-id']:
+                df = df[(df.dataset == dataset) & (df['patient-id'] == pat_id)]
+                if len(df) == 1:
                     break
-                elif test_fold == 4:
-                    raise ValueError(f"NIFTI patient '{pat_id}' not found in loader manifest for region '{region}'.")
-            segmenter = (f'segmenter-{region}', 'clinical-fold-{test_fold}-samples-None', 'best')
+
+            # Check if patient wasn't found in loader.
+            if len(df) == 0:
+                data = {
+                    'region': region,
+                    'dataset': dataset,
+                    'patient-id': pat_id
+                }
+                miss_df = append_row(miss_df, data)
+                # Skip to next region.
+                continue
+
+                # raise ValueError(f"NIFTI patient '({dataset}, {pat_id})' not found in loader manifest for region '{region}'.")
+
+            # Use segmenter that wasn't trained on final 'test_fold' value.
+            segmenter = (f'segmenter-{region}', f'clinical-fold-{test_fold}-samples-None', 'best')
 
             # Add index entry.
             data = {
@@ -284,7 +312,7 @@ def convert_segmenter_predictions_to_dicom_aggregate(n_pats: int = 20) -> None:
             index_df = append_row(index_df, data)
 
             # Load prediction.
-            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, use_model_manifest=use_model_manifest)
             
             # Match ROI number to ground truth if available.
             if region in region_map_gt:
@@ -333,6 +361,10 @@ def convert_segmenter_predictions_to_dicom_aggregate(n_pats: int = 20) -> None:
         # Save index.
         filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'index.csv')
         index_df.to_csv(filepath, index=False)
+
+        # Save missing patient regions.
+        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'missing.csv')
+        miss_df.to_csv(filepath, index=False)
 
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],
