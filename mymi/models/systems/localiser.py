@@ -11,6 +11,7 @@ from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
+from mymi.models import replace_checkpoint_alias
 from mymi.postprocessing import get_batch_largest_cc
 from mymi import types
 
@@ -65,26 +66,13 @@ class Localiser(pl.LightningModule):
             raise ValueError(f"Can't load localiser ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = Localiser.replace_checkpoint_aliases(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = replace_checkpoint_alias(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")
         localiser = Localiser.load_from_checkpoint(filepath, **kwargs)
         localiser._name = (model_name, run_name, checkpoint)
         return localiser
-
-    @staticmethod
-    def replace_checkpoint_aliases(
-        model_name: str,
-        run_name: str,
-        checkpoint: str) -> Tuple[str, str, str]:
-        # Find best checkpoint.
-        if checkpoint == 'BEST': 
-            dirpath = os.path.join(config.directories.models, model_name, run_name)
-            if not os.path.exists(dirpath):
-                raise ValueError(f"Run '{run_name}' not found for localiser '{model_name}'.")
-            checkpoint = list(sorted(os.listdir(dirpath)))[-1].replace('.ckpt', '')
-        return (model_name, run_name, checkpoint)
 
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)

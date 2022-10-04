@@ -1,6 +1,6 @@
 import os
 import torch
-from typing import List, Tuple
+from typing import Tuple
 
 from mymi import config
 from mymi.reporting.models import load_model_manifest

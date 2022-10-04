@@ -1,5 +1,7 @@
+from mymi.reporting.loaders import load_loader_manifest
 import numpy as np
 import os
+import pandas as pd
 import torch
 from tqdm import tqdm
 from typing import List, Literal, Optional, Tuple, Union
@@ -13,10 +15,10 @@ from mymi.loaders import Loader
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi.transforms import crop_foreground_3D
-from mymi.regions import RegionLimits, get_region_patch_size
+from mymi.regions import RegionNames, get_region_patch_size
 from mymi.transforms import top_crop_or_pad_3D, crop_or_pad_3D, resample_3D
 from mymi import types
-from mymi.utils import load_csv
+from mymi.utils import append_row, load_csv
 
 def get_patient_localiser_prediction(
     dataset: str,
@@ -42,7 +44,7 @@ def create_patient_localiser_prediction(
     localiser: Union[types.ModelName, types.Model],
     device: Optional[torch.device] = None,
     logging: bool = True,
-    savefolder: Optional[str] = None) -> None:
+    savepath: Optional[str] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(pat_ids) == str:
@@ -76,16 +78,16 @@ def create_patient_localiser_prediction(
         pred = get_patient_localiser_prediction(dataset, pat_id, localiser, device=device)
 
         # Save segmentation.
-        if savefolder is None:
-            savefolder = os.path.join(set.path, 'predictions', 'localiser', *localiser.name) 
-        os.makedirs(savefolder, exist_ok=True)
-        np.savez_compressed(os.path.join(savefolder, f'{pat_id}.npz'), data=pred)
+        if savepath is None:
+            savepath = os.path.join(set.path, 'predictions', 'localiser', *localiser.name, f'{pat_id}.npz') 
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        np.savez_compressed(savepath, data=pred)
 
 def create_localiser_predictions_for_first_n_pats(
     n_pats: int,
     region: str,
     localiser: types.ModelName,
-    savefolder: Optional[str] = None) -> None:
+    savepath: Optional[str] = None) -> None:
     localiser = Localiser.load(*localiser)
     log.info(f"Making localiser predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
 
@@ -101,7 +103,7 @@ def create_localiser_predictions_for_first_n_pats(
         log.info('Predicting on CPU...')
 
     # Get dataset/patient IDs.
-    create_patient_localiser_prediction(*df, localiser, device=device, logging=False, savefolder=savefolder)
+    create_patient_localiser_prediction(*df, localiser, device=device, logging=False, savepath=savepath)
 
 def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
@@ -234,7 +236,7 @@ def create_patient_segmenter_prediction(
     logging: bool = True,
     probs: bool = False,
     raise_error: bool = False,
-    savefolder: Optional[str] = None) -> None:
+    savepath: Optional[str] = None) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     if type(pat_ids) == str:
@@ -279,17 +281,17 @@ def create_patient_segmenter_prediction(
             filename = f'{pat_id}-prob.npz'
         else:
             filename = f'{pat_id}.npz'
-        if savefolder is None:
-            savefolder = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, filename) 
-        os.makedirs(savefolder, exist_ok=True)
-        np.savez_compressed(os.path.join(savefolder, filename), data=pred)
+        if savepath is None:
+            savepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter.name, filename) 
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        np.savez_compressed(savepath, data=pred)
 
-def create_segmenter_predictions_for_first_n_pats(
+def create_segmenter_predictions_from_csv(
     n_pats: int,
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    savefolder: Optional[str] = None) -> None:
+    savepath: Optional[str] = None) -> None:
     log.info(f"Making segmenter predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
 
     # Load 'all-patients.csv'.
@@ -305,7 +307,7 @@ def create_segmenter_predictions_for_first_n_pats(
 
     for _, (dataset, pat_id) in df.iterrows():
         # Get segmenter that wasn't trained using this patient.
-        create_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device, logging=False, savefolder=savefolder)
+        create_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device, logging=False, savepath=savepath)
 
 def create_segmenter_predictions_from_loader(
     datasets: Union[str, List[str]],
@@ -384,16 +386,14 @@ def save_patient_segmenter_prediction(
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     np.savez_compressed(filepath, data=data)
 
-def create_two_stage_predictions_for_first_n_pats(
-    n_pats: int,
-    region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
-    savefolder: Optional[str] = None) -> None:
-    log.info(f"Making segmenter predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
+def create_two_stage_predictions_for_first_n_pats(n_pats: int) -> None:
+    loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+    log.info(f"Making segmenter predictions for NIFTI datasets for all regions for first '{n_pats}' patients in 'all-patients.csv'.")
 
     # Load 'all-patients.csv'.
     df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = df.astype({ 'patient-id': str })
+    df = df.head(n_pats)
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -403,12 +403,48 @@ def create_two_stage_predictions_for_first_n_pats(
         device = torch.device('cpu')
         log.info('Predicting on CPU...')
 
-    loc_savefolder = os.path.join(savefolder, 'localiser') if savefolder is not None else None
-    seg_savefolder = os.path.join(savefolder, 'segmenter') if savefolder is not None else None
+    cols = {
+        'region': str,
+        'model': str
+    }
 
-    for _, (dataset, pat_id) in df.iterrows():
-        create_patient_localiser_prediction(*df, localiser, device=device, logging=False, savefolder=loc_savefolder)
-        create_patient_segmenter_prediction(*df, region, localiser, segmenter, device=device, logging=False, savefolder=seg_savefolder)
+    for _, (dataset, pat_id) in tqdm(df.iterrows()):
+        index_df = pd.DataFrame(columns=cols.keys())
+
+        for region in RegionNames:
+            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+
+            # Find fold for which this dataset/pat_id was in the 'test' loader.
+            for test_fold in range(5):
+                man_df = load_loader_manifest(loader_datasets, region, test_fold=test_fold)
+                man_df = man_df[(man_df.loader == 'test') & (man_df['origin-dataset'] == dataset) & (man_df['origin-patient-id'] == pat_id)]
+                if len(man_df) == 1:
+                    break
+            
+            # Select segmenter that didn't include this patient for training.
+            if len(man_df) != 0:
+                # Patient was excluded when training model for 'test_fold'.
+                segmenter = (f'segmenter-{region}', f'clinical-fold-{test_fold}-samples-None', 'best')
+            else:
+                # This patient region wasn't used for training any models, let's just use the model of the first fold.
+                segmenter = (f'segmenter-{region}', 'clinical-fold-0-samples-None', 'best') 
+
+            # Add index row.
+            data = {
+                'region': region,
+                'model': f'clinical-fold-{test_fold}-samples-None'
+            }
+            index_df = append_row(index_df, data)
+
+            # Save localiser prediction (in normal location) and segmenter prediction (for easy transfer to PMCC).
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, f'{region}.npz')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            create_patient_localiser_prediction(dataset, pat_id, localiser, device=device, logging=False)
+            create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, device=device, logging=False, savepath=filepath)
+
+        # Save patient index.
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, 'index.csv')
+        index_df.to_csv(filepath, index=False)
 
 def create_two_stage_predictions_from_loader(
     datasets: Union[str, List[str]],

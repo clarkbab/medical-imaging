@@ -98,18 +98,6 @@ class Segmenter(pl.LightningModule):
         segmenter.__name = (model_name, run_name, checkpoint)
         return segmenter
 
-    @staticmethod
-    def replace_checkpoint_aliases(
-        model_name: str,
-        run_name: str,
-        checkpoint: str) -> Tuple[str, str, str]:
-        # Find best checkpoint.
-        if checkpoint == 'BEST': 
-            checkpath = os.path.join(config.directories.models, model_name, run_name)
-            checkpoint = list(sorted(os.listdir(checkpath)))[-1].replace('.ckpt', '')
-
-        return (model_name, run_name, checkpoint)
-
     def configure_optimizers(self):
         return SGD(self.parameters(), lr=1e-3, momentum=0.9)
 

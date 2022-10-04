@@ -82,8 +82,5 @@ def load_loader_manifest(
     apply_typing: bool = True,
     test_fold: Optional[int] = None) -> pd.DataFrame:
     df = load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
-    if apply_typing:
-        if 'patient-id' not in df:
-            raise ValueError(f"Column 'patient-id' not found in loader manifest for dataset hash '{encode(datasets)}', file '{region}-fold-{test_fold}.csv'.")
-        df = df.astype({ 'patient-id': str })
+    df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
     return df
