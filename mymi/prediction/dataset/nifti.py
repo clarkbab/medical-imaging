@@ -387,7 +387,7 @@ def save_patient_segmenter_prediction(
     np.savez_compressed(filepath, data=data)
 
 def create_two_stage_predictions_for_first_n_pats(n_pats: int) -> None:
-    loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
+    datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
     log.info(f"Making segmenter predictions for NIFTI datasets for all regions for first '{n_pats}' patients in 'all-patients.csv'.")
 
     # Load 'all-patients.csv'.
@@ -416,7 +416,7 @@ def create_two_stage_predictions_for_first_n_pats(n_pats: int) -> None:
 
             # Find fold for which this dataset/pat_id was in the 'test' loader.
             for test_fold in range(5):
-                man_df = load_loader_manifest(loader_datasets, region, test_fold=test_fold)
+                man_df = load_loader_manifest(datasets, region, test_fold=test_fold)
                 man_df = man_df[(man_df.loader == 'test') & (man_df['origin-dataset'] == dataset) & (man_df['origin-patient-id'] == pat_id)]
                 if len(man_df) == 1:
                     break
