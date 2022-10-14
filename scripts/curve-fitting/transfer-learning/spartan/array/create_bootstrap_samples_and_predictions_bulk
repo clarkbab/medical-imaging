@@ -1,7 +1,7 @@
 import subprocess
 
-regions = '15,16'
-tol = 2.02
+regions = '0'
+tol = 1
 script = 'scripts/curve-fitting/transfer-learning/spartan/array/create_bootstrap_samples_and_predictions'
 models = "\"('clinical','transfer')\""
 # metrics = "('apl-mm-tol-1','dice','dm-surface-dice-tol-1','hd','hd-95','msd')"

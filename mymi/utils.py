@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
@@ -130,3 +130,15 @@ def load_csv(
         raise ValueError(f"CSV at path '{path}' not found.")
     else:
         return None
+
+def arg_to_list(arg, t: Literal[int, str, tuple]) -> List[Union[int, str]]:
+    if type(arg) == t:
+        return [arg]
+    else:
+        return arg
+
+def arg_broadcast(a: List, b: List):
+    if len(a) == 1 and len(b) != 1:
+        return a * len(b)
+    else:
+        return a

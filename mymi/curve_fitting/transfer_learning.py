@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.optimize import least_squares
 import seaborn as sns
 from tqdm import tqdm
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi.evaluation.dataset.nifti import load_segmenter_evaluation_from_loader
@@ -46,6 +46,7 @@ for region in RegionNames:
     DEFAULT_METRIC_Y_LIMS[f'dm-surface-dice-tol-{tol}'] = (0, 1)
 
 DEFAULT_N_SAMPLES = int(1e4)
+DEFAULT_N_TRAINS = [5, 10, 20, 50, 100, 200, 400, 800, None]
 LOG_SCALE_X_UPPER_LIMS = [100, 150, 200, 300, 400, 600, 800]
 LOG_SCALE_X_TICK_LABELS = [5, 10, 20, 50, 100, 200, 400, 800]
 
@@ -89,7 +90,7 @@ def create_bootstrap_predictions(
             
         # Fit curve.
         try:
-            p_init = get_p_init_v2(metric)
+            p_init = get_p_init(metric)
             p_opt, _, _ = fit_curve(p_init, x, y, weights=w)
         except ValueError as e:
             if raise_error:
@@ -145,40 +146,46 @@ def create_bootstrap_samples(
 def create_bootstrap_samples_and_predictions(
     datasets: List[str],
     region: str,
-    models: Union[str, List[str]],
+    model_types: Union[str, List[str]],
     metrics: Union[str, List[str]],
     stats: Union[str, List[str]],
-    n_trains: Union[Optional[int], List[Optional[int]]] = [5, 10, 20, 50, 100, 200, None],
+    n_trains: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
     n_folds: int = 5,
     n_samples: int = DEFAULT_N_SAMPLES,
     test_folds: Union[int, List[int]] = list(range(5))) -> None:
     metrics = [metrics] if type(metrics) == str else metrics
-    models = [models] if type(models) == str else models
+    model_types = [model_types] if type(model_types) == str else model_types
     stats = [stats] if type(stats) == str else stats
     test_folds = [test_folds] if type(test_folds) == int else test_folds
 
     # Load data.
-    _, mean_df, min_df, max_df = load_evaluation(datasets, region, models, n_trains, n_folds=n_folds, test_folds=test_folds)
+    df = load_evaluation_data(datasets, region, model_types, n_trains=n_trains, n_folds=n_folds, test_folds=test_folds)
+    if 'mean' in stats:
+        mean_df = get_mean_evaluation_data(df)
+    if 'p5' in stats:
+        p5_df = get_p5_evaluation_data(df)
+    if 'p95' in stats:
+        p95_df = get_p95_evaluation_data(df)
 
     # Create samples and prediction from curve fitting.
     for metric in metrics:
-        for model in models:
+        for model_type in model_types:
             if 'mean' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model, metric, 'mean', mean_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model, metric, 'mean', samples, n_trains)
-            if 'min' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model, metric, 'min', min_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model, metric, 'min', samples, n_trains)
-            if 'max' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model, metric, 'max', max_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model, metric, 'max', samples, n_trains)
+                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'mean', mean_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model_type, metric, 'mean', samples, n_trains)
+            if 'p5' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'p5', p5_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model_type, metric, 'p5', samples, n_trains)
+            if 'p95' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'p95', p95_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model_type, metric, 'p95', samples, n_trains)
 
 def f(
     x: np.ndarray,
     params: Tuple[float]) -> Union[float, List[float]]:
     return -params[0] / (x - params[1]) + params[2]
 
-def get_p_init_v2(metric: str) -> Tuple[float, float, float]:
+def get_p_init(metric: str) -> Tuple[float, float, float]:
     if 'apl-mm-tol-' in metric:
         return (-1, -1, 1)
     if 'dm-surface-dice-tol-' in metric:
@@ -191,27 +198,6 @@ def get_p_init_v2(metric: str) -> Tuple[float, float, float]:
     }
     return metric_p_inits[metric]
 
-def get_p_init(
-    x: List[float],
-    y: List[float],
-    y_mid_ratio: float = 1e-1) -> Tuple[float]:
-    # Get min/max points.
-    x_min = np.min(x)
-    y_min = np.array(y)[np.equal(x, x_min)].mean()
-    x_max = np.max(x)
-    y_max = np.array(y)[np.equal(x, x_max)].mean()
-
-    # Fit a line curved slightly so that we're fitting quadrant 2 or 3.
-    x_mid = (x_max + x_min) / 2
-    y_mid = y_max - y_mid_ratio * (y_max - y_min)
-        
-    # Fit a curve to the points.
-    x = [x_min, x_mid, x_max]
-    y = [y_min, y_mid, y_max]
-    params = fit_curve_to_points(x, y)
-
-    return params
-
 def fit_curve(
     p_init: Tuple[float],
     x: List[float],
@@ -221,7 +207,7 @@ def fit_curve(
     weights: Optional[List[float]] = None):
     # Make fit.
     x_min = np.min(x)
-    result = least_squares(residuals(f), p_init, args=(x, y, weights), bounds=((-np.inf, -np.inf, 0), (np.inf, x_min, np.inf)), max_nfev=max_nfev)
+    result = least_squares(__residuals(f), p_init, args=(x, y, weights), bounds=((-np.inf, -np.inf, 0), (np.inf, x_min, np.inf)), max_nfev=max_nfev)
 
     # Check fit status.
     status = result.status
@@ -237,45 +223,6 @@ def fit_curve(
             raise ValueError(f"Horizontal asymp. position 'y={p_opt[2]:.3f}' was below zero.")
 
     return p_opt, result.cost, result.jac
-
-def fit_curve_to_points(
-    x: List[float],
-    y: List[float]) -> Tuple[float, float, float]:
-    assert len(x) == 3 and len(y) == 3
-    
-    # Solve for b, c.
-    A = np.array([
-        [y[1] - y[0], x[1] - x[0]],
-        [y[2] - y[0], x[2] - x[0]]
-    ])
-    b = np.array([x[1] * y[1] - x[0] * y[0], x[2] * y[2] - x[0] * y[0]])
-    b, c = np.linalg.solve(A, b)
-    
-    # Solve for a.
-    a = -b * c + y[0] * b + x[0] * c - x[0] * y[0]
-    
-    return a, b, c
-
-def get_bootstrap_statistic(
-    region: str,
-    model: str,
-    metric: str, 
-    stat: str,
-    n_train: int,
-    n_samples: int = DEFAULT_N_SAMPLES):
-    # Get data for 'n_train'.
-    data, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
-    data_n_train = data[:, n_train]
-
-    # Calculate statistic.
-    if stat == 'mean':
-        value = data_n_train.mean()
-    elif stat == 'min':
-        value = data_n_train.min()
-    elif stat == 'max':
-        value = data_n_train.max()
-    
-    return value
 
 def load_bootstrap_predictions(
     region: str,
@@ -303,18 +250,18 @@ def load_bootstrap_samples(
     n_trains = f['n_trains']
     return data, n_trains
 
-def load_evaluation(
+def load_evaluation_data(
     datasets: Union[str, List[str]],
     regions: Union[str, List[str]],
-    models: Union[str, List[str]],
-    n_trains: Union[Optional[int], List[Optional[int]]],
-    n_folds: int = 5,
+    model_types: Union[str, List[str]],
+    n_trains: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
+    n_folds: Optional[int] = 5,
     test_folds: Union[int, List[int]] = list(range(5))) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     datasets = [datasets] if type(datasets) == str else datasets
-    models = [models] if type(models) == str else models
-    n_trains = [n_trains] if type(n_trains) == str else n_trains
+    model_types = [model_types] if type(model_types) == str else model_types
+    n_trains = [n_trains] if type(n_trains) == int else n_trains
     regions = [regions] if type(regions) == str else regions
-    test_folds = [test_folds] if type(test_folds) == str else test_folds
+    test_folds = [test_folds] if type(test_folds) == int else test_folds
 
     # Load evaluations and combine.
     dfs = []
@@ -324,15 +271,16 @@ def load_evaluation(
             localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
             seg_run = 'public-1gpu-150epochs'
             segmenter = (f'segmenter-{region}', seg_run, 'BEST')
-            df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, n_folds, test_fold)
-            df['model-type'] = f'transfer-fold-{test_fold}-samples-0'
+            df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
+            df['model-type'] = seg_run
+            df['n-train'] = 0
             dfs.append(df)
 
             # Get number of training cases.
             n_train_max = get_loader_n_train(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
             # Add clinical/transfer evaluations.
-            for model in (model for model in models if model != 'public'):
+            for model in (model for model in model_types if model != 'public'):
                 for n_train in n_trains:
                     # Skip if we've exceeded available number of training samples.
                     if n_train is not None and n_train > n_train_max:
@@ -340,21 +288,21 @@ def load_evaluation(
 
                     seg_run = f'{model}-fold-{test_fold}-samples-{n_train}'
                     segmenter = (f'segmenter-{region}', seg_run, 'BEST')
-                    df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, n_folds, test_fold)
+                    df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, test_fold=test_fold)
                     df['model-type'] = seg_run
+                    df['n-train'] = n_train
                     dfs.append(df)
                    
     # Save dataframe.
     df = pd.concat(dfs, axis=0)
 
-    # Add num-train (same for each fold).
-    df = df.assign(**{ 'n-train': df['model-type'].str.split('-').apply(lambda x: x[-1]) })
+    # Replace `n_train=None` with true value.
     none_nums = {}
     for region in regions:
         tl, vl, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=0)
         n_train = len(tl) + len(vl)
         none_nums[region] = n_train
-    df.loc[df['n-train'] == 'None', 'n-train'] = df[df['n-train'] == 'None']['region'].apply(lambda r: none_nums[r])
+    df.loc[df['n-train'].isnull(), 'n-train'] = df[df['n-train'].isnull()].region.apply(lambda r: none_nums[r])
     df['n-train'] = df['n-train'].astype(int)
 
     # Replace model names.
@@ -364,17 +312,16 @@ def load_evaluation(
     # Sort values.
     df = df.sort_values(['fold', 'region', 'model-type', 'n-train'])
 
-    # Add region counts.
-    # count_df = df.groupby(['fold', 'region', 'model-type', 'metric'])['patient-id'].count().reset_index()
+    return df
 
-    # Get mean values.
-    mean_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].mean().reset_index()
+def get_mean_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].mean().reset_index()
 
-    # Get min values.
-    min_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.05).reset_index()
-    max_df = df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.95).reset_index()
+def get_p5_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.05).reset_index()
 
-    return df, mean_df, min_df, max_df
+def get_p95_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.95).reset_index()
 
 def megaplot(
     regions: Union[str, List[str]],
@@ -436,11 +383,11 @@ def megaplot(
     plt.show()
 
 def plot_bootstrap_fit(
+    datasets: Union[str, List[str]],
     region: str, 
     models: Union[str, List[str]],
     metric: str,
     stat: str,
-    df: pd.DataFrame,
     alpha_ci: float = 0.2,
     alpha_points: float = 1.0,
     axs: Optional[Union[matplotlib.axes.Axes, List[matplotlib.axes.Axes]]] = None,
@@ -451,6 +398,7 @@ def plot_bootstrap_fit(
     legend_loc: Optional[str] = None,
     model_labels: Optional[Union[str, List[str]]] = None,
     n_samples: int = DEFAULT_N_SAMPLES,
+    n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS,
     show_ci: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
@@ -501,7 +449,7 @@ def plot_bootstrap_fit(
                     ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
             else:
                 # Load raw data and bootstrapped predictions.
-                x_raw, y_raw = raw_data(region, model, metric, df)
+                x_raw, y_raw = __raw_data(datasets, region, model, metric, stat, n_trains=n_trains)
                 preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
 
                 # Calculate means.
@@ -591,17 +539,31 @@ def plot_bootstrap_fit(
         axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
         axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
 
-def raw_data(
+def __raw_data(
+    datasets: Union[str, List[str]],
     region: str,
-    model: str,
+    model_type: str,
     metric: str,
-    df: pd.DataFrame) -> np.ndarray:
-    data_df = df[(df.metric == metric) & (df['model-type'] == model) & (df.region == region)]
+    stat: str,
+    n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS) -> np.ndarray:
+    # Load evaluation data.
+    df = load_evaluation_data(datasets, region, model_type, n_trains=n_trains)
+    if stat == 'mean':
+        stat_df = get_mean_evaluation_data(df)
+    elif stat == 'p5':
+        stat_df = get_p5_evaluation_data(df)
+    elif stat == 'p95':
+        stat_df = get_p95_evaluation_data(df)
+    else:
+        raise ValueError(f"Stat '{stat} not recognised.")
+
+    # Get data points.
+    data_df = stat_df[(stat_df.metric == metric) & (stat_df['model-type'] == model_type) & (stat_df.region == region)]
     x = data_df['n-train']
     y = data_df['value']
     return x, y
 
-def residuals(f):
+def __residuals(f):
     def inner(params, x, y, weights):
         y_pred = f(x, params)
         rs = y - y_pred

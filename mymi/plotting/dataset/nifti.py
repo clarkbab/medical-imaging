@@ -2,26 +2,28 @@ import re
 from typing import Dict, List, Optional, Union
 
 from mymi import dataset as ds
-from mymi.geometry import get_extent_centre
 from mymi import logging
 from mymi.prediction.dataset.nifti import create_patient_localiser_prediction, create_patient_segmenter_prediction, load_patient_localiser_centre, load_patient_localiser_prediction, load_patient_segmenter_prediction
 from mymi import types
+from mymi.utils import arg_broadcast, arg_to_list
 
-from ..plotter import plot_localiser_prediction, plot_regions, plot_segmenter_prediction
+from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
+from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
+from ..plotter import plot_region as plot_region_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 
-def plot_patient_regions(
+def plot_region(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Crop2D]] = None,
-    regions: Optional[types.PatientRegions] = None,
-    region_labels: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
+    region: Optional[types.PatientRegions] = None,
+    region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     **kwargs) -> None:
-    if type(regions) == str:
-        regions = [regions]
+    regions = arg_to_list(region)
+    region_labels = arg_to_list(region_label)
 
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
@@ -53,19 +55,22 @@ def plot_patient_regions(
             crop = region_labels[crop]
 
     # Plot.
-    plot_regions(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_region_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
-def plot_patient_localiser_prediction(
+def plot_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: types.ModelName,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Crop2D]] = None,
     load_prediction: bool = True,
-    regions: Optional[types.PatientRegions] = None,
-    region_labels: Optional[Dict[str, str]] = None,
+    region: Optional[types.PatientRegions] = None,
+    region_label: Optional[Dict[str, str]] = None,
     show_ct: bool = True,
     **kwargs) -> None:
+    regions = arg_to_list(region)
+    region_labels = arg_to_list(region_label)
+    
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data if show_ct else None
@@ -105,32 +110,32 @@ def plot_patient_localiser_prediction(
             crop = region_labels[crop]
     
     # Plot.
-    plot_localiser_prediction(pat_id, spacing, pred, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_localiser_prediction_base(pat_id, spacing, pred, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
-def plot_patient_segmenter_prediction(
+def plot_segmenter_prediction(
     dataset: str,
     pat_id: str,
-    localisers: Union[types.ModelName, List[types.ModelName]],
-    segmenters: Union[types.ModelName, List[types.ModelName]],
+    localiser: Union[types.ModelName, List[types.ModelName]],
+    segmenter: Union[types.ModelName, List[types.ModelName]],
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Crop2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
-    regions: Optional[types.PatientRegions] = None,
-    region_labels: Optional[Dict[str, str]] = None,
+    pred_label: Union[str, List[str]] = None,
+    region: Optional[types.PatientRegions] = None,
+    region_label: Optional[Dict[str, str]] = None,
     show_ct: bool = True,
     seg_spacings: Optional[Union[types.ImageSpacing3D, List[types.ImageSpacing3D]]] = (1, 1, 2),
     **kwargs) -> None:
-    # Convert args to 'list'.
-    if type(localisers) == tuple:
-        localisers = [localisers]
-    if type(segmenters) == tuple:
-        segmenters = [segmenters]
-    if type(regions) == str:
-        regions = [regions]
-    assert len(localisers) == len(segmenters)
+    localisers = arg_to_list(localiser, tuple)
+    segmenters = arg_to_list(segmenter, tuple)
+    regions = arg_to_list(region, str)
+    region_labels = arg_to_list(region_label, str)
+    localisers = arg_broadcast(localisers, segmenters)
+    pred_labels = arg_to_list(pred_label, str)
     n_models = len(localisers)
-    model_names = tuple(f'model-{i}' for i in range(n_models))
+    if pred_labels is None:
+        pred_labels = list(f'model-{i}' for i in range(n_models))
 
     # Infer 'pred_regions' from localiser model names.
     pred_regions = [l[0].split('-')[1] for l in localisers]
@@ -151,9 +156,8 @@ def plot_patient_segmenter_prediction(
     for i in range(n_models):
         localiser = localisers[i]
         segmenter = segmenters[i]
-        model_name = model_names[i]
+        pred_label = pred_labels[i]
         pred_region = pred_regions[i]
-        seg_spacing = seg_spacings[i]
 
         # Load/make localiser prediction.
         loc_centre = None
@@ -164,8 +168,7 @@ def plot_patient_segmenter_prediction(
                 logging.info(f"No prediction found for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
         if loc_centre is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
-            truncate = True if pred_region == 'SpinalCord' else False
-            create_patient_localiser_prediction(dataset, pat_id, localiser, truncate=truncate)
+            create_patient_localiser_prediction(dataset, pat_id, localiser)
             loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
 
         # Get segmenter prediction.
@@ -179,35 +182,35 @@ def plot_patient_segmenter_prediction(
         # Make prediction if didn't/couldn't load.
         if pred is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
-            create_patient_segmenter_prediction(dataset, pat_id, pred_region, localiser, segmenter, seg_spacing=seg_spacing)           # Handle multiple spacings.
+            create_patient_segmenter_prediction(dataset, pat_id, pred_region, localiser, segmenter)           # Handle multiple spacings.
             pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
 
         loc_centres.append(loc_centre)
-        pred_data[model_name] = pred
+        pred_data[pred_label] = pred
 
     if centre_of is not None:
         if centre_of == 'model':
             assert n_models == 1
-            centre_of = pred_data[model_names[0]]
+            centre_of = pred_data[pred_label[0]]
         elif type(centre_of) == str:
             match = re.search(MODEL_SELECT_PATTERN, centre_of)
             if match is not None:
                 model_i = int(match.group(1))
                 assert model_i < n_models
-                centre_of = pred_data[model_names[model_i]]
+                centre_of = pred_data[pred_label[model_i]]
             elif region_data is None or centre_of not in region_data:
                 centre_of = patient.region_data(regions=centre_of)[centre_of]
 
     if type(crop) == str:
         if crop == 'model':
             assert n_models == 1
-            crop = pred_data[model_names[0]]
+            crop = pred_data[pred_label[0]]
         else:
             match = re.search(MODEL_SELECT_PATTERN, crop)
             if match is not None:
                 model_i = int(match.group(1))
                 assert model_i < n_models
-                crop = pred_data[model_names[model_i]]
+                crop = pred_data[pred_label[model_i]]
             elif region_data is None or crop not in region_data:
                 crop = patient.region_data(regions=crop)[crop]
 
@@ -224,4 +227,4 @@ def plot_patient_segmenter_prediction(
             crop = region_labels[crop]
     
     # Plot.
-    plot_segmenter_prediction(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, loc_centres=loc_centres, region_data=region_data, **kwargs)
+    plot_segmenter_prediction_base(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, loc_centre=loc_centres, region_data=region_data, **kwargs)

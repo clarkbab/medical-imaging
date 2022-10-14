@@ -4,7 +4,7 @@
 #SBATCH --mem 64G
 #SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 5-0:00:00
+#SBATCH --time 3-06:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 
@@ -60,6 +60,17 @@ else
     PRETRAINED_MODEL=None
 fi
 USE_LOGGER=True
+
+# Check if 'N_TRAIN' training samples exist for this region.
+N_TRAIN_MAX = $(python $SCRIPT_DIR/utilities/get_n_train_max.py \
+    --datasets $DATASETS \
+    --region $REGION \
+    --test_fold $TEST_FOLD)
+
+if [ \( "$N_TRAIN" == "all" \) -o \( "$N_TRAIN" -ge "$N_TRAIN_MAX" \) ]; then
+    echo "N_TRAIN ($N_TRAIN) >= N_TRAIN_MAX ($N_TRAIN_MAX). Skipping."
+    exit 0
+fi
 
 python $SCRIPT_DIR/train/segmenter/train.py \
     --datasets $DATASETS \

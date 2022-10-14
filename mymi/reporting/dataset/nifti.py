@@ -17,7 +17,7 @@ from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_patient_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_model_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
 from mymi.utils import append_row, encode
@@ -349,7 +349,7 @@ def create_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of='pred', crop='pred', savepath=filepath, show=False, view=view)
+                plot_model_prediction(dataset, pat_id, localiser, segmenter, centre_of='pred', crop='pred', savepath=filepath, show=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -817,7 +817,7 @@ def create_segmenter_figures(
             )
             for view, page_coord in zip(views, img_coords):
                 # Set figure.
-                plot_patient_segmenter_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
+                plot_model_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
 
                 # Save temp file.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

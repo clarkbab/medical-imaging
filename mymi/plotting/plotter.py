@@ -20,6 +20,7 @@ from mymi.postprocessing import get_largest_cc
 from mymi.regions import get_region_patch_size, is_region, RegionColours
 from mymi.transforms import crop_or_pad_2D, crop_or_pad_box, crop_or_pad_point
 from mymi import types
+from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 15
 
@@ -302,10 +303,10 @@ def __assert_slice_idx(
     slice_idx: Optional[str]):
     if centre_of is None and extent_of is None and slice_idx is None:
         raise ValueError(f"Either 'centre_of', 'extent_of' or 'slice_idx' must be set.")
-    elif (centre_of and extent_of) or (centre_of and slice_idx) or (extent_of and slice_idx) or (centre_of and extent_of and slice_idx):
+    elif (centre_of is not None and extent_of is not None) or (centre_of is not None and slice_idx is not None) or (extent_of is not None and slice_idx is not None):
         raise ValueError(f"Only one of 'centre_of', 'extent_of' or 'slice_idx' can be set.")
 
-def plot_regions(
+def plot_region(
     id: str,
     size: types.ImageSize3D,
     spacing: types.ImageSpacing3D,
@@ -325,11 +326,12 @@ def plot_regions(
     figsize: Tuple[int, int] = (8, 8),
     fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,            # All data passed to 'region_data' is plotted.
-    region_alpha: float = 0.3,
+    region_alpha: float = 0.5,
     savepath: Optional[str] = None,
     show: bool = True,
     show_extent: bool = False,
@@ -474,7 +476,7 @@ def plot_regions(
 
         # Create legend.
         if show_legend and should_show_legend:
-            plt_legend = ax.legend(fontsize=fontsize, loc=legend_loc)
+            plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
 
@@ -544,8 +546,9 @@ def plot_localiser_prediction(
     figsize: Tuple[int, int] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    pred_alpha: float = 0.3,
+    pred_alpha: float = 0.5,
     pred_centre_colour: str = 'deepskyblue',
     pred_colour: str = 'deepskyblue',
     pred_extent_colour: str = 'deepskyblue',
@@ -602,7 +605,7 @@ def plot_localiser_prediction(
             slice_idx = extent[extent_end][0]
 
     # Plot patient regions.
-    plot_regions(id, prediction.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_region(id, prediction.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -667,7 +670,7 @@ def plot_localiser_prediction(
 
         # Plot the prediction centre.
         if pred_centre:
-            plt.scatter(*pred_centre, c=pred_centre_colour, label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
+            plt.scatter(*pred_centre, c=pred_centre_colour, label=f"Loc. Centre")
         else:
             plt.plot(0, 0, c=pred_centre_colour, label='Loc. Centre (offscreen)')
 
@@ -687,7 +690,7 @@ def plot_localiser_prediction(
 
     # Show legend.
     if show_legend:
-        plt_legend = plt.legend(fontsize=fontsize, loc=legend_loc)
+        plt_legend = plt.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -772,9 +775,10 @@ def plot_segmenter_prediction(
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    loc_centres: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
-    pred_alpha: float = 0.3,
+    loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
+    pred_alpha: float = 0.5,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
@@ -792,8 +796,7 @@ def plot_segmenter_prediction(
     model_names = tuple(pred_data.keys())
     n_models = len(model_names)
     n_regions = len(region_data.keys()) if region_data is not None else 0
-    if type(loc_centres) == types.Point3D:
-        loc_centres = [loc_centres]
+    loc_centres = arg_to_list(loc_centre, types.Point3D)
     if loc_centres is not None:
         assert len(loc_centres) == n_models
 
@@ -848,7 +851,7 @@ Prediction: {model_name}""")
 
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
     size = pred_data[list(pred_data.keys())[0]].shape
-    plot_regions(id, size, spacing, aspect=aspect, colours=colours[:n_regions], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+    plot_region(id, size, spacing, aspect=aspect, colours=colours[:n_regions], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -915,7 +918,7 @@ Prediction: {model_name}""")
                 centre = crop_or_pad_point(centre, crop)
 
             if centre:
-                plt.scatter(*centre, c='royalblue', label=f"Loc. Centre{' (offscreen)' if offscreen else ''}")
+                plt.scatter(*centre, c='royalblue', label=f"Loc. Centre")
             else:
                 plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
 
@@ -936,7 +939,7 @@ Prediction: {model_name}""")
 
     # Show legend.
     if show_legend:
-        plt_legend = plt.legend(fontsize=fontsize, loc=legend_loc)
+        plt_legend = plt.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -969,6 +972,7 @@ def plot_dataframe(
     annotation_model_offset=35,
     fontsize: float = DEFAULT_FONT_SIZE,
     hue_order: Optional[List[str]] = None,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'best',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
@@ -1164,9 +1168,9 @@ def plot_dataframe(
             handles, labels = axs[i].get_legend_handles_labels()
             handles = handles[:n_hues]
             labels = labels[:n_hues]
-            axs[i].legend(handles, labels, fontsize=fontsize, loc=legend_loc)
+            axs[i].legend(handles, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
         else:
-            axs[i].legend(fontsize=fontsize, loc=legend_loc)
+            axs[i].legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
     # Save plot to disk.
     if savepath is not None:
@@ -1526,7 +1530,7 @@ def plot_dataframe_v2(
                     main_legend = axs[i].get_legend()
 
                     # Show outlier legend.
-                    axs[i].legend(artists, labels, fontsize=fontsize, loc=outlier_legend_loc)
+                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=outlier_legend_loc)
 
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)

@@ -1,24 +1,45 @@
-from mymi.reporting.loaders import load_loader_manifest
+from contextlib import contextmanager
 import numpy as np
 import os
 import pandas as pd
+from time import time
 import torch
 from tqdm import tqdm
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Union
 
 from ..prediction import get_localiser_prediction
 from mymi import config
 from mymi import dataset as ds
-from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
+from mymi.geometry import get_box, get_extent_centre
 from mymi import logging as log
 from mymi.loaders import Loader
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
-from mymi.transforms import crop_foreground_3D
 from mymi.regions import RegionNames, get_region_patch_size
-from mymi.transforms import top_crop_or_pad_3D, crop_or_pad_3D, resample_3D
+from mymi.transforms import crop_or_pad_3D, resample_3D
 from mymi import types
-from mymi.utils import append_row, load_csv
+from mymi.utils import append_row, arg_to_list, encode, load_csv
+
+class Timer:
+    def __init__(self, columns):
+        self.__cols = columns
+        self.__cols['time'] = float
+        self.__df = pd.DataFrame(columns=self.__cols.keys())
+
+    @contextmanager
+    def record(self, enabled, data):
+        try:
+            if enabled:
+                start = time()
+
+            yield None
+        finally:
+            if enabled:
+                data['time'] = time() - start
+                self.__df = append_row(self.__df, data)
+
+    def save(self, filepath):
+        self.__df.astype(self.__cols).to_csv(filepath, index=False)
 
 def get_patient_localiser_prediction(
     dataset: str,
@@ -68,11 +89,12 @@ def create_patient_localiser_prediction(
             log.info('Predicting on CPU...')
 
     for dataset, pat_id in zip(datasets, pat_ids):
-        if logging:
-            log.info(f"Creating prediction for patient '({dataset}, {pat_id})', localiser '{localiser.name}'.")
-
         # Load dataset.
         set = ds.get(dataset, 'nifti')
+        pat = set.patient(pat_id)
+
+        if logging:
+            log.info(f"Creating prediction for patient '{pat}', localiser '{localiser.name}'.")
 
         # Make prediction.
         pred = get_patient_localiser_prediction(dataset, pat_id, localiser, device=device)
@@ -109,8 +131,9 @@ def create_localiser_predictions_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None,
+    timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
@@ -124,6 +147,17 @@ def create_localiser_predictions_from_loader(
         device = torch.device('cpu')
         log.info('Predicting on CPU...')
 
+    # Create timing table.
+    if timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
@@ -133,7 +167,24 @@ def create_localiser_predictions_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            create_patient_localiser_prediction(dataset, pat_id, localiser, device=device, logging=False)
+
+            # Timing table data.
+            data = {
+                'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': region,
+                'device': device.type
+            }
+
+            with timer.record(timing, data):
+                create_patient_localiser_prediction(dataset, pat_id, localiser, device=device, logging=False)
+
+    # Save timing data.
+    if timing:
+        filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
 
 def load_patient_localiser_prediction(
     dataset: str,
@@ -227,8 +278,8 @@ def get_patient_segmenter_prediction(
     return pred
 
 def create_patient_segmenter_prediction(
-    datasets: Union[str, List[str]],
-    pat_ids: Union[str, List[str]],
+    dataset: Union[str, List[str]],
+    pat_id: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
     segmenter: Union[types.Model, types.ModelName],
@@ -237,12 +288,11 @@ def create_patient_segmenter_prediction(
     probs: bool = False,
     raise_error: bool = False,
     savepath: Optional[str] = None) -> None:
-    if type(datasets) == str:
-        datasets = [datasets]
-    if type(pat_ids) == str:
-        pat_ids = [pat_ids]
-    if len(datasets) == 1 and len(pat_ids) != 1:
-        # Broadcast datasets.
+    datasets = arg_to_list(dataset, str)
+    if type(pat_id) == int:
+        pat_id = str(pat_id)
+    pat_ids = arg_to_list(pat_id, str)
+    if len(datasets) == 1 and len(pat_ids) != 1:        # Broadcast 'datasets' to 'pat_ids' length.
         datasets = datasets * len(pat_ids)
     assert len(datasets) == len(pat_ids)
     localiser = replace_checkpoint_alias(*localiser)
@@ -261,8 +311,12 @@ def create_patient_segmenter_prediction(
             log.info('Predicting on CPU...')
 
     for dataset, pat_id in zip(datasets, pat_ids):
+        # Load dataset.
+        set = ds.get(dataset, 'nifti')
+        pat = set.patient(pat_id)
+
         if logging:
-            log.info(f"Creating prediction for patient '({dataset}, {pat_id})', localiser '{localiser.name}'.")
+            log.info(f"Creating prediction for patient '{pat}', localiser '{localiser}'.")
 
         # Get segmenter prediction.
         loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
@@ -315,7 +369,8 @@ def create_segmenter_predictions_from_loader(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
+    test_fold: Optional[int] = None,
+    timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.replace_checkpoint_aliases(*localiser)
@@ -330,6 +385,17 @@ def create_segmenter_predictions_from_loader(
         device = torch.device('cpu')
         log.info('Predicting on CPU...')
 
+    # Create timing table.
+    if timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
@@ -339,7 +405,24 @@ def create_segmenter_predictions_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, device=device, logging=False)
+
+            # Timing table data.
+            data = {
+                'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': region,
+                'device': device.type
+            }
+
+            with timer.record(timing, data):
+                create_patient_segmenter_prediction(dataset, pat_id, region, localiser, segmenter, device=device, logging=False)
+
+    # Save timing data.
+    if timing:
+        filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser, *segmenter, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
 
 def load_patient_segmenter_prediction(
     dataset: str,
@@ -451,13 +534,19 @@ def create_two_stage_predictions_from_loader(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    n_folds: Optional[int] = None,
-    test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[Union[int, List[int], Literal['all']]] = None,
+    timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
     localiser = Localiser.load(*localiser)
     segmenter = Segmenter.load(*segmenter)
+    if test_fold == 'all':
+        test_folds = list(range(n_folds))
+    elif type(test_fold) == int:
+        test_folds = [test_fold]
+    else:
+        test_folds = test_fold
     log.info(f"Making two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Load gpu if available.
@@ -468,19 +557,54 @@ def create_two_stage_predictions_from_loader(
         device = torch.device('cpu')
         log.info('Predicting on CPU...')
 
-    # Perform for specified folds
-    if test_folds == 'all':
-        test_folds = list(range(n_folds))
-    elif type(test_folds) == int:
-        test_folds = [test_folds]
+    # Create timing table.
+    if timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        loc_timer = Timer(cols)
+        seg_timer = Timer(cols)
 
     for test_fold in tqdm(test_folds):
         _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
         # Make predictions.
-        for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-            if type(pat_id_b) == torch.Tensor:
-                pat_id_b = pat_id_b.tolist()
-            for dataset, pat_id in zip(dataset_b, pat_id_b):
-                create_patient_localiser_prediction(dataset, pat_id, localiser, loc_size, device=device, logging=False)
-                create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, device=device)
+        i = 0
+        for pat_desc_b in tqdm(iter(test_loader)):
+            # For testing.
+            if i >= 2:
+                break
+            i += 1
+
+            if type(pat_desc_b) == torch.Tensor:
+                pat_desc_b = pat_desc_b.tolist()
+            for pat_desc in pat_desc_b:
+                dataset, pat_id = pat_desc.split(':')
+
+                # Timing table data.
+                data = {
+                    'fold': test_fold,
+                    'dataset': dataset,
+                    'patient-id': pat_id,
+                    'region': region,
+                    'device': device.type
+                }
+
+                with loc_timer.record(timing, data):
+                    create_patient_localiser_prediction(dataset, pat_id, localiser, device=device, logging=False)
+
+                with seg_timer.record(timing, data):
+                    create_patient_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, device=device)
+
+        # Save timing data.
+        if timing:
+            filepath = os.path.join(config.directories.predictions, 'times', 'localiser', *localiser.name, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            loc_timer.save(filepath)
+            filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser.name, *segmenter.name, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            seg_timer.save(filepath)

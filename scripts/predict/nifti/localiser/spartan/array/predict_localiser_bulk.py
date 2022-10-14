@@ -1,6 +1,6 @@
 import subprocess
 
-regions = '14'
+regions = '0-3'
 script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser'
 test_folds = [0, 1, 2, 3, 4]
 

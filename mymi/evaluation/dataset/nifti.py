@@ -4,13 +4,14 @@ import os
 import pandas as pd
 import torch
 from tqdm import tqdm
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
 from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
+from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
@@ -202,7 +203,7 @@ def create_localiser_evaluation_from_loader(
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = replace_checkpoint_alias(*localiser)
     logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
@@ -241,9 +242,9 @@ def create_localiser_evaluation_from_loader(
 
 def load_localiser_evaluation(
     dataset: str,
-    localiser: Tuple[str, str, str]) -> np.ndarray:
+    localiser: types.ModelName) -> np.ndarray:
     set = ds.get(dataset, 'nifti')
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = replace_checkpoint_alias(*localiser)
     filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")
@@ -255,7 +256,7 @@ def load_localiser_evaluation_from_loader(
     localiser: types.ModelName,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> np.ndarray:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = replace_checkpoint_alias(*localiser)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
@@ -368,8 +369,8 @@ def create_segmenter_evaluation(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName) -> None:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
     logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Load dataset.
@@ -417,8 +418,8 @@ def create_segmenter_evaluation_from_loader(
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
     logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
@@ -464,10 +465,10 @@ def create_segmenter_evaluation_from_loader(
 
 def load_segmenter_evaluation(
     dataset: str,
-    localiser: Tuple[str, str, str],
-    segmenter: Tuple[str, str, str]) -> np.ndarray:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser: types.ModelName,
+    segmenter: types.ModelName) -> np.ndarray:
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
     if not os.path.exists(filepath):
@@ -479,10 +480,10 @@ def load_segmenter_evaluation_from_loader(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> np.ndarray:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     if not os.path.exists(filepath):
@@ -499,8 +500,8 @@ def create_two_stage_evaluation_from_loader(
     n_folds: Optional[int] = None,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
     logging.info(f"Evaluating two-stage predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds

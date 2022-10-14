@@ -19,7 +19,7 @@ def plot_patient_regions(
     # Plot.
     plot_regions(pat_id, ct_data, region_data, spacing, regions=regions, **kwargs)
 
-def plot_patient_segmenter_prediction(
+def plot_model_prediction(
     dataset: str,
     pat_id: str,
     region: str,

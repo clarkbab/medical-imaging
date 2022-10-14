@@ -11,20 +11,24 @@ class Directories:
         return os.path.join(self.root, 'cache')
 
     @property
-    def models(self):
-        return os.path.join(self.root, 'models')
-
-    @property
     def datasets(self):
         return os.path.join(self.root, 'datasets')
-
-    @property
-    def files(self):
-        return os.path.join(self.root, 'files')
     
     @property
     def evaluations(self):
         return os.path.join(self.root, 'evaluations')
+
+    @property
+    def files(self):
+        return os.path.join(self.root, 'files')
+
+    @property
+    def models(self):
+        return os.path.join(self.root, 'models')
+
+    @property
+    def predictions(self):
+        return os.path.join(self.root, 'predictions')
 
     @property
     def root(self):

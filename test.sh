@@ -1,11 +1,7 @@
-join () {
-  local IFS=","
-  shift
-  echo "$@"
-}
+datasets="['PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC']"
+region='Brain'
+test_fold=3
 
-list=('a' 'b' 'c')
-
-test=$(join "${list[@]}")
-echo $test
+n_train_max=$(python scripts/utilities/get_n_train_max.py --datasets $datasets --region $region --test_fold $test_fold)
+echo $n_train_max
 
