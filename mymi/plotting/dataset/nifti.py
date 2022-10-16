@@ -22,8 +22,8 @@ def plot_region(
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     **kwargs) -> None:
-    regions = arg_to_list(region)
-    region_labels = arg_to_list(region_label)
+    regions = arg_to_list(region, str)
+    region_labels = arg_to_list(region_label, str)
 
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
@@ -33,8 +33,8 @@ def plot_region(
     dose_data = patient.dose_data if show_dose else None
 
     if centre_of is not None:
-        if type(crop) == str:
-            if region_data is None or crop not in region_data:
+        if type(centre_of) == str:
+            if region_data is None or centre_of not in region_data:
                 centre_of = patient.region_data(regions=centre_of)[centre_of]
 
     if crop is not None:

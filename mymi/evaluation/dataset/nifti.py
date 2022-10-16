@@ -1,4 +1,4 @@
-from mymi.transforms.crop_or_pad import crop_foreground_3D
+from mymi.transforms.crop import crop_foreground_3D
 import numpy as np
 import os
 import pandas as pd

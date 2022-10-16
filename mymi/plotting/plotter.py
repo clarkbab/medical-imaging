@@ -18,7 +18,7 @@ from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
 from mymi.postprocessing import get_largest_cc
 from mymi.regions import get_region_patch_size, is_region, RegionColours
-from mymi.transforms import crop_or_pad_2D, crop_or_pad_box, crop_or_pad_point
+from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, crop_box
 from mymi import types
 from mymi.utils import arg_to_list
 
@@ -53,20 +53,20 @@ def __plot_region_data(
 
         # Crop image.
         if crop:
-            slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
+            slice_data = crop_2D(slice_data, reverse_box_coords_2D(crop))
 
         # Plot extent.
         if show_extent:
             extent = get_extent(data[region])
             if should_plot_box(extent, view, slice_idx):
                 show_legend = True
-                plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
+                __plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
 
         # Plot connected extent.
         if connected_extent:
             extent = get_extent(get_largest_cc(data[region]))
             if should_plot_box(extent, view, slice_idx):
-                plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
+                __plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
         # Skip region if not present on this slice.
         if slice_data.max() == 0:
@@ -79,42 +79,33 @@ def __plot_region_data(
             slice_data = get_largest_cc(slice_data)
 
         # Plot region.
-        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
+        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_origin(view))
         label = _escape_latex(region) if latex else region
         ax.plot(0, 0, c=colour, label=label)
         if perimeter:
             ax.contour(slice_data, colors=[colour], levels=[.5])
 
-        # Set ticks.
-        if crop:
-            min, max = crop
-            width = tuple(np.array(max) - min)
-            xticks = np.linspace(0, 10 * np.floor(width[0] / 10), 5).astype(int)
-            xtick_labels = xticks + min[0]
-            ax.set_xticks(xticks)
-            ax.set_xticklabels(xtick_labels)
-            yticks = np.linspace(0, 10 * np.floor(width[1] / 10), 5).astype(int)
-            ytick_labels = yticks + min[1]
-            ax.set_yticks(yticks)
-            ax.set_yticklabels(ytick_labels)
+        # # Set ticks.
+        # if crop is not None:
+        #     min, max = crop
+        #     width = tuple(np.array(max) - min)
+        #     xticks = np.linspace(0, 10 * np.floor(width[0] / 10), 5).astype(int)
+        #     xtick_labels = xticks + min[0]
+        #     ax.set_xticks(xticks)
+        #     ax.set_xticklabels(xtick_labels)
+        #     yticks = np.linspace(0, 10 * np.floor(width[1] / 10), 5).astype(int)
+        #     ytick_labels = yticks + min[1]
+        #     ax.set_yticks(yticks)
+        #     ax.set_yticklabels(ytick_labels)
 
     return show_legend
 
-def _to_image_coords(
-    data: ndarray,
-    view: types.PatientView) -> ndarray:
-    """
-    returns: data in correct orientation for viewing.
-    args:
-        data: the data to orient.
-        view: the viewing axis.
-    """
+def __to_image_coords(data: ndarray) -> ndarray:
     # 'plt.imshow' expects (y, x).
     data = np.transpose(data)
-
     return data
 
-def get_origin(view: types.PatientView) -> str:
+def __get_origin(view: types.PatientView) -> str:
     """
     returns: whether to place image origin in lower or upper corner of plot.
     args:
@@ -173,7 +164,7 @@ def get_slice(
 
     # Convert from our co-ordinate system (frontal, sagittal, longitudinal) to 
     # that required by 'imshow'.
-    slice_data = _to_image_coords(slice_data, view)
+    slice_data = __to_image_coords(slice_data)
 
     return slice_data
 
@@ -226,21 +217,13 @@ def should_plot_box(
     # Return result.
     return slice_idx >= min and slice_idx <= max
 
-def plot_box_slice(
+def __plot_box_slice(
     box: types.Box3D,
     view: types.PatientView,
     colour: str = 'r',
     crop: types.Box2D = None,
     label: str = 'box',
     linestyle: str = 'solid') -> None:
-    """
-    effect: plots a 2D slice of the box.
-    args:
-        box: the box to plot.
-        view: the view direction.
-    kwargs:
-        crop: the cropping applied to the image.
-    """
     # Compress box to 2D.
     if view == 'axial':
         dims = (0, 1)
@@ -255,7 +238,7 @@ def plot_box_slice(
 
     # Apply crop.
     if crop:
-        box_2D = crop_or_pad_box(box_2D, crop)
+        box_2D = crop_box(box_2D, crop)
 
     # Draw bounding box.
     min, max = box_2D
@@ -412,9 +395,9 @@ def plot_region(
 
     if crop is not None:
         # Perform crop on CT data or placeholder.
-        ct_slice_data = crop_or_pad_2D(ct_slice_data, reverse_box_coords_2D(crop))
+        ct_slice_data = crop_2D(ct_slice_data, reverse_box_coords_2D(crop))
         if dose_data is not None:
-            dose_slice_data = crop_or_pad_2D(dose_slice_data, reverse_box_coords_2D(crop))
+            dose_slice_data = crop_2D(dose_slice_data, reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -448,7 +431,7 @@ def plot_region(
         vmax = 0
 
     # Plot CT data.
-    ax.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
+    ax.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=__get_origin(view), vmin=vmin, vmax=vmax)
 
     if show_x_label:
         # Add 'x-axis' label.
@@ -482,7 +465,7 @@ def plot_region(
 
     # Plot dose data.
     if dose_data is not None:
-        axim = ax.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=get_origin(view))
+        axim = ax.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=__get_origin(view))
         cbar = plt.colorbar(axim, fraction=dose_legend_size)
         print('here')
         print(fontsize)
@@ -627,12 +610,12 @@ def plot_localiser_prediction(
 
         # Crop the image.
         if crop:
-            pred_slice_data = crop_or_pad_2D(pred_slice_data, reverse_box_coords_2D(crop))
+            pred_slice_data = crop_2D(pred_slice_data, reverse_box_coords_2D(crop))
 
         # Plot prediction.
         colours = [(1, 1, 1, 0), pred_colour]
         cmap = ListedColormap(colours)
-        plt.imshow(pred_slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
+        plt.imshow(pred_slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         plt.plot(0, 0, c=pred_colour, label='Loc. Prediction')
         if show_pred_contour:
             plt.contour(pred_slice_data, colors=[pred_colour], levels=[.5])
@@ -644,7 +627,7 @@ def plot_localiser_prediction(
 
         # Plot extent if in view.
         if should_plot_box(pred_extent, view, slice_idx):
-            plot_box_slice(pred_extent, view, colour=pred_extent_colour, crop=crop, label='Loc. Box', linestyle='dashed')
+            __plot_box_slice(pred_extent, view, colour=pred_extent_colour, crop=crop, label='Loc. Box', linestyle='dashed')
         else:
             plt.plot(0, 0, c=pred_extent_colour, label='Loc. Extent (offscreen)')
 
@@ -666,10 +649,10 @@ def plot_localiser_prediction(
             
         # Apply crop.
         if crop:
-            pred_centre = crop_or_pad_point(pred_centre, crop)
+            pred_centre = crop_point(pred_centre, crop)
 
         # Plot the prediction centre.
-        if pred_centre:
+        if pred_centre is not None:
             plt.scatter(*pred_centre, c=pred_centre_colour, label=f"Loc. Centre")
         else:
             plt.plot(0, 0, c=pred_centre_colour, label='Loc. Centre (offscreen)')
@@ -684,7 +667,7 @@ def plot_localiser_prediction(
         max = np.clip(max, a_min=None, a_max=prediction.shape)
 
         if should_plot_box((min, max), view, slice_idx):
-            plot_box_slice((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')
+            __plot_box_slice((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')
         else:
             plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
 
@@ -879,11 +862,11 @@ Prediction: {model_name}""")
 
             # Crop the image.
             if crop:
-                slice_data = crop_or_pad_2D(slice_data, reverse_box_coords_2D(crop))
+                slice_data = crop_2D(slice_data, reverse_box_coords_2D(crop))
 
             # Plot prediction.
             cmap = ListedColormap(((1, 1, 1, 0), colour))
-            plt.imshow(slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=get_origin(view))
+            plt.imshow(slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=__get_origin(view))
             plt.plot(0, 0, c=colour, label=model_name)
             if show_pred_contour:
                 plt.contour(slice_data, colors=[colour], levels=[.5])
@@ -895,7 +878,7 @@ Prediction: {model_name}""")
 
             # Plot if extent box is in view.
             if should_plot_box(pred_extent, view, slice_idx):
-                plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=f'{model_name} Extent', linestyle='dashed')
+                __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=f'{model_name} Extent', linestyle='dashed')
             else:
                 plt.plot(0, 0, c=colour, label=f'{model_name} Extent (offscreen)')
 
@@ -915,7 +898,7 @@ Prediction: {model_name}""")
                 
             # Apply crop.
             if crop:
-                centre = crop_or_pad_point(centre, crop)
+                centre = crop_point(centre, crop)
 
             if centre:
                 plt.scatter(*centre, c='royalblue', label=f"Loc. Centre")
@@ -933,7 +916,7 @@ Prediction: {model_name}""")
 
             # Plot box.
             if patch and should_plot_box(patch, view, slice_idx):
-                plot_box_slice(patch, view, colour=colour, crop=crop, label='Pred. Patch', linestyle='dotted')
+                __plot_box_slice(patch, view, colour=colour, crop=crop, label='Pred. Patch', linestyle='dotted')
             else:
                 plt.plot(0, 0, c=colour, label='Pred. Patch (offscreen)', linestyle='dashed')
 
