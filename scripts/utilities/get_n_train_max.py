@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.loaders import get_loader_n_train
+from mymi.loaders import get_n_train_max
 
 if __name__ == '__main__':
-    fire.Fire(get_loader_n_train)
+    fire.Fire(get_n_train_max)

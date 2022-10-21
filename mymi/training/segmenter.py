@@ -97,7 +97,7 @@ def train_segmenter(
             # group=f"{model_name}-{run}",
             project=model_name,
             name=run,
-            save_dir=config.directories.wandb)
+            save_dir=config.directories.reports)
         logger.watch(model)   # Caused multi-GPU training to hang.
     else:
         logger = None
@@ -129,9 +129,9 @@ def train_segmenter(
 
     # Perform training.
     trainer = Trainer(
-        # accelerator='ddp',
+        accelerator='gpu' if n_gpus > 0 else 'cpu',
         callbacks=callbacks,
-        gpus=list(range(n_gpus)),
+        devices=list(range(n_gpus)) if n_gpus > 0 else 1,
         logger=logger,
         max_epochs=n_epochs,
         num_nodes=n_nodes,

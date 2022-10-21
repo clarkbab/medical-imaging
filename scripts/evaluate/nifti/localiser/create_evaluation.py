@@ -8,6 +8,3 @@ sys.path.append(root_dir)
 from mymi.evaluation.dataset.nifti import create_localiser_evaluation
 
 fire.Fire(create_localiser_evaluation)
-
-# Sample args:
-# --dataset PMCC-HN-TEST --region Parotid_L --localiser "(...)"

@@ -55,15 +55,11 @@ for i in "${!TEST_FOLDS[@]}"; do
     test_fold=${TEST_FOLDS[i]}
     segmenter="('segmenter-$REGION','transfer-fold-$test_fold-samples-$N_TRAIN','BEST')"
 
-    python $SCRIPT_DIR/predict/nifti/two-stage/create_predictions_from_loader \
+    python $SCRIPT_DIR/predict/nifti/two-stage/create_predictions.py \
         --datasets $DATASETS \
         --localiser $LOCALISER \
-        --loc_size $LOCALISER_SIZE \
-        --loc_spacing $LOCALISER_SPACING \
-        --n_folds $N_FOLDS \
         --n_train $N_TRAIN \
         --region $REGION \
         --segmenter $segmenter \
-        --seg_spacing $SEGMENTER_SPACING \
         --test_folds $test_fold
 done

@@ -62,7 +62,7 @@ fi
 USE_LOGGER=True
 
 # Check if 'N_TRAIN' training samples exist for this region.
-N_TRAIN_MAX = $(python $SCRIPT_DIR/utilities/get_n_train_max.py \
+N_TRAIN_MAX=$(python $SCRIPT_DIR/utilities/get_n_train_max.py \
     --datasets $DATASETS \
     --region $REGION \
     --test_fold $TEST_FOLD)

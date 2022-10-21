@@ -30,11 +30,10 @@ TEST_FOLD=0
 for i in "${!REGIONS[@]}"; do
     localiser="('localiser-${REGIONS[i]}','public-1gpu-150epochs','BEST')"
     segmenter="('segmenter-${REGIONS[i]}','public-1gpu-150epochs','BEST')"
-    python $SCRIPT_DIR/predict/nifti/segmenter/predict_from_loader.py \
+    python $SCRIPT_DIR/predict/nifti/segmenter/predict.py \
         --datasets $DATASETS \
         --region ${REGIONS[i]} \
         --localiser $localiser \
         --segmenter $segmenter \
-        --n_folds $N_FOLDS \
         --test_fold $TEST_FOLD
 done

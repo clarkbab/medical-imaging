@@ -2,7 +2,7 @@ from typing import List, Optional, Union
 from .loader import Loader
 from .patch_loader import PatchLoader
 
-def get_loader_n_train(
+def get_n_train_max(
     datasets: Union[str, List[str]],
     region: str,
     n_folds: Optional[int] = 5,

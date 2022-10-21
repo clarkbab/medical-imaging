@@ -48,7 +48,7 @@ else
 fi
 SEGMENTER="('segmenter-$REGION','$run_name','BEST')"
 
-python $SCRIPT_DIR/predict/nifti/two-stage/create_predictions_from_loader \
+python $SCRIPT_DIR/predict/nifti/two-stage/create_predictions.py \
     --datasets $DATASETS \
     --region $REGION \
     --localiser $LOCALISER \

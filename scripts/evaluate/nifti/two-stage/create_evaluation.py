@@ -5,6 +5,6 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.prediction.dataset.nifti import create_two_stage_predictions
+from mymi.evaluation.dataset.nifti import create_two_stage_evaluation
 
-fire.Fire(create_two_stage_predictions)
+fire.Fire(create_two_stage_evaluation)

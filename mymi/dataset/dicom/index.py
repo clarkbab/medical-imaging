@@ -10,7 +10,19 @@ from typing import Dict, List
 
 from mymi import config
 from mymi import logging
-from mymi.utils import append_row
+from mymi.utils import append_dataframe, append_row
+
+INDEX_COLS = {
+    'patient-id': str,
+    'study-id': str,
+    'modality': str,
+    'series-id': str,
+    'sop-id': str,
+    'filepath': str,
+    'mod-spec': object
+}
+ERRORS_COLS = INDEX_COLS.copy()
+ERRORS_COLS['error'] = str
 
 def build_index(dataset: str) -> None:
     start = time()
@@ -22,16 +34,7 @@ def build_index(dataset: str) -> None:
         raise ValueError(f"No 'data' folder found for dataset '{dataset}'.")
 
     # Create index.
-    index_cols = {
-        'patient-id': str,
-        'study-id': str,
-        'modality': str,
-        'series-id': str,
-        'sop-id': str,
-        'filepath': str,
-        'mod-spec': object
-    }
-    index = pd.DataFrame(columns=index_cols.keys())
+    index = pd.DataFrame(columns=INDEX_COLS.keys())
 
     # Add all DICOM files.
     logging.info(f"Building index for dataset '{dataset}'...")
@@ -85,8 +88,6 @@ def build_index(dataset: str) -> None:
                 mod_spec = {
                     'RefCTSeriesInstanceUID': dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
                 }
-            else:
-                mod_spec = {}
 
             # Add index entry.
             data = {
@@ -100,17 +101,24 @@ def build_index(dataset: str) -> None:
             }
             index = append_row(index, data)
 
+    logging.info('finished loop')
+    
+    # Save index.
+    filepath = os.path.join(config.directories.files, 'index-test.csv')
+    index.to_csv(filepath, index=False)
+    logging.info('saved test index')
+
     # Create errors index.
-    errors_cols = index_cols.copy()
-    errors_cols['error'] = str
-    errors = pd.DataFrame(columns=errors_cols.keys())
+    errors = pd.DataFrame(columns=ERRORS_COLS.keys())
+    logging.info('created errors')
 
     # Remove duplicates by 'SOPInstanceUID'.
     dup_rows = index['sop-id'].duplicated()
     dup = index[dup_rows]
     dup['error'] = 'DUPLICATE'
-    errors = append_row(errors, dup)
+    errors = append_dataframe(errors, dup)
     index = index[~dup_rows]
+    logging.info('removed duplicates')
 
     # Check CT slices have standard orientation.
     ct = index[index.modality == 'CT']
@@ -121,8 +129,9 @@ def build_index(dataset: str) -> None:
     nonstand_idx = stand_orient[~stand_orient].index
     nonstand = index.loc[nonstand_idx]
     nonstand['error'] = 'NON-STANDARD-ORIENTATION'
-    errors = append_row(errors, nonstand)
+    errors = append_dataframe(errors, nonstand)
     index = index.drop(nonstand_idx)
+    logging.info('consistent CT orientation')
 
     # Check CT slices have consistent x/y position.
     ct = index[index.modality == 'CT']
@@ -134,8 +143,9 @@ def build_index(dataset: str) -> None:
     incons_idx = cons_xy[~cons_xy].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-POSITION-XY'
-    errors = append_row(errors, incons)
+    errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
+    logging.info('Consistend CT x/y position')
 
     # Check CT slices have consistent x/y spacing.
     ct = index[index.modality == 'CT']
@@ -147,22 +157,24 @@ def build_index(dataset: str) -> None:
     incons_idx = cons_xy[~cons_xy].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-SPACING-XY'
-    errors = append_row(errors, incons)
+    errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
+    logging.info('Consistent CT x/y spacing')
 
     # Check CT slices have consistent z spacing.
     ct = index[index.modality == 'CT']
     def consistent_z_position(series: pd.Series) -> bool:
-        pos = series.apply(lambda m: m['ImagePositionPatient'][2]).sort_values()
-        pos = pos.diff().dropna().round(3)
-        pos = pos.drop_duplicates()
-        return len(pos) == 1
+        z_locs = series.apply(lambda m: m['ImagePositionPatient'][2]).sort_values()
+        z_diffs = z_locs.diff().dropna().round(3)
+        z_diffs = z_diffs.drop_duplicates()
+        return len(z_diffs) == 1
     cons_z = ct.groupby('series-id')['mod-spec'].transform(consistent_z_position)
     incons_idx = cons_z[~cons_z].index
     incons = index.loc[incons_idx]
     incons['error'] = 'INCONSISTENT-SPACING-Z'
-    errors = append_row(errors, incons)
+    errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
+    logging.info("Consistent CT z spacing")
 
     # If multiple RT files included for a series, keep most recent.
     modalities = ['RTSTRUCT', 'RTPLAN', 'RTDOSE']
@@ -171,8 +183,9 @@ def build_index(dataset: str) -> None:
         dup_idx = rt[rt['series-id'].duplicated()].index
         dup = index.loc[dup_idx]
         dup['error'] = 'MULTIPLE-FILES'
-        errors = append_row(errors, dup)
+        errors = append_dataframe(errors, dup)
         index = index.drop(dup_idx)
+    logging.info('keep most recent RTSTRUCT')
 
     # Check that RTSTRUCT references CT series in index.
     ct_series = index[index.modality == 'CT']['series-id'].unique()
@@ -181,8 +194,9 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_ct[~ref_ct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-CT'
-    errors = append_row(errors, nonref)
+    errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
+    logging.info('RTSTRUCT has CT')
 
     # Check that RTPLAN references RTSTRUCT SOP instance in index.
     rtstruct_sops = index[index.modality == 'RTSTRUCT']['sop-id'].unique()
@@ -191,8 +205,9 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_rtstruct[~ref_rtstruct].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-RTSTRUCT'
-    errors = append_row(errors, nonref)
+    errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
+    logging.info('RTPLAN as RTSTRUCT')
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
     rtplan_sops = index[index.modality == 'RTPLAN']['sop-id'].unique()
@@ -201,25 +216,29 @@ def build_index(dataset: str) -> None:
     nonref_idx = ref_rtplan[~ref_rtplan].index
     nonref = index.loc[nonref_idx]
     nonref['error'] = 'NO-REF-RTPLAN'
-    errors = append_row(errors, nonref)
+    errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
+    logging.info('RTDOSE has RTPLAN')
 
     # Check that study has RTSTRUCT series.
     incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
     nonincl = index[~incl_rows]
     nonincl['error'] = 'STUDY-NO-RTSTRUCT'
-    errors = append_row(errors, nonincl)
+    errors = append_dataframe(errors, nonincl)
     index = index[incl_rows]
+    logging.info('Study has RTSTRUCT')
 
     # Save index.
     logging.info(f"Saving index for dataset '{dataset}'...")
-    index = index.astype(index_cols)
+    if len(index) > 0:
+        index = index.astype(INDEX_COLS)
     filepath = os.path.join(dataset_path, 'index.csv')
     index.to_csv(filepath, index=False)
 
     # Save errors index.
     logging.info(f"Saving index errors for dataset '{dataset}'...")
-    errors = errors.astype(errors_cols)
+    if len(errors) > 0:
+        errors = errors.astype(ERRORS_COLS)
     filepath = os.path.join(dataset_path, 'index-errors.csv')
     errors.to_csv(filepath, index=False)
 

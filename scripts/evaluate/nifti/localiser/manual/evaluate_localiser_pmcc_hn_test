@@ -27,5 +27,5 @@ RUN="public-1gpu-100epochs"
 
 for i in "${!REGIONS[@]}"; do
     localiser="('localiser-${REGIONS[i]}','$RUN','BEST')"
-    python create_evaluation --dataset $DATASET --localiser $localiser --region ${REGIONS[i]}
+    python create_evaluation.py --dataset $DATASET --localiser $localiser --region ${REGIONS[i]}
 done

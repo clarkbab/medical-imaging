@@ -31,5 +31,8 @@ for i in "${!REGIONS[@]}"; do
     region=${REGIONS[i]}
     datasets="['PMCC-HN-TRAIN-$region-LOC','PMCC-HN-TEST-$region-LOC']"
     localiser="('localiser-$region','public-1gpu-100epochs','BEST')"
-    python create_predictions_from_loader --datasets $DATASET --region ${REGIONS[i]} --localiser $localiser --loc_size $LOCALISER_SIZE --loc_spacing $LOCALISER_SPACING 
+    python create_predictions \
+        --datasets $DATASET \
+        --region ${REGIONS[i]} \
+        --localiser $localiser
 done

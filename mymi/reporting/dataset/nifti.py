@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 import torch
 from tqdm import tqdm
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
@@ -17,10 +17,10 @@ from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_patient_localiser_prediction, plot_patient_regions, plot_model_prediction
+from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
 from mymi import types
-from mymi.utils import append_row, encode
+from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_summary(
     dataset: str,
@@ -176,7 +176,7 @@ def add_region_summary_outliers(
 def load_region_summary(
     dataset: str,
     regions: Optional[Union[str, List[str]]] = None,
-    blacklist: bool = False) -> None:
+    raise_error: bool = True) -> None:
     # Convert to array.
     set = ds.get(dataset, 'nifti')
     if regions is None:
@@ -189,18 +189,17 @@ def load_region_summary(
     dfs = []
     for region in regions:
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        df = pd.read_csv(filepath)
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+        else:
+            if raise_error:
+                raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+            else:
+                # Skip this region.
+                continue
         df.insert(1, 'region', region)
         dfs.append(df)
     df = pd.concat(dfs, axis=0)
-
-    # Filter blacklisted records.
-    if blacklist:
-        filepath = os.path.join(set.path, 'region-blacklist.csv')
-        black_df = pd.read_csv(filepath)
-        df = df.merge(black_df, how='left', on=['patient-id', 'region'], indicator=True)
-        df = df[df['_merge'] == 'left_only']
-        df = df.drop(columns='_merge')
 
     return df
 
@@ -287,16 +286,17 @@ def load_ct_summary(
     else:
         return None
 
-def create_prediction_figures(
-    datasets: Union[str, List[str]],
+def create_segmenter_prediction_figures(
+    dataset: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
-    if type(datasets) == str:
-        datasets = [datasets]
-    logging.info(f"Creating prediction figures for datasets '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
+    localiser: Union[types.ModelName, List[types.ModelName]],
+    segmenter: Union[types.ModelName, List[types.ModelName]],
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None,
+    view: Union[Literal['axial', 'coronal', 'sagittal'], List[Literal['axial', 'coronal', 'sagittal']]] = ['axial', 'coronal', 'sagittal']) -> None:
+    datasets = arg_to_list(dataset, str)
+    views = arg_to_list(view, str)
+    logging.info(f"Creating segmenter prediction figures for datasets '{datasets}', region '{region}', test fold '{test_fold}', localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
@@ -304,8 +304,8 @@ def create_prediction_figures(
     # Set PDF margins.
     img_t_margin = 35
     img_l_margin = 5
-    img_width = 100
-    img_height = 100
+    img_width = 150
+    img_height = 200
 
     # Create PDF.
     pdf = FPDF()
@@ -331,16 +331,21 @@ def create_prediction_figures(
     ) 
 
     # Make predictions.
-    for dataset_b, pat_id_b in tqdm(iter(test_loader)):
-        if type(pat_id_b) == torch.Tensor:
-            pat_id_b = pat_id_b.tolist()
-        for dataset, pat_id in zip(dataset_b, pat_id_b):
+    i = 0
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if i == 1:
+            break
+        i += 1
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+
             # Add patient.
             pdf.add_page()
-            pdf.start_section(str(pat_id))
+            pdf.start_section(pat_id)
 
             # Create images.
-            views = ['axial', 'coronal', 'sagittal']
             img_coords = (
                 (img_l_margin, img_t_margin),
                 (img_l_margin + img_width, img_t_margin),
@@ -349,12 +354,13 @@ def create_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_model_prediction(dataset, pat_id, localiser, segmenter, centre_of='pred', crop='pred', savepath=filepath, show=False, view=view)
+                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
     # Save PDF.
-    filepath = os.path.join(set.path, 'reports', 'prediction-figures', region, *localiser, *segmenter, f'figures-fold-{test_fold}.pdf') 
+    # We have to 'encode' localisers/segmenters because they could be a list of models.
+    filepath = os.path.join(config.directories.reports, 'prediction-figures', 'segmenter', encode(datasets), region, encode(localiser), encode(segmenter), f'figures-fold-{test_fold}.pdf') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 
@@ -379,8 +385,8 @@ def create_region_figures(
     # Set PDF margins.
     img_t_margin = 35
     img_l_margin = 5
-    img_width = 100
-    img_height = 100
+    img_width = 150
+    img_height = 200
 
     # Create PDF.
     pdf = FPDF()
@@ -496,7 +502,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], crop=region, regions=region, show_extent=True, savepath=savepath, view=view)
+            plot_region(dataset, pat, centre_of=region, colours=['y'], crop=region, regions=region, show_extent=True, savepath=savepath, view=view)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -519,7 +525,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_patient_regions(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
+                    plot_region(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -706,7 +712,7 @@ def create_localiser_figures(
         )
         for view, page_coord in zip(views, img_coords):
             # Set figure.
-            plot_patient_localiser_prediction(dataset, pat, region, localiser, centre_of=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
+            plot_localiser_prediction(dataset, pat, region, localiser, centre_of=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
 
             # Save temp file.
             filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -723,114 +729,3 @@ def create_localiser_figures(
     filepath = os.path.join(set.path, 'reports', 'localiser-figures', *localiser, f'{region}.pdf') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
-
-def create_segmenter_figures(
-    dataset: str,
-    regions: List[str],
-    segmenters: List[Tuple[str, str, str]]) -> None:
-    assert len(regions) == len(segmenters)
-
-    # Get patients.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=regions)
-
-    # Filter regions that don't exist in dataset.
-    pat_regions = list(sorted(set.list_regions().region.unique()))
-    regions = [r for r in pat_regions if r in regions]
-
-    # Set PDF margins.
-    img_t_margin = 30
-    img_l_margin = 5
-    img_width = 100
-    img_height = 100
-
-    logging.info(f"Creating segmenter figures for dataset '{dataset}', regions '{regions}'...")
-    for region, segmenter in tqdm(list(zip(regions, segmenters))):
-        # Create PDF.
-        pdf = FPDF()
-        pdf.set_section_title_styles(
-            TitleStyle(
-                font_family='Times',
-                font_style='B',
-                font_size_pt=24,
-                color=0,
-                t_margin=3,
-                l_margin=12,
-                b_margin=0
-            ),
-            TitleStyle(
-                font_family='Times',
-                font_style='B',
-                font_size_pt=18,
-                color=0,
-                t_margin=12,
-                l_margin=12,
-                b_margin=0
-            )
-        ) 
-        
-        # Get errors for the region based upon 'extent-dist-x/y/z' metrics.
-        eval_df = load_segmenter_evaluation(dataset, segmenter)
-
-        for pat in tqdm(pats, leave=False):
-            # Skip if patient doesn't have region.
-            patient = set.patient(pat)
-            if not patient.has_region(region):
-                continue
-
-            # Start info section.
-            pdf.add_page()
-            pdf.start_section(pat)
-            pdf.start_section('Info', level=1)
-
-            # Add table.
-            table_t_margin = 45
-            table_l_margin = 12
-            table_line_height = 2 * pdf.font_size
-            table_col_widths = (40, 40)
-            table_data = [('Metric', 'Value')]
-            pat_eval_df = eval_df[eval_df['patient-id'] == pat]
-            for _, row in pat_eval_df.iterrows():
-                table_data.append((
-                    row.metric,
-                    f'{row.value:.3f}'
-                ))
-            for i, row in enumerate(table_data):
-                if i == 0:
-                    pdf.set_font('Helvetica', 'B', 12)
-                else:
-                    pdf.set_font('Helvetica', '', 12)
-                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
-                for j, value in enumerate(row):
-                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
-
-            # Add images.
-            pdf.add_page()
-            pdf.start_section('Images', level=1)
-
-            # Save images.
-            views = ['axial', 'coronal', 'sagittal']
-            img_coords = (
-                (img_l_margin, img_t_margin),
-                (img_l_margin + img_width, img_t_margin),
-                (img_l_margin, img_t_margin + img_height)
-            )
-            for view, page_coord in zip(views, img_coords):
-                # Set figure.
-                plot_model_prediction(dataset, pat, region, segmenter, centre_of=region, view=view, window=(3000, 500))
-
-                # Save temp file.
-                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plt.savefig(filepath)
-                plt.close()
-
-                # Add image to report.
-                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
-
-                # Delete temp file.
-                os.remove(filepath)
-
-        # Save PDF.
-        filepath = os.path.join(set.path, 'reports', 'segmenter-figures', f'{region}.pdf') 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        pdf.output(filepath, 'F')

@@ -10,7 +10,7 @@ sys.path.append(mymi_dir)
 from mymi import config
 from mymi.regions import RegionNames
 
-dry_run = False
+for_real = False
 
 model_types = ['segmenter']
 regions = RegionNames
@@ -59,16 +59,16 @@ for model_type in model_types:
                         for ckpt in ckpts:
                             ckptpath = os.path.join(ckptspath, ckpt)
                             newpath = os.path.join(ckptspath_base, ckpt)
-                            if dry_run:
-                                print(f'{ckptpath}=>{newpath}')
-                            else:
+                            if for_real:
                                 print(f'{ckptpath}=>{newpath}')
                                 os.rename(ckptpath, newpath)
+                            else:
+                                print(f'{ckptpath}=>{newpath}')
 
                         # Copy 'last.ckpt' to base folder if we're at largest number of epochs.
                         if n_epoch == n_epochs[-1]:
-                            if dry_run:
-                                print(f'{lastpath}=>{lastpath_base}')
-                            else:
+                            if for_real:
                                 print(f'{lastpath}=>{lastpath_base}')
                                 os.rename(lastpath, lastpath_base)
+                            else:
+                                print(f'{lastpath}=>{lastpath_base}')

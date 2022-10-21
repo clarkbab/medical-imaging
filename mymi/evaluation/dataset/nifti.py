@@ -14,18 +14,18 @@ from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nifti import load_patient_localiser_prediction, load_patient_segmenter_prediction
+from mymi.prediction.dataset.nifti import load_localiser_prediction, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance
 from mymi import types
 from mymi.utils import append_row, encode
 
-def get_patient_localiser_evaluation(
+def get_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
     localiser: types.ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
-    pred = load_patient_localiser_prediction(dataset, pat_id, localiser)
+    pred = load_localiser_prediction(dataset, pat_id, localiser)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -104,7 +104,7 @@ def get_patient_localiser_evaluation(
 
     return data
     
-def create_patient_localiser_evaluation(
+def create_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
@@ -134,7 +134,7 @@ def create_patient_localiser_evaluation(
         eval_df = df
 
     # Get metrics.
-    metrics = get_patient_localiser_evaluation(dataset, pat_id, region, localiser)
+    metrics = get_localiser_evaluation(dataset, pat_id, region, localiser)
 
     # Add/update each metric.
     for metric, value in metrics.items():
@@ -164,43 +164,10 @@ def create_patient_localiser_evaluation(
         return eval_df
 
 def create_localiser_evaluation(
-    dataset: str,
-    region: str,
-    localiser: types.ModelName) -> None:
-    # Load localiser.
-    localiser = Localiser.load(*localiser)
-    logging.info(f"Evaluating localiser predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser.name}'.")
-
-    # Load dataset.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
-
-    # Create dataframe.
-    cols = {
-        'dataset': str,
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    df = pd.DataFrame(columns=cols.keys())
-
-    for pat in tqdm(pats):
-        df = create_patient_localiser_evaluation(dataset, pat, region, localiser, df=df)
-
-    # Set column types.
-    df = df.astype(cols)
-
-    # Save evaluation.
-    filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
-
-def create_localiser_evaluation_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
     localiser = replace_checkpoint_alias(*localiser)
@@ -226,7 +193,7 @@ def create_localiser_evaluation_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=df)
+            df = create_localiser_evaluation(dataset, pat_id, region, localiser, df=df)
 
     # Add fold.
     df['fold'] = test_fold
@@ -241,20 +208,9 @@ def create_localiser_evaluation_from_loader(
     df.to_csv(filepath, index=False)
 
 def load_localiser_evaluation(
-    dataset: str,
-    localiser: types.ModelName) -> np.ndarray:
-    set = ds.get(dataset, 'nifti')
-    localiser = replace_checkpoint_alias(*localiser)
-    filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, 'eval.csv') 
-    if not os.path.exists(filepath):
-        raise ValueError(f"Evaluation for dataset '{set}', localiser '{localiser}' not found.")
-    data = pd.read_csv(filepath, dtype={'patient-id': str})
-    return data
-
-def load_localiser_evaluation_from_loader(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> np.ndarray:
     localiser = replace_checkpoint_alias(*localiser)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
@@ -264,14 +220,14 @@ def load_localiser_evaluation_from_loader(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
-def get_patient_segmenter_evaluation(
+def get_segmenter_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
-    pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+    pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
     set = ds.get(dataset, 'nifti')
     label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool)
 
@@ -315,102 +271,7 @@ def get_patient_segmenter_evaluation(
 
     return data
     
-def create_patient_segmenter_evaluation(
-    dataset: str,
-    pat_id: str,
-    region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
-    df: Optional[pd.DataFrame] = None) -> Optional[pd.DataFrame]:
-
-    # Define dataframe columns.
-    cols = {
-        'dataset': str,
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-
-    # Create/update dataframe if not provided.
-    if df is None:
-        # Try to load existing dataframe, we don't want to overwrite other values.
-        set = ds.get(dataset, 'nifti')
-        filepath = os.path.join(set.path, 'evaluation', 'localiser', *localiser, *segmenter, 'eval.csv') 
-        if os.path.exists(filepath):
-            df = load_segmenter_evaluation(dataset, localiser, segmenter)
-        else:
-            df = pd.DataFrame(columns=cols.keys())
-
-    # Add metrics to dataframe.
-    metrics = get_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
-    for metric, value in metrics.items():
-        data = {
-            'dataset': dataset,
-            'patient-id': pat_id, 
-            'region': region,
-            'metric': metric,
-            'value': value
-        }
-        df = append_row(df, data)
-
-    # Set column types.
-    df = df.astype(cols)
-
-    if df is None:
-        # Save evaluation.
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        eval_df.to_csv(filepath, index=False)
-    else:
-        return df
-
 def create_segmenter_evaluation(
-    dataset: str,
-    region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName) -> None:
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
-    logging.info(f"Evaluating segmenter predictions for NIFTI dataset '{dataset}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'.")
-
-    # Load dataset.
-    set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
-
-    # Create dataframe.
-    cols = {
-        'dataset': str,
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    df = pd.DataFrame(columns=cols.keys())
-
-    for pat in tqdm(pats):
-        # Get metrics.
-        metrics = get_patient_segmenter_evaluation(dataset, pat, region, localiser, segmenter)
-
-        # Add metrics.
-        for metric, value in metrics.items():
-            data = {
-                'dataset': dataset,
-                'patient-id': pat, 
-                'region': region,
-                'metric': metric,
-                'value': value
-            }
-            df = append_row(df, data)
-
-    # Set column types.
-    df = df.astype(cols)
-
-    # Save evaluation.
-    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
-
-def create_segmenter_evaluation_from_loader(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
@@ -442,7 +303,7 @@ def create_segmenter_evaluation_from_loader(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            metrics = get_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
+            metrics = get_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
             for metric, value in metrics.items():
                 data = {
                     'fold': test_fold,
@@ -464,19 +325,6 @@ def create_segmenter_evaluation_from_loader(
     df.to_csv(filepath, index=False)
 
 def load_segmenter_evaluation(
-    dataset: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName) -> np.ndarray:
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
-    set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'evaluation', 'segmenter', *localiser, *segmenter, 'eval.csv') 
-    if not os.path.exists(filepath):
-        raise ValueError(f"Segmenter evaluation for dataset '{set}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
-    data = pd.read_csv(filepath, dtype={'patient-id': str})
-    return data
-
-def load_segmenter_evaluation_from_loader(
     datasets: Union[str, List[str]],
     localiser: types.ModelName,
     segmenter: types.ModelName,
@@ -492,7 +340,7 @@ def load_segmenter_evaluation_from_loader(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
-def create_two_stage_evaluation_from_loader(
+def create_two_stage_evaluation(
     datasets: Union[str, List[str]],
     region: str,
     localiser: types.ModelName,
@@ -531,8 +379,8 @@ def create_two_stage_evaluation_from_loader(
                 pat_desc_b = pat_desc_b.tolist()
             for pat_desc in pat_desc_b:
                 dataset, pat_id = pat_desc.split(':')
-                loc_df = create_patient_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df)
-                seg_df = create_patient_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
+                loc_df = create_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df)
+                seg_df = create_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
 
         # Add fold.
         loc_df['fold'] = test_fold

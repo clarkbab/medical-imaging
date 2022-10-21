@@ -31,6 +31,10 @@ class Directories:
         return os.path.join(self.root, 'predictions')
 
     @property
+    def reports(self):
+        return os.path.join(self.root, 'reports')
+
+    @property
     def root(self):
         return os.environ['MYMI_DATA']
 
@@ -44,11 +48,7 @@ class Directories:
 
     @property
     def tensorboard(self):
-        return os.path.join(self.root, 'reports', 'tensorboard')
-
-    @property
-    def wandb(self):
-        return os.path.join(self.root, 'reports')
+        return os.path.join(self.reports, 'tensorboard')
 
 class Formatting:
     @property

@@ -9,7 +9,7 @@ sys.path.append(mymi_dir)
 from mymi import config
 from mymi.regions import RegionNames
 
-dry_run = True
+for_real = True
 keep = 1
 assert keep >= 1
 types = ['segmenter']
@@ -47,10 +47,10 @@ for type in types:
             # Get full paths.
             del_ckpts = [os.path.join(run_folder, f) for f in del_ckpts]
 
-            if dry_run:
-                for ckpt in del_ckpts:
-                    print(f'\tDELETE - {ckpt}')
-            else:
+            if for_real:
                 for ckpt in del_ckpts:
                     print(f'\tDELETE - {ckpt}')
                     os.remove(ckpt)
+            else:
+                for ckpt in del_ckpts:
+                    print(f'\tDELETE - {ckpt}')

@@ -5,7 +5,7 @@ import sys
 filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(up(filepath)))))
 sys.path.append(mymi_dir)
-from mymi.processing.dataset.nifti import convert_segmenter_predictions_to_dicom_from_loader
+from mymi.processing.dataset.nifti import convert_segmenter_predictions_to_dicom
 
 DATASETS = ('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC') # Code links from 'training' set to nifti set.
 REGIONS = (
@@ -44,8 +44,8 @@ for test_fold in TEST_FOLDS:
         for model in MODELS:
             if model == 'public':
                 segmenter = (f'segmenter-{region}', 'public-1gpu-150epochs', 'BEST')
-                convert_segmenter_predictions_to_dicom_from_loader(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
+                convert_segmenter_predictions_to_dicom(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
             else:
                 for n_train in N_TRAINS:
                     segmenter = (f'segmenter-{region}', f'{model}-fold-{test_fold}-samples-{n_train}', 'BEST')
-                    convert_segmenter_predictions_to_dicom_from_loader(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)
+                    convert_segmenter_predictions_to_dicom(DATASETS, region, localiser, segmenter, n_folds=N_FOLDS, test_fold=test_fold, use_loader_manifest=USE_LOADER_MANIFEST, use_model_manifest=USE_MODEL_MANIFEST)

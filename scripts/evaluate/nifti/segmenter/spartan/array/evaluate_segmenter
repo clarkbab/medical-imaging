@@ -46,7 +46,7 @@ else
 fi
 SEGMENTER="('segmenter-$REGION','$run_name','BEST')"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_from_loader.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate.py \
     --datasets $DATASETS \
     --localiser $LOCALISER \
     --n_folds $N_FOLDS \

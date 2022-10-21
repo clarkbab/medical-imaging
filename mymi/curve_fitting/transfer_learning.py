@@ -11,10 +11,11 @@ from tqdm import tqdm
 from typing import List, Literal, Optional, Tuple, Union
 
 from mymi import config
-from mymi.evaluation.dataset.nifti import load_segmenter_evaluation_from_loader
-from mymi.loaders import Loader, get_loader_n_train
+from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
+from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
 from mymi.regions import RegionNames
+from mymi.utils import arg_broadcast, arg_to_list
 
 DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
@@ -162,10 +163,10 @@ def create_bootstrap_samples_and_predictions(
     df = load_evaluation_data(datasets, region, model_types, n_trains=n_trains, n_folds=n_folds, test_folds=test_folds)
     if 'mean' in stats:
         mean_df = get_mean_evaluation_data(df)
-    if 'p5' in stats:
-        p5_df = get_p5_evaluation_data(df)
-    if 'p95' in stats:
-        p95_df = get_p95_evaluation_data(df)
+    if 'q1' in stats:
+        q1_df = get_q1_evaluation_data(df)
+    if 'q3' in stats:
+        q3_df = get_q3_evaluation_data(df)
 
     # Create samples and prediction from curve fitting.
     for metric in metrics:
@@ -173,12 +174,12 @@ def create_bootstrap_samples_and_predictions(
             if 'mean' in stats:
                 samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'mean', mean_df, n_samples=n_samples)
                 create_bootstrap_predictions(region, model_type, metric, 'mean', samples, n_trains)
-            if 'p5' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'p5', p5_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model_type, metric, 'p5', samples, n_trains)
-            if 'p95' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'p95', p95_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model_type, metric, 'p95', samples, n_trains)
+            if 'q1' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'q1', q1_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model_type, metric, 'q1', samples, n_trains)
+            if 'q3' in stats:
+                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'q3', q3_df, n_samples=n_samples)
+                create_bootstrap_predictions(region, model_type, metric, 'q3', samples, n_trains)
 
 def f(
     x: np.ndarray,
@@ -271,13 +272,13 @@ def load_evaluation_data(
             localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
             seg_run = 'public-1gpu-150epochs'
             segmenter = (f'segmenter-{region}', seg_run, 'BEST')
-            df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
+            df = load_segmenter_evaluation(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
             df['model-type'] = seg_run
             df['n-train'] = 0
             dfs.append(df)
 
             # Get number of training cases.
-            n_train_max = get_loader_n_train(datasets, region, n_folds=n_folds, test_fold=test_fold)
+            n_train_max = get_n_train_max(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
             # Add clinical/transfer evaluations.
             for model in (model for model in model_types if model != 'public'):
@@ -288,7 +289,7 @@ def load_evaluation_data(
 
                     seg_run = f'{model}-fold-{test_fold}-samples-{n_train}'
                     segmenter = (f'segmenter-{region}', seg_run, 'BEST')
-                    df = load_segmenter_evaluation_from_loader(datasets, localiser, segmenter, test_fold=test_fold)
+                    df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)
                     df['model-type'] = seg_run
                     df['n-train'] = n_train
                     dfs.append(df)
@@ -317,47 +318,45 @@ def load_evaluation_data(
 def get_mean_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
     return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].mean().reset_index()
 
-def get_p5_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
-    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.05).reset_index()
+def get_q1_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.25).reset_index()
 
-def get_p95_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
-    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.95).reset_index()
+def get_q3_evaluation_data(df: pd.DataFrame) -> pd.DataFrame:
+    return df.groupby(['fold', 'region', 'model-type', 'n-train', 'metric'])['value'].quantile(0.75).reset_index()
 
 def megaplot(
-    regions: Union[str, List[str]],
-    models: Union[str, List[str]],
-    metrics: Union[str, List[str], np.ndarray],
-    stats: Union[str, List[str]],
-    dfs: Union[pd.DataFrame, List[pd.DataFrame]],
+    dataset: Union[str, List[str]],
+    region: Union[str, List[str]],
+    model: Union[str, List[str]],
+    metric: Union[str, List[str], np.ndarray],
+    stat: Union[str, List[str]],
     fontsize: float = DEFAULT_FONT_SIZE,
     inner_wspace: float = 0.05,
-    legend_locs: Optional[Union[str, List[str]]] = None,
-    model_labels: Optional[Union[str, List[str]]] = None,
+    legend_loc: Optional[Union[str, List[str]]] = None,
+    model_label: Optional[Union[str, List[str]]] = None,
     outer_hspace: float = 0.2,
     outer_wspace: float = 0.2,
     savepath: Optional[str] = None,
     y_lim: bool = True) -> None:
-    if type(metrics) == str:
-        metrics = np.repeat([[metrics]], len(regions), axis=0)
-    elif type(metrics) == list:
-        metrics = np.repeat([metrics], len(regions), axis=0)
-    n_metrics = metrics.shape[1]
-    dfs = [dfs] if type(dfs) == pd.DataFrame else dfs
-    dfs = dfs * n_metrics if len(dfs) == 1 else dfs         # Broadcast 'dfs' to 'n_metrics'.
-    if legend_locs is not None:
-        if type(legend_locs) == str:
-            legend_locs = [legend_locs]
-        assert len(legend_locs) == n_metrics
-    models = [models] if type(models) == str else models
-    n_models = len(models)
-    if model_labels is not None:
-        if type(model_labels) == str:
-            model_labels = [model_labels]
-        assert len(model_labels) == n_models
-    regions = [regions] if type(regions) == str else regions
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
     n_regions = len(regions)
-    stats = [stats] if type(stats) == str else stats
-    stats = stats * n_metrics if len(stats) == 1 else stats         # Broadcast 'stats' to 'n_metrics'.
+    if type(metric) is str:
+        metrics = np.repeat([[metric]], n_regions, axis=0)
+    elif type(metric) is list:
+        metrics = np.repeat([metric], n_regions, axis=0)
+    else:
+        metrics = metric
+    n_metrics = metrics.shape[1]
+    legend_locs = arg_to_list(legend_loc, str)
+    if legend_locs is not None:
+        assert len(legend_locs) == n_metrics
+    models = arg_to_list(model, str)
+    n_models = len(models)
+    model_labels = arg_to_list(model_label, str)
+    if model_labels is not None:
+        assert len(model_labels) == n_models
+    stats = arg_broadcast(stat, n_metrics, str)
 
     # Lookup tables.
     # matplotlib.rc('text', usetex=True)
@@ -368,14 +367,13 @@ def megaplot(
     outer_gs = fig.add_gridspec(hspace=outer_hspace, nrows=n_regions, ncols=metrics.shape[1], wspace=outer_wspace)
     for i, region in enumerate(regions):
         for j in range(n_metrics):
-            df = dfs[j]
             metric = metrics[i, j]
             stat = stats[j]
             inner_gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer_gs[i, j], width_ratios=[1, 19], wspace=0.05)
             axs = [plt.subplot(cell) for cell in inner_gs]
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
-            plot_bootstrap_fit(region, models, metric, stat, df, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim)
+            plot_bootstrap_fit(datasets, region, models, metric, stat, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim)
 
     if savepath is not None:
         plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
@@ -550,10 +548,10 @@ def __raw_data(
     df = load_evaluation_data(datasets, region, model_type, n_trains=n_trains)
     if stat == 'mean':
         stat_df = get_mean_evaluation_data(df)
-    elif stat == 'p5':
-        stat_df = get_p5_evaluation_data(df)
-    elif stat == 'p95':
-        stat_df = get_p95_evaluation_data(df)
+    elif stat == 'q1':
+        stat_df = get_q1_evaluation_data(df)
+    elif stat == 'q3':
+        stat_df = get_q3_evaluation_data(df)
     else:
         raise ValueError(f"Stat '{stat} not recognised.")
 

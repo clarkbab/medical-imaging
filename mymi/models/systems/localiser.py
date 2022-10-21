@@ -42,7 +42,7 @@ class Localiser(pl.LightningModule):
         self._network = UNet3D(pretrained_model=pretrained_model)
         self._predict_logits = predict_logits
         self._spacing = spacing
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['loss'])
 
     @property
     def network(self) -> nn.Module:

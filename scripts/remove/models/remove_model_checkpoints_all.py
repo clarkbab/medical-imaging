@@ -9,7 +9,7 @@ sys.path.append(mymi_dir)
 from mymi import config
 
 keep_n = 1
-dry_run = True
+for_real = False
 
 modelspath = config.directories.models
 models = os.listdir(modelspath)
@@ -29,9 +29,9 @@ for model in models:
         ckpts_to_delete = ckpts[:-keep_n]
 
         for ckpt in ckpts_to_delete:
-            if dry_run:
-                print(f'{model}:{run}:{ckpt}')
-            else:
+            if for_real:
                 print(f'{model}:{run}:{ckpt}')
                 ckptpath = os.path.join(ckptspath, ckpt)
                 os.remove(ckptpath)
+            else:
+                print(f'{model}:{run}:{ckpt}')

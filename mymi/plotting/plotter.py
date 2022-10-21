@@ -17,7 +17,8 @@ from mymi import dataset
 from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
 from mymi.postprocessing import get_largest_cc
-from mymi.regions import get_region_patch_size, is_region, RegionColours
+from mymi.regions import get_region_patch_size, is_region
+from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, crop_box
 from mymi import types
 from mymi.utils import arg_to_list
@@ -519,7 +520,8 @@ def plot_region(
 def plot_localiser_prediction(
     id: str,
     spacing: types.ImageSpacing3D, 
-    prediction: np.ndarray,
+    pred_data: np.ndarray,
+    pred_region: str,
     aspect: float = None,
     centre_of: Optional[str] = None,
     crop: types.Box2D = None,
@@ -545,6 +547,7 @@ def plot_localiser_prediction(
     show_pred: bool = True,
     show_seg_patch: bool = True,
     slice_idx: Optional[int] = None,
+    truncate_spine: bool = True,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
@@ -558,7 +561,7 @@ def plot_localiser_prediction(
         })
 
     # Load localiser segmentation.
-    if prediction.sum() == 0:
+    if pred_data.sum() == 0:
         logging.info('Empty prediction')
         empty_pred = True
     else:
@@ -588,7 +591,7 @@ def plot_localiser_prediction(
             slice_idx = extent[extent_end][0]
 
     # Plot patient regions.
-    plot_region(id, prediction.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_region(id, pred_data.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -606,7 +609,7 @@ def plot_localiser_prediction(
             aspect = get_aspect_ratio(view, spacing) 
 
         # Get slice data.
-        pred_slice_data = get_slice(prediction, slice_idx, view)
+        pred_slice_data = get_slice(pred_data, slice_idx, view)
 
         # Crop the image.
         if crop:
@@ -623,7 +626,7 @@ def plot_localiser_prediction(
     # Plot prediction extent.
     if show_pred_extent and not empty_pred:
         # Get extent of prediction.
-        pred_extent = get_extent(prediction)
+        pred_extent = get_extent(pred_data)
 
         # Plot extent if in view.
         if should_plot_box(pred_extent, view, slice_idx):
@@ -633,18 +636,18 @@ def plot_localiser_prediction(
 
     # Plot localiser centre.
     if show_pred_centre and not empty_pred:
+        # Truncate if necessary to show true pred centre.
+        centre_data = truncate(pred_data, spacing) if truncate_spine and pred_region == 'SpinalCord' else pred_data
+
         # Get pred centre.
-        pred_centre = get_extent_centre(prediction) 
+        pred_centre = get_extent_centre(centre_data) 
 
         # Get 2D loc centre.
         if view == 'axial':
-            offscreen = False if slice_idx == pred_centre[2] else True
             pred_centre = (pred_centre[0], pred_centre[1])
         elif view == 'coronal':
-            offscreen = False if slice_idx == pred_centre[1] else True
             pred_centre = (pred_centre[0], pred_centre[2])
         elif view == 'sagittal':
-            offscreen = False if slice_idx == pred_centre[0] else True
             pred_centre = (pred_centre[1], pred_centre[2])
             
         # Apply crop.
@@ -659,12 +662,19 @@ def plot_localiser_prediction(
 
     # Plot second stage patch.
     if not empty_pred and show_seg_patch:
-        size = get_region_patch_size(region, spacing)
-        min, max = get_box(loc_centre, size)
+        # Truncate if necessary to show true pred centre.
+        centre_data = truncate(pred_data, spacing) if truncate_spine and pred_region == 'SpinalCord' else pred_data
+
+        # Get pred centre.
+        pred_centre = get_extent_centre(centre_data) 
+
+        # Get second-stage patch.
+        size = get_region_patch_size(pred_region, spacing)
+        min, max = get_box(pred_centre, size)
 
         # Squash min/max to label size.
         min = np.clip(min, a_min=0, a_max=None)
-        max = np.clip(max, a_min=None, a_max=prediction.shape)
+        max = np.clip(max, a_min=None, a_max=pred_data.shape)
 
         if should_plot_box((min, max), view, slice_idx):
             __plot_box_slice((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')

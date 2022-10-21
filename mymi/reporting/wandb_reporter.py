@@ -13,19 +13,11 @@ class WandbReporter(Reporter):
         project_name: str,
         run_name: str,
         offline: bool = False) -> None:
-        """
-        args:
-            project_name: the project name.
-            run_name: the name of the training run.
-        kwargs:
-            offline: create files locally, to be uploaded later.
-        """
-        # Create file locally.
         if offline:
             os.environ['WANDB_MODE'] = 'offline'
 
         # Configure wandb.
-        wandb.init(dir=config.directories.wandb, project=project_name, name=run_name)
+        wandb.init(dir=config.directories.reports, project=project_name, name=run_name)
 
     """
     For method doc strings, see parent class.

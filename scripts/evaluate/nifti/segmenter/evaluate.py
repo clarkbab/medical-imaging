@@ -8,6 +8,3 @@ sys.path.append(root_dir)
 from mymi.evaluation.dataset.nifti import create_segmenter_evaluation
 
 fire.Fire(create_segmenter_evaluation)
-
-# Sample args:
-# --dataset PMCC-HN-TEST --region Parotid_L --segmenter "(...)"

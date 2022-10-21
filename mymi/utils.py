@@ -1,9 +1,11 @@
+from contextlib import contextmanager
 import hashlib
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
+from time import time
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 # Commented due to circular import.
@@ -11,8 +13,11 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from mymi import config
 from mymi import logging
 
-def append_row(df: pd.DataFrame, data: Dict[str, Union[str, int, float]]) -> pd.DataFrame:
-    return pd.concat((df, pd.DataFrame(data, index=[0])), axis=0)
+def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
+    return pd.concat((df, odf), axis=0)
+
+def append_row(df: pd.DataFrame, data: Dict[str, Union[int, float, str]]) -> pd.DataFrame:
+    return pd.concat((df, pd.DataFrame([data], index=[0])), axis=0)
 
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
@@ -131,14 +136,60 @@ def load_csv(
     else:
         return None
 
-def arg_to_list(arg, t: Literal[int, str, tuple]) -> List[Union[int, str]]:
-    if type(arg) == t:
-        return [arg]
-    else:
+def arg_to_list(
+    arg: Optional[Any],
+    arg_type: Any,
+    out_type: Optional[Any] = None) -> List[Any]:
+    if arg is None:
         return arg
 
-def arg_broadcast(a: List, b: List):
-    if len(a) == 1 and len(b) != 1:
-        return a * len(b)
-    else:
-        return a
+    # Convert to list.
+    if type(arg) is arg_type:
+        arg = [arg]
+    elif type(arg_type) is list and type(arg) in arg_type:      # Allow multiple types to be specified in 't'.
+        arg = [arg]
+        
+    # Convert to output type. Used when multiple types are specified in 't'.
+    if out_type is not None:
+        arg = [out_type(a) for a in arg]
+
+    return arg
+
+def arg_broadcast(
+    arg: Any,
+    b_arg: Any,
+    arg_type: Optional[Any] = None,
+    out_type: Optional[Any] = None):
+    # Convert arg to list.
+    if arg_type is not None:
+        arg = arg_to_list(arg, arg_type, out_type)
+
+    # Get broadcast length.
+    b_len = b_arg if type(b_arg) is int else len(b_arg)
+
+    # Broadcast arg.
+    if len(arg) == 1 and b_len != 1:
+        arg = b_len * arg
+
+    return arg
+
+class Timer:
+    def __init__(self, columns):
+        self.__cols = columns
+        self.__cols['time'] = float
+        self.__df = pd.DataFrame(columns=self.__cols.keys())
+
+    @contextmanager
+    def record(self, enabled, data):
+        try:
+            if enabled:
+                start = time()
+
+            yield None
+        finally:
+            if enabled:
+                data['time'] = time() - start
+                self.__df = append_row(self.__df, data)
+
+    def save(self, filepath):
+        self.__df.astype(self.__cols).to_csv(filepath, index=False)

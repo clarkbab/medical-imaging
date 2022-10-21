@@ -4,7 +4,7 @@ from mymi import types
 
 from .colours import to_255, RegionColours
 from .dose_constraints import get_dose_constraint
-from .limits import RegionLimits
+from .limits import RegionLimits, truncate_spine
 from .patch_sizes import get_region_patch_size
 from .regions import RegionNames, Regions
 from .tolerances import get_region_tolerance, RegionTolerances

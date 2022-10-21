@@ -28,5 +28,5 @@ RUN="public-1gpu-100epochs"
 
 for i in "${!REGIONS[@]}"; do
     localiser="('localiser-${REGIONS[i]}','$RUN','BEST')"
-    python create_patient_evaluation --dataset $DATASET --pat_id $PATIENT --region ${REGIONS[i]} --localiser $localiser
+    python create_patient_evaluation.py --dataset $DATASET --pat_id $PATIENT --region ${REGIONS[i]} --localiser $localiser
 done

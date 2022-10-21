@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Union
 
 from mymi import dataset as ds
 from mymi import logging
-from mymi.prediction.dataset.nifti import create_patient_localiser_prediction, create_patient_segmenter_prediction, load_patient_localiser_centre, load_patient_localiser_prediction, load_patient_segmenter_prediction
+from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction
 from mymi import types
 from mymi.utils import arg_broadcast, arg_to_list
 
@@ -68,8 +68,8 @@ def plot_localiser_prediction(
     region_label: Optional[Dict[str, str]] = None,
     show_ct: bool = True,
     **kwargs) -> None:
-    regions = arg_to_list(region)
-    region_labels = arg_to_list(region_label)
+    regions = arg_to_list(region, str)
+    region_labels = arg_to_list(region_label, str)
     
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
@@ -79,13 +79,10 @@ def plot_localiser_prediction(
 
     # Load prediction.
     if load_prediction:
-        pred = load_patient_localiser_prediction(dataset, pat_id, localiser)
+        pred = load_localiser_prediction(dataset, pat_id, localiser)
     else:
-        # Set truncation if 'SpinalCord'.
-        truncate = True if 'SpinalCord' in localiser[0] else False
-
         # Make prediction.
-        pred = get_patient_localiser_prediction(dataset, pat_id, localiser, truncate=truncate)
+        pred = get_localiser_prediction(dataset, pat_id, localiser)
 
     if centre_of is not None:
         if type(crop) == str:
@@ -110,7 +107,8 @@ def plot_localiser_prediction(
             crop = region_labels[crop]
     
     # Plot.
-    plot_localiser_prediction_base(pat_id, spacing, pred, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    pred_region = localiser[0].split('-')[1]    # Infer pred region name from localiser model name.
+    plot_localiser_prediction_base(pat_id, spacing, pred, pred_region, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_segmenter_prediction(
     dataset: str,
@@ -129,12 +127,13 @@ def plot_segmenter_prediction(
     **kwargs) -> None:
     localisers = arg_to_list(localiser, tuple)
     segmenters = arg_to_list(segmenter, tuple)
-    regions = arg_to_list(region, str)
-    region_labels = arg_to_list(region_label, str)
+    regions = arg_to_list(region, str) if region is not None else None
+    region_labels = arg_to_list(region_label, str) if region_label is not None else None
     localisers = arg_broadcast(localisers, segmenters)
-    pred_labels = arg_to_list(pred_label, str)
     n_models = len(localisers)
-    if pred_labels is None:
+    if pred_label is not None:
+        pred_labels = arg_to_list(pred_label, str)
+    else:
         pred_labels = list(f'model-{i}' for i in range(n_models))
 
     # Infer 'pred_regions' from localiser model names.
@@ -160,30 +159,32 @@ def plot_segmenter_prediction(
         pred_region = pred_regions[i]
 
         # Load/make localiser prediction.
-        loc_centre = None
         if load_loc_pred:
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
-            loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser, raise_error=False)
-            if loc_centre is None:
+            try:
+                loc_centre = load_localiser_centre(dataset, pat_id, localiser)
+            except ValueError as e:
+                loc_centre = None
                 logging.info(f"No prediction found for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
+
         if loc_centre is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}'...")
-            create_patient_localiser_prediction(dataset, pat_id, localiser)
-            loc_centre = load_patient_localiser_centre(dataset, pat_id, localiser)
+            create_localiser_prediction(dataset, pat_id, localiser)
+            loc_centre = load_localiser_centre(dataset, pat_id, localiser)
 
         # Get segmenter prediction.
         pred = None
         # Attempt load.
         if load_seg_pred:
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
-            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, raise_error=False)
+            pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter, raise_error=False)
             if pred is None:
                 logging.info(f"No prediction found for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
         # Make prediction if didn't/couldn't load.
         if pred is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
-            create_patient_segmenter_prediction(dataset, pat_id, pred_region, localiser, segmenter)           # Handle multiple spacings.
-            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+            create_segmenter_prediction(dataset, pat_id, pred_region, localiser, segmenter)           # Handle multiple spacings.
+            pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
 
         loc_centres.append(loc_centre)
         pred_data[pred_label] = pred

@@ -10,7 +10,7 @@ sys.path.append(mymi_dir)
 from mymi import config
 from mymi.regions import RegionNames
 
-dry_run = True
+for_real = True
 keep = 2
 types = ['segmenter']
 regions = RegionNames
@@ -36,8 +36,8 @@ for type in types:
                 continue
 
             # Remove run.
-            if dry_run:
-                print(f'\t{run_folder}')
-            else:
+            if for_real:
                 print(f'\t{run_folder}')
                 shutil.rmtree(run_folder)
+            else:
+                print(f'\t{run_folder}')
