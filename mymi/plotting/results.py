@@ -1,13 +1,13 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from mymi.regions.tolerances import get_region_tolerance
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from typing import List, Literal, Optional, Tuple, Union
 
 from mymi.regions import RegionNames
+from mymi.regions.tolerances import get_region_tolerance
 
 DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
@@ -148,7 +148,7 @@ def plot_bootstrap_fit(
 
             if index is not None:
                 # Load bootstrapped sample.
-                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, n_samples=n_samples)
+                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, include_n_trains=True, n_samples=n_samples)
                 sample = samples[index]
                 x_raw = np.array([])
                 y_raw = np.array([])
@@ -157,7 +157,7 @@ def plot_bootstrap_fit(
                     y_raw = np.concatenate((y_raw, n_train_sample))
 
                 # Load prediction on bootstrapped sample.
-                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
                 pred = preds[index]
 
                 # Plot.
@@ -168,7 +168,7 @@ def plot_bootstrap_fit(
             else:
                 # Load raw data and bootstrapped predictions.
                 x_raw, y_raw = raw_data(region, model, metric, df)
-                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
 
                 # Calculate means.
                 means = preds.mean(axis=0)

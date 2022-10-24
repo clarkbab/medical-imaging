@@ -1,13 +1,12 @@
 import subprocess
 
-regions = '16'
-script = 'scripts/train/segmenter/spartan/array/train_segmenter'
+regions = '3'
+script = 'scripts/train/segmenter/spartan/array/train_segmenter.slurm'
 test_folds = [0, 1, 2, 3, 4]
-test_folds = [4]
-models = ['transfer']
+test_folds = [1]
+models = ['clinical']
 n_trains = [5, 10, 20, 50, 100, None]
-# n_trains = [None]
-# n_trains = [20, 50, 100, 200, None]
+n_trains = [None]
 resume = False
 
 n_train_epochs = {

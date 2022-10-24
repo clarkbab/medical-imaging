@@ -43,7 +43,7 @@ def train_segmenter(
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
     model_name = model
-    logging.info(f"Training model '({model_name}, {run})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}'.")
+    logging.info(f"Training model '({model_name}, {run})' on datasets '{datasets}' with region '{region}' - pretrained model '{pretrained_model}', resume '{resume}'.")
     # 'libgcc'
     import ctypes
     libgcc_s = ctypes.CDLL('libgcc_s.so.1')

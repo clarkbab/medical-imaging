@@ -41,7 +41,6 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 TIMING=True
 
-
 python $SCRIPT_DIR/predict/nifti/localiser/create_predictions.py \
     --datasets $DATASETS \
     --region $REGION \

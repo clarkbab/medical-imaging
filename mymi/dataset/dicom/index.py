@@ -1,3 +1,4 @@
+from ast import literal_eval
 from distutils.dir_util import copy_tree
 import numpy as np
 import pandas as pd
@@ -24,103 +25,112 @@ INDEX_COLS = {
 ERRORS_COLS = INDEX_COLS.copy()
 ERRORS_COLS['error'] = str
 
-def build_index(dataset: str) -> None:
+def build_index(
+    dataset: str,
+    from_temp_index: bool = False) -> None:
     start = time()
 
-    # Load all dicom files.
+    # Load dataset path.
     dataset_path = os.path.join(config.directories.datasets, 'dicom', dataset) 
-    data_path = os.path.join(dataset_path, 'data')
-    if not os.path.exists(data_path):
-        raise ValueError(f"No 'data' folder found for dataset '{dataset}'.")
 
     # Create index.
     index = pd.DataFrame(columns=INDEX_COLS.keys())
 
-    # Add all DICOM files.
-    logging.info(f"Building index for dataset '{dataset}'...")
-    for root, _, files in tqdm(os.walk(data_path)):
-        for f in files:
-            # Check if DICOM file.
-            filepath = os.path.join(root, f)
-            try:
-                dicom = dcm.read_file(filepath, stop_before_pixels=True)
-            except dcm.errors.InvalidDicomError:
-                continue
+    # Crawl folder structure.
+    temp_filepath = os.path.join(config.directories.temp, f'{dataset}-index.csv')
+    if from_temp_index:
+        if os.path.exists(temp_filepath):
+            logging.info(f"Loading saved index for dataset '{dataset}'...")
+            index = pd.read_csv(temp_filepath)
+            index['mod-spec'] = index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
+        else:
+            raise ValueError(f"Temporary index doesn't exist for dataset '{dataset}' at filepath '{temp_filepath}'.")
+    else:
+        data_path = os.path.join(dataset_path, 'data')
+        if not os.path.exists(data_path):
+            raise ValueError(f"No 'data' folder found for dataset '{dataset}'.")
 
-            # Get modality.
-            modality = dicom.Modality
-            if not modality in ('CT', 'RTSTRUCT', 'RTPLAN', 'RTDOSE'):
-                continue
-
-            # Get patient ID.
-            pat_id = dicom.PatientID
-
-            # Get study UID.
-            study_id = dicom.StudyInstanceUID
-
-            # Get series UID.
-            series_id = dicom.SeriesInstanceUID
-
-            # Get SOP UID.
-            sop_id = dicom.SOPInstanceUID
-
-            # Get modality-specific info.
-            if modality == 'CT':
-                if not hasattr(dicom, 'ImageOrientationPatient'):
-                    logging.error(f"No 'ImageOrientationPatient' found for CT dicom '{filepath}'.")
+        # Add all DICOM files.
+        logging.info(f"Building index for dataset '{dataset}'...")
+        for root, _, files in tqdm(os.walk(data_path)):
+            for f in files:
+                # Check if DICOM file.
+                filepath = os.path.join(root, f)
+                try:
+                    dicom = dcm.read_file(filepath, stop_before_pixels=True)
+                except dcm.errors.InvalidDicomError:
                     continue
 
-                mod_spec = {
-                    'ImageOrientationPatient': dicom.ImageOrientationPatient,
-                    'ImagePositionPatient': dicom.ImagePositionPatient,
-                    'InstanceNumber': dicom.InstanceNumber,
-                    'PixelSpacing': dicom.PixelSpacing
-                }
-            elif modality == 'RTDOSE':
-                mod_spec = {
-                    'RefRTPLANSOPInstanceUID': dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
-                }
-            elif modality == 'RTPLAN':
-                mod_spec = {
-                    'RefRTSTRUCTSOPInstanceUID': dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
-                }
-            elif modality == 'RTSTRUCT':
-                mod_spec = {
-                    'RefCTSeriesInstanceUID': dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-                }
+                # Get modality.
+                modality = dicom.Modality
+                if not modality in ('CT', 'RTSTRUCT', 'RTPLAN', 'RTDOSE'):
+                    continue
 
-            # Add index entry.
-            data = {
-                'patient-id': pat_id,
-                'study-id': study_id,
-                'modality': modality,
-                'series-id': series_id,
-                'sop-id': sop_id,
-                'filepath': filepath,
-                'mod-spec': mod_spec,
-            }
-            index = append_row(index, data)
+                # Get patient ID.
+                pat_id = dicom.PatientID
 
-    logging.info('finished loop')
+                # Get study UID.
+                study_id = dicom.StudyInstanceUID
+
+                # Get series UID.
+                series_id = dicom.SeriesInstanceUID
+
+                # Get SOP UID.
+                sop_id = dicom.SOPInstanceUID
+
+                # Get modality-specific info.
+                if modality == 'CT':
+                    if not hasattr(dicom, 'ImageOrientationPatient'):
+                        logging.error(f"No 'ImageOrientationPatient' found for CT dicom '{filepath}'.")
+                        continue
+
+                    mod_spec = {
+                        'ImageOrientationPatient': dicom.ImageOrientationPatient,
+                        'ImagePositionPatient': dicom.ImagePositionPatient,
+                        'InstanceNumber': dicom.InstanceNumber,
+                        'PixelSpacing': dicom.PixelSpacing
+                    }
+                elif modality == 'RTDOSE':
+                    mod_spec = {
+                        'RefRTPLANSOPInstanceUID': dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                    }
+                elif modality == 'RTPLAN':
+                    mod_spec = {
+                        'RefRTSTRUCTSOPInstanceUID': dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+                    }
+                elif modality == 'RTSTRUCT':
+                    mod_spec = {
+                        'RefCTSeriesInstanceUID': dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+                    }
+
+                # Add index entry.
+                data = {
+                    'patient-id': pat_id,
+                    'study-id': study_id,
+                    'modality': modality,
+                    'series-id': series_id,
+                    'sop-id': sop_id,
+                    'filepath': filepath,
+                    'mod-spec': mod_spec,
+                }
+                index = append_row(index, data)
     
-    # Save index.
-    filepath = os.path.join(config.directories.files, 'index-test.csv')
-    index.to_csv(filepath, index=False)
-    logging.info('saved test index')
+        # Save index - in case something goes wrong later.
+        index.to_csv(temp_filepath, index=False)
 
     # Create errors index.
     errors = pd.DataFrame(columns=ERRORS_COLS.keys())
-    logging.info('created errors')
 
     # Remove duplicates by 'SOPInstanceUID'.
+    logging.info(f"Removing duplicate DICOM files (by 'SOPInstanceUID')...")
     dup_rows = index['sop-id'].duplicated()
     dup = index[dup_rows]
     dup['error'] = 'DUPLICATE'
     errors = append_dataframe(errors, dup)
     index = index[~dup_rows]
-    logging.info('removed duplicates')
 
     # Check CT slices have standard orientation.
+    logging.info(f"Removing CT DICOM files with rotated orientation (by 'ImageOrientationPatient')...")
     ct = index[index.modality == 'CT']
     def standard_orientation(m: Dict) -> bool:
         orient = m['ImageOrientationPatient']
@@ -131,9 +141,9 @@ def build_index(dataset: str) -> None:
     nonstand['error'] = 'NON-STANDARD-ORIENTATION'
     errors = append_dataframe(errors, nonstand)
     index = index.drop(nonstand_idx)
-    logging.info('consistent CT orientation')
 
     # Check CT slices have consistent x/y position.
+    logging.info(f"Removing CT DICOM files with inconsistent x/y position (by 'ImagePositionPatient')...")
     ct = index[index.modality == 'CT']
     def consistent_xy_position(series: pd.Series) -> bool:
         pos = series.apply(lambda m: pd.Series(m['ImagePositionPatient'][:2]))
@@ -145,9 +155,9 @@ def build_index(dataset: str) -> None:
     incons['error'] = 'INCONSISTENT-POSITION-XY'
     errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
-    logging.info('Consistend CT x/y position')
 
     # Check CT slices have consistent x/y spacing.
+    logging.info(f"Removing CT DICOM files with inconsistent x/y spacing (by 'PixelSpacing')...")
     ct = index[index.modality == 'CT']
     def consistent_xy_spacing(series: pd.Series) -> bool:
         pos = series.apply(lambda m: pd.Series(m['PixelSpacing']))
@@ -159,9 +169,9 @@ def build_index(dataset: str) -> None:
     incons['error'] = 'INCONSISTENT-SPACING-XY'
     errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
-    logging.info('Consistent CT x/y spacing')
 
     # Check CT slices have consistent z spacing.
+    logging.info(f"Removing CT DICOM files with inconsistent z spacing (by 'ImagePositionPatient')...")
     ct = index[index.modality == 'CT']
     def consistent_z_position(series: pd.Series) -> bool:
         z_locs = series.apply(lambda m: m['ImagePositionPatient'][2]).sort_values()
@@ -174,9 +184,9 @@ def build_index(dataset: str) -> None:
     incons['error'] = 'INCONSISTENT-SPACING-Z'
     errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
-    logging.info("Consistent CT z spacing")
 
     # If multiple RT files included for a series, keep most recent.
+    logging.info(f"Removing duplicate RTSTRUCT, RTPLAN, and RTDOSE DICOM files (by 'SeriesInstanceUID')...")
     modalities = ['RTSTRUCT', 'RTPLAN', 'RTDOSE']
     for modality in modalities:
         rt = index[index.modality == modality].sort_values('sop-id', ascending=False)
@@ -185,9 +195,9 @@ def build_index(dataset: str) -> None:
         dup['error'] = 'MULTIPLE-FILES'
         errors = append_dataframe(errors, dup)
         index = index.drop(dup_idx)
-    logging.info('keep most recent RTSTRUCT')
 
     # Check that RTSTRUCT references CT series in index.
+    logging.info(f"Removing RTSTRUCT DICOM files without CT in index (by 'RefCTSeriesInstanceUID')...")
     ct_series = index[index.modality == 'CT']['series-id'].unique()
     rtstruct = index[index.modality == 'RTSTRUCT']
     ref_ct = rtstruct['mod-spec'].apply(lambda m: m['RefCTSeriesInstanceUID']).isin(ct_series)
@@ -196,9 +206,9 @@ def build_index(dataset: str) -> None:
     nonref['error'] = 'NO-REF-CT'
     errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
-    logging.info('RTSTRUCT has CT')
 
     # Check that RTPLAN references RTSTRUCT SOP instance in index.
+    logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID')...")
     rtstruct_sops = index[index.modality == 'RTSTRUCT']['sop-id'].unique()
     rtplan = index[index.modality == 'RTPLAN']
     ref_rtstruct = rtplan['mod-spec'].apply(lambda m: m['RefRTSTRUCTSOPInstanceUID']).isin(rtstruct_sops)
@@ -207,9 +217,9 @@ def build_index(dataset: str) -> None:
     nonref['error'] = 'NO-REF-RTSTRUCT'
     errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
-    logging.info('RTPLAN as RTSTRUCT')
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
+    logging.info(f"Removing RTDOSE DICOM files without RTPLAN in index (by 'RefRTPLANSOPInstanceUID')...")
     rtplan_sops = index[index.modality == 'RTPLAN']['sop-id'].unique()
     rtdose = index[index.modality == 'RTDOSE']
     ref_rtplan = rtdose['mod-spec'].apply(lambda m: m['RefRTPLANSOPInstanceUID']).isin(rtplan_sops)
@@ -218,25 +228,22 @@ def build_index(dataset: str) -> None:
     nonref['error'] = 'NO-REF-RTPLAN'
     errors = append_dataframe(errors, nonref)
     index = index.drop(nonref_idx)
-    logging.info('RTDOSE has RTPLAN')
 
     # Check that study has RTSTRUCT series.
+    logging.info(f"Removing series without RTSTRUCT DICOM...")
     incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
     nonincl = index[~incl_rows]
     nonincl['error'] = 'STUDY-NO-RTSTRUCT'
     errors = append_dataframe(errors, nonincl)
     index = index[incl_rows]
-    logging.info('Study has RTSTRUCT')
 
     # Save index.
-    logging.info(f"Saving index for dataset '{dataset}'...")
     if len(index) > 0:
         index = index.astype(INDEX_COLS)
     filepath = os.path.join(dataset_path, 'index.csv')
     index.to_csv(filepath, index=False)
 
     # Save errors index.
-    logging.info(f"Saving index errors for dataset '{dataset}'...")
     if len(errors) > 0:
         errors = errors.astype(ERRORS_COLS)
     filepath = os.path.join(dataset_path, 'index-errors.csv')

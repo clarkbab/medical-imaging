@@ -1,4 +1,4 @@
-import fire
+from fire import Fire
 import os
 import sys
 import torch
@@ -8,13 +8,18 @@ sys.path.append(root_dir)
 
 from mymi import config
 
-region = sys.argv[1]
-run = sys.argv[2]
-model = (f'segmenter-{region}', run, 'last.ckpt')
-path = os.path.join(config.directories.models, *model)
-state = torch.load(path, map_location=torch.device('cpu'))
+def print_epoch(
+    model: str,
+    run: str,
+    checkpoint: str = 'last') -> None:
+    # Load checkpoint state.
+    model = (model, run, f'{checkpoint}.ckpt')
+    path = os.path.join(config.directories.models, *model)
+    state = torch.load(path, map_location=torch.device('cpu'))
 
-print(f"""
+    print(f"""
 Model: {model}
 Epoch: {state['epoch']}
 """)
+
+Fire(print_epoch)

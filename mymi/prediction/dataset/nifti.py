@@ -44,7 +44,7 @@ def create_localiser_prediction(
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None) -> None:
     datasets = arg_to_list(dataset, str)
-    pat_ids = arg_to_list(pat_id, [int, str], out_t=str)
+    pat_ids = arg_to_list(pat_id, [int, str], out_type=str)
     datasets = arg_broadcast(datasets, pat_ids)
     assert len(datasets) == len(pat_ids)
 
@@ -154,7 +154,7 @@ def create_localiser_predictions(
 
     # Save timing data.
     if timing:
-        filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -393,7 +393,7 @@ def create_segmenter_predictions(
 
     # Save timing data.
     if timing:
-        filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser, *segmenter, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -559,9 +559,9 @@ def create_two_stage_predictions(
 
         # Save timing data.
         if timing:
-            filepath = os.path.join(config.directories.predictions, 'times', 'localiser', *localiser.name, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+            filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             loc_timer.save(filepath)
-            filepath = os.path.join(config.directories.predictions, 'times', 'segmenter', *localiser.name, *segmenter.name, encode(datasets), f'time-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+            filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser.name, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             seg_timer.save(filepath)

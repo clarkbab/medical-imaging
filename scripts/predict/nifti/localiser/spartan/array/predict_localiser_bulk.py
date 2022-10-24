@@ -1,7 +1,7 @@
 import subprocess
 
-regions = '0-3'
-script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser'
+regions = '0-16'
+script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser.slurm'
 test_folds = [0, 1, 2, 3, 4]
 
 for test_fold in test_folds:

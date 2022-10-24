@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.optimize import least_squares
 import seaborn as sns
 from tqdm import tqdm
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
@@ -187,17 +187,24 @@ def f(
     return -params[0] / (x - params[1]) + params[2]
 
 def get_p_init(metric: str) -> Tuple[float, float, float]:
-    if 'apl-mm-tol-' in metric:
-        return (-1, -1, 1)
-    if 'dm-surface-dice-tol-' in metric:
+    if get_metric_direction(metric):
         return (1, -1, 1)
-    metric_p_inits = {
-        'dice': (1, -1, 1),
-        'hd': (-1, -1, 1),
-        'hd-95': (-1, -1, 1),
-        'msd': (-1, -1, 1)
-    }
-    return metric_p_inits[metric]
+    else:
+        return (-1, -1, 1)
+
+# In which direction does the metric improve?
+# Higher is better (True) or lower is better (False).
+def get_metric_direction(metric: str) -> bool:
+    if 'apl-mm-tol-' in metric:
+        return False
+    if metric == 'dice':
+        return True
+    if 'dm-surface-dice-tol-' in metric:
+        return True
+    if 'hd' in metric: 
+        return False
+    if metric == 'msd':
+        return False
 
 def fit_curve(
     p_init: Tuple[float],
@@ -230,26 +237,70 @@ def load_bootstrap_predictions(
     model: str,
     metric: str, 
     stat: str,
-    n_samples: int = DEFAULT_N_SAMPLES):
+    include_params: bool = False,
+    n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[np.ndarray]:
     dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
-    params = f['params']
-    return data, params
+    if include_params:
+        params = f['params']
+        return data, params
+    else:
+        return data
 
 def load_bootstrap_samples(
     region: str,
     model: str,
     metric: str,
     stat: str, 
+    include_n_trains: bool = False,
     n_samples: int = DEFAULT_N_SAMPLES):
     dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
-    n_trains = f['n_trains']
-    return data, n_trains
+    if include_n_trains:
+        n_trains = f['n_trains']
+        return data, n_trains
+    else:
+        return data
+    
+def load_bootstrap_differences(
+    region: str,
+    models: List[str],
+    metric: str, 
+    stat: str,
+    n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[List[int], Dict[int, str]]:
+    assert len(models) == 2
+
+    # Calculate fitted value differences.
+    preds_a = load_bootstrap_predictions(region, models[0], metric, stat, n_samples=n_samples)
+    preds_b = load_bootstrap_predictions(region, models[1], metric, stat, n_samples=n_samples)
+    diffs = preds_b - preds_a
+
+    # Calculate percentiles.
+    diffs_p5 = np.quantile(diffs, 0.05, axis=0)
+    diffs_p95 = np.quantile(diffs, 0.95, axis=0)
+
+    # Build map from integer to model name.
+    model_map = {
+        0: 'No significant difference',
+        1: models[0],
+        2: models[1]
+    }
+
+    # If a model performs better in 95% of samples, it is significantly better
+    # for that value of 'n_train'.
+    results = np.zeros_like(diffs_p5, dtype=int)
+    if get_metric_direction(metric):
+        results[diffs_p5 > 0] = 2
+        results[diffs_p95 < 0] = 1
+    else:
+        results[diffs_p95 < 0] = 2
+        results[diffs_p5 > 0] = 1
+
+    return results, model_map
 
 def load_evaluation_data(
     datasets: Union[str, List[str]],
@@ -337,7 +388,8 @@ def megaplot(
     outer_hspace: float = 0.2,
     outer_wspace: float = 0.2,
     savepath: Optional[str] = None,
-    y_lim: bool = True) -> None:
+    y_lim: bool = True,
+    **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
     regions = arg_to_list(region, str)
     n_regions = len(regions)
@@ -373,9 +425,10 @@ def megaplot(
             axs = [plt.subplot(cell) for cell in inner_gs]
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
-            plot_bootstrap_fit(datasets, region, models, metric, stat, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim)
+            plot_bootstrap_fit(datasets, region, models, metric, stat, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
 
     if savepath is not None:
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
         plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
 
     plt.show()
@@ -398,6 +451,7 @@ def plot_bootstrap_fit(
     n_samples: int = DEFAULT_N_SAMPLES,
     n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS,
     show_ci: bool = True,
+    show_difference: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
     split: bool = True,
@@ -413,22 +467,35 @@ def plot_bootstrap_fit(
         model_labels = [model_labels] if type(model_labels) == str else model_labels
         assert len(model_labels) == len(models)
         
+    # Create axes.
+    # Axes[0] contains two subplot axes (if 'split=True'), with the same data, so that we can plot with a split
+    # between 0 and 5.
+    # Axes[1] contains two subplot axes (if 'show_difference=True'), one of which is hidden, so that we can
+    # plot significant differences between models.
     if axs is None:
         plt.figure(figsize=figsize)
         if split:
-            _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={'width_ratios': [1, 19]})
+            if show_difference:
+                _, axs = plt.subplots(2, 2, figsize=figsize, gridspec_kw={ 'height_ratios': [49, 1], 'width_ratios': [1, 19] })
+            else:
+                _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={ 'width_ratios': [1, 19] })
+                axs = [axs]
         else:
-            axs = [plt.gca()]
+            if show_difference:
+                _, axs = plt.subplots(2, 1, figsize=figsize, gridspec_kw={ 'height_ratios': [49, 1] })
+                axs = np.transpose([axs])
+            else:
+                axs = [[plt.gca()]]
     
-    for ax in axs:
-        # Plot data.
+    # Plot main data.
+    for ax in axs[0]:
         for i, model in enumerate(models):
             colour = colours[i]
             model_label = model_labels[i] if model_labels is not None else model
 
             if index is not None:
                 # Load bootstrapped sample.
-                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, n_samples=n_samples)
+                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, include_n_trains=True, n_samples=n_samples)
                 sample = samples[index]
                 x_raw = np.array([])
                 y_raw = np.array([])
@@ -437,7 +504,7 @@ def plot_bootstrap_fit(
                     y_raw = np.concatenate((y_raw, n_train_sample))
 
                 # Load prediction on bootstrapped sample.
-                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
                 pred = preds[index]
 
                 # Plot.
@@ -446,9 +513,8 @@ def plot_bootstrap_fit(
                 if show_points:
                     ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
             else:
-                # Load raw data and bootstrapped predictions.
-                x_raw, y_raw = __raw_data(datasets, region, model, metric, stat, n_trains=n_trains)
-                preds, _ = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+                # Load bootstrapped predictions.
+                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
 
                 # Calculate means.
                 means = preds.mean(axis=0)
@@ -466,7 +532,22 @@ def plot_bootstrap_fit(
                     ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
                     ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
                 if show_points:
+                    x_raw, y_raw = __raw_data(datasets, region, model, metric, stat, n_trains=n_trains)
                     ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+
+    # Plot difference
+    if show_difference:
+        # Load best models per n_train.
+        diffs = load_bootstrap_differences(region, models, metric, stat, n_samples=n_samples)
+
+        for i, model in enumerate(models):
+            colour = colours[i]
+
+            # Get indices where this model outperforms.
+            indices = [i for i, d in enumerate(diffs) if d == model]
+            
+            # Plot model colour.
+            ax.scatter(indices, [0] * len(indices), color=colour)
 
     # Set axis scale.
     if split:
