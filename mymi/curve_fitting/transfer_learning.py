@@ -1,6 +1,6 @@
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from mymi.regions.tolerances import get_region_tolerance
 import numpy as np
 import os
@@ -15,7 +15,7 @@ from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
 from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
 from mymi.regions import RegionNames
-from mymi.utils import arg_broadcast, arg_to_list
+from mymi.utils import arg_assert_present, arg_broadcast, arg_to_list
 
 DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
@@ -112,7 +112,7 @@ def create_bootstrap_predictions(
         preds[:, :5] = np.nan
         
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric, stat)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
@@ -135,7 +135,7 @@ def create_bootstrap_samples(
     n_trains = boot_df.reset_index()['n-train'].values
     
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric, stat)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
@@ -239,7 +239,12 @@ def load_bootstrap_predictions(
     stat: str,
     include_params: bool = False,
     n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[np.ndarray]:
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'preds', model, metric, stat)
+    arg_assert_present(region, 'region')
+    arg_assert_present(model, 'model')
+    arg_assert_present(metric, 'metric')
+    arg_assert_present(stat, 'stat')
+
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
@@ -256,7 +261,7 @@ def load_bootstrap_samples(
     stat: str, 
     include_n_trains: bool = False,
     n_samples: int = DEFAULT_N_SAMPLES):
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'curve-fitting', 'bootstrap', 'samples', model, metric, stat)
+    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', model, metric, stat)
     filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
@@ -382,12 +387,10 @@ def megaplot(
     metric: Union[str, List[str], np.ndarray],
     stat: Union[str, List[str]],
     fontsize: float = DEFAULT_FONT_SIZE,
-    inner_wspace: float = 0.05,
     legend_loc: Optional[Union[str, List[str]]] = None,
     model_label: Optional[Union[str, List[str]]] = None,
-    outer_hspace: float = 0.2,
-    outer_wspace: float = 0.2,
     savepath: Optional[str] = None,
+    secondary_stat: Optional[Union[str, List[str], np.ndarray]] = None,
     y_lim: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
@@ -399,6 +402,13 @@ def megaplot(
         metrics = np.repeat([metric], n_regions, axis=0)
     else:
         metrics = metric
+    if type(secondary_stat) is str:
+        secondary_stats = np.repeat([[secondary_stat]], n_regions, axis=0)
+    elif type(secondary_stat) is list:
+        secondary_stats = np.repeat([secondary_stat], n_regions, axis=0)
+    else:
+        secondary_stats = secondary_stat
+
     n_metrics = metrics.shape[1]
     legend_locs = arg_to_list(legend_loc, str)
     if legend_locs is not None:
@@ -414,18 +424,17 @@ def megaplot(
     # matplotlib.rc('text', usetex=True)
     # matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
-    # Create nested subplots.
+    # Create main gridspec._labels
     fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * n_regions))
-    outer_gs = fig.add_gridspec(hspace=outer_hspace, nrows=n_regions, ncols=metrics.shape[1], wspace=outer_wspace)
+    gs = GridSpec(n_regions, metrics.shape[1], figure=fig)
     for i, region in enumerate(regions):
         for j in range(n_metrics):
             metric = metrics[i, j]
             stat = stats[j]
-            inner_gs = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer_gs[i, j], width_ratios=[1, 19], wspace=0.05)
-            axs = [plt.subplot(cell) for cell in inner_gs]
+            sec_stat = secondary_stats[i, j]
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
-            plot_bootstrap_fit(datasets, region, models, metric, stat, axs=axs, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, split=True, wspace=inner_wspace, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
+            plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, subplot_spec=gs[i, j], legend_loc=legend_loc, model_labels=model_labels, secondary_stat=sec_stat, split=True, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
 
     if savepath is not None:
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
@@ -441,7 +450,10 @@ def plot_bootstrap_fit(
     stat: str,
     alpha_ci: float = 0.2,
     alpha_points: float = 1.0,
-    axs: Optional[Union[matplotlib.axes.Axes, List[matplotlib.axes.Axes]]] = None,
+    alpha_secondary: float = 0.5,
+    axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
+    diff_hspace: Optional[float] = 0.05,
+    diff_marker: str = 's',
     figsize: Tuple[float, float] = (8, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     fontweight: Literal['normal', 'bold'] = 'normal',
@@ -450,47 +462,64 @@ def plot_bootstrap_fit(
     model_labels: Optional[Union[str, List[str]]] = None,
     n_samples: int = DEFAULT_N_SAMPLES,
     n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS,
+    secondary_stat: Optional[str] = None,
     show_ci: bool = True,
     show_difference: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
+    show_secondary_ci: bool = True, 
+    show_secondary_difference: bool = True,
     split: bool = True,
+    split_wspace: Optional[float] = 0.05,
+    subplot_spec: Optional[mpl.gridspec.SubplotSpec] = None,
     title: str = '',
-    wspace: float = 0.05,
     x_scale: str = 'log',
     y_label: str = '',
     y_lim: Optional[Tuple[float, float]] = None):
-    colours = sns.color_palette('colorblind')[:len(models)]
+    model_colours = sns.color_palette('colorblind')[:len(models)]
     legend_loc = DEFAULT_METRIC_LEGEND_LOCS[metric] if legend_loc is None else legend_loc
     models = [models] if type(models) == str else models
     if model_labels is not None:
         model_labels = [model_labels] if type(model_labels) == str else model_labels
         assert len(model_labels) == len(models)
+    if secondary_stat is None:
+        show_secondary_difference = False
         
-    # Create axes.
-    # Axes[0] contains two subplot axes (if 'split=True'), with the same data, so that we can plot with a split
-    # between 0 and 5.
-    # Axes[1] contains two subplot axes (if 'show_difference=True'), one of which is hidden, so that we can
-    # plot significant differences between models.
-    if axs is None:
-        plt.figure(figsize=figsize)
-        if split:
-            if show_difference:
-                _, axs = plt.subplots(2, 2, figsize=figsize, gridspec_kw={ 'height_ratios': [49, 1], 'width_ratios': [1, 19] })
-            else:
-                _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={ 'width_ratios': [1, 19] })
-                axs = [axs]
-        else:
-            if show_difference:
-                _, axs = plt.subplots(2, 1, figsize=figsize, gridspec_kw={ 'height_ratios': [49, 1] })
-                axs = np.transpose([axs])
-            else:
-                axs = [[plt.gca()]]
+    # Create main gridspec.
+    main_gs_size = (2, 1) if show_difference else (1, 1)
+    main_gs_height_ratios = (48 if show_secondary_difference else 49, 2 if show_secondary_difference else 1) if show_difference else None
+    if subplot_spec is None:
+        fig = plt.figure(figsize=figsize)
+        main_gs = GridSpec(*main_gs_size, figure=fig, height_ratios=main_gs_height_ratios)
+    else:
+        fig = subplot_spec.get_gridspec().figure
+        main_gs = GridSpecFromSubplotSpec(*main_gs_size, subplot_spec=subplot_spec, height_ratios=main_gs_height_ratios)
+
+    # Create data gridspec.
+    data_gs_size = (1, 2) if split else (1, 1)
+    data_gs_width_ratios = (1, 19) if split else None
+    data_gs = GridSpecFromSubplotSpec(*data_gs_size, subplot_spec=main_gs[0, 0], width_ratios=data_gs_width_ratios, wspace=split_wspace)
+
+    # Create difference gridspec.
+    if show_difference:
+        diff_gs_size = (2, 2) if show_secondary_difference else (1, 2)
+        diff_gs_hspace = diff_hspace if show_secondary_difference else None
+        diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=main_gs[1, 0], width_ratios=(1, 19), wspace=split_wspace)
+
+    # Create subplots.
+    axs = [
+        [fig.add_subplot(data_gs[0, 0]), fig.add_subplot(data_gs[0, 1]) if split else None],
+        [None, fig.add_subplot(diff_gs[0, 1]) if show_difference else None],
+        [None, fig.add_subplot(diff_gs[1, 1]) if show_difference and show_secondary_difference else None]
+    ]
     
     # Plot main data.
     for ax in axs[0]:
+        if ax is None:
+            continue
+
         for i, model in enumerate(models):
-            colour = colours[i]
+            model_colour = model_colours[i]
             model_label = model_labels[i] if model_labels is not None else model
 
             if index is not None:
@@ -509,114 +538,189 @@ def plot_bootstrap_fit(
 
                 # Plot.
                 x = np.linspace(0, len(pred) - 1, num=len(pred))
-                ax.plot(x, pred, color=colour, label=model_label)
+                ax.plot(x, pred, color=model_colour, label=model_label)
                 if show_points:
-                    ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+                    ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
             else:
                 # Load bootstrapped predictions.
                 preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
 
-                # Calculate means.
-                means = preds.mean(axis=0)
+                # Load data for secondary statistic.
+                if secondary_stat:
+                    sec_preds = load_bootstrap_predictions(region, model, metric, secondary_stat, n_samples=n_samples)
 
-                # Plot.
+                # Plot mean value of 'stat' over all bootstrapped samples (convergent value).
+                means = preds.mean(axis=0)
                 x = np.linspace(0, len(means) - 1, num=len(means))
-                ax.plot(x, means, color=colour, label=model_label)
+                ax.plot(x, means, color=model_colour, label=model_label)
+
+                # Plot secondary statistic mean values.
+                if secondary_stat:
+                    sec_means = sec_preds.mean(axis=0)
+                    ax.plot(x, sec_means, color=model_colour, alpha=alpha_secondary, linestyle='--')
+
+                # Plot secondary statistic 95% CIs.
+                if secondary_stat and show_secondary_ci:
+                    low_ci = np.quantile(sec_preds, 0.025, axis=0)
+                    high_ci = np.quantile(sec_preds, 0.975, axis=0)
+                    ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_secondary * alpha_ci)
+
+                # Plot 95% CIs for statistic.
                 if show_ci:
                     low_ci = np.quantile(preds, 0.025, axis=0)
                     high_ci = np.quantile(preds, 0.975, axis=0)
-                    ax.fill_between(x, low_ci, high_ci, color=colour, alpha=alpha_ci)
+                    ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_ci)
+
+                # Plot upper/lower limits for statistic.
                 if show_limits:
                     min = preds.min(axis=0)
                     max = preds.max(axis=0)
                     ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
                     ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
+
+                # Plot original data (before bootstrapping was applied).
                 if show_points:
                     x_raw, y_raw = __raw_data(datasets, region, model, metric, stat, n_trains=n_trains)
-                    ax.scatter(x_raw, y_raw, color=colour, marker='o', alpha=alpha_points)
+                    ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
 
-    # Plot difference
+    # Plot difference.
     if show_difference:
-        # Load best models per n_train.
-        diffs = load_bootstrap_differences(region, models, metric, stat, n_samples=n_samples)
+        assert len(models) == 2
 
-        for i, model in enumerate(models):
-            colour = colours[i]
+        # Load significant difference.
+        diffs, _ = load_bootstrap_differences(region, models, metric, stat, n_samples=n_samples)
+        
+        # Plot model A points.
+        diff_ax = axs[1][1] if split else axs[1][0]
+        x = np.argwhere(diffs == 1).flatten()
+        diff_ax.scatter(x, [0] * len(x), color=model_colours[0], marker=diff_marker)
 
-            # Get indices where this model outperforms.
-            indices = [i for i, d in enumerate(diffs) if d == model]
+        # Plot model B points.
+        x = np.argwhere(diffs == 2).flatten()
+        diff_ax.scatter(x, [0] * len(x), color=model_colours[1], marker=diff_marker)
+
+        if show_secondary_difference:
+            # Load significant difference.
+            diffs, _ = load_bootstrap_differences(region, models, metric, secondary_stat, n_samples=n_samples)
             
-            # Plot model colour.
-            ax.scatter(indices, [0] * len(indices), color=colour)
+            # Plot model A points.
+            diff_ax = axs[2][1] if split else axs[2][0]
+            x = np.argwhere(diffs == 1).flatten()
+            diff_ax.scatter(x, [0] * len(x), color=model_colours[0], marker=diff_marker)
+
+            # Plot model B points.
+            x = np.argwhere(diffs == 2).flatten()
+            diff_ax.scatter(x, [0] * len(x), color=model_colours[1], marker=diff_marker)
 
     # Set axis scale.
     if split:
-        axs[1].set_xscale(x_scale)
+        axs[0][1].set_xscale(x_scale)
+
+        if show_difference:
+            axs[1][1].set_xscale(x_scale)
+
+            if show_secondary_difference:
+                axs[2][1].set_xscale(x_scale)
     else:
-        axs[0].set_xscale(x_scale)
+        axs[0][0].set_xscale(x_scale)
+
+        if show_difference:
+            axs[1][0].set_xscale(x_scale)
+
+            if show_secondary_difference:
+                axs[2][0].set_xscale(x_scale)
 
     # Set x tick labels.
     x_upper_lim = None
     if split:
-        axs[0].set_xticks([0])
+        axs[0][0].set_xticks([0])
+        if show_difference:
+            axs[1][1].get_xaxis().set_visible(False)
+            axs[1][1].get_yaxis().set_visible(False)
+
+            if show_secondary_difference:
+                axs[2][1].get_xaxis().set_visible(False)
+                axs[2][1].get_yaxis().set_visible(False)
+
         if x_scale == 'log':
-            x_upper_lim = axs[1].get_xlim()[1]      # Record x upper lim as setting ticks overrides this.
-            axs[1].set_xticks(LOG_SCALE_X_TICK_LABELS)
-            axs[1].get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+            x_upper_lim = axs[0][1].get_xlim()[1]      # Record x upper lim as setting ticks overrides this.
+            axs[0][1].set_xticks(LOG_SCALE_X_TICK_LABELS)
+            axs[0][1].get_xaxis().set_major_formatter(mpl.ticker.ScalarFormatter())
+    else:
+        if show_difference:
+            axs[1][0].get_xaxis().set_visible(False)
+            axs[1][0].get_yaxis().set_visible(False)
+
+            if show_secondary_difference:
+                axs[2][0].get_xaxis().set_visible(False)
+                axs[2][0].get_yaxis().set_visible(False)
 
     # Set axis limits.
     if split:
-        axs[0].set_xlim(-0.5, 0.5)
-        axs[1].set_xlim(4.5, x_upper_lim)
-        # if x_scale == 'log':
-        #     axs[1].set_xlim(4.5, x_upper_lim)
-        # else:
-        #     axs[1].set_xlim(4.5, None)
+        axs[0][0].set_xlim(-0.5, 0.5)
+        axs[0][1].set_xlim(4.5, x_upper_lim)
+
+        if show_difference:
+            axs[1][1].set_xlim(4.5, x_upper_lim)
+
+            if show_secondary_difference:
+                axs[2][1].set_xlim(4.5, x_upper_lim)
 
     # Set y label.
-    axs[0].set_ylabel(y_label, fontsize=fontsize, weight=fontweight)
+    axs[0][0].set_ylabel(y_label, fontsize=fontsize, weight=fontweight)
 
     # Set y limits.
-    axs[0].set_ylim(y_lim)
+    axs[0][0].set_ylim(y_lim)
     if split:
-        axs[1].set_ylim(y_lim)
+        axs[0][1].set_ylim(y_lim)
+
+    # Condense y ticks labels.
+    y_ticks = axs[0][0].get_yticks()
+    apply_formatting = False
+    for y_tick in y_ticks:
+        if y_tick >= 1000:
+            apply_formatting = True
+    if apply_formatting:
+        def format_y_tick(y_tick: float):
+            y_tick = int(y_tick / 1000)
+            return f'{y_tick}k'
+        axs[0][0].set_yticklabels([format_y_tick(y) for y in y_ticks])
 
     # Set y tick label fontsize.
-    axs[0].tick_params(axis='x', which='major', labelsize=fontsize)
-    axs[0].tick_params(axis='y', which='major', labelsize=fontsize)
+    axs[0][0].tick_params(axis='x', which='major', labelsize=fontsize)
+    axs[0][0].tick_params(axis='y', which='major', labelsize=fontsize)
     if split:
-        axs[1].tick_params(axis='x', which='major', labelsize=fontsize)
+        axs[0][1].tick_params(axis='x', which='major', labelsize=fontsize)
 
     # Set title.
     title = title if title else region
     if split:
-        axs[1].set_title(title, fontsize=fontsize, weight=fontweight)
+        axs[0][1].set_title(title, fontsize=fontsize, weight=fontweight)
     else:
-        axs[0].set_title(title, fontsize=fontsize, weight=fontweight)
+        axs[0][0].set_title(title, fontsize=fontsize, weight=fontweight)
 
     # Add legend.
     if split:
-        axs[1].legend(fontsize=fontsize, loc=legend_loc)
+        axs[0][1].legend(fontsize=fontsize, loc=legend_loc)
     else:
-        axs[0].legend(fontsize=fontsize, loc=legend_loc)
+        axs[0][0].legend(fontsize=fontsize, loc=legend_loc)
 
     if split:
         # Hide axes' spines.
-        axs[0].spines['right'].set_visible(False)
-        axs[1].spines['left'].set_visible(False)
-        axs[1].set_yticks([])
+        axs[0][0].spines['right'].set_visible(False)
+        axs[0][1].spines['left'].set_visible(False)
+        axs[0][1].set_yticks([])
 
         # Add split between axes.
-        plt.subplots_adjust(wspace=wspace)
         d_x_0 = .1
         d_x_1 = .006
         d_y = .03
-        kwargs = dict(transform=axs[0].transAxes, color='k', clip_on=False)
-        axs[0].plot((1 - (d_x_0 / 2), 1 + (d_x_0 / 2)), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
-        axs[0].plot((1 - (d_x_0 / 2), 1 + (d_x_0 / 2)), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
-        kwargs = dict(transform=axs[1].transAxes, color='k', clip_on=False)
-        axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
-        axs[1].plot((-d_x_1 / 2, d_x_1 / 2), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
+        kwargs = dict(transform=axs[0][0].transAxes, color='k', clip_on=False)
+        axs[0][0].plot((1 - (d_x_0 / 2), 1 + (d_x_0 / 2)), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
+        axs[0][0].plot((1 - (d_x_0 / 2), 1 + (d_x_0 / 2)), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
+        kwargs = dict(transform=axs[0][1].transAxes, color='k', clip_on=False)
+        axs[0][1].plot((-d_x_1 / 2, d_x_1 / 2), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
+        axs[0][1].plot((-d_x_1 / 2, d_x_1 / 2), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
 
 def __raw_data(
     datasets: Union[str, List[str]],

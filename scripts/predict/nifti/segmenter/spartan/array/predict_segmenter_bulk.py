@@ -1,9 +1,11 @@
 import subprocess
 
-regions = '7'
+regions = '0-16'
 script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter.slurm'
-test_folds = [0]
-models = ['public', 'clinical', 'transfer']
+test_folds = list(range(5))
+# 'public' models don't require '-v2' postfix.
+models = ['clinical', 'transfer']
+models = ['public']
 n_trains = [5, 10, 20, 50, 100, 200, None]
 
 for model in models:

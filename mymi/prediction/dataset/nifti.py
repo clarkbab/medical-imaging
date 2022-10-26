@@ -161,17 +161,41 @@ def create_localiser_predictions(
 def load_localiser_prediction(
     dataset: str,
     pat_id: types.PatientID,
-    localiser: types.ModelName) -> np.ndarray:
+    localiser: types.ModelName,
+    exists_only: bool = False) -> Union[np.ndarray, bool]:
     localiser = replace_checkpoint_alias(*localiser)
 
     # Load prediction.
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(config.directories.predictions, 'data', 'localiser', dataset, str(pat_id), *localiser, 'pred.npz')
-    if not os.path.exists(filepath):
-        raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', localiser '{localiser}'.")
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', localiser '{localiser}'.")
 
     pred = np.load(filepath)['data']
     return pred
+
+def load_localiser_predictions_timings(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    device: str = 'cuda',
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None) -> pd.DataFrame:
+    localiser = replace_checkpoint_alias(*localiser)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Prediction timings not found for datasets '{datasets}', region '{region}', and localiser '{localiser}'. Filepath: {filepath}.")
+    df = pd.read_csv(filepath)
+
+    return df
 
 def load_localiser_centre(
     dataset: str,
@@ -265,7 +289,7 @@ def create_segmenter_prediction(
     savepath: Optional[str] = None) -> None:
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
-    datasets = arg_broadcast(dataset, pat_ids)
+    datasets = arg_broadcast(dataset, pat_ids, arg_type=str)
     localiser = replace_checkpoint_alias(*localiser)
     assert len(datasets) == len(pat_ids)
 
@@ -287,7 +311,7 @@ def create_segmenter_prediction(
         set = ds.get(dataset, 'nifti')
         pat = set.patient(pat_id)
 
-        logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser}'.")
+        logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser}', segmenter '{segmenter.name}'.")
 
         # Load localiser centre.
         loc_centre = load_localiser_centre(dataset, pat_id, localiser)
@@ -341,12 +365,12 @@ def create_segmenter_predictions(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = replace_checkpoint_alias(*localiser)
     segmenter = Segmenter.load(*segmenter)
     logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
@@ -393,7 +417,7 @@ def create_segmenter_predictions(
 
     # Save timing data.
     if timing:
-        filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -402,21 +426,43 @@ def load_segmenter_prediction(
     pat_id: types.PatientID,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    raise_error: bool = True,
-    use_model_manifest: bool = False) -> Optional[np.ndarray]:
+    exists_only: bool = False,
+    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
     localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
     segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
 
     # Load segmentation.
     filepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, str(pat_id), *localiser, *segmenter, 'pred.npz')
-    if not os.path.exists(filepath):
-        if raise_error:
-            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
         else:
-            return None
+            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
+
     pred = np.load(filepath)['data']
-    
     return pred
+
+def load_segmenter_predictions_timings(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: types.ModelName,
+    segmenter: types.ModelName,
+    device: str = 'cuda',
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None) -> pd.DataFrame:
+    localiser = replace_checkpoint_alias(*localiser)
+    segmenter = replace_checkpoint_alias(*segmenter)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Prediction timings not found for datasets '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'. Filepath: {filepath}.")
+    df = pd.read_csv(filepath)
+
+    return df
 
 def save_patient_segmenter_prediction(
     dataset: str,

@@ -50,7 +50,7 @@ SEGMENTER="('segmenter-$REGION','$run_name','BEST')"
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict.py \
     --datasets $DATASETS \
-    --localiser $LOCALISER \
     --region $REGION \
+    --localiser $LOCALISER \
     --segmenter $SEGMENTER \
     --test_fold $TEST_FOLD

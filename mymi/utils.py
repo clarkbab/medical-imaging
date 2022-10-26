@@ -132,9 +132,15 @@ def load_csv(
     if os.path.exists(filepath):
         return pd.read_csv(filepath, **kwargs)
     elif raise_error:
-        raise ValueError(f"CSV at path '{path}' not found.")
+        raise ValueError(f"CSV at filepath '{filepath}' not found.")
     else:
         return None
+
+def arg_assert_present(
+    arg: Any,
+    name: str) -> None:
+    if arg is None:
+        raise ValueError(f"Argument '{name}' expected not to be None.")
 
 def arg_to_list(
     arg: Optional[Any],

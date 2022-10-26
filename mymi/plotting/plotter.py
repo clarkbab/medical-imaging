@@ -1319,6 +1319,7 @@ def plot_dataframe_v2(
     show_hue_connections: bool = False,
     show_hue_connections_inliers: bool = False,
     show_legend: bool = True,
+    show_points: bool = True,
     show_stats: bool = False,
     show_x_tick_labels: bool = True,
     show_x_tick_label_counts: bool = True,
@@ -1471,15 +1472,16 @@ def plot_dataframe_v2(
                     axs[i].legend(objs, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
             # Plot points.
-            if hue is None:
-                x_data = row_data[row_data[x] == x_val]
-                axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
-            else:
-                for j, hue_name in enumerate(hue_order_f):
-                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
-                    if len(hue_data) == 0:
-                        continue
-                    axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+            if show_points:
+                if hue is None:
+                    x_data = row_data[row_data[x] == x_val]
+                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                else:
+                    for j, hue_name in enumerate(hue_order_f):
+                        hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
+                        if len(hue_data) == 0:
+                            continue
+                        axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:
