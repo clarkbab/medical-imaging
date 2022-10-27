@@ -43,10 +43,12 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 if [ "$MODEL" = "public" ]; then
     run_name="public-1gpu-150epochs"
+    postfix=""
 else
     run_name="$MODEL-fold-$TEST_FOLD-samples-$N_TRAIN"
+    postfix="-v2"
 fi
-SEGMENTER="('segmenter-$REGION','$run_name','BEST')"
+SEGMENTER="('segmenter-$REGION$postfix','$run_name','BEST')"
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict.py \
     --datasets $DATASETS \

@@ -276,7 +276,7 @@ def create_segmenter_evaluation(
     region: str,
     localiser: types.ModelName,
     segmenter: types.ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
     localiser = replace_checkpoint_alias(*localiser)

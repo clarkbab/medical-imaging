@@ -3,7 +3,7 @@ import subprocess
 regions = '0-16'
 script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter.slurm'
 test_folds = list(range(5))
-# 'public' models don't require '-v2' postfix.
+# Remove '-v2' postfix for 'public' models.
 models = ['clinical', 'transfer']
 models = ['public']
 n_trains = [5, 10, 20, 50, 100, 200, None]

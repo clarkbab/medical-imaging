@@ -440,7 +440,7 @@ def load_segmenter_prediction(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Prediction not found for dataset '{set}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
+            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
 
     pred = np.load(filepath)['data']
     return pred
