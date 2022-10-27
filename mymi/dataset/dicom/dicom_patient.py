@@ -158,11 +158,13 @@ class DICOMPatient:
         def_rt_sop_id = self.__default_rtstruct.get_rtstruct().SOPInstanceUID
         rtplan_series_ids = def_study.list_series('RTPLAN')
         linked_rtplan_sop_ids = []
+        linked_rtplan_series_ids = []
         for rtplan_series_id in rtplan_series_ids:
             rtplan = def_study.series(rtplan_series_id, 'RTPLAN')
             rtplan_ref_rt_sop_id = rtplan.get_rtplan().ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
             if rtplan_ref_rt_sop_id == def_rt_sop_id:
                 linked_rtplan_sop_ids.append(rtplan.get_rtplan().SOPInstanceUID)
+                linked_rtplan_series_ids.append(rtplan_series_id)
         if len(linked_rtplan_sop_ids) == 0:
             raise ValueError(f"No RTPLAN linked to default RTSTRUCT for patient '{self}'.") 
 
@@ -179,7 +181,7 @@ class DICOMPatient:
             raise ValueError(f"No RTDOSE linked to default RTPLAN for patient '{self}'.") 
 
         # Select the first RTDOSE as the default.
-        self.__default_rtplan = def_study.series(linked_rtplan_sop_ids[0], 'RTPLAN')
+        self.__default_rtplan = def_study.series(linked_rtplan_series_ids[0], 'RTPLAN')
         self.__default_rtdose = linked_rtdose_series[0]
 
     # Proxy to default RTSTRUCT series.
