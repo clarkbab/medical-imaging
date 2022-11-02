@@ -136,6 +136,36 @@ def load_csv(
     else:
         return None
 
+def arg_log(
+    action: str,
+    arg_names: Union[str, List[str]],
+    arg_vals: Union[Any, List[Any]]) -> None:
+    arg_assert_lengths((arg_names, arg_vals)) 
+    msg = action + ' with ' + ', '.join([f"{arg_name} '{arg_val}'" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
+    logging.info(msg)
+
+def arg_assert_lengths(args: List[List[Any]]) -> None:
+    len_0 = len(args[0])
+    for arg in args[1:]:
+        assert len(arg) == len_0
+
+def arg_assert_literal(
+    arg: Any,
+    literal: Union[Any, List[Any]]) -> None:
+    literals = arg_to_list(literal, type(arg))
+    if arg not in literals:
+        raise ValueError(f"Expected argument to be one of '{literals}', got '{arg}'.")
+
+def arg_assert_literal_list(
+    arg: Union[Any, List[Any]],
+    arg_type: Any,
+    literal: Union[Any, List[Any]]) -> None:
+    args = arg_to_list(arg, arg_type)
+    literals = arg_to_list(literal, arg_type)
+    for arg in args:
+        if arg not in literals:
+            raise ValueError(f"Expected argument to be one of '{literals}', got '{arg}'.")
+
 def arg_assert_present(
     arg: Any,
     name: str) -> None:

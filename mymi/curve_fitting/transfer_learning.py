@@ -15,7 +15,7 @@ from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
 from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
 from mymi.regions import RegionNames
-from mymi.utils import arg_assert_present, arg_broadcast, arg_to_list
+from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_log, arg_to_list, encode
 
 DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
@@ -56,15 +56,20 @@ def __bootstrap_n_train_sample(x, n_samples, seed=42):
     return np.random.choice(x, size=(len(x), n_samples), replace=True)
 
 def create_bootstrap_predictions(
+    dataset: Union[str, List[str]],
     region: str,
-    model: str,
+    model_type: str,
     metric: str, 
-    stat: str,
-    samples: np.ndarray,
-    n_trains: Union[int, List[int]],
+    stat: Literal['mean', 'q1', 'q3'],
+    n_samples: int = DEFAULT_N_SAMPLES,
     raise_error: bool = True,
     weights: bool = False) -> None:
-    logging.info(f"Creating bootstrap predictions for metric '{metric}', model '{model}', stat '{stat}', n_trains '{n_trains}', region '{region}'...")
+    datasets = arg_to_list(dataset, str)
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
+    arg_log('Creating bootstrap predictions', ('datasets', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
+
+    # Load samples.
+    samples, n_trains = load_bootstrap_samples(datasets, region, model_type, metric, stat, include_n_trains=True, n_samples=n_samples)
 
     # Get placeholders.
     n_preds = np.max(n_trains) + 1
@@ -108,78 +113,68 @@ def create_bootstrap_predictions(
 
     # Set 'clinical' model predictions to 'NaN' as 'clinical' model must be trained on
     # 5 or more training cases.
-    if model == 'clinical':
+    if model_type == 'clinical':
         preds[:, :5] = np.nan
         
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', model, metric, stat)
-    filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
+    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=preds, params=params)
     logging.info('Bootstrap predictions created.')
 
 def create_bootstrap_samples(
+    dataset: Union[str, List[str]],
     region: str, 
-    model: str, 
+    model_type: str, 
     metric: str, 
-    stat: str,
-    data: pd.DataFrame, 
-    n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[np.ndarray, List[int]]:
-    logging.info(f"Creating bootstrap samples for region '{region}', model '{model}', metric '{metric}', stat '{stat}', n_samples '{n_samples}'...")
+    stat: Literal['mean', 'q1', 'q3'],
+    n_samples: int = DEFAULT_N_SAMPLES) -> None:
+    datasets = arg_to_list(dataset, str)
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
+    logging.info(f"Creating bootstrap samples for region '{region}', model_type '{model_type}', metric '{metric}', stat '{stat}', n_samples '{n_samples}'...")
+
+    # Load all 'model_type' data.
+    df = load_evaluation_data(datasets, region, model_type)
+    if stat == 'mean':
+        data = get_mean_evaluation_data(df)
+    elif stat == 'q1':
+        data = get_q1_evaluation_data(df)
+    elif stat == 'q3':
+        data = get_q3_evaluation_data(df)
 
     # Bootstrap each 'n_train=...' sample to create a 3D array of 'n_samples' samples for each 'n_train'.
-    boot_df = data[(data.metric == metric) & (data['model-type'] == model) & (data.region == region)]
+    boot_df = data[(data.metric == metric) & (data['model-type'] == model_type) & (data.region == region)]
     boot_df = boot_df.pivot(index=['region', 'model-type', 'n-train', 'metric'], columns='fold', values='value')
     boot_data = np.moveaxis(np.apply_along_axis(lambda x: __bootstrap_n_train_sample(x, n_samples), arr=boot_df.values, axis=1), 2, 0)
     n_trains = boot_df.reset_index()['n-train'].values
     
     # Save data.
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', model, metric, stat)
-    filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
+    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=boot_data, n_trains=n_trains)
     logging.info(f'Bootstrap samples created.')
 
-    return boot_data, list(n_trains)
-
 def create_bootstrap_samples_and_predictions(
-    datasets: List[str],
+    dataset: Union[str, List[str]],
     region: str,
-    model_types: Union[str, List[str]],
-    metrics: Union[str, List[str]],
-    stats: Union[str, List[str]],
-    n_trains: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
-    n_folds: int = 5,
-    n_samples: int = DEFAULT_N_SAMPLES,
-    test_folds: Union[int, List[int]] = list(range(5))) -> None:
-    metrics = [metrics] if type(metrics) == str else metrics
-    model_types = [model_types] if type(model_types) == str else model_types
-    stats = [stats] if type(stats) == str else stats
-    test_folds = [test_folds] if type(test_folds) == int else test_folds
-
-    # Load data.
-    df = load_evaluation_data(datasets, region, model_types, n_trains=n_trains, n_folds=n_folds, test_folds=test_folds)
-    if 'mean' in stats:
-        mean_df = get_mean_evaluation_data(df)
-    if 'q1' in stats:
-        q1_df = get_q1_evaluation_data(df)
-    if 'q3' in stats:
-        q3_df = get_q3_evaluation_data(df)
+    model_type: Union[str, List[str]],
+    metric: Union[str, List[str]],
+    stat: Union[Literal['mean', 'q1', 'q3'], List[Literal['mean', 'q1', 'q3']]],
+    n_samples: int = DEFAULT_N_SAMPLES) -> None:
+    datasets = arg_to_list(dataset, str)
+    model_types = arg_to_list(model_type, str)
+    metrics = arg_to_list(metric, str)
+    stats = arg_to_list(stat, str)
+    arg_assert_literal_list(stats, str, ('mean', 'q1', 'q3'))
 
     # Create samples and prediction from curve fitting.
-    for metric in metrics:
-        for model_type in model_types:
-            if 'mean' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'mean', mean_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model_type, metric, 'mean', samples, n_trains)
-            if 'q1' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'q1', q1_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model_type, metric, 'q1', samples, n_trains)
-            if 'q3' in stats:
-                samples, n_trains = create_bootstrap_samples(region, model_type, metric, 'q3', q3_df, n_samples=n_samples)
-                create_bootstrap_predictions(region, model_type, metric, 'q3', samples, n_trains)
+    for model_type in model_types:
+        for metric in metrics:
+            for stat in stats:
+                create_bootstrap_samples(datasets, region, model_type, metric, stat, n_samples=n_samples)
+                create_bootstrap_predictions(datasets, region, model_type, metric, stat, n_samples=n_samples)
 
 def f(
     x: np.ndarray,
@@ -233,19 +228,17 @@ def fit_curve(
     return p_opt, result.cost, result.jac
 
 def load_bootstrap_predictions(
+    dataset: Union[str, List[str]],
     region: str,
-    model: str,
+    model_type: str,
     metric: str, 
-    stat: str,
+    stat: Literal['mean', 'q1', 'q3'],
     include_params: bool = False,
     n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[np.ndarray]:
-    arg_assert_present(region, 'region')
-    arg_assert_present(model, 'model')
-    arg_assert_present(metric, 'metric')
-    arg_assert_present(stat, 'stat')
+    datasets = arg_to_list(dataset, str)
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
 
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', model, metric, stat)
-    filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
+    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
     if include_params:
@@ -255,14 +248,16 @@ def load_bootstrap_predictions(
         return data
 
 def load_bootstrap_samples(
+    dataset: Union[str, List[str]],
     region: str,
-    model: str,
+    model_type: str,
     metric: str,
-    stat: str, 
+    stat: Literal['mean', 'q1', 'q3'],
     include_n_trains: bool = False,
     n_samples: int = DEFAULT_N_SAMPLES):
-    dirpath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', model, metric, stat)
-    filepath = os.path.join(dirpath, f'{region}-{n_samples}.npz')
+    datasets = arg_to_list(dataset, str)
+
+    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
     if include_n_trains:
@@ -272,17 +267,20 @@ def load_bootstrap_samples(
         return data
     
 def load_bootstrap_differences(
+    dataset: Union[str, List[str]],
     region: str,
-    models: List[str],
+    model_types: List[str],
     metric: str, 
-    stat: str,
+    stat: Literal['mean', 'q1', 'q3'],
     n_samples: int = DEFAULT_N_SAMPLES) -> Tuple[List[int], Dict[int, str]]:
-    assert len(models) == 2
+    datasets = arg_to_list(dataset, str)
+    assert len(model_types) == 2
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
 
     # Calculate fitted value differences.
-    preds_a = load_bootstrap_predictions(region, models[0], metric, stat, n_samples=n_samples)
-    preds_b = load_bootstrap_predictions(region, models[1], metric, stat, n_samples=n_samples)
-    diffs = preds_b - preds_a
+    preds_1 = load_bootstrap_predictions(datasets, region, model_types[0], metric, stat, n_samples=n_samples)
+    preds_2 = load_bootstrap_predictions(datasets, region, model_types[1], metric, stat, n_samples=n_samples)
+    diffs = preds_2 - preds_1
 
     # Calculate percentiles.
     diffs_p5 = np.quantile(diffs, 0.05, axis=0)
@@ -291,8 +289,8 @@ def load_bootstrap_differences(
     # Build map from integer to model name.
     model_map = {
         0: 'No significant difference',
-        1: models[0],
-        2: models[1]
+        1: model_types[0],
+        2: model_types[1]
     }
 
     # If a model performs better in 95% of samples, it is significantly better
@@ -308,45 +306,48 @@ def load_bootstrap_differences(
     return results, model_map
 
 def load_evaluation_data(
-    datasets: Union[str, List[str]],
-    regions: Union[str, List[str]],
-    model_types: Union[str, List[str]],
-    n_trains: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
+    dataset: Union[str, List[str]],
+    region: Union[str, List[str]],
+    model_type: Union[Literal['clinical', 'transfer'], List[Literal['clinical', 'transfer']]],
+    n_train: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
     n_folds: Optional[int] = 5,
-    test_folds: Union[int, List[int]] = list(range(5))) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    datasets = [datasets] if type(datasets) == str else datasets
-    model_types = [model_types] if type(model_types) == str else model_types
-    n_trains = [n_trains] if type(n_trains) == int else n_trains
-    regions = [regions] if type(regions) == str else regions
-    test_folds = [test_folds] if type(test_folds) == int else test_folds
+    test_fold: Union[int, List[int]] = list(range(5))) -> pd.DataFrame:
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    model_types = arg_to_list(model_type, str)
+    n_trains = arg_to_list(n_train, int)
+    test_folds = arg_to_list(test_fold, int)
+    arg_log('Loading evaluation data', ('datasets', 'regions', 'model_types'), (datasets, regions, model_types))
 
     # Load evaluations and combine.
     dfs = []
     for region in regions:
+        localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
+
         for test_fold in test_folds:
-            # Add public evaluation.
-            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
-            seg_run = 'public-1gpu-150epochs'
-            segmenter = (f'segmenter-{region}', seg_run, 'BEST')
-            df = load_segmenter_evaluation(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
-            df['model-type'] = seg_run
-            df['n-train'] = 0
-            dfs.append(df)
+            # Add public evaluation as 'transfer' with 'n=0'.
+            if 'transfer' in model_types:
+                seg_run = 'public-1gpu-150epochs'
+                segmenter = (f'segmenter-{region}', seg_run, 'BEST')
+                df = load_segmenter_evaluation(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
+                df['model-type'] = 'transfer'
+                df['n-train'] = 0
+                dfs.append(df)
 
             # Get number of training cases.
             n_train_max = get_n_train_max(datasets, region, n_folds=n_folds, test_fold=test_fold)
 
             # Add clinical/transfer evaluations.
-            for model in (model for model in model_types if model != 'public'):
+            for model_type in (model_type for model_type in model_types if model_type != 'public'):
                 for n_train in n_trains:
                     # Skip if we've exceeded available number of training samples.
-                    if n_train is not None and n_train > n_train_max:
+                    if n_train is not None and n_train >= n_train_max:
                         continue
 
-                    seg_run = f'{model}-fold-{test_fold}-samples-{n_train}'
-                    segmenter = (f'segmenter-{region}', seg_run, 'BEST')
+                    seg_run = f'{model_type}-fold-{test_fold}-samples-{n_train}'
+                    segmenter = (f'segmenter-{region}-v2', seg_run, 'BEST')
                     df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)
-                    df['model-type'] = seg_run
+                    df['model-type'] = model_type
                     df['n-train'] = n_train
                     dfs.append(df)
                    
@@ -362,8 +363,7 @@ def load_evaluation_data(
     df.loc[df['n-train'].isnull(), 'n-train'] = df[df['n-train'].isnull()].region.apply(lambda r: none_nums[r])
     df['n-train'] = df['n-train'].astype(int)
 
-    # Replace model names.
-    df['model-type'] = df['model-type'].str.split('-').apply(lambda l: l[0])
+    # Add model names.
     df['model'] = df['model-type'] + '-' + df['n-train'].astype(str)
 
     # Sort values.
@@ -431,7 +431,7 @@ def megaplot(
         for j in range(n_metrics):
             metric = metrics[i, j]
             stat = stats[j]
-            sec_stat = secondary_stats[i, j]
+            sec_stat = secondary_stats[i, j] if secondary_stats is not None else None
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
             plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, subplot_spec=gs[i, j], legend_loc=legend_loc, model_labels=model_labels, secondary_stat=sec_stat, split=True, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
@@ -443,28 +443,27 @@ def megaplot(
     plt.show()
 
 def plot_bootstrap_fit(
-    datasets: Union[str, List[str]],
+    dataset: Union[str, List[str]],
     region: str, 
-    models: Union[str, List[str]],
+    model_type: Union[str, List[str]],
     metric: str,
-    stat: str,
+    stat: Literal['mean', 'q1', 'q3'],
     alpha_ci: float = 0.2,
     alpha_points: float = 1.0,
     alpha_secondary: float = 0.5,
-    axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
+    ax: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
     diff_hspace: Optional[float] = 0.05,
     diff_marker: str = 's',
     figsize: Tuple[float, float] = (8, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     fontweight: Literal['normal', 'bold'] = 'normal',
-    index: Optional[int] = None,
     legend_loc: Optional[str] = None,
     model_labels: Optional[Union[str, List[str]]] = None,
     n_samples: int = DEFAULT_N_SAMPLES,
-    n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS,
     secondary_stat: Optional[str] = None,
     show_ci: bool = True,
     show_difference: bool = True,
+    show_legend: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
     show_secondary_ci: bool = True, 
@@ -476,12 +475,15 @@ def plot_bootstrap_fit(
     x_scale: str = 'log',
     y_label: str = '',
     y_lim: Optional[Tuple[float, float]] = None):
-    model_colours = sns.color_palette('colorblind')[:len(models)]
+    datasets = arg_to_list(dataset, str)
+    model_types = arg_to_list(model_type, str)
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
+    axs = arg_to_list(ax, mpl.axes.Axes)
+    model_colours = sns.color_palette('colorblind')[:len(model_types)]
     legend_loc = DEFAULT_METRIC_LEGEND_LOCS[metric] if legend_loc is None else legend_loc
-    models = [models] if type(models) == str else models
     if model_labels is not None:
         model_labels = [model_labels] if type(model_labels) == str else model_labels
-        assert len(model_labels) == len(models)
+        assert len(model_labels) == len(model_types)
     if secondary_stat is None:
         show_secondary_difference = False
         
@@ -502,15 +504,32 @@ def plot_bootstrap_fit(
 
     # Create difference gridspec.
     if show_difference:
-        diff_gs_size = (2, 2) if show_secondary_difference else (1, 2)
+        if split:
+            diff_gs_size = (2, 2) if show_secondary_difference else (1, 2)
+        else:
+            diff_gs_size = (2, 1) if show_secondary_difference else (1, 1)
         diff_gs_hspace = diff_hspace if show_secondary_difference else None
-        diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=main_gs[1, 0], width_ratios=(1, 19), wspace=split_wspace)
+        diff_gs_width_ratios = (1, 19) if split else None
+        diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=main_gs[1, 0], width_ratios=diff_gs_width_ratios, wspace=split_wspace)
 
     # Create subplots.
     axs = [
-        [fig.add_subplot(data_gs[0, 0]), fig.add_subplot(data_gs[0, 1]) if split else None],
-        [None, fig.add_subplot(diff_gs[0, 1]) if show_difference else None],
-        [None, fig.add_subplot(diff_gs[1, 1]) if show_difference and show_secondary_difference else None]
+        [
+            fig.add_subplot(data_gs[0, 0]),
+            *([fig.add_subplot(data_gs[0, 1])] if split else []),
+        ],
+        *([
+            [
+                *([None] if split else []),
+                fig.add_subplot(diff_gs[0, 1] if split else diff_gs[0, 0])
+            ]
+        ] if show_difference else []),
+        *([
+            [
+                *([None] if split else []),
+                fig.add_subplot(diff_gs[1, 1] if split else diff_gs[1, 0])
+            ]
+        ] if show_difference and show_secondary_difference else [])
     ]
     
     # Plot main data.
@@ -518,77 +537,57 @@ def plot_bootstrap_fit(
         if ax is None:
             continue
 
-        for i, model in enumerate(models):
+        for i, model_type in enumerate(model_types):
             model_colour = model_colours[i]
-            model_label = model_labels[i] if model_labels is not None else model
+            model_label = model_labels[i] if model_labels is not None else model_type
 
-            if index is not None:
-                # Load bootstrapped sample.
-                samples, n_trains = load_bootstrap_samples(region, model, metric, stat, include_n_trains=True, n_samples=n_samples)
-                sample = samples[index]
-                x_raw = np.array([])
-                y_raw = np.array([])
-                for n_train, n_train_sample in zip(n_trains, sample):
-                    x_raw = np.concatenate((x_raw, n_train * np.ones(len(n_train_sample))))
-                    y_raw = np.concatenate((y_raw, n_train_sample))
+            # Load bootstrapped predictions.
+            preds = load_bootstrap_predictions(datasets, region, model_type, metric, stat, n_samples=n_samples)
 
-                # Load prediction on bootstrapped sample.
-                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
-                pred = preds[index]
+            # Load data for secondary statistic.
+            if secondary_stat:
+                sec_preds = load_bootstrap_predictions(region, model_type, metric, secondary_stat, n_samples=n_samples)
 
-                # Plot.
-                x = np.linspace(0, len(pred) - 1, num=len(pred))
-                ax.plot(x, pred, color=model_colour, label=model_label)
-                if show_points:
-                    ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
-            else:
-                # Load bootstrapped predictions.
-                preds = load_bootstrap_predictions(region, model, metric, stat, n_samples=n_samples)
+            # Plot mean value of 'stat' over all bootstrapped samples (convergent value).
+            means = preds.mean(axis=0)
+            x = np.linspace(0, len(means) - 1, num=len(means))
+            ax.plot(x, means, color=model_colour, label=model_label)
 
-                # Load data for secondary statistic.
-                if secondary_stat:
-                    sec_preds = load_bootstrap_predictions(region, model, metric, secondary_stat, n_samples=n_samples)
+            # Plot secondary statistic mean values.
+            if secondary_stat:
+                sec_means = sec_preds.mean(axis=0)
+                ax.plot(x, sec_means, color=model_colour, alpha=alpha_secondary, linestyle='--')
 
-                # Plot mean value of 'stat' over all bootstrapped samples (convergent value).
-                means = preds.mean(axis=0)
-                x = np.linspace(0, len(means) - 1, num=len(means))
-                ax.plot(x, means, color=model_colour, label=model_label)
+            # Plot secondary statistic 95% CIs.
+            if secondary_stat and show_secondary_ci:
+                low_ci = np.quantile(sec_preds, 0.025, axis=0)
+                high_ci = np.quantile(sec_preds, 0.975, axis=0)
+                ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_secondary * alpha_ci)
 
-                # Plot secondary statistic mean values.
-                if secondary_stat:
-                    sec_means = sec_preds.mean(axis=0)
-                    ax.plot(x, sec_means, color=model_colour, alpha=alpha_secondary, linestyle='--')
+            # Plot 95% CIs for statistic.
+            if show_ci:
+                low_ci = np.quantile(preds, 0.025, axis=0)
+                high_ci = np.quantile(preds, 0.975, axis=0)
+                ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_ci)
 
-                # Plot secondary statistic 95% CIs.
-                if secondary_stat and show_secondary_ci:
-                    low_ci = np.quantile(sec_preds, 0.025, axis=0)
-                    high_ci = np.quantile(sec_preds, 0.975, axis=0)
-                    ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_secondary * alpha_ci)
+            # Plot upper/lower limits for statistic.
+            if show_limits:
+                min = preds.min(axis=0)
+                max = preds.max(axis=0)
+                ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
+                ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
 
-                # Plot 95% CIs for statistic.
-                if show_ci:
-                    low_ci = np.quantile(preds, 0.025, axis=0)
-                    high_ci = np.quantile(preds, 0.975, axis=0)
-                    ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_ci)
-
-                # Plot upper/lower limits for statistic.
-                if show_limits:
-                    min = preds.min(axis=0)
-                    max = preds.max(axis=0)
-                    ax.plot(x, min, c='black', linestyle='--', alpha=0.5)
-                    ax.plot(x, max, c='black', linestyle='--', alpha=0.5)
-
-                # Plot original data (before bootstrapping was applied).
-                if show_points:
-                    x_raw, y_raw = __raw_data(datasets, region, model, metric, stat, n_trains=n_trains)
-                    ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
+            # Plot original data (before bootstrapping was applied).
+            if show_points:
+                x_raw, y_raw = raw_data(datasets, region, model_type, metric, stat)
+                ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
 
     # Plot difference.
     if show_difference:
-        assert len(models) == 2
+        assert len(model_types) == 2
 
         # Load significant difference.
-        diffs, _ = load_bootstrap_differences(region, models, metric, stat, n_samples=n_samples)
+        diffs, _ = load_bootstrap_differences(datasets, region, model_types, metric, stat, n_samples=n_samples)
         
         # Plot model A points.
         diff_ax = axs[1][1] if split else axs[1][0]
@@ -601,7 +600,7 @@ def plot_bootstrap_fit(
 
         if show_secondary_difference:
             # Load significant difference.
-            diffs, _ = load_bootstrap_differences(region, models, metric, secondary_stat, n_samples=n_samples)
+            diffs, _ = load_bootstrap_differences(region, model_types, metric, secondary_stat, n_samples=n_samples)
             
             # Plot model A points.
             diff_ax = axs[2][1] if split else axs[2][0]
@@ -700,10 +699,11 @@ def plot_bootstrap_fit(
         axs[0][0].set_title(title, fontsize=fontsize, weight=fontweight)
 
     # Add legend.
-    if split:
-        axs[0][1].legend(fontsize=fontsize, loc=legend_loc)
-    else:
-        axs[0][0].legend(fontsize=fontsize, loc=legend_loc)
+    if show_legend:
+        if split:
+            axs[0][1].legend(fontsize=fontsize, loc=legend_loc)
+        else:
+            axs[0][0].legend(fontsize=fontsize, loc=legend_loc)
 
     if split:
         # Hide axes' spines.
@@ -722,23 +722,23 @@ def plot_bootstrap_fit(
         axs[0][1].plot((-d_x_1 / 2, d_x_1 / 2), (-d_y / 2, d_y / 2), **kwargs)  # bottom-left diagonal
         axs[0][1].plot((-d_x_1 / 2, d_x_1 / 2), (1 - (d_y / 2), 1 + (d_y / 2)), **kwargs)  # top-left diagonal
 
-def __raw_data(
-    datasets: Union[str, List[str]],
+def raw_data(
+    dataset: Union[str, List[str]],
     region: str,
     model_type: str,
     metric: str,
-    stat: str,
-    n_trains: Optional[Union[Union[int, str], List[Union[int, str]]]] = DEFAULT_N_TRAINS) -> np.ndarray:
+    stat: Literal['mean', 'q1', 'q3']) -> Tuple[List[int], List[float]]:
+    datasets = arg_to_list(dataset, str)
+    arg_assert_literal(stat, ('mean', 'q1', 'q3'))
+
     # Load evaluation data.
-    df = load_evaluation_data(datasets, region, model_type, n_trains=n_trains)
+    df = load_evaluation_data(datasets, region, model_type)
     if stat == 'mean':
         stat_df = get_mean_evaluation_data(df)
     elif stat == 'q1':
         stat_df = get_q1_evaluation_data(df)
     elif stat == 'q3':
         stat_df = get_q3_evaluation_data(df)
-    else:
-        raise ValueError(f"Stat '{stat} not recognised.")
 
     # Get data points.
     data_df = stat_df[(stat_df.metric == metric) & (stat_df['model-type'] == model_type) & (stat_df.region == region)]

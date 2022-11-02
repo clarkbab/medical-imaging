@@ -15,9 +15,10 @@ from mymi import logging
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
+from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import crop_foreground_3D, crop_or_pad_3D, resample_3D
 from mymi import types
-from mymi.utils import Timer, append_row, arg_broadcast, arg_to_list, encode, load_csv
+from mymi.utils import Timer, append_row, arg_broadcast, arg_log, arg_to_list, encode, load_csv
 
 def get_localiser_prediction(
     dataset: str,
@@ -337,29 +338,6 @@ def create_segmenter_prediction(
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
-def create_segmenter_predictions_from_csv(
-    n_pats: int,
-    region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
-    savepath: Optional[str] = None) -> None:
-    logging.info(f"Making segmenter predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
-
-    # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
-
-    # Load gpu if available.
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
-    else:
-        device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    for _, (dataset, pat_id) in df.iterrows():
-        # Get segmenter that wasn't trained using this patient.
-        create_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device, savepath=savepath)
-
 def create_segmenter_predictions(
     datasets: Union[str, List[str]],
     region: str,
@@ -477,66 +455,6 @@ def save_patient_segmenter_prediction(
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     np.savez_compressed(filepath, data=data)
-
-def create_two_stage_predictions_for_first_n_pats(n_pats: int) -> None:
-    datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
-    logging.info(f"Making segmenter predictions for NIFTI datasets for all regions for first '{n_pats}' patients in 'all-patients.csv'.")
-
-    # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
-    df = df.astype({ 'patient-id': str })
-    df = df.head(n_pats)
-
-    # Load gpu if available.
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
-    else:
-        device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    cols = {
-        'region': str,
-        'model': str
-    }
-
-    for _, (dataset, pat_id) in tqdm(df.iterrows()):
-        index_df = pd.DataFrame(columns=cols.keys())
-
-        for region in RegionNames:
-            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
-
-            # Find fold for which this dataset/pat_id was in the 'test' loader.
-            for test_fold in range(5):
-                man_df = load_loader_manifest(datasets, region, test_fold=test_fold)
-                man_df = man_df[(man_df.loader == 'test') & (man_df['origin-dataset'] == dataset) & (man_df['origin-patient-id'] == pat_id)]
-                if len(man_df) == 1:
-                    break
-            
-            # Select segmenter that didn't include this patient for training.
-            if len(man_df) != 0:
-                # Patient was excluded when training model for 'test_fold'.
-                segmenter = (f'segmenter-{region}', f'clinical-fold-{test_fold}-samples-None', 'best')
-            else:
-                # This patient region wasn't used for training any models, let's just use the model of the first fold.
-                segmenter = (f'segmenter-{region}', 'clinical-fold-0-samples-None', 'best') 
-
-            # Add index row.
-            data = {
-                'region': region,
-                'model': f'clinical-fold-{test_fold}-samples-None'
-            }
-            index_df = append_row(index_df, data)
-
-            # Save localiser prediction (in normal location) and segmenter prediction (for easy transfer to PMCC).
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, f'{region}.npz')
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            create_localiser_prediction(dataset, pat_id, localiser, device=device)
-            create_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device, savepath=filepath)
-
-        # Save patient index.
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, 'index.csv')
-        index_df.to_csv(filepath, index=False)
 
 def create_two_stage_predictions(
     datasets: Union[str, List[str]],

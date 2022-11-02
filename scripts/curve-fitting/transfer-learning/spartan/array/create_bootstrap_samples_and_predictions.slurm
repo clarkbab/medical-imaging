@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 1-00:00:00
+#SBATCH --time 0-06:00:00
 #SBATCH -A punim1413
 
 module load gcccore/8.3.0
@@ -34,18 +34,18 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 # METRICS="('apl-mm-tol-1','dice','dm-surface-dice-tol-1','hd','hd-95','msd')"
-# MODELS="('clinical','transfer')"
+# MODEL_TYPES="('clinical','transfer')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # STATS="('mean','min','max')"
 
 # Remove 'quotes' from variables passed via bulk script - we need to pass 'quoted' strings to 'sbatch'.
 METRICS=$(echo $METRICS | tr -d '"')
-MODELS=$(echo $MODELS | tr -d '"')
+MODEL_TYPES=$(echo $MODEL_TYPES | tr -d '"')
 STATS=$(echo $STATS | tr -d '"')
 
 python $SCRIPT_DIR/curve-fitting/transfer-learning/create_bootstrap_samples_and_predictions.py \
-    --datasets $DATASETS \
+    --dataset $DATASETS \
     --region $REGION \
-    --models $MODELS \
-    --metrics $METRICS \
-    --stats $STATS
+    --model_type $MODEL_TYPES \
+    --metric $METRICS \
+    --stat $STATS

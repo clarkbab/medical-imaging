@@ -1,12 +1,14 @@
 import subprocess
 
-regions = '0-16'
+regions = '2'
 script = 'scripts/predict/nifti/segmenter/spartan/array/predict_segmenter.slurm'
 test_folds = list(range(5))
+test_folds = [0]
 # Remove '-v2' postfix for 'public' models.
 models = ['clinical', 'transfer']
-models = ['public']
+models = ['clinical']
 n_trains = [5, 10, 20, 50, 100, 200, None]
+n_trains = [None]
 
 for model in models:
     for test_fold in test_folds:

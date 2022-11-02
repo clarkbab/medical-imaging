@@ -4,7 +4,7 @@
 #SBATCH --mem 64G
 #SBATCH --gres gpu:p100:1
 #SBATCH --cpus-per-gpu 4
-#SBATCH --time 4-00:00:00
+#SBATCH --time 0-06:00:00
 #SBATCH -A punim1413
 #SBATCH -q gpgpumse
 

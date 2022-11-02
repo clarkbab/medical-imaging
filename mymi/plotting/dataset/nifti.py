@@ -177,13 +177,14 @@ def plot_segmenter_prediction(
         # Attempt load.
         if load_seg_pred:
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
-            pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter, raise_error=False)
-            if pred is None:
-                logging.info(f"No prediction found for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
+            try:
+                pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+            except ValueError as e:
+                logging.info(str(e))
         # Make prediction if didn't/couldn't load.
         if pred is None:
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', localiser '{localiser}', segmenter '{segmenter}'...")
-            create_segmenter_prediction(dataset, pat_id, pred_region, localiser, segmenter)           # Handle multiple spacings.
+            create_segmenter_prediction(dataset, pat_id, localiser, segmenter)           # Handle multiple spacings.
             pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
 
         loc_centres.append(loc_centre)

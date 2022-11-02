@@ -296,7 +296,7 @@ def create_segmenter_prediction_figures(
     view: Union[Literal['axial', 'coronal', 'sagittal'], List[Literal['axial', 'coronal', 'sagittal']]] = ['axial', 'coronal', 'sagittal']) -> None:
     datasets = arg_to_list(dataset, str)
     views = arg_to_list(view, str)
-    logging.info(f"Creating segmenter prediction figures for datasets '{datasets}', region '{region}', test fold '{test_fold}', localiser '{localiser}' and segmenter '{segmenter}'.")
+    logging.info(f"Creating segmenter prediction figures for datasets '{datasets}', region '{region}', test fold '{test_fold}', localiser '{localiser}', segmenter '{segmenter}' and view '{view}'.")
 
     # Create test loader.
     _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
@@ -331,11 +331,7 @@ def create_segmenter_prediction_figures(
     ) 
 
     # Make predictions.
-    i = 0
     for pat_desc_b in tqdm(iter(test_loader)):
-        if i == 1:
-            break
-        i += 1
         if type(pat_desc_b) == torch.Tensor:
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
@@ -343,7 +339,7 @@ def create_segmenter_prediction_figures(
 
             # Add patient.
             pdf.add_page()
-            pdf.start_section(pat_id)
+            pdf.start_section(f'{dataset} - {pat_id}')
 
             # Create images.
             img_coords = (

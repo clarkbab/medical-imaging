@@ -17,12 +17,12 @@ from mymi.dataset.training import create, exists, get, recreate
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_checkpoint_alias
-from mymi.prediction.dataset.nifti import load_patient_segmenter_prediction
+from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
-from mymi.utils import append_row
+from mymi.utils import append_row, arg_log, arg_to_list, load_csv
 
 def convert_to_training(
     dataset: str,
@@ -437,3 +437,68 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         rtstruct_pred.save_as(filepath)
+
+def combine_segmenter_predictions_from_all_patients(
+    dataset: Union[str, List[str]],
+    n_pats: int,
+    model_type: str = 'clinical') -> None:
+    datasets = arg_to_list(dataset, str)
+    arg_log("Combining (NIFTI) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
+
+    # Load 'all-patients.csv'.
+    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = df.astype({ 'patient-id': str })
+    df = df.head(n_pats)
+
+    cols = {
+        'region': str,
+        'model': str
+    }
+
+    for _, (dataset, pat_id) in tqdm(df.iterrows()):
+        index_df = pd.DataFrame(columns=cols.keys())
+
+        for region in RegionNames:
+            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+
+            # Find fold that didn't use this patient for training.
+            for test_fold in range(5):
+                man_df = load_loader_manifest(datasets, region, test_fold=test_fold)
+                man_df = man_df[(man_df.loader == 'test') & (man_df['origin-dataset'] == dataset) & (man_df['origin-patient-id'] == pat_id)]
+                if len(man_df) == 1:
+                    break
+            
+            # Select segmenter that didn't use this patient for training.
+            if len(man_df) == 1:
+                # Patient was excluded when training model for 'test_fold'.
+                segmenter = (f'segmenter-{region}-v2', f'{model_type}-fold-{test_fold}-samples-None', 'best')
+            elif len(man_df) == 0:
+                # This patient region wasn't used for training any models, let's just use the model of the first fold.
+                segmenter = (f'segmenter-{region}-v2', f'{model_type}-fold-0-samples-None', 'best') 
+            else:
+                raise ValueError(f"Found multiple matches in loader manifest for test fold '{test_fold}', dataset '{dataset}', patient '{pat_id}' and region '{region}'.")
+
+            # Add index row.
+            data = {
+                'region': region,
+                'model': f'{model_type}-fold-{test_fold}-samples-None'
+            }
+            index_df = append_row(index_df, data)
+
+            # Load/create segmenter prediction.
+            try:
+                pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+            except ValueError as e:
+                logging.info(str(e))
+                create_localiser_prediction(dataset, pat_id, localiser)
+                create_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+                pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
+
+            # Copy prediction to new location.
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, f'{region}.npz')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            np.savez_compressed(filepath, pred)
+
+        # Save patient index.
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, 'index.csv')
+        index_df.to_csv(filepath, index=False)

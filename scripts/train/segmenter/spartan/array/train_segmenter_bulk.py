@@ -1,9 +1,9 @@
 import subprocess
 
-regions = '14'
+regions = '2'
 script = 'scripts/train/segmenter/spartan/array/train_segmenter.slurm'
 test_folds = [0, 1, 2, 3, 4]
-test_folds = [4]
+test_folds = [0]
 models = ['clinical']
 n_trains = [5, 10, 20, 50, 100, None]
 n_trains = [None]

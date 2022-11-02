@@ -1,11 +1,9 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition gpgpu
+#SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --gres gpu:p100:1
 #SBATCH --time 0-04:00:00
 #SBATCH -A punim1413
-#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -50,20 +48,20 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 read -r -d '' SEGMENTER << EOF
 [
     ('segmenter-SpinalCord', 'public-1gpu-150epochs', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-5', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-10', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-20', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-50', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-100', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-200', 'best'),
-    ('segmenter-SpinalCord', 'clinical-fold-$TEST_FOLD-samples-None', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-5', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-10', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-20', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-50', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-100', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-200', 'best'),
-    ('segmenter-SpinalCord', 'transfer-fold-$TEST_FOLD-samples-None', 'best')
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-5', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-10', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-20', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-50', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-100', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-200', 'best'),
+    ('segmenter-SpinalCord-v2', 'clinical-fold-$TEST_FOLD-samples-None', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-5', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-10', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-20', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-50', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-100', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-200', 'best'),
+    ('segmenter-SpinalCord-v2', 'transfer-fold-$TEST_FOLD-samples-None', 'best')
 ]
 EOF
 
@@ -75,5 +73,5 @@ python $SCRIPT_DIR/report/nifti/create_segmenter_prediction_figures.py \
     --region $REGION \
     --localiser $LOCALISER \
     --segmenter $SEGMENTER \
-    --test_fold $TEST_FOLD
+    --test_fold $TEST_FOLD \
     --view $VIEW
