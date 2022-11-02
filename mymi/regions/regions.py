@@ -19,4 +19,11 @@ class Regions(Enum):
     Submandibular_L = 15
     Submandibular_R = 16
 
+# TODO: Add to 'Regions'.
+class ExtraRegions(Enum):
+    Larynx = 0
+    Oesophagus = 1
+    PharynConst = 2
+
+
 RegionNames = [r.name for r in Regions]

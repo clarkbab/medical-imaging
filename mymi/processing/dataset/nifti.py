@@ -2,6 +2,7 @@ from re import I
 import numpy as np
 import os
 import pandas as pd
+import pydicom as dcm
 from pathlib import Path
 from scipy.ndimage import binary_dilation
 import shutil
@@ -22,7 +23,7 @@ from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
-from mymi.utils import append_row
+from mymi.utils import append_row, load_csv
 
 def convert_to_training(
     dataset: str,
@@ -227,32 +228,29 @@ def _create_training_label(
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
 
-def convert_segmenter_predictions_to_dicom_aggregate(
+def convert_segmenter_predictions_to_dicom_for_first_n_pats(
     n_pats: int = 20,
-    use_model_manifest: bool = False) -> None:
+    anonymise: bool = True) -> None:
+    # Load 'all-patients.csv'.
+    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = df.astype({ 'patient-id': str })
+    df = df.head(n_pats)
+
     # RTSTRUCT info.
     default_rt_info = {
         'label': 'PMCC-AI',
         'institution-name': 'PMCC-AI'
     }
 
-    # Load patients - from Mandible as (fold=0) is missing. 
-    loader_datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
-    df = load_loader_manifest(loader_datasets, 'Mandible', apply_typing=False, test_fold=0)
-    df = df.head(n_pats)
-    df = df.astype({ 'origin-patient-id': str })
-    datasets = df['origin-dataset']
-    pat_ids = df['origin-patient-id']
+    # Create index.
+    if anonymise:
+        cols = {
+            'patient-id': str,
+            'anon-id': str
+        }
+        index_df = pd.DataFrame(columns=cols.keys())
 
-    # Save missing patients.
-    cols = {
-        'region': str,
-        'dataset': str,
-        'patient-id': str
-    }
-    miss_df = pd.DataFrame(columns=cols.keys())
-
-    for dataset, pat_id in tqdm(list(zip(datasets, pat_ids))):
+    for i, (dataset, pat_id) in tqdm(df.iterrows()):
         # Get ROI ID from DICOM dataset.
         nifti_set = NIFTIDataset(dataset)
         pat_id_dicom = nifti_set.patient(pat_id).patient_id
@@ -267,64 +265,20 @@ def convert_segmenter_predictions_to_dicom_aggregate(
         rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
         frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
 
-        # Create index to track which model was used to predict each region.
-        cols = {
-            'region': str,
-            'model': str
-        }
-        index_df = pd.DataFrame(columns=cols.keys())
-
         for region in RegionNames:
-            # Localiser is always 'public' model.
-            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
-
-            # Get segmenter that wasn't trained on this patient.
-            for test_fold in range(5):
-                # This file has a different format - so we can't trust the loader matches the trained models.
-                if region == 'Mandible' and test_fold == 0:
-                    continue
-                df = load_loader_manifest(loader_datasets, region, test_fold=test_fold)
-                df = df[(df.dataset == dataset) & (df['patient-id'] == pat_id)]
-                if len(df) == 1:
-                    break
-
-            # Check if patient wasn't found in loader.
-            if len(df) == 0:
-                data = {
-                    'region': region,
-                    'dataset': dataset,
-                    'patient-id': pat_id
-                }
-                miss_df = append_row(miss_df, data)
-                # Skip to next region.
-                continue
-
-                # raise ValueError(f"NIFTI patient '({dataset}, {pat_id})' not found in loader manifest for region '{region}'.")
-
-            # Use segmenter that wasn't trained on final 'test_fold' value.
-            segmenter = (f'segmenter-{region}', f'clinical-fold-{test_fold}-samples-None', 'best')
-
-            # Add index entry.
-            data = {
-                'region': region,
-                'model': segmenter[1]
-            }
-            index_df = append_row(index_df, data)
-
             # Load prediction.
-            pred = load_patient_segmenter_prediction(dataset, pat_id, localiser, segmenter, use_model_manifest=use_model_manifest)
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, f'{region}.npz')
+            pred = np.load(filepath)['data']
             
-            # Match ROI number to ground truth if available.
-            if region in region_map_gt:
-                number = region_map_gt[region]
-            else:
-                for i in range(1, 1000):
-                    if i not in region_map_gt[region].values():
-                        region_map_gt[region] = i
+            # Match ROI number to ground truth, otherwise assign next available integer.
+            if region not in region_map_gt:
+                for j in range(1, 1000):
+                    if j not in region_map_gt.values():
+                        region_map_gt[region] = j
                         break
-                    elif i == 999:
+                    elif j == 999:
                         raise ValueError(f'Unlikely')
-                number = i 
+            roi_number = region_map_gt[region]
 
             # Add ROI data.
             roi_data = ROIData(
@@ -332,39 +286,49 @@ def convert_segmenter_predictions_to_dicom_aggregate(
                 data=pred,
                 frame_of_reference_uid=frame_of_reference_uid,
                 name=region,
-                number=number
+                number=roi_number
             )
             RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
 
-        # Save prediction.
-        # Hack - clean up when/if path limits are removed.
-        if os.environ['PETER_MAC_HACK'] == 'True':
-            if dataset == 'PMCC-HN-TEST':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\test'
-            elif dataset == 'PMCC-HN-TRAIN':
-                pred_path = 'S:\\ImageStore\\AtlasSegmentation\\BC_HN\\dicom\\train'
-        else:
-            pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
-        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'pred.dcm')
+        # Add index row.
+        if anonymise:
+            anon_id = f'PMCC_AI_HN_{i + 1:03}'
+            data = {
+                'patient-id': pat_id,
+                'anon-id': anon_id
+            }
+            index_df = append_row(index_df, data)
+
+        # Save pred RTSTRUCT.
+        pat_id_folder = anon_id if anonymise else pat_id_dicom
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct-pred.dcm')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        if anonymise:
+            rtstruct_pred.PatientID = anon_id
+            rtstruct_pred.PatientName = anon_id
         rtstruct_pred.save_as(filepath)
 
         # Copy CTs.
-        for i, path in enumerate(patient_dicom.default_rtstruct.ref_ct.paths):
-            filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, f'ct-{i}.dcm')
-            shutil.copyfile(path, filepath)
+        for j, path in enumerate(patient_dicom.default_rtstruct.ref_ct.paths):
+            ct = dcm.read_file(path)
+            if anonymise:
+                ct.PatientID = anon_id
+                ct.PatientName = anon_id
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, f'ct-{j}.dcm')
+            ct.save_as(filepath)
 
         # Copy ground truth RTSTRUCT.
-        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'rtstruct.dcm')
-        shutil.copyfile(patient_dicom.default_rtstruct.path, filepath)
-
-        # Save index.
-        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'index.csv')
+        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
+        if anonymise:
+            rtstruct_gt.PatientID = anon_id
+            rtstruct_gt.PatientName = anon_id
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', , 'rtstruct-gt.dcm')
+        rtstruct_gt.save_as(filepath)
+    
+    # Save index.
+    if anonymise:
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
         index_df.to_csv(filepath, index=False)
-
-        # Save missing patient regions.
-        filepath = os.path.join(pred_path, 'aggregate', pat_id_dicom, 'missing.csv')
-        miss_df.to_csv(filepath, index=False)
 
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],
