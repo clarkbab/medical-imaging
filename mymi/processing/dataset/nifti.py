@@ -322,7 +322,7 @@ def convert_segmenter_predictions_to_dicom_for_first_n_pats(
         if anonymise:
             rtstruct_gt.PatientID = anon_id
             rtstruct_gt.PatientName = anon_id
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', , 'rtstruct-gt.dcm')
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct-gt.dcm')
         rtstruct_gt.save_as(filepath)
     
     # Save index.
@@ -459,10 +459,10 @@ def combine_segmenter_predictions_from_all_patients(
                 pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
 
             # Copy prediction to new location.
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, f'{region}.npz')
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, f'{region}.npz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.savez_compressed(filepath, pred)
+            np.savez_compressed(filepath, data=pred)
 
         # Save patient index.
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', dataset, pat_id, 'index.csv')
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, 'index.csv')
         index_df.to_csv(filepath, index=False)
