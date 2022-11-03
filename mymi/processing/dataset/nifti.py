@@ -23,7 +23,7 @@ from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
-from mymi.utils import append_row, arg_log, arg_to_list, load_csv
+from mymi.utils import append_row, arg_log, arg_to_list, load_csv, save_csv
 
 def convert_to_training(
     dataset: str,
@@ -228,9 +228,11 @@ def _create_training_label(
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
 
-def convert_segmenter_predictions_to_dicom_for_first_n_pats(
-    n_pats: int = 20,
+def convert_segmenter_predictions_to_dicom_from_all_patients(
+    n_pats: int,
     anonymise: bool = True) -> None:
+    arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
+
     # Load 'all-patients.csv'.
     df = load_csv('transfer-learning', 'data', 'all-patients.csv')
     df = df.astype({ 'patient-id': str })
@@ -238,8 +240,8 @@ def convert_segmenter_predictions_to_dicom_for_first_n_pats(
 
     # RTSTRUCT info.
     default_rt_info = {
-        'label': 'PMCC-AI',
-        'institution-name': 'PMCC-AI'
+        'label': 'PMCC-AI-HN',
+        'institution-name': 'PMCC-AI-HN'
     }
 
     # Create index.
@@ -301,7 +303,7 @@ def convert_segmenter_predictions_to_dicom_for_first_n_pats(
 
         # Save pred RTSTRUCT.
         pat_id_folder = anon_id if anonymise else pat_id_dicom
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct-pred.dcm')
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct', 'pred.dcm')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         if anonymise:
             rtstruct_pred.PatientID = anon_id
@@ -314,7 +316,8 @@ def convert_segmenter_predictions_to_dicom_for_first_n_pats(
             if anonymise:
                 ct.PatientID = anon_id
                 ct.PatientName = anon_id
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, f'ct-{j}.dcm')
+            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'ct', f'{j}.dcm')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
             ct.save_as(filepath)
 
         # Copy ground truth RTSTRUCT.
@@ -322,13 +325,16 @@ def convert_segmenter_predictions_to_dicom_for_first_n_pats(
         if anonymise:
             rtstruct_gt.PatientID = anon_id
             rtstruct_gt.PatientName = anon_id
+<<<<<<< HEAD
         filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct-gt.dcm')
+=======
+        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct', 'gt.dcm')
+>>>>>>> 29a707b (Worked on NIFTI to DICOM combined predictions)
         rtstruct_gt.save_as(filepath)
     
     # Save index.
     if anonymise:
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
-        index_df.to_csv(filepath, index=False)
+        save_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
 
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],
@@ -355,8 +361,8 @@ def convert_segmenter_predictions_to_dicom_from_loader(
 
     # RTSTRUCT info.
     default_rt_info = {
-        'label': 'PMCC-AI',
-        'institution-name': 'PMCC-AI'
+        'label': 'PMCC-AI-HN',
+        'institution-name': 'PMCC-AI-HN'
     }
 
     # Create prediction RTSTRUCTs.
