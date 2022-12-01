@@ -28,5 +28,24 @@ TASKS=(
 TASK=${TASKS[$SLURM_ARRAY_TASK_ID]}
 # CONF=2d
 # FOLD=0
+# RESUME='-c'
 
-nnUNet_train $CONF nnUNetTrainerV2 $TASK $FOLD --npz
+# Set 'TRAINER' var.
+case "$CONF" in
+    '3d_cascade_fullres')
+        TRAINER='nnUNetTrainerV2CascadeFullRes';;
+    *)
+        TRAINER='nnUNetTrainerV2';;
+esac
+
+# Set 'RESUME' var.
+case "$RESUME" in
+    'True')
+        RESUME='-c';;
+    'False')
+        RESUME='';;
+esac
+
+command="nnUNet_train $CONF $TRAINER $TASK $FOLD --npz $RESUME"
+echo $command
+eval $command

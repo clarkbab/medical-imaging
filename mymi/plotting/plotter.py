@@ -35,11 +35,17 @@ def __plot_region_data(
     view: types.PatientView,
     ax = None,
     cca: bool = False, connected_extent: bool = False,
-    colours: Optional[List[str]] = None,
+    colour: Optional[Union[str, List[str]]] = None,
     crop: Optional[types.Box2D] = None,
+    linestyle: str = 'solid',
+    legend_show_all_regions: bool = False,
     show_extent: bool = False) -> bool:
     regions = list(data.keys()) 
-    colours = sns.color_palette('husl', n_colors=len(regions)) if colours is None else colours
+    if colour is None:
+        colours = sns.color_palette('colorblind', n_colors=len(regions))
+    else:
+        colours = arg_to_list(colour, [str, tuple])
+
     if not ax:
         ax = plt.gca()
 
@@ -50,27 +56,27 @@ def __plot_region_data(
         cmap = ListedColormap(((1, 1, 1, 0), colour))
 
         # Convert data to 'imshow' co-ordinate system.
-        slice_data = get_slice(data[region], slice_idx, view)
+        slice_data = __get_slice_data(data[region], slice_idx, view)
 
         # Crop image.
         if crop:
-            slice_data = crop_2D(slice_data, reverse_box_coords_2D(crop))
+            slice_data = crop_2D(slice_data, __reverse_box_coords_2D(crop))
 
         # Plot extent.
         if show_extent:
             extent = get_extent(data[region])
-            if should_plot_box(extent, view, slice_idx):
-                show_legend = True
-                __plot_box_slice(extent, view, colour=colour, crop=crop, label=f'{region} Extent', linestyle='dashed')
+            label = f'{region} extent' if __box_in_plane(extent, view, slice_idx) else f'{region} extent (offscreen)'
+            __plot_box_slice(extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+            show_legend = True
 
         # Plot connected extent.
         if connected_extent:
             extent = get_extent(get_largest_cc(data[region]))
-            if should_plot_box(extent, view, slice_idx):
+            if __box_in_plane(extent, view, slice_idx):
                 __plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
         # Skip region if not present on this slice.
-        if slice_data.max() == 0:
+        if not legend_show_all_regions and slice_data.max() == 0:
             continue
         else:
             show_legend = True
@@ -81,10 +87,10 @@ def __plot_region_data(
 
         # Plot region.
         ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_origin(view))
-        label = _escape_latex(region) if latex else region
+        label = __escape_latex(region) if latex else region
         ax.plot(0, 0, c=colour, label=label)
         if perimeter:
-            ax.contour(slice_data, colors=[colour], levels=[.5])
+            ax.contour(slice_data, colors=[colour], levels=[.5], linestyles=linestyle)
 
         # # Set ticks.
         # if crop is not None:
@@ -143,7 +149,7 @@ def _to_internal_region(
     # Raise an error if we don't know how to translate to the internal name.
     raise ValueError(f"Region '{region}' is neither an internal region, nor listed in the region map, can't create internal name.")
 
-def get_slice(
+def __get_slice_data(
     data: np.ndarray,
     slice_idx: int,
     view: types.PatientView) -> np.ndarray:
@@ -182,28 +188,14 @@ def get_aspect_ratio(
 
     return aspect
 
-def reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
-    """
-    returns: a box with (x, y) coordinates reversed.
-    args:
-        box: the box to swap coordinates for.
-    """
-    # Reverse coords.
-    box = tuple((y, x) for x, y in box)
+def __reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
+    # Swap x/y coordinates.
+    return tuple((y, x) for x, y in box)
 
-    return box
-
-def should_plot_box(
+def __box_in_plane(
     box: types.Box3D,
     view: types.PatientView,
     slice_idx: int) -> bool:
-    """
-    returns: True if the box should be plotted.
-    args:
-        bounding_box: the bounding box to plot.
-        view: the view direction.
-        slice_idx: the index of the slice to plot.
-    """
     # Get view bounding box.
     if view == 'axial':
         dim = 2
@@ -251,7 +243,7 @@ def __plot_box_slice(
     ax.add_patch(rect)
     plt.plot(0, 0, c=colour, label=label, linestyle=linestyle)
 
-def _escape_latex(text: str) -> str:
+def __escape_latex(text: str) -> str:
     """
     returns: a string with escaped latex special characters.
     args:
@@ -294,11 +286,12 @@ def plot_region(
     id: str,
     size: types.ImageSize3D,
     spacing: types.ImageSpacing3D,
+    alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[matplotlib.axes.Axes] = None,
     cca: bool = False,
     centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'region_data' if 'str', else uses 'np.ndarray'.
-    colours: Optional[List[str]] = None,
+    colour: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, types.Crop2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     ct_data: Optional[np.ndarray] = None,
@@ -312,12 +305,14 @@ def plot_region(
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_show_all_regions: bool = False,
+    linestyle_region: bool = 'solid',
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,            # All data passed to 'region_data' is plotted.
-    region_alpha: float = 0.5,
     savepath: Optional[str] = None,
     show: bool = True,
+    show_axis: bool = True,
     show_extent: bool = False,
     show_legend: bool = True,
     show_title: bool = True,
@@ -333,7 +328,7 @@ def plot_region(
 
     # Create plot figure/axis.
     if ax is None:
-        fig = plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
 
     # Set latex as text compiler.
@@ -387,18 +382,18 @@ def plot_region(
 
     if ct_data is not None:
         # Load CT slice.
-        ct_slice_data = get_slice(ct_data, slice_idx, view)
+        ct_slice_data = __get_slice_data(ct_data, slice_idx, view)
         if dose_data is not None:
-            dose_slice_data = get_slice(dose_data, slice_idx, view)
+            dose_slice_data = __get_slice_data(dose_data, slice_idx, view)
     else:
         # Load empty slice.
-        ct_slice_data = get_slice(np.zeros(shape=size), slice_idx, view)
+        ct_slice_data = __get_slice_data(np.zeros(shape=size), slice_idx, view)
 
     if crop is not None:
         # Perform crop on CT data or placeholder.
-        ct_slice_data = crop_2D(ct_slice_data, reverse_box_coords_2D(crop))
+        ct_slice_data = crop_2D(ct_slice_data, __reverse_box_coords_2D(crop))
         if dose_data is not None:
-            dose_slice_data = crop_2D(dose_slice_data, reverse_box_coords_2D(crop))
+            dose_slice_data = crop_2D(dose_slice_data, __reverse_box_coords_2D(crop))
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -434,6 +429,9 @@ def plot_region(
     # Plot CT data.
     ax.imshow(ct_slice_data, cmap='gray', aspect=aspect, interpolation='none', origin=__get_origin(view), vmin=vmin, vmax=vmax)
 
+    if not show_axis:
+        ax.set_axis_off()
+
     if show_x_label:
         # Add 'x-axis' label.
         if view == 'axial':
@@ -456,7 +454,7 @@ def plot_region(
 
     if region_data is not None:
         # Plot regions.
-        should_show_legend = __plot_region_data(region_data, slice_idx, region_alpha, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, show_extent=show_extent)
+        should_show_legend = __plot_region_data(region_data, slice_idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -495,7 +493,7 @@ def plot_region(
 
         # Escape text if using latex.
         if latex:
-            title = _escape_latex(title)
+            title = __escape_latex(title)
 
         ax.set_title(title)
 
@@ -533,7 +531,8 @@ def plot_localiser_prediction(
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    pred_alpha: float = 0.5,
+    linestyle_pred: str = 'solid',
+    alpha_pred: float = 0.5,
     pred_centre_colour: str = 'deepskyblue',
     pred_colour: str = 'deepskyblue',
     pred_extent_colour: str = 'deepskyblue',
@@ -609,19 +608,19 @@ def plot_localiser_prediction(
             aspect = get_aspect_ratio(view, spacing) 
 
         # Get slice data.
-        pred_slice_data = get_slice(pred_data, slice_idx, view)
+        pred_slice_data = __get_slice_data(pred_data, slice_idx, view)
 
         # Crop the image.
         if crop:
-            pred_slice_data = crop_2D(pred_slice_data, reverse_box_coords_2D(crop))
+            pred_slice_data = crop_2D(pred_slice_data, __reverse_box_coords_2D(crop))
 
         # Plot prediction.
         colours = [(1, 1, 1, 0), pred_colour]
         cmap = ListedColormap(colours)
-        plt.imshow(pred_slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+        plt.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         plt.plot(0, 0, c=pred_colour, label='Loc. Prediction')
         if show_pred_contour:
-            plt.contour(pred_slice_data, colors=[pred_colour], levels=[.5])
+            plt.contour(pred_slice_data, colors=[pred_colour], levels=[.5], linestyles=linestyle_pred)
 
     # Plot prediction extent.
     if show_pred_extent and not empty_pred:
@@ -629,10 +628,8 @@ def plot_localiser_prediction(
         pred_extent = get_extent(pred_data)
 
         # Plot extent if in view.
-        if should_plot_box(pred_extent, view, slice_idx):
-            __plot_box_slice(pred_extent, view, colour=pred_extent_colour, crop=crop, label='Loc. Box', linestyle='dashed')
-        else:
-            plt.plot(0, 0, c=pred_extent_colour, label='Loc. Extent (offscreen)')
+        label = 'Loc. extent' if __box_in_plane(pred_extent, view, slice_idx) else 'Loc. extent (offscreen)'
+        __plot_box_slice(pred_extent, view, colour=pred_extent_colour, crop=crop, label=label, linestyle='dashed')
 
     # Plot localiser centre.
     if show_pred_centre and not empty_pred:
@@ -676,7 +673,7 @@ def plot_localiser_prediction(
         min = np.clip(min, a_min=0, a_max=None)
         max = np.clip(max, a_min=None, a_max=pred_data.shape)
 
-        if should_plot_box((min, max), view, slice_idx):
+        if __box_in_plane((min, max), view, slice_idx):
             __plot_box_slice((min, max), view, colour='tomato', crop=crop, label='Seg. Patch', linestyle='dotted')
         else:
             plt.plot(0, 0, c='tomato', label='Seg. Patch (offscreen)', linestyle='dashed')
@@ -760,28 +757,35 @@ def plot_segmenter_prediction(
     id: str,
     spacing: types.ImageSpacing3D,
     pred_data: Dict[str, np.ndarray],
+    alpha_pred: float = 0.5,
+    alpha_region: float = 0.5,
     aspect: float = None,
+    ax: Optional[matplotlib.axes.Axes] = None,
     centre_of: Optional[str] = None,
+    colour: Optional[Union[str, List[str]]] = None,
+    colour_match: bool = False,
     crop: Optional[Union[str, types.Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
+    figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    linestyle_pred: str = 'solid',
+    linestyle_region: str = 'solid',
     loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
-    pred_alpha: float = 0.5,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
-    show_label_extent: bool = True,
     show_legend: bool = True,
     show_loc_centre: bool = True,
     show_pred: bool = True,
     show_pred_contour: bool = True,
     show_pred_extent: bool = True,
     show_pred_patch: bool = False,
+    show_region_extent: bool = True,
     slice_idx: Optional[int] = None,
     view: types.PatientView = 'axial',
     **kwargs: dict) -> None:
@@ -793,9 +797,20 @@ def plot_segmenter_prediction(
     if loc_centres is not None:
         assert len(loc_centres) == n_models
 
+    # Create plot figure/axis.
+    if ax is None:
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+
     # Get unique colours.
-    n_colours = n_models + n_regions
-    colours = sns.color_palette('husl', n_colours)
+    if colour is None:
+        if colour_match:
+            n_colours = np.max((n_regions, n_models))
+        else:
+            n_colours = n_regions + n_models
+        colours = sns.color_palette('husl', n_colours)
+    else:
+        colours = arg_to_list(colour, [str, tuple])
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -843,8 +858,9 @@ Prediction: {model_name}""")
             slice_idx = extent[extent_end][0]
 
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
-    size = pred_data[list(pred_data.keys())[0]].shape
-    plot_region(id, size, spacing, aspect=aspect, colours=colours[:n_regions], crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_extent=show_label_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+    size = ct_data.shape
+    region_colours = colours if colour_match else colours[:n_regions]
+    plot_region(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -859,7 +875,7 @@ Prediction: {model_name}""")
     for i in range(n_models):
         model_name = model_names[i]
         pred = pred_data[model_name]
-        colour = colours[n_regions + i]
+        colour = colours[i] if colour_match else colours[n_regions + i]
         loc_centre = loc_centres[i]
 
         if pred.sum() != 0 and show_pred:
@@ -868,18 +884,19 @@ Prediction: {model_name}""")
                 aspect = get_aspect_ratio(view, spacing) 
 
             # Get slice data.
-            slice_data = get_slice(pred, slice_idx, view)
+            pred_slice_data = __get_slice_data(pred, slice_idx, view)
 
             # Crop the image.
             if crop:
-                slice_data = crop_2D(slice_data, reverse_box_coords_2D(crop))
+                pred_slice_data = crop_2D(pred_slice_data, __reverse_box_coords_2D(crop))
 
             # Plot prediction.
-            cmap = ListedColormap(((1, 1, 1, 0), colour))
-            plt.imshow(slice_data, alpha=pred_alpha, aspect=aspect, cmap=cmap, origin=__get_origin(view))
-            plt.plot(0, 0, c=colour, label=model_name)
-            if show_pred_contour:
-                plt.contour(slice_data, colors=[colour], levels=[.5])
+            if pred_slice_data.sum() != 0: 
+                cmap = ListedColormap(((1, 1, 1, 0), colour))
+                ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+                ax.plot(0, 0, c=colour, label=model_name)
+                if show_pred_contour:
+                    ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
 
         # Plot prediction extent.
         if pred.sum() != 0 and show_pred_extent:
@@ -887,10 +904,8 @@ Prediction: {model_name}""")
             pred_extent = get_extent(pred)
 
             # Plot if extent box is in view.
-            if should_plot_box(pred_extent, view, slice_idx):
-                __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=f'{model_name} Extent', linestyle='dashed')
-            else:
-                plt.plot(0, 0, c=colour, label=f'{model_name} Extent (offscreen)')
+            label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
+            __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
 
         # Plot localiser centre.
         if show_loc_centre:
@@ -898,22 +913,19 @@ Prediction: {model_name}""")
             loc_centre = loc_centres[i]
             if view == 'axial':
                 centre = (loc_centre[0], loc_centre[1])
-                offscreen = False if slice_idx == loc_centre[2] else True
             elif view == 'coronal':
                 centre = (loc_centre[0], loc_centre[2])
-                offscreen = False if slice_idx == loc_centre[1] else True
             elif view == 'sagittal':
                 centre = (loc_centre[1], loc_centre[2])
-                offscreen = False if slice_idx == loc_centre[0] else True
                 
             # Apply crop.
             if crop:
                 centre = crop_point(centre, crop)
 
             if centre:
-                plt.scatter(*centre, c='royalblue', label=f"Loc. Centre")
+                ax.scatter(*centre, c='royalblue', label=f"Loc. Centre")
             else:
-                plt.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
+                ax.plot(0, 0, c='royalblue', label='Loc. Centre (offscreen)')
 
         # Plot second stage patch.
         if loc_centre is not None and pred.sum() != 0 and show_pred_patch:
@@ -925,14 +937,128 @@ Prediction: {model_name}""")
             patch = crop_or_pad_box(patch, label_box)
 
             # Plot box.
-            if patch and should_plot_box(patch, view, slice_idx):
+            if patch and __box_in_plane(patch, view, slice_idx):
                 __plot_box_slice(patch, view, colour=colour, crop=crop, label='Pred. Patch', linestyle='dotted')
             else:
-                plt.plot(0, 0, c=colour, label='Pred. Patch (offscreen)', linestyle='dashed')
+                ax.plot(0, 0, c=colour, label='Pred. Patch (offscreen)', linestyle='dashed')
 
     # Show legend.
     if show_legend:
-        plt_legend = plt.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        for l in plt_legend.get_lines():
+            l.set_linewidth(8)
+
+    # Save plot to disk.
+    if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
+
+    if show:
+        plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })
+
+def plot_segmenter_prediction_diff(
+    id: str,
+    spacing: types.ImageSpacing3D,
+    diff_data: Dict[str, np.ndarray],
+    alpha_diff: float = 1.0,
+    aspect: float = None,
+    ax: Optional[matplotlib.axes.Axes] = None,
+    centre_of: Optional[str] = None,
+    crop: Optional[Union[str, types.Box2D]] = None,
+    crop_margin: float = 100,
+    ct_data: Optional[np.ndarray] = None,
+    extent_of: Optional[str] = None,
+    figsize: Tuple[float, float] = (8, 8),
+    fontsize: float = DEFAULT_FONT_SIZE,
+    latex: bool = False,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    linestyle_diff: str = 'solid',
+    savepath: Optional[str] = None,
+    show: bool = True,
+    show_diff: bool = True,
+    show_diff_contour: bool = False,
+    show_legend: bool = True,
+    slice_idx: Optional[int] = None,
+    view: types.PatientView = 'axial',
+    **kwargs: dict) -> None:
+    __assert_slice_idx(centre_of, extent_of, slice_idx)
+    diff_names = list(diff_data.keys())
+    n_diffs = len(diff_names)
+    colours = sns.color_palette('husl', n_diffs)
+
+    # Create plot figure/axis.
+    if ax is None:
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
+
+    # Print diff summary info.
+    for diff_name, diff in diff_data.items():
+        logging.info(f"""
+Diff: {diff_name}""")
+        if diff.sum() != 0:
+            volume_vox = diff.sum()
+            volume_mm3 = volume_vox * np.product(spacing)
+            logging.info(f"""
+    Volume (vox): {volume_vox}
+    Volume (mm^3): {volume_mm3:.2f}""")
+        else:
+            logging.info(f"""
+    Empty""")
+
+    # Plot CT data.
+    size = ct_data.shape
+    plot_region(id, size, spacing, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, show=False, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+
+    if crop is not None:
+        crop = tuple(zip(*crop))    # Convert from 'Crop2D' to 'Box2D'.
+
+    # Plot diffs.
+    for i in range(n_diffs):
+        model_name = diff_names[i]
+        diff = diff_data[model_name]
+        colour = colours[i]
+
+        if diff.sum() != 0 and show_diff:
+            # Get aspect ratio.
+            if not aspect:
+                aspect = get_aspect_ratio(view, spacing) 
+
+            # Get slice data.
+            slice_data = __get_slice_data(diff, slice_idx, view)
+
+            # Crop the image.
+            if crop:
+                slice_data = crop_2D(slice_data, __reverse_box_coords_2D(crop))
+
+            # Plot prediction.
+            cmap = ListedColormap(((1, 1, 1, 0), colour))
+            ax.imshow(slice_data, alpha=alpha_diff, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+            ax.plot(0, 0, c=colour, label=model_name)
+            if show_diff_contour:
+                ax.contour(slice_data, colors=[colour], levels=[.5], linestyles=linestyle_diff)
+
+    # Show legend.
+    if show_legend:
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -1307,6 +1433,7 @@ def plot_dataframe_v2(
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
+    hue_palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
     major_tick_freq: Optional[float] = None,
@@ -1316,6 +1443,7 @@ def plot_dataframe_v2(
     point_size: float = 10,
     savepath: Optional[str] = None,
     share_y: bool = False,
+    show_boxes: bool = True,
     show_hue_connections: bool = False,
     show_hue_connections_inliers: bool = False,
     show_legend: bool = True,
@@ -1403,9 +1531,10 @@ def plot_dataframe_v2(
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
-        # hue_palette = sns.color_palette('husl', n_colors=len(hue_order))
-        # hue_palette = sns.color_palette('tab10')
-        hue_palette = sns.color_palette('colorblind')
+
+        # Check there are enough hue colors.
+        if len(hue_order) > len(hue_palette):
+            raise ValueError(f"'hue_palette' doesn't have enough colours, needs '{len(hue_order)}'.")
 
     # Plot rows.
     for i in range(n_rows):
@@ -1437,39 +1566,44 @@ def plot_dataframe_v2(
                 for k, hue_name in enumerate(hue_order_f):
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
                     row_data.loc[(row_data[x] == x_val) & (row_data[hue] == hue_name), 'x_pos'] = x_pos
+
+            # Keep track of legend.
+            legend_added = False
                 
             # Plot boxes.
-            if hue is None:
-                # Plot box.
-                x_data = row_data[row_data[x] == x_val]
-                if len(x_data) == 0:
-                    continue
-                x_pos = x_data.iloc[0]['x_pos']
-                if style == 'box':
-                    axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
-                elif style == 'violin':
-                    axs[i].violinplot(x_data[y], positions=[x_pos])
-            else:
-                obj_labels = []
-                for j, hue_name in enumerate(hue_order_f):
-                    # Get hue data and pos.
-                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
-                    if len(hue_data) == 0:
-                        continue
-                    hue_pos = hue_data.iloc[0]['x_pos']
-
+            if show_boxes:
+                if hue is None:
                     # Plot box.
+                    x_data = row_data[row_data[x] == x_val]
+                    if len(x_data) == 0:
+                        continue
+                    x_pos = x_data.iloc[0]['x_pos']
                     if style == 'box':
-                        res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[j], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
-                        obj_labels.append((res['boxes'][0], hue_name))
+                        axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
                     elif style == 'violin':
-                        res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
-                        obj_labels.append((res['bodies'], hue_name))
+                        axs[i].violinplot(x_data[y], positions=[x_pos])
+                else:
+                    artist_labels = []
+                    for k, hue_name in enumerate(hue_order_f):
+                        # Get hue data and pos.
+                        hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
+                        if len(hue_data) == 0:
+                            continue
+                        hue_pos = hue_data.iloc[0]['x_pos']
 
-                # Add legend.
-                if show_legend:
-                    objs, labels = list(zip(*obj_labels))
-                    axs[i].legend(objs, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+                        # Plot box.
+                        if style == 'box':
+                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[k], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                            artist_labels.append((hue_name, res['boxes'][0]))
+                        elif style == 'violin':
+                            res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
+                            artist_labels.append((hue_name, res['bodies']))
+
+                    # Add legend.
+                    if show_legend:
+                        legend_added = True
+                        labels, artists = list(zip(*artist_labels))
+                        axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
             # Plot points.
             if show_points:
@@ -1477,11 +1611,17 @@ def plot_dataframe_v2(
                     x_data = row_data[row_data[x] == x_val]
                     axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
                 else:
+                    artist_labels = []
                     for j, hue_name in enumerate(hue_order_f):
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
                             continue
-                        axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                        artist_labels.append((hue_name, res))
+
+                    if not legend_added:
+                        labels, artists = list(zip(*artist_labels))
+                        axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:

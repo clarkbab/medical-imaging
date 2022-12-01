@@ -12,7 +12,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-TEST"
+DATASET="OPC"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -33,7 +33,11 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-SUBREGIONS=True
+SUBREGIONS=False
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/report/nifti/create_region_figures --dataset $DATASET --region $REGION --subregions $SUBREGIONS
+python $SCRIPT_DIR/report/nifti/create_region_figures.py \
+    --dataset $DATASET \
+    --region $REGION \
+    --subregions $SUBREGIONS \
+    --window $WINDOW

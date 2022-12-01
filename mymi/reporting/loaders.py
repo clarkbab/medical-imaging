@@ -6,6 +6,7 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader
 from mymi import logging
+from mymi.types import PatientID
 from mymi.utils import append_row, encode, load_csv, save_csv
 
 def get_loader_manifest(
@@ -84,3 +85,17 @@ def load_loader_manifest(
     df = load_csv('loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv')
     df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
     return df
+
+def get_test_fold(
+    datasets: Union[str, List[str]],
+    dataset: str,
+    pat_id: PatientID,
+    region: str):
+    for test_fold in range(5):
+        df = load_loader_manifest(datasets, region, test_fold=test_fold)
+        df = df[df.loader == 'test']
+        df = df[(df['origin-dataset'] == dataset) & (df['origin-patient-id'] == str(pat_id))]
+        if len(df) == 1:
+            return test_fold
+
+    raise ValueError(f"Patient '{pat_id}' not found for region '{region}' loader and dataset '{dataset}'.")

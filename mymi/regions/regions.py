@@ -25,5 +25,6 @@ class ExtraRegions(Enum):
     Oesophagus = 1
     PharynConst = 2
 
-
 RegionNames = [r.name for r in Regions]
+# Background is class '0'.
+RegionMap = dict((r, i + 1) for i, r in enumerate(RegionNames))

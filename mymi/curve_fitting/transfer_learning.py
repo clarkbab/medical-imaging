@@ -14,6 +14,7 @@ from mymi import config
 from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
 from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
+from mymi.metrics import get_metric_direction
 from mymi.regions import RegionNames
 from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_log, arg_to_list, encode
 
@@ -27,9 +28,9 @@ DEFAULT_METRIC_LEGEND_LOCS = {
 }
 DEFAULT_METRIC_LABELS = {
     'dice': 'DSC',
-    'hd': 'HD [mm]',
-    'hd-95': '95HD [mm]',
-    'msd': 'MSD [mm]',
+    'hd': 'HD (mm)',
+    'hd-95': '95HD (mm)',
+    'msd': 'MSD (mm)',
 }
 DEFAULT_METRIC_Y_LIMS = {
     'dice': (0, 1),
@@ -41,7 +42,7 @@ for region in RegionNames:
     tol = get_region_tolerance(region)
     DEFAULT_METRIC_LEGEND_LOCS[f'apl-mm-tol-{tol}'] = 'upper right'
     DEFAULT_METRIC_LEGEND_LOCS[f'dm-surface-dice-tol-{tol}'] = 'lower right'
-    DEFAULT_METRIC_LABELS[f'apl-mm-tol-{tol}'] = fr'APL, $\tau$={tol}mm'
+    DEFAULT_METRIC_LABELS[f'apl-mm-tol-{tol}'] = fr'APL, $\tau$={tol}mm (mm)'
     DEFAULT_METRIC_LABELS[f'dm-surface-dice-tol-{tol}'] = fr'Surface DSC, $\tau$={tol}mm'
     DEFAULT_METRIC_Y_LIMS[f'apl-mm-tol-{tol}'] = (0, None)
     DEFAULT_METRIC_Y_LIMS[f'dm-surface-dice-tol-{tol}'] = (0, 1)
@@ -65,6 +66,8 @@ def create_bootstrap_predictions(
     raise_error: bool = True,
     weights: bool = False) -> None:
     datasets = arg_to_list(dataset, str)
+    if '{tol}' in metric:
+        metric = metric.replace('{tol}', str(get_region_tolerance(region)))
     arg_assert_literal(stat, ('mean', 'q1', 'q3'))
     arg_log('Creating bootstrap predictions', ('datasets', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
 
@@ -96,8 +99,8 @@ def create_bootstrap_predictions(
             
         # Fit curve.
         try:
-            p_init = get_p_init(metric)
-            p_opt, _, _ = fit_curve(p_init, x, y, weights=w)
+            p_init = __get_p_init(metric)
+            p_opt, _, _ = __fit_curve(p_init, x, y, weights=w)
         except ValueError as e:
             if raise_error:
                 logging.error(f"Error when fitting sample '{i}':")
@@ -108,7 +111,7 @@ def create_bootstrap_predictions(
         
         # Create prediction points.
         x = np.linspace(0, n_preds - 1, num=n_preds)
-        y = f(x, p_opt)
+        y = __f(x, p_opt)
         preds[i] = y
 
     # Set 'clinical' model predictions to 'NaN' as 'clinical' model must be trained on
@@ -131,8 +134,10 @@ def create_bootstrap_samples(
     stat: Literal['mean', 'q1', 'q3'],
     n_samples: int = DEFAULT_N_SAMPLES) -> None:
     datasets = arg_to_list(dataset, str)
+    if '{tol}' in metric:
+        metric = metric.replace('{tol}', str(get_region_tolerance(region)))
     arg_assert_literal(stat, ('mean', 'q1', 'q3'))
-    logging.info(f"Creating bootstrap samples for region '{region}', model_type '{model_type}', metric '{metric}', stat '{stat}', n_samples '{n_samples}'...")
+    arg_log('Creating bootstrap samples', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
 
     # Load all 'model_type' data.
     df = load_evaluation_data(datasets, region, model_type)
@@ -168,6 +173,7 @@ def create_bootstrap_samples_and_predictions(
     metrics = arg_to_list(metric, str)
     stats = arg_to_list(stat, str)
     arg_assert_literal_list(stats, str, ('mean', 'q1', 'q3'))
+    arg_log('Creating bootstrap samples and predictions', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_types, metrics, stats))
 
     # Create samples and prediction from curve fitting.
     for model_type in model_types:
@@ -176,32 +182,18 @@ def create_bootstrap_samples_and_predictions(
                 create_bootstrap_samples(datasets, region, model_type, metric, stat, n_samples=n_samples)
                 create_bootstrap_predictions(datasets, region, model_type, metric, stat, n_samples=n_samples)
 
-def f(
+def __f(
     x: np.ndarray,
     params: Tuple[float]) -> Union[float, List[float]]:
     return -params[0] / (x - params[1]) + params[2]
 
-def get_p_init(metric: str) -> Tuple[float, float, float]:
+def __get_p_init(metric: str) -> Tuple[float, float, float]:
     if get_metric_direction(metric):
         return (1, -1, 1)
     else:
         return (-1, -1, 1)
 
-# In which direction does the metric improve?
-# Higher is better (True) or lower is better (False).
-def get_metric_direction(metric: str) -> bool:
-    if 'apl-mm-tol-' in metric:
-        return False
-    if metric == 'dice':
-        return True
-    if 'dm-surface-dice-tol-' in metric:
-        return True
-    if 'hd' in metric: 
-        return False
-    if metric == 'msd':
-        return False
-
-def fit_curve(
+def __fit_curve(
     p_init: Tuple[float],
     x: List[float],
     y: List[float], 
@@ -210,7 +202,7 @@ def fit_curve(
     weights: Optional[List[float]] = None):
     # Make fit.
     x_min = np.min(x)
-    result = least_squares(__residuals(f), p_init, args=(x, y, weights), bounds=((-np.inf, -np.inf, 0), (np.inf, x_min, np.inf)), max_nfev=max_nfev)
+    result = least_squares(__residuals(__f), p_init, args=(x, y, weights), bounds=((-np.inf, -np.inf, 0), (np.inf, x_min, np.inf)), max_nfev=max_nfev)
 
     # Check fit status.
     status = result.status
@@ -317,7 +309,6 @@ def load_evaluation_data(
     model_types = arg_to_list(model_type, str)
     n_trains = arg_to_list(n_train, int)
     test_folds = arg_to_list(test_fold, int)
-    arg_log('Loading evaluation data', ('datasets', 'regions', 'model_types'), (datasets, regions, model_types))
 
     # Load evaluations and combine.
     dfs = []
@@ -391,6 +382,7 @@ def megaplot(
     model_label: Optional[Union[str, List[str]]] = None,
     savepath: Optional[str] = None,
     secondary_stat: Optional[Union[str, List[str], np.ndarray]] = None,
+    wspace: float = 0.25,
     y_lim: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
@@ -426,7 +418,7 @@ def megaplot(
 
     # Create main gridspec._labels
     fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * n_regions))
-    gs = GridSpec(n_regions, metrics.shape[1], figure=fig)
+    gs = GridSpec(n_regions, metrics.shape[1], figure=fig, wspace=wspace)
     for i, region in enumerate(regions):
         for j in range(n_metrics):
             metric = metrics[i, j]
@@ -462,12 +454,12 @@ def plot_bootstrap_fit(
     n_samples: int = DEFAULT_N_SAMPLES,
     secondary_stat: Optional[str] = None,
     show_ci: bool = True,
-    show_difference: bool = True,
+    show_diff: bool = True,
     show_legend: bool = True,
     show_limits: bool = False,
     show_points: bool = True,
-    show_secondary_ci: bool = True, 
-    show_secondary_difference: bool = True,
+    show_secondary_stat_ci: bool = True, 
+    show_secondary_stat_diff: bool = True,
     split: bool = True,
     split_wspace: Optional[float] = 0.05,
     subplot_spec: Optional[mpl.gridspec.SubplotSpec] = None,
@@ -485,11 +477,11 @@ def plot_bootstrap_fit(
         model_labels = [model_labels] if type(model_labels) == str else model_labels
         assert len(model_labels) == len(model_types)
     if secondary_stat is None:
-        show_secondary_difference = False
+        show_secondary_stat_diff = False
         
     # Create main gridspec.
-    main_gs_size = (2, 1) if show_difference else (1, 1)
-    main_gs_height_ratios = (48 if show_secondary_difference else 49, 2 if show_secondary_difference else 1) if show_difference else None
+    main_gs_size = (2, 1) if show_diff else (1, 1)
+    main_gs_height_ratios = (48 if show_secondary_stat_diff else 49, 2 if show_secondary_stat_diff else 1) if show_diff else None
     if subplot_spec is None:
         fig = plt.figure(figsize=figsize)
         main_gs = GridSpec(*main_gs_size, figure=fig, height_ratios=main_gs_height_ratios)
@@ -503,12 +495,12 @@ def plot_bootstrap_fit(
     data_gs = GridSpecFromSubplotSpec(*data_gs_size, subplot_spec=main_gs[0, 0], width_ratios=data_gs_width_ratios, wspace=split_wspace)
 
     # Create difference gridspec.
-    if show_difference:
+    if show_diff:
         if split:
-            diff_gs_size = (2, 2) if show_secondary_difference else (1, 2)
+            diff_gs_size = (2, 2) if show_secondary_stat_diff else (1, 2)
         else:
-            diff_gs_size = (2, 1) if show_secondary_difference else (1, 1)
-        diff_gs_hspace = diff_hspace if show_secondary_difference else None
+            diff_gs_size = (2, 1) if show_secondary_stat_diff else (1, 1)
+        diff_gs_hspace = diff_hspace if show_secondary_stat_diff else None
         diff_gs_width_ratios = (1, 19) if split else None
         diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=main_gs[1, 0], width_ratios=diff_gs_width_ratios, wspace=split_wspace)
 
@@ -523,13 +515,13 @@ def plot_bootstrap_fit(
                 *([None] if split else []),
                 fig.add_subplot(diff_gs[0, 1] if split else diff_gs[0, 0])
             ]
-        ] if show_difference else []),
+        ] if show_diff else []),
         *([
             [
                 *([None] if split else []),
                 fig.add_subplot(diff_gs[1, 1] if split else diff_gs[1, 0])
             ]
-        ] if show_difference and show_secondary_difference else [])
+        ] if show_diff and show_secondary_stat_diff else [])
     ]
     
     # Plot main data.
@@ -546,7 +538,7 @@ def plot_bootstrap_fit(
 
             # Load data for secondary statistic.
             if secondary_stat:
-                sec_preds = load_bootstrap_predictions(region, model_type, metric, secondary_stat, n_samples=n_samples)
+                sec_preds = load_bootstrap_predictions(datasets, region, model_type, metric, secondary_stat, n_samples=n_samples)
 
             # Plot mean value of 'stat' over all bootstrapped samples (convergent value).
             means = preds.mean(axis=0)
@@ -559,7 +551,7 @@ def plot_bootstrap_fit(
                 ax.plot(x, sec_means, color=model_colour, alpha=alpha_secondary, linestyle='--')
 
             # Plot secondary statistic 95% CIs.
-            if secondary_stat and show_secondary_ci:
+            if secondary_stat and show_secondary_stat_ci:
                 low_ci = np.quantile(sec_preds, 0.025, axis=0)
                 high_ci = np.quantile(sec_preds, 0.975, axis=0)
                 ax.fill_between(x, low_ci, high_ci, color=model_colour, alpha=alpha_secondary * alpha_ci)
@@ -583,7 +575,7 @@ def plot_bootstrap_fit(
                 ax.scatter(x_raw, y_raw, color=model_colour, marker='o', alpha=alpha_points)
 
     # Plot difference.
-    if show_difference:
+    if show_diff:
         assert len(model_types) == 2
 
         # Load significant difference.
@@ -598,9 +590,9 @@ def plot_bootstrap_fit(
         x = np.argwhere(diffs == 2).flatten()
         diff_ax.scatter(x, [0] * len(x), color=model_colours[1], marker=diff_marker)
 
-        if show_secondary_difference:
+        if show_secondary_stat_diff:
             # Load significant difference.
-            diffs, _ = load_bootstrap_differences(region, model_types, metric, secondary_stat, n_samples=n_samples)
+            diffs, _ = load_bootstrap_differences(datasets, region, model_types, metric, secondary_stat, n_samples=n_samples)
             
             # Plot model A points.
             diff_ax = axs[2][1] if split else axs[2][0]
@@ -615,29 +607,29 @@ def plot_bootstrap_fit(
     if split:
         axs[0][1].set_xscale(x_scale)
 
-        if show_difference:
+        if show_diff:
             axs[1][1].set_xscale(x_scale)
 
-            if show_secondary_difference:
+            if show_secondary_stat_diff:
                 axs[2][1].set_xscale(x_scale)
     else:
         axs[0][0].set_xscale(x_scale)
 
-        if show_difference:
+        if show_diff:
             axs[1][0].set_xscale(x_scale)
 
-            if show_secondary_difference:
+            if show_secondary_stat_diff:
                 axs[2][0].set_xscale(x_scale)
 
     # Set x tick labels.
     x_upper_lim = None
     if split:
         axs[0][0].set_xticks([0])
-        if show_difference:
+        if show_diff:
             axs[1][1].get_xaxis().set_visible(False)
             axs[1][1].get_yaxis().set_visible(False)
 
-            if show_secondary_difference:
+            if show_secondary_stat_diff:
                 axs[2][1].get_xaxis().set_visible(False)
                 axs[2][1].get_yaxis().set_visible(False)
 
@@ -646,11 +638,11 @@ def plot_bootstrap_fit(
             axs[0][1].set_xticks(LOG_SCALE_X_TICK_LABELS)
             axs[0][1].get_xaxis().set_major_formatter(mpl.ticker.ScalarFormatter())
     else:
-        if show_difference:
+        if show_diff:
             axs[1][0].get_xaxis().set_visible(False)
             axs[1][0].get_yaxis().set_visible(False)
 
-            if show_secondary_difference:
+            if show_secondary_stat_diff:
                 axs[2][0].get_xaxis().set_visible(False)
                 axs[2][0].get_yaxis().set_visible(False)
 
@@ -659,10 +651,10 @@ def plot_bootstrap_fit(
         axs[0][0].set_xlim(-0.5, 0.5)
         axs[0][1].set_xlim(4.5, x_upper_lim)
 
-        if show_difference:
+        if show_diff:
             axs[1][1].set_xlim(4.5, x_upper_lim)
 
-            if show_secondary_difference:
+            if show_secondary_stat_diff:
                 axs[2][1].set_xlim(4.5, x_upper_lim)
 
     # Set y label.
@@ -673,23 +665,25 @@ def plot_bootstrap_fit(
     if split:
         axs[0][1].set_ylim(y_lim)
 
-    # Condense y ticks labels.
+    # Don't apply thousands formatting if any values are less than 1000.
     y_ticks = axs[0][0].get_yticks()
-    apply_formatting = False
+    apply_formatting = True
     for y_tick in y_ticks:
-        if y_tick >= 1000:
-            apply_formatting = True
+        if y_tick != 0 and y_tick < 1000:
+            apply_formatting = False
     if apply_formatting:
         def format_y_tick(y_tick: float):
             y_tick = int(y_tick / 1000)
             return f'{y_tick}k'
         axs[0][0].set_yticklabels([format_y_tick(y) for y in y_ticks])
 
-    # Set y tick label fontsize.
+    # Set x/y tick label fontsize.
     axs[0][0].tick_params(axis='x', which='major', labelsize=fontsize)
     axs[0][0].tick_params(axis='y', which='major', labelsize=fontsize)
+    axs[0][0].tick_params(axis='x', which='minor', direction='in')
     if split:
         axs[0][1].tick_params(axis='x', which='major', labelsize=fontsize)
+        axs[0][1].tick_params(axis='x', which='minor', direction='in')
 
     # Set title.
     title = title if title else region
@@ -748,7 +742,7 @@ def raw_data(
 
 def __residuals(f):
     def inner(params, x, y, weights):
-        y_pred = f(x, params)
+        y_pred = __f(x, params)
         rs = y - y_pred
         if weights is not None:
             rs *= weights

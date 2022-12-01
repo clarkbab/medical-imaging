@@ -1,6 +1,6 @@
 from typing import List, Optional, Union
 from .loader import Loader
-from .patch_loader import PatchLoader
+from .multi_loader import MultiLoader
 
 def get_n_train_max(
     datasets: Union[str, List[str]],

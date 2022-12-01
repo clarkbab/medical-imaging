@@ -363,7 +363,8 @@ def create_segmenter_prediction_figures(
 def create_region_figures(
     dataset: str,
     region: str,
-    subregions: bool = False) -> None:
+    subregions: bool = False,
+    **kwargs) -> None:
     logging.info(f"Creating region figures for dataset '{dataset}', region '{region}'.")
 
     # Get patients.
@@ -381,8 +382,8 @@ def create_region_figures(
     # Set PDF margins.
     img_t_margin = 35
     img_l_margin = 5
-    img_width = 150
-    img_height = 200
+    img_width = 100
+    img_height = 100
 
     # Create PDF.
     pdf = FPDF()
@@ -498,7 +499,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat, centre_of=region, colours=['y'], crop=region, regions=region, show_extent=True, savepath=savepath, view=view)
+            plot_region(dataset, pat, centre_of=region, colours=['y'], crop=region, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -521,7 +522,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
+                    plot_region(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -535,7 +536,8 @@ def create_region_figures(
                     os.remove(filepath)
 
     # Save PDF.
-    filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}.pdf') 
+    # We have to 'encode' localisers/segmenters because they could be a list of models.
+    filepath = os.path.join(config.directories.reports, 'region-figures', dataset, f'{region}.pdf') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 
