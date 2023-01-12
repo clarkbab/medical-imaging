@@ -13,7 +13,7 @@ def dice(
     """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'dice' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
     # Convert types for SimpleITK.
@@ -38,7 +38,7 @@ def batch_mean_dice(
     """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'batch_mean_dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'batch_mean_dice' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
     dices = []

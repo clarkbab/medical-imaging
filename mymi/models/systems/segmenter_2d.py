@@ -72,7 +72,7 @@ class Segmenter2D(pl.LightningModule):
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = pred.cpu().numpy().astype(np.bool)
+        pred = pred.cpu().numpy().astype(np.bool_)
 
         return pred
 
@@ -85,7 +85,7 @@ class Segmenter2D(pl.LightningModule):
 
         # Log metrics.
         y = y.cpu().numpy()
-        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool)
+        y_hat = y_hat.argmax(dim=1).cpu().numpy().astype(np.bool_)
         self.log('train/loss', loss, **self._log_args)
 
         if 'dice' in self._metrics:

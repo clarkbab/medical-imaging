@@ -42,7 +42,7 @@ def evaluate_localiser_predictions(
         for sample in tqdm(samples):
             # Get pred/ground truth.
             pred = get_localiser_prediction(dataset, partition, sample, localiser)
-            label = set.partition(partition).sample(sample).label(regions=region)[region].astype(np.bool)
+            label = set.partition(partition).sample(sample).label(regions=region)[region].astype(np.bool_)
 
             # Add metrics.
             metrics = [

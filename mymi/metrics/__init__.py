@@ -7,7 +7,7 @@ from .volume import volume
 
 # In which direction does the metric improve?
 # Higher is better (True) or lower is better (False).
-def get_metric_direction(metric: str) -> bool:
+def is_higher_better(metric: str) -> bool:
     if 'apl-mm-tol-' in metric:
         return False
     if metric == 'dice':

@@ -26,5 +26,8 @@ class ExtraRegions(Enum):
     PharynConst = 2
 
 RegionNames = [r.name for r in Regions]
-# Background is class '0'.
-RegionMap = dict((r, i + 1) for i, r in enumerate(RegionNames))
+
+# For multi-class training - 'background' is channel '0'.
+RegionChannelMap = dict((r, i + 1) for i, r in enumerate(RegionNames))
+RegionChannelMap['Background'] = 0
+ChannelRegionMap = dict((c, r) for r, c in RegionChannelMap.items())

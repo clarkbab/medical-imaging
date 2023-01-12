@@ -1,3 +1,4 @@
+from fairscale.nn import checkpoint_wrapper
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,6 +12,28 @@ class DoubleConv(nn.Module):
         out_channels: int):
         super().__init__()
 
+        # self.double_conv = nn.Sequential(
+        #     checkpoint_wrapper(nn.Sequential(
+        #         nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+        #         nn.InstanceNorm3d(out_channels),
+        #         nn.ReLU()
+        #     )),
+        #     checkpoint_wrapper(nn.Sequential(
+        #         nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+        #         nn.InstanceNorm3d(out_channels),
+        #         nn.ReLU()
+        #     ))
+        # )
+
+        # self.double_conv = checkpoint_wrapper(nn.Sequential(
+        #     nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+        #     nn.InstanceNorm3d(out_channels),
+        #     nn.ReLU(),
+        #     nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
+        #     nn.InstanceNorm3d(out_channels),
+        #     nn.ReLU()
+        # ))
+
         self.double_conv = nn.Sequential(
             nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(out_channels),
@@ -19,6 +42,8 @@ class DoubleConv(nn.Module):
             nn.InstanceNorm3d(out_channels),
             nn.ReLU()
         )
+
+
 
     def forward(self, x):
         return self.double_conv(x)
@@ -84,16 +109,17 @@ class UNet3D(nn.Module):
         super().__init__()
 
         # Define layers.
-        self.first = DoubleConv(1, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 1024)
-        self.up1 = Up(1024, 512)
-        self.up2 = Up(512, 256)
-        self.up3 = Up(256, 128)
-        self.up4 = Up(128, 64)
-        self.out = OutConv(64, 2)
+        n_features = 32
+        self.first = DoubleConv(1, n_features)
+        self.down1 = Down(n_features, 2 * n_features)
+        self.down2 = Down(2 * n_features, 4 * n_features)
+        self.down3 = Down(4 * n_features, 8 * n_features)
+        self.down4 = Down(8 * n_features, 16 * n_features)
+        self.up1 = Up(16 * n_features, 8 * n_features)
+        self.up2 = Up(8 * n_features, 4 * n_features)
+        self.up3 = Up(4 * n_features, 2 * n_features)
+        self.up4 = Up(2 * n_features, n_features)
+        self.out = OutConv(n_features, 2)
         self.softmax = nn.Softmax(dim=1)
 
         # Transfer pretrained model.

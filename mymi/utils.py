@@ -111,18 +111,19 @@ def save_csv(
     data: pd.DataFrame,
     *path: List[str],
     index: bool = False,
+    header: bool = True,
     overwrite: bool = False) -> None:
     filepath = os.path.join(config.directories.files, *path)
     dirpath = os.path.dirname(filepath)
     if os.path.exists(filepath):
         if overwrite:
             os.makedirs(dirpath, exist_ok=True)
-            data.to_csv(filepath, index=index)
+            data.to_csv(filepath, header=header, index=index)
         else:
             logging.error(f"File '{filepath}' already exists, use overwrite=True.")
     else:
         os.makedirs(dirpath, exist_ok=True)
-        data.to_csv(filepath, index=index)
+        data.to_csv(filepath, header=header, index=index)
 
 def load_csv(
     *path: List[str],

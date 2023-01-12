@@ -7,7 +7,7 @@ def get_largest_cc(a: np.ndarray) -> np.ndarray:
     args:
         a: a 3D binary array.
     """
-    if a.dtype != np.bool:
+    if a.dtype != np.bool_:
         raise ValueError(f"'get_batch_largest_cc' expected a boolean array, got '{a.dtype}'.")
 
     # Check that there are some foreground pixels.
@@ -26,7 +26,7 @@ def get_batch_largest_cc(a: np.ndarray) -> np.ndarray:
     args:
         a: a 3D binary array.
     """
-    if a.dtype != np.bool:
+    if a.dtype != np.bool_:
         raise ValueError(f"'get_batch_largest_cc' expected a boolean array, got '{a.dtype}'.")
 
     ccs = []

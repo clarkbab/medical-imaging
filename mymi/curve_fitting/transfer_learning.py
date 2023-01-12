@@ -14,7 +14,7 @@ from mymi import config
 from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
 from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
-from mymi.metrics import get_metric_direction
+from mymi.metrics import is_higher_better
 from mymi.regions import RegionNames
 from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_log, arg_to_list, encode
 
@@ -188,7 +188,7 @@ def __f(
     return -params[0] / (x - params[1]) + params[2]
 
 def __get_p_init(metric: str) -> Tuple[float, float, float]:
-    if get_metric_direction(metric):
+    if is_higher_better(metric):
         return (1, -1, 1)
     else:
         return (-1, -1, 1)
@@ -288,7 +288,7 @@ def load_bootstrap_differences(
     # If a model performs better in 95% of samples, it is significantly better
     # for that value of 'n_train'.
     results = np.zeros_like(diffs_p5, dtype=int)
-    if get_metric_direction(metric):
+    if is_higher_better(metric):
         results[diffs_p5 > 0] = 2
         results[diffs_p95 < 0] = 1
     else:

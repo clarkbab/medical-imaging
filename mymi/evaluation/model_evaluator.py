@@ -76,10 +76,10 @@ class ModelEvaluator:
                 folder = 'output' if self.output_transform else 'raw'
                 filepath = os.path.join(config.directories.evaluation, self.run_name, 'predictions', folder, f"batch-{batch}")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.save(filepath, pred.numpy().astype(np.bool))
+                np.save(filepath, pred.numpy().astype(np.bool_))
                 filepath = os.path.join(config.directories.evaluation, self.run_name, 'labels', folder, f"batch-{batch}")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                np.save(filepath, label.numpy().astype(np.bool))
+                np.save(filepath, label.numpy().astype(np.bool_))
 
             # Calculate output metrics.
             if self.output_transform:

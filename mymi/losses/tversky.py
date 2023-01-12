@@ -21,7 +21,9 @@ class TverskyLoss(nn.Module):
         returns: the Tversky loss.
         args:
             pred: the B x C x X x Y x Z batch of network predictions probabilities.
-            label: the the B x C x X x Y x Z batch of binary labels.
+            label: the B x C x X x Y x Z batch of binary labels.
+            class_mask: the B x C batch of class masks indicating which regions are present.
+            class_weights: the B x C batch of class weights to up/down-weight particular regions during training.
         """
         if pred.shape != label.shape:
             raise ValueError(f"Expected pred shape ({pred.shape}) to equal label shape ({label.shape}).")

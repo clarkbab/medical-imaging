@@ -144,7 +144,7 @@ class LoaderDataset(Dataset):
             input = input.astype(np.half)
         else:
             input = input.astype(np.single)
-        label = label.astype(np.bool)
+        label = label.astype(np.bool_)
 
         return desc, input, label
 

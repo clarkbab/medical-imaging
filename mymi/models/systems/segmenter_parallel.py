@@ -98,7 +98,7 @@ class SegmenterParallel(pl.LightningModule):
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = pred.cpu().numpy().astype(np.bool)
+        pred = pred.cpu().numpy().astype(np.bool_)
         pred = get_batch_largest_cc(pred)
 
         return pred

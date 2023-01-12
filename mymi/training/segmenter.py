@@ -4,7 +4,6 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
 from typing import List, Optional, Tuple, Union
 
@@ -26,6 +25,7 @@ def train_segmenter(
     model: str,
     run: str,
     loss: str = 'dice',
+    lr_find: bool = False,
     n_epochs: int = 200,
     n_folds: Optional[int] = 5,
     n_gpus: int = 1,
@@ -131,12 +131,21 @@ def train_segmenter(
     trainer = Trainer(
         accelerator='gpu' if n_gpus > 0 else 'cpu',
         callbacks=callbacks,
-        devices=list(range(n_gpus)) if n_gpus > 0 else 1,
+        devices=n_gpus if n_gpus > 0 else 1,
         logger=logger,
         max_epochs=n_epochs,
         num_nodes=n_nodes,
+        num_sanity_val_steps=2,
         # plugins=DDPPlugin(find_unused_parameters=False),
-        precision=16)
+        precision=16,
+        strategy='ddp')
+
+    if lr_find:
+        lr_finder = trainer.tuner.lr_find(model, train_loader, val_loader)
+        logging.info(lr_finder.results)
+        fig = lr_finder.plot(suggest=True)
+        fig.show()
+        exit()
 
     # Save training information.
     man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold)

@@ -1,3 +1,4 @@
+from mymi.types.types import PatientRegions
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
@@ -8,14 +9,15 @@ from typing import List, Optional, Tuple, Union
 from mymi import types
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
-from mymi.regions import RegionMap, RegionNames
+from mymi import logging
+from mymi.regions import RegionNames, to_list
 from mymi.utils import arg_to_list
 
 class MultiLoader:
     @staticmethod
     def build_loaders(
         dataset: Union[str, List[str]],
-        batch_size: int = 1,
+        batch_size: int = 1,    # Doesn't support > 1 as probably not necessary and introduces problems like padding images to max batch size.
         check_processed: bool = True,
         half_precision: bool = True,
         load_data: bool = True,
@@ -24,6 +26,7 @@ class MultiLoader:
         n_train: Optional[int] = None,
         n_workers: int = 1,
         random_seed: int = 42,
+        regions: types.PatientRegions = 'all',
         shuffle_train: bool = True,
         spacing: Optional[types.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,
@@ -39,7 +42,7 @@ class MultiLoader:
         samples = []
         for i, dataset in enumerate(datasets):
             set = ds.get(dataset, 'training', check_processed=check_processed)
-            for sample in set.list_samples():
+            for sample in set.list_samples(regions=regions):
                 samples.append((i, sample))
 
         # Shuffle samples.
@@ -82,11 +85,12 @@ class MultiLoader:
         nn_val_samples = train_samples[n_nn_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, nn_train_samples, half_precision=half_precision, load_data=load_data, spacing=spacing, transform=transform)
+        train_ds = TrainingDataset(datasets, nn_train_samples, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing, transform=transform)
         train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
-        val_ds = TrainingDataset(datasets, nn_val_samples, half_precision=half_precision, load_data=load_data, spacing=spacing)
+        class_weights = np.ones(len(to_list(regions)) + 1)
+        val_ds = TrainingDataset(datasets, nn_val_samples, class_weights=class_weights, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -102,23 +106,54 @@ class TrainingDataset(Dataset):
         self,
         datasets: List[str],
         samples: List[Tuple[int, int]],
+        class_weights: Optional[np.ndarray] = None,
         half_precision: bool = True,
         load_data: bool = True,
+        regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__class_weights = class_weights
         self.__half_precision = half_precision
         self.__load_data = load_data
+        self.__regions = to_list(regions)
         self.__spacing = spacing
         self.__transform = transform
         if transform:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
+        
+        # Load datasets.
+        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
 
         # Record number of samples.
         self.__n_samples = len(samples)
 
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
+
+        # Create map from region names to channels.
+        self.__n_channels = len(self.__regions) + 1
+        self.__region_channel_map = { 'background': 0 }
+        for i, region in enumerate(self.__regions):
+            self.__region_channel_map[region] = i + 1
+
+        if class_weights is None:
+            # Calculate weights based on training data.
+            region_counts = np.zeros(self.__n_channels, dtype=int)
+            for ds_i, s_i in samples:
+                regions = self.__sets[ds_i].sample(s_i).list_regions()
+                regions = [r for r in regions if r in self.__regions]
+                for region in regions:
+                    region_counts[self.__region_channel_map[region]] += 1
+
+                # If all regions are present, we can train background class.
+                if len(regions) == len(self.__regions):
+                    region_counts[0] += 1
+
+            logging.info(f"Calculated region counts '{region_counts}'.")
+            class_weights = 1 / region_counts
+
+        logging.info(f"Using class weights '{class_weights}'.")
+        self.__class_weights = class_weights
 
     def __len__(self):
         return self.__n_samples
@@ -135,26 +170,28 @@ class TrainingDataset(Dataset):
         if not self.__load_data:
             return desc
 
-        # Load all region data.
+        # Load region data.
         sample = set.sample(s_i)
         regions = sample.list_regions()
+        regions = [r for r in regions if r in self.__regions]
         input, labels = sample.pair(regions=regions)
 
         # Create multi-class mask and label.
         # Note that using this method we may end up with multiple foreground classes for a
         # single voxel. E.g. brain/brainstem both present. Don't worry about this for now,
         # the network will just try to maximise both (and fail).
-        n_channels = len(RegionNames) + 1   # Background is channel 0.
-        mask = np.zeros(n_channels, dtype=bool)
-        label = np.zeros((n_channels, *input.shape), dtype=bool)
+        mask = np.zeros(self.__n_channels, dtype=bool)
+        label = np.zeros((self.__n_channels, *input.shape), dtype=bool)
         for region in regions:
-            mask[RegionMap[region]] = True
-            label[RegionMap[region]] = labels[region]
+            mask[self.__region_channel_map[region]] = True
+            label[self.__region_channel_map[region]] = labels[region]
 
-        # Add background information if all regions are annotated.
-        if len(regions) == len(RegionNames):
+        # Add background class.
+        # If all regions are annotated, we can invert combined label to return the background class.
+        # If a region is missing, we can't do this as we'd be telling the model that this region
+        # was background.
+        if len(regions) == len(self.__regions):
             mask[0] = True
-            # Collapse along channel axis - seeing if any other class is present for this voxel.
             label[0] = np.invert(label.any(axis=0))
 
         # Perform transform.
@@ -198,7 +235,10 @@ class TrainingDataset(Dataset):
             input = input.astype(np.single)
         label = label.astype(bool)
 
-        return desc, input, label, mask
+        # Add channel dimension - expected by pytorch.
+        input = np.expand_dims(input, 0)
+
+        return desc, input, label, mask, self.__class_weights
     
 class TestDataset(Dataset):
     def __init__(

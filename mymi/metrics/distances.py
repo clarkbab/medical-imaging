@@ -13,7 +13,7 @@ def distances_deepmind(
     tolerances: Union[float, List[float]]) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -37,12 +37,12 @@ def apl(
     tol: float,
     unit: Literal['mm', 'voxels'] = 'mm') -> float:
     b_to_a_surf_dists = surf_dists[1]   # Only look at dists from 'GT' back to 'pred'. 
-    b_to_a_overlap = b_to_a_surf_dists[b_to_a_surf_dists > tol]
+    b_to_a_non_overlap = b_to_a_surf_dists[b_to_a_surf_dists > tol]
     assert spacing[0] == spacing[1], f"In-plane spacing should be equal when calculating APL, got '{spacing}'."
     if unit == 'mm':
-        return len(b_to_a_overlap) * spacing[0]
+        return len(b_to_a_non_overlap) * spacing[0]
     else:
-        return len(b_to_a_overlap)
+        return len(b_to_a_non_overlap)
 
 def hausdorff_distance(
     surf_dists: Tuple[np.ndarray, np.ndarray],
@@ -67,7 +67,7 @@ def all_distances(
     tols: Union[int, float, List[Union[int, float]]]) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -96,7 +96,7 @@ def surface_distances(
     spacing: types.ImageSpacing3D) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -134,7 +134,7 @@ def batch_mean_all_distances(
     tols: Union[float, List[float]]) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'batch_mean_all_distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'batch_mean_all_distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
     # Average metrics over all batch items.
@@ -161,7 +161,7 @@ def extent_centre_distance(
     """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'extent_centre_distance' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'extent_centre_distance' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'extent_centre_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -188,7 +188,7 @@ def extent_distance(
     """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'extent_distance' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'extent_distance' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'extent_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -215,7 +215,7 @@ def get_encaps_dist_vox(
     """
     if a.shape != b.shape:
         raise ValueError(f"'get_encaps_dist_vox' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"'get_encaps_dist_vox' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"'get_encaps_dist_vox' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
@@ -242,7 +242,7 @@ def get_encaps_dist_mm(
     """
     if a.shape != b.shape:
         raise ValueError(f"'get_encaps_dist_mm' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.bool or b.dtype != np.bool:
+    if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"'get_encaps_dist_mm' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"'get_encaps_dist_mm' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")

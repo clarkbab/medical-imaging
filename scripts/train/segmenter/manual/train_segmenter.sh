@@ -1,24 +1,23 @@
 #! /usr/bin/env bash
-
-module load gcccore/8.3.0
-module load python/3.8.2
-module load web_proxy
+module load python/3.8.6
+source ~/venvs/medical-imaging/bin/activate
+python --version
 
 DATASETS="['PMCC-HN-TEST-SEG','PMCC-HN-TRAIN-SEG']"
-REGION="Submandibular_L"
+REGION="Brain"
 MODEL_NAME="segmenter-$REGION"
 N_EPOCHS=5
-N_GPUS=0
+N_GPUS=1
 N_NODES=1
-N_WORKERS=4
-N_TRAIN=5
+N_WORKERS=1
+N_TRAIN=None
 PRETRAINED_MODEL=None
 RESUME=False
-RESUME_CHECKPOINT=None
-RUN_NAME="test"
+RESUME_CKPT=None
+RUN_NAME="test-sharded"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
-USE_LOGGER=True
+USE_LOGGER=False
 
 python $SCRIPT_DIR/train/segmenter/train.py \
     --datasets $DATASETS \
@@ -34,7 +33,7 @@ python $SCRIPT_DIR/train/segmenter/train.py \
     --use_logger $USE_LOGGER \
     --region $REGION \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --test_fold $TEST_FOLD

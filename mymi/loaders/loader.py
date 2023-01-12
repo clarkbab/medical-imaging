@@ -22,7 +22,6 @@ class Loader:
         batch_size: int = 1,
         check_processed: bool = True,
         extract_patch: bool = False,
-        half_precision: bool = True,
         load_data: bool = True,
         load_test_origin: bool = True,
         n_folds: Optional[int] = 5, 
@@ -89,11 +88,11 @@ class Loader:
         nn_val_samples = train_samples[n_nn_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, half_precision=half_precision, load_data=load_data, spacing=spacing, transform=transform)
+        train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, load_data=load_data, spacing=spacing, transform=transform)
         train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
-        val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, half_precision=half_precision, load_data=load_data, spacing=spacing)
+        val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, load_data=load_data, spacing=spacing)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -111,13 +110,11 @@ class TrainingDataset(Dataset):
         region: str,
         samples: List[Tuple[int, int]],
         extract_patch: bool = False,
-        half_precision: bool = True,
         load_data: bool = True,
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         self.__datasets = datasets
         self.__extract_patch = extract_patch
-        self.__half_precision = half_precision
         self.__load_data = load_data
         self.__region = region
         self.__spacing = spacing
@@ -196,10 +193,7 @@ class TrainingDataset(Dataset):
         input = np.expand_dims(input, axis=0)
 
         # Convert dtypes.
-        if self.__half_precision:
-            input = input.astype(np.half)
-        else:
-            input = input.astype(np.single)
+        input = input.astype(np.single)
         label = label.astype(bool)
 
         return desc, input, label

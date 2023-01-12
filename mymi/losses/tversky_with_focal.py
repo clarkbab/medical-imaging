@@ -4,13 +4,13 @@ from torch import nn
 from .focal import FocalLoss
 from .tversky import TverskyLoss
 
-class TverskyWithFocal(nn.Module):
+class TverskyWithFocalLoss(nn.Module):
     def __init__(self,
         alpha: float = 0.5,
         beta: float = 0.5,
         epsilon: float = 1e-6,
         lam: float = 0.5) -> None:
-        super(TverskyWithFocal, self).__init__()
+        super(TverskyWithFocalLoss, self).__init__()
         self.__tversky = TverskyLoss(alpha=alpha, beta=beta, epsilon=epsilon)
         self.__focal = FocalLoss()
         self.__lam = lam

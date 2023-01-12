@@ -1,10 +1,14 @@
+from fairscale.nn import auto_wrap, default_auto_wrap_policy
+from functools import partial
 import numpy as np
 import os
 import pytorch_lightning as pl
 from scipy.ndimage import center_of_mass
 import torch
 from torch import nn
+from torch.distributed.fsdp import CPUOffload
 from torch.optim import SGD
+from torch.utils.checkpoint import checkpoint_sequential
 from typing import Dict, List, Optional, OrderedDict, Tuple
 import wandb
 
@@ -30,6 +34,7 @@ class Segmenter(pl.LightningModule):
             raise ValueError(f"Localiser requires 'spacing' when calculating 'distances' metric.")
         self.__distances_delay = 50
         self.__distances_interval = 20
+        self.learning_rate = 1e-1   # Shouldn't have '__' as value is set by pytorch-lightning.
         self.__loss = loss
         self.__max_image_batches = 5
         self.__name = None
@@ -37,6 +42,18 @@ class Segmenter(pl.LightningModule):
         pretrained_model = pretrained_model.network if pretrained_model else None
         self.__network = UNet3D(pretrained_model=pretrained_model)
         self.__spacing = spacing
+        self.__first_training_step = True
+
+    def configure_sharded_model(self):
+        auto_wrap_policy = partial(default_auto_wrap_policy, min_num_params=10)
+        self.__network = auto_wrap(self.__network, auto_wrap_policy=auto_wrap_policy)
+        # 'auto_wrap_policy' causes recursive layer wrapping using custom policy, 'device_id' ensures sharding happens
+        # on GPU.
+        # self.__network = FSDP(
+        #     self.__network,
+        #     auto_wrap_policy=auto_wrap_policy,
+        #     cpu_offload=CPUOffload(offload_params=True),
+        #     device_id=torch.distributed.get_rank())
 
     @property
     def network(self) -> nn.Module:
@@ -99,7 +116,7 @@ class Segmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        return SGD(self.parameters(), lr=1e-3, momentum=0.9)
+        return SGD(self.trainer.model.parameters(), lr=1e-3)
 
     def forward(
         self,
@@ -114,7 +131,7 @@ class Segmenter(pl.LightningModule):
         pred = pred.argmax(dim=1)
         
         # Apply postprocessing.
-        pred = pred.cpu().numpy().astype(np.bool)
+        pred = pred.cpu().numpy().astype(np.bool_)
         pred = get_batch_largest_cc(pred)
 
         return pred
@@ -122,6 +139,10 @@ class Segmenter(pl.LightningModule):
     def training_step(self, batch, _):
         # Forward pass.
         _, x, y = batch
+        if self.__first_training_step:
+            print(self.__network)
+            self.__first_training_step = False
+        # y_hat = checkpoint_sequential(self.__network, 10, x)
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y)
 
@@ -147,6 +168,8 @@ class Segmenter(pl.LightningModule):
         #         self.log('train/std-surface', std_sd, **self.__log_args)
         #         self.log('train/max-surface', max_sd, **self.__log_args)
 
+        print(f'[{torch.distributed.get_rank()} - {torch.cuda.current_device()}] Memory allocated: {torch.cuda.memory_allocated()}')
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -154,6 +177,7 @@ class Segmenter(pl.LightningModule):
         if not batch:
             raise ValueError(f"Batch is none")
         descs, x, y = batch
+        # y_hat = checkpoint_sequential(self.__network, 10, x)
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y)
 

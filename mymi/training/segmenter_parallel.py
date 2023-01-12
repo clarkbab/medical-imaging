@@ -126,7 +126,7 @@ def train_segmenter_parallel(
         n_nodes=n_nodes,
         n_sanity_val_steps=0,
         precision=16,
-        strategy='fsdp')
+        strategy='ddp')
 
     # Train the model.
     trainer.fit(model, train_loader, val_loader, **opt_kwargs)

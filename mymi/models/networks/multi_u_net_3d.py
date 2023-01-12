@@ -45,8 +45,8 @@ class Up(nn.Module):
         out_channels: int):
         super().__init__()
 
-        self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
-        self.double_conv = DoubleConv(in_channels, out_channels)
+        self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2)
+        self.double_conv = DoubleConv(2 * out_channels, out_channels)
 
     def forward(self, x, x_res):
         x = self.upsample(x)
@@ -71,7 +71,6 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
-
         self.conv = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
 
     def forward(self, x):
@@ -80,21 +79,22 @@ class OutConv(nn.Module):
 class MultiUNet3D(nn.Module):
     def __init__(
         self,
-        n_classes: int,
+        n_output_channels: int,
         pretrained_model: Optional[nn.Module] = None):
         super().__init__()
 
         # Define layers.
-        self.first = DoubleConv(1, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 1024)
-        self.up1 = Up(1024, 512)
-        self.up2 = Up(512, 256)
-        self.up3 = Up(256, 128)
-        self.up4 = Up(128, 64)
-        self.out = OutConv(64, n_classes + 1)
+        n_features = 8
+        self.first = DoubleConv(1, n_features)
+        self.down1 = Down(n_features, 2 * n_features)
+        self.down2 = Down(2 * n_features, 4 * n_features)
+        self.down3 = Down(4 * n_features, 8 * n_features)
+        self.down4 = Down(8 * n_features, 16 * n_features)
+        self.up1 = Up(16 * n_features, 8 * n_features)
+        self.up2 = Up(8 * n_features, 4 * n_features)
+        self.up3 = Up(4 * n_features, 2 * n_features)
+        self.up4 = Up(2 * n_features, n_features)
+        self.out = OutConv(n_features, n_output_channels)
         self.softmax = nn.Softmax(dim=1)
 
         # Transfer pretrained model.

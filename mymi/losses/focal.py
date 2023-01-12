@@ -10,7 +10,8 @@ class FocalLoss(nn.Module):
         pred: torch.Tensor,
         label: torch.Tensor,
         class_mask: torch.Tensor,
-        class_weights: torch.Tensor) -> float:
+        class_weights: torch.Tensor,
+        epsilon: float = 1e-6) -> float:
         """
         returns: the Focal loss.
         args:
@@ -28,7 +29,7 @@ class FocalLoss(nn.Module):
 
         # Calculate focal loss.
         n_voxels = label.shape[2]
-        inner_loss = label * ((1 - pred) ** 2) * torch.log(pred)
+        inner_loss = label * ((1 - pred) ** 2) * torch.log(pred + epsilon)
         inner_loss = inner_loss.sum(axis=2)
         inner_loss = class_mask * class_weights * inner_loss
         loss = -(1 / n_voxels) * inner_loss.sum(axis=1)

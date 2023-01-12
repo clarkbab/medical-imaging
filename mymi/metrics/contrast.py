@@ -13,7 +13,7 @@ def __contrast_boundary(
     d: float = 5) -> np.ndarray:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.float or b.dtype != np.bool:
+    if a.dtype != np.float or b.dtype != np.bool_:
         raise ValueError(f"Metric 'contrast' expects (float, boolean) arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if b.sum() == 0:
         raise ValueError(f"Metric 'contrast' can't be calculated on empty 'b' set. Got cardinalities '{b.sum()}'.")
@@ -38,7 +38,7 @@ def contrast(
     d: float = 5) -> Tuple[List[float], List[float]]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.float or b.dtype != np.bool:
+    if a.dtype != np.float or b.dtype != np.bool_:
         raise ValueError(f"Metric 'contrast' expects (float, boolean) arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if b.sum() == 0:
         raise ValueError(f"Metric 'contrast' can't be calculated on empty 'b' set. Got cardinalities '{b.sum()}'.")
@@ -59,7 +59,7 @@ def plot_contrast(
     d: float = 5) -> None:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.float or b.dtype != np.bool:
+    if a.dtype != np.float or b.dtype != np.bool_:
         raise ValueError(f"Metric 'contrast' expects (float, boolean) arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if b.sum() == 0:
         raise ValueError(f"Metric 'contrast' can't be calculated on empty 'b' set. Got cardinalities '{b.sum()}'.")
@@ -78,7 +78,7 @@ def plot_contrast_hist(
     d: float = 5) -> None:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.dtype != np.float or b.dtype != np.bool:
+    if a.dtype != np.float or b.dtype != np.bool_:
         raise ValueError(f"Metric 'contrast' expects (float, boolean) arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if b.sum() == 0:
         raise ValueError(f"Metric 'contrast' can't be calculated on empty 'b' set. Got cardinalities '{b.sum()}'.")
