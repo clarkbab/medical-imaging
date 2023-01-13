@@ -3,7 +3,7 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-DATASETS="['PMCC-HN-TEST-SEG','PMCC-HN-TRAIN-SEG']"
+DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
 MODEL_NAME="segmenter-multi"
 N_EPOCHS=5
 N_GPUS=1
@@ -11,10 +11,10 @@ N_NODES=1
 N_WORKERS=1
 N_TRAIN=None
 PRETRAINED_MODEL=None
-REGIONS="['Brain','BrainStem']"
+REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L']"
 RESUME=False
 RESUME_CHECKPOINT=None
-RUN_NAME="test"
+RUN_NAME="gpu-test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
 USE_LOGGER=False

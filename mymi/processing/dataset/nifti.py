@@ -33,10 +33,10 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
+    output_spacing: Optional[types.ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
-    size: Optional[types.ImageSize3D] = None,
-    spacing: Optional[types.ImageSpacing3D] = None) -> None:
+    size: Optional[types.ImageSize3D] = None) -> None:
     if type(regions) == str:
         if regions == 'all':
             regions = RegionNames
@@ -63,7 +63,7 @@ def convert_to_training(
     _write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Notify user.
-    logging.info(f"Creating dataset '{set_t}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and spacing={spacing}.")
+    logging.info(f"Creating dataset '{set_t}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and output_spacing={output_spacing}.")
 
     # Write params.
     if created:
@@ -71,9 +71,9 @@ def convert_to_training(
         params_df = pd.DataFrame({
             'dilate-iter': [str(dilate_iter)],
             'dilate-regions': [str(dilate_regions)],
+            'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
             'regions': [str(regions)],
             'size': [str(size)] if size is not None else ['None'],
-            'spacing': [str(spacing)] if spacing is not None else ['None'],
         })
         params_df.to_csv(filepath)
     else:
@@ -82,9 +82,9 @@ def convert_to_training(
             params_df = pd.DataFrame({
                 'dilate-iter': [str(dilate_iter)],
                 'dilate-regions': [str(dilate_regions)],
+                'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
                 'regions': [str(regions)],
                 'size': [str(size)] if size is not None else ['None'],
-                'spacing': [str(spacing)] if spacing is not None else ['None'],
             })
             params_df.to_csv(filepath)
 
@@ -127,21 +127,21 @@ def convert_to_training(
         for i, pat_id in enumerate(tqdm(pat_ids)):
             # Load input data.
             patient = set.patient(pat_id)
-            old_spacing = patient.ct_spacing
+            spacing = patient.ct_spacing
             input = patient.ct_data
 
             # Resample input.
-            if spacing:
-                input = resample_3D(input, old_spacing, spacing)
+            if output_spacing:
+                input = resample_3D(input, spacing=spacing, output_spacing=output_spacing)
 
             # Crop/pad.
             if size:
                 # Log warning if we're cropping the FOV as we're losing information.
                 if log_warnings:
-                    if spacing:
-                        fov_spacing = spacing
+                    if output_spacing:
+                        fov_spacing = output_spacing
                     else:
-                        fov_spacing = old_spacing
+                        fov_spacing = spacing
                     fov = np.array(input.shape) * fov_spacing
                     new_fov = np.array(size) * fov_spacing
                     for axis in range(len(size)):
@@ -163,8 +163,8 @@ def convert_to_training(
                 label = patient.region_data(regions=region)[region]
 
                 # Resample data.
-                if spacing:
-                    label = resample_3D(label, old_spacing, spacing)
+                if output_spacing:
+                    label = resample_3D(label, spacing=spacing, output_spacing=output_spacing)
 
                 # Crop/pad.
                 if size:
@@ -325,11 +325,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
         if anonymise:
             rtstruct_gt.PatientID = anon_id
             rtstruct_gt.PatientName = anon_id
-<<<<<<< HEAD
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct-gt.dcm')
-=======
         filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct', 'gt.dcm')
->>>>>>> 29a707b (Worked on NIFTI to DICOM combined predictions)
         rtstruct_gt.save_as(filepath)
     
     # Save index.
