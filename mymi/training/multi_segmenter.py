@@ -34,7 +34,6 @@ def train_multi_segmenter(
     n_nodes: int = 1,
     n_train: Optional[int] = None,
     n_workers: int = 1,
-    pretrained_model: Optional[types.ModelName] = None,    
     p_val: float = 0.2,
     regions: types.PatientRegions = 'all',
     resume: bool = False,
@@ -54,9 +53,9 @@ def train_multi_segmenter(
 
     # Load datasets and check for consistent spacing.
     datasets = arg_to_list(dataset, str)
-    spacing_0 = ds.get(datasets[0], 'training').params['spacing']
+    spacing_0 = ds.get(datasets[0], 'training').params['output-spacing']
     for dataset in datasets[1:]:
-        spacing = ds.get(dataset, 'training').params['spacing']
+        spacing = ds.get(dataset, 'training').params['output-spacing']
         if spacing != spacing_0:
             raise ValueError(f'Datasets must have consistent spacing.')
 
@@ -79,13 +78,11 @@ def train_multi_segmenter(
 
     # Create model.
     metrics = ['dice']
-    if pretrained_model:
-        pretrained_model = MultiSegmenter.load(*pretrained_model)
     model = MultiSegmenter(
         regions,
         loss=loss_fn,
         metrics=metrics,
-        pretrained_model=pretrained_model,
+        n_gpus=n_gpus,
         spacing=spacing)
 
     # Create logger.

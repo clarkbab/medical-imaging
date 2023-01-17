@@ -93,8 +93,7 @@ class MultiUNet3D(nn.Module):
     def __init__(
         self,
         n_output_channels: int,
-        n_gpus: int = 1,
-        pretrained_model: Optional[nn.Module] = None):
+        n_gpus: int = 1) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
 
@@ -136,10 +135,6 @@ class MultiUNet3D(nn.Module):
 
         self.out = OutConv(n_features, n_output_channels)
         self.softmax = nn.Softmax(dim=1)
-
-        # Transfer pretrained model.
-        if pretrained_model:
-            self._transfer_model(pretrained_model)
 
     def count_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -209,32 +204,3 @@ class MultiUNet3D(nn.Module):
         x = self.out(x).to(device_3)
         x = self.softmax(x).to(device_3)
         return x
-
-    def _transfer_model(
-        self,
-        model: 'UNet3D') -> None:
-
-        # Copy all layers.
-        self.first = model.first
-        self.down1 = model.down1
-        self.down2 = model.down2
-        self.down3 = model.down3
-        self.down4 = model.down4
-        self.up1 = model.up1
-        self.up2 = model.up2
-        self.up3 = model.up3
-        self.up4 = model.up4
-        self.out = model.out
-
-        # Freeze encoder layers.
-        frozen_modules = [
-            self.first,
-            self.down1,
-            self.down2,
-            self.down3,
-            self.down4
-        ]
-        for module in frozen_modules:
-            for layer in module.children():
-                for param in layer.parameters():
-                    param.requires_grad = False

@@ -27,7 +27,7 @@ class MultiSegmenter(pl.LightningModule):
         regions: types.PatientRegions,
         loss: nn.Module,
         metrics: List[str] = [],
-        pretrained_model: Optional[pl.LightningModule] = None,
+        n_gpus: int = 1,
         spacing: Optional[types.ImageSpacing3D] = None):
         super().__init__()
         if 'distances' in metrics and spacing is None:
@@ -38,11 +38,10 @@ class MultiSegmenter(pl.LightningModule):
         self.__max_image_batches = 5
         self.__name = None
         self.__metrics = metrics
-        pretrained_model = pretrained_model.network if pretrained_model else None
         self.__spacing = spacing
         self.__regions = to_list(regions)
         self.__n_output_channels = len(to_list(self.__regions)) + 1
-        self.__network = MultiUNet3D(self.__n_output_channels, pretrained_model=pretrained_model)
+        self.__network = MultiUNet3D(self.__n_output_channels, n_gpus=n_gpus)
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
@@ -152,13 +151,6 @@ class MultiSegmenter(pl.LightningModule):
                     if class_mask[b, i]:
                         y_i = y[b, i]   
                         y_hat_i = y_hat[b, i]
-                        import os
-                        filepath = '/tmp/tensors/pred.pt'
-                        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                        torch.save(y_hat_i, filepath)
-                        filepath = '/tmp/tensors/label.pt'
-                        torch.save(y_i, filepath)
-                        print('saved tensors')
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 
@@ -188,13 +180,6 @@ class MultiSegmenter(pl.LightningModule):
                     if class_mask[b, i]:
                         y_i = y[b, i]
                         y_hat_i = y_hat[b, i]
-                        import os
-                        filepath = '/tmp/tensors/pred.pt'
-                        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                        torch.save(y_hat_i, filepath)
-                        filepath = '/tmp/tensors/label.pt'
-                        torch.save(y_i, filepath)
-                        print('saved tensors')
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 

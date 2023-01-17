@@ -3,17 +3,16 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
+DATASETS="['PMCC-HN-TEST-MULTI-HALF','PMCC-HN-TRAIN-MULTI-HALF']"
 MODEL_NAME="segmenter-multi"
 N_EPOCHS=5
 N_GPUS=1
 N_NODES=1
 N_WORKERS=1
 N_TRAIN=None
-PRETRAINED_MODEL=None
 REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L']"
 RESUME=False
-RESUME_CHECKPOINT=None
+RESUME_CKPT=None
 RUN_NAME="gpu-test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
@@ -28,10 +27,9 @@ python $SCRIPT_DIR/train/segmenter/train_multi.py \
     --n_nodes $N_NODES \
     --n_train $N_TRAIN \
     --n_workers $N_WORKERS \
-    --pretrained_model $PRETRAINED_MODEL \
     --regions $REGIONS \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --test_fold $TEST_FOLD \

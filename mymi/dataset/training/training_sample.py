@@ -16,18 +16,18 @@ class TrainingSample:
         self.__dataset = dataset
         self.__id = str(id)
         self.__global_id = f'{self.__dataset} - {self.__id}'
-        self.__spacing = self.__dataset.params['spacing']
+        self.__spacing = self.__dataset.params['output-spacing']
 
         # Load sample index.
         if self.__id not in self.__dataset.list_samples():
             raise ValueError(f"Sample '{self.__id}' not found for dataset '{self.__dataset}'.")
         index = self.__dataset.index
         index = index[index['sample-id'] == self.__id]
-        self._index = index
+        self.__index = index
 
     @property
     def index(self) -> str:
-        return self._index
+        return self.__index
 
     @property
     def description(self) -> str:
@@ -45,7 +45,7 @@ class TrainingSample:
         return self.__spacing
 
     def list_regions(self) -> List[str]:
-        return list(sorted(self._index.region))
+        return list(sorted(self.__index.region))
 
     def has_region(
         self,

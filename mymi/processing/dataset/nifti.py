@@ -71,9 +71,9 @@ def convert_to_training(
         params_df = pd.DataFrame({
             'dilate-iter': [str(dilate_iter)],
             'dilate-regions': [str(dilate_regions)],
+            'output-size': [str(size)] if size is not None else ['None'],
             'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
             'regions': [str(regions)],
-            'size': [str(size)] if size is not None else ['None'],
         })
         params_df.to_csv(filepath)
     else:
@@ -82,9 +82,9 @@ def convert_to_training(
             params_df = pd.DataFrame({
                 'dilate-iter': [str(dilate_iter)],
                 'dilate-regions': [str(dilate_regions)],
+                'output-size': [str(size)] if size is not None else ['None'],
                 'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
                 'regions': [str(regions)],
-                'size': [str(size)] if size is not None else ['None'],
             })
             params_df.to_csv(filepath)
 
@@ -98,28 +98,10 @@ def convert_to_training(
         'sample-id': str,
         'origin-dataset': str,
         'patient-id': str,
-        'region': str
+        'region': str,
+        'empty': bool
     }
     index = pd.DataFrame(columns=cols.keys())
-    for i, pat_id in enumerate(pat_ids):
-        # Get patient regions.
-        pat_regions = set.patient(pat_id).list_regions()
-        
-        # Add entries.
-        for region in pat_regions:
-            data = {
-                'dataset': set_t.name,
-                'sample-id': i,
-                'origin-dataset': set.name,
-                'patient-id': pat_id,
-                'region': region
-            }
-            index = append_row(index, data)
-
-    # Write index.
-    index = index.astype(cols)
-    filepath = os.path.join(set_t.path, 'index.csv')
-    index.to_csv(filepath, index=False)
 
     # Write each patient to dataset.
     start = time()
@@ -152,7 +134,7 @@ def convert_to_training(
                 input = top_crop_or_pad_3D(input, size, fill=input.min())
 
             # Save input.
-            _create_training_input(set_t, i, input)
+            __create_training_input(set_t, i, input)
 
             for region in regions:
                 # Skip if patient doesn't have region.
@@ -180,9 +162,28 @@ def convert_to_training(
 
                 # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
                 if label.sum() != 0:
-                    _create_training_label(set_t, i, region, label)
+                    empty = False
+                    __create_training_label(set_t, i, region, label)
+                else:
+                    empty = True
+
+                # Add index entry.
+                data = {
+                    'dataset': set_t.name,
+                    'sample-id': i,
+                    'origin-dataset': set.name,
+                    'patient-id': pat_id,
+                    'region': region,
+                    'empty': empty
+                }
+                index = append_row(index, data)
 
     end = time()
+
+    # Write index.
+    index = index.astype(cols)
+    filepath = os.path.join(set_t.path, 'index.csv')
+    index.to_csv(filepath, index=False)
 
     # Indicate success.
     _write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
@@ -207,7 +208,7 @@ def _print_time(
     path = os.path.join(dataset.path, f'__CONVERT_FROM_NIFTI_TIME_HOURS_{hours}__')
     Path(path).touch()
 
-def _create_training_input(
+def __create_training_input(
     dataset: 'Dataset',
     index: int,
     data: np.ndarray) -> None:
@@ -217,7 +218,7 @@ def _create_training_input(
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=data)
 
-def _create_training_label(
+def __create_training_label(
     dataset: 'Dataset',
     index: int,
     region: str,

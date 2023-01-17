@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
+from mymi.regions import to_list
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
@@ -62,7 +63,7 @@ class TrainingDataset(Dataset):
         params = df.iloc[0].to_dict()
         
         # Replace special columns.
-        cols = ['size', 'spacing']
+        cols = ['output-spacing', 'size']
         for col in cols:
             if col == 'None':
                 params[col] = None
@@ -85,15 +86,14 @@ class TrainingDataset(Dataset):
 
     def list_samples(
         self,
-        regions: Optional[Union[str, List[str]]] = None) -> List[int]:
-        if type(regions) == str:
-            regions = [regions]
+        regions: types.PatientRegions = 'all') -> List[int]:
+        regions = to_list(regions) 
+
+        # Filter out 'empty' labels.
+        index = self.__index[~self.__index['empty']]
 
         # Filter by regions.
-        if regions is not None:
-            index = self.__index[self.__index.region.isin(regions)]
-        else:
-            index = self.__index
+        index = index[index.region.isin(regions)]
 
         # Get sample IDs.
         sample_ids = list(sorted(index['sample-id'].unique()))
