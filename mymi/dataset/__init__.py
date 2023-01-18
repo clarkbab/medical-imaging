@@ -13,18 +13,18 @@ from .other import list as list_other
 def get(
     name: str,
     type: Optional[str] = None,
-    check_processed: bool = True) -> Dataset:
+    **kwargs) -> Dataset:
     if type:
         # Convert from string to type.
         type = to_type(type)
     
         # Create dataset.
         if type == DatasetType.DICOM:
-            return DICOMDataset(name)
+            return DICOMDataset(name, **kwargs)
         elif type == DatasetType.NIFTI:
-            return NIFTIDataset(name)
+            return NIFTIDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
-            return TrainingDataset(name, check_processed=check_processed)
+            return TrainingDataset(name, **kwargs)
         elif type == DatasetType.OTHER:
             return OtherDataset(name)
         else:
@@ -33,22 +33,22 @@ def get(
         # Preference 1: TRAINING.
         proc_ds = list_training()
         if name in proc_ds:
-            return TrainingDataset(name)
+            return TrainingDataset(name, **kwargs)
 
         # Preference 2: NIFTI.
         nifti_ds = list_nifti()
         if name in nifti_ds:
-            return NIFTIDataset(name)
+            return NIFTIDataset(name, **kwargs)
 
         # Preference 3: DICOM.
         dicom_ds = list_dicom()
         if name in dicom_ds:
-            return DICOMDataset(name)
+            return DICOMDataset(name, **kwargs)
 
         # Preference : OTHER.
         other_ds = list_other()
         if name in other_ds:
-            return OtherDataset(name)
+            return OtherDataset(name, **kwargs)
 
 def default() -> Optional[Dataset]:
     """

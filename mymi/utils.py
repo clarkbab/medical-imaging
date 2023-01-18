@@ -16,8 +16,14 @@ from mymi import logging
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
     return pd.concat((df, odf), axis=0)
 
-def append_row(df: pd.DataFrame, data: Dict[str, Union[int, float, str]]) -> pd.DataFrame:
-    return pd.concat((df, pd.DataFrame([data], index=[0])), axis=0)
+def append_row(
+    df: pd.DataFrame,
+    data: Dict[str, Union[int, float, str]],
+    index: Optional[int] = None) -> pd.DataFrame:
+    kwargs = {}
+    if index is not None:
+        kwargs['index'] = [index]
+    return pd.concat((df, pd.DataFrame([data], **kwargs)), axis=0)
 
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()

@@ -1,5 +1,8 @@
 from colorlog import ColoredFormatter
 import logging
+from typing import Any, List, Union
+
+from mymi.utils import arg_assert_lengths
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LEVEL_MAP = {
@@ -57,6 +60,14 @@ def error(*args, **kwargs):
 def critical(*args, **kwargs):
     global logger
     return logger.critical(*args, **kwargs)
+
+def arg_log(
+    action: str,
+    arg_names: Union[str, List[str]],
+    arg_vals: Union[Any, List[Any]]) -> None:
+    arg_assert_lengths((arg_names, arg_vals)) 
+    message = action + ' with ' + ', '.join([f"{arg_name} '{arg_val}'" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
+    info(message)
 
 # Default config.
 config('info')

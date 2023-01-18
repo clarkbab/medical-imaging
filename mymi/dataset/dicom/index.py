@@ -41,7 +41,7 @@ def build_index(
     if from_temp_index:
         if os.path.exists(temp_filepath):
             logging.info(f"Loading saved index for dataset '{dataset}'...")
-            index = pd.read_csv(temp_filepath)
+            index = pd.read_csv(temp_filepath, index_col='index')
             index['mod-spec'] = index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
         else:
             raise ValueError(f"Temporary index doesn't exist for dataset '{dataset}' at filepath '{temp_filepath}'.")
@@ -52,6 +52,7 @@ def build_index(
 
         # Add all DICOM files.
         logging.info(f"Building index for dataset '{dataset}'...")
+        file_index = 0
         for root, _, files in tqdm(os.walk(data_path)):
             for f in files:
                 # Check if DICOM file.
@@ -113,10 +114,11 @@ def build_index(
                     'filepath': filepath,
                     'mod-spec': mod_spec,
                 }
-                index = append_row(index, data)
+                index = append_row(index, data, index=file_index)
+                file_index += 1
     
         # Save index - in case something goes wrong later.
-        index.to_csv(temp_filepath, index=False)
+        index.to_csv(temp_filepath, index=True)
 
     # Create errors index.
     errors = pd.DataFrame(columns=ERRORS_COLS.keys())

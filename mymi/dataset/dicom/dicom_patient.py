@@ -22,7 +22,7 @@ class DICOMPatient:
         else:
             self.__global_id = f"{dataset} - {id}"
         self.__ct_from = ct_from
-        self.__default_rtstruct     # Lazy-loaded.
+        self.__default_rtstruct = None     # Lazy-loaded.
         self.__dataset = dataset
         self.__id = str(id)
         self.__region_map = region_map

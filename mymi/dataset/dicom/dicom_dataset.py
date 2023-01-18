@@ -26,7 +26,8 @@ Z_SPACING_ROUND_DP = 2
 class DICOMDataset(Dataset):
     def __init__(
         self,
-        name: str):
+        name: str,
+        recreate_index: bool = False):
         self.__path = os.path.join(config.directories.datasets, 'dicom', name)
 
         # Load 'ct_from' flag.
@@ -45,7 +46,7 @@ class DICOMDataset(Dataset):
 
         # Load index.
         filepath = os.path.join(self.__path, 'index.csv')
-        if not os.path.exists(filepath):
+        if recreate_index or not os.path.exists(filepath):
             build_index(name)
         try:
             self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str })
