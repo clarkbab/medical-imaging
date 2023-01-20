@@ -6,9 +6,6 @@ import sys
 filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(filepath)))
 sys.path.append(mymi_dir)
-from mymi import config
 from mymi.download.pacs import download_dicoms
 
-FILEPATH = os.path.join(config.directories.files, 'patient-specific-models', 'data', 'urn.txt')
-
-download_dicoms(FILEPATH)
+download_dicoms()

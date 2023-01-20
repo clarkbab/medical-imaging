@@ -143,14 +143,6 @@ def load_csv(
     else:
         return None
 
-def arg_log(
-    action: str,
-    arg_names: Union[str, List[str]],
-    arg_vals: Union[Any, List[Any]]) -> None:
-    arg_assert_lengths((arg_names, arg_vals)) 
-    msg = action + ' with ' + ', '.join([f"{arg_name} '{arg_val}'" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
-    logging.info(msg)
-
 def arg_assert_lengths(args: List[List[Any]]) -> None:
     len_0 = len(args[0])
     for arg in args[1:]:
