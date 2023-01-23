@@ -6,7 +6,7 @@ import pydicom
 from pydicom.dataset import Dataset
 from pynetdicom import AE
 from pynetdicom.sop_class import StudyRootQueryRetrieveInformationModelFind
-from typing import List, Literal, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi import logging
@@ -29,7 +29,7 @@ def download_dicoms(
     date_format: str = '%d/%m/%Y',
     sep: str = '\t') -> None:
     # Load patient file.
-    df = load_csv('patient-specific-models', 'data', 'urn.txt', sep=sep)
+    df = load_csv('patient-specific-models', 'data', 'urn.txt', names=['patient-id', 'study-date'], header=None, sep=sep)
 
     # Create error table.
     cols = {
@@ -57,10 +57,9 @@ def download_patient_dicoms(
     logging.arg_log("Downloading patient DICOMS", ('pat_id', 'study_date'), (pat_id, study_date))
 
     # Download RTDOSE files. Allow 1 week for creation of these after CT creation.
-    study_date_start = datetime.strftime(study_date, PACS_DT_FORMAT)
-    study_date_end = datetime.strftime(study_date + relativedelta(days=RTDOSE_DELAY_DAYS), PACS_DT_FORMAT)
-    study_date = f'{study_date_start}-{study_date_end}'
-    query_results = download_patient_rtdose_dicoms(pat_id, study_date)
+    start_date = study_date
+    end_date = study_date + relativedelta(days=RTDOSE_DELAY_DAYS)
+    query_results = download_patient_rtdose_dicoms(pat_id, start_date, end_date)
 
     if len(query_results) == 0:
         # Add error entry.
@@ -129,11 +128,12 @@ def download_patient_dicoms(
 
 def download_patient_rtdose_dicoms(
     pat_id: types.PatientID,
-    study_date: str) -> List[Tuple[str, str]]:
-    logging.arg_log("Downloading patient RTDOSE dicoms", ('pat_id', 'study_date'), (pat_id, study_date))
+    start_date: datetime,
+    end_date: datetime) -> List[Tuple[str, str]]:
+    logging.arg_log("Downloading patient RTDOSE dicoms", ('pat_id', 'start_date', 'end_date'), (pat_id, start_date, end_date))
 
     # Search for RTDOSE files by date.
-    query_results = queryPACS(pat_id, 'IMAGE', 'RTDOSE', study_date=study_date)
+    query_results = queryPACS(pat_id, 'RTDOSE', start_date=start_date, end_date=end_date)
     print(query_results)
 
     for study_id, series_id, sop_id in query_results:
@@ -166,7 +166,7 @@ def download_patient_rtplan_dicoms(
     rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
 
     # Query for RTPLAN dicoms.
-    query_results = queryPACS(pat_id, 'IMAGE', 'RTPLAN', sop_id=rtplan_id) 
+    query_results = queryPACS(pat_id, 'RTPLAN', sop_id=rtplan_id) 
 
     for study_id, series_id, sop_id in query_results:
         # Create RTPLAN folder.
@@ -198,7 +198,7 @@ def download_patient_rtstruct_dicoms(
     rtstruct_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
 
     # Query for RTSTRUCT dicoms.
-    query_results = queryPACS(pat_id, 'IMAGE', 'RTSTRUCT', sop_id=rtstruct_id) 
+    query_results = queryPACS(pat_id, 'RTSTRUCT', sop_id=rtstruct_id) 
 
     for study_id, series_id, sop_id in query_results:
         # Create RTSTRUCT folder.
@@ -230,7 +230,7 @@ def download_patient_ct_dicoms(
     ct_series_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
 
     # Query for CT dicoms.
-    query_results = queryPACS(pat_id, 'SERIES', 'CT', series_id=ct_series_id)
+    query_results = queryPACS(pat_id, 'CT', series_id=ct_series_id)
     print(query_results)
 
     for study_id, series_id in query_results:
@@ -257,11 +257,16 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
 
 def queryPACS(
     pat_id: types.PatientID,
-    level: Literal['IMAGE', 'SERIES'],
     modality: Literal['CT', 'RTDOSE', 'RTPLAN', 'RTSTRUCT'],
     series_id: str = '*',
     sop_id: str = '*',
-    study_date: str = '*') -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    end_date: Optional[datetime] = None,
+    start_date: Optional[datetime] = None) -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    # Determine query retrieve level.
+    if modality == 'CT':
+        level = 'SERIES'
+    elif modality in ('RTDOSE', 'RTPLAN', 'RTSTRUCT'):
+        level = 'IMAGE'
 
     # Connect with remote server.
     ae = AE()
@@ -276,7 +281,7 @@ def queryPACS(
         ds.PatientID = str(pat_id)
         ds.QueryRetrieveLevel = level
         ds.Modality = modality
-        ds.StudyDate = study_date
+        ds.StudyDate = '*'      # Filter dates in python - faster than using the query.
         ds.SeriesInstanceUID = series_id
         ds.StudyInstanceUID = '*'
         if level == 'IMAGE':
@@ -288,18 +293,32 @@ def queryPACS(
         # Use the C-FIND service to send the identifier
         responses = assoc.send_c_find(ds, StudyRootQueryRetrieveInformationModelFind)
 
+        # Filter responses based on date.
+        def response_filter(response):
+            status, identifier = response
+            # Filter on status.
+            if status.Status not in (0xFF00, 0xFF01):
+                return False
+
+            # Filter on date.
+            study_dt = datetime.strptime(identifier.StudyDate, PACS_DT_FORMAT)
+            if start_date is not None and study_dt < start_date:
+                return False
+            elif end_date is not None and study_dt > end_date:
+                return False
+            return True
+        responses = filter(response_filter, responses)
+
         for (status, identifier) in responses:
             if status:
                 #print('C-FIND query status: 0x{0:04x}'.format(status.Status))
 
-                # If the status is 'Pending' then identifier is the C-FIND response
-                if status.Status in (0xFF00, 0xFF01):
-                    print('=== response ===')
-                    print(identifier)
-                    result = [identifier.StudyInstanceUID, identifier.SeriesInstanceUID]
-                    if level == 'IMAGE':
-                        result.append(identifier.SOPInstanceUID)
-                    results.append(result)
+                print('=== response ===')
+                print(identifier)
+                result = [identifier.StudyInstanceUID, identifier.SeriesInstanceUID]
+                if level == 'IMAGE':
+                    result.append(identifier.SOPInstanceUID)
+                results.append(result)
             else:
                 print('Connection timed out, was aborted or received invalid response')
 
