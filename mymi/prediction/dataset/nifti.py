@@ -18,7 +18,7 @@ from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import crop_foreground_3D, crop_or_pad_3D, resample_3D
 from mymi import types
-from mymi.utils import Timer, append_row, arg_broadcast, arg_log, arg_to_list, encode, load_csv
+from mymi.utils import Timer, append_row, arg_broadcast, arg_to_list, encode, load_csv
 
 def get_localiser_prediction(
     dataset: str,

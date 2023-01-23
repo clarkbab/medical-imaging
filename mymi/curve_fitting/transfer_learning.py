@@ -16,7 +16,7 @@ from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
 from mymi.metrics import is_higher_better
 from mymi.regions import RegionNames
-from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_log, arg_to_list, encode
+from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_to_list, encode
 
 DEFAULT_FONT_SIZE = 15
 DEFAULT_MAX_NFEV = int(1e6)
@@ -69,7 +69,7 @@ def create_bootstrap_predictions(
     if '{tol}' in metric:
         metric = metric.replace('{tol}', str(get_region_tolerance(region)))
     arg_assert_literal(stat, ('mean', 'q1', 'q3'))
-    arg_log('Creating bootstrap predictions', ('datasets', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
+    logging.arg_log('Creating bootstrap predictions', ('datasets', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
 
     # Load samples.
     samples, n_trains = load_bootstrap_samples(datasets, region, model_type, metric, stat, include_n_trains=True, n_samples=n_samples)
@@ -137,7 +137,7 @@ def create_bootstrap_samples(
     if '{tol}' in metric:
         metric = metric.replace('{tol}', str(get_region_tolerance(region)))
     arg_assert_literal(stat, ('mean', 'q1', 'q3'))
-    arg_log('Creating bootstrap samples', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
+    logging.arg_log('Creating bootstrap samples', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_type, metric, stat))
 
     # Load all 'model_type' data.
     df = load_evaluation_data(datasets, region, model_type)
@@ -173,7 +173,7 @@ def create_bootstrap_samples_and_predictions(
     metrics = arg_to_list(metric, str)
     stats = arg_to_list(stat, str)
     arg_assert_literal_list(stats, str, ('mean', 'q1', 'q3'))
-    arg_log('Creating bootstrap samples and predictions', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_types, metrics, stats))
+    logging.arg_log('Creating bootstrap samples and predictions', ('dataset', 'region', 'model_type', 'metric', 'stat'), (datasets, region, model_types, metrics, stats))
 
     # Create samples and prediction from curve fitting.
     for model_type in model_types:

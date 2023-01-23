@@ -7,7 +7,7 @@ from mymi import dataset as ds
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.types import PatientID
-from mymi.utils import append_row, arg_log, arg_to_list, encode, load_csv, save_csv
+from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
 
 def get_loader_manifest(
     dataset: Union[str, List[str]],
@@ -152,7 +152,7 @@ def create_multi_loader_manifest(
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> None:
     datasets = arg_to_list(dataset, str)
-    arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
+    logging.arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
 
     # Get manifest.
     df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, test_fold=test_fold)

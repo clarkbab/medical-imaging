@@ -19,7 +19,7 @@ from mymi.models.systems import MultiSegmenter
 from mymi.regions import to_list
 from mymi.reporting.loaders import get_multi_loader_manifest
 from mymi import types
-from mymi.utils import arg_log, arg_to_list
+from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
@@ -45,7 +45,7 @@ def train_multi_segmenter(
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
     model_name = model
-    arg_log('Training model', ('dataset', 'model', 'run'), (dataset, model, run))
+    logging.arg_log('Training model', ('dataset', 'model', 'run'), (dataset, model, run))
 
     # 'libgcc'
     import ctypes

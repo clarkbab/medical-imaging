@@ -50,9 +50,9 @@ class DICOMStudy:
 
     @property
     def default_rtstruct(self) -> RTSTRUCTSeries:
-        rt_series_id = self.list_series('RTSTRUCT')[0]
-        rt_series = self.series(rt_series_id, 'RTSTRUCT')
-        return rt_series
+        if self.__default_rtstruct is None:
+            self.__load_default_rtstruct
+        return self.__default_rtstruct
 
     def list_series(
         self,
@@ -77,3 +77,18 @@ class DICOMStudy:
             return RTDOSESeries(self, id, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
+
+    def __load_default_rtstruct(self) -> None:
+        rtstruct_series_id = self.list_series('RTSTRUCT')[0]
+        rtstruct_series = self.series(rtstruct_series_id, 'RTSTRUCT')
+        self.__default_rtstruct = rtstruct_series
+
+    @property
+    def ct_data(self):
+        return self.default_rtstruct.ref_ct.data
+
+    def list_regions(self, *args, **kwargs):
+        return self.default_rtstruct.list_regions(*args, **kwargs)
+
+    def region_data(self, *args, **kwargs):
+        return self.default_rtstruct.region_data(*args, **kwargs)

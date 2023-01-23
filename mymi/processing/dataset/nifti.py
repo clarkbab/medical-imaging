@@ -23,7 +23,7 @@ from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
-from mymi.utils import append_row, arg_log, arg_to_list, load_csv, save_csv
+from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_to_training(
     dataset: str,
@@ -232,7 +232,7 @@ def __create_training_label(
 def convert_segmenter_predictions_to_dicom_from_all_patients(
     n_pats: int,
     anonymise: bool = True) -> None:
-    arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
+    logging.arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
 
     # Load 'all-patients.csv'.
     df = load_csv('transfer-learning', 'data', 'all-patients.csv')
@@ -410,7 +410,7 @@ def combine_segmenter_predictions_from_all_patients(
     n_pats: int,
     model_type: str = 'clinical') -> None:
     datasets = arg_to_list(dataset, str)
-    arg_log("Combining (NIFTI) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
+    logging.arg_log("Combining (NIFTI) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
 
     # Load 'all-patients.csv'.
     df = load_csv('transfer-learning', 'data', 'all-patients.csv')
