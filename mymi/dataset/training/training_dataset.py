@@ -63,7 +63,7 @@ class TrainingDataset(Dataset):
         params = df.iloc[0].to_dict()
         
         # Replace special columns.
-        cols = ['output-spacing', 'size']
+        cols = ['output-size', 'output-spacing']
         for col in cols:
             if col == 'None':
                 params[col] = None

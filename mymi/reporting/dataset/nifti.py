@@ -278,13 +278,12 @@ def create_ct_summary(
 
 def load_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> Optional[pd.DataFrame]:
+    regions: types.PatientRegions = 'all') -> pd.DataFrame:
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
-    if os.path.exists(filepath):
-        return pd.read_csv(filepath)
-    else:
-        return None
+    if not os.path.exists(filepath):
+        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
+    return pd.read_csv(filepath)
 
 def create_segmenter_prediction_figures(
     dataset: Union[str, List[str]],

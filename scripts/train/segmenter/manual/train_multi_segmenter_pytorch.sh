@@ -3,10 +3,10 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-DATASETS="['PMCC-HN-TEST-MULTI-HALF','PMCC-HN-TRAIN-MULTI-HALF']"
+DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
 MODEL_NAME="segmenter-multi"
 N_EPOCHS=5
-N_GPUS=2
+N_GPUS=4
 N_NODES=1
 N_WORKERS=1
 N_TRAIN=None
@@ -18,7 +18,7 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
 USE_LOGGER=False
 
-python $SCRIPT_DIR/train/segmenter/train_multi.py \
+python $SCRIPT_DIR/train/segmenter/train_multi_pytorch.py \
     --dataset $DATASETS \
     --model $MODEL_NAME \
     --run $RUN_NAME \
