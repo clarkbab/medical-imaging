@@ -1,59 +1,57 @@
-import os
 import pandas as pd
-import pydicom as dcm
+from typing import List, Optional
 
-from .rtstruct_series import RTSTRUCTSeries
-from .dicom_series import DICOMModality, DICOMSeries
+from .dicom_file import SOPInstanceUID
+from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
+from .region_map import RegionMap
+from .rtplan import RTPLAN
 
 class RTPLANSeries(DICOMSeries):
     def __init__(
         self,
         study: 'DICOMStudy',
-        id: str) -> None:
-        self._global_id = f"{study} - {id}"
-        self._study = study
-        self._id = id
+        id: SeriesInstanceUID) -> None:
+        self.__global_id = f"{study} - {id}"
+        self.__id = id
+        self.__study = study
 
         # Get index.
-        index = self._study.index
+        index = self.__study.index
         index = index[(index.modality == 'RTPLAN') & (index['series-id'] == id)]
-        self._index = index
-        if len(index) != 1:
-            raise ValueError(f"Index length '{len(index)}' for  series '{self}'.")
-        self._path = index.iloc[0]['filepath']
-
-        # Check that series exists.
-        if len(index) == 0:
-            raise ValueError(f"RTPLAN series '{self}' not found in index for study '{study}'.")
+        self.__index = index
+        self.__check_index()
 
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
-    def index(self) -> pd.DataFrame:
-        return self._index
-
-    @property
-    def id(self) -> str:
-        return self._id
+    def id(self) -> SOPInstanceUID:
+        return self.__id
 
     @property
     def modality(self) -> DICOMModality:
         return DICOMModality.RTPLAN
 
     @property
-    def path(self) -> str:
-        return self._path
+    def study(self) -> str:
+        return self.__study
 
     @property
-    def study(self) -> str:
-        return self._study
+    def index(self) -> pd.DataFrame:
+        return self.__index
+
+    def list_rtplans(self) -> List[SOPInstanceUID]:
+        return list(sorted(self.__index['sop-id']))
+
+    def rtplan(
+        self,
+        id: SOPInstanceUID) -> RTPLAN:
+        return RTPLAN(self, id)
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
 
-    def get_rtplan(self) -> dcm.dataset.FileDataset:
-        filepath = self._index.iloc[0].filepath
-        rtplan = dcm.read_file(filepath)
-        return rtplan
+    def __check_index(self) -> None:
+        if len(self.__index) == 0:
+            raise ValueError(f"RTPLANSeries '{self}' not found in index for study '{self.__study}'.")

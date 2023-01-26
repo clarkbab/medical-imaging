@@ -1,88 +1,57 @@
-import numpy as np
 import pandas as pd
-import pydicom as dcm
-from mymi import types
+from typing import List, Optional
 
-from .dicom_series import DICOMModality, DICOMSeries
-from mymi.transforms import resample_3D
+from .dicom_file import SOPInstanceUID
+from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
+from .region_map import RegionMap
+from .rtdose import RTDOSE
 
 class RTDOSESeries(DICOMSeries):
     def __init__(
         self,
         study: 'DICOMStudy',
-        id: str) -> None:
-        self._global_id = f"{study} - {id}"
-        self._study = study
-        self._id = id
+        id: SeriesInstanceUID) -> None:
+        self.__global_id = f"{study} - {id}"
+        self.__id = id
+        self.__study = study
 
         # Get index.
-        index = self._study.index
+        index = self.__study.index
         index = index[(index.modality == 'RTDOSE') & (index['series-id'] == id)]
-        self._index = index
-        self._path = index.iloc[0].filepath
-
-        # Check that series exists.
-        if len(index) == 0:
-            raise ValueError(f"RTDOSE series '{self}' not found in index for study '{study}'.")
+        self.__index = index
+        self.__check_index()
 
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
-    def id(self) -> str:
-        return self._id
+    def id(self) -> SOPInstanceUID:
+        return self.__id
 
     @property
     def modality(self) -> DICOMModality:
         return DICOMModality.RTDOSE
 
     @property
-    def index(self) -> pd.DataFrame:
-        return self._index
-
-    @property
     def study(self) -> str:
-        return self._study
+        return self.__study
 
     @property
-    def path(self) -> str:
-        return self._path
+    def index(self) -> pd.DataFrame:
+        return self.__index
+
+    def list_rtdoses(self) -> List[SOPInstanceUID]:
+        return list(sorted(self.__index['sop-id']))
+
+    def rtdose(
+        self,
+        id: SOPInstanceUID) -> RTDOSE:
+        return RTDOSE(self, id)
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
 
-    def get_rtdose(self) -> dcm.dataset.FileDataset:
-        filepath = self._index.iloc[0].filepath
-        rtdose = dcm.read_file(filepath)
-        return rtdose
-
-    @property
-    def data(self) -> np.ndarray:
-        patient = self.study.patient
-        rtdose = self.get_rtdose()
-        data = np.transpose(rtdose.pixel_array)
-        data = rtdose.DoseGridScaling * data
-        data = resample_3D(data, origin=self.offset, spacing=self.spacing, output_origin=patient.ct_offset, output_size=patient.ct_size, output_spacing=patient.ct_spacing) 
-        return data
-
-    @property
-    def offset(self) -> types.PhysPoint3D:
-        rtdose = self.get_rtdose()
-        offset = rtdose.ImagePositionPatient
-        offset = tuple(int(s) for s in offset)
-        return offset
-
-    @property
-    def size(self) -> types.ImageSize3D:
-        return self.data.shape
-
-    @property
-    def spacing(self) -> types.ImageSpacing3D:
-        rtdose = self.get_rtdose()
-        spacing_x_y = rtdose.PixelSpacing 
-        z_diffs = np.unique(np.diff(rtdose.GridFrameOffsetVector))
-        assert len(z_diffs) == 1
-        spacing_z = z_diffs[0]
-        spacing = tuple(np.append(spacing_x_y, spacing_z))
-        return spacing
+    def __check_index(self) -> None:
+        if len(self.__index) == 0:
+            raise ValueError(f"RTDOSESeries '{self}' not found in index for study '{self.__study}'.")

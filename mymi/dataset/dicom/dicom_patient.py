@@ -40,8 +40,52 @@ class DICOMPatient:
             raise ValueError(f"Patient '{self}' not found in index for dataset '{dataset}'.")
 
     @property
+    def age(self) -> str:
+        return getattr(self.get_cts()[0], 'PatientAge', '')
+
+    @property
+    def birth_date(self) -> str:
+        return self.get_cts()[0].PatientBirthDate
+
+    @property
+    def ct_data(self):
+        return self.default_rtstruct.ref_ct.data
+
+    @property
+    def ct_from(self) -> str:
+        return self.__ct_from
+
+    @property
+    def ct_offset(self):
+        return self.default_rtstruct.ref_ct.offset
+
+    @property
+    def ct_size(self):
+        return self.default_rtstruct.ref_ct.size
+
+    @property
+    def ct_spacing(self):
+        return self.default_rtstruct.ref_ct.spacing
+
+    @property
     def description(self) -> str:
         return self.__global_id
+
+    @property
+    def dose_data(self):
+        return self.default_rtdose.data
+
+    @property
+    def dose_offset(self):
+        return self.default_rtdose.offset
+
+    @property
+    def dose_size(self):
+        return self.default_rtdose.size
+
+    @property
+    def dose_spacing(self):
+        return self.default_rtdose.spacing
 
     @property
     def id(self) -> str:
@@ -51,28 +95,9 @@ class DICOMPatient:
     def index(self) -> pd.DataFrame:
         return self.__index
 
-    def __str__(self) -> str:
-        return self.__global_id
-
-    @property
-    def age(self) -> str:
-        return getattr(self.get_cts()[0], 'PatientAge', '')
-
-    @property
-    def birth_date(self) -> str:
-        return self.get_cts()[0].PatientBirthDate
-
-    @property
-    def ct_from(self) -> str:
-        return self.__ct_from
-
     @property
     def dataset(self) -> str:
         return self.__dataset
-
-    @property
-    def id(self) -> str:
-        return self.__id
 
     @property
     def default_rtdose(self) -> str:
@@ -93,6 +118,10 @@ class DICOMPatient:
         return self.__default_rtstruct
 
     @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
     def name(self) -> str:
         return self.get_cts()[0].PatientName
 
@@ -108,14 +137,26 @@ class DICOMPatient:
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
-    def list_studies(self) -> List[str]:
-        studies = list(sorted(self.__index['study-id'].unique()))
-        return studies
+    def ct_orientation(self, *args, **kwargs):
+        return self.default_rtstruct.ref_ct.orientation(*args, **kwargs)
 
-    def study(
-        self,
-        id: str) -> DICOMStudy:
-        return DICOMStudy(self, id, region_map=self.__region_map)
+    def ct_slice_summary(self, *args, **kwargs):
+        return self.default_rtstruct.ref_ct.slice_summary(*args, **kwargs)
+
+    def ct_summary(self, *args, **kwargs):
+        return self.default_rtstruct.ref_ct.summary(*args, **kwargs)
+
+    def get_rtdose(self, *args, **kwargs):
+        return self.__default_rtdose_series.get_rtdose(*args, **kwargs)
+
+    def get_cts(self, *args, **kwargs):
+        return self.default_rtstruct.ref_ct.get_cts(*args, **kwargs)
+ 
+    def get_rtstruct(self, *args, **kwargs):
+        return self.default_rtstruct.get_rtstruct(*args, **kwargs)
+
+    def has_region(self, *args, **kwargs):
+        return self.default_rtstruct.has_region(*args, **kwargs)
 
     def info(self) -> pd.DataFrame:
         # Define dataframe structure.
@@ -143,6 +184,24 @@ class DICOMPatient:
 
         return df
 
+    def list_studies(self) -> List[str]:
+        studies = list(sorted(self.__index['study-id'].unique()))
+        return studies
+
+    def list_regions(self, *args, **kwargs):
+        return self.default_rtstruct.list_regions(*args, **kwargs)
+
+    def region_data(self, *args, **kwargs):
+        return self.default_rtstruct.region_data(*args, **kwargs)
+
+    def region_summary(self, *args, **kwargs):
+        return self.default_rtstruct.region_summary(*args, **kwargs)
+
+    def study(
+        self,
+        id: str) -> DICOMStudy:
+        return DICOMStudy(self, id, region_map=self.__region_map)
+
     def __load_default_rtstruct(self) -> None:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
         study_id = self.list_studies()[0]
@@ -156,69 +215,5 @@ class DICOMPatient:
         self.__default_rtplan = study.default_rtplan
         self.__default_rtdose = study.default_rtdose
 
-    # Proxy calls to default series.
-
-    @property
-    def ct_data(self):
-        return self.default_rtstruct.ref_ct.data
-
-    @property
-    def ct_offset(self):
-        return self.default_rtstruct.ref_ct.offset
-
-    @property
-    def ct_size(self):
-        return self.default_rtstruct.ref_ct.size
-
-    @property
-    def ct_spacing(self):
-        return self.default_rtstruct.ref_ct.spacing
-
-    @property
-    def dose_data(self):
-        return self.default_rtdose.data
-
-    @property
-    def dose_offset(self):
-        return self.default_rtdose.offset
-
-    @property
-    def dose_size(self):
-        return self.default_rtdose.size
-
-    @property
-    def dose_spacing(self):
-        return self.default_rtdose.spacing
-
-    def ct_orientation(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.orientation(*args, **kwargs)
-
-    def ct_slice_summary(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.slice_summary(*args, **kwargs)
-
-    def ct_summary(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.summary(*args, **kwargs)
-
-    def get_rtdose(self, *args, **kwargs):
-        return self.__default_rtdose_series.get_rtdose(*args, **kwargs)
-
-    def get_cts(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.get_cts(*args, **kwargs)
-
-    def get_first_ct(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.get_first_ct(*args, **kwargs)
- 
-    def get_rtstruct(self, *args, **kwargs):
-        return self.default_rtstruct.get_rtstruct(*args, **kwargs)
-
-    def has_region(self, *args, **kwargs):
-        return self.default_rtstruct.has_region(*args, **kwargs)
-
-    def list_regions(self, *args, **kwargs):
-        return self.default_rtstruct.list_regions(*args, **kwargs)
-
-    def region_data(self, *args, **kwargs):
-        return self.default_rtstruct.region_data(*args, **kwargs)
-
-    def region_summary(self, *args, **kwargs):
-        return self.default_rtstruct.region_summary(*args, **kwargs)
+    def __str__(self) -> str:
+        return self.__global_id

@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Dict, List, Optional
 
 from .ct_series import CTSeries
-from .dicom_series import DICOMSeries
+from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
 from .region_map import RegionMap
 from .rtdose_series import RTDOSESeries
 from .rtplan_series import RTPLANSeries
@@ -72,7 +72,7 @@ class DICOMStudy:
 
     def list_series(
         self,
-        modality: str) -> List[str]:
+        modality: str) -> List[SeriesInstanceUID]:
         index = self.__index
         index = index[index.modality == modality]
         series = list(sorted(index['series-id'].unique()))
@@ -80,8 +80,8 @@ class DICOMStudy:
 
     def series(
         self,
-        id: str,
-        modality: str,
+        id: SeriesInstanceUID,
+        modality: DICOMModality,
         **kwargs: Dict) -> DICOMSeries:
         if modality == 'CT':
             return CTSeries(self, id, **kwargs)

@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-from typing import Literal, Sequence, Tuple, Union
+from typing import List, Literal, Sequence, Tuple, Union
 
 Point2D = Tuple[int, int]
 Point3D = Tuple[int, int, int]
@@ -14,7 +14,8 @@ PhysPoint2D = Tuple[float, float]
 PhysPoint3D = Tuple[float, float, float]
 PatientIDs = Union[Literal['all'], PatientID, Sequence[PatientID]]
 PatientView = Literal['axial', 'sagittal', 'coronal'],
-PatientRegions = Union[Literal['all'], str, Sequence[str]]
+PatientRegion = str
+PatientRegions = Union[PatientRegion, List[PatientRegion], Literal['all']]
 TrainingPartition = Literal['train', 'validation', 'test']
 ImageSize2D = Tuple[int, int]
 ImageSize3D = Tuple[int, int, int]
