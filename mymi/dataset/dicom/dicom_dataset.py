@@ -135,26 +135,18 @@ class DICOMDataset(Dataset):
 
     def list_regions(
         self,
-        n_pats: Union[str, int] = 'all',
         pat_ids: types.PatientIDs = 'all',
         trimmed: bool = False,
         use_mapping: bool = True) -> pd.DataFrame:
-        # Define table structure.
-        cols = {
-            'patient-id': str,
-            'region': str,
-        }
-        df = pd.DataFrame(columns=cols.keys())
 
         # Load each patient.
         pats = self.list_patients(trimmed=trimmed)
 
         # Filter patients.
         pats = list(filter(self._filter_patient_by_pat_ids(pat_ids), pats))
-        pats = list(filter(self._filter_patient_by_n_pats(n_pats), pats))
 
-        # Add patient regions.
-        logging.info(f"Loading regions for dataset '{self.__name}'..")
+        # Get patient regions.
+        regions = []
         for pat in tqdm(pats):
             try:
                 pat_regions = self.patient(pat, trimmed=trimmed).list_regions(use_mapping=use_mapping)
@@ -165,17 +157,9 @@ class DICOMDataset(Dataset):
                 else:
                     raise e
 
-            for pat_region in pat_regions:
-                data = {
-                    'patient-id': pat,
-                    'region': pat_region
-                }
-                df = append_row(df, data)
+            regions += pat_regions
 
-        # Set column types.
-        df = df.astype(cols)
-
-        return df
+        return list(np.unique(regions))
 
     def _load_index(self) -> pd.DataFrame:
         filepath = os.path.join(self.__path, 'index.csv')

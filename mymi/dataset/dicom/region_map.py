@@ -14,11 +14,11 @@ class RegionMap:
         args:
             data: the mapping data.
         """
-        self._data = data
+        self.__data = data
 
     @property
     def data(self) -> pd.DataFrame:
-        return self._data
+        return self.__data
 
     def to_internal(
         self,
@@ -30,7 +30,7 @@ class RegionMap:
             region: the region name to map.
         """
         # Iterrate over map rows.
-        for _, row in self._data.iterrows():
+        for _, row in self.__data.iterrows():
             # Create pattern match args.
             args = [row.dataset, region]
             

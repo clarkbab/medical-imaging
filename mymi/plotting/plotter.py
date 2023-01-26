@@ -326,10 +326,14 @@ def plot_region(
     view: types.PatientView = 'axial') -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
 
-    # Create plot figure/axis.
     if ax is None:
+        # Create figure/axes.
         plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
+    else:
+        # Assume that parent routine will call 'plt.show()' after
+        # all axes are plotted.
+        show = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -506,6 +510,7 @@ def plot_region(
         logging.info(f"Saved plot to '{savepath}'.")
 
     if show:
+        logging.info('showing')
         plt.show()
 
         # Revert latex settings.

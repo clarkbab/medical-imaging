@@ -24,37 +24,34 @@ def plot_region(
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     **kwargs) -> None:
-    regions = arg_to_list(region, str)
-    region_labels = arg_to_list(region_label, str)
 
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data
-    region_data = patient.region_data(regions=regions) if regions is not None else None
+    region_data = patient.region_data(region=region) if region is not None else None
     spacing = patient.ct_spacing
     dose_data = patient.dose_data if show_dose else None
 
     if centre_of is not None:
         if type(centre_of) == str:
             if region_data is None or centre_of not in region_data:
-                centre_of = patient.region_data(regions=centre_of)[centre_of]
+                centre_of = patient.region_data(region=centre_of)[centre_of]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = patient.region_data(regions=crop)[crop]
+                crop = patient.region_data(region=crop)[crop]
 
-    if region_labels is not None:
-        # Rename 'regions' and 'region_data' keys.
-        regions = [region_labels[r] if r in region_labels else r for r in regions]
-        for old, new in region_labels.items():
+    if region_label is not None:
+        # Rename regions.
+        for old, new in region_label.items():
             region_data[new] = region_data.pop(old)
 
         # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_labels:
-            centre_of = region_labels[centre_of] 
-        if type(crop) == str and crop in region_labels:
-            crop = region_labels[crop]
+        if type(centre_of) == str and centre_of in region_label:
+            centre_of = region_label[centre_of] 
+        if type(crop) == str and crop in region_label:
+            crop = region_label[crop]
 
     # Plot.
     plot_region_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)

@@ -4,7 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 from typing import List
 
-from mymi import dataset as ds
+from mymi.dataset.dicom import DICOMDataset
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
 from mymi import types
@@ -18,7 +18,7 @@ def create_evaluation_report(
     region: str) -> None:
     # Save report.
     eval_df = evaluate_model(dataset, localiser, segmenter, region)
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     filename = f"{name}.csv"
     filepath = os.path.join(set.path, 'reports', 'evaluation', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -28,7 +28,7 @@ def get_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> pd.DataFrame:
     # Get patients.
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     pats = set.list_patients(regions=regions)
 
     cols = {
@@ -71,7 +71,7 @@ def create_ct_summary(
     df = get_ct_summary(dataset, regions=regions)
 
     # Save summary.
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -79,54 +79,53 @@ def create_ct_summary(
 def load_ct_summary(
     dataset: str,
     regions: types.PatientRegions = 'all') -> None:
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
-def region_count(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
-    # List regions.
-    set = ds.get(dataset, 'dicom')
-    regions_df = set.list_regions(clear_cache=clear_cache)
+def get_patient_regions(dataset: str) -> pd.DataFrame:
+    # List patients.
+    set = DICOMDataset(dataset)
+    pat_ids = set.list_patients()
 
-    # Filter on requested regions.
-    def filter_fn(row):
-        if type(regions) == str:
-            if regions == 'all':
-                return True
-            else:
-                return row['region'] == regions
-        else:
-            for region in regions:
-                if row['region'] == region:
-                    return True
-            return False
-    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str
+    }
+    df = pd.DataFrame(columns=cols.keys())
 
+    # Add rows.
+    for pat_id in tqdm(pat_ids):
+        pat_regions = set.patient(pat_id).list_regions()
+        for pat_region in pat_regions:
+            data = {
+                'patient-id': pat_id,
+                'region': pat_region
+            }
+            df = append_row(df, data)
+
+    return df
+
+def create_patient_regions_report(dataset: str) -> None:
     # Generate counts report.
-    count_df = regions_df.groupby('region').count().rename(columns={'patient-id': 'count'})
-    return count_df
-
-def create_region_count_report(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> None:
-    # Generate counts report.
-    set = ds.get(dataset, type_str='dicom')
-    count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
-    filename = 'region-count.csv'
-    filepath = os.path.join(set.path, 'reports', filename)
+    pr_df = get_patient_regions(dataset)
+    set = DICOMDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    count_df.to_csv(filepath)
+    pr_df.to_csv(filepath, index=False)
+
+def load_patient_regions_report(dataset: str) -> None:
+    set = DICOMDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    return pd.read_csv(filepath)
 
 def region_overlap(
     dataset: str,
     clear_cache: bool = True,
     regions: types.PatientRegions = 'all') -> int:
     # List regions.
-    set = ds.get(dataset, type_str='dicom')
+    set = DICOMDataset(dataset)
     regions_df = set.list_regions(clear_cache=clear_cache) 
     regions_df = regions_df.drop_duplicates()
     regions_df['count'] = 1
@@ -154,7 +153,7 @@ def region_summary(
     """
     returns: stats on region shapes.
     """
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     pats = set.list_patients(regions=regions)
 
     cols = {
@@ -212,7 +211,7 @@ def create_region_summary_report(
 
     # Save report.
     filename = 'region-summary.csv'
-    set = ds.get(dataset, 'dicom')
+    set = DICOMDataset(dataset)
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)

@@ -34,11 +34,13 @@ def download_dicoms(
     # Create error table.
     cols = {
         'patient-id': str,
+        'study-id': str,
         'study-date': datetime,
-        'parent-study': str,
+        'modality': str,
+        'series-id': str,
+        'sop-id': str,
         'parent-modality': str,
-        'parent-id': str,
-        'error': str
+        'parent-sop-id': str,
     }
     error_df = pd.DataFrame(columns=cols.keys())
 
@@ -66,61 +68,76 @@ def download_patient_dicoms(
         data = {
             'patient-id': pat_id,
             'study-date': study_date,
-            'error': 'NO-RTDOSE'
+            'modality': 'RTDOSE'
         }
         error_df = append_row(error_df, data)
     
     # Download RTPLAN for each RTDOSE file.
     for study_id, _, rtdose_sop_id in query_results:
+        # Get RTPLAN ID.
         filepath = image_filepath(pat_id, study_id, 'RTDOSE', rtdose_sop_id)
         rtdose = pydicom.read_file(filepath)
-        query_results = download_patient_rtplan_dicoms(pat_id, rtdose)
+        rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+
+        # Query for RTPLAN file.
+        query_results = download_patient_rtplan_dicoms(pat_id, study_id, rtplan_id)
         
         if len(query_results) == 0:
             # Add error entry.
             data = {
                 'patient-id': pat_id,
+                'study-id': study_id,
                 'study-date': study_date,
-                'parent-study': study_id,
+                'modality': 'RTPLAN',
+                'sop-id': rtplan_id,
                 'parent-modality': 'RTDOSE',
-                'parent-id': rtdose_sop_id,
-                'error': 'NO-RTPLAN'
+                'parent-sop-id': rtdose_sop_id
             }
             error_df = append_row(error_df, data)
 
         # Download RTSTRUCT for each RTPLAN file.
         for _, _, rtplan_sop_id in query_results:
+            # Get RTSTRUCT ID.
             filepath = image_filepath(pat_id, study_id, 'RTPLAN', rtplan_sop_id)
             rtplan = pydicom.read_file(filepath)
-            query_results = download_patient_rtstruct_dicoms(pat_id, rtplan)
+            rtstruct_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+
+            # Query for RTSTRUCT file.
+            query_results = download_patient_rtstruct_dicoms(pat_id, study_id, rtstruct_id)
 
             if len(query_results) == 0:
                 # Add error entry.
                 data = {
                     'patient-id': pat_id,
+                    'study-id': study_id,
                     'study-date': study_date,
-                    'parent-study': study_id,
+                    'modality': 'RTSTRUCT',
+                    'sop-id': rtstruct_id,
                     'parent-modality': 'RTPLAN',
-                    'parent-id': rtplan_sop_id,
-                    'error': 'NO-RTSTRUCT'
+                    'parent-sop-id': rtplan_sop_id
                 }
                 error_df = append_row(error_df, data)
 
             # Download CT series for each RTSTRUCT file.
             for _, _, rtstruct_sop_id in query_results:
+                # Get CT series ID.
                 filepath = image_filepath(pat_id, study_id, 'RTSTRUCT', rtstruct_sop_id)
                 rtstruct = pydicom.read_file(filepath)
-                query_results = download_patient_ct_dicoms(pat_id, rtstruct)
+                ct_series_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+
+                # Query CT files.
+                query_results = download_patient_ct_dicoms(pat_id, study_id, ct_series_id)
 
                 if len(query_results) == 0:
                     # Add error entry.
                     data = {
                         'patient-id': pat_id,
+                        'study-id': study_id,
                         'study-date': study_date,
-                        'parent-study': study_id,
+                        'modality': 'CT',
+                        'series-id': ct_series_id,
                         'parent-modality': 'RTSTRUCT',
-                        'parent-id': rtstruct_sop_id,
-                        'error': 'NO-CT'
+                        'parent-sop-id': rtstruct_sop_id,
                     }
                     error_df = append_row(error_df, data)
 
@@ -159,14 +176,12 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
 
 def download_patient_rtplan_dicoms(
     pat_id: types.PatientID,
-    rtdose: Dataset) -> None:
-    logging.arg_log("Downloading patient RTPLAN dicoms", ('pat_id', 'rtdose'), (pat_id, rtdose.SOPInstanceUID))
-
-    # Get referenced RTPLAN ID.
-    rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+    study_id: str,
+    rtplan_id: str) -> None:
+    logging.arg_log("Downloading patient RTPLAN dicoms", ('pat_id', 'study_id', 'rtplan_id'), (pat_id, study_id, rtplan_id))
 
     # Query for RTPLAN dicoms.
-    query_results = queryPACS(pat_id, 'RTPLAN', sop_id=rtplan_id) 
+    query_results = queryPACS(pat_id, 'RTPLAN', sop_id=rtplan_id, study_id=study_id) 
 
     for study_id, series_id, sop_id in query_results:
         # Create RTPLAN folder.
@@ -191,14 +206,12 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
 
 def download_patient_rtstruct_dicoms(
     pat_id: types.PatientID,
-    rtplan: Dataset) -> None:
-    logging.arg_log("Downloading patient RTSTRUCT dicoms", ('pat_id', 'rtplan'), (pat_id, rtplan.SOPInstanceUID))
-
-    # Get referenced RTSTRUCT ID.
-    rtstruct_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+    study_id: str,
+    rtstruct_id: str) -> None:
+    logging.arg_log("Downloading patient RTSTRUCT dicoms", ('pat_id', 'study_id', 'rtstruct_id'), (pat_id, study_id, rtstruct_id))
 
     # Query for RTSTRUCT dicoms.
-    query_results = queryPACS(pat_id, 'RTSTRUCT', sop_id=rtstruct_id) 
+    query_results = queryPACS(pat_id, 'RTSTRUCT', sop_id=rtstruct_id, study_id=study_id) 
 
     for study_id, series_id, sop_id in query_results:
         # Create RTSTRUCT folder.
@@ -223,14 +236,12 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
 
 def download_patient_ct_dicoms(
     pat_id: types.PatientID,
-    rtstruct: Dataset) -> List[Tuple[str, str]]:
-    logging.arg_log("Downloading patient CT dicoms", ('pat_id', 'rtstruct'), (pat_id, rtstruct.SOPInstanceUID))
-
-    # Get referenced CT series ID.
-    ct_series_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+    study_id: str,
+    ct_series_id: str) -> List[Tuple[str, str]]:
+    logging.arg_log("Downloading patient CT dicoms", ('pat_id', 'study_id', 'ct_series_id'), (pat_id, study_id, ct_series_id))
 
     # Query for CT dicoms.
-    query_results = queryPACS(pat_id, 'CT', series_id=ct_series_id)
+    query_results = queryPACS(pat_id, 'CT', series_id=ct_series_id, study_id=study_id)
     print(query_results)
 
     for study_id, series_id in query_results:
@@ -258,10 +269,11 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
 def queryPACS(
     pat_id: types.PatientID,
     modality: Literal['CT', 'RTDOSE', 'RTPLAN', 'RTSTRUCT'],
+    end_date: Optional[datetime] = None,
     series_id: str = '*',
     sop_id: str = '*',
-    end_date: Optional[datetime] = None,
-    start_date: Optional[datetime] = None) -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    start_date: Optional[datetime] = None,
+    study_id: str = '*') -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
     # Determine query retrieve level.
     if modality == 'CT':
         level = 'SERIES'
@@ -283,7 +295,7 @@ def queryPACS(
         ds.Modality = modality
         ds.StudyDate = '*'      # Filter dates in python - faster than using the query.
         ds.SeriesInstanceUID = series_id
-        ds.StudyInstanceUID = '*'
+        ds.StudyInstanceUID = study_id
         if level == 'IMAGE':
             ds.SOPInstanceUID = sop_id
 

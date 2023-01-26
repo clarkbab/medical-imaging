@@ -124,13 +124,13 @@ class NIFTIPatient:
 
     def region_data(
         self,
-        regions: types.PatientRegions = 'all') -> OrderedDict:
+        region: types.PatientRegions = 'all') -> OrderedDict:
         # Convert regions to list.
-        if type(regions) == str:
-            if regions == 'all':
+        if type(region) == str:
+            if region == 'all':
                 regions = self.list_regions()
             else:
-                regions = [regions]
+                regions = [region]
 
         data = {}
         for region in regions:

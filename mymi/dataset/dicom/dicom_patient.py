@@ -1,13 +1,14 @@
-import os
 import pandas as pd
-from typing import Any, Callable, List, Optional
+from typing import Any, List, Optional
 
 from mymi import types
-from mymi.dataset.dicom.rtstruct_series import RTSTRUCTSeries
 from mymi.utils import append_row
 
 from .dicom_study import DICOMStudy
 from .region_map import RegionMap
+from .rtdose_series import RTDOSESeries
+from .rtplan_series import RTPLANSeries
+from .rtstruct_series import RTSTRUCTSeries
 
 class DICOMPatient:
     def __init__(
@@ -22,7 +23,9 @@ class DICOMPatient:
         else:
             self.__global_id = f"{dataset} - {id}"
         self.__ct_from = ct_from
-        self.__default_rtstruct = None     # Lazy-loaded.
+        self.__default_rtdose = None        # Lazy-loaded.
+        self.__default_rtplan = None        # Lazy-loaded.
+        self.__default_rtstruct = None      # Lazy-loaded.
         self.__dataset = dataset
         self.__id = str(id)
         self.__region_map = region_map
@@ -35,9 +38,6 @@ class DICOMPatient:
         # Check that patient ID exists.
         if len(index) == 0:
             raise ValueError(f"Patient '{self}' not found in index for dataset '{dataset}'.")
-
-        # if load_default_rtdose:
-        #     self.__load_default_rtdose()
 
     @property
     def description(self) -> str:
@@ -77,11 +77,11 @@ class DICOMPatient:
     @property
     def default_rtdose(self) -> str:
         if self.__default_rtdose is None:
-            self.__load_default_rtdose_and_rtplan()
+            self.__load_default_rtplan_and_rtdose()
         return self.__default_rtdose
 
     @property
-    def default_rtplan(self) -> str:
+    def default_rtplan(self) -> RTPLANSeries:
         if self.__default_rtplan is None:
             self.__load_default_rtdose_and_rtplan()
         return self.__default_rtplan
@@ -145,45 +145,22 @@ class DICOMPatient:
 
     def __load_default_rtstruct(self) -> None:
         # Preference the first study - all studies without RTSTRUCTs have been trimmed.
-        # TODO: Add configuration to determine which (multiple?) RTSTRUCTs to select.
         study_id = self.list_studies()[0]
         study = self.study(study_id)
         self.__default_rtstruct = study.default_rtstruct
 
-    def __load_default_rtdose_and_rtplan(self) -> None:
-        # Get RTPLAN series linked to the default RTSTRUCT by 'SOPInstanceUID'.
-        default_rt = self.default_rtstruct
-        def_study = default_rt.study
-        def_rt_sop_id = default_rt.get_rtstruct().SOPInstanceUID
-        rtplan_series_ids = def_study.list_series('RTPLAN')
-        linked_rtplan_sop_ids = []
-        linked_rtplan_series_ids = []
-        for rtplan_series_id in rtplan_series_ids:
-            rtplan = def_study.series(rtplan_series_id, 'RTPLAN')
-            rtplan_ref_rt_sop_id = rtplan.get_rtplan().ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
-            if rtplan_ref_rt_sop_id == def_rt_sop_id:
-                linked_rtplan_sop_ids.append(rtplan.get_rtplan().SOPInstanceUID)
-                linked_rtplan_series_ids.append(rtplan_series_id)
-        if len(linked_rtplan_sop_ids) == 0:
-            raise ValueError(f"No RTPLAN linked to default RTSTRUCT for patient '{self}'.") 
+    def __load_default_rtplan_and_rtdose(self) -> None:
+        # Preference the first study - no guarantees that this study has an RTPLAN/RTDOSE.
+        study_id = self.list_studies()[0]
+        study = self.study(study_id)
+        self.__default_rtplan = study.default_rtplan
+        self.__default_rtdose = study.default_rtdose
 
-        # Select the first RTPLAN and get linked RTDOSE series.
-        def_rtplan_sop_id = linked_rtplan_sop_ids[0]
-        rtdose_series_ids = def_study.list_series('RTDOSE')
-        linked_rtdose_series = []
-        for rtdose_series_id in rtdose_series_ids:
-            rtdose = def_study.series(rtdose_series_id, 'RTDOSE')
-            rtdose_ref_rtplan_sop_id = rtdose.get_rtdose().ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
-            if rtdose_ref_rtplan_sop_id == def_rtplan_sop_id:
-                linked_rtdose_series.append(rtdose)
-        if len(linked_rtdose_series) == 0:
-            raise ValueError(f"No RTDOSE linked to default RTPLAN for patient '{self}'.") 
+    # Proxy calls to default series.
 
-        # Select the first RTDOSE as the default.
-        self.__default_rtplan = def_study.series(linked_rtplan_series_ids[0], 'RTPLAN')
-        self.__default_rtdose = linked_rtdose_series[0]
-
-    # Proxy to default RTSTRUCT series.
+    @property
+    def ct_data(self):
+        return self.default_rtstruct.ref_ct.data
 
     @property
     def ct_offset(self):
@@ -197,6 +174,22 @@ class DICOMPatient:
     def ct_spacing(self):
         return self.default_rtstruct.ref_ct.spacing
 
+    @property
+    def dose_data(self):
+        return self.default_rtdose.data
+
+    @property
+    def dose_offset(self):
+        return self.default_rtdose.offset
+
+    @property
+    def dose_size(self):
+        return self.default_rtdose.size
+
+    @property
+    def dose_spacing(self):
+        return self.default_rtdose.spacing
+
     def ct_orientation(self, *args, **kwargs):
         return self.default_rtstruct.ref_ct.orientation(*args, **kwargs)
 
@@ -205,26 +198,6 @@ class DICOMPatient:
 
     def ct_summary(self, *args, **kwargs):
         return self.default_rtstruct.ref_ct.summary(*args, **kwargs)
-
-    @property
-    def ct_data(self):
-        return self.default_rtstruct.ref_ct.data
-
-    @property
-    def dose_data(self):
-        return self.__default_rtdose.data
-
-    @property
-    def dose_offset(self):
-        return self.__default_rtdose.offset
-
-    @property
-    def dose_size(self):
-        return self.__default_rtdose.size
-
-    @property
-    def dose_spacing(self):
-        return self.__default_rtdose.spacing
 
     def get_rtdose(self, *args, **kwargs):
         return self.__default_rtdose_series.get_rtdose(*args, **kwargs)
