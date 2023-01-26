@@ -1,9 +1,9 @@
 internal,dataset
 Cochlea_L,Cochlea-Left
 Cochlea_R,Cochlea-Right
-OralCavity,Oral-Cavity
+Cavity_Oral,Oral-Cavity
 Parotid_L,Parotid-Left
 Parotid_R,Parotid-Right
 SpinalCord,Spinal-Cord
-Submandibular_L,Submandibular-Gland-Left
-Submandibular_R,Submandibular-Gland-Right
+Glnd_Submand_L,Submandibular-Gland-Left
+Glnd_Submand_R,Submandibular-Gland-Right
