@@ -17,7 +17,6 @@ class CTSeries(DICOMSeries):
         self.__data = None          # Lazy-loaded.
         self.__global_id = f"{study} - {id}"
         self.__offset = None        # Lazy-loaded.
-        self.__orientation = None   # Lazy-loaded.
         self.__size = None   # Lazy-loaded.
         self.__spacing = None   # Lazy-loaded.
         self.__study = study
@@ -58,12 +57,6 @@ class CTSeries(DICOMSeries):
         return self.__offset
 
     @property
-    def orientation(self) -> types.ImageSpacing3D:
-        if self.__orientation is None:
-            self.__load_ct_data()
-        return self.__orientation
-
-    @property
     def paths(self) -> str:
         return self.__paths
 
@@ -96,44 +89,10 @@ class CTSeries(DICOMSeries):
     def __load_ct_data(self) -> None:
         cts = self.get_cts()
 
-        # Store CT data.
-        size = self.size
-        offset = self.offset
-        spacing = self.spacing
-        data = np.zeros(shape=size)
-        for ct in cts:
-            # Convert to HU. Transpose to (x, y) coordinates, 'pixel_array' returns
-            # row-first image data.
-            ct_data = np.transpose(ct.pixel_array)
-            ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
-
-            # Get z index.
-            z_offset =  ct.ImagePositionPatient[2] - offset[2]
-            z_idx = int(round(z_offset / spacing[2]))
-
-            # Add data.
-            data[:, :, z_idx] = ct_data
-        self.__data = data
-
         # Store offset.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
         offset = cts[0].ImagePositionPatient    
         self.__offset = tuple(int(s) for s in offset)
-
-        # Store orientation.
-        # Indexing checked that all 'ImageOrientationPatient' keys were the same for the series.
-        self.__orientation = (
-            (
-                cts[0].ImageOrientationPatient[0],
-                cts[0].ImageOrientationPatient[1],
-                cts[0].ImageOrientationPatient[2]
-            ),
-            (
-                cts[0].ImageOrientationPatient[3],
-                cts[0].ImageOrientationPatient[4],
-                cts[0].ImageOrientationPatient[5]
-            )
-        )
 
         # Store size.
         # Indexing checked that CT slices had consisent x/y spacing in series.
@@ -150,6 +109,21 @@ class CTSeries(DICOMSeries):
             float(cts[0].PixelSpacing[1]),
             np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
         )
+
+        # Store CT data.
+        data = np.zeros(shape=self.__size)
+        for ct in cts:
+            # Convert values to HU.
+            ct_data = np.transpose(ct.pixel_array)      # 'pixel_array' contains row-first image data.
+            ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
+
+            # Get z index.
+            z_offset =  ct.ImagePositionPatient[2] - self.__offset[2]
+            z_idx = int(round(z_offset / self.__spacing[2]))
+
+            # Add data.
+            data[:, :, z_idx] = ct_data
+        self.__data = data
 
     def __str__(self) -> str:
         return self.__global_id

@@ -68,6 +68,28 @@ class DICOMPatient:
         return self.default_rtstruct.ref_ct.spacing
 
     @property
+    def dataset(self) -> str:
+        return self.__dataset
+
+    @property
+    def default_rtdose(self) -> str:
+        if self.__default_rtdose is None:
+            self.__load_default_rtplan_and_rtdose()
+        return self.__default_rtdose
+
+    @property
+    def default_rtplan(self) -> RTPLANSeries:
+        if self.__default_rtplan is None:
+            self.__load_default_rtdose_and_rtplan()
+        return self.__default_rtplan
+    
+    @property
+    def default_rtstruct(self) -> RTSTRUCTSeries:
+        if self.__default_rtstruct is None:
+            self.__load_default_rtstruct()
+        return self.__default_rtstruct
+
+    @property
     def description(self) -> str:
         return self.__global_id
 
@@ -96,28 +118,6 @@ class DICOMPatient:
         return self.__index
 
     @property
-    def dataset(self) -> str:
-        return self.__dataset
-
-    @property
-    def default_rtdose(self) -> str:
-        if self.__default_rtdose is None:
-            self.__load_default_rtplan_and_rtdose()
-        return self.__default_rtdose
-
-    @property
-    def default_rtplan(self) -> RTPLANSeries:
-        if self.__default_rtplan is None:
-            self.__load_default_rtdose_and_rtplan()
-        return self.__default_rtplan
-    
-    @property
-    def default_rtstruct(self) -> RTSTRUCTSeries:
-        if self.__default_rtstruct is None:
-            self.__load_default_rtstruct()
-        return self.__default_rtstruct
-
-    @property
     def id(self) -> str:
         return self.__id
 
@@ -136,9 +136,6 @@ class DICOMPatient:
     @property
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
-
-    def ct_orientation(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.orientation(*args, **kwargs)
 
     def ct_slice_summary(self, *args, **kwargs):
         return self.default_rtstruct.ref_ct.slice_summary(*args, **kwargs)
@@ -202,18 +199,18 @@ class DICOMPatient:
         id: str) -> DICOMStudy:
         return DICOMStudy(self, id, region_map=self.__region_map)
 
-    def __load_default_rtstruct(self) -> None:
-        # Preference the first study - all studies without RTSTRUCTs have been trimmed.
-        study_id = self.list_studies()[0]
-        study = self.study(study_id)
-        self.__default_rtstruct = study.default_rtstruct
-
-    def __load_default_rtplan_and_rtdose(self) -> None:
+    def __load_default_rtdose_and_rtplan(self) -> None:
         # Preference the first study - no guarantees that this study has an RTPLAN/RTDOSE.
         study_id = self.list_studies()[0]
         study = self.study(study_id)
         self.__default_rtplan = study.default_rtplan
         self.__default_rtdose = study.default_rtdose
+
+    def __load_default_rtstruct(self) -> None:
+        # Preference the first study - all studies without RTSTRUCTs have been trimmed.
+        def_study_id = self.list_studies()[0]
+        def_study = self.study(def_study_id)
+        self.__default_rtstruct = def_study.default_rtstruct
 
     def __str__(self) -> str:
         return self.__global_id

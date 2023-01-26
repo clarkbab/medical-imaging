@@ -187,17 +187,6 @@ def build_index(
     errors = append_dataframe(errors, incons)
     index = index.drop(incons_idx)
 
-    # If multiple RT files included for a series, keep most recent.
-    logging.info(f"Removing duplicate RTSTRUCT, RTPLAN, and RTDOSE DICOM files (by 'SeriesInstanceUID')...")
-    modalities = ['RTSTRUCT', 'RTPLAN', 'RTDOSE']
-    for modality in modalities:
-        rt = index[index.modality == modality].sort_values('sop-id', ascending=False)
-        dup_idx = rt[rt['series-id'].duplicated()].index
-        dup = index.loc[dup_idx]
-        dup['error'] = 'MULTIPLE-FILES'
-        errors = append_dataframe(errors, dup)
-        index = index.drop(dup_idx)
-
     # Check that RTSTRUCT references CT series in index.
     logging.info(f"Removing RTSTRUCT DICOM files without CT in index (by 'RefCTSeriesInstanceUID')...")
     ct_series = index[index.modality == 'CT']['series-id'].unique()

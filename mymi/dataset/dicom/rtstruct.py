@@ -55,19 +55,6 @@ class RTSTRUCT(DICOMFile):
     def series(self) -> str:
         return self.__series
 
-    def __str__(self) -> str:
-        return self.__global_id
-
-    def list_regions(
-        self,
-        use_mapping: bool = True) -> List[PatientRegion]:
-        rtstruct = self.get_rtstruct()
-        names = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
-        names = list(filter(lambda n: RTSTRUCTConverter.has_roi_data(rtstruct, n), names))
-        if use_mapping and self.__region_map:
-            names = [self.__region_map.to_internal(n) for n in names]
-        return names
-
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
         return dcm.read_file(self.__path)
 
@@ -93,6 +80,12 @@ class RTSTRUCT(DICOMFile):
 
         return roi_info
 
+    def has_region(
+        self,
+        region: PatientRegion,
+        use_mapping: bool = True) -> bool:
+        return region in self.list_regions(use_mapping=use_mapping)
+
     def list_regions(
         self,
         use_mapping: bool = True) -> List[PatientRegion]:
@@ -109,12 +102,6 @@ class RTSTRUCT(DICOMFile):
             regions = [self.__region_map.to_internal(r) for r in regions]
 
         return regions
-
-    def has_region(
-        self,
-        region: PatientRegion,
-        use_mapping: bool = True) -> bool:
-        return region in self.list_regions(use_mapping=use_mapping)
 
     def region_data(
         self,
@@ -156,10 +143,11 @@ class RTSTRUCT(DICOMFile):
 
         return ordered_dict
 
-    def __load_ref_ct(self) -> None:
-        rtstruct = self.get_rtstruct()
-        ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-        self.__ref_ct = CTSeries(self.__series.study, ct_id)
+    def __check_index(self) -> None:
+        if len(self.__index) == 0:
+            raise ValueError(f"RTSTRUCT '{self}' not found in index for series '{self.__series}'.")
+        elif len(self.__index) > 1:
+            raise ValueError(f"Multiple RTSTRUCTs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
     def __assert_requested_regions(
         self,
@@ -175,8 +163,10 @@ class RTSTRUCT(DICOMFile):
         else:
             raise ValueError(f"Requested regions '{regions}' isn't 'str' or 'iterable'.")
 
-    def __check_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RTSTRUCT '{self}' not found in index for series '{self.__series}'.")
-        elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RTSTRUCTs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+    def __load_ref_ct(self) -> None:
+        rtstruct = self.get_rtstruct()
+        ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+        self.__ref_ct = CTSeries(self.__series.study, ct_id)
+
+    def __str__(self) -> str:
+        return self.__global_id

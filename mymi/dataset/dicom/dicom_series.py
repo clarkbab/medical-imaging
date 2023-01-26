@@ -2,11 +2,11 @@ from enum import Enum
 
 SeriesInstanceUID = str
 
-class DICOMModality(Enum):
-    CT = 0
-    RTSTRUCT = 1
-    RTPLAN = 2
-    RTDOSE = 3
+class DICOMModality(str, Enum):
+    CT = 'CT'
+    RTSTRUCT = 'RTSTRUCT'
+    RTPLAN = 'RTPLAN'
+    RTDOSE = 'RTDOSE'
 
 # Abstract class.
 class DICOMSeries:

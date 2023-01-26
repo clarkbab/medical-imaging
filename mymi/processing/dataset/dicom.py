@@ -9,14 +9,14 @@ from tqdm import tqdm
 from mymi.dataset.dicom import DICOMDataset
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
-from mymi import types
+from mymi.types import PatientRegions
 from mymi.utils import save_csv
 
 from .dataset import write_flag
 
 def convert_to_nifti(
     dataset: 'Dataset',
-    regions: types.PatientRegions = 'all',
+    regions: PatientRegions = 'all',
     anonymise: bool = False) -> None:
     # Create NIFTI dataset.
     nifti_ds = recreate_nifti(dataset.name)
@@ -81,7 +81,7 @@ def convert_to_nifti(
 
 def convert_to_nifti_multiple_studies(
     dataset: 'Dataset',
-    regions: types.PatientRegions = 'all',
+    regions: PatientRegions = 'all',
     anonymise: bool = False) -> None:
     # Create NIFTI dataset.
     nifti_ds = recreate_nifti(dataset)
