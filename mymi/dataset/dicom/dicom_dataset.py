@@ -1,12 +1,7 @@
-from collections import OrderedDict
-import inspect
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 import re
-from scipy.ndimage import center_of_mass
-from skimage.draw import polygon
 from tqdm import tqdm
 from typing import Callable, Dict, List, Optional, Union
 
@@ -14,7 +9,6 @@ from mymi import config
 from mymi import logging
 from mymi import regions
 from mymi import types
-from mymi.utils import append_row
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
@@ -26,9 +20,11 @@ Z_SPACING_ROUND_DP = 2
 class DICOMDataset(Dataset):
     def __init__(
         self,
-        name: str,
-        recreate_index: bool = False):
+        name: str):
         self.__path = os.path.join(config.directories.datasets, 'dicom', name)
+        self.__index = None             # Lazy-loaded.
+        self.__index_errors = None      # Lazy-loaded.
+        self.__region_map = None        # Lazy-loaded.
 
         # Load 'ct_from' flag.
         ct_from_name = None
@@ -44,26 +40,9 @@ class DICOMDataset(Dataset):
         if not os.path.exists(self.__path):
             raise ValueError(f"Dataset '{self}' not found.")
 
-        # Load index.
-        filepath = os.path.join(self.__path, 'index.csv')
-        if recreate_index or not os.path.exists(filepath):
-            build_index(name)
-        try:
-            self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        except pd.errors.EmptyDataError:
-            logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = pd.DataFrame(columns=INDEX_COLS.keys())
-
-        # Load index errors.
-        filepath = os.path.join(self.__path, 'index-errors.csv')
-        try:
-            self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        except pd.errors.EmptyDataError:
-            logging.info(f"Index errors empty for dataset '{self}'.")
-            self.__index_errors = pd.DataFrame(columns=ERRORS_COLS.keys())
-
-        # Load region map.
-        self.__region_map = self._load_region_map()
+    @property
+    def ct_from(self) -> Optional['DICOMDataset']:
+        return self.__ct_from
 
     @property
     def description(self) -> str:
@@ -71,132 +50,74 @@ class DICOMDataset(Dataset):
 
     @property
     def index(self) -> pd.DataFrame:
+        if self.__index is None:
+            self.__load_index()
         return self.__index
 
     @property
-    def region_map(self) -> RegionMap:
-        return self.__region_map
-
-    @property
     def index_errors(self) -> pd.DataFrame:
+        if self.__index_errors is None:
+            self.__load_index_errors()
         return self.__index_errors
-
-    def __str__(self) -> str:
-        return self.__global_id
-
-    @property
-    def ct_from(self) -> Optional['DICOMDataset']:
-        return self.__ct_from
 
     @property
     def name(self) -> str:
         return self.__name
 
     @property
-    def type(self) -> DatasetType:
-        return self._type
-
-    @property
     def path(self) -> str:
         return self.__path
 
-    def to_internal(self, region: str) -> str:
-        return self.__region_map.to_internal(region) if self.__region_map is not None else region
+    @property
+    def region_map(self) -> RegionMap:
+        if self.__region_map is None:
+            self.__load_region_map()
+        return self.__region_map
 
-    def trimmed_errors(self) -> pd.DataFrame:
-        path = os.path.join(self.__path, 'hierarchy', 'trimmed', 'errors.csv')
-        return pd.read_csv(path)
+    @property
+    def type(self) -> DatasetType:
+        return self._type
 
     def has_patient(
         self,
         id: types.PatientID) -> bool:
-        """
-        returns: whether the patient is present in the dataset or not.
-        args:
-            id: the patient ID.
-        """
         return id in self.list_patients()
 
     def list_patients(
         self,
-        regions: types.PatientRegions = 'all',
-        trimmed: bool = False) -> List[str]:
+        regions: types.PatientRegions = 'all') -> List[str]:
         pats = list(sorted(self.index['patient-id'].unique()))
 
         # Filter by 'regions'.
-        pats = list(filter(self._filter_patient_by_regions(regions), pats))
+        pats = list(filter(self.__filter_patient_by_regions(regions), pats))
         return pats
 
     def patient(
         self,
         id: types.PatientID,
         **kwargs: Dict) -> DICOMPatient:
-        return DICOMPatient(self, id, region_map=self.__region_map, **kwargs)
+        return DICOMPatient(self, id, region_map=self.region_map, **kwargs)
 
     def list_regions(
         self,
         pat_ids: types.PatientIDs = 'all',
-        trimmed: bool = False,
         use_mapping: bool = True) -> pd.DataFrame:
-
-        # Load each patient.
-        pats = self.list_patients(trimmed=trimmed)
-
         # Filter patients.
-        pats = list(filter(self._filter_patient_by_pat_ids(pat_ids), pats))
+        pats = self.list_patients()
+        pats = list(filter(self.__filter_patient_by_pat_ids(pat_ids), pats))
 
         # Get patient regions.
         regions = []
         for pat in tqdm(pats):
-            try:
-                pat_regions = self.patient(pat, trimmed=trimmed).list_regions(use_mapping=use_mapping)
-            except ValueError as e:
-                # Allow errors if we're inspecting 'trimmed' patients.
-                if trimmed:
-                    logging.error(e)
-                else:
-                    raise e
-
+            pat_regions = self.patient(pat).list_regions(use_mapping=use_mapping)
             regions += pat_regions
 
         return list(np.unique(regions))
 
-    def _load_index(self) -> pd.DataFrame:
-        filepath = os.path.join(self.__path, 'index.csv')
-        index = pd.read_csv(filepath)
-        return index
+    def rebuild_index(self) -> None:
+        build_index(self.__name)
 
-    def _load_region_map(self) -> Optional[RegionMap]:
-        # Check for region map.
-        filepath = os.path.join(self.__path, 'region-map.csv')
-        if os.path.exists(filepath):
-            # Load map file.
-            map_df = pd.read_csv(filepath)
-
-            # Check that internal region names are entered correctly.
-            for n in map_df.internal:
-                if not regions.is_region(n):
-                    raise ValueError(f"Error in region map for dataset '{self.__name}', '{n}' is not an internal region.")
-            
-            return RegionMap(map_df)
-        else:
-            return None
-
-    def _filter_patient_by_n_pats(
-        self,
-        n_pats: int) -> Callable[[str], bool]:
-        def fn(id):
-            if n_pats == 'all' or fn.n_included < n_pats:
-                fn.n_included += 1
-                return True
-            else:
-                return False
-
-        # Assign state to the function.
-        fn.n_included = 0
-        return fn
-
-    def _filter_patient_by_pat_ids(
+    def __filter_patient_by_pat_ids(
         self,
         pat_ids: Union[str, List[str]]) -> Callable[[str], bool]:
         def fn(id):
@@ -207,7 +128,7 @@ class DICOMDataset(Dataset):
                 return False
         return fn
 
-    def _filter_patient_by_regions(
+    def __filter_patient_by_regions(
         self,
         regions: types.PatientRegions,
         use_mapping: bool = True) -> Callable[[str], bool]:
@@ -224,3 +145,30 @@ class DICOMDataset(Dataset):
                 else:
                     return False
         return fn
+
+    def __load_index(self) -> None:
+        filepath = os.path.join(self.__path, 'index.csv')
+        if not os.path.exists(filepath):
+            build_index(self.__name)
+        try:
+            self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str })
+        except pd.errors.EmptyDataError:
+            logging.info(f"Index empty for dataset '{self}'.")
+            self.__index = pd.DataFrame(columns=INDEX_COLS.keys())
+
+    def __load_index_errors(self) -> None:
+        filepath = os.path.join(self.__path, 'index-errors.csv')
+        if not os.path.exists(filepath):
+            build_index(self.__name)
+        try:
+            self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
+        except pd.errors.EmptyDataError:
+            logging.info(f"Index-errors empty for dataset '{self}'.")
+            self.__index_errors = pd.DataFrame(columns=ERRORS_COLS.keys())
+
+    def __load_region_map(self) -> Optional[RegionMap]:
+        filepath = os.path.join(self.__path, 'region-map.csv')
+        self.__region_map = RegionMap.load(filepath)
+
+    def __str__(self) -> str:
+        return self.__global_id

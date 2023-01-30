@@ -73,8 +73,9 @@ class RTSTRUCT(DICOMFile):
 
         # Map to internal names.
         if use_mapping and self.__region_map:
+            pat_id = self.__series.study.patient.id
             def map_name(info):
-                info['name'] = self.__region_map.to_internal(info['name'])
+                info['name'] = self.__region_map.to_internal(info['name'], pat_id=pat_id)
                 return info
             roi_info = dict((id, map_name(info)) for id, info in roi_info.items())
 
@@ -99,7 +100,12 @@ class RTSTRUCT(DICOMFile):
 
         # Map to internal regions.
         if use_mapping and self.__region_map is not None:
-            regions = [self.__region_map.to_internal(r) for r in regions]
+            pat_id = self.__series.study.patient.id
+            regions = [self.__region_map.to_internal(r, pat_id=pat_id) for r in regions]
+
+        # Check for multiple regions.
+        if len(regions) != len(set(regions)):
+            raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Regions: '{regions}'")
 
         return regions
 
@@ -155,11 +161,11 @@ class RTSTRUCT(DICOMFile):
         use_mapping: bool = True) -> None:
         if type(regions) == str:
             if regions != 'all' and not self.has_region(regions, use_mapping=use_mapping):
-                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT series '{self}'.")
+                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT '{self}'.")
         elif hasattr(regions, '__iter__'):
             for region in regions:
                 if not self.has_region(region, use_mapping=use_mapping):
-                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT series '{self}'.")
+                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
         else:
             raise ValueError(f"Requested regions '{regions}' isn't 'str' or 'iterable'.")
 

@@ -60,7 +60,8 @@ class RTDOSESeries(DICOMSeries):
             raise ValueError(f"RTDOSESeries '{self}' not found in index for study '{self.__study}'.")
 
     def __load_default_rtdose(self) -> None:
-        def_rtdose_id = self.list_rtdoses()[0]
+        # Preference most recent RTDOSE.
+        def_rtdose_id = self.list_rtdoses()[-1]
         self.__default_rtdose = self.rtdose(def_rtdose_id)
 
     def __str__(self) -> str:

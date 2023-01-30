@@ -145,16 +145,18 @@ class DICOMStudy:
         def_rt_sop_id = def_rtstruct.get_rtstruct().SOPInstanceUID
 
         # Find RTPLANs that link to default RTSTRUCT.
-        rtplan_series_ids = self.list_series(DICOMModality.RTPLAN)
         linked_rtplan_sop_ids = []
         linked_rtplan_series_ids = []
+        rtplan_series_ids = self.list_series(DICOMModality.RTPLAN)
         for rtplan_series_id in rtplan_series_ids:
-            rtplan = self.series(rtplan_series_id, DICOMModality.RTPLAN)
-            rtplan_ref_rtstruct_sop_id = rtplan.get_rtplan().ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
-            if rtplan_ref_rtstruct_sop_id == def_rt_sop_id:
-                linked_rtplan_series_ids.append(rtplan_series_id)
-                rtplan_sop_id = rtplan.get_rtplan().SOPInstanceUID
-                linked_rtplan_sop_ids.append(rtplan_sop_id)
+            rtplan_series = self.series(rtplan_series_id, DICOMModality.RTPLAN)
+            rtplan_sop_ids = rtplan_series.list_rtplans()
+            for rtplan_sop_id in rtplan_sop_ids:
+                rtplan = rtplan_series.rtplan(rtplan_sop_id)
+                rtplan_ref_rtstruct_sop_id = rtplan.get_rtplan().ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+                if rtplan_ref_rtstruct_sop_id == def_rt_sop_id:
+                    linked_rtplan_series_ids.append(rtplan_series_id)
+                    linked_rtplan_sop_ids.append(rtplan_sop_id)
 
         if len(linked_rtplan_sop_ids) == 0:
             # If no linked RTPLAN, then no RTDOSE either.
@@ -162,29 +164,43 @@ class DICOMStudy:
             self.__default_rtdose = None
             return
 
-        # Set default RTPLAN.
-        self.__default_rtplan = RTPLANSeries(linked_rtplan_sop_ids[0])
+        # Preference most recent RTPLAN as default.
+        def_rtplan_series_id = linked_rtplan_series_ids[-1]
+        def_rtplan_sop_id = linked_rtplan_sop_ids[-1]
+        def_rtplan_series = self.series(def_rtplan_series_id, DICOMModality.RTPLAN)
+        self.__default_rtplan = def_rtplan_series.rtplan(def_rtplan_sop_id)
 
         # Get RTDOSEs linked to first RTPLAN.
-        rtdose_series_ids = self.list_series(DICOMModality.RTDOSE)
         linked_rtdose_series_ids = []
+        linked_rtdose_sop_ids = []
+        rtdose_series_ids = self.list_series(DICOMModality.RTDOSE)
         for rtdose_series_id in rtdose_series_ids:
-            rtdose = self.series(rtdose_series_id, DICOMModality.RTDOSE)
-            rtdose_ref_rtplan_sop_id = rtdose.get_rtdose().ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
-            if rtdose_ref_rtplan_sop_id == self.__default_rtplan.id:
-                linked_rtdose_series_ids.append(rtdose_series_id)
+            rtdose_series = self.series(rtdose_series_id, DICOMModality.RTDOSE)
+            rtdose_sop_ids = rtdose_series.list_rtdoses()
+            for rtdose_sop_id in rtdose_sop_ids:
+                rtdose = rtdose_series.rtdose(rtdose_sop_id)
+                rtdose_ref_rtplan_sop_id = rtdose.get_rtdose().ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                if rtdose_ref_rtplan_sop_id == self.__default_rtplan.id:
+                    linked_rtdose_series_ids.append(rtdose_series_id)
+                    linked_rtdose_sop_ids.append(rtdose_sop_id)
 
-        if len(linked_rtdose_series_ids) == 0:
+        if len(linked_rtdose_sop_ids) == 0:
             self.__default_rtdose = None
-        else:
-            self.__default_rtdose = RTDOSESeries(linked_rtdose_series_ids[0])
+            return
+
+        # Preference most recent RTDOSE as default.
+        def_rtdose_series_id = linked_rtdose_series_ids[-1]
+        def_rtdose_sop_id = linked_rtdose_sop_ids[-1]
+        def_rtdose_series = self.series(def_rtdose_series_id, DICOMModality.RTDOSE)
+        self.__default_rtdose = def_rtdose_series.rtdose(def_rtdose_sop_id)
 
     def __check_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"DICOMStudy '{self}' not found in index for patient '{self.__patient}'.")
 
     def __load_default_rtstruct(self) -> None:
-        def_rtstruct_series_id = self.list_series(DICOMModality.RTSTRUCT)[0]
+        # Preference most recent RTSTRUCT series.
+        def_rtstruct_series_id = self.list_series(DICOMModality.RTSTRUCT)[-1]
         def_rtstruct_series = self.series(def_rtstruct_series_id, DICOMModality.RTSTRUCT)
         self.__default_rtstruct = def_rtstruct_series.default_rtstruct
 

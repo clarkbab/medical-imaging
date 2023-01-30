@@ -81,12 +81,6 @@ class RTDOSE(DICOMFile):
     def __load_rtdose_data(self) -> None:
         rtdose = self.get_rtdose()
 
-        # Store dose data.
-        pat = self.__series.study.patient
-        data = np.transpose(rtdose.pixel_array)
-        data = rtdose.DoseGridScaling * data
-        self.__data = resample_3D(data, origin=self.offset, spacing=self.spacing, output_origin=pat.ct_offset, output_size=pat.ct_size, output_spacing=pat.ct_spacing) 
-
         # Store offset.
         offset = rtdose.ImagePositionPatient
         self.__offset = tuple(int(s) for s in offset)
@@ -97,6 +91,12 @@ class RTDOSE(DICOMFile):
         assert len(z_diffs) == 1
         spacing_z = z_diffs[0]
         self.__spacing = tuple(np.append(spacing_x_y, spacing_z))
+
+        # Store dose data.
+        pat = self.__series.study.patient
+        data = np.transpose(rtdose.pixel_array)
+        data = rtdose.DoseGridScaling * data
+        self.__data = resample_3D(data, origin=self.__offset, spacing=self.__spacing, output_origin=pat.ct_offset, output_size=pat.ct_size, output_spacing=pat.ct_spacing) 
 
     def __str__(self) -> str:
         return self.__global_id

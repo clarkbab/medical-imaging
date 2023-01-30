@@ -19,24 +19,24 @@ def convert_to_nifti(
     regions: PatientRegions = 'all',
     anonymise: bool = False) -> None:
     # Create NIFTI dataset.
-    nifti_ds = recreate_nifti(dataset.name)
+    nifti_set = recreate_nifti(dataset.name)
 
-    logging.info(f"Converting dataset '{dataset}' to dataset '{nifti_ds}', with regions '{regions}' and anonymise '{anonymise}'.")
+    logging.info(f"Converting dataset '{dataset}' to dataset '{nifti_set}', with regions '{regions}' and anonymise '{anonymise}'.")
 
     # Load all patients.
     pats = dataset.list_patients(regions=regions)
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
-        map_df = pd.DataFrame(pats, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
+        df = pd.DataFrame(pats, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
 
         # Save map.
-        save_csv(map_df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
+        save_csv(df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
 
     for pat in tqdm(pats):
         # Get anonymous ID.
         if anonymise:
-            anon_id = map_df[map_df['patient-id'] == pat].index.values[0]
+            anon_id = df[df['patient-id'] == pat].index.values[0]
             filename = f'{anon_id}.nii.gz'
         else:
             filename = f'{pat}.nii.gz'
@@ -52,7 +52,7 @@ def convert_to_nifti(
             [0, 0, spacing[2], offset[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(data, affine)
-        filepath = os.path.join(nifti_ds.path, 'data', 'ct', filename)
+        filepath = os.path.join(nifti_set.path, 'data', 'ct', filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         nib.save(img, filepath)
 
@@ -61,7 +61,7 @@ def convert_to_nifti(
         region_data = patient.region_data(regions=pat_regions)
         for region, data in region_data.items():
             img = Nifti1Image(data.astype(np.int32), affine)
-            filepath = os.path.join(nifti_ds.path, 'data', 'regions', region, filename)
+            filepath = os.path.join(nifti_set.path, 'data', 'regions', region, filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
 
@@ -70,21 +70,21 @@ def convert_to_nifti(
             patient = dataset.patient(pat, load_default_rtdose=True) 
             dose_data = patient.dose_data
             img = Nifti1Image(dose_data, affine)
-            filepath = os.path.join(nifti_ds.path, 'data', 'dose', filename)
+            filepath = os.path.join(nifti_set.path, 'data', 'dose', filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
         except ValueError as e:
             logging.error(str(e))
 
     # Indicate success.
-    write_flag(nifti_ds, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(nifti_set, '__CONVERT_FROM_NIFTI_END__')
 
 def convert_to_nifti_multiple_studies(
-    dataset: 'Dataset',
+    dataset: str,
     regions: PatientRegions = 'all',
     anonymise: bool = False) -> None:
     # Create NIFTI dataset.
-    nifti_ds = recreate_nifti(dataset)
+    nifti_set = recreate_nifti(dataset)
     logging.arg_log('Converting dataset to NIFTI', ('dataset', 'regions', 'anonymise'), (dataset, regions, anonymise))
 
     # Get all patients.
@@ -97,14 +97,15 @@ def convert_to_nifti_multiple_studies(
 
     if anonymise:
         # Create ID mapping to anonymise patient IDs.
-        map_df = pd.DataFrame(pat_ids, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
-        filepath = os.path.join(set.path, 'nifti-map.csv')
-        map_df.to_csv(filepath, index=False)
+        df = pd.DataFrame(pat_ids, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
+        df.insert(0, 'dicom-dataset', dataset)
+        filepath = os.path.join(nifti_set.path, 'anon-index.csv')
+        df.to_csv(filepath, index=False)
 
-    for pat_id in tqdm(pat_ids[:5]):
+    for pat_id in tqdm(pat_ids):
         # Get anonymous ID.
         if anonymise:
-            nifti_id = map_df[map_df['patient-id'] == pat_id].iloc[0]['anon-id']
+            nifti_id = df[df['patient-id'] == pat_id].iloc[0]['anon-id']
         else:
             nifti_id = pat_id
 
@@ -112,7 +113,7 @@ def convert_to_nifti_multiple_studies(
         study_ids = study_df[study_df['patient-id'] == pat_id]['study-id'].values
 
         for i, study_id in enumerate(study_ids):
-            # Create CT nifti for study.
+            # Create CT NIFTI for study.
             pat = set.patient(pat_id)
             study = pat.study(study_id)
             ct_data = study.ct_data
@@ -124,21 +125,21 @@ def convert_to_nifti_multiple_studies(
                 [0, 0, ct_spacing[2], ct_offset[2]],
                 [0, 0, 0, 1]])
             img = Nifti1Image(ct_data, affine)
-            filepath = os.path.join(nifti_ds.path, 'data', 'ct', f'{nifti_id}-{i}.nii.gz')
+            filepath = os.path.join(nifti_set.path, 'data', 'ct', f'{nifti_id}-{i}.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
 
-            # Create region niftis for study.
+            # Create region NIFTIs for study.
             pat_regions = study.list_regions()
             pat_regions = [r for r in pat_regions if r in regions]
             region_data = study.region_data(regions=pat_regions)
             for region, data in region_data.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
-                filepath = os.path.join(nifti_ds.path, 'data', 'regions', region, f'{nifti_id}-{i}.nii.gz')
+                filepath = os.path.join(nifti_set.path, 'data', 'regions', region, f'{nifti_id}-{i}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 nib.save(img, filepath)
 
-            # Create RTDOSE niftis for study.
+            # Create RTDOSE NIFTIs for study.
             dose_data = study.dose_data
             if dose_data is not None:
                 dose_spacing = study.dose_spacing
@@ -149,9 +150,9 @@ def convert_to_nifti_multiple_studies(
                     [0, 0, dose_spacing[2], dose_offset[2]],
                     [0, 0, 0, 1]])
                 img = Nifti1Image(dose_data, affine)
-                filepath = os.path.join(nifti_ds.path, 'data', 'dose', '{nifti_id}-{i}.nii.gz')
+                filepath = os.path.join(nifti_set.path, 'data', 'dose', f'{nifti_id}-{i}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 nib.save(img, filepath)
 
     # Indicate success.
-    write_flag(nifti_ds, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(nifti_set, '__CONVERT_FROM_NIFTI_END__')

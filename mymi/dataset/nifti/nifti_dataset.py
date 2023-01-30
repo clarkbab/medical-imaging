@@ -7,6 +7,7 @@ from mymi import config
 from mymi import types
 from mymi.utils import append_row, load_csv
 
+from ..dataset.dicom import DICOMDataset
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
 
@@ -19,12 +20,17 @@ class NIFTIDataset(Dataset):
         self._path = os.path.join(config.directories.datasets, 'nifti', name)
         if not os.path.exists(self._path):
             raise ValueError(f"Dataset '{self}' not found.")
+
+    @property
+    def anon_manifest(self) -> Optional[pd.DataFrame]:
+        filepath = os.path.join(set.path, 'nifti-map.csv')
+        man_df = pd.read_csv(filepath).astype({ 'anon-id': str, 'patient-id': str })
+        man_df = load_csv('anon-maps', f'{self._name}.csv')
+        man_df = man_df
+        return man_df
     
     @property
     def description(self) -> str:
-        return self._global_id
-
-    def __str__(self) -> str:
         return self._global_id
 
     @property
@@ -39,12 +45,6 @@ class NIFTIDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
-    @property
-    def anon_manifest(self) -> Optional[pd.DataFrame]:
-        man_df = load_csv('anon-maps', f'{self._name}.csv')
-        man_df = man_df.astype({ 'anon-id': str, 'patient-id': str })
-        return man_df
-
     def list_patients(
         self,
         regions: types.PatientRegions = 'all') -> List[str]:
@@ -57,7 +57,7 @@ class NIFTIDataset(Dataset):
         pats = [f.replace('.nii.gz', '') for f in files]
 
         # Filter by 'regions'.
-        pats = list(filter(self._filter_patient_by_regions(regions), pats))
+        pats = list(filter(self.__filter_patient_by_regions(regions), pats))
         return pats
 
     def list_regions(self) -> pd.DataFrame:
@@ -95,7 +95,7 @@ class NIFTIDataset(Dataset):
             id = man_df.iloc[0]['anon-id']
         return NIFTIPatient(self, id)
 
-    def _filter_patient_by_regions(
+    def __filter_patient_by_regions(
         self,
         regions: types.PatientRegions) -> Callable[[str], bool]:
         def func(id):
@@ -111,3 +111,7 @@ class NIFTIDataset(Dataset):
                 else:
                     return False
         return func
+
+    def __str__(self) -> str:
+        return self._global_id
+    

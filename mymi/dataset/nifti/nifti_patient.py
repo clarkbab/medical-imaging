@@ -1,7 +1,7 @@
 import nibabel as nib
 import numpy as np
 import os
-from typing import Any, List, Optional, OrderedDict
+from typing import List, Optional, OrderedDict, Tuple
 
 from mymi.regions import is_region
 from mymi import types
@@ -23,6 +23,12 @@ class NIFTIPatient:
     @property
     def description(self) -> str:
         return self._global_id
+
+    @property
+    def origin(self) -> Tuple[str, str]:
+        idx = self.__dataset.index
+        record = idx[idx['sample-id'] == self.__id].iloc[0]
+        return (record['origin-dataset'], record['patient-id'])
 
     @property
     def path(self) -> str:

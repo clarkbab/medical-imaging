@@ -182,8 +182,7 @@ class DICOMPatient:
         return df
 
     def list_studies(self) -> List[str]:
-        studies = list(sorted(self.__index['study-id'].unique()))
-        return studies
+        return list(sorted(self.__index['study-id'].unique()))
 
     def list_regions(self, *args, **kwargs):
         return self.default_rtstruct.list_regions(*args, **kwargs)
@@ -200,15 +199,15 @@ class DICOMPatient:
         return DICOMStudy(self, id, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
-        # Preference the first study - no guarantees that this study has an RTPLAN/RTDOSE.
-        study_id = self.list_studies()[0]
-        study = self.study(study_id)
-        self.__default_rtplan = study.default_rtplan
-        self.__default_rtdose = study.default_rtdose
+        # Preference the most recent study.
+        def_study_df = self.list_studies()[-1]
+        def_study = self.study(def_study_df)
+        self.__default_rtplan = def_study.default_rtplan
+        self.__default_rtdose = def_study.default_rtdose
 
     def __load_default_rtstruct(self) -> None:
-        # Preference the first study - all studies without RTSTRUCTs have been trimmed.
-        def_study_id = self.list_studies()[0]
+        # Preference the most recent study.
+        def_study_id = self.list_studies()[-1]
         def_study = self.study(def_study_id)
         self.__default_rtstruct = def_study.default_rtstruct
 

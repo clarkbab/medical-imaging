@@ -8,6 +8,8 @@ dataset,internal
 ^ear_internal_r$,Cochlea_R
 ^glnd_submand_l$,Glnd_Submand_L
 ^glnd_submand_r$,Glnd_Submand_R
+^gtvp_preop$,GTVp
+^gtvp_7000$,GTVp
 ^mandible(_)?$,Bone_Mandible
 ^musc_constrictor$,Musc_Constrict
 ^oesophagus$,Esophagus_S

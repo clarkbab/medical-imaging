@@ -60,7 +60,8 @@ class RTPLANSeries(DICOMSeries):
             raise ValueError(f"RTPLANSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __load_default_rtplan(self) -> None:
-        def_rtplan_id = self.list_rtplans()[0]
+        # Preference most recent RTPLAN.
+        def_rtplan_id = self.list_rtplans()[-1]
         self.__default_rtplan = self.rtplan(def_rtplan_id)
 
     def __str__(self) -> str:

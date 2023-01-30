@@ -61,14 +61,15 @@ class RTSTRUCTSeries(DICOMSeries):
     def rtstruct(
         self,
         id: SOPInstanceUID) -> RTSTRUCT:
-        return RTSTRUCT(self, id, self.__region_map)
+        return RTSTRUCT(self, id, region_map=self.__region_map)
 
     def __check_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTSTRUCTSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __load_default_rtstruct(self) -> None:
-        def_rtstruct_id = self.list_rtstructs()[0]
+        # Preference most recent RTSTRUCT.
+        def_rtstruct_id = self.list_rtstructs()[-1]
         self.__default_rtstruct = self.rtstruct(def_rtstruct_id)
 
     def __str__(self) -> str:
