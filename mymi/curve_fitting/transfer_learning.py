@@ -416,7 +416,7 @@ def megaplot(
     # matplotlib.rc('text', usetex=True)
     # matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
-    # Create main gridspec._labels
+    # Create main gridspec (size: num OARs x num metrics).
     fig = plt.figure(constrained_layout=False, figsize=(6 * metrics.shape[1], 6 * n_regions))
     gs = GridSpec(n_regions, metrics.shape[1], figure=fig, wspace=wspace)
     for i, region in enumerate(regions):
@@ -424,9 +424,10 @@ def megaplot(
             metric = metrics[i, j]
             stat = stats[j]
             sec_stat = secondary_stats[i, j] if secondary_stats is not None else None
+            x_label = 'num. institutional samples (n)' if i == len(regions) - 1 else None
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
-            plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, subplot_spec=gs[i, j], legend_loc=legend_loc, model_labels=model_labels, secondary_stat=sec_stat, split=True, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
+            plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, legend_loc=legend_loc, model_labels=model_labels, outer_gs=gs[i, j], secondary_stat=sec_stat, split=True, x_label=x_label, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
 
     if savepath is not None:
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
@@ -462,10 +463,11 @@ def plot_bootstrap_fit(
     show_secondary_stat_diff: bool = True,
     split: bool = True,
     split_wspace: Optional[float] = 0.05,
-    subplot_spec: Optional[mpl.gridspec.SubplotSpec] = None,
+    outer_gs: Optional[mpl.gridspec.SubplotSpec] = None,
     title: str = '',
+    x_label: Optional[str] = None,
     x_scale: str = 'log',
-    y_label: str = '',
+    y_label: Optional[str] = None,
     y_lim: Optional[Tuple[float, float]] = None):
     datasets = arg_to_list(dataset, str)
     model_types = arg_to_list(model_type, str)
@@ -479,20 +481,26 @@ def plot_bootstrap_fit(
     if secondary_stat is None:
         show_secondary_stat_diff = False
         
-    # Create main gridspec.
-    main_gs_size = (2, 1) if show_diff else (1, 1)
-    main_gs_height_ratios = (48 if show_secondary_stat_diff else 49, 2 if show_secondary_stat_diff else 1) if show_diff else None
-    if subplot_spec is None:
+    # Create gridspec. If using 'megaplot' this sits inside the large megaplot gridspec.
+    # Size = (2 x 1) if showing significant differences, otherwise (1 x 1). Both primary and secondary
+    # stat significant differences share the bottom row.
+    gs_size = (2, 1) if show_diff else (1, 1)
+    gs_height_ratios = (48 if show_secondary_stat_diff else 49, 2 if show_secondary_stat_diff else 1) if show_diff else None
+    hspace = 0.35 if x_label is not None else None
+    if outer_gs is None:
+        # Create standalone gridspec for 'bootstrap fit'.
         fig = plt.figure(figsize=figsize)
-        main_gs = GridSpec(*main_gs_size, figure=fig, height_ratios=main_gs_height_ratios)
+        gs = GridSpec(*gs_size, figure=fig, height_ratios=gs_height_ratios, hspace=hspace)
     else:
-        fig = subplot_spec.get_gridspec().figure
-        main_gs = GridSpecFromSubplotSpec(*main_gs_size, subplot_spec=subplot_spec, height_ratios=main_gs_height_ratios)
+        # Nest 'bootstrap fit' gridspec in 'megaplot' gridspec.
+        fig = outer_gs.get_gridspec().figure
+        gs = GridSpecFromSubplotSpec(*gs_size, subplot_spec=outer_gs, height_ratios=gs_height_ratios, hspace=hspace)
 
     # Create data gridspec.
+    # Size = (1 x 2) if splitting, otherwise (1, 1).
     data_gs_size = (1, 2) if split else (1, 1)
     data_gs_width_ratios = (1, 19) if split else None
-    data_gs = GridSpecFromSubplotSpec(*data_gs_size, subplot_spec=main_gs[0, 0], width_ratios=data_gs_width_ratios, wspace=split_wspace)
+    data_gs = GridSpecFromSubplotSpec(*data_gs_size, subplot_spec=gs[0, 0], width_ratios=data_gs_width_ratios, wspace=split_wspace)
 
     # Create difference gridspec.
     if show_diff:
@@ -502,20 +510,29 @@ def plot_bootstrap_fit(
             diff_gs_size = (2, 1) if show_secondary_stat_diff else (1, 1)
         diff_gs_hspace = diff_hspace if show_secondary_stat_diff else None
         diff_gs_width_ratios = (1, 19) if split else None
-        diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=main_gs[1, 0], width_ratios=diff_gs_width_ratios, wspace=split_wspace)
+        diff_gs = GridSpecFromSubplotSpec(*diff_gs_size, hspace=diff_gs_hspace, subplot_spec=gs[1, 0], width_ratios=diff_gs_width_ratios, wspace=split_wspace)
 
-    # Create subplots.
+    # Create subplot axes.
+    # The dimensions of these lists will change depending upon the options:
+    #   'split', 'show_diff' and 'show_secondary_stat_diff'. 
     axs = [
         [
             fig.add_subplot(data_gs[0, 0]),
+            # Add this axis if we're splitting horizontally. Public results (n=0) will be shown on left split,
+            # all other results (n=5,10,...) will be shown on right split.
             *([fig.add_subplot(data_gs[0, 1])] if split else []),
         ],
+        # Add this/these axes if we're showing significant differences below the plot. This is another plot
+        # that's very thin vertically.
         *([
             [
+                # If we're split, don't show significant differences on the left split as it's just the public
+                # model results here.
                 *([None] if split else []),
                 fig.add_subplot(diff_gs[0, 1] if split else diff_gs[0, 0])
             ]
         ] if show_diff else []),
+        # Add these axes if we're showing secondary statistic (e.g. Q1/Q3) significant differences.
         *([
             [
                 *([None] if split else []),
@@ -657,8 +674,12 @@ def plot_bootstrap_fit(
             if show_secondary_stat_diff:
                 axs[2][1].set_xlim(4.5, x_upper_lim)
 
-    # Set y label.
-    axs[0][0].set_ylabel(y_label, fontsize=fontsize, weight=fontweight)
+    # Set x/y label.
+    if x_label is not None:
+        x_axis = axs[0][1] if split else axs[0][0]
+        x_axis.set_xlabel(x_label, fontsize=fontsize, weight=fontweight)
+    if y_label is not None:
+        axs[0][0].set_ylabel(y_label, fontsize=fontsize, weight=fontweight)
 
     # Set y limits.
     axs[0][0].set_ylim(y_lim)
