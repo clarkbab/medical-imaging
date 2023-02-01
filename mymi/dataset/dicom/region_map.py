@@ -44,11 +44,13 @@ class RegionMap:
                     continue
 
             args = []
+            # Add case sensitivity to regexp match args.
             if 'case-sensitive' in row:
-                # Add case sensitivity to regexp match args.
                 case_sensitive = row['case-sensitive']
                 if not np.isnan(case_sensitive) and not case_sensitive:
                     args += [re.IGNORECASE]
+            else:
+                args += [re.IGNORECASE]
                 
             # Perform match.
             if re.match(row['dataset'], region, *args):

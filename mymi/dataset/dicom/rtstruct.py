@@ -3,6 +3,7 @@ import pandas as pd
 import pydicom as dcm
 from typing import Dict, List, Optional, OrderedDict
 
+from mymi import logging
 from mymi.types import PatientRegion, PatientRegions
 
 from .ct_series import CTSeries
@@ -101,11 +102,21 @@ class RTSTRUCT(DICOMFile):
         # Map to internal regions.
         if use_mapping and self.__region_map is not None:
             pat_id = self.__series.study.patient.id
-            regions = [self.__region_map.to_internal(r, pat_id=pat_id) for r in regions]
+            new_regions = []
+            for region in regions:
+                mapped_region = self.__region_map.to_internal(region, pat_id=pat_id)
+                if mapped_region != region and mapped_region in regions:
+                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in unmapped regions for '{self}'. Skipping...")
+                    continue
+                new_regions.append(mapped_region)
+            regions = new_regions
 
         # Check for multiple regions.
-        if len(regions) != len(set(regions)):
-            raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Regions: '{regions}'")
+        # Probably not an issue? Do RTSTRUCT DICOMs support duplicates - probably not,
+        # and we check for duplicates after we apply the region map.
+        dup_regions = [r for r in regions if regions.count(r) > 1]
+        if len(dup_regions) > 0:
+            raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
 
         return regions
 
