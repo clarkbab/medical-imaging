@@ -19,35 +19,58 @@ class NIFTIPatient:
         self.__path = os.path.join(dataset.path, 'data', 'ct', f'{self.__id}.nii.gz')
         if not os.path.exists(self.__path):
             raise ValueError(f"Patient '{self}' not found.")
+
+    @property
+    def ct_data(self) -> np.ndarray:
+        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
+        img = nib.load(path)
+        data = img.get_data()
+        return data
+
+    @property
+    def ct_offset(self) -> types.Point3D:
+        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
+        img = nib.load(path)
+        affine = img.affine
+        offset = (affine[0][3], affine[1][3], affine[2][3])
+        return offset
+
+    @property
+    def ct_size(self) -> np.ndarray:
+        return self.ct_data.shape
+
+    @property
+    def ct_spacing(self) -> types.ImageSpacing3D:
+        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
+        img = nib.load(path)
+        affine = img.affine
+        spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
+        return spacing
     
     @property
     def description(self) -> str:
         return self._global_id
 
     @property
-    def origin(self) -> Tuple[str, str]:
-        idx = self.__dataset.index
-        record = idx[idx['sample-id'] == self.__id].iloc[0]
-        return (record['origin-dataset'], record['patient-id'])
-
-    @property
-    def path(self) -> str:
-        return self.__path
-
-    def region_path(
-        self,
-        region: str) -> str:
-        filepath = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nii.gz')
+    def dose_data(self) -> np.ndarray:
+        filepath = os.path.join(self.__dataset.path, 'data', 'dose', f'{self.__id}.nii.gz')
         if not os.path.exists(filepath):
-            raise ValueError(f"Patient '{self}' doesn't have region '{region}'.")
-        return filepath
-
-    def __str__(self) -> str:
-        return self._global_id
+            raise ValueError(f"Dose data not found for patient '{self}'.")
+        img = nib.load(filepath)
+        data = img.get_fdata()
+        return data
 
     @property
     def id(self) -> str:
         return self.__id
+
+    @property
+    def origin(self) -> Tuple[str, str]:
+        df = self.__dataset.anon_index
+        row = df[df['anon-id'] == self.__id].iloc[0]
+        dataset = row['dicom-dataset']
+        pat_id = row['patient-id']
+        return (dataset, pat_id)
 
     @property
     def patient_id(self) -> Optional[str]:
@@ -63,6 +86,15 @@ class NIFTIPatient:
         pat_id = manifest.iloc[0]['patient-id']
 
         return pat_id
+
+    @property
+    def path(self) -> str:
+        return self.__path
+
+    def has_region(
+        self,
+        region: str) -> bool:
+        return region in self.list_regions()
 
     def list_regions(
         self,
@@ -96,38 +128,6 @@ class NIFTIPatient:
 
         return names
 
-    def has_region(
-        self,
-        region: str) -> bool:
-        return region in self.list_regions()
-
-    @property
-    def ct_spacing(self) -> types.ImageSpacing3D:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
-        affine = img.affine
-        spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
-        return spacing
-
-    @property
-    def ct_offset(self) -> types.Point3D:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
-        affine = img.affine
-        offset = (affine[0][3], affine[1][3], affine[2][3])
-        return offset
-
-    @property
-    def ct_data(self) -> np.ndarray:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
-        data = img.get_data()
-        return data
-
-    @property
-    def ct_size(self) -> np.ndarray:
-        return self.ct_data.shape
-
     def region_data(
         self,
         region: types.PatientRegions = 'all') -> OrderedDict:
@@ -151,12 +151,5 @@ class NIFTIPatient:
             data[region] = rdata.astype(bool)
         return data
 
-    @property
-    def dose_data(self) -> np.ndarray:
-        filepath = os.path.join(self.__dataset.path, 'data', 'dose', f'{self.__id}.nii.gz')
-        if not os.path.exists(filepath):
-            raise ValueError(f"Dose data not found for patient '{self}'.")
-        img = nib.load(filepath)
-        data = img.get_fdata()
-        return data
-
+    def __str__(self) -> str:
+        return self._global_id

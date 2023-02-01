@@ -7,7 +7,6 @@ from mymi import config
 from mymi import types
 from mymi.utils import append_row, load_csv
 
-from ..dataset.dicom import DICOMDataset
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
 
@@ -15,31 +14,28 @@ class NIFTIDataset(Dataset):
     def __init__(
         self,
         name: str):
-        self._global_id = f"NIFTI: {name}"
-        self._name = name
-        self._path = os.path.join(config.directories.datasets, 'nifti', name)
-        if not os.path.exists(self._path):
+        self.__global_id = f"NIFTI: {name}"
+        self.__name = name
+        self.__path = os.path.join(config.directories.datasets, 'nifti', name)
+        if not os.path.exists(self.__path):
             raise ValueError(f"Dataset '{self}' not found.")
 
     @property
-    def anon_manifest(self) -> Optional[pd.DataFrame]:
-        filepath = os.path.join(set.path, 'nifti-map.csv')
-        man_df = pd.read_csv(filepath).astype({ 'anon-id': str, 'patient-id': str })
-        man_df = load_csv('anon-maps', f'{self._name}.csv')
-        man_df = man_df
-        return man_df
+    def anon_index(self) -> Optional[pd.DataFrame]:
+        filepath = os.path.join(self.__path, 'anon-index.csv')
+        return pd.read_csv(filepath).astype({ 'anon-id': str, 'patient-id': str })
     
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
     def name(self) -> str:
-        return self._name
+        return self.__name
     
     @property
     def path(self) -> str:
-        return self._path
+        return self.__path
 
     @property
     def type(self) -> DatasetType:
@@ -48,11 +44,8 @@ class NIFTIDataset(Dataset):
     def list_patients(
         self,
         regions: types.PatientRegions = 'all') -> List[str]:
-        """
-        returns: a list of NIFTI IDs.
-        """
         # Load patients.
-        ct_path = os.path.join(self._path, 'data', 'ct')
+        ct_path = os.path.join(self.__path, 'data', 'ct')
         files = list(sorted(os.listdir(ct_path)))
         pats = [f.replace('.nii.gz', '') for f in files]
 
@@ -87,12 +80,7 @@ class NIFTIDataset(Dataset):
 
     def patient(
         self,
-        id: Union[int, str],
-        by_dicom_id: bool = False) -> NIFTIPatient:
-        if by_dicom_id:
-            man_df = self.anon_manifest
-            man_df = man_df[man_df['patient-id'] == str(id)]
-            id = man_df.iloc[0]['anon-id']
+        id: Union[int, str]) -> NIFTIPatient:
         return NIFTIPatient(self, id)
 
     def __filter_patient_by_regions(
@@ -113,5 +101,5 @@ class NIFTIDataset(Dataset):
         return func
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id
     
