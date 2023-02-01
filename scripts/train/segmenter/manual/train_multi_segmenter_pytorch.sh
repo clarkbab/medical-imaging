@@ -5,12 +5,12 @@ python --version
 
 DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
 MODEL_NAME="segmenter-multi"
-N_EPOCHS=5
-N_GPUS=4
+N_EPOCHS=1
+N_GPUS=1
 N_NODES=1
 N_WORKERS=1
 N_TRAIN=None
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L']"
+REGIONS="['Brain','Lens_L','OpticNerve_L','Parotid_L','Submandibular_L']"
 RESUME=False
 RESUME_CKPT=None
 RUN_NAME="gpu-test"

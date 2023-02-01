@@ -131,7 +131,9 @@ class MultiSegmenter(pl.LightningModule):
 
     def training_step(self, batch, _):
         # Forward pass.
-        _, x, y, class_mask, class_weights = batch
+        desc, x, y, class_mask, class_weights = batch
+        print(f'=== {desc} ===')
+        print(x.shape)
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y, class_mask, class_weights)
         self.log('train/loss', loss, on_epoch=True)

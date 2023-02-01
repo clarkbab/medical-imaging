@@ -98,12 +98,14 @@ class MultiUNet3D(nn.Module):
         self.__n_gpus = n_gpus
 
         # Assign devices based on number of GPUs.
+        if self.__n_gpus == 0:
+            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = 4 * ['cpu']
         if self.__n_gpus == 1:
             self.__device_0, self.__device_1, self.__device_2, self.__device_3 = 4 * ['cuda:0']
         elif self.__n_gpus == 2:
             self.__device_0, self.__device_2, self.__device_1, self.__device_3 = 2 * ['cuda:0', 'cuda:1']
         elif self.__n_gpus == 4:
-            self.__device_0, self.__device_2, self.__device_1, self.__device_3 = ['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']
+            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = ['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']
 
         # Define layers.
         n_features = 32
@@ -133,7 +135,7 @@ class MultiUNet3D(nn.Module):
         self.up3_c = Conv(2 * n_features, 2 * n_features).to(self.__device_1)
 
         # Split 'up4' to place on separate GPUs.
-        self.up4_a = nn.ConvTranspose3d(in_channels=2 * n_features, out_channels=n_features, kernel_size=2, stride=2).to(self.__device_2)
+        self.up4_a = nn.ConvTranspose3d(in_channels=2 * n_features, out_channels=n_features, kernel_size=2, stride=2).to(self.__device_1)
         self.up4_b = nn.Conv3d(in_channels=2 * n_features, out_channels=n_features, kernel_size=3, stride=1, padding=1).to(self.__device_2)
         self.up4_c = nn.InstanceNorm3d(n_features)
         self.up4_d = nn.ReLU()
@@ -183,7 +185,7 @@ class MultiUNet3D(nn.Module):
         x = self.up3_c(x)
 
         # Split 'up4' layer to place on separate GPUs.
-        x = self.up4_a(x.to(self.__device_2))
+        x = self.up4_a(x)
         if x.shape != x1.shape:
             n_axes = len(x.shape)
             padding = np.zeros((n_axes, 2), dtype='uint8')
@@ -193,8 +195,8 @@ class MultiUNet3D(nn.Module):
                     padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
             padding = tuple(np.flip(padding, axis=0).flatten())
             x = pad(x, padding)
-        x = torch.cat((x, x1.to(self.__device_2)), dim=1)
-        x = self.up4_b(x)
+        x = torch.cat((x, x1.to(self.__device_1)), dim=1)
+        x = self.up4_b(x.to(self.__device_2))
         x = self.up4_c(x)
         x = self.up4_d(x)
         x = self.up4_e(x.to(self.__device_3))

@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple, Union
 from mymi import types
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
+from mymi.geometry import get_centre
 from mymi import logging
 from mymi.regions import RegionNames, to_list
 from mymi.utils import arg_to_list
@@ -19,6 +20,7 @@ class MultiLoader:
         dataset: Union[str, List[str]],
         batch_size: int = 1,    # Doesn't support > 1 as probably not necessary and introduces problems like padding images to max batch size.
         check_processed: bool = True,
+        crop_x_mm: Optional[float] = None,
         half_precision: bool = True,
         load_data: bool = True,
         load_test_origin: bool = True,
@@ -85,12 +87,12 @@ class MultiLoader:
         nn_val_samples = train_samples[n_nn_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, nn_train_samples, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing, transform=transform)
+        train_ds = TrainingDataset(datasets, nn_train_samples, crop_x_mm=crop_x_mm, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing, transform=transform)
         train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
         class_weights = np.ones(len(to_list(regions)) + 1)
-        val_ds = TrainingDataset(datasets, nn_val_samples, class_weights=class_weights, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing)
+        val_ds = TrainingDataset(datasets, nn_val_samples, class_weights=class_weights, crop_x_mm=crop_x_mm, half_precision=half_precision, load_data=load_data, regions=regions, spacing=spacing)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -107,12 +109,14 @@ class TrainingDataset(Dataset):
         datasets: List[str],
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
+        crop_x_mm: Optional[float] = None,
         half_precision: bool = True,
         load_data: bool = True,
         regions: types.PatientRegions = 'all',
         spacing: types.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
+        self.__crop_x_mm = crop_x_mm
         self.__half_precision = half_precision
         self.__load_data = load_data
         self.__regions = to_list(regions)
@@ -193,6 +197,19 @@ class TrainingDataset(Dataset):
         if len(regions) == len(self.__regions):
             mask[0] = True
             label[0] = np.invert(label.any(axis=0))
+
+        # Perform crop.
+        if self.__crop_x_mm is not None:
+            x_centre = get_centre(input)[0]
+            crop_lower = x_centre - int(np.ceil((self.__crop_x_mm / 2) / self.__spacing[0]))
+            crop_width = int(np.ceil(self.__crop_x_mm / self.__spacing[0])) 
+            input = input[crop_lower:]
+            input = input[:crop_width]
+            precrop_sum = label.sum()
+            label = label[:, crop_lower:]
+            label = label[:, :crop_width]
+            if label.sum() != precrop_sum:
+                raise ValueError(f"Cropped label for sample '{desc}'.")
 
         # Perform transform.
         if self.__transform:

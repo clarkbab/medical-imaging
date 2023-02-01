@@ -3,14 +3,15 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-DATASETS="['PMCC-HN-TEST-MULTI-HALF','PMCC-HN-TRAIN-MULTI-HALF']"
+CROP_X_MM=400
+DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
 MODEL_NAME="segmenter-multi"
 N_EPOCHS=5
-N_GPUS=2
+N_GPUS=1
 N_NODES=1
 N_WORKERS=1
 N_TRAIN=None
-REGIONS="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L']"
+REGIONS="['Brain','Lens_L','OpticNerve_L','Parotid_L','Submandibular_L']"
 RESUME=False
 RESUME_CKPT=None
 RUN_NAME="gpu-test"
@@ -22,6 +23,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi.py \
     --dataset $DATASETS \
     --model $MODEL_NAME \
     --run $RUN_NAME \
+    --crop_x_mm $CROP_X_MM \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \

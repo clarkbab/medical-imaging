@@ -18,21 +18,6 @@ def get_extent(a: np.ndarray) -> Optional[Union[types.Box2D, types.Box3D]]:
 
     return box
 
-def get_extent_centre(a: np.ndarray) -> Optional[Union[types.Point2D, types.Point3D]]:
-    if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent_centre' expected a boolean array, got '{a.dtype}'.")
-
-    # Get extent.
-    extent = get_extent(a)
-
-    if extent:
-        # Find the extent centre.
-        centre = tuple(np.floor(np.array(extent).sum(axis=0) / 2).astype(int))
-    else:
-        return None
-
-    return centre
-
 def get_extent_width_vox(a: np.ndarray) -> Optional[Union[types.ImageSize2D, types.ImageSize3D]]:
     if a.dtype != np.bool_:
         raise ValueError(f"'get_extent_width_vox' expected a boolean array, got '{a.dtype}'.")

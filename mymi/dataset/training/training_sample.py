@@ -23,7 +23,8 @@ class TrainingSample:
             raise ValueError(f"Sample '{self.__id}' not found for dataset '{self.__dataset}'.")
         index = self.__dataset.index
         index = index[index['sample-id'] == self.__id]
-        index = index[~index['empty']]
+        if 'empty' in index.columns:
+            index = index[~index['empty']]
         self.__index = index
 
     @property

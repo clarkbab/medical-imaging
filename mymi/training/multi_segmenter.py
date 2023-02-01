@@ -27,6 +27,7 @@ def train_multi_segmenter(
     dataset: Union[str, List[str]],
     model: str,
     run: str,
+    crop_x_mm: Optional[float] = None,
     lr_find: bool = False,
     n_epochs: int = 150,
     n_folds: Optional[int] = 5,
@@ -53,10 +54,10 @@ def train_multi_segmenter(
 
     # Load datasets and check for consistent spacing.
     datasets = arg_to_list(dataset, str)
-    spacing_0 = ds.get(datasets[0], 'training').params['output-spacing']
+    spacing = ds.get(datasets[0], 'training').params['output-spacing']
     for dataset in datasets[1:]:
-        spacing = ds.get(dataset, 'training').params['output-spacing']
-        if spacing != spacing_0:
+        sp = ds.get(dataset, 'training').params['output-spacing']
+        if sp != spacing:
             raise ValueError(f'Datasets must have consistent spacing.')
 
     # Create transforms.
@@ -71,7 +72,7 @@ def train_multi_segmenter(
 
     # Create data loaders.
     transform = None
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, regions=regions, spacing=spacing, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, crop_x_mm=crop_x_mm, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, regions=regions, spacing=spacing, test_fold=test_fold, transform=transform)
 
     # Get loss function.
     loss_fn = TverskyWithFocalLoss()

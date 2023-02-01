@@ -5,6 +5,7 @@ from typing import List, Optional, OrderedDict, Tuple
 
 from mymi.regions import is_region
 from mymi import types
+from mymi.utils import arg_to_list
 
 class NIFTIPatient:
     def __init__(
@@ -131,12 +132,10 @@ class NIFTIPatient:
     def region_data(
         self,
         region: types.PatientRegions = 'all') -> OrderedDict:
-        # Convert regions to list.
-        if type(region) == str:
-            if region == 'all':
-                regions = self.list_regions()
-            else:
-                regions = [region]
+        if region == 'all':
+            regions = self.list_regions()
+        else:
+            regions = arg_to_list(region, str)
 
         data = {}
         for region in regions:
