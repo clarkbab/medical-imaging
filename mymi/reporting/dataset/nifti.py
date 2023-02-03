@@ -19,7 +19,8 @@ from mymi import logging
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
-from mymi import types
+from mymi.regions import to_list as region_to_list
+from mymi.types import ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_summary(
@@ -38,7 +39,7 @@ def get_region_summary(
 
     for pat in tqdm(pats):
         spacing = set.patient(pat).ct_spacing
-        label = set.patient(pat).region_data(regions=region)[region]
+        label = set.patient(pat).region_data(region=region)[region]
 
         data = {
             'dataset': dataset,
@@ -87,7 +88,7 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add volume.
-        vox_volume = reduce(lambda x, y: x * y, spacing)
+        vox_volume = reduce(np.multiply, spacing)
         data['metric'] = 'volume-mm3'
         data['value'] = vox_volume * label.sum() 
         df = append_row(df, data)
@@ -99,26 +100,28 @@ def get_region_summary(
 
 def create_region_summary(
     dataset: str,
-    region: str) -> None:
-    # List patients.
+    region: PatientRegions = 'all') -> None:
+    logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
+
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
+    regions = region_to_list(region)
 
-    # Allows us to pass all regions from Spartan 'array' job.
-    if len(pats) == 0:
-        logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
-        return
+    for region in tqdm(regions):
+        # List patients.
+        pats = set.list_patients(regions=region)
 
-    logging.info(f"Creating region summary for dataset '{dataset}', region '{region}'.")
+        # Allows us to pass all regions from Spartan 'array' job.
+        if len(pats) == 0:
+            logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
+            return
 
-    # Generate counts report.
-    df = get_region_summary(dataset, region)
+        # Generate counts report.
+        df = get_region_summary(dataset, region)
 
-    # Save report.
-    set = ds.get(dataset, 'nifti')
-    filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
+        # Save report.
+        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        df.to_csv(filepath, index=False)
 
 def _get_outlier_cols_func(
     lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:
@@ -222,7 +225,7 @@ def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
 
 def get_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    regions: PatientRegions = 'all') -> pd.DataFrame:
     logging.info(f"Creating CT summary for dataset '{dataset}'.")
 
     # Get patients.
@@ -266,7 +269,7 @@ def get_ct_summary(
 
 def create_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     # Get summary.
     df = get_ct_summary(dataset)
 
@@ -278,7 +281,7 @@ def create_ct_summary(
 
 def load_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    regions: PatientRegions = 'all') -> pd.DataFrame:
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     if not os.path.exists(filepath):
@@ -288,8 +291,8 @@ def load_ct_summary(
 def create_segmenter_prediction_figures(
     dataset: Union[str, List[str]],
     region: str,
-    localiser: Union[types.ModelName, List[types.ModelName]],
-    segmenter: Union[types.ModelName, List[types.ModelName]],
+    localiser: Union[ModelName, List[ModelName]],
+    segmenter: Union[ModelName, List[ModelName]],
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     view: Union[Literal['axial', 'coronal', 'sagittal'], List[Literal['axial', 'coronal', 'sagittal']]] = ['axial', 'coronal', 'sagittal']) -> None:
@@ -547,7 +550,7 @@ def get_object_summary(
     # Get objects.
     pat = ds.get(dataset, 'nifti').patient(patient)
     spacing = pat.ct_spacing
-    label = pat.region_data(regions=region)[region]
+    label = pat.region_data(region=region)[region]
     objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     

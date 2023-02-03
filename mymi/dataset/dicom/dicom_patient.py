@@ -26,6 +26,7 @@ class DICOMPatient:
         self.__default_rtdose = None        # Lazy-loaded.
         self.__default_rtplan = None        # Lazy-loaded.
         self.__default_rtstruct = None      # Lazy-loaded.
+        self.__default_study = None         # Lazy-loaded.
         self.__dataset = dataset
         self.__id = str(id)
         self.__region_map = region_map
@@ -88,6 +89,12 @@ class DICOMPatient:
         if self.__default_rtstruct is None:
             self.__load_default_rtstruct()
         return self.__default_rtstruct
+    
+    @property
+    def default_study(self) -> DICOMStudy:
+        if self.__default_study is None:
+            self.__load_default_study()
+        return self.__default_study
 
     @property
     def description(self) -> str:
@@ -199,17 +206,16 @@ class DICOMPatient:
         return DICOMStudy(self, id, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
-        # Preference the most recent study.
-        def_study_df = self.list_studies()[-1]
-        def_study = self.study(def_study_df)
-        self.__default_rtplan = def_study.default_rtplan
-        self.__default_rtdose = def_study.default_rtdose
+        self.__default_rtplan = self.default_study.default_rtplan
+        self.__default_rtdose = self.default_study.default_rtdose
 
     def __load_default_rtstruct(self) -> None:
+        self.__default_rtstruct = self.default_study.default_rtstruct
+
+    def __load_default_study(self) -> None:
         # Preference the most recent study.
         def_study_id = self.list_studies()[-1]
-        def_study = self.study(def_study_id)
-        self.__default_rtstruct = def_study.default_rtstruct
+        self.__default_study = self.study(def_study_id)
 
     def __str__(self) -> str:
         return self.__global_id

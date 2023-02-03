@@ -23,7 +23,7 @@ class NIFTIDataset(Dataset):
     @property
     def anon_index(self) -> Optional[pd.DataFrame]:
         filepath = os.path.join(self.__path, 'anon-index.csv')
-        return pd.read_csv(filepath).astype({ 'anon-id': str, 'patient-id': str })
+        return pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
     
     @property
     def description(self) -> str:

@@ -15,6 +15,7 @@ def plot_region(
     region: Optional[types.PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
+    study_id: Optional[str] = None,
     use_mapping: bool = False,
     **kwargs) -> None:
     regions = arg_to_list(region, str)
@@ -22,20 +23,24 @@ def plot_region(
 
     # Load data.
     patient = DICOMDataset(dataset).patient(pat_id)
-    ct_data = patient.ct_data
-    region_data = patient.region_data(regions=regions, use_mapping=use_mapping) if regions is not None else None
-    spacing = patient.ct_spacing
-    dose_data = patient.dose_data if show_dose else None
+    if study_id is not None:
+        study = patient.study(study_id)
+    else:
+        study = patient.default_study
+    ct_data = study.ct_data
+    region_data = study.region_data(regions=regions, use_mapping=use_mapping) if regions is not None else None
+    spacing = study.ct_spacing
+    dose_data = study.dose_data if show_dose else None
 
     if centre_of is not None:
         if type(centre_of) == str:
             if region_data is None or centre_of not in region_data:
-                centre_of = patient.region_data(regions=centre_of, use_mapping=use_mapping)[centre_of]
+                centre_of = study.region_data(regions=centre_of, use_mapping=use_mapping)[centre_of]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = patient.region_data(regions=crop, use_mapping=use_mapping)[crop]
+                crop = study.region_data(regions=crop, use_mapping=use_mapping)[crop]
 
     if region_labels is not None:
         # Rename 'regions' and 'region_data' keys.
