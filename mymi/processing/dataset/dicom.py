@@ -9,6 +9,7 @@ from tqdm import tqdm
 from mymi.dataset.dicom import DICOMDataset
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
+from mymi.regions import to_list as regions_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, save_csv
 
@@ -81,18 +82,22 @@ def convert_to_nifti(
 
 def convert_to_nifti_multiple_studies(
     dataset: str,
-    regions: PatientRegions = 'all',
+    dicom_dataset: Optional[str] = None,
+    region: PatientRegions = 'all',
     anonymise: bool = False) -> None:
+    regions = regions_to_list(region)
+
     # Create NIFTI dataset.
     nifti_set = recreate_nifti(dataset)
     logging.arg_log('Converting dataset to NIFTI', ('dataset', 'regions', 'anonymise'), (dataset, regions, anonymise))
 
     # Get all patients.
-    set = DICOMDataset(dataset)
+    dicom_dataset = dataset if dicom_dataset is None else dicom_dataset
+    set = DICOMDataset(dicom_dataset)
     filepath = os.path.join(set.path, 'patient-studies.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"File '<dataset>/patient-studies.csv' not found.")
-    study_df = pd.read_csv(filepath)
+    study_df = pd.read_csv(filepath, dtype={ 'patient-id': str })
     pat_ids = list(sorted(np.unique(study_df['patient-id'])))
 
     if anonymise:
@@ -104,6 +109,7 @@ def convert_to_nifti_multiple_studies(
         }
         df = pd.DataFrame(columns=cols.keys())
 
+    pat_ids = ['9065544']
     for i, pat_id in enumerate(tqdm(pat_ids)):
         # Get study IDs.
         study_ids = study_df[study_df['patient-id'] == pat_id]['study-id'].values
@@ -119,7 +125,7 @@ def convert_to_nifti_multiple_studies(
             if anonymise:
                 data = {
                     'patient-id': nifti_id,
-                    'origin-dataset': dataset,
+                    'origin-dataset': dicom_dataset,
                     'origin-patient-id': pat_id,
                     'origin-study-id': study_id,
                 }

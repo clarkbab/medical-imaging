@@ -105,10 +105,12 @@ class RTSTRUCT(DICOMFile):
             new_regions = []
             for region in regions:
                 mapped_region = self.__region_map.to_internal(region, pat_id=pat_id)
+                # Don't map regions that would map to an existing region name.
                 if mapped_region != region and mapped_region in regions:
                     logging.warning(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in unmapped regions for '{self}'. Skipping...")
-                    continue
-                new_regions.append(mapped_region)
+                    new_regions.append(region)
+                else:
+                    new_regions.append(mapped_region)
             regions = new_regions
 
         # Check for multiple regions.
@@ -144,7 +146,7 @@ class RTSTRUCT(DICOMFile):
         names = list(filter(fn, names))
 
         # Get reference CTs.
-        cts = self.__ref_ct.get_cts()
+        cts = self.ref_ct.get_cts()
 
         # Load RTSTRUCT dicom.
         rtstruct = self.get_rtstruct()

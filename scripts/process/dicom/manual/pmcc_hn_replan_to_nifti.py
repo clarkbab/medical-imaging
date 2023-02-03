@@ -8,8 +8,9 @@ sys.path.append(mymi_dir)
 from mymi.processing.dataset.dicom import convert_to_nifti_multiple_studies
 from mymi.regions import RegionNames
 
-dataset = 'PMCC-HN-REPLAN'
-regions = RegionNames
+dataset = 'PMCC-HN-REPLAN-TEST'
+dicom_dataset = 'PMCC-HN-REPLAN'
+regions = 'all'
 anonymise = True
 
-convert_to_nifti_multiple_studies(dataset, regions, anonymise)
+convert_to_nifti_multiple_studies(dataset, dicom_dataset=dicom_dataset, region=regions, anonymise=anonymise)
