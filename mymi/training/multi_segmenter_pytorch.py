@@ -14,6 +14,7 @@ import torch
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.optim import SGD
+from torch.utils.checkpoint import checkpoint
 from typing import List, Optional, Union
 
 from mymi import config
@@ -119,16 +120,20 @@ def train_multi_segmenter_pytorch(
         model.train()
         for i, data_b in enumerate(train_loader):
             desc_b, input_b, label_b, class_mask_b, class_weights_b = data_b
+            print(f'=== {desc_b[0]} ===')
+            print(input_b[0].shape)
 
             # Crop input and label.
-            crop_mm = 400
-            crop = int(np.floor(crop_mm / spacing_0[0]))
-            x_centre = get_centre(input_b)[2]
-            x_lower = x_centre - int(np.floor(crop / 2))
-            input_b = input_b[:, :, x_lower:]
-            input_b = input_b[:, :, :crop]
-            label_b = label_b[:, :, x_lower:]
-            label_b = label_b[:, :, :crop]
+            crop = False
+            if crop:
+                crop_mm = 400
+                crop = int(np.floor(crop_mm / spacing_0[0]))
+                x_centre = get_centre(input_b)[2]
+                x_lower = x_centre - int(np.floor(crop / 2))
+                input_b = input_b[:, :, x_lower:]
+                input_b = input_b[:, :, :crop]
+                label_b = label_b[:, :, x_lower:]
+                label_b = label_b[:, :, :crop]
 
             # Move loss calculation tensors to final GPU.
             final_gpu = f'cuda:{n_gpus - 1}'
@@ -141,13 +146,19 @@ def train_multi_segmenter_pytorch(
 
             # Perform forward, backward and update steps.
             with autocast(device_type='cuda', dtype=torch.float16):
+                dummy_arg = torch.Tensor()
+                dummy_arg.requires_grad = True
+                # output_b = checkpoint(model, input_b, dummy_arg)
                 output_b = model(input_b)
                 loss = loss_fn(output_b, label_b, class_mask_b, class_weights_b)
+
             scaler.scale(loss).backward()
             scaler.step(optimiser)
             scaler.update()
 
-            # Store GPU usage.
+            # Store GPU usage. Memory should peak after loss is calculate (?)
+            # as without checkpointing all intermediate activations are stored.
+            print([g.memoryUtil for g in getGPUs()])
             data = {
                 'epoch': epoch,
                 'iteration': i,

@@ -3,11 +3,9 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-CROP_X_MM=400
-CROP_X_MM=None
 DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
 MODEL_NAME="segmenter-multi"
-N_EPOCHS=5
+N_EPOCHS=1
 N_GPUS=1
 N_NODES=1
 N_WORKERS=1
@@ -20,11 +18,10 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
 USE_LOGGER=False
 
-python $SCRIPT_DIR/train/segmenter/train_multi.py \
+python $SCRIPT_DIR/train/segmenter/train_memory_test.py \
     --dataset $DATASETS \
     --model $MODEL_NAME \
     --run $RUN_NAME \
-    --crop_x_mm $CROP_X_MM \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \

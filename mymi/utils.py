@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from GPUtil import getGPUs
 import hashlib
 import json
 import matplotlib.pyplot as plt
@@ -228,3 +229,6 @@ class Timer:
 
     def save(self, filepath):
         self.__df.astype(self.__cols).to_csv(filepath, index=False)
+
+def gpu_usage() -> List[float]:
+    return [g.memoryUsed for g in getGPUs()]

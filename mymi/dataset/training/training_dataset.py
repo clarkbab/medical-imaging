@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
-from mymi.regions import to_list
+from mymi.regions import to_list as regions_to_list
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
@@ -14,8 +14,8 @@ class TrainingDataset(Dataset):
     def __init__(
         self,
         name: str,
-        check_processed: bool = True,
-        load_index: bool = True):
+        check_processed: bool = True):
+        self.__index = None     # Lazy-loaded.
         self.__name = name
         self.__global_id = f"TRAINING: {self.__name}"
         self.__path = os.path.join(config.directories.datasets, 'training', self.__name)
@@ -32,29 +32,19 @@ class TrainingDataset(Dataset):
                 if not os.path.exists(path):
                     raise ValueError(f"Dataset '{self}' processing from NIFTI not completed. To override check use 'check_processed=False'.")
 
-        # Load data index.
-        if load_index:
-            filepath = os.path.join(self.__path, 'index.csv')
-            self.__index = pd.read_csv(filepath).astype({ 'patient-id': str, 'sample-id': str })
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
     @property
     def description(self) -> str:
         return self.__global_id
 
-    def __str__(self) -> str:
-        return self.__global_id
+    @property
+    def index(self) -> str:
+        if self.__index is None:
+            self.__load_index()
+        return self.__index
 
     @property
     def name(self) -> str:
         return self.__name
-
-    @property
-    def path(self) -> str:
-        return self.__path
 
     @property
     def params(self) -> pd.DataFrame:
@@ -72,8 +62,29 @@ class TrainingDataset(Dataset):
         return params
 
     @property
+    def path(self) -> str:
+        return self.__path
+
+    @property
     def type(self) -> DatasetType:
         return DatasetType.TRAINING
+
+    def list_samples(
+        self,
+        regions: types.PatientRegions = 'all') -> List[int]:
+        regions = regions_to_list(regions) 
+
+        # Filter out 'empty' labels.
+        if 'empty' in self.index.columns:
+            index = self.index[~self.index['empty']]
+
+        # Filter by regions.
+        index = index[index.region.isin(regions)]
+
+        # Get sample IDs.
+        sample_ids = list(sorted(index['sample-id'].unique()))
+
+        return sample_ids
 
     def patient_id(
         self,
@@ -84,24 +95,6 @@ class TrainingDataset(Dataset):
         pat_id = df['patient-id'].iloc[0] 
         return pat_id
 
-    def list_samples(
-        self,
-        regions: types.PatientRegions = 'all') -> List[int]:
-        regions = to_list(regions) 
-
-        # Filter out 'empty' labels.
-        index = self.__index
-        if 'empty' in self.__index.columns:
-            index = self.__index[~self.__index['empty']]
-
-        # Filter by regions.
-        index = index[index.region.isin(regions)]
-
-        # Get sample IDs.
-        sample_ids = list(sorted(index['sample-id'].unique()))
-
-        return sample_ids
-
     def sample(
         self,
         sample_id: Union[int, str],
@@ -111,3 +104,10 @@ class TrainingDataset(Dataset):
             sample_id = self.__index[self.__index['patient-id'] == sample_id].iloc[0]['sample-id']
 
         return TrainingSample(self, sample_id)
+
+    def __load_index(self) -> None:
+        filepath = os.path.join(self.__path, 'index.csv')
+        self.__index = pd.read_csv(filepath).astype({ 'patient-id': str, 'sample-id': str })
+
+    def __str__(self) -> str:
+        return self.__global_id

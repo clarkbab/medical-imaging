@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.optim import SGD
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 from typing import Dict, List, Optional, OrderedDict, Tuple
 import wandb
 
@@ -134,6 +135,7 @@ class MultiSegmenter(pl.LightningModule):
         desc, x, y, class_mask, class_weights = batch
         print(f'=== {desc} ===')
         print(x.shape)
+        # y_hat = checkpoint(self.__network, x)
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y, class_mask, class_weights)
         self.log('train/loss', loss, on_epoch=True)
