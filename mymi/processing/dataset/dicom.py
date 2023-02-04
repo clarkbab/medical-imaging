@@ -109,7 +109,6 @@ def convert_to_nifti_multiple_studies(
         }
         df = pd.DataFrame(columns=cols.keys())
 
-    pat_ids = ['9065544']
     for i, pat_id in enumerate(tqdm(pat_ids)):
         # Get study IDs.
         study_ids = study_df[study_df['patient-id'] == pat_id]['study-id'].values
