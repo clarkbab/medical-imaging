@@ -7,9 +7,6 @@ from mymi import config
 from .training_dataset import TrainingDataset
 
 def list() -> List[str]:
-    """
-    returns: list of raw datasets.
-    """
     path = os.path.join(config.directories.datasets, 'training')
     if os.path.exists(path):
         return sorted(os.listdir(path))
@@ -23,34 +20,19 @@ def get(name: str) -> TrainingDataset:
         raise ValueError(f"TrainingDataset '{name}' doesn't exist.")
 
 def exists(name: str) -> bool:
-    """
-    returns: if the dataset exists.
-    """
     ds_path = os.path.join(config.directories.datasets, 'training', name)
     return os.path.exists(ds_path)
 
 def create(name: str) -> TrainingDataset:
-    # Create dataset folder.
     ds_path = os.path.join(config.directories.datasets, 'training', name)
     os.makedirs(ds_path)
-
-    return TrainingDataset(name, check_processed=False, load_index=False)
+    return TrainingDataset(name, check_processed=False)
 
 def destroy(name: str) -> None:
-    """
-    effect: destroys a dataset.
-    args:
-        name: the name of the dataset.
-    """
     ds_path = os.path.join(config.directories.datasets, 'training', name)
     if os.path.exists(ds_path):
         shutil.rmtree(ds_path)
 
 def recreate(name: str) -> None:
-    """
-    effect: destroys and creates a dataset.
-    args:
-        name: the name of the dataset.
-    """
     destroy(name)
     return create(name)

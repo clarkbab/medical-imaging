@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-1:00:00
+#SBATCH --time 0-6:00:00
 #SBATCH -A punim1413
 
 module load gcccore/10.2.0
@@ -14,6 +14,7 @@ version=$(python --version)
 echo $version
 
 DATASET='PMCC-HN-REPLAN'
+INCLUDED_REGIONS=False
 REGIONS=(
     'Bone_Mandible'
     'BrachialPlex_L'
@@ -43,7 +44,10 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+SUBREGIONS=False
 
-python $SCRIPT_DIR/report/nifti/create_region_summary \
+python $SCRIPT_DIR/report/nifti/create_region_figures.py \
     --dataset $DATASET \
-    --region $REGION
+    --region $REGION \
+    --included_regions $INCLUDED_REGIONS \
+    --subregions $SUBREGIONS

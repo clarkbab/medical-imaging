@@ -12,7 +12,7 @@ module load web_proxy
 version=$(python --version)
 echo $version
 
-DATASET="OPC"
+DATASET="PMCC-HN-REPLAN"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1

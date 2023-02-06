@@ -15,6 +15,10 @@ class NIFTIDataset(Dataset):
         self,
         name: str):
         self.__global_id = f"NIFTI: {name}"
+        self.__anon_index = None                # Lazy-loaded.
+        self.__excluded_regions = None          # Lazy-loaded.
+        self.__loaded_anon_index = False
+        self.__loaded_excluded_regions = False
         self.__name = name
         self.__path = os.path.join(config.directories.datasets, 'nifti', name)
         if not os.path.exists(self.__path):
@@ -22,8 +26,17 @@ class NIFTIDataset(Dataset):
 
     @property
     def anon_index(self) -> Optional[pd.DataFrame]:
-        filepath = os.path.join(self.__path, 'anon-index.csv')
-        return pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
+        if not self.__loaded_anon_index:
+            self.__load_anon_index()
+            self.__loaded_anon_index = True
+        return self.__anon_index
+
+    @property
+    def excluded_regions(self) -> Optional[pd.DataFrame]:
+        if not self.__loaded_excluded_regions:
+            self.__load_excluded_regions()
+            self.__loaded_excluded_regions = True
+        return self.__excluded_regions
     
     @property
     def description(self) -> str:
@@ -53,35 +66,10 @@ class NIFTIDataset(Dataset):
         pats = list(filter(self.__filter_patient_by_regions(regions), pats))
         return pats
 
-    def list_regions(self) -> pd.DataFrame:
-        # Define table structure.
-        cols = {
-            'patient-id': str,
-            'region': str,
-        }
-        df = pd.DataFrame(columns=cols.keys())
-
-        # Load each patient.
-        pat_ids = self.list_patients()
-
-        # Add patient regions.
-        for pat_id in pat_ids:
-            for region in self.patient(pat_id).list_regions():
-                data = {
-                    'patient-id': pat_id,
-                    'region': region,
-                }
-                df = append_row(df, data)
-
-        # Set column types.
-        df = df.astype(cols)
-
-        return df
-
     def patient(
         self,
         id: Union[int, str]) -> NIFTIPatient:
-        return NIFTIPatient(self, id)
+        return NIFTIPatient(self, id, excluded_regions=self.excluded_regions)
 
     def __filter_patient_by_regions(
         self,
@@ -99,6 +87,18 @@ class NIFTIDataset(Dataset):
                 else:
                     return False
         return func
+    
+    def __load_anon_index(self) -> None:
+        filepath = os.path.join(self.__path, 'anon-index.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"No 'anon-index.csv' found for '{self}'.")
+        self.__anon_index = pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
+    
+    def __load_excluded_regions(self) -> None:
+        filepath = os.path.join(self.__path, 'excluded-regions.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"No 'excluded-regions.csv' found for '{self}'.")
+        self.__excluded_regions = pd.read_csv(filepath).astype({ 'patient-id': str })
 
     def __str__(self) -> str:
         return self.__global_id

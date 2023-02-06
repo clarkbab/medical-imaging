@@ -163,8 +163,8 @@ def add_region_summary_outliers(
     columns: List[str]) -> pd.DataFrame:
 
     # Get outlier limits.
-    q1 = df.quantile(0.25)[columns].rename('q1')
-    q3 = df.quantile(0.75)[columns].rename('q3')
+    q1 = df.quantile(0.25, numeric_only=True)[columns].rename('q1')
+    q3 = df.quantile(0.75, numeric_only=True)[columns].rename('q3')
     iqr = (q3 - q1).rename('iqr')
     low = (q1 - 1.5 * iqr).rename('low')
     high = (q3 + 1.5 * iqr).rename('high')
@@ -365,13 +365,22 @@ def create_segmenter_prediction_figures(
 def create_region_figures(
     dataset: str,
     region: str,
+    excluded_regions: bool = True,
+    included_regions: bool = True,
     subregions: bool = False,
     **kwargs) -> None:
-    logging.info(f"Creating region figures for dataset '{dataset}', region '{region}'.")
+    if not excluded_regions and not included_regions:
+        raise ValueError(f"One or both of 'excluded_regions' and 'included_regions' must be True.")
+    logging.arg_log('Creating region figures', ('dataset', 'region'), (dataset, region))
 
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
+    pat_ids = set.list_patients(regions=region)
+
+    # Get excluded regions.
+    exc_df = set.excluded_regions
+    if exc_df is None and (not excluded_regions or not included_regions):
+        raise ValueError("'excluded-regions.csv' must be present to split included from excluded regions.")
 
     # Keep regions with patients.
     df = load_region_summary(dataset, regions=region)
@@ -410,15 +419,26 @@ def create_region_figures(
         )
     ) 
 
-    for pat in tqdm(pats, leave=False):
+    for pat_id in tqdm(pat_ids):
         # Skip if patient doesn't have region.
-        patient = set.patient(pat)
+        patient = set.patient(pat_id)
         if not patient.has_region(region):
             continue
 
+        # Skip on inclusion/exclusion criteria.
+        if exc_df is not None:
+            pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
+            excluded = len(pr_df) == 1
+            if excluded and not excluded_regions:
+                logging.info(f"Region '{region}' excluded from report for patient '{pat_id}'.")
+                continue
+            if not excluded and not included_regions:
+                logging.info(f"Region '{region}' excluded from report for patient '{pat_id}'.")
+                continue
+
         # Add patient.
         pdf.add_page()
-        pdf.start_section(pat)
+        pdf.start_section(pat_id)
 
         # Add region info.
         pdf.start_section('Region Info', level=1)
@@ -428,7 +448,7 @@ def create_region_figures(
         table_l_margin = 12
         table_line_height = 2 * pdf.font_size
         table_col_widths = (15, 35, 30, 45, 45)
-        pat_info = df[df['patient-id'].astype(str) == pat].iloc[0]
+        pat_info = df[df['patient-id'].astype(str) == pat_id].iloc[0]
         table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
         for axis in ['x', 'y', 'z']:
             colnames = {
@@ -459,7 +479,7 @@ def create_region_figures(
         # Add subregion info.
         if subregions:
             # Get object info.
-            obj_df = get_object_summary(dataset, pat, region)
+            obj_df = get_object_summary(dataset, pat_id, region)
 
             if len(obj_df) > 1:
                 pdf.start_section('Subregion Info', level=1)
@@ -501,7 +521,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat, centre_of=region, colours=['y'], crop=region, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -524,7 +544,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat, centre_of=region, colours=['y'], postproc=postproc, region=region, show_extent=True, view=view, **kwargs)
+                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -538,8 +558,13 @@ def create_region_figures(
                     os.remove(filepath)
 
     # Save PDF.
-    # We have to 'encode' localisers/segmenters because they could be a list of models.
-    filepath = os.path.join(config.directories.reports, 'region-figures', dataset, f'{region}.pdf') 
+    if included_regions and excluded_regions:
+        postfix = ''
+    elif included_regions:
+        postfix = '-included'
+    else:
+        postfix = '-excluded'
+    filepath = os.path.join(set.path, 'region-figures', f'{region}{postfix}.pdf')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 

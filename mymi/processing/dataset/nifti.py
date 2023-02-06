@@ -20,6 +20,7 @@ from mymi import logging
 from mymi.models import replace_checkpoint_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
+from mymi.regions import to_list as regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
@@ -27,8 +28,7 @@ from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_to_training(
     dataset: str,
-    regions: types.PatientRegions,
-    dest_dataset: str,
+    region: types.PatientRegions,
     create_data: bool = True,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -36,14 +36,13 @@ def convert_to_training(
     output_spacing: Optional[types.ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
-    size: Optional[types.ImageSize3D] = None) -> None:
-    if type(regions) == str:
-        if regions == 'all':
-            regions = RegionNames
-        else:
-            regions = [regions]
+    size: Optional[types.ImageSize3D] = None,
+    training_dataset: Optional[str] = None) -> None:
+    regions = regions_to_list(region)
+    logging.arg_log('Converting to training', ('dataset', 'region'), (dataset, region))
 
     # Create the dataset.
+    dest_dataset = dataset if training_dataset is None else training_dataset
     if exists(dest_dataset):
         if recreate_dataset:
             created = True
@@ -61,9 +60,6 @@ def convert_to_training(
         created = True
         set_t = create(dest_dataset)
     _write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
-
-    # Notify user.
-    logging.info(f"Creating dataset '{set_t}' with recreate_dataset={recreate_dataset}, regions={regions}, dilate_regions={dilate_regions}, dilate_iter={dilate_iter}, size={size} and output_spacing={output_spacing}.")
 
     # Write params.
     if created:
@@ -92,12 +88,15 @@ def convert_to_training(
     set = NIFTIDataset(dataset)
     pat_ids = set.list_patients()
 
+    # Get exclusions.
+    exc_df = set.excluded_regions
+
     # Create index.
     cols = {
         'dataset': str,
         'sample-id': str,
         'origin-dataset': str,
-        'patient-id': str,
+        'origin-patient-id': str,
         'region': str,
         'empty': bool
     }
@@ -141,8 +140,14 @@ def convert_to_training(
                 if not set.patient(pat_id).has_region(region):
                     continue
 
+                # Skip if region in 'excluded-regions.csv'.
+                if exc_df is not None:
+                    pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
+                    if len(pr_df) == 1:
+                        continue
+
                 # Load label data.
-                label = patient.region_data(regions=region)[region]
+                label = patient.region_data(region=region)[region]
 
                 # Resample data.
                 if output_spacing:

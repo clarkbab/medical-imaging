@@ -1,6 +1,7 @@
 import nibabel as nib
 import numpy as np
 import os
+import pandas as pd
 from typing import List, Optional, OrderedDict, Tuple
 
 from mymi.regions import is_region
@@ -11,10 +12,12 @@ class NIFTIPatient:
     def __init__(
         self,
         dataset: 'NIFTIDataset',
-        id: types.PatientID):
+        id: types.PatientID,
+        excluded_regions: Optional[pd.DataFrame] = None):
         self.__dataset = dataset
+        self.__excluded_regions = excluded_regions
         self.__id = str(id)
-        self._global_id = f"{dataset} - {self.__id}"
+        self.__global_id = f"{dataset} - {self.__id}"
 
         # Check that patient ID exists.
         self.__path = os.path.join(dataset.path, 'data', 'ct', f'{self.__id}.nii.gz')
@@ -50,7 +53,7 @@ class NIFTIPatient:
     
     @property
     def description(self) -> str:
-        return self._global_id
+        return self.__global_id
 
     @property
     def dose_data(self) -> np.ndarray:
@@ -94,38 +97,28 @@ class NIFTIPatient:
 
     def has_region(
         self,
-        region: str) -> bool:
-        return region in self.list_regions()
+        region: str,
+        excluded_regions: bool = False) -> bool:
+        return region in self.list_regions(excluded_regions=excluded_regions)
 
     def list_regions(
         self,
-        whitelist: types.PatientRegions = 'all') -> List[str]:
-        path = os.path.join(self.__dataset.path, 'data', 'regions')
-        files = os.listdir(path)
+        excluded_regions: bool = False) -> List[str]:
+        dirpath = os.path.join(self.__dataset.path, 'data', 'regions')
+        folders = os.listdir(dirpath)
         names = []
-        for f in files:
+        for f in folders:
             if not is_region(f):
                 continue
-            region_path = os.path.join(self.__dataset.path, 'data', 'regions', f)
-            for r in os.listdir(region_path):
-                id = r.replace('.nii.gz', '')
-                if id == self.__id:
-                    names.append(f)
+            dirpath = os.path.join(self.__dataset.path, 'data', 'regions', f)
+            if f'{self.__id}.nii.gz' in os.listdir(dirpath):
+                # Check exclusion list.
+                if not excluded_regions and self.__excluded_regions is not None:
+                    pr_df = self.__excluded_regions[(self.__excluded_regions['patient-id'] == self.__id) & (self.__excluded_regions['region'] == f)]
+                    if len(pr_df) == 1:
+                        continue
+                names.append(f)
         names = list(sorted(names))
-
-        # Filter on whitelist.
-        def filter_fn(region):
-            if isinstance(whitelist, str):
-                if whitelist == 'all':
-                    return True
-                else:
-                    return region == whitelist
-            else:
-                if region in whitelist:
-                    return True
-                else:
-                    return False
-        names = list(filter(filter_fn, names))
 
         return names
 
@@ -151,4 +144,4 @@ class NIFTIPatient:
         return data
 
     def __str__(self) -> str:
-        return self._global_id
+        return self.__global_id

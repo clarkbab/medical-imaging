@@ -510,7 +510,6 @@ def plot_region(
         logging.info(f"Saved plot to '{savepath}'.")
 
     if show:
-        logging.info('showing')
         plt.show()
 
         # Revert latex settings.

@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import Module, Sequential
 from torch.nn.functional import pad
 from torch import Tensor
-# from torch.utils.checkpoint import checkpoint
+from torch.utils.checkpoint import checkpoint
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from typing import Callable, List
 
@@ -100,67 +100,71 @@ class PrintWrapper(nn.Module):
         super().__init__()
         self.__module = module
         self.__name = name
+        self.__gpu_available = torch.cuda.is_available()
 
     def forward(self, *params):
         print(f"=== layer: {self.__name} ===")
         for i, param in enumerate(params):
             print(f"input {i} shape/dtype: {param.shape}/{param.dtype}")
-        gpu_before = gpu_usage()
+        if self.__gpu_available:
+            gpu_before = gpu_usage()
         y = self.__module(*params)
         print(f"output shape/dtype: {y.shape}/{y.dtype}")
-        gpu_after = gpu_usage()
-        gpu_diff = [ga - gb for ga, gb in zip(gpu_after, gpu_before)]
-        # a.element_size() * a.nelement().
-        print(f"gpu diff/total (MB): {gpu_diff[0]:.2f}/{gpu_after[0]:.2f}")
+        if self.__gpu_available:
+            gpu_after = gpu_usage()
+            gpu_diff = [ga - gb for ga, gb in zip(gpu_after, gpu_before)]
+            print(f"gpu diff/total (MB): {gpu_diff[0]:.2f}/{gpu_after[0]:.2f}")
         return y
 
-class MultiUNet3DCKPT(nn.Module):
+class Encoder(nn.Module):
+    def __init__(self, n_features):
+        super().__init__()
+        self.first = PrintWrapper(DoubleConv(1, n_features), 'first')
+        self.down1 = PrintWrapper(Down(n_features, 2 * n_features), 'down1')
+        self.down2 = PrintWrapper(Down(2 * n_features, 4 * n_features), 'down2')
+        self.down3 = PrintWrapper(Down(4 * n_features, 8 * n_features), 'down3')
+        self.down4 = PrintWrapper(Down(8 * n_features, 16 * n_features), 'down4')
+
+    def forward(self, x):
+        x0 = self.first(x)
+        x1 = self.down1(x0)
+        x2 = self.down2(x1)
+        x3 = self.down3(x2)
+        x4 = self.down4(x3)
+        return x0, x1, x2, x3, x4
+
+class Decoder(nn.Module):
+    def __init__(self, n_features, n_output_channels):
+        super().__init__()
+        self.up1 = PrintWrapper(Up(16 * n_features, 8 * n_features), 'up1')
+        self.up2 = PrintWrapper(Up(8 * n_features, 4 * n_features), 'up2')
+        self.up3 = PrintWrapper(Up(4 * n_features, 2 * n_features), 'up3')
+        self.up4 = PrintWrapper(Up(2 * n_features, n_features), 'up4')
+        self.out = PrintWrapper(OutConv(n_features, n_output_channels), 'out')
+        self.softmax = PrintWrapper(nn.Softmax(dim=1), 'softmax')
+
+    def forward(self, x0, x1, x2, x3, x4):
+        x = self.up1(x4, x3)
+        x = self.up2(x, x2)
+        x = self.up3(x, x1)
+        x = self.up4(x, x0)
+        x = self.out(x)
+        return self.softmax(x)
+
+class MutilUNet3DMemoryTest(nn.Module):
     def __init__(
         self,
-        n_output_channels: int,
-        n_gpus: int = 0) -> None:
+        n_output_channels: int) -> None:
         super().__init__()
 
         # Define layers.
         n_features = 32
-        offload = True
-        self.first = checkpoint_wrapper(PrintWrapper(DoubleConv(1, n_features), 'first'), offload_to_cpu=offload)
-        self.down1 = checkpoint_wrapper(PrintWrapper(Down(n_features, 2 * n_features), 'down1'), offload_to_cpu=offload)
-        self.down2 = checkpoint_wrapper(PrintWrapper(Down(2 * n_features, 4 * n_features), 'down2'), offload_to_cpu=offload)
-        self.down3 = checkpoint_wrapper(PrintWrapper(Down(4 * n_features, 8 * n_features), 'down3'), offload_to_cpu=offload)
-        self.down4 = checkpoint_wrapper(PrintWrapper(Down(8 * n_features, 16 * n_features), 'down4'), offload_to_cpu=offload)
-        self.up1 = checkpoint_wrapper(PrintWrapper(Up(16 * n_features, 8 * n_features), 'up1'), offload_to_cpu=offload)
-        self.up2 = checkpoint_wrapper(PrintWrapper(Up(8 * n_features, 4 * n_features), 'up2'), offload_to_cpu=offload)
-        self.up3 = checkpoint_wrapper(PrintWrapper(Up(4 * n_features, 2 * n_features), 'up3'), offload_to_cpu=offload)
-        self.up4 = checkpoint_wrapper(PrintWrapper(Up(2 * n_features, n_features), 'up4'), offload_to_cpu=offload)
-        self.out = checkpoint_wrapper(PrintWrapper(OutConv(n_features, n_output_channels), 'out'), offload_to_cpu=offload)
-        # self.softmax = checkpoint_wrapper(PrintWrapper(nn.Softmax(dim=1), 'softmax'), offload_to_cpu=offload)
-        self.softmax = PrintWrapper(nn.Softmax(dim=1), 'softmax')
+        self.encoder = Encoder(n_features)
+        self.decoder = Decoder(n_features, n_output_channels)
 
     def count_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def forward(self, x):
-        x1 = self.first(x)
-        print('first', x1.requires_grad)
-        x2 = self.down1(x1)
-        print('down1', x2.requires_grad)
-        x3 = self.down2(x2)
-        print('down2', x3.requires_grad)
-        x4 = self.down3(x3)
-        print('down3', x4.requires_grad)
-        x = self.down4(x4)
-        print('down4', x.requires_grad)
-        x = self.up1(x, x4)
-        print('up1', x.requires_grad)
-        x = self.up2(x, x3)
-        print('up2', x.requires_grad)
-        x = self.up3(x, x2)
-        print('up3', x.requires_grad)
-        x = self.up4(x, x1)
-        print('up4', x.requires_grad)
-        x = self.out(x)
-        print('out', x.requires_grad)
-        x = self.softmax(x)
-        print('softmax', x.requires_grad)
-        return x
+        x0, x1, x2, x3, x4 = self.encoder(x)
+        return self.decoder(x0, x1, x2, x3, x4)
