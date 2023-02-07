@@ -11,6 +11,10 @@ from typing import Callable, List
 
 from mymi.utils import gpu_usage
 
+use_pytorch_ckpt = False
+use_fairscale_ckpt = False
+use_fairscale_cpu_offload = False
+
 class Conv(nn.Module):
     def __init__(
         self,
@@ -159,12 +163,30 @@ class MutilUNet3DMemoryTest(nn.Module):
 
         # Define layers.
         n_features = 32
-        self.encoder = Encoder(n_features)
-        self.decoder = Decoder(n_features, n_output_channels)
+        if use_fairscale_ckpt:
+            self.encoder = checkpoint_wrapper(Encoder(n_features), offload_to_cpu=use_fairscale_cpu_offload)
+            self.decoder = checkpoint_wrapper(Decoder(n_features, n_output_channels), offload_to_cpu=use_fairscale_cpu_offload)
+        else:
+            self.encoder = Encoder(n_features)
+            self.decoder = Decoder(n_features, n_output_channels)
 
     def count_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+    def ckpt_func(
+        self,
+        module: nn.Module) -> Callable:
+        def inner(dummy_arg: torch.Tensor, *params: List[torch.Tensor]) -> torch.Tensor:
+            return module(*params)
+        return inner
+
     def forward(self, x):
-        x0, x1, x2, x3, x4 = self.encoder(x)
-        return self.decoder(x0, x1, x2, x3, x4)
+        if use_pytorch_ckpt:
+            dummy_arg = torch.Tensor()
+            dummy_arg.requires_grad = True
+            x0, x1, x2, x3, x4 = checkpoint(self.ckpt_func(self.encoder), dummy_arg, x)
+            return checkpoint(self.ckpt_func(self.decoder), dummy_arg, x0, x1, x2, x3, x4)
+        else:
+            x0, x1, x2, x3, x4 = self.encoder(x)
+            return self.decoder(x0, x1, x2, x3, x4)
+

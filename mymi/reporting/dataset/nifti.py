@@ -564,7 +564,7 @@ def create_region_figures(
         postfix = '-included'
     else:
         postfix = '-excluded'
-    filepath = os.path.join(set.path, 'region-figures', f'{region}{postfix}.pdf')
+    filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}{postfix}.pdf')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 

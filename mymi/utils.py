@@ -11,8 +11,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
+# from mymi import logging
 from mymi import config
-from mymi import logging
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
     return pd.concat((df, odf), axis=0)
@@ -229,6 +229,9 @@ class Timer:
 
     def save(self, filepath):
         self.__df.astype(self.__cols).to_csv(filepath, index=False)
+
+def gpu_count() -> int:
+    return len(getGPUs())
 
 def gpu_usage() -> List[float]:
     return [g.memoryUsed for g in getGPUs()]

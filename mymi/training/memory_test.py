@@ -58,7 +58,7 @@ def train_memory_test(
     # torch.backends.cudnn.enabled = True
 
     # Create dummy data.
-    shape = (301, 301, 250)
+    shape = (370, 360, 250)
     input_b = torch.rand(1, 1, *shape).to(device)
     label_b = torch.ones(1, n_channels, *shape, dtype=bool).to(device)
     class_mask_b = torch.ones(1, n_channels, dtype=bool).to(device)
@@ -70,7 +70,7 @@ def train_memory_test(
     # Perform training step.
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, record_shapes=True, use_cuda=True) as prof:
         with record_function('training-step'):
-            with autocast(device_type='cuda', dtype=torch.float16, enabled=False):
+            with autocast(device_type='cuda', dtype=torch.float16, enabled=True):
                 output_b = model(input_b)
                 loss = loss_fn(output_b, label_b, class_mask_b, class_weights_b)
 
