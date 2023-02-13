@@ -8,9 +8,11 @@ version=$(python --version)
 echo $version
 
 NAME="memory-test"
-TIME=10
+TIME=20
+INTERVAL=0.1
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/report/gpu/usage.py \
     --name $NAME \
-    --time $TIME
+    --time $TIME \
+    --interval $INTERVAL

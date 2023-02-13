@@ -1,43 +1,29 @@
-from datetime import datetime
-from functools import reduce
-from GPUtil import getGPUs, showUtilization
-import numpy as np
 import os
-import pandas as pd
-import pytorch_lightning as pl
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
-from torchio.transforms import RandomAffine
+from datetime import datetime
+from threading import Thread
+from time import sleep
 import torch
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.optim import SGD
-from torch.utils.checkpoint import checkpoint
-from torch.profiler import profile, record_function, ProfilerActivity
-from typing import List, Optional, Union
+from typing import Optional
 
 from mymi import config
-from mymi import dataset as ds
-from mymi.dataset.training import exists
-from mymi.geometry import get_centre
-from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.losses import TverskyWithFocalLoss
-from mymi.models.networks import MutilUNet3DMemoryTest
-from mymi.regions import to_list
-from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi import types
-from mymi.utils import append_row, arg_to_list, save_csv
+from mymi.models.networks import MemoryTest
+from mymi.reporting.gpu_usage import record_gpu_usage
+from mymi.utils import Timer
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_memory_test(
-    dataset: Union[str, List[str]],
-    model: str,
-    run: str) -> None:
-    logging.arg_log('Training model', ('dataset', 'model', 'run'), (dataset, model, run))
+    mode: str,
+    name: str,
+    monitor_time: float = 15,
+    n_ckpts: Optional[int] = 1,
+    n_steps: int = 11) -> None:
+    logging.arg_log('Running memory test', ('mode', 'name', 'n_ckpts', 'n_steps'), (mode, name, n_ckpts, n_steps))
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     # 'libgcc'
@@ -46,7 +32,7 @@ def train_memory_test(
 
     # Create model.
     n_channels = 5
-    model = MutilUNet3DMemoryTest(n_output_channels=n_channels).to(device)
+    model = MemoryTest(mode=mode, n_ckpts=n_ckpts, n_output_channels=n_channels).to(device)
 
     # Create loss function, optimiser and gradient scaler.
     loss_fn = TverskyWithFocalLoss()
@@ -57,27 +43,40 @@ def train_memory_test(
     # torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.enabled = True
 
-    # Create dummy data.
-    shape = (370, 360, 250)
-    input_b = torch.rand(1, 1, *shape).to(device)
-    label_b = torch.ones(1, n_channels, *shape, dtype=bool).to(device)
-    class_mask_b = torch.ones(1, n_channels, dtype=bool).to(device)
-    class_weights_b = torch.ones(1, n_channels, dtype=bool).to(device)
-    
-    # Zero all parameter gradients.
-    optimiser.zero_grad()
+    # Kick off GPU memory recording.
+    thread = Thread(target=record_gpu_usage, args=(name, monitor_time, 0.01))
+    thread.start()
+    sleep(2)
 
-    # Perform training step.
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, record_shapes=True, use_cuda=True) as prof:
-        with record_function('training-step'):
+    # Create timer.
+    timer = Timer(columns={ 'step': int })
+
+    for step in range(n_steps):
+        # Create dummy data.
+        # shape = (360, 360, 250)
+        shape = (300, 300, 250)
+        input_b = torch.rand(1, 1, *shape).to(device)
+        label_b = torch.ones(1, n_channels, *shape, dtype=bool).to(device)
+        class_mask_b = torch.ones(1, n_channels, dtype=bool).to(device)
+        class_weights_b = torch.ones(1, n_channels, dtype=bool).to(device)
+        
+        # Zero all parameter gradients.
+        optimiser.zero_grad()
+
+        # Perform training step.
+        data = { 'step': step }
+        with timer.record(data):
             with autocast(device_type='cuda', dtype=torch.float16, enabled=True):
                 output_b = model(input_b)
                 loss = loss_fn(output_b, label_b, class_mask_b, class_weights_b)
-
             scaler.scale(loss).backward()
             scaler.step(optimiser)
             scaler.update()
 
-    prof.export_chrome_trace('trace.json')
+    # Clear cache - for easy viewing of GPU usage over time.
+    torch.cuda.empty_cache()
+
+    filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
+    timer.save(filepath)
 
     print('Training complete.')

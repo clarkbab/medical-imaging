@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from time import time
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from pynvml.smi import nvidia_smi
+from time import perf_counter, time
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
@@ -209,14 +210,21 @@ def arg_broadcast(
 
     return arg
 
+# Time for each 'recorded' event is stored in a row of the CSV.
+# Additional columns can be populated using 'data'.
 class Timer:
-    def __init__(self, columns):
+    def __init__(
+        self,
+        columns: Dict[str, str] = {}):
         self.__cols = columns
         self.__cols['time'] = float
         self.__df = pd.DataFrame(columns=self.__cols.keys())
 
     @contextmanager
-    def record(self, enabled, data):
+    def record(
+        self,
+        data: Dict[str, Union[str, int, float]] = {},
+        enabled: bool = True):
         try:
             if enabled:
                 start = time()
@@ -235,3 +243,34 @@ def gpu_count() -> int:
 
 def gpu_usage() -> List[float]:
     return [g.memoryUsed for g in getGPUs()]
+
+def gpu_usage_nvml() -> List[float]:
+    usages = []
+    nvsmi = nvidia_smi.getInstance()
+    results = nvsmi.DeviceQuery('memory.used')['gpu']
+    for result in results:
+        assert result['fb_memory_usage']['unit'] == 'MiB'
+        usage = result['fb_memory_usage']['used']
+        usages.append(usage)
+    return usages
+
+def benchmark(
+    f: Callable,
+    args: Tuple = (),
+    after: Optional[Callable] = None,
+    before: Optional[Callable] = None,
+    n: int = 100) -> float:
+    if before is not None:
+        before()
+
+    # Evaluate function 'n' times.
+    durations = [] 
+    for _ in range(n):
+        start = perf_counter()
+        f(*args)
+        durations.append(perf_counter() - start)
+
+    if after is not None:
+        after()
+
+    return np.mean(durations)
