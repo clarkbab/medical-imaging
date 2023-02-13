@@ -55,5 +55,12 @@ def get_checkpoints(
     return ckpts
 
 # Assumes that splits don't occur across a level.
-def get_level_checkpoint_sizes(n_ckpts: int):
-    pass
+def get_level_checkpoints(n_ckpts: int):
+    ckpts = []
+    for level_start, level_end in LEVELS:
+        level_n_layers = level_end - level_start + 1
+        level_ckpts = get_checkpoints(level_n_layers, n_ckpts)
+        for level_ckpt in level_ckpts:
+            level_ckpt = (level_ckpt[0] + level_start, level_ckpt[1] + level_start)
+            ckpts.append(level_ckpt)
+    return ckpts
