@@ -3,17 +3,23 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-MODE="baseline"
-# MODE="ckpt-pytorch"
-# MODE="ckpt-fairscale"
-# MODE="ckpt-fairscale-offload"
-MONITOR_TIME=30
-N_CKPTS=1
-NAME="memory-test-small-$MODE-n_ckpts-$N_CKPTS"
+# CKPT_LIBRARY="baseline"
+# CKPT_LIBRARY="ckpt-pytorch"
+# CKPT_LIBRARY="ckpt-fairscale"
+CKPT_LIBRARY="ckpt-fairscale-offload"
+CKPT_MODE=""
+# CKPT_MODE="-level"
+INPUT_MODE="-large"
+# INPUT_MODE=""
+# INPUT_MODE="-small"
+# INPUT_MODE="-xsmall"
+MONITOR_TIME=70
+N_CKPTS=25
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/train/segmenter/train_memory_test.py \
-    --mode $MODE \
-    --name $NAME \
-    --monitor_time $MONITOR_TIME \
-    --n_ckpts $N_CKPTS
+    --ckpt_library=$CKPT_LIBRARY \
+    --ckpt_mode=$CKPT_MODE \
+    --input_mode=$INPUT_MODE \
+    --n_ckpts=$N_CKPTS \
+    --monitor_time=$MONITOR_TIME

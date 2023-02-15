@@ -1,12 +1,13 @@
 import os
 from datetime import datetime
+from pathlib import Path
 from threading import Thread
 from time import sleep
 import torch
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.optim import SGD
-from typing import Optional
+from typing import Literal, Optional
 
 from mymi import config
 from mymi import logging
@@ -18,13 +19,29 @@ from mymi.utils import Timer
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_memory_test(
-    mode: str,
-    name: str,
+    ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-offload'],
+    ckpt_mode: Literal['', '-level'],
+    input_mode: Literal['', '-small', '-xsmall'],
+    n_ckpts: int,
     monitor_time: float = 15,
-    n_ckpts: Optional[int] = 1,
-    n_steps: int = 11) -> None:
-    logging.arg_log('Running memory test', ('mode', 'name', 'n_ckpts', 'n_steps'), (mode, name, n_ckpts, n_steps))
+    n_train_steps: int = 11) -> None:
+    logging.arg_log('Running memory test', ('ckpt_library', 'ckpt_mode', 'input_mode', 'n_ckpts'), (ckpt_library, ckpt_mode, input_mode, n_ckpts))
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    # Determine input shape.
+    if input_mode == '-large':
+        shape = (370, 370, 250)
+    elif input_mode == '':
+        shape = (360, 360, 250)
+    elif input_mode == '-small':
+        shape = (300, 300, 250)
+    elif input_mode == '-xsmall':
+        shape = (200, 200, 250)
+    else:
+        raise ValueError(f"'input_mode={input_mode}' not recognised.")
+
+    # Create name.
+    name = f"memory-test{input_mode}-{ckpt_library}-n_ckpts-{n_ckpts}{ckpt_mode}"
 
     # 'libgcc'
     import ctypes
@@ -32,7 +49,7 @@ def train_memory_test(
 
     # Create model.
     n_channels = 5
-    model = MemoryTest(mode=mode, n_ckpts=n_ckpts, n_output_channels=n_channels).to(device)
+    model = MemoryTest(n_channels, ckpt_library=ckpt_library, n_ckpts=n_ckpts).to(device)
 
     # Create loss function, optimiser and gradient scaler.
     loss_fn = TverskyWithFocalLoss()
@@ -44,17 +61,15 @@ def train_memory_test(
     # torch.backends.cudnn.enabled = True
 
     # Kick off GPU memory recording.
-    thread = Thread(target=record_gpu_usage, args=(name, monitor_time, 0.01))
+    thread = Thread(target=record_gpu_usage, args=(name, monitor_time, 1e-3))
     thread.start()
     sleep(2)
 
     # Create timer.
     timer = Timer(columns={ 'step': int })
 
-    for step in range(n_steps):
+    for step in range(n_train_steps):
         # Create dummy data.
-        # shape = (360, 360, 250)
-        shape = (300, 300, 250)
         input_b = torch.rand(1, 1, *shape).to(device)
         label_b = torch.ones(1, n_channels, *shape, dtype=bool).to(device)
         class_mask_b = torch.ones(1, n_channels, dtype=bool).to(device)
@@ -76,6 +91,7 @@ def train_memory_test(
     # Clear cache - for easy viewing of GPU usage over time.
     torch.cuda.empty_cache()
 
+    # Write timing file.
     filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
     timer.save(filepath)
 

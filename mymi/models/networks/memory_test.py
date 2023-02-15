@@ -1,30 +1,35 @@
-from asyncio.trsock import TransportSocket
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-from torch.nn import Module, Sequential
 from torch.nn.functional import pad
 from torch.utils.checkpoint import checkpoint
 from fairscale.nn.checkpoint import checkpoint_wrapper
-from typing import List, Tuple
+from typing import Dict, List, Literal
 
-from mymi.checkpointing import get_checkpoints
+from mymi.checkpointing import get_checkpoints, get_level_checkpoints
+
+PRINT_ENABLED = True
 
 class MemoryTestSubmodule(nn.Module):
     def __init__(
         self,
         name: str,
         layers: List[nn.Module],
-        residual_output_layers: List[int],
-        residual_input_layers: List[int],
-        print_enabled: bool = False) -> None:
+        residual_outputs: List[int] = [],
+        residual_output_layers: Dict[int, nn.Module] = {},
+        residual_inputs: List[int] = [],
+        residual_input_layers: Dict[int, nn.Module] = {},
+        print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
         self.__layers = nn.ParameterList(layers)
         self.__name = name
         self.__print_enabled = print_enabled
-        self.__residual_input_layers = residual_input_layers
-        self.__residual_output_layers = residual_output_layers
+        self.__residual_outputs = residual_outputs
+        self.__residual_inputs = residual_inputs
+        self.__residual_output_layer_keys = residual_output_layers.keys()
+        self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.items())
+        self.__residual_input_layer_keys = residual_input_layers.keys()
+        self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.items())
 
     def __pad_upsampled(self, x, shape):
         if x.shape != shape: 
@@ -41,8 +46,8 @@ class MemoryTestSubmodule(nn.Module):
     def forward(self, x, *x_res, dummy_arg=None):
         if self.__print_enabled:
             print(f'=== submodule ({self.__name}) ===')
-            print(f'ro_layers: {self.__residual_output_layers}')
-            print(f'ri_layers: {self.__residual_input_layers}')
+            print(f'res_outputs: {self.__residual_outputs}')
+            print(f'res_inputs: {self.__residual_inputs}')
             print(f'id(x_res): {id(x_res)}')
             print(f'len(x_res): {len(x_res)}')
             print(f'shape(x_res): {[xr.shape for xr in x_res]}')
@@ -51,20 +56,30 @@ class MemoryTestSubmodule(nn.Module):
 
         for i, layer in enumerate(self.__layers):
             # Upsample and concat input with residual.
-            if i in self.__residual_input_layers:
+            if i in self.__residual_inputs:
                 # Remove element from 'x_res' but not in-place as this
                 # will break 'x_res' on second forward pass with checkpointing.
                 x_res_i = x_res[-1]
                 x_res = [xr for j, xr in enumerate(x_res) if j != len(x_res) - 1]
                 x = self.__pad_upsampled(x, x_res_i.shape) 
+
+                # Apply pre-input layer.
+                if i in self.__residual_input_layer_keys:
+                    x = self.__residual_input_layer_values[self.__residual_input_layer_keys.index(i)](x)
+
+                # Concatenate upsampled and residual features.
                 x = torch.cat((x, x_res_i), dim=1)
 
             # Execute layer.
             x = layer(x)
 
-            # Add output residual.
-            if i in self.__residual_output_layers:
-                x_res = tuple(list(x_res) + [x])     # Note that 'x_res += [x]' is still an in-place operation!
+            # Add 'x' to 'x_res'.
+            if i in self.__residual_outputs:
+                x_res_new = x
+                # Apply pre-output layer.
+                if i in self.__residual_output_layer_keys:
+                    x_res_new = self.__residual_output_layer_values[self.__residual_output_layer_keys.index(i)](x_res_new)
+                x_res = tuple(list(x_res) + [x_res_new])     # Note that 'x_res += [x]' is still an in-place operation!
 
         if self.__print_enabled:
             print(f'id(x_res): {id(x_res)}')
@@ -76,50 +91,62 @@ class MemoryTestSubmodule(nn.Module):
 
         return x, *x_res
 
-class PrintWrapper(nn.Module):
+class LayerWrapper(nn.Module):
     def __init__(
         self,
-        module: nn.Module,
+        layer: nn.Module,
         name: str,
-        print_enabled: bool = False) -> None:
+        print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
         self.__print_enabled = print_enabled
-        self.__module = module
+        self.__layer = layer
         self.__name = name
 
-    def forward(self, *params) -> torch.Tensor:
+    def forward(self, x) -> torch.Tensor:
         if self.__print_enabled:
-            print(f'running layer: {self.__name}')
-        return self.__module(*params)
+            print(f'>>> layer: {self.__name} ({type(self.__layer)}) >>>')
+            print(f'input shape: {x.shape}')
+            print(f'input type: {x.dtype}')
+
+        x = self.__layer(x)
+
+        if self.__print_enabled:
+            print(f'output shape: {x.shape}')
+            print(f'output type: {x.dtype}')
+            print('>>>>>>>>>>>>>>>>>')
+
+        return x
     
 class MemoryTest(nn.Module):
     def __init__(
         self,
         n_output_channels: int,
-        ckpts: List[Tuple[int, int]] = None,
-        mode: str = 'baseline',
-        n_ckpts: int = 1,       # Checkpoints are only activated if a checkpoint mode (e.g. 'ckpt-pytorch') is used.
+        ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-fairscale-offload'] = 'baseline',
+        ckpt_mode: Literal['', '-level'] = '',
+        n_ckpts: int = 1,
         n_gpus: int = 0) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
 
         # Set mode flags. 
-        if mode == 'baseline':
+        if ckpt_library == 'baseline':
             self.__use_pytorch_ckpt = False
             self.__use_fairscale_ckpt = False
             self.__use_fairscale_cpu_offload = False
-        if mode == 'ckpt-pytorch':
+        if ckpt_library == 'ckpt-pytorch':
             self.__use_pytorch_ckpt = True
             self.__use_fairscale_ckpt = False
             self.__use_fairscale_cpu_offload = False
-        elif mode == 'ckpt-fairscale':
+        elif ckpt_library == 'ckpt-fairscale':
             self.__use_pytorch_ckpt = False
             self.__use_fairscale_ckpt = True
             self.__use_fairscale_cpu_offload = False
-        elif mode == 'ckpt-fairscale-offload':
+        elif ckpt_library == 'ckpt-fairscale-offload':
             self.__use_pytorch_ckpt = False
             self.__use_fairscale_ckpt = True
             self.__use_fairscale_cpu_offload = True
+        else:
+            raise ValueError(f"'ckpt_library={ckpt_library}' not recognised.")
 
         # Assign devices based on number of GPUs.
         if self.__n_gpus == 0:
@@ -140,6 +167,20 @@ class MemoryTest(nn.Module):
             [19, 49],
             [26, 56]
         ] 
+        residual_halves = [
+            # [5, 35]
+        ]
+        levels = [
+            (0, 5),
+            (6, 12),
+            (13, 19),
+            (20, 26),
+            (27, 33),
+            (34, 40),
+            (41, 47),
+            (48, 54),
+            (55, 63)
+        ]
 
         # Add first level.
         in_channels = 1
@@ -184,22 +225,41 @@ class MemoryTest(nn.Module):
         self.__layers.append(nn.Softmax(dim=1))
 
         # Wrap each layer in a print layer to test.
-        self.__layers = nn.ParameterList([PrintWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
+        self.__layers = nn.ParameterList([LayerWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
 
         # Get checkpoint locations.
         n_layers = len(self.__layers)
         assert n_layers == 64
-        ckpts = get_checkpoints(n_layers, n_ckpts) if n_ckpts > 0 else None
+        if ckpt_mode == '':
+            ckpts = get_checkpoints(n_layers, n_ckpts)
+        elif ckpt_mode == '-level':
+            ckpts = get_level_checkpoints(levels, n_ckpts)
 
         # Create submodules - can be wrapped with fairscale 'checkpoint_wrapper'.
         self.__submodules = []
         for i, (start_layer, end_layer) in enumerate(ckpts):
-            # Check if these layers contain residual inputs or outputs.
-            ro_layers = [r[0] - start_layer for r in residuals if r[0] >= start_layer and r[0] <= end_layer]
-            ri_layers = [r[1] - start_layer for r in residuals if r[1] >= start_layer and r[1] <= end_layer]
+            # Add residual inputs/outputs.
+            residual_outputs = []
+            residual_inputs = []
+            for res_output, res_input in residuals:
+                if res_output >= start_layer and res_output <= end_layer:
+                    residual_outputs.append(res_output - start_layer)
+                if res_input >= start_layer and res_input <= end_layer:
+                    residual_inputs.append(res_input - start_layer)
+
+            # Add residual input/output additional layers.
+            residual_output_layers = {}
+            residual_input_layers = {}
+            for res_output, res_input in residual_halves:
+                if res_output >= start_layer and res_output <= end_layer:
+                    layer = nn.Conv3d(in_channels=0, out_channels=0, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_output_layers[res_output - start_layer] = layer
+                if res_input >= start_layer and res_input <= end_layer:
+                    layer = nn.Conv3d(in_channels=0, out_channels=0, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_input_layers[res_input - start_layer] = layer
 
             layers = self.__layers[start_layer:end_layer + 1]
-            module = MemoryTestSubmodule(str(i), layers, ro_layers, ri_layers)
+            module = MemoryTestSubmodule(str(i), layers, residual_outputs=residual_outputs, residual_output_layers=residual_output_layers, residual_inputs=residual_inputs, residual_input_layers=residual_input_layers)
             if self.__use_fairscale_ckpt:
                 module = checkpoint_wrapper(module, offload_to_cpu=self.__use_fairscale_cpu_offload)
             self.__submodules.append(module)

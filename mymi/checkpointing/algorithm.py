@@ -1,18 +1,6 @@
 import numpy as np
 from typing import List, Tuple
 
-LEVELS = [
-    (0, 5),
-    (6, 12),
-    (13, 19),
-    (20, 26),
-    (27, 33),
-    (34, 40),
-    (41, 47),
-    (48, 54),
-    (55, 63)
-]
-
 def get_checkpoint_sizes(
     n_layers: int,
     n_ckpts: int) -> List[int]:
@@ -55,9 +43,11 @@ def get_checkpoints(
     return ckpts
 
 # Assumes that splits don't occur across a level.
-def get_level_checkpoints(n_ckpts: int):
+def get_level_checkpoints(
+    levels: List[Tuple[int, int]],
+    n_ckpts: int):
     ckpts = []
-    for level_start, level_end in LEVELS:
+    for level_start, level_end in levels:
         level_n_layers = level_end - level_start + 1
         level_ckpts = get_checkpoints(level_n_layers, n_ckpts)
         for level_ckpt in level_ckpts:
