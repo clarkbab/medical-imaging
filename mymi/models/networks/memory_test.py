@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn.functional import pad
 from torch.utils.checkpoint import checkpoint
 from fairscale.nn.checkpoint import checkpoint_wrapper
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 from mymi.checkpointing import get_checkpoints, get_level_checkpoints
 
@@ -26,10 +26,10 @@ class MemoryTestSubmodule(nn.Module):
         self.__print_enabled = print_enabled
         self.__residual_outputs = residual_outputs
         self.__residual_inputs = residual_inputs
-        self.__residual_output_layer_keys = residual_output_layers.keys()
-        self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.items())
-        self.__residual_input_layer_keys = residual_input_layers.keys()
-        self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.items())
+        self.__residual_output_layer_keys = list(residual_output_layers.keys())
+        self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.values())
+        self.__residual_input_layer_keys = list(residual_input_layers.keys())
+        self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.values())
 
     def __pad_upsampled(self, x, shape):
         if x.shape != shape: 
@@ -69,6 +69,8 @@ class MemoryTestSubmodule(nn.Module):
 
                 # Concatenate upsampled and residual features.
                 x = torch.cat((x, x_res_i), dim=1)
+                if self.__print_enabled:
+                    print('concat size (GB): ', x.numel() * x.element_size() / 1e9)
 
             # Execute layer.
             x = layer(x)
@@ -97,10 +99,17 @@ class LayerWrapper(nn.Module):
         layer: nn.Module,
         name: str,
         print_enabled: bool = PRINT_ENABLED) -> None:
-        super().__init__()
+        super(LayerWrapper, self).__init__()
         self.__print_enabled = print_enabled
         self.__layer = layer
         self.__name = name
+
+    @property
+    def out_channels(self) -> Optional[int]:
+        if hasattr(self.__layer, 'out_channels'):
+            return self.__layer.out_channels
+        else:
+            return None
 
     def forward(self, x) -> torch.Tensor:
         if self.__print_enabled:
@@ -133,7 +142,7 @@ class MemoryTest(nn.Module):
             self.__use_pytorch_ckpt = False
             self.__use_fairscale_ckpt = False
             self.__use_fairscale_cpu_offload = False
-        if ckpt_library == 'ckpt-pytorch':
+        elif ckpt_library == 'ckpt-pytorch':
             self.__use_pytorch_ckpt = True
             self.__use_fairscale_ckpt = False
             self.__use_fairscale_cpu_offload = False
@@ -167,8 +176,8 @@ class MemoryTest(nn.Module):
             [19, 49],
             [26, 56]
         ] 
-        residual_halves = [
-            # [5, 35]
+        residual_halves = [     # Halve the number of channels for residual output and upsampled input.
+            [5, None]
         ]
         levels = [
             (0, 5),
@@ -211,6 +220,8 @@ class MemoryTest(nn.Module):
             in_channels = 2 ** (self.__n_up_levels - i) * n_features
             out_channels = 2 ** (self.__n_up_levels - i - 1) * n_features
             self.__layers.append(nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
+            if i == 3:  # Halved the number of residual feature maps passed on high-resolution level.
+                in_channels = 48
             self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_2))
             self.__layers.append(nn.InstanceNorm3d(out_channels))
             self.__layers.append(nn.ReLU())
@@ -251,12 +262,26 @@ class MemoryTest(nn.Module):
             residual_output_layers = {}
             residual_input_layers = {}
             for res_output, res_input in residual_halves:
-                if res_output >= start_layer and res_output <= end_layer:
-                    layer = nn.Conv3d(in_channels=0, out_channels=0, kernel_size=3, stride=1, padding=1).to('cuda:0')
-                    residual_output_layers[res_output - start_layer] = layer
-                if res_input >= start_layer and res_input <= end_layer:
-                    layer = nn.Conv3d(in_channels=0, out_channels=0, kernel_size=3, stride=1, padding=1).to('cuda:0')
-                    residual_input_layers[res_input - start_layer] = layer
+                if res_output is not None and res_output >= start_layer and res_output <= end_layer:
+                    out_layer = res_output
+                    in_channels = None
+                    while in_channels is None:
+                        in_channels = self.__layers[out_layer].out_channels
+                        out_layer -= 1
+                    out_channels = in_channels // 2
+                    print('creating residual input layer: ', in_channels, out_channels)
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_output_layers[res_output - start_layer] = res_layer
+                if res_input is not None and res_input >= start_layer and res_input <= end_layer:
+                    out_layer = res_output
+                    in_channels = None
+                    while in_channels is None:
+                        in_channels = self.__layers[out_layer].out_channels
+                        out_layer -= 1
+                    out_channels = in_channels // 2
+                    print('creating residual output layer: ', in_channels, out_channels)
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_input_layers[res_input - start_layer] = res_layer
 
             layers = self.__layers[start_layer:end_layer + 1]
             module = MemoryTestSubmodule(str(i), layers, residual_outputs=residual_outputs, residual_output_layers=residual_output_layers, residual_inputs=residual_inputs, residual_input_layers=residual_input_layers)

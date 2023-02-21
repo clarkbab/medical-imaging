@@ -8,7 +8,7 @@ from mymi.reporting.gpu_usage import record_gpu_usage
 
 n_channels = 64
 name = f'testing-{n_channels}'
-input_shape = (1, n_channels, 370, 370, 250)
+input_shape = (1, n_channels, 360, 370, 251)
 device = torch.device('cuda:0')
 input = torch.rand(input_shape)
 

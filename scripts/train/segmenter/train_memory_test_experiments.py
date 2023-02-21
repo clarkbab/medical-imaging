@@ -8,13 +8,13 @@ CKPT_LIBRARIES = [
     'ckpt-fairscale-offload'
 ]
 INPUT_MODES = [
-    # "",
-    # "-small",
+    "",
+    "-small",
     "-xsmall"
 ]
 CKPT_MODES = [
-    "",
-    # "-level"
+    # "",
+    "-level"
 ]
 MONITOR_TIMES = {
     'large': {
@@ -24,9 +24,9 @@ MONITOR_TIMES = {
         'ckpt-fairscale-offload': 90
     },
     '': {
-        'baseline': 25,
-        'ckpt-pytorch': 30,
-        'ckpt-fairscale': 30,
+        'baseline': 30,
+        'ckpt-pytorch': 40,
+        'ckpt-fairscale': 40,
         'ckpt-fairscale-offload': 70
     },
     '-small': {
@@ -42,7 +42,7 @@ MONITOR_TIMES = {
         'ckpt-fairscale-offload': 35
     }
 }
-N_CKPTSES = list(range(1, 33))
+N_CKPTSES = list(range(1, 4))
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 # Run experiments.

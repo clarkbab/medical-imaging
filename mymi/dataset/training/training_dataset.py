@@ -75,8 +75,9 @@ class TrainingDataset(Dataset):
         regions = regions_to_list(regions) 
 
         # Filter out 'empty' labels.
+        index = self.index
         if 'empty' in self.index.columns:
-            index = self.index[~self.index['empty']]
+            index = index[~index['empty']]
 
         # Filter by regions.
         index = index[index.region.isin(regions)]

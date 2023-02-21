@@ -30,7 +30,7 @@ def train_memory_test(
 
     # Determine input shape.
     if input_mode == '-large':
-        shape = (370, 370, 250)
+        shape = (415, 415, 250)
     elif input_mode == '':
         shape = (360, 360, 250)
     elif input_mode == '-small':
@@ -49,7 +49,7 @@ def train_memory_test(
 
     # Create model.
     n_channels = 5
-    model = MemoryTest(n_channels, ckpt_library=ckpt_library, n_ckpts=n_ckpts).to(device)
+    model = MemoryTest(n_channels, ckpt_library=ckpt_library, ckpt_mode=ckpt_mode, n_ckpts=n_ckpts).to(device)
 
     # Create loss function, optimiser and gradient scaler.
     loss_fn = TverskyWithFocalLoss()
@@ -91,7 +91,7 @@ def train_memory_test(
     # Clear cache - for easy viewing of GPU usage over time.
     torch.cuda.empty_cache()
 
-    # Write timing file.
+    # Write timing (also indicates success) file.
     filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
     timer.save(filepath)
 

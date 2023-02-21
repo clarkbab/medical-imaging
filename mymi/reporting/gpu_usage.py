@@ -59,6 +59,10 @@ def record_gpu_usage(
     df.to_csv(filepath, index=False)
 
 def load_gpu_usage(name: str) -> pd.DataFrame:
+    # Check for 'timing' file - indicates successful training run.
+    filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Timing file doesn't exists - so training run didn't complete.")
     filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}.csv') 
     return pd.read_csv(filepath)
 
