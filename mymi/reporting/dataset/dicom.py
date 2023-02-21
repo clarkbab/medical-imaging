@@ -83,7 +83,9 @@ def load_ct_summary(
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
-def get_patient_regions(dataset: str) -> pd.DataFrame:
+def get_patient_regions(
+    dataset: str,
+    use_mapping: bool = True) -> pd.DataFrame:
     # List patients.
     set = DICOMDataset(dataset)
     pat_ids = set.list_patients()
@@ -97,7 +99,7 @@ def get_patient_regions(dataset: str) -> pd.DataFrame:
 
     # Add rows.
     for pat_id in tqdm(pat_ids):
-        pat_regions = set.patient(pat_id).list_regions()
+        pat_regions = set.patient(pat_id).list_regions(use_mapping=use_mapping)
         for pat_region in pat_regions:
             data = {
                 'patient-id': pat_id,
@@ -107,17 +109,23 @@ def get_patient_regions(dataset: str) -> pd.DataFrame:
 
     return df
 
-def create_patient_regions_report(dataset: str) -> None:
+def create_patient_regions_report(
+    dataset: str,
+    use_mapping: bool = True) -> None:
     # Generate counts report.
-    pr_df = get_patient_regions(dataset)
+    pr_df = get_patient_regions(dataset, use_mapping=use_mapping)
     set = DICOMDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+    filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pr_df.to_csv(filepath, index=False)
 
-def load_patient_regions_report(dataset: str) -> None:
+def load_patient_regions_report(
+    dataset: str,
+    use_mapping: bool = True) -> None:
     set = DICOMDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+    filepath = os.path.join(set.path, 'reports', filename)
     return pd.read_csv(filepath)
 
 def region_overlap(
