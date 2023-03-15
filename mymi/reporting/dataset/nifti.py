@@ -19,15 +19,15 @@ from mymi import logging
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_segmenter_prediction
 from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
-from mymi.regions import to_list as region_to_list
-from mymi.types import ModelName, PatientRegions
+from mymi.regions import region_to_list as region_to_list
+from mymi.types import Axis, ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_summary(
     dataset: str,
     region: str) -> pd.DataFrame:
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
+    pats = set.list_patients(region=region)
 
     cols = {
         'dataset': str,
@@ -45,6 +45,19 @@ def get_region_summary(
             'dataset': dataset,
             'patient-id': pat,
         }
+
+        # Add 'min/max' extent metrics.
+        min_extent_vox = np.argwhere(label).min(axis=0)
+        min_extent_mm = min_extent_vox * spacing
+        max_extent_vox = np.argwhere(label).max(axis=0)
+        max_extent_mm = max_extent_vox * spacing
+        for axis, min, max in zip(('x', 'y', 'z'), min_extent_mm, max_extent_mm):
+            data['metric'] = f'min-extent-mm-{axis}'
+            data['value'] = min
+            df = append_row(df, data)
+            data['metric'] = f'max-extent-mm-{axis}'
+            data['value'] = max
+            df = append_row(df, data)
 
         # Add 'connected' metrics.
         lcc_label = get_largest_cc(label)
@@ -102,13 +115,12 @@ def create_region_summary(
     dataset: str,
     region: PatientRegions = 'all') -> None:
     logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
-
-    set = ds.get(dataset, 'nifti')
     regions = region_to_list(region)
 
+    set = ds.get(dataset, 'nifti')
     for region in tqdm(regions):
         # List patients.
-        pats = set.list_patients(regions=region)
+        pats = set.list_patients(labels='all', region=region)
 
         # Allows us to pass all regions from Spartan 'array' job.
         if len(pats) == 0:
@@ -178,22 +190,17 @@ def add_region_summary_outliers(
 
 def load_region_summary(
     dataset: str,
-    regions: Optional[Union[str, List[str]]] = None,
+    region: PatientRegions = 'all',
     raise_error: bool = True) -> None:
-    # Convert to array.
-    set = ds.get(dataset, 'nifti')
-    if regions is None:
-        filepath = os.path.join(set.path, 'reports', 'region-summaries')
-        regions = [f.replace('.csv', '') for f in os.listdir(filepath)]
-    elif type(regions) == str:
-        regions = [regions]
+    regions = region_to_list(region)
 
     # Load summary.
     dfs = []
+    set = ds.get(dataset, 'nifti')
     for region in regions:
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
         if os.path.exists(filepath):
-            df = pd.read_csv(filepath)
+            df = pd.read_csv(filepath, dtype={ 'patient-id': str })
         else:
             if raise_error:
                 raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
@@ -230,7 +237,7 @@ def get_ct_summary(
 
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=regions)
+    pats = set.list_patients(region=regions)
 
     cols = {
         'dataset': str,
@@ -269,7 +276,9 @@ def get_ct_summary(
 
 def create_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> None:
+    region: PatientRegions = 'all') -> None:
+    regions = region_to_list(region)
+
     # Get summary.
     df = get_ct_summary(dataset)
 
@@ -281,7 +290,9 @@ def create_ct_summary(
 
 def load_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> pd.DataFrame:
+    region: PatientRegions = 'all') -> pd.DataFrame:
+    regions = region_to_list(region)
+
     set = ds.get(dataset, 'nifti')
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     if not os.path.exists(filepath):
@@ -295,7 +306,7 @@ def create_segmenter_prediction_figures(
     segmenter: Union[ModelName, List[ModelName]],
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
-    view: Union[Literal['axial', 'coronal', 'sagittal'], List[Literal['axial', 'coronal', 'sagittal']]] = ['axial', 'coronal', 'sagittal']) -> None:
+    view: Union[Axis, List[Axis]] = list(range(3))) -> None:
     datasets = arg_to_list(dataset, str)
     views = arg_to_list(view, str)
     logging.info(f"Creating segmenter prediction figures for datasets '{datasets}', region '{region}', test fold '{test_fold}', localiser '{localiser}', segmenter '{segmenter}' and view '{view}'.")
@@ -365,25 +376,22 @@ def create_segmenter_prediction_figures(
 def create_region_figures(
     dataset: str,
     region: str,
-    excluded_regions: bool = True,
-    included_regions: bool = True,
+    labels: Literal['included', 'excluded', 'all'] = 'all',
     subregions: bool = False,
     **kwargs) -> None:
-    if not excluded_regions and not included_regions:
-        raise ValueError(f"One or both of 'excluded_regions' and 'included_regions' must be True.")
-    logging.arg_log('Creating region figures', ('dataset', 'region'), (dataset, region))
+    logging.arg_log('Creating region figures', ('dataset', 'region', 'labels', 'subregions'), (dataset, region, labels, subregions))
 
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pat_ids = set.list_patients(regions=region)
+    pat_ids = set.list_patients(labels=labels, region=region)
 
     # Get excluded regions.
-    exc_df = set.excluded_regions
-    if exc_df is None and (not excluded_regions or not included_regions):
-        raise ValueError("'excluded-regions.csv' must be present to split included from excluded regions.")
+    exc_df = set.excluded_labels
+    if exc_df is None and labels != 'all':
+        raise ValueError("'excluded-labels.csv' must be present to split included from excluded regions.")
 
     # Keep regions with patients.
-    df = load_region_summary(dataset, regions=region)
+    df = load_region_summary(dataset, region=region)
     df = df.pivot(index=['dataset', 'region', 'patient-id'], columns='metric', values='value').reset_index()
 
     # Add 'extent-mm' outlier info.
@@ -420,20 +428,14 @@ def create_region_figures(
     ) 
 
     for pat_id in tqdm(pat_ids):
-        # Skip if patient doesn't have region.
-        patient = set.patient(pat_id)
-        if not patient.has_region(region):
-            continue
-
         # Skip on inclusion/exclusion criteria.
         if exc_df is not None:
-            pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
-            excluded = len(pr_df) == 1
-            if excluded and not excluded_regions:
-                logging.info(f"Region '{region}' excluded from report for patient '{pat_id}'.")
+            edf = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
+            if labels == 'included' and len(edf) >= 1:
+                logging.info(f"Patient '{pat_id}' skipped. Excluded by 'excluded-labels.csv' and only 'included' labels shown in report.")
                 continue
-            if not excluded and not included_regions:
-                logging.info(f"Region '{region}' excluded from report for patient '{pat_id}'.")
+            elif labels == 'excluded' and len(edf) == 0:
+                logging.info(f"Patient '{pat_id}' skipped. Not excluded by 'excluded-labels.csv' and only 'excluded' labels shown in report.")
                 continue
 
         # Add patient.
@@ -448,7 +450,8 @@ def create_region_figures(
         table_l_margin = 12
         table_line_height = 2 * pdf.font_size
         table_col_widths = (15, 35, 30, 45, 45)
-        pat_info = df[df['patient-id'].astype(str) == pat_id].iloc[0]
+        print(pat_id)
+        pat_info = df[df['patient-id'] == pat_id].iloc[0]
         table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
         for axis in ['x', 'y', 'z']:
             colnames = {
@@ -512,7 +515,7 @@ def create_region_figures(
         pdf.start_section(f'Region Images', level=1)
 
         # Create images.
-        views = ['axial', 'coronal', 'sagittal']
+        views = list(range(3))
         img_coords = (
             (img_l_margin, img_t_margin),
             (img_l_margin + img_width, img_t_margin),
@@ -521,7 +524,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, excluded_labels=excluded_labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -534,7 +537,7 @@ def create_region_figures(
                 pdf.start_section(f'Subregion {i} Images', level=1)
 
                 # Create images.
-                views = ['axial', 'coronal', 'sagittal']
+                views = list(range(3))
                 img_coords = (
                     (img_l_margin, img_t_margin),
                     (img_l_margin + img_width, img_t_margin),
@@ -544,7 +547,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, region=region, show_extent=True, view=view, **kwargs)
+                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, excluded_labels=excluded_labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -558,12 +561,7 @@ def create_region_figures(
                     os.remove(filepath)
 
     # Save PDF.
-    if included_regions and excluded_regions:
-        postfix = ''
-    elif included_regions:
-        postfix = '-included'
-    else:
-        postfix = '-excluded'
+    postfix = '' if labels == 'all' else f'-{labels}'
     filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}{postfix}.pdf')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
@@ -626,7 +624,7 @@ def create_localiser_figures(
 
     # Get patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(regions=region)
+    pats = set.list_patients(region=region)
 
     # Exit if region not present.
     set_regions = list(sorted(set.list_regions().region.unique()))
@@ -729,7 +727,7 @@ def create_localiser_figures(
         pdf.start_section('Images', level=1)
 
         # Save images.
-        views = ['axial', 'coronal', 'sagittal']
+        views = list(range(3))
         img_coords = (
             (img_l_margin, img_t_margin),
             (img_l_margin + img_width, img_t_margin),

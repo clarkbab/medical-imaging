@@ -20,7 +20,7 @@ from mymi.postprocessing import get_largest_cc
 from mymi.regions import get_region_patch_size, is_region
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, crop_box
-from mymi import types
+from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSize3D, ImageSpacing3D, Point3D
 from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 15
@@ -32,14 +32,16 @@ def __plot_region_data(
     aspect: float,
     latex: bool,
     perimeter: bool,
-    view: types.PatientView,
+    view: Axis,
     ax = None,
     cca: bool = False, connected_extent: bool = False,
     colour: Optional[Union[str, List[str]]] = None,
-    crop: Optional[types.Box2D] = None,
+    crop: Optional[Box2D] = None,
     linestyle: str = 'solid',
     legend_show_all_regions: bool = False,
     show_extent: bool = False) -> bool:
+    __assert_view(view)
+
     regions = list(data.keys()) 
     if colour is None:
         colours = sns.color_palette('colorblind', n_colors=len(regions))
@@ -112,19 +114,11 @@ def __to_image_coords(data: ndarray) -> ndarray:
     data = np.transpose(data)
     return data
 
-def __get_origin(view: types.PatientView) -> str:
-    """
-    returns: whether to place image origin in lower or upper corner of plot.
-    args:
-        view: the viewing plane.
-    """
-    # Get origin.
-    if view == 'axial':
-        origin = 'upper'
+def __get_origin(view: Axis) -> str:
+    if view == 2:
+        return 'upper'
     else:
-        origin = 'lower'
-
-    return origin
+        return 'lower'
     
 def _to_internal_region(
     region: str,
@@ -152,20 +146,16 @@ def _to_internal_region(
 def __get_slice_data(
     data: np.ndarray,
     slice_idx: int,
-    view: types.PatientView) -> np.ndarray:
+    view: Axis) -> np.ndarray:
     # Check that slice index isn't too large.
-    if view == 'axial' and (slice_idx >= data.shape[2]):
-        raise ValueError(f"Slice '{slice_idx}' out of bounds, only '{data.shape[2]}' axial slices.")
-    elif view == 'coronal' and (slice_idx >= data.shape[1]):
-        raise ValueError(f"Slice '{slice_idx}' out of bounds, only '{data.shape[1]}' coronal slices.")
-    elif view == 'sagittal' and (slice_idx >= data.shape[0]):
-        raise ValueError(f"Slice '{slice_idx}' out of bounds, only '{data.shape[0]}' sagittal slices.")
+    if slice_idx >= data.shape[view]:
+        raise ValueError(f"Slice '{slice_idx}' out of bounds, only '{data.shape[view]}' {__view_to_text(view)} slices.")
 
-    # Find slice in correct plane, x=sagittal, y=coronal, z=axial.
+    # Get correct plane.
     data_index = (
-        slice_idx if view == 'sagittal' else slice(data.shape[0]),
-        slice_idx if view == 'coronal' else slice(data.shape[1]),
-        slice_idx if view == 'axial' else slice(data.shape[2]),
+        slice_idx if view == 0 else slice(data.shape[0]),
+        slice_idx if view == 1 else slice(data.shape[1]),
+        slice_idx if view == 2 else slice(data.shape[2]),
     )
     slice_data = data[data_index]
 
@@ -175,55 +165,48 @@ def __get_slice_data(
 
     return slice_data
 
-def get_aspect_ratio(
-    view: types.PatientView,
-    spacing: types.ImageSpacing3D) -> float:
-    # Get the aspect ratio.
-    if view == 'axial':
-        aspect = spacing[1] / spacing[0]
-    elif view == 'coronal':
-        aspect = spacing[2] / spacing[0]
-    elif view == 'sagittal':
+def __get_aspect_ratio(
+    view: Axis,
+    spacing: ImageSpacing3D) -> float:
+    if view == 0:
         aspect = spacing[2] / spacing[1]
-
+    elif view == 1:
+        aspect = spacing[2] / spacing[0]
+    elif view == 2:
+        aspect = spacing[1] / spacing[0]
     return aspect
 
-def __reverse_box_coords_2D(box: types.Box2D) -> types.Box2D:
+def __reverse_box_coords_2D(box: Box2D) -> Box2D:
     # Swap x/y coordinates.
     return tuple((y, x) for x, y in box)
 
 def __box_in_plane(
-    box: types.Box3D,
-    view: types.PatientView,
+    box: Box3D,
+    view: Axis,
     slice_idx: int) -> bool:
     # Get view bounding box.
-    if view == 'axial':
-        dim = 2
-    elif view == 'coronal':
-        dim = 1
-    elif view == 'sagittal':
-        dim = 0
     min, max = box
-    min = min[dim]
-    max = max[dim]
+    min = min[view]
+    max = max[view]
 
-    # Return result.
-    return slice_idx >= min and slice_idx <= max
+    # Calculate if the box is in plane.
+    result = slice_idx >= min and slice_idx <= max
+    return result
 
 def __plot_box_slice(
-    box: types.Box3D,
-    view: types.PatientView,
+    box: Box3D,
+    view: Axis,
     colour: str = 'r',
-    crop: types.Box2D = None,
+    crop: Box2D = None,
     label: str = 'box',
     linestyle: str = 'solid') -> None:
     # Compress box to 2D.
-    if view == 'axial':
-        dims = (0, 1)
-    elif view == 'coronal':
-        dims = (0, 2)
-    elif view == 'sagittal':
+    if view == 0:
         dims = (1, 2)
+    elif view == 1:
+        dims = (0, 2)
+    elif view == 2:
+        dims = (0, 1)
     min, max = box
     min = np.array(min)[[*dims]]
     max = np.array(max)[[*dims]]
@@ -282,24 +265,27 @@ def __assert_slice_idx(
     elif (centre_of is not None and extent_of is not None) or (centre_of is not None and slice_idx is not None) or (extent_of is not None and slice_idx is not None):
         raise ValueError(f"Only one of 'centre_of', 'extent_of' or 'slice_idx' can be set.")
 
+def __assert_view(view: int):
+    assert view in (0, 1, 2)
+
 def plot_region(
     id: str,
-    size: types.ImageSize3D,
-    spacing: types.ImageSpacing3D,
+    size: ImageSize3D,
+    spacing: ImageSpacing3D,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[matplotlib.axes.Axes] = None,
     cca: bool = False,
     centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'region_data' if 'str', else uses 'np.ndarray'.
     colour: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[str, np.ndarray, types.Crop2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     ct_data: Optional[np.ndarray] = None,
     window: Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]] = 'tissue',
     dose_alpha: float = 0.3,
     dose_data: Optional[np.ndarray] = None,
     dose_legend_size: float = 0.03,
-    extent_of: Optional[Tuple[Union[str, np.ndarray], Literal['min', 'max']]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
+    extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
     figsize: Tuple[int, int] = (8, 8),
     fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
@@ -323,8 +309,9 @@ def plot_region(
     slice_idx: Optional[int] = None,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
-    view: types.PatientView = 'axial') -> None:
+    view: Axis = 2) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
+    assert view in (0, 1, 2)
 
     if ax is None:
         # Create figure/axes.
@@ -348,27 +335,26 @@ def plot_region(
         label = region_data[centre_of] if type(centre_of) == str else centre_of
         if postproc:
             label = postproc(label)
+        if label.sum() == 0:
+            raise ValueError(f"'centre_of' (np.ndarray/region) is empty.")
         extent_centre = get_extent_centre(label)
-        if view == 'axial':
-            slice_idx = extent_centre[2]
-        elif view == 'coronal':
-            slice_idx = extent_centre[1]
-        elif view == 'sagittal':
-            slice_idx = extent_centre[0]
+        slice_idx = extent_centre[view]
 
     if extent_of is not None:
+        if len(extent_of) == 2:
+            eo_region, eo_end = extent_of
+            eo_axis = view
+        elif len(extent_of) == 3:
+            eo_region, eo_end, eo_axis = extent_of
+
         # Get 'slice_idx' at min/max extent of data.
-        label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
-        extent_end = 0 if extent_of[1] == 'min' else 1
+        label = region_data[eo_region] if type(eo_region) == str else eo_region     # 'eo_region' can be str ('region_data' key) or np.ndarray.
+        assert eo_end in ('min', 'max'), "'extent_of' must have one of ('min', 'max') as second element."
+        eo_end = 0 if eo_end == 'min' else 1
         if postproc:
             label = postproc(label)
-        extent = get_extent(label)
-        if view == 'axial':
-            slice_idx = extent[extent_end][2]
-        elif view == 'coronal':
-            slice_idx = extent[extent_end][1]
-        elif view == 'sagittal':
-            slice_idx = extent[extent_end][0]
+        extent_voxel = get_extent_voxel(label, eo_axis, eo_end, view)
+        slice_idx = extent[eo_end][axis]
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -405,7 +391,7 @@ def plot_region(
         if transform:
             aspect = 1
         else:
-            aspect = get_aspect_ratio(view, spacing) 
+            aspect = __get_aspect_ratio(view, spacing) 
 
     # Determine CT window.
     if ct_data is not None:
@@ -438,22 +424,23 @@ def plot_region(
 
     if show_x_label:
         # Add 'x-axis' label.
-        if view == 'axial':
-            spacing_x = spacing[0]
-        elif view == 'coronal':
-            spacing_x = spacing[0]
-        elif view == 'sagittal':
+        if view == 0:
             spacing_x = spacing[1]
+        elif view == 1: 
+            spacing_x = spacing[0]
+        elif view == 2:
+            spacing_x = spacing[0]
+
         ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
 
     if show_y_label:
         # Add 'y-axis' label.
-        if view == 'axial':
+        if view == 0:
+            spacing_y = spacing[2]
+        elif view == 1:
+            spacing_y = spacing[2]
+        elif view == 2:
             spacing_y = spacing[1]
-        elif view == 'coronal':
-            spacing_y = spacing[2]
-        elif view == 'sagittal':
-            spacing_y = spacing[2]
         ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
     if region_data is not None:
@@ -484,16 +471,9 @@ def plot_region(
     if show_title:
         # Add title.
         if title is None:
-            # Determine number of slices.
-            if view == 'axial':
-                n_slices = size[2]
-            elif view == 'coronal':
-                n_slices = size[1]
-            elif view == 'sagittal':
-                n_slices = size[0]
-
             # Set default title.
-            title = f"patient: {id}, slice: {slice_idx}/{n_slices - 1} ({view} view)"
+            n_slices = size[view]
+            title = f"patient: {id}, slice: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
 
         # Escape text if using latex.
         if latex:
@@ -521,15 +501,15 @@ def plot_region(
 
 def plot_localiser_prediction(
     id: str,
-    spacing: types.ImageSpacing3D, 
+    spacing: ImageSpacing3D, 
     pred_data: np.ndarray,
     pred_region: str,
     aspect: float = None,
     centre_of: Optional[str] = None,
-    crop: types.Box2D = None,
+    crop: Box2D = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
-    extent_of: Optional[Literal[0, 1]] = None,
+    extent_of: Optional[Extrema] = None,
     figsize: Tuple[int, int] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
@@ -551,9 +531,10 @@ def plot_localiser_prediction(
     show_seg_patch: bool = True,
     slice_idx: Optional[int] = None,
     truncate_spine: bool = True,
-    view: types.PatientView = 'axial',
+    view: Axis = 0,
     **kwargs: dict) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
+    __assert_view(view)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -574,24 +555,23 @@ def plot_localiser_prediction(
         # Get 'slice_idx' at centre of data.
         label = region_data[centre_of] if type(centre_of) == str else centre_of
         extent_centre = get_extent_centre(label)
-        if view == 'axial':
-            slice_idx = extent_centre[2]
-        elif view == 'coronal':
-            slice_idx = extent_centre[1]
-        elif view == 'sagittal':
-            slice_idx = extent_centre[0]
+        slice_idx = extent_centre[view]
 
     if extent_of is not None:
+        if len(extent_of) == 2:
+            eo_region, eo_end = extent_of
+            eo_axis = view
+        elif len(extent_of) == 3:
+            eo_region, eo_end, eo_axis = extent_of
+
         # Get 'slice_idx' at min/max extent of data.
-        label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
-        extent_end = 0 if extent_of[1] == 'min' else 1
+        label = region_data[eo_region] if type(eo_region) == str else eo_region     # 'eo_region' can be str ('region_data' key) or np.ndarray.
+        assert eo_end in ('min', 'max'), "'extent_of' must have one of ('min', 'max') as second element."
+        eo_end = 0 if eo_end == 'min' else 1
+        if postproc:
+            label = postproc(label)
         extent = get_extent(label)
-        if view == 'axial':
-            slice_idx = extent[extent_end][2]
-        elif view == 'coronal':
-            slice_idx = extent[extent_end][1]
-        elif view == 'sagittal':
-            slice_idx = extent[extent_end][0]
+        slice_idx = extent[eo_end][axis]
 
     # Plot patient regions.
     plot_region(id, pred_data.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
@@ -609,7 +589,7 @@ def plot_localiser_prediction(
     if show_pred and not empty_pred:
         # Get aspect ratio.
         if not aspect:
-            aspect = get_aspect_ratio(view, spacing) 
+            aspect = __get_aspect_ratio(view, spacing) 
 
         # Get slice data.
         pred_slice_data = __get_slice_data(pred_data, slice_idx, view)
@@ -644,12 +624,12 @@ def plot_localiser_prediction(
         pred_centre = get_extent_centre(centre_data) 
 
         # Get 2D loc centre.
-        if view == 'axial':
-            pred_centre = (pred_centre[0], pred_centre[1])
-        elif view == 'coronal':
-            pred_centre = (pred_centre[0], pred_centre[2])
-        elif view == 'sagittal':
+        if view == 0:
             pred_centre = (pred_centre[1], pred_centre[2])
+        elif view == 1:
+            pred_centre = (pred_centre[0], pred_centre[2])
+        elif view == 2:
+            pred_centre = (pred_centre[0], pred_centre[1])
             
         # Apply crop.
         if crop:
@@ -709,8 +689,8 @@ def plot_localiser_prediction(
 def __get_region_crop(
     data: np.ndarray,
     crop_margin: float,
-    spacing: types.ImageSpacing3D,
-    view: types.PatientView) -> types.Box2D:
+    spacing: ImageSpacing3D,
+    view: Axis) -> Box2D:
     # Get 3D crop box.
     extent = get_extent(data)
 
@@ -721,15 +701,15 @@ def __get_region_crop(
     max = tuple(np.array(max) + crop_margin_vox)
 
     # Select 2D component.
-    if view == 'axial':
-        min = (min[0], min[1])
-        max = (max[0], max[1])
-    elif view == 'coronal':
-        min = (min[0], min[2])
-        max = (max[0], max[2])
-    elif view == 'sagittal':
+    if view == 0:
         min = (min[1], min[2])
         max = (max[1], max[2])
+    elif view == 1:
+        min = (min[0], min[2])
+        max = (max[0], max[2])
+    elif view == 2:
+        min = (min[0], min[1])
+        max = (max[0], max[1])
     crop = (min, max)
     return crop
 
@@ -759,7 +739,7 @@ def plot_distribution(
 
 def plot_segmenter_prediction(
     id: str,
-    spacing: types.ImageSpacing3D,
+    spacing: ImageSpacing3D,
     pred_data: Dict[str, np.ndarray],
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
@@ -768,7 +748,7 @@ def plot_segmenter_prediction(
     centre_of: Optional[str] = None,
     colour: Optional[Union[str, List[str]]] = None,
     colour_match: bool = False,
-    crop: Optional[Union[str, types.Box2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
@@ -779,7 +759,7 @@ def plot_segmenter_prediction(
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
     linestyle_region: str = 'solid',
-    loc_centre: Optional[Union[types.Point3D, List[types.Point3D]]] = None,
+    loc_centre: Optional[Union[Point3D, List[Point3D]]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
@@ -791,13 +771,13 @@ def plot_segmenter_prediction(
     show_pred_patch: bool = False,
     show_region_extent: bool = True,
     slice_idx: Optional[int] = None,
-    view: types.PatientView = 'axial',
+    view: Axis = 0,
     **kwargs: dict) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
     model_names = tuple(pred_data.keys())
     n_models = len(model_names)
     n_regions = len(region_data.keys()) if region_data is not None else 0
-    loc_centres = arg_to_list(loc_centre, types.Point3D)
+    loc_centres = arg_to_list(loc_centre, Point3D)
     if loc_centres is not None:
         assert len(loc_centres) == n_models
 
@@ -842,24 +822,14 @@ Prediction: {model_name}""")
         # Get 'slice_idx' at centre of data.
         label = region_data[centre_of] if type(centre_of) == str else centre_of
         extent_centre = get_extent_centre(label)
-        if view == 'axial':
-            slice_idx = extent_centre[2]
-        elif view == 'coronal':
-            slice_idx = extent_centre[1]
-        elif view == 'sagittal':
-            slice_idx = extent_centre[0]
+        slice_idx = extent_centre[view]
 
     if extent_of is not None:
         # Get 'slice_idx' at min/max extent of data.
         label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
         extent_end = 0 if extent_of[1] == 'min' else 1
         extent = get_extent(label)
-        if view == 'axial':
-            slice_idx = extent[extent_end][2]
-        elif view == 'coronal':
-            slice_idx = extent[extent_end][1]
-        elif view == 'sagittal':
-            slice_idx = extent[extent_end][0]
+        slice_idx = extent[extent_end][view]
 
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
     size = ct_data.shape
@@ -885,7 +855,7 @@ Prediction: {model_name}""")
         if pred.sum() != 0 and show_pred:
             # Get aspect ratio.
             if not aspect:
-                aspect = get_aspect_ratio(view, spacing) 
+                aspect = __get_aspect_ratio(view, spacing) 
 
             # Get slice data.
             pred_slice_data = __get_slice_data(pred, slice_idx, view)
@@ -915,12 +885,12 @@ Prediction: {model_name}""")
         if show_loc_centre:
             # Get loc centre.
             loc_centre = loc_centres[i]
-            if view == 'axial':
-                centre = (loc_centre[0], loc_centre[1])
-            elif view == 'coronal':
-                centre = (loc_centre[0], loc_centre[2])
-            elif view == 'sagittal':
+            if view == 0:
                 centre = (loc_centre[1], loc_centre[2])
+            elif view == 1:
+                centre = (loc_centre[0], loc_centre[2])
+            elif view == 2:
+                centre = (loc_centre[0], loc_centre[1])
                 
             # Apply crop.
             if crop:
@@ -972,13 +942,13 @@ Prediction: {model_name}""")
 
 def plot_segmenter_prediction_diff(
     id: str,
-    spacing: types.ImageSpacing3D,
+    spacing: ImageSpacing3D,
     diff_data: Dict[str, np.ndarray],
     alpha_diff: float = 1.0,
     aspect: float = None,
     ax: Optional[matplotlib.axes.Axes] = None,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, types.Box2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[str] = None,
@@ -994,9 +964,10 @@ def plot_segmenter_prediction_diff(
     show_diff_contour: bool = False,
     show_legend: bool = True,
     slice_idx: Optional[int] = None,
-    view: types.PatientView = 'axial',
+    view: Axis = 0,
     **kwargs: dict) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
+    __assert_view(view)
     diff_names = list(diff_data.keys())
     n_diffs = len(diff_names)
     colours = sns.color_palette('husl', n_diffs)
@@ -1044,7 +1015,7 @@ Diff: {diff_name}""")
         if diff.sum() != 0 and show_diff:
             # Get aspect ratio.
             if not aspect:
-                aspect = get_aspect_ratio(view, spacing) 
+                aspect = __get_aspect_ratio(view, spacing) 
 
             # Get slice data.
             slice_data = __get_slice_data(diff, slice_idx, view)
@@ -1084,7 +1055,7 @@ Diff: {diff_name}""")
             'text.usetex': rc_params['text.usetex']
         })
 
-def plot_dataframe(
+def plot_dataframe_old(
     data: pd.DataFrame = None,
     x: str = None,
     y: str = None,
@@ -1423,7 +1394,7 @@ def __format_p_values(p_vals: List[float]) -> List[str]:
         f_p_vals.append(p_val)
     return f_p_vals
 
-def plot_dataframe_v2(
+def plot_dataframe(
     ax: Optional[matplotlib.axes.Axes] = None,
     data: Optional[pd.DataFrame] = None,
     x: Optional[str] = None,
@@ -1840,3 +1811,11 @@ def __get_styles(
             styles.append(f'background-color: {colour}')
 
     return styles
+
+def __view_to_text(view: int) -> str:
+    if view == 0:
+        return 'axial'
+    elif view == 1:
+        return 'coronal'
+    elif view == 2:
+        return 'sagittal'

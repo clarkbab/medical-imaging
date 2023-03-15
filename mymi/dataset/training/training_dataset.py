@@ -4,8 +4,9 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
-from mymi.regions import to_list as regions_to_list
+from mymi.regions import region_to_list
 from mymi import types
+from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
 from .training_sample import TrainingSample
@@ -35,6 +36,10 @@ class TrainingDataset(Dataset):
     @property
     def description(self) -> str:
         return self.__global_id
+
+    @property
+    def has_grouping(self) -> bool:
+        return 'group-id' in self.index
 
     @property
     def index(self) -> str:
@@ -69,10 +74,12 @@ class TrainingDataset(Dataset):
     def type(self) -> DatasetType:
         return DatasetType.TRAINING
 
-    def list_samples(
+    def list_groups(
         self,
-        regions: types.PatientRegions = 'all') -> List[int]:
-        regions = regions_to_list(regions) 
+        region: types.PatientRegions = 'all') -> List[int]:
+        if not self.has_grouping:
+            raise ValueError(f"{self} has no grouping.")
+        regions = region_to_list(region) 
 
         # Filter out 'empty' labels.
         index = self.index
@@ -83,7 +90,33 @@ class TrainingDataset(Dataset):
         index = index[index.region.isin(regions)]
 
         # Get sample IDs.
+        group_ids = list(sorted(index['group-id'].unique()))
+        group_ids = [int(i) for i in group_ids]
+
+        return group_ids
+
+    def list_samples(
+        self,
+        region: types.PatientRegions = 'all',
+        group_id: Optional[Union[int, List[int]]] = None) -> List[int]:
+        group_ids = arg_to_list(group_id, int)
+        regions = region_to_list(region) 
+
+        # Filter out 'empty' labels.
+        index = self.index
+        if 'empty' in self.index.columns:
+            index = index[~index['empty']]
+
+        # Filter by regions.
+        index = index[index.region.isin(regions)]
+
+        # Filter by groups.
+        if group_id is not None:
+            index = index[index['group-id'].isin(group_ids)] 
+
+        # Get sample IDs.
         sample_ids = list(sorted(index['sample-id'].unique()))
+        sample_ids = [int(i) for i in sample_ids]
 
         return sample_ids
 
@@ -103,12 +136,13 @@ class TrainingDataset(Dataset):
         # Look up sample by patient ID.
         if by_patient_id:
             sample_id = self.__index[self.__index['patient-id'] == sample_id].iloc[0]['sample-id']
-
         return TrainingSample(self, sample_id)
 
     def __load_index(self) -> None:
         filepath = os.path.join(self.__path, 'index.csv')
-        self.__index = pd.read_csv(filepath).astype({ 'patient-id': str, 'sample-id': str })
+        if not os.path.exists(filepath):
+            raise ValueError(f"Index not found for {self}.")
+        self.__index = pd.read_csv(filepath).astype({ 'sample-id': int, 'origin-patient-id': str })
 
     def __str__(self) -> str:
         return self.__global_id

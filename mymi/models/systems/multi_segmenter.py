@@ -1,48 +1,41 @@
-from monai.metrics import compute_dice
 import numpy as np
 import os
 import pytorch_lightning as pl
-from scipy.ndimage import center_of_mass
 import torch
 from torch import nn
-from torch.optim import SGD
+from torch.optim import Adam
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 from typing import Dict, List, Optional, OrderedDict, Tuple
-import wandb
+from wandb import Image
 
 from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi import logging
-from mymi.losses import DiceLoss
 from mymi.metrics import dice
 from mymi.models import replace_checkpoint_alias
 from mymi.models.networks import MultiUNet3D
-from mymi.postprocessing import get_batch_largest_cc
-from mymi.regions import to_list
+from mymi.regions import region_to_list
 from mymi import types
 
 class MultiSegmenter(pl.LightningModule):
     def __init__(
         self,
-        regions: types.PatientRegions,
+        region: types.PatientRegions,
         loss: nn.Module,
+        lr_init: float = 1e-3,
+        max_image_batches: int = 2,
         metrics: List[str] = [],
-        n_gpus: int = 1,
-        spacing: Optional[types.ImageSpacing3D] = None):
+        **kwargs):
         super().__init__()
-        if 'distances' in metrics and spacing is None:
-            raise ValueError(f"Localiser requires 'spacing' when calculating 'distances' metric.")
-        self.__distances_delay = 50
-        self.__distances_interval = 20
+        self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__loss = loss
-        self.__max_image_batches = 5
         self.__name = None
+        self.__max_image_batches = max_image_batches
         self.__metrics = metrics
-        self.__spacing = spacing
-        self.__regions = to_list(regions)
-        self.__n_output_channels = len(to_list(self.__regions)) + 1
-        self.__network = MultiUNet3D(self.__n_output_channels, n_gpus=n_gpus)
+        self.__regions = region_to_list(region)
+        self.__n_output_channels = len(self.__regions) + 1
+        self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
@@ -50,12 +43,12 @@ class MultiSegmenter(pl.LightningModule):
             self.__channel_region_map[i + 1] = region 
 
     @property
-    def network(self) -> nn.Module:
-        return self.__network
-
-    @property
     def name(self) -> Optional[Tuple[str, str, str]]:
         return self.__name
+
+    @property
+    def network(self) -> nn.Module:
+        return self.__network
 
     @staticmethod
     def load(
@@ -69,14 +62,7 @@ class MultiSegmenter(pl.LightningModule):
             filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
             n_samples = run_name.split('-')[-1]
-            if n_samples == '5':
-                n_epochs = 900
-            elif n_samples == '10':
-                n_epochs = 450
-            elif n_samples == '20':
-                n_epochs = 300
-            else:
-                n_epochs = 150
+            n_epochs = 150
             if state['epoch'] < n_epochs - 1:
                 raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
@@ -110,35 +96,46 @@ class MultiSegmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        return SGD(self.parameters(), lr=1e-3, momentum=0.9)
+        self.__optimiser = Adam(self.parameters(), lr=self.lr)
+        self.__scheduler = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=20, verbose=True)
+        return {
+            'optimizer': self.__optimiser,
+            'lr_scheduler': self.__scheduler,
+            'monitor': 'val/loss'
+        }
 
     def forward(
         self,
-        x: torch.Tensor,
-        probs: bool = False):
-        # Get prediction.
-        pred = self.__network(x)
-        if probs:
-            return pred
-
-        # Apply thresholding.
-        pred = pred.argmax(dim=1)
-        
-        # Apply postprocessing.
-        pred = pred.cpu().numpy().astype(np.bool_)
-        pred = get_batch_largest_cc(pred)
-
-        return pred
+        x: torch.Tensor) -> torch.Tensor:
+        return self.__network(x)
 
     def training_step(self, batch, _):
         # Forward pass.
-        desc, x, y, class_mask, class_weights = batch
-        print(f'=== {desc} ===')
+        desc, x, y, mask, weights = batch
+        print(desc)
         print(x.shape)
-        # y_hat = checkpoint(self.__network, x)
-        y_hat = self.__network(x)
-        loss = self.__loss(y_hat, y, class_mask, class_weights)
-        self.log('train/loss', loss, on_epoch=True)
+        y_hat = self.forward(x)
+        loss = self.__loss(y_hat, y, mask, weights)
+        if loss.item() == np.nan:
+            logging.info('Got nan. Saving data...')
+            # Save data.
+            filepath = os.path.join(config.directories.temp, 'input.npy')
+            torch.save({
+                'epoch': self.current_epoch,
+                'model_state_dict': self.__network.state_dict(),
+                'optimizer_state_dict': self.__optimiser.state_dict(),
+                'scheduler_state_dict': self.__scheduler.state_dict(),
+                'loss': loss.item()
+            }, filepath)
+            filepath = os.path.join(config.directories.temp, 'input.npy')
+            np.save(filepath, x)
+            filepath = os.path.join(config.directories.temp, 'label.npy')
+            np.save(filepath, y)
+            filepath = os.path.join(config.directories.temp, 'mask.npy')
+            np.save(filepath, mask)
+            filepath = os.path.join(config.directories.temp, 'weights.npy')
+            np.save(filepath, weights)
+        self.log('train/loss', loss, on_epoch=True, on_step=False)
 
         # Convert pred to binary mask.
         y = y.cpu().numpy()
@@ -152,23 +149,23 @@ class MultiSegmenter(pl.LightningModule):
                 region = self.__channel_region_map[i]
                 dice_scores = []
                 for b in range(y.shape[0]):     # Batch items.
-                    if class_mask[b, i]:
+                    if mask[b, i]:
                         y_i = y[b, i]   
                         y_hat_i = y_hat[b, i]
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 
                 channel_dice = np.mean(dice_scores)
-                self.log(f'train/dice/{region}', channel_dice, on_epoch=True)
+                self.log(f'train/dice/{region}', channel_dice, on_epoch=True, on_step=False)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
         # Forward pass.
-        _, x, y, class_mask, class_weights = batch
-        y_hat = self.__network(x)
-        loss = self.__loss(y_hat, y, class_mask, class_weights)
-        self.log('val/loss', loss, on_epoch=True)
+        descs, x, y, mask, weights = batch
+        y_hat = self.forward(x)
+        loss = self.__loss(y_hat, y, mask, weights)
+        self.log('val/loss', loss, on_epoch=True, on_step=False)
 
         # Convert pred to binary mask.
         y = y.cpu().numpy()
@@ -181,64 +178,59 @@ class MultiSegmenter(pl.LightningModule):
                 region = self.__channel_region_map[i]
                 dice_scores = []
                 for b in range(y.shape[0]):     # Batch items.
-                    if class_mask[b, i]:
+                    if mask[b, i]:
                         y_i = y[b, i]
                         y_hat_i = y_hat[b, i]
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 
                 channel_dice = np.mean(dice_scores)
-                self.log(f'train/dice/{region}', channel_dice, on_epoch=True)
+                self.log(f'val/dice/{region}', channel_dice, on_epoch=True, on_step=False)
 
         # Log predictions.
-        # if self.logger:
-        #     class_labels = {
-        #         1: 'foreground'
-        #     }
+        if self.logger:
+            class_labels = {
+                1: 'foreground'
+            }
+            if batch_idx < self.__max_image_batches:
+                for i, desc in enumerate(descs):
+                    # Plot for each channel.
+                    for j in range(y.shape[1]):
+                        # Get images.
+                        x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i, j], y_hat[i, j]
 
-        #     for i, desc in enumerate(descs):
-        #         if batch_idx > self.__max_image_batches + 1:
-        #             break
+                        # Get centre of extent of ground truth.
+                        centre = get_extent_centre(y_vol)
 
-        #         # Get images.
-        #         x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i], y_hat[i]
+                        for axis, centre_ax in enumerate(centre):
+                            # Get slices.
+                            slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
+                            x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
 
-        #         # Get centre of extent of ground truth.
-        #         centre = get_extent_centre(y_vol)
-        #         if centre is None:
-        #             logging.info(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
-        #             continue
-        #             # raise ValueError(f'Empty label, desc: {desc}. Sum: {y_vol.sum()}')
+                            # Fix orientation.
+                            if axis == 0 or axis == 1:
+                                x_img = np.rot90(x_img)
+                                y_img = np.rot90(y_img)
+                                y_hat_img = np.rot90(y_hat_img)
+                            elif axis == 2:
+                                x_img = np.transpose(x_img)
+                                y_img = np.transpose(y_img) 
+                                y_hat_img = np.transpose(y_hat_img)
 
-        #         for axis, centre_ax in enumerate(centre):
-        #             # Get slices.
-        #             slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
-        #             x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
-
-        #             # Fix orientation.
-        #             if axis == 0 or axis == 1:
-        #                 x_img = np.rot90(x_img)
-        #                 y_img = np.rot90(y_img)
-        #                 y_hat_img = np.rot90(y_hat_img)
-        #             elif axis == 2:
-        #                 x_img = np.transpose(x_img)
-        #                 y_img = np.transpose(y_img) 
-        #                 y_hat_img = np.transpose(y_hat_img)
-
-        #             # Send image.
-        #             image = wandb.Image(
-        #                 x_img,
-        #                 caption=desc,
-        #                 masks={
-        #                     'ground_truth': {
-        #                         'mask_data': y_img,
-        #                         'class_labels': class_labels
-        #                     },
-        #                     'predictions': {
-        #                         'mask_data': y_hat_img,
-        #                         'class_labels': class_labels
-        #                     }
-        #                 }
-        #             )
-        #             title = f'{desc}:axis:{axis}'
-        #             self.logger.experiment.log({ title: image })
+                            # Send image.
+                            image = Image(
+                                x_img,
+                                caption=desc,
+                                masks={
+                                    'ground_truth': {
+                                        'mask_data': y_img,
+                                        'class_labels': class_labels
+                                    },
+                                    'predictions': {
+                                        'mask_data': y_hat_img,
+                                        'class_labels': class_labels
+                                    }
+                                }
+                            )
+                            title = f'desc:{desc}:class:{j}:axis:{axis}'
+                            self.logger.experiment.log({ title: image })

@@ -44,7 +44,7 @@ class Loader:
         datasets = [ds.get(d, 'training', check_processed=check_processed) for d in datasets]
         all_samples = []
         for ds_i, dataset in enumerate(datasets):
-            samples = dataset.list_samples(regions=region)
+            samples = dataset.list_samples(region=region)
             for s_i in samples:
                 all_samples.append((ds_i, s_i))
 
@@ -144,7 +144,7 @@ class TrainingDataset(Dataset):
             return desc
 
         # Load data.
-        input, labels = dataset.sample(s_i).pair(regions=self.__region)
+        input, labels = dataset.sample(s_i).pair(region=self.__region)
         label = labels[self.__region]
 
         # Perform transform.

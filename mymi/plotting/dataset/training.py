@@ -22,18 +22,18 @@ def plot_region(
     # Load data.
     sample = ds.get(dataset, 'training').sample(sample_idx)
     ct_data = sample.input
-    region_data = sample.label(regions=regions) if regions is not None else None
+    region_data = sample.label(region=regions) if regions is not None else None
     spacing = sample.spacing
 
     if centre_of is not None:
         if type(centre_of) == str:
             if region_data is None or centre_of not in region_data:
-                centre_of = sample.label(regions=centre_of)[centre_of]
+                centre_of = sample.label(region=centre_of)[centre_of]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = sample.label(regions=crop)[crop]
+                crop = sample.label(region=crop)[crop]
 
     if region_labels is not None:
         # Rename 'regions' and 'region_data' keys.
@@ -59,7 +59,7 @@ def plot_sample_localiser_prediction(
     # Load data.
     sample = ds.get(dataset, 'training').sample(sample_idx)
     input = sample.input
-    label = sample.label(regions=region)[region]
+    label = sample.label(region=region)[region]
     spacing = sample.spacing
 
     # Set truncation if 'SpinalCord'.

@@ -12,11 +12,11 @@ from .tolerances import get_region_tolerance, RegionTolerances
 def is_region(name: str) -> bool:
     return name in RegionNames
 
-def to_list(regions: types.PatientRegions) -> List[str]:
-    if type(regions) == str:
-        if regions == 'all':
+def region_to_list(region: types.PatientRegions) -> List[str]:
+    if type(region) == str:
+        if region == 'all':
             return RegionNames
         else:
-            return [regions]
+            return [region]
     else:
-        return regions
+        return region

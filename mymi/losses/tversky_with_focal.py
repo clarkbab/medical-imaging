@@ -10,7 +10,7 @@ class TverskyWithFocalLoss(nn.Module):
         beta: float = 0.5,
         epsilon: float = 1e-6,
         lam: float = 0.5) -> None:
-        super(TverskyWithFocalLoss, self).__init__()
+        super().__init__()
         self.__tversky = TverskyLoss(alpha=alpha, beta=beta, epsilon=epsilon)
         self.__focal = FocalLoss()
         self.__lam = lam

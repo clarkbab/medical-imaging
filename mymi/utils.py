@@ -176,13 +176,17 @@ def arg_assert_present(
 def arg_to_list(
     arg: Optional[Any],
     arg_type: Any,
+    literals: Dict[str, List[Any]] = {},
     out_type: Optional[Any] = None) -> List[Any]:
     if arg is None:
         return arg
 
     # Convert to list.
     if type(arg) is arg_type:
-        arg = [arg]
+        if arg in literals:
+            arg = literals[arg]
+        else:
+            arg = [arg]
     elif type(arg_type) is list and type(arg) in arg_type:      # Allow multiple types to be specified in 't'.
         arg = [arg]
         

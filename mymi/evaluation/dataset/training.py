@@ -33,7 +33,7 @@ def evaluate_localiser_predictions(
 
         # Create dataframe.
         cols = {
-            'sample-id': str,
+            'sample-id': int,
             'metric': str,
             region: float
         }

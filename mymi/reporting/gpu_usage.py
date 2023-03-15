@@ -62,7 +62,7 @@ def load_gpu_usage(name: str) -> pd.DataFrame:
     # Check for 'timing' file - indicates successful training run.
     filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"Timing file doesn't exists - so training run didn't complete.")
+        raise ValueError(f"Timing file doesn't exist for '{name}'. Training run didn't complete.")
     filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}.csv') 
     return pd.read_csv(filepath)
 
@@ -96,7 +96,7 @@ def plot_gpu_usage(
         # ax.plot(x, y, color='g', label='pytorch-alloc')
         # y = df[f'{device_name}-mem-res']
         # ax.plot(x, y, color='b', label='pytorch-res')
-    # ax.legend()
+    ax.legend()
     ax.set_title(name)
     ax.set_xlabel('time [seconds]')
     ax.set_ylabel('GPU usage [MB]')

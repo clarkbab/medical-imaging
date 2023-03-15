@@ -15,12 +15,12 @@ echo $version
 
 DATASET="PMCC-HN-REPLAN"
 REGION='Brain'
-SPACING="(4,4,4)"
+OUTPUT_SPACING="(4,4,4)"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TRAINING_DATASET="$DATASET-LOC"
 
-python $SCRIPT_DIR/process/nifti/convert_to_training \
+python $SCRIPT_DIR/process/nifti/convert_to_training.py \
     --dataset $DATASET \
     --region $REGION \
-    --spacing $SPACING \
+    --output_spacing $OUTPUT_SPACING \
     --training_dataset $TRAINING_DATASET

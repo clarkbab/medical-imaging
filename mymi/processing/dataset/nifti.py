@@ -1,4 +1,5 @@
-from re import I
+import nibabel as nib
+from nibabel.nifti1 import Nifti1Image
 import numpy as np
 import os
 import pandas as pd
@@ -14,13 +15,16 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
 from mymi.dataset.nifti import NIFTIDataset
-from mymi.dataset.training import create, exists, get, recreate
+from mymi.dataset.nifti import recreate as recreate_nifti
+from mymi.dataset.training import TrainingDataset, exists
+from mymi.dataset.training import create as create_training
+from mymi.dataset.training import recreate as recreate_training
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_checkpoint_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
-from mymi.regions import to_list as regions_to_list
+from mymi.regions import region_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
@@ -33,23 +37,23 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
+    output_size: Optional[types.ImageSize3D] = None,
     output_spacing: Optional[types.ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
-    size: Optional[types.ImageSize3D] = None,
     training_dataset: Optional[str] = None) -> None:
-    regions = regions_to_list(region)
     logging.arg_log('Converting to training', ('dataset', 'region'), (dataset, region))
+    regions = region_to_list(region)
 
     # Create the dataset.
     dest_dataset = dataset if training_dataset is None else training_dataset
     if exists(dest_dataset):
         if recreate_dataset:
             created = True
-            set_t = recreate(dest_dataset)
+            set_t = recreate_training(dest_dataset)
         else:
             created = False
-            set_t = get(dest_dataset)
+            set_t = TrainingDataset(dest_dataset)
             _destroy_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
 
             # Delete old labels.
@@ -58,7 +62,7 @@ def convert_to_training(
                 shutil.rmtree(filepath)
     else:
         created = True
-        set_t = create(dest_dataset)
+        set_t = create_training(dest_dataset)
     _write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
@@ -67,40 +71,45 @@ def convert_to_training(
         params_df = pd.DataFrame({
             'dilate-iter': [str(dilate_iter)],
             'dilate-regions': [str(dilate_regions)],
-            'output-size': [str(size)] if size is not None else ['None'],
+            'output-size': [str(output_size)] if output_size is not None else ['None'],
             'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
             'regions': [str(regions)],
         })
-        params_df.to_csv(filepath)
+        params_df.to_csv(filepath, index=False)
     else:
         for region in regions:
             filepath = os.path.join(set_t.path, f'params-{region}.csv')
             params_df = pd.DataFrame({
                 'dilate-iter': [str(dilate_iter)],
                 'dilate-regions': [str(dilate_regions)],
-                'output-size': [str(size)] if size is not None else ['None'],
+                'output-size': [str(output_size)] if output_size is not None else ['None'],
                 'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
                 'regions': [str(regions)],
             })
-            params_df.to_csv(filepath)
+            params_df.to_csv(filepath, index=False)
 
     # Load patients.
     set = NIFTIDataset(dataset)
-    pat_ids = set.list_patients()
+    pat_ids = set.list_patients(region=regions)
 
     # Get exclusions.
-    exc_df = set.excluded_regions
+    exc_df = set.excluded_labels
 
     # Create index.
     cols = {
         'dataset': str,
-        'sample-id': str,
+        'sample-id': int,
+        'group-id': int,
         'origin-dataset': str,
         'origin-patient-id': str,
         'region': str,
         'empty': bool
     }
     index = pd.DataFrame(columns=cols.keys())
+    index = index.astype(cols)
+
+    # Load patient grouping if present.
+    group_df = set.group_index
 
     # Write each patient to dataset.
     start = time()
@@ -116,7 +125,7 @@ def convert_to_training(
                 input = resample_3D(input, spacing=spacing, output_spacing=output_spacing)
 
             # Crop/pad.
-            if size:
+            if output_size:
                 # Log warning if we're cropping the FOV as we're losing information.
                 if log_warnings:
                     if output_spacing:
@@ -124,13 +133,13 @@ def convert_to_training(
                     else:
                         fov_spacing = spacing
                     fov = np.array(input.shape) * fov_spacing
-                    new_fov = np.array(size) * fov_spacing
-                    for axis in range(len(size)):
+                    new_fov = np.array(output_size) * fov_spacing
+                    for axis in range(len(output_size)):
                         if fov[axis] > new_fov[axis]:
                             logging.warning(f"Patient '{patient}' had FOV '{fov}', larger than new FOV after crop/pad '{new_fov}' for axis '{axis}'.")
 
                 # Perform crop/pad.
-                input = top_crop_or_pad_3D(input, size, fill=input.min())
+                input = top_crop_or_pad_3D(input, output_size, fill=input.min())
 
             # Save input.
             __create_training_input(set_t, i, input)
@@ -140,7 +149,7 @@ def convert_to_training(
                 if not set.patient(pat_id).has_region(region):
                     continue
 
-                # Skip if region in 'excluded-regions.csv'.
+                # Skip if region in 'excluded-labels.csv'.
                 if exc_df is not None:
                     pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
                     if len(pr_df) == 1:
@@ -154,8 +163,8 @@ def convert_to_training(
                     label = resample_3D(label, spacing=spacing, output_spacing=output_spacing)
 
                 # Crop/pad.
-                if size:
-                    label = top_crop_or_pad_3D(label, size)
+                if output_size:
+                    label = top_crop_or_pad_3D(label, output_size)
 
                 # Round data after resampling to save on disk space.
                 if round_dp is not None:
@@ -173,11 +182,21 @@ def convert_to_training(
                     empty = True
 
                 # Add index entry.
+                if group_df is not None:
+                    tdf = group_df[group_df['patient-id'] == pat_id]
+                    if len(tdf) == 0:
+                        group_id = np.nan
+                    else:
+                        assert len(tdf) == 1
+                        group_id = tdf.iloc[0]['group-id']
+                else:
+                    group_id = np.nan
                 data = {
                     'dataset': set_t.name,
                     'sample-id': i,
+                    'group-id': group_id,
                     'origin-dataset': set.name,
-                    'patient-id': pat_id,
+                    'origin-patient-id': pat_id,
                     'region': region,
                     'empty': empty
                 }
@@ -194,6 +213,56 @@ def convert_to_training(
     _write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     _print_time(set_t, hours)
+
+def create_excluded_brainstem(
+    dataset: str,
+    dest_dataset: str) -> None:
+    # Copy dataset to destination.
+    set = NIFTIDataset(dataset)
+    dest_set = recreate_nifti(dest_dataset)
+    os.rmdir(dest_set.path)
+    shutil.copytree(set.path, dest_set.path)
+
+    cols = {
+        'patient-id': str
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Get patient with 'Brain' label.
+    pat_ids = dest_set.list_patients(region='Brain')
+    for pat_id in tqdm(pat_ids):
+        # Skip if no 'Brainstem'.
+        pat = dest_set.patient(pat_id)
+        if not pat.has_region('Brainstem'):
+            continue
+
+        # Load label data.
+        data = pat.region_data(region=['Brain', 'Brainstem'])
+
+        # Perform exclusion.
+        brain_data = data['Brain'] & ~data['Brainstem']
+
+        # Write new label.
+        ct_spacing = pat.ct_spacing
+        ct_offset = pat.ct_offset
+        affine = np.array([
+            [ct_spacing[0], 0, 0, ct_offset[0]],
+            [0, ct_spacing[1], 0, ct_offset[1]],
+            [0, 0, ct_spacing[2], ct_offset[2]],
+            [0, 0, 0, 1]])
+        img = Nifti1Image(brain_data.astype(np.int32), affine)
+        filepath = os.path.join(dest_set.path, 'data', 'regions', 'Brain', f'{pat_id}.nii.gz')
+        nib.save(img, filepath)
+
+        # Add to index.
+        data = {
+            'patient-id': pat_id
+        }
+        df = append_row(df, data)
+
+    # Save index.
+    filepath = os.path.join(dest_set.path, 'excl-index.csv')
+    df.to_csv(filepath, index=False)
 
 def _destroy_flag(
     dataset: 'Dataset',

@@ -3,9 +3,9 @@ module load python/3.8.6
 source ~/venvs/medical-imaging/bin/activate
 python --version
 
-CKPT_LIBRARY="baseline"
+# CKPT_LIBRARY="baseline"
 # CKPT_LIBRARY="ckpt-pytorch"
-# CKPT_LIBRARY="ckpt-fairscale"
+CKPT_LIBRARY="ckpt-fairscale"
 # CKPT_LIBRARY="ckpt-fairscale-offload"
 CKPT_MODE=""
 # CKPT_MODE="-level"
@@ -13,8 +13,8 @@ INPUT_MODE="-large"
 # INPUT_MODE=""
 # INPUT_MODE="-small"
 # INPUT_MODE="-xsmall"
-MONITOR_TIME=30
-N_CKPTS=1
+MONITOR_TIME=60
+N_CKPTS=30
 N_TRAIN_STEPS=6
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 

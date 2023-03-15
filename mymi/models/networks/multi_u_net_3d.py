@@ -1,125 +1,168 @@
-from asyncio.trsock import TransportSocket
+from functools import reduce
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn import Module, Sequential
 from torch.nn.functional import pad
-from torch import Tensor
 from torch.utils.checkpoint import checkpoint
-from typing import Callable, List
+from fairscale.nn.checkpoint import checkpoint_wrapper
+from typing import Dict, List, Literal, Optional
 
-from mymi.utils import gpu_usage
+from mymi.checkpointing import get_checkpoints, get_level_checkpoints
+from mymi import logging
 
-class Conv(nn.Module):
+CUDA_INT_MAX = 2 ** 31 - 1
+PRINT_ENABLED = False
+
+class MemoryTestSubmodule(nn.Module):
     def __init__(
         self,
-        in_channels: int,
-        out_channels: int):
+        name: str,
+        layers: List[nn.Module],
+        residual_outputs: List[int] = [],
+        residual_output_layers: Dict[int, nn.Module] = {},
+        residual_inputs: List[int] = [],
+        residual_input_layers: Dict[int, nn.Module] = {},
+        print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
+        self.__layers = nn.ParameterList(layers)
+        self.__name = name
+        self.__print_enabled = print_enabled
+        self.__residual_outputs = residual_outputs
+        self.__residual_inputs = residual_inputs
+        self.__residual_output_layer_keys = list(residual_output_layers.keys())
+        self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.values())
+        self.__residual_input_layer_keys = list(residual_input_layers.keys())
+        self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.values())
 
-        self.conv = nn.Sequential(
-            nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm3d(out_channels),
-            nn.ReLU()
-        )
-
-    def forward(self, x):
-        return self.conv(x)
-
-class DoubleConv(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int):
-        super().__init__()
-
-        self.double_conv = Sequential(
-            Conv(in_channels, out_channels),
-            Conv(out_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.double_conv(x)
-
-class Down(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int):
-        super().__init__()
-
-        self.down = Sequential(
-            nn.MaxPool3d(kernel_size=2),
-            DoubleConv(in_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.down(x)
-
-class Up(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int):
-        super().__init__()
-
-        self.upsample = nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2)
-        self.double_conv = DoubleConv(2 * out_channels, out_channels)
-
-    def forward(self, x, x_res):
-        x = self.upsample(x)
-
-        # Spatial resolution may be lost due to rounding when downsampling. Pad the upsampled features
-        # if necessary.
-        if x.shape != x_res.shape:
+    def __pad_upsampled(self, x, shape):
+        if x.shape != shape: 
             n_axes = len(x.shape)
             padding = np.zeros((n_axes, 2), dtype='uint8')
             for axis in range(n_axes):
-                diff = x_res.shape[axis] - x.shape[axis]
+                diff = shape[axis] - x.shape[axis]
                 if diff > 0:
                     padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
             padding = tuple(np.flip(padding, axis=0).flatten())
             x = pad(x, padding)
-
-        x = torch.cat((x, x_res), dim=1)
-        x = self.double_conv(x)
-
         return x
 
-class OutConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.conv = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+    def forward(self, x, *x_res, dummy_arg=None):
+        if self.__print_enabled:
+            print(f'=== submodule ({self.__name}) ===')
+            print(f'res_outputs: {self.__residual_outputs}')
+            print(f'res_inputs: {self.__residual_inputs}')
+            print(f'id(x_res): {id(x_res)}')
+            print(f'len(x_res): {len(x_res)}')
+            print(f'shape(x_res): {[xr.shape for xr in x_res]}')
+            print(f'x.requires_grad: ', x.requires_grad)
+            print(f'x_res.requires_grad: ', [xr.requires_grad for xr in x_res])
 
-    def forward(self, x):
-        return self.conv(x)
+        for i, layer in enumerate(self.__layers):
+            # Upsample and concat input with residual.
+            if i in self.__residual_inputs:
+                # Remove element from 'x_res' but not in-place as this
+                # will break 'x_res' on second forward pass with checkpointing.
+                x_res_i = x_res[-1]
+                x_res = [xr for j, xr in enumerate(x_res) if j != len(x_res) - 1]
+                x = self.__pad_upsampled(x, x_res_i.shape) 
 
-class PrintWrapper(nn.Module):
-    def __init__(self, module, name):
+                # Apply pre-input layer.
+                if i in self.__residual_input_layer_keys:
+                    x = self.__residual_input_layer_values[self.__residual_input_layer_keys.index(i)](x)
+
+                # Concatenate upsampled and residual features.
+                x = torch.cat((x, x_res_i), dim=1)
+                if self.__print_enabled:
+                    print('concat size (GB): ', x.numel() * x.element_size() / 1e9)
+
+            # Execute layer.
+            n_voxels = reduce(np.multiply, x.shape)
+            if n_voxels > CUDA_INT_MAX:
+                logging.error(f"Feature map of size '{x.shape}' (n_voxels={n_voxels}) has more voxels than 'CUDA_INT_MAX' ({CUDA_INT_MAX}) voxels.")
+            x = layer(x)
+
+            # Add 'x' to 'x_res'.
+            if i in self.__residual_outputs:
+                x_res_new = x
+                # Apply pre-output layer.
+                if i in self.__residual_output_layer_keys:
+                    x_res_new = self.__residual_output_layer_values[self.__residual_output_layer_keys.index(i)](x_res_new)
+                x_res = tuple(list(x_res) + [x_res_new])     # Note that 'x_res += [x]' is still an in-place operation!
+
+        if self.__print_enabled:
+            print(f'id(x_res): {id(x_res)}')
+            print(f'len(x_res): {len(x_res)}')
+            print(f'shape(x_res): {[xr.shape for xr in x_res]}')
+            print(f'x.requires_grad: ', x.requires_grad)
+            print(f'x_res.requires_grad: ', [xr.requires_grad for xr in x_res])
+            print('=================')
+
+        return x, *x_res
+
+class LayerWrapper(nn.Module):
+    def __init__(
+        self,
+        layer: nn.Module,
+        name: str,
+        print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
-        self.__module = module
+        self.__print_enabled = print_enabled
+        self.__layer = layer
         self.__name = name
 
-    def forward(self, *params):
-        print(f"=== layer: {self.__name} ===")
-        for i, param in enumerate(params):
-            print(f"input {i} shape/dtype: {param.shape}/{param.dtype}")
-        gpu_before = gpu_usage()
-        y = self.__module(*params)
-        print(f"output shape/dtype: {y.shape}/{y.dtype}")
-        gpu_after = gpu_usage()
-        gpu_diff = [ga - gb for ga, gb in zip(gpu_after, gpu_before)]
-        # a.element_size() * a.nelement().
-        print(f"gpu diff/total (MB): {gpu_diff[0]:.2f}/{gpu_after[0]:.2f}")
-        return y
+    @property
+    def out_channels(self) -> Optional[int]:
+        if hasattr(self.__layer, 'out_channels'):
+            return self.__layer.out_channels
+        else:
+            return None
 
+    def forward(self, x) -> torch.Tensor:
+        if self.__print_enabled:
+            print(f'>>> layer: {self.__name} ({type(self.__layer)}) >>>')
+            print(f'input shape: {x.shape}')
+            print(f'input type: {x.dtype}')
+
+        x = self.__layer(x)
+
+        if self.__print_enabled:
+            print(f'output shape: {x.shape}')
+            print(f'output type: {x.dtype}')
+            print('>>>>>>>>>>>>>>>>>')
+
+        return x
+    
 class MultiUNet3D(nn.Module):
     def __init__(
         self,
         n_output_channels: int,
-        n_gpus: int = 0) -> None:
+        ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-fairscale-offload'] = 'ckpt-fairscale-offload',
+        ckpt_mode: Literal['', '-level'] = '',
+        halve_channels: bool = True,
+        n_ckpts: int = 23,
+        n_gpus: int = 1) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
+
+        # Set mode flags. 
+        if ckpt_library == 'baseline':
+            self.__use_pytorch_ckpt = False
+            self.__use_fairscale_ckpt = False
+            self.__use_fairscale_cpu_offload = False
+        elif ckpt_library == 'ckpt-pytorch':
+            self.__use_pytorch_ckpt = True
+            self.__use_fairscale_ckpt = False
+            self.__use_fairscale_cpu_offload = False
+        elif ckpt_library == 'ckpt-fairscale':
+            self.__use_pytorch_ckpt = False
+            self.__use_fairscale_ckpt = True
+            self.__use_fairscale_cpu_offload = False
+        elif ckpt_library == 'ckpt-fairscale-offload':
+            self.__use_pytorch_ckpt = False
+            self.__use_fairscale_ckpt = True
+            self.__use_fairscale_cpu_offload = True
+        else:
+            raise ValueError(f"'ckpt_library={ckpt_library}' not recognised.")
 
         # Assign devices based on number of GPUs.
         if self.__n_gpus == 0:
@@ -133,184 +176,145 @@ class MultiUNet3D(nn.Module):
 
         # Define layers.
         n_features = 32
-
-        # Split 'first' to place on separate GPUs.
-        self.first_a = PrintWrapper(nn.Conv3d(in_channels=1, out_channels=n_features, kernel_size=3, stride=1, padding=1).to(self.__device_0), 'first_a')
-        self.first_b = PrintWrapper(nn.InstanceNorm3d(n_features), 'first_b')
-        self.first_c = PrintWrapper(nn.ReLU(), 'first_c')
-        self.first_d = PrintWrapper(nn.Conv3d(in_channels=n_features, out_channels=n_features, kernel_size=3, stride=1, padding=1).to(self.__device_0), 'first_d')
-        self.first_e = PrintWrapper(nn.InstanceNorm3d(n_features), 'first_e')
-        self.first_f = PrintWrapper(nn.ReLU(), 'first_f')
-
-        # Split 'down1' to place on separate GPUs.
-        self.down1_a = PrintWrapper(nn.MaxPool3d(kernel_size=2), 'down1_a')
-        self.down1_b = PrintWrapper(Conv(n_features, 2 * n_features).to(self.__device_1), 'down1_b')
-        self.down1_c = PrintWrapper(Conv(2 * n_features, 2 * n_features).to(self.__device_1), 'down1_c')
-
-        self.down2 = PrintWrapper(Down(2 * n_features, 4 * n_features).to(self.__device_1), 'down2')
-        self.down3 = PrintWrapper(Down(4 * n_features, 8 * n_features).to(self.__device_1), 'down3')
-        self.down4 = PrintWrapper(Down(8 * n_features, 16 * n_features).to(self.__device_1), 'down4')
-        self.up1 = PrintWrapper(Up(16 * n_features, 8 * n_features).to(self.__device_1), 'up1')
-        self.up2 = PrintWrapper(Up(8 * n_features, 4 * n_features).to(self.__device_1), 'up2')
-
-        # Split 'up3' to place on separate GPUs.
-        self.up3_a = PrintWrapper(nn.ConvTranspose3d(in_channels=4 * n_features, out_channels=2 * n_features, kernel_size=2, stride=2).to(self.__device_1), 'up3_a')
-        self.up3_b = PrintWrapper(Conv(4 * n_features, 2 * n_features).to(self.__device_1), 'up3_b')
-        self.up3_c = PrintWrapper(Conv(2 * n_features, 2 * n_features).to(self.__device_1), 'up3_c')
-
-        # Split 'up4' to place on separate GPUs.
-        self.up4_a = PrintWrapper(nn.ConvTranspose3d(in_channels=2 * n_features, out_channels=n_features, kernel_size=2, stride=2).to(self.__device_1), 'up4_a')
-        self.up4_b = PrintWrapper(nn.Conv3d(in_channels=2 * n_features, out_channels=n_features, kernel_size=3, stride=1, padding=1).to(self.__device_2), 'up4_b')
-        self.up4_c = PrintWrapper(nn.InstanceNorm3d(n_features), 'up4_c')
-        self.up4_d = PrintWrapper(nn.ReLU(), 'up4_d')
-        self.up4_e = PrintWrapper(nn.Conv3d(in_channels=n_features, out_channels=n_features, kernel_size=3, stride=1, padding=1).to(self.__device_3), 'up4_e')
-        self.up4_f = PrintWrapper(nn.InstanceNorm3d(n_features), 'up4_f')
-        self.up4_g = PrintWrapper(nn.ReLU(), 'up4_g')
-
-        self.out = PrintWrapper(OutConv(n_features, n_output_channels).to(self.__device_3), 'out')
-        self.softmax = PrintWrapper(nn.Softmax(dim=1), 'softmax')
-
-    def count_params(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def get_ckpt_func(
-        self,
-        layers: List[Module]) -> Callable:
-        model = Sequential(*layers)
-        def ckpt_func(x, dummy_arg) -> Tensor:
-            assert dummy_arg is not None
-            return model(x)
-        return ckpt_func
-
-    def forward(self, x, dummy_arg=None):
-        # assert dummy_arg is not None
-        # # Split 'first' layer to place on separate GPUs.
-        # x = self.first_a(x.to(self.__device_0))
-        # x = self.first_b(x)
-        # x = self.first_c(x)
-        # x = self.first_d(x)
-        # x = self.first_e(x)
-        # x1 = self.first_f(x)
-        dummy_arg = torch.Tensor()
-        dummy_arg.requires_grad = True
-        ckpt1_layers = [
-            self.first_a,
-            self.first_b,
-            self.first_c
+        self.__layers = nn.ParameterList()
+        residuals = [
+            [5, 56],
+            [12, 49],
+            [19, 42],
+            [26, 35]
+        ] 
+        if halve_channels:
+            residual_halves = [     # Halve the number of channels for residual output and upsampled input.
+                [5, 56]
+            ]
+        else:
+            residual_halves = []
+        levels = [
+            (0, 5),
+            (6, 12),
+            (13, 19),
+            (20, 26),
+            (27, 33),
+            (34, 40),
+            (41, 47),
+            (48, 54),
+            (55, 63)
         ]
-        x = checkpoint(self.get_ckpt_func(ckpt1_layers), x.to(self.__device_0), dummy_arg)
-        ckpt2_layers = [
-            self.first_d,
-            self.first_e,
-            self.first_f
-        ]
-        x1 = checkpoint(self.get_ckpt_func(ckpt2_layers), x)
 
-        # # Split 'down1' layer to place on separate GPUs.
-        # x = self.down1_a(x1.to(self.__device_1))
-        # x = self.down1_b(x)
-        # x2 = self.down1_c(x)
+        # Add first level.
+        in_channels = 1
+        out_channels = n_features
+        self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+        self.__layers.append(nn.InstanceNorm3d(out_channels))
+        self.__layers.append(nn.ReLU())
+        self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+        self.__layers.append(nn.InstanceNorm3d(out_channels))
+        self.__layers.append(nn.ReLU())
 
-        # x3 = self.down2(x2)
-        # x4 = self.down3(x3)
-        # x = self.down4(x4)
+        # Add downsampling levels. 
+        self.__n_down_levels = 4
+        for i in range(self.__n_down_levels):
+            in_channels = 2 ** i * n_features
+            out_channels = 2 ** (i + 1) * n_features
+            self.__layers.append(nn.MaxPool3d(kernel_size=2))
+            self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+            self.__layers.append(nn.InstanceNorm3d(out_channels))
+            self.__layers.append(nn.ReLU())
+            self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+            self.__layers.append(nn.InstanceNorm3d(out_channels))
+            self.__layers.append(nn.ReLU())
 
-        def ckpt3_func(xi):
-            x = self.down1_a(xi.to(self.__device_1))
-            x = self.down1_b(x)
-            x2 = self.down1_c(x)
-            x3 = self.down2(x2)
-            x4 = self.down3(x3)
-            x = self.down4(x4)
-            return x, x2, x3, x4
-        x, x2, x3, x4 = checkpoint(ckpt3_func, x1)
+        # Add upsampling levels.
+        self.__n_up_levels = 4
+        for i in range(self.__n_up_levels):
+            in_channels = 2 ** (self.__n_up_levels - i) * n_features
+            out_channels = 2 ** (self.__n_up_levels - i - 1) * n_features
+            self.__layers.append(nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
+            if i == 3 and halve_channels:
+                # Halved the number of residual features maps passed on both residual and upsampling pathways.
+                # See: https://github.com/pytorch/pytorch/issues/95024.
+                in_channels = 32
+            self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_2))
+            self.__layers.append(nn.InstanceNorm3d(out_channels))
+            self.__layers.append(nn.ReLU())
+            self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_3))
+            self.__layers.append(nn.InstanceNorm3d(out_channels))
+            self.__layers.append(nn.ReLU())
 
-        # x = self.up1(x, x4)
-        # x = self.up2(x, x3)
+        # Add final layers.
+        in_channels = n_features
+        out_channels = n_output_channels
+        self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1))
+        self.__layers.append(nn.Softmax(dim=1))
 
-        # # Split 'up3' layer to place on separate GPUs.
-        # x = self.up3_a(x)
-        # if x.shape != x2.shape:
-        #     n_axes = len(x.shape)
-        #     padding = np.zeros((n_axes, 2), dtype='uint8')
-        #     for axis in range(n_axes):
-        #         diff = x2.shape[axis] - x.shape[axis]
-        #         if diff > 0:
-        #             padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
-        #     padding = tuple(np.flip(padding, axis=0).flatten())
-        #     x = pad(x, padding)
-        # x = torch.cat((x, x2), dim=1)
-        # x = self.up3_b(x)
-        # x = self.up3_c(x)
-        
-        def ckpt4_func(xi, xi2, xi3, xi4):
-            x = self.up1(xi, xi4)
-            x = self.up2(x, xi3)
+        # Wrap each layer in a print layer to test.
+        self.__layers = nn.ParameterList([LayerWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
 
-            # Split 'up3' layer to place on separate GPUs.
-            x = self.up3_a(x)
-            if x.shape != xi2.shape:
-                n_axes = len(x.shape)
-                padding = np.zeros((n_axes, 2), dtype='uint8')
-                for axis in range(n_axes):
-                    diff = xi2.shape[axis] - x.shape[axis]
-                    if diff > 0:
-                        padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
-                padding = tuple(np.flip(padding, axis=0).flatten())
-                x = pad(x, padding)
-            x = torch.cat((x, xi2), dim=1)
-            x = self.up3_b(x)
-            x = self.up3_c(x)
-            return x
-        x = checkpoint(ckpt4_func, x, x2, x3, x4)
+        # Get checkpoint locations.
+        n_layers = len(self.__layers)
+        assert n_layers == 64
+        if ckpt_mode == '':
+            ckpts = get_checkpoints(n_layers, n_ckpts)
+        elif ckpt_mode == '-level':
+            ckpts = get_level_checkpoints(levels, n_ckpts)
 
-        # # Split 'up4' layer to place on separate GPUs.
-        # x = self.up4_a(x)
-        # if x.shape != x1.shape:
-        #     n_axes = len(x.shape)
-        #     padding = np.zeros((n_axes, 2), dtype='uint8')
-        #     for axis in range(n_axes):
-        #         diff = x1.shape[axis] - x.shape[axis]
-        #         if diff > 0:
-        #             padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
-        #     padding = tuple(np.flip(padding, axis=0).flatten())
-        #     x = pad(x, padding)
-        # x = torch.cat((x, x1.to(self.__device_1)), dim=1)
+        # Create submodules - can be wrapped with fairscale 'checkpoint_wrapper'.
+        self.__submodules = []
+        for i, (start_layer, end_layer) in enumerate(ckpts):
+            # Add residual inputs/outputs.
+            residual_outputs = []
+            residual_inputs = []
+            for res_output, res_input in residuals:
+                if res_output >= start_layer and res_output <= end_layer:
+                    residual_outputs.append(res_output - start_layer)
+                if res_input >= start_layer and res_input <= end_layer:
+                    residual_inputs.append(res_input - start_layer)
 
-        # x = self.up4_b(x.to(self.__device_2))
-        # x = self.up4_c(x)
-        # x = self.up4_d(x)
-        # x = self.up4_e(x.to(self.__device_3))
-        # x = self.up4_f(x)
-        # x = self.up4_g(x)
+            # Add residual input/output additional layers.
+            residual_output_layers = {}
+            residual_input_layers = {}
+            for res_output, res_input in residual_halves:
+                if res_output is not None and res_output >= start_layer and res_output <= end_layer:
+                    out_layer = res_output
+                    in_channels = None
+                    while in_channels is None:
+                        in_channels = self.__layers[out_layer].out_channels
+                        out_layer -= 1
+                    out_channels = in_channels // 2
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_output_layers[res_output - start_layer] = res_layer
+                if res_input is not None and res_input >= start_layer and res_input <= end_layer:
+                    out_layer = res_output
+                    in_channels = None
+                    while in_channels is None:
+                        in_channels = self.__layers[out_layer].out_channels
+                        out_layer -= 1
+                    out_channels = in_channels // 2
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    residual_input_layers[res_input - start_layer] = res_layer
 
-        # Split 'up4' layer to place on separate GPUs.
-        def ckpt5_func(xi, xi1):
-            x = self.up4_a(xi)
-            if x.shape != xi1.shape:
-                n_axes = len(x.shape)
-                padding = np.zeros((n_axes, 2), dtype='uint8')
-                for axis in range(n_axes):
-                    diff = xi1.shape[axis] - x.shape[axis]
-                    if diff > 0:
-                        padding[axis] = np.floor([diff / 2, (diff + 1) / 2])
-                padding = tuple(np.flip(padding, axis=0).flatten())
-                x = pad(x, padding)
-            x = torch.cat((x, xi1.to(self.__device_1)), dim=1)
-            x = self.up4_b(x.to(self.__device_2))
-            x = self.up4_c(x)
-            return x
-        x = checkpoint(ckpt5_func, x, x1)
+            layers = self.__layers[start_layer:end_layer + 1]
+            module = MemoryTestSubmodule(str(i), layers, residual_outputs=residual_outputs, residual_output_layers=residual_output_layers, residual_inputs=residual_inputs, residual_input_layers=residual_input_layers)
+            if self.__use_fairscale_ckpt:
+                module = checkpoint_wrapper(module, offload_to_cpu=self.__use_fairscale_cpu_offload)
+            self.__submodules.append(module)
 
-        ckpt6_layers = [
-            self.up4_d,
-            self.up4_e,
-            self.up4_f,
-            self.up4_g
-        ]
-        x = checkpoint(self.get_ckpt_func(ckpt6_layers), x)
+    @property
+    def layers(self) -> List[nn.Module]:
+        return self.__layers
 
-        x = self.out(x)
-        x = self.softmax(x)
+    @property
+    def submodules(self) -> List[nn.Module]:
+        return self.__submodules
 
+    def forward(self, x):
+        x_res = []
+        for module in self.__submodules:
+            if self.__use_pytorch_ckpt:
+                dummy_arg = torch.Tensor()
+                dummy_arg.requires_grad = True
+                x, *x_res = checkpoint(module, x, *x_res, dummy_arg=dummy_arg, use_reentrant=False)
+            else:
+                x, *x_res = module(x, *x_res)
+        assert len(x_res) == 0
         return x

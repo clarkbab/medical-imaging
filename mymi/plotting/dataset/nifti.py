@@ -20,6 +20,7 @@ def plot_region(
     pat_id: str,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, types.Crop2D]] = None,
+    excluded_labels: bool = False,
     region: Optional[types.PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
@@ -28,7 +29,7 @@ def plot_region(
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data
-    region_data = patient.region_data(region=region) if region is not None else None
+    region_data = patient.region_data(excluded_labels=excluded_labels, region=region) if region is not None else None
     spacing = patient.ct_spacing
     dose_data = patient.dose_data if show_dose else None
 

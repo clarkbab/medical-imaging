@@ -6,7 +6,8 @@ from mymi import config
 from mymi import dataset as ds
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
-from mymi.types import PatientID
+from mymi.regions import region_to_list
+from mymi.types import PatientID, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
 
 def get_loader_manifest(
@@ -24,7 +25,7 @@ def get_loader_manifest(
         'loader': str,
         'loader-batch': int,
         'dataset': str,
-        'sample-id': str,
+        'sample-id': int,
         'origin-dataset': str,
         'origin-patient-id': str
     }
@@ -103,6 +104,7 @@ def get_multi_loader_manifest(
     check_processed: bool = True,
     n_folds: Optional[int] = 5,
     n_train: Optional[int] = None,
+    region: PatientRegions = 'all',
     test_fold: Optional[int] = None) -> None:
     datasets = arg_to_list(dataset, str)
 
@@ -111,7 +113,8 @@ def get_multi_loader_manifest(
         'loader': str,
         'loader-batch': int,
         'dataset': str,
-        'sample-id': str,
+        'sample-id': int,
+        'group-id': int,
         'origin-dataset': str,
         'origin-patient-id': str
     }
@@ -122,7 +125,7 @@ def get_multi_loader_manifest(
 
     # Create test loader.
     # Create loaders.
-    tl, vl, tsl = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_train=n_train, shuffle_train=False, test_fold=test_fold)
+    tl, vl, tsl = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_train=n_train, region=region, shuffle_train=False, test_fold=test_fold)
     loader_names = ['train', 'validate', 'test']
 
     # Get values for this region.
@@ -130,12 +133,15 @@ def get_multi_loader_manifest(
         for b, pat_desc_b in tqdm(enumerate(iter(loader))):
             for pat_desc in pat_desc_b:
                 dataset, sample_id = pat_desc.split(':')
-                origin_ds, origin_pat_id = dataset_map[dataset].sample(sample_id).origin
+                sample = dataset_map[dataset].sample(sample_id)
+                group_id = sample.group_id
+                origin_ds, origin_pat_id = sample.origin
                 data = {
                     'loader': loader_name,
                     'loader-batch': b,
                     'dataset': dataset,
                     'sample-id': sample_id,
+                    'group-id': group_id,
                     'origin-dataset': origin_ds,
                     'origin-patient-id': origin_pat_id
                 }
@@ -150,20 +156,27 @@ def create_multi_loader_manifest(
     dataset: Union[str, List[str]],
     check_processed: bool = True,
     n_folds: Optional[int] = 5,
+    region: PatientRegions = 'all',
     test_fold: Optional[int] = None) -> None:
     datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
     logging.arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
 
     # Get manifest.
-    df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, test_fold=test_fold)
+    df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, region=regions, test_fold=test_fold)
 
     # Save manifest.
-    save_csv(df, 'multi-loader-manifests', encode(datasets), f'fold-{test_fold}.csv', overwrite=True)
+    save_csv(df, 'multi-loader-manifests', encode(datasets), encode(regions), f'fold-{test_fold}.csv', overwrite=True)
 
 def load_multi_loader_manifest(
     dataset: Union[str, List[str]],
+    region: PatientRegions = 'all',
     test_fold: Optional[int] = None) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
-    df = load_csv('multi-loader-manifests', encode(datasets), f'fold-{test_fold}.csv')
+    regions = region_to_list(region)
+
+    # Load file.
+    df = load_csv('multi-loader-manifests', encode(datasets), encode(regions), f'fold-{test_fold}.csv')
     df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
+
     return df

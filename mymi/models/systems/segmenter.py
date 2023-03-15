@@ -116,7 +116,7 @@ class Segmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        return SGD(self.trainer.model.parameters(), lr=1e-3)
+        return SGD(self.trainer.model.parameters(), lr=self.learning_rate)
 
     def forward(
         self,
@@ -137,6 +137,7 @@ class Segmenter(pl.LightningModule):
         return pred
 
     def training_step(self, batch, _):
+        print(self.learning_rate)
         # Forward pass.
         _, x, y = batch
         if self.__first_training_step:
@@ -167,8 +168,6 @@ class Segmenter(pl.LightningModule):
         #         self.log('train/median-surface', median_sd, **self.__log_args)
         #         self.log('train/std-surface', std_sd, **self.__log_args)
         #         self.log('train/max-surface', max_sd, **self.__log_args)
-
-        print(f'[{torch.distributed.get_rank()} - {torch.cuda.current_device()}] Memory allocated: {torch.cuda.memory_allocated()}')
 
         return loss
 

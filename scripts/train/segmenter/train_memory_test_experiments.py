@@ -8,16 +8,25 @@ CKPT_LIBRARIES = [
     'ckpt-fairscale-offload'
 ]
 INPUT_MODES = [
-    "",
-    "-small",
-    "-xsmall"
+    "-large",
+    # "",
+    # "-small",
+    # "-xsmall"
 ]
 CKPT_MODES = [
     # "",
     "-level"
 ]
+MIN_CKPTS = {
+    "": 1,
+    "-level": 1
+}
+MAX_CKPTS = {
+    "": 32,
+    "-level": 3
+}
 MONITOR_TIMES = {
-    'large': {
+    '-large': {
         'baseline': 30,
         'ckpt-pytorch': 35,
         'ckpt-fairscale': 35,
@@ -42,23 +51,22 @@ MONITOR_TIMES = {
         'ckpt-fairscale-offload': 35
     }
 }
-N_CKPTSES = list(range(1, 4))
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 # Run experiments.
 for ckpt_library in tqdm(CKPT_LIBRARIES):
     for ckpt_mode in tqdm(CKPT_MODES, leave=False):
+        n_ckptses = list(range(MIN_CKPTS[ckpt_mode], MAX_CKPTS[ckpt_mode] + 1))
         for input_mode in tqdm(INPUT_MODES, leave=False):
             # Run with evenly spaced checkpoints.
-            for n_ckpts in tqdm(N_CKPTSES, leave=False):
-                name = f'memory-test{input_mode}-{ckpt_library}-n_ckpts-{n_ckpts}{ckpt_mode}'
+            for n_ckpts in tqdm(n_ckptses, leave=False):
                 command = f"""
-        python {SCRIPT_DIR}/train/segmenter/train_memory_test.py \
-            --ckpt_library={ckpt_library} \
-            --ckpt_mode={ckpt_mode} \
-            --input_mode={input_mode} \
-            --n_ckpts={n_ckpts} \
-            --monitor_time={MONITOR_TIMES[input_mode][ckpt_library]}
-        """
+python {SCRIPT_DIR}/train/segmenter/train_memory_test.py \
+    --ckpt_library={ckpt_library} \
+    --ckpt_mode={ckpt_mode} \
+    --input_mode={input_mode} \
+    --n_ckpts={n_ckpts} \
+    --monitor_time={MONITOR_TIMES[input_mode][ckpt_library]}
+"""
                 print(command)
                 os.system(command)

@@ -30,7 +30,7 @@ def train_memory_test(
 
     # Determine input shape.
     if input_mode == '-large':
-        shape = (415, 415, 250)
+        shape = (450, 450, 250)
     elif input_mode == '':
         shape = (360, 360, 250)
     elif input_mode == '-small':
@@ -41,7 +41,7 @@ def train_memory_test(
         raise ValueError(f"'input_mode={input_mode}' not recognised.")
 
     # Create name.
-    name = f"memory-test{input_mode}-{ckpt_library}-n_ckpts-{n_ckpts}{ckpt_mode}"
+    name = f"halved-memory-test{input_mode}-{ckpt_library}-n_ckpts-{n_ckpts}{ckpt_mode}"
 
     # 'libgcc'
     import ctypes
