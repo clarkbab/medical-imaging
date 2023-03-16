@@ -1,13 +1,13 @@
 import numpy as np
-from typing import Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 from mymi.geometry import get_box
-from mymi import types
+from mymi.types import Box2D, Box3D, ImageSize3D, Point2D, Point3D
 
 def crop_or_pad_2D(
     data: np.ndarray,
-    bounding_box: types.Box2D,
-    fill: float = 'min') -> np.ndarray:
+    bounding_box: Box2D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Convert args to 3D.
     data = np.expand_dims(data, axis=2)
     bounding_box = tuple((x, y, z) for (x, y), z in zip(bounding_box, (0, 1)))
@@ -22,7 +22,7 @@ def crop_or_pad_2D(
 
 def crop_2D(
     data: np.ndarray,
-    bounding_box: types.Box2D) -> np.ndarray:
+    bounding_box: Box2D) -> np.ndarray:
     # Convert args to 3D.
     data = np.expand_dims(data, axis=2)
     bounding_box = tuple((x, y, z) for (x, y), z in zip(bounding_box, (0, 1)))
@@ -37,8 +37,8 @@ def crop_2D(
 
 def crop_or_pad_3D(
     data: np.ndarray,
-    bounding_box: types.Box3D,
-    fill: float = 'min') -> np.ndarray:
+    bounding_box: Box3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     if fill == 'min':
         fill = np.min(data)
     assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
@@ -66,7 +66,7 @@ def crop_or_pad_3D(
 
 def crop_3D(
     data: np.ndarray,
-    bounding_box: types.Box3D) -> np.ndarray:
+    bounding_box: Box3D) -> np.ndarray:
     assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
 
     min, max = bounding_box
@@ -79,14 +79,14 @@ def crop_3D(
     size = np.array(data.shape)
     crop_min = np.array(min).clip(0)
     crop_max = (size - max).clip(0)
-    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, data.shape))
+    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
     data = data[slices]
 
     return data
 
 def crop_foreground_3D(
     data: np.ndarray,
-    crop: types.Box3D) -> np.ndarray:
+    crop: Box3D) -> np.ndarray:
     cropped = np.zeros_like(data).astype(bool)
     slices = tuple(slice(min, max) for min, max in zip(*crop))
     cropped[slices] = data[slices]
@@ -94,8 +94,8 @@ def crop_foreground_3D(
 
 def centre_crop_or_pad_3D(
     data: np.ndarray,
-    size: types.ImageSize3D,
-    fill: float = 0) -> np.ndarray:
+    size: ImageSize3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Determine cropping/padding amounts.
     to_crop = data.shape - np.array(size)
     box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
@@ -109,8 +109,8 @@ def centre_crop_or_pad_3D(
 
 def top_crop_or_pad_3D(
     data: np.ndarray,
-    size: types.ImageSize3D,
-    fill: float = 0) -> np.ndarray:
+    size: ImageSize3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Centre crop x/y axes.
     to_crop = data.shape[:2] - np.array(size[:2])
     xy_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
@@ -128,10 +128,10 @@ def top_crop_or_pad_3D(
 
 def point_crop_or_pad_3D(
     data: np.ndarray,
-    size: types.ImageSize3D,
-    point: types.Point3D,
-    fill: float = 0,
-    return_box: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, types.Box3D]]:
+    size: ImageSize3D,
+    point: Point3D,
+    fill: Union[float, Literal['min']] = 'min',
+    return_box: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, Box3D]]:
     # Perform the crop or pad.
     box = get_box(point, size)
     data = crop_or_pad_3D(data, box, fill=fill)
@@ -142,8 +142,8 @@ def point_crop_or_pad_3D(
         return data
 
 def crop_point(
-    point: Union[types.Point2D, types.Point3D],
-    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Point2D, types.Point3D]]:
+    point: Union[Point2D, Point3D],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Point2D, Point3D]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -163,8 +163,8 @@ def crop_point(
     return point
 
 def crop_or_pad_point(
-    point: Union[types.Point2D, types.Point3D],
-    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Point2D, types.Point3D]]:
+    point: Union[Point2D, Point3D],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Point2D, Point3D]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -184,8 +184,8 @@ def crop_or_pad_point(
     return point
 
 def crop_box(
-    box: Union[types.Box2D, types.Box3D],
-    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Box2D, types.Box3D]]:
+    box: Union[Box2D, Box3D],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
     box = np.array(box, dtype=int)
     crop = np.array(crop, dtype=int)
 
@@ -218,8 +218,8 @@ def crop_box(
     return new_box
 
 def crop_or_pad_box(
-    box: Union[types.Box2D, types.Box3D],
-    crop: Union[types.Box2D, types.Box3D]) -> Optional[Union[types.Box2D, types.Box3D]]:
+    box: Union[Box2D, Box3D],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
     box = np.array(box, dtype=int)
     crop = np.array(crop, dtype=int)
 

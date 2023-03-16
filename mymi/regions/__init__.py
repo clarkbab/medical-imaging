@@ -17,6 +17,11 @@ def region_to_list(region: types.PatientRegions) -> List[str]:
         if region == 'all':
             return RegionNames
         else:
+            if not region in RegionNames:
+                raise ValueError(f"'{region}' is not a valid region. Should be one of '{RegionNames}'.")
             return [region]
     else:
+        for r in region:
+            if not r in RegionNames:
+                raise ValueError(f"'{r}' is not a valid region. Should be one of '{RegionNames}'.")
         return region

@@ -524,7 +524,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, excluded_labels=excluded_labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -547,7 +547,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, excluded_labels=excluded_labels, region=region, show_extent=True, view=view, **kwargs)
+                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

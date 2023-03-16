@@ -1,4 +1,3 @@
-from mymi.types.types import PatientRegions
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -6,7 +5,7 @@ import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi import types
+from mymi.types import ImageSpacing3D, PatientRegions
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
@@ -29,7 +28,7 @@ class MultiLoader:
         n_workers: int = 1,
         p_val: float = .2,
         random_seed: int = 42,
-        region: types.PatientRegions = 'all',
+        region: PatientRegions = 'all',
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
@@ -145,8 +144,8 @@ class TrainingDataset(Dataset):
         data_hook: Optional[Callable] = None,
         half_precision: bool = True,
         load_data: bool = True,
-        region: types.PatientRegions = 'all',
-        spacing: types.ImageSpacing3D = None,
+        region: PatientRegions = 'all',
+        spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
         self.__data_hook = data_hook
@@ -178,6 +177,8 @@ class TrainingDataset(Dataset):
             region_counts = np.zeros(self.__n_channels, dtype=int)
             for ds_i, s_i in samples:
                 regions = self.__sets[ds_i].sample(s_i).list_regions()
+                print(ds_i, s_i)
+                print(regions)
                 regions = [r for r in regions if r in self.__regions]
                 for region in regions:
                     region_counts[self.__region_channel_map[region]] += 1
@@ -189,6 +190,7 @@ class TrainingDataset(Dataset):
             logging.info(f"Calculated region counts '{region_counts}'.")
 
             # Set class weights as inverse of region counts.
+            assert len(np.argwhere(region_counts)) == self.__n_channels
             class_weights = 1 / region_counts
 
             # Normalise weight values.
@@ -220,7 +222,7 @@ class TrainingDataset(Dataset):
 
         # Apply data hook.
         if self.__data_hook is not None:
-            input, labels = self.__data_hook(input, labels)
+            input, labels = self.__data_hook(input, labels, spacing=self.__spacing)
 
         # Create multi-class mask and label.
         # Note that using this method we may end up with multiple foreground classes for a

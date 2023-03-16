@@ -14,6 +14,7 @@ from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models.systems import MultiSegmenter
 from mymi.reporting.loaders import get_multi_loader_manifest
+from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
@@ -55,8 +56,24 @@ def train_localiser_replan(
     # Define loss function.
     loss_fn = DiceWithFocalLoss()
 
+    # Define crop function.
+    crop_x_mm = 300
+    def crop_x(input, labels, spacing=None):
+        assert spacing is not None
+
+        # Crop input.
+        crop = list(input.shape)
+        crop[0] = int(crop_x_mm / spacing[0])
+        input = centre_crop_or_pad_3D(input, crop)
+
+        # Crop labels.
+        for r in labels.keys():
+            labels[r] = centre_crop_or_pad_3D(labels[r], crop)
+
+        return input, labels
+
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, data_hook=crop_x, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
 
     # Create model.
     model = MultiSegmenter(

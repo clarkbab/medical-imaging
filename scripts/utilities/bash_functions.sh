@@ -1,1 +1,4 @@
-function join { local IFS=","; shift; echo "$*"; }
+function join { 
+    local IFS=","
+    echo "$*"
+}

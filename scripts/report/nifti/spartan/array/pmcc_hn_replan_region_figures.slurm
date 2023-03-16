@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-0:05:00
+#SBATCH --time 0-2:00:00
 #SBATCH -A punim1413
 
 module load gcccore/10.2.0

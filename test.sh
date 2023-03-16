@@ -1,21 +1,5 @@
-#!/bin/bash
-#SBATCH --nodes 1
-#SBATCH --partition physical
-#SBATCH --mem 32G
-#SBATCH --time 0-06:00:00
-#SBATCH -A punim1413
-
-module load gcccore/10.2.0
-module load python/3.8.6
-module load web_proxy
-source ~/venvs/medical-imaging/bin/activate
-
-version=$(python --version)
-echo $version
-
 . scripts/utilities/bash_functions.sh
 
-DATASET="PMCC-HN-REPLAN"
 REGIONS=(
     'Bone_Mandible'     # 0
     'BrachialPlex_L'    # 1
@@ -45,12 +29,3 @@ REGIONS=(
 )
 REGION=$(join "${REGIONS[@]}")
 echo $REGION
-OUTPUT_SPACING="(4,4,4)"
-SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TRAINING_DATASET="$DATASET-444"
-
-python $SCRIPT_DIR/process/nifti/convert_to_training.py \
-    --dataset $DATASET \
-    --region $REGION \
-    --output_spacing $OUTPUT_SPACING \
-    --training_dataset $TRAINING_DATASET
