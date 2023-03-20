@@ -26,8 +26,9 @@ from mymi.utils import append_row, arg_to_list, encode
 def get_region_summary(
     dataset: str,
     region: str) -> pd.DataFrame:
+    # List patients.
     set = ds.get(dataset, 'nifti')
-    pats = set.list_patients(region=region)
+    pats = set.list_patients(labels='all', region=region)
 
     cols = {
         'dataset': str,
@@ -39,7 +40,7 @@ def get_region_summary(
 
     for pat in tqdm(pats):
         spacing = set.patient(pat).ct_spacing
-        label = set.patient(pat).region_data(region=region)[region]
+        label = set.patient(pat).region_data(labels='all', region=region)[region]
 
         data = {
             'dataset': dataset,
@@ -119,11 +120,10 @@ def create_region_summary(
 
     set = ds.get(dataset, 'nifti')
     for region in tqdm(regions):
-        # List patients.
-        pats = set.list_patients(labels='all', region=region)
-
-        # Allows us to pass all regions from Spartan 'array' job.
-        if len(pats) == 0:
+        # Check if there are patients with this region.
+        n_pats = len(set.list_patients(labels='all', region=region))
+        if n_pats == 0:
+            # Allows us to pass all regions from Spartan 'array' job.
             logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
             return
 
@@ -190,6 +190,7 @@ def add_region_summary_outliers(
 
 def load_region_summary(
     dataset: str,
+    labels: Literal['included', 'excluded', 'all'] = 'all',
     region: PatientRegions = 'all',
     raise_error: bool = True) -> None:
     regions = region_to_list(region)
@@ -199,17 +200,33 @@ def load_region_summary(
     set = ds.get(dataset, 'nifti')
     for region in regions:
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        if os.path.exists(filepath):
-            df = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        else:
+        if not os.path.exists(filepath):
             if raise_error:
                 raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
             else:
                 # Skip this region.
                 continue
+
+        # Add CSV.
+        df = pd.read_csv(filepath, dtype={ 'patient-id': str })
         df.insert(1, 'region', region)
         dfs.append(df)
+
+    # Concatenate loaded files.
     df = pd.concat(dfs, axis=0)
+    df = df.reset_index(drop=True)
+
+    # Filter by 'excluded-labels.csv'.
+    exc_df = set.excluded_labels
+    if labels != 'all':
+        if exc_df is None:
+            raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
+    if labels == 'included':
+        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
+        df = df[df._merge == 'left_only'].drop(columns='_merge')
+    elif labels == 'excluded':
+        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
+        df = df[df._merge == 'both'].drop(columns='_merge')
 
     return df
 

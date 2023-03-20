@@ -309,7 +309,7 @@ def plot_region(
     slice_idx: Optional[int] = None,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
-    view: Axis = 2) -> None:
+    view: Axis = 0) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
     assert view in (0, 1, 2)
 
@@ -792,7 +792,7 @@ def plot_segmenter_prediction(
             n_colours = np.max((n_regions, n_models))
         else:
             n_colours = n_regions + n_models
-        colours = sns.color_palette('husl', n_colours)
+        colours = sns.color_palette('colorblind', n_colours)
     else:
         colours = arg_to_list(colour, [str, tuple])
 

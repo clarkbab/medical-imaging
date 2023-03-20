@@ -8,8 +8,8 @@ def dice(
     """
     returns: the dice coefficient.
     args:
-        a: a boolean 3D array.
-        b: another boolean 3D array.
+        a: an X x Y x Z boolean array.
+        b: an X x Y x Z boolean array.
     """
     if a.shape != b.shape:
         raise ValueError(f"Metric 'dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")

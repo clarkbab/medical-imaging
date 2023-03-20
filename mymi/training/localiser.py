@@ -14,11 +14,12 @@ from mymi.loaders import Loader
 from mymi.losses import DiceLoss
 from mymi import logging
 from mymi.models.systems import Localiser
+from mymi.utils import arg_to_list
 
 def train_localiser(
+    dataset: Union[str, List[str]],
     model_name: str,
     run_name: str,
-    datasets: Union[str, List[str]],
     region: str,
     loss: str = 'dice',
     n_epochs: int = 200,
@@ -36,19 +37,16 @@ def train_localiser(
     slurm_array_task_id: Optional[str] = None,
     test_fold: Optional[int] = None,
     use_logger: bool = False) -> None:
-    logging.info(f"Training model '({model_name}, {run_name})' on datasets '{datasets}' with region '{region}' using '{n_folds}' folds with test fold '{test_fold}'.")
+    logging.info(f"Training model '({model_name}, {run_name})' on dataset '{dataset}' with region '{region}' using '{n_folds}' folds with test fold '{test_fold}'.")
 
     # Load datasets.
-    if type(datasets) == str:
-        datasets = [datasets]
-        spacing = ds.get(datasets[0], 'training').params['spacing']
-    else:
-        spacing = ds.get(datasets[0], 'training').params['spacing']
-        for dataset in datasets[1:]:
-            # Check for consistent spacing.
-            new_spacing = ds.get(dataset, 'training').params['spacing']
-            if new_spacing != spacing:
-                raise ValueError(f'Datasets must have consistent spacing.')
+    datasets = arg_to_list(dataset, str)
+    spacing = ds.get(datasets[0], 'training').params['output-spacing']
+    for dataset in datasets[1:]:
+        # Check for consistent spacing.
+        new_spacing = ds.get(dataset, 'training').params['output-spacing']
+        if new_spacing != spacing:
+            raise ValueError(f'Datasets must have consistent spacing.')
 
     # Create transforms.
     rotation = (-5, 5)
@@ -61,7 +59,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, num_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    loaders = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
     train_loader = loaders[0]
     val_loader = loaders[1]
 
@@ -87,7 +85,7 @@ def train_localiser(
             # group=f"{model_name}-{run_name}",
             project=model_name,
             name=run_name,
-            save_dir=config.directories.wandb)
+            save_dir=config.directories.reports)
         logger.watch(model) # Caused multi-GPU training to hang.
     else:
         logger = None
@@ -123,8 +121,7 @@ def train_localiser(
         gpus=list(range(n_gpus)),
         logger=logger,
         max_epochs=n_epochs,
-        n_nodes=n_nodes,
-        n_sanity_val_steps=0,
+        num_sanity_val_steps=0,
         # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16,
         **opt_kwargs)

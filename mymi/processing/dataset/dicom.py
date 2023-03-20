@@ -59,7 +59,7 @@ def convert_to_nifti(
 
         # Create region NIFTIs.
         pat_regions = patient.list_regions(whitelist=regions)
-        region_data = patient.region_data(regions=pat_regions)
+        region_data = patient.region_data(region=pat_regions)
         for region, data in region_data.items():
             img = Nifti1Image(data.astype(np.int32), affine)
             filepath = os.path.join(nifti_set.path, 'data', 'regions', region, filename)
@@ -149,7 +149,7 @@ def convert_to_nifti_multiple_studies(
             # Create region NIFTIs for study.
             pat_regions = study.list_regions()
             pat_regions = [r for r in pat_regions if r in regions]
-            region_data = study.region_data(regions=pat_regions)
+            region_data = study.region_data(region=pat_regions)
             for region, data in region_data.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'regions', region, f'{nifti_id}.nii.gz')

@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from monai.losses import DiceFocalLoss
 import os
 import pytorch_lightning as pl
@@ -137,8 +138,9 @@ def train_multi_segmenter(
     if lr_find:
         lr_finder = trainer.tuner.lr_find(model, train_loader, val_loader)
         logging.info(lr_finder.results)
-        fig = lr_finder.plot(suggest=True)
-        fig.show()
+        filepath = os.path.join(config.directories.models, model_name, run, 'lr-finder.json')
+        with open(filepath, 'w') as f:
+            f.write(json.dumps(lr_finder.results))
         exit()
 
     # Save training information.

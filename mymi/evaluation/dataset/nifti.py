@@ -27,7 +27,7 @@ def get_localiser_evaluation(
     # Get pred/ground truth.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
     set = ds.get(dataset, 'nifti')
-    label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool_)
+    label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
     if region == 'SpinalCord':
@@ -185,7 +185,7 @@ def get_segmenter_evaluation(
     # Get pred/ground truth.
     pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
     set = ds.get(dataset, 'nifti')
-    label = set.patient(pat_id).region_data(regions=region)[region].astype(np.bool_)
+    label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
     if region == 'SpinalCord':

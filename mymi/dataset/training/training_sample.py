@@ -68,6 +68,7 @@ class TrainingSample:
         # Load the input data.
         filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}.npz')
         data = np.load(filepath)['data']
+        data = data.astype(np.float32)
         return data
 
     def label(
@@ -82,6 +83,7 @@ class TrainingSample:
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']
+            label = label.astype(np.float32)
             data[region] = label
 
         return data

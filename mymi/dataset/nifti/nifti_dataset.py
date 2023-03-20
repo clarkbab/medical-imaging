@@ -91,6 +91,7 @@ class NIFTIDataset(Dataset):
         filepath = os.path.join(self.__path, 'excluded-labels.csv')
         if os.path.exists(filepath):
             self.__excluded_labels = pd.read_csv(filepath).astype({ 'patient-id': str })
+            self.__excluded_labels = self.__excluded_labels.sort_values(['patient-id', 'region'])
         else:
             self.__excluded_labels = None
 

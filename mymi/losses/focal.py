@@ -35,8 +35,9 @@ class FocalLoss(nn.Module):
             assert mask.shape == pred.shape[:2]
         if weights is not None:
             assert weights.shape == pred.shape[:2]
-            if weights.sum() != 1:
-                raise ValueError(f"Weights must sum to 1. Got '{weights}'.")
+            weight_sum = weights.sum().round(decimals=3)
+            if weight_sum != 1:
+                raise ValueError(f"Weights must sum to 1. Got '{weight_sum}' (weights={weights}).")
         assert reduction in ('mean', 'sum')
 
         # Flatten spatial dimensions (X, Y, Z).

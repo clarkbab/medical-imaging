@@ -5,5 +5,6 @@ from .multi_segmenter import train_multi_segmenter
 from .multi_segmenter_pytorch import train_multi_segmenter_pytorch
 from .localiser_replan import train_localiser_replan
 from .segmenter import train_segmenter
+from .segmenter_replan import train_segmenter_replan
 from .segmenter_test import train_segmenter_test
 from .segmenter_parallel import train_segmenter_parallel

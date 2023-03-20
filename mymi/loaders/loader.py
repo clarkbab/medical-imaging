@@ -162,9 +162,6 @@ class TrainingDataset(Dataset):
             ])
             input = ScalarImage(tensor=input, affine=affine)
             label = LabelMap(tensor=label, affine=affine)
-            subject_kwargs = { 'input': input }
-            for r, d in label.items():
-                subject_kwargs[r] = d
             subject = Subject({
                 'input': input,
                 'label': label

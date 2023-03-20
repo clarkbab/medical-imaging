@@ -42,7 +42,7 @@ def convert_to_nifti(
 
         # Create region NIFTIs.
         pat_regions = patient.list_regions(whitelist=regions)
-        region_data = patient.region_data(regions=pat_regions)
+        region_data = patient.region_data(region=pat_regions)
         for region, data in region_data.items():
             img = Nifti1Image(data.astype(np.int32), affine)
             filepath = os.path.join(nifti_ds.path, region, f'{pat}.nii.gz')

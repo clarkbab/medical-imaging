@@ -7,7 +7,7 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-REPLAN-112-NATIVE"
+DATASET="PMCC-HN-REPLAN-444"
 REGION="Brain"
 MODEL_NAME="localiser-replan-$REGION"
 TEST_FOLD=0
@@ -17,7 +17,7 @@ LR_FIND=False
 N_EPOCHS=200
 N_GPUS=1
 N_NODES=1
-N_WORKERS=4
+N_WORKERS=8
 RESUME=False
 RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"

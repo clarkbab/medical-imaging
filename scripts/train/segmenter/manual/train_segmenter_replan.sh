@@ -7,8 +7,9 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-REPLAN-112-NATIVE"
-REGION="('Brain','BrachialPlex_L','Lens_L','Bone_Mandible','Parotid_L')"
+DATASET="PMCC-HN-REPLAN-444"
+# REGION="('Bone_Mandible','BrachialPlex_L','Brain','Lens_L','Parotid_L')"
+REGION="Brain"
 MODEL_NAME="segmenter-replan"
 TEST_FOLD=0
 HALVE_CHANNELS=True
@@ -17,13 +18,13 @@ LR_FIND=False
 N_EPOCHS=200
 N_GPUS=1
 N_NODES=1
-N_WORKERS=4
+N_WORKERS=8
 RESUME=False
 RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
-python $SCRIPT_DIR/train/localiser/train_localiser_replan.py \
+python $SCRIPT_DIR/train/segmenter/train_segmenter_replan.py \
     --dataset $DATASET \
     --region $REGION \
     --model_name $MODEL_NAME \

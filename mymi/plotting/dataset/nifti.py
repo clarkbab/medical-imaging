@@ -74,7 +74,7 @@ def plot_localiser_prediction(
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data if show_ct else None
-    region_data = patient.region_data(regions=regions) if regions is not None else None
+    region_data = patient.region_data(region=regions) if regions is not None else None
     spacing = patient.ct_spacing
 
     # Load prediction.
@@ -87,12 +87,12 @@ def plot_localiser_prediction(
     if centre_of is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                centre_of = patient.region_data(regions=centre_of)[centre_of]
+                centre_of = patient.region_data(region=centre_of)[centre_of]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = patient.region_data(regions=crop)[crop]
+                crop = patient.region_data(region=crop)[crop]
 
     if region_labels is not None:
         # Rename 'regions' and 'region_data' keys.
@@ -145,7 +145,7 @@ def plot_segmenter_prediction(
     # Load data.
     patient = ds.get(dataset, 'nifti').patient(pat_id)
     ct_data = patient.ct_data if show_ct else None
-    region_data = patient.region_data(regions=regions) if regions is not None else None
+    region_data = patient.region_data(region=regions) if regions is not None else None
     spacing = patient.ct_spacing
 
     # Load predictions.
@@ -199,7 +199,7 @@ def plot_segmenter_prediction(
                 assert model_i < n_models
                 centre_of = pred_data[pred_labels[model_i]]
             elif region_data is None or centre_of not in region_data:
-                centre_of = patient.region_data(regions=centre_of)[centre_of]
+                centre_of = patient.region_data(region=centre_of)[centre_of]
 
     if type(crop) == str:
         if crop == 'model':
@@ -212,7 +212,7 @@ def plot_segmenter_prediction(
                 assert model_i < n_models
                 crop = pred_data[pred_label[model_i]]
             elif region_data is None or crop not in region_data:
-                crop = patient.region_data(regions=crop)[crop]
+                crop = patient.region_data(region=crop)[crop]
 
     if region_labels is not None:
         for old, new in zip(regions, region_labels):
@@ -264,7 +264,7 @@ def plot_segmenter_prediction_diff(
         localiser = localisers[i]
         segmenter = segmenters[i]
         diff_region = diff_regions[i]
-        region_data = patient.region_data(regions=diff_region)[diff_region]
+        region_data = patient.region_data(region=diff_region)[diff_region]
         region_datas.append(region_data)
 
         # Load/make localiser prediction.

@@ -18,6 +18,9 @@ from mymi.models.networks import MultiUNet3D
 from mymi.regions import region_to_list
 from mymi import types
 
+LOG_ON_EPOCH = True
+LOG_ON_STEP = False
+
 class MultiSegmenter(pl.LightningModule):
     def __init__(
         self,
@@ -97,10 +100,10 @@ class MultiSegmenter(pl.LightningModule):
 
     def configure_optimizers(self):
         self.__optimiser = Adam(self.parameters(), lr=self.lr)
-        self.__scheduler = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=20, verbose=True)
+        # self.__scheduler = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=10, verbose=True)
         return {
             'optimizer': self.__optimiser,
-            'lr_scheduler': self.__scheduler,
+            # 'lr_scheduler': self.__scheduler,
             'monitor': 'val/loss'
         }
 
@@ -112,30 +115,9 @@ class MultiSegmenter(pl.LightningModule):
     def training_step(self, batch, _):
         # Forward pass.
         desc, x, y, mask, weights = batch
-        print(desc)
-        print(x.shape)
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
-        if loss.item() == np.nan:
-            logging.info('Got nan. Saving data...')
-            # Save data.
-            filepath = os.path.join(config.directories.temp, 'input.npy')
-            torch.save({
-                'epoch': self.current_epoch,
-                'model_state_dict': self.__network.state_dict(),
-                'optimizer_state_dict': self.__optimiser.state_dict(),
-                'scheduler_state_dict': self.__scheduler.state_dict(),
-                'loss': loss.item()
-            }, filepath)
-            filepath = os.path.join(config.directories.temp, 'input.npy')
-            np.save(filepath, x)
-            filepath = os.path.join(config.directories.temp, 'label.npy')
-            np.save(filepath, y)
-            filepath = os.path.join(config.directories.temp, 'mask.npy')
-            np.save(filepath, mask)
-            filepath = os.path.join(config.directories.temp, 'weights.npy')
-            np.save(filepath, weights)
-        self.log('train/loss', loss, on_epoch=True, on_step=False)
+        self.log('train/loss', loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         # Convert pred to binary mask.
         y = y.cpu().numpy()
@@ -144,8 +126,8 @@ class MultiSegmenter(pl.LightningModule):
 
         # Report metrics.
         if 'dice' in self.__metrics:
-            # Accumulate dice scores for each element in batch.
-            for i in range(self.__n_output_channels):     # Channels.
+            # Get mean dice score per-channel.
+            for i in range(self.__n_output_channels):
                 region = self.__channel_region_map[i]
                 dice_scores = []
                 for b in range(y.shape[0]):     # Batch items.
@@ -155,8 +137,10 @@ class MultiSegmenter(pl.LightningModule):
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 
-                channel_dice = np.mean(dice_scores)
-                self.log(f'train/dice/{region}', channel_dice, on_epoch=True, on_step=False)
+                if len(dice_scores) > 0:
+                    mean_dice = np.mean(dice_scores)
+                    print(region, ': ', mean_dice)
+                    self.log(f'train/dice/{region}', mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         return loss
 
@@ -165,7 +149,7 @@ class MultiSegmenter(pl.LightningModule):
         descs, x, y, mask, weights = batch
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
-        self.log('val/loss', loss, on_epoch=True, on_step=False)
+        self.log('val/loss', loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         # Convert pred to binary mask.
         y = y.cpu().numpy()
@@ -173,8 +157,8 @@ class MultiSegmenter(pl.LightningModule):
         y_hat = y_hat.cpu().numpy().astype(bool)
 
         if 'dice' in self.__metrics:
-            # Accumulate dice scores for each element in batch.
-            for i in range(self.__n_output_channels):     # Channels.
+            # Get mean dice score per-channel.
+            for i in range(self.__n_output_channels):
                 region = self.__channel_region_map[i]
                 dice_scores = []
                 for b in range(y.shape[0]):     # Batch items.
@@ -184,8 +168,9 @@ class MultiSegmenter(pl.LightningModule):
                         dice_score = dice(y_hat_i, y_i)
                         dice_scores.append(dice_score)
 
-                channel_dice = np.mean(dice_scores)
-                self.log(f'val/dice/{region}', channel_dice, on_epoch=True, on_step=False)
+                if len(dice_scores) > 0:
+                    mean_dice = np.mean(dice_scores)
+                    self.log(f'val/dice/{region}', mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         # Log predictions.
         if self.logger:
@@ -196,6 +181,10 @@ class MultiSegmenter(pl.LightningModule):
                 for i, desc in enumerate(descs):
                     # Plot for each channel.
                     for j in range(y.shape[1]):
+                        # Skip channel if not present.
+                        if not mask[i, j]:
+                            continue
+
                         # Get images.
                         x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i, j], y_hat[i, j]
 

@@ -20,7 +20,6 @@ class MultiLoader:
         batch_size: int = 1,    # Doesn't support > 1 as probably not necessary and introduces problems like padding images to max batch size.
         check_processed: bool = True,
         data_hook: Optional[Callable] = None,
-        half_precision: bool = True,
         load_data: bool = True,
         load_test_origin: bool = True,
         n_folds: Optional[int] = 5, 
@@ -119,12 +118,12 @@ class MultiLoader:
         train_val_samples = train_samples[n_train:] 
 
         # Create train loader.
-        train_ds = TrainingDataset(datasets, train_train_samples, data_hook=data_hook, half_precision=half_precision, load_data=load_data, region=regions, spacing=spacing, transform=transform)
+        train_ds = TrainingDataset(datasets, train_train_samples, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform)
         train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
         class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
-        val_ds = TrainingDataset(datasets, train_val_samples, class_weights=class_weights, data_hook=data_hook, half_precision=half_precision, load_data=load_data, region=regions, spacing=spacing)
+        val_ds = TrainingDataset(datasets, train_val_samples, class_weights=class_weights, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing)
         val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -142,14 +141,12 @@ class TrainingDataset(Dataset):
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
         data_hook: Optional[Callable] = None,
-        half_precision: bool = True,
         load_data: bool = True,
         region: PatientRegions = 'all',
         spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
         self.__data_hook = data_hook
-        self.__half_precision = half_precision
         self.__load_data = load_data
         self.__regions = region_to_list(region)
         self.__spacing = spacing
@@ -177,8 +174,6 @@ class TrainingDataset(Dataset):
             region_counts = np.zeros(self.__n_channels, dtype=int)
             for ds_i, s_i in samples:
                 regions = self.__sets[ds_i].sample(s_i).list_regions()
-                print(ds_i, s_i)
-                print(regions)
                 regions = [r for r in regions if r in self.__regions]
                 for region in regions:
                     region_counts[self.__region_channel_map[region]] += 1
@@ -189,9 +184,13 @@ class TrainingDataset(Dataset):
 
             logging.info(f"Calculated region counts '{region_counts}'.")
 
-            # Set class weights as inverse of region counts.
-            assert len(np.argwhere(region_counts)) == self.__n_channels
-            class_weights = 1 / region_counts
+            # If class has no labels, set weight=0.
+            class_weights = []
+            for i in range(len(region_counts)):
+                if region_counts[i] == 0:
+                    class_weights.append(0)
+                else:
+                    class_weights.append(1 / region_counts[i])
 
             # Normalise weight values.
             class_weights = class_weights / np.sum(class_weights)
@@ -269,13 +268,6 @@ class TrainingDataset(Dataset):
             # Convert to numpy.
             input = input.numpy()
             label = label.numpy().astype(bool)
-
-        # Convert dtypes.
-        if self.__half_precision:
-            input = input.astype(np.half)
-        else:
-            input = input.astype(np.single)
-        label = label.astype(bool)
 
         # Add channel dimension - expected by pytorch.
         input = np.expand_dims(input, 0)
