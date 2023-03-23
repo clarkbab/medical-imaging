@@ -1,50 +1,69 @@
 import os
-from typing import Dict, List, Optional
+
+DATA_VAR = 'MYMI_DATA'
 
 class Directories:
     @property
-    def cache(self):
-        return os.path.join(self.root, 'cache')
-
-    @property
     def datasets(self):
-        return os.path.join(self.root, 'datasets')
+        filepath = os.path.join(self.root, 'datasets')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
     
     @property
     def evaluations(self):
-        return os.path.join(self.root, 'evaluations')
+        filepath = os.path.join(self.root, 'evaluations')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def files(self):
-        return os.path.join(self.root, 'files')
+        filepath = os.path.join(self.root, 'files')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def models(self):
-        return os.path.join(self.root, 'models')
+        filepath = os.path.join(self.root, 'models')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def predictions(self):
-        return os.path.join(self.root, 'predictions')
+        filepath = os.path.join(self.root, 'predictions')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def reports(self):
-        return os.path.join(self.root, 'reports')
+        filepath = os.path.join(self.root, 'reports')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def root(self):
-        return os.environ['MYMI_DATA']
+        if DATA_VAR not in os.environ:
+            raise ValueError(f"Must set env var '{DATA_VAR}'.")
+        return os.environ[DATA_VAR]
 
     @property
     def runs(self):
-        return os.path.join(self.root, 'runs')
+        filepath = os.path.join(self.root, 'runs')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
     @property
     def temp(self):
-        return os.path.join(self.root, 'tmp')
-
-    @property
-    def tensorboard(self):
-        return os.path.join(self.reports, 'tensorboard')
+        filepath = os.path.join(self.root, 'tmp')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
 
 class Formatting:
     @property
@@ -55,11 +74,11 @@ class Formatting:
     def sample_digits(self):
         return 5
 
+class Regions:
+    @property
+    def mode(self):
+        return 0
+
 directories = Directories()
 formatting = Formatting()
-
-def environ(name: str) -> Optional[str]:
-    if name in os.environ:
-        return os.environ[name]
-    else:
-        return None
+regions = Regions()

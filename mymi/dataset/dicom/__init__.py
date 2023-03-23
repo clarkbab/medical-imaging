@@ -20,7 +20,7 @@ def list() -> List[str]:
 def create(name: str) -> None:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)
     os.makedirs(ds_path)
-    return NIFTIDataset(name)
+    return DICOMDataset(name)
 
 def destroy(name: str) -> None:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)

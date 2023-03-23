@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from mymi.geometry import get_box
 from mymi.types import Box2D, Box3D, ImageSize3D, Point2D, Point3D
@@ -35,6 +35,17 @@ def crop_2D(
 
     return data
 
+def crop_or_pad_4D(
+    data: np.ndarray,
+    bounding_box: Box3D,
+    **kwargs: Dict[str, Any]) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = crop_or_pad_3D(d, bounding_box, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
+
 def crop_or_pad_3D(
     data: np.ndarray,
     bounding_box: Box3D,
@@ -61,6 +72,66 @@ def crop_or_pad_3D(
     crop_max = (size - max).clip(0)
     slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, data.shape))
     data = data[slices]
+
+    return data
+
+def centre_pad_4D(
+    data: np.ndarray,
+    size: ImageSize3D) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = centre_pad_3D(d, size)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
+
+def centre_pad_3D(
+    data: np.ndarray,
+    size: ImageSize3D) -> np.ndarray:
+    # Determine padding amounts.
+    to_pad = np.array(size) - data.shape
+    box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
+
+    # Perform padding.
+    output = pad_3D(data, bounding_box)
+
+    return output
+
+def centre_crop_3D(
+    data: np.ndarray,
+    size: ImageSize3D) -> np.ndarray:
+    # Determine cropping/padding amounts.
+    to_crop = data.shape - np.array(size)
+    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
+
+    # Perform crop or padding.
+    output = crop_3D(data, bounding_box)
+
+    return output
+
+def pad_3D(
+    data: np.ndarray,
+    bounding_box: Box3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
+    fill = np.min(data) if fill == 'min' else fill
+
+    min, max = bounding_box
+    for i in range(3):
+        width = max[i] - min[i]
+        if width <= 0:
+            raise ValueError(f"Pad width must be positive, got '{bounding_box}'.")
+
+    # Perform padding.
+    size = np.array(data.shape)
+    pad_min = (-np.array(min)).clip(0)
+    pad_max = (max - size).clip(0)
+    padding = tuple(zip(pad_min, pad_max))
+    data = np.pad(data, padding, constant_values=fill)
 
     return data
 

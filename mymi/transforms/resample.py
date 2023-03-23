@@ -1,8 +1,18 @@
 import numpy as np
 import SimpleITK as sitk
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from mymi import types
+
+def resample_4D(
+    input: np.ndarray,
+    **kwargs: Dict[str, Any]) -> np.ndarray:
+    ds = []
+    for d in input:
+        d = resample_3D(d, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
 
 def resample_3D(
     input: np.ndarray,

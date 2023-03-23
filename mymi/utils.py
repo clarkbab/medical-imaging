@@ -8,6 +8,7 @@ import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
 from time import perf_counter, time
+import torch
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 # Commented due to circular import.
@@ -22,10 +23,15 @@ def append_row(
     df: pd.DataFrame,
     data: Dict[str, Union[int, float, str]],
     index: Optional[int] = None) -> pd.DataFrame:
-    kwargs = {}
-    if index is not None:
-        kwargs['index'] = [index]
-    return pd.concat((df, pd.DataFrame([data], **kwargs)), axis=0)
+    odf = pd.DataFrame([data], index=index)
+    use_odf_types = True if len(df) == 0 else False
+    df = pd.concat((df, odf), axis=0)
+
+    # Automatic assigning of types to columns will break when we concat with an empty dataframe.
+    if use_odf_types:
+        df = df.astype(odf.dtypes.to_dict())
+    
+    return df
 
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
@@ -115,6 +121,42 @@ def fplot(
 
     plt.show()
 
+def get_n_epochs(
+    model: Union[str, List[str]],
+    run: Union[str, List[str]],
+    checkpoint: str = 'last') -> pd.DataFrame:
+    models = arg_to_list(model, str)
+    runs = arg_to_list(run, str)
+    
+    cols = {
+        'model': str,
+        'run': str,
+        'exists': bool,
+        'n-epochs': int,
+    }
+    df = pd.DataFrame(columns=cols.keys())
+    
+    for model in models:
+        for run in runs:
+            filepath = os.path.join(config.directories.models, model, run, f'{checkpoint}.ckpt')
+            if not os.path.exists(filepath):
+                exists = False
+                n_epochs = 0
+            else:
+                exists = True
+                state = torch.load(filepath, map_location=torch.device('cpu'))
+                n_epochs = state['epoch']
+            
+            data = {
+                'model': model,
+                'run': run,
+                'exists': exists,
+                'n-epochs': n_epochs
+            }
+            df = append_row(df, data)
+            
+    return df
+
 def save_csv(
     data: pd.DataFrame,
     *path: List[str],
@@ -128,7 +170,7 @@ def save_csv(
             os.makedirs(dirpath, exist_ok=True)
             data.to_csv(filepath, header=header, index=index)
         else:
-            logging.error(f"File '{filepath}' already exists, use overwrite=True.")
+            raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
     else:
         os.makedirs(dirpath, exist_ok=True)
         data.to_csv(filepath, header=header, index=index)
@@ -203,7 +245,7 @@ def arg_broadcast(
     out_type: Optional[Any] = None):
     # Convert arg to list.
     if arg_type is not None:
-        arg = arg_to_list(arg, arg_type, out_type)
+        arg = arg_to_list(arg, arg_type, out_type=out_type)
 
     # Get broadcast length.
     b_len = b_arg if type(b_arg) is int else len(b_arg)

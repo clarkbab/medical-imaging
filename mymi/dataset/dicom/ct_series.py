@@ -1,3 +1,4 @@
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import pydicom as dcm
@@ -8,6 +9,7 @@ from mymi import types
 from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
 
 CLOSENESS_ABS_TOL = 1e-10;
+STUDY_DATE_FMT = '%Y%m%d'
 
 class CTSeries(DICOMSeries):
     def __init__(
@@ -75,6 +77,11 @@ class CTSeries(DICOMSeries):
     @property
     def study(self) -> str:
         return self.__study
+
+    @property
+    def study_date(self) -> datetime:
+        dt_str = self.get_cts()[0].StudyDate
+        return datetime.strptime(dt_str, STUDY_DATE_FMT)
     
     def get_cts(self) -> List[dcm.dataset.FileDataset]:
         ct_paths = list(self.__index['filepath'])
@@ -92,7 +99,7 @@ class CTSeries(DICOMSeries):
         # Store offset.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
         offset = cts[0].ImagePositionPatient    
-        self.__offset = tuple(int(s) for s in offset)
+        self.__offset = tuple(int(round(o)) for o in offset)
 
         # Store size.
         # Indexing checked that CT slices had consisent x/y spacing in series.

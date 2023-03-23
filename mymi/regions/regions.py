@@ -1,8 +1,8 @@
 from enum import Enum
 
-MODE = 0
+from mymi import config
 
-if MODE == 0:
+if config.regions.mode == 0:
     RegionNames = [
         'Bone_Mandible',        # 0
         'BrachialPlex_L',       # 1
@@ -30,7 +30,7 @@ if MODE == 0:
         'Parotid_R',            # 23
         'SpinalCord',           # 24
     ]
-elif MODE == 1:
+elif config.regions.mode == 1:
     class Regions(Enum):
         BrachialPlexus_L = 0
         BrachialPlexus_R = 1
@@ -51,8 +51,3 @@ elif MODE == 1:
         Submandibular_R = 16
 
     RegionNames = [r.name for r in Regions]
-
-# For multi-class training - 'background' is channel '0'.
-RegionChannelMap = dict((r, i + 1) for i, r in enumerate(RegionNames))
-RegionChannelMap['Background'] = 0
-ChannelRegionMap = dict((c, r) for r, c in RegionChannelMap.items())

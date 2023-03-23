@@ -54,8 +54,8 @@ def train_localiser_replan(
         default_pad_value='minimum')
 
     # Define loss function.
-    loss_fn = DiceWithFocalLoss()
-    # loss_fn = DiceLoss()
+    # loss_fn = DiceWithFocalLoss()
+    loss_fn = DiceLoss()
 
     # Define crop function.
     crop_x_mm = 300
@@ -74,7 +74,7 @@ def train_localiser_replan(
         return input, labels
 
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, data_hook=None, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, data_hook=crop_x, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
 
     # Create model.
     model = MultiSegmenter(

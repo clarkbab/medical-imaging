@@ -12,10 +12,12 @@ from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
 from mymi.models import replace_checkpoint_alias
-from mymi.postprocessing import get_batch_largest_cc
+from mymi.postprocessing import largest_cc_4D
 from mymi import types
 
-from ..networks import UNet3D
+from ..networks import MultiUNet3D, UNet3D
+
+MODE = 1
 
 class Localiser(pl.LightningModule):
     def __init__(
@@ -39,7 +41,8 @@ class Localiser(pl.LightningModule):
         self._metrics = metrics
         self._name = None
         pretrained_model = pretrained.network if pretrained else None
-        self._network = UNet3D(pretrained_model=pretrained_model)
+        # self._network = UNet3D(pretrained_model=pretrained_model)
+        self._network = MultiUNet3D(2, n_ckpts=22, halve_channels=False)
         self._predict_logits = predict_logits
         self._spacing = spacing
         self.save_hyperparameters(ignore=['loss'])
@@ -92,13 +95,16 @@ class Localiser(pl.LightningModule):
         
         # Apply postprocessing.
         pred = pred.cpu().numpy().astype(np.bool_)
-        pred = get_batch_largest_cc(pred)
+        pred = largest_cc_4D(pred)
 
         return pred
 
     def training_step(self, batch, _):
         # Forward pass.
-        _, x, y = batch
+        if MODE == 0:
+            _, x, y = batch
+        elif MODE == 1:
+            _, x, y, _, _ = batch
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
@@ -108,6 +114,8 @@ class Localiser(pl.LightningModule):
         self.log('train/loss', loss, **self._log_args)
 
         if 'dice' in self._metrics:
+            if MODE == 1:
+                y = y.argmax(axis=1).astype(np.bool_)
             dice = batch_mean_dice(y_hat, y)
             self.log('train/dice', dice, **self._log_args)
 
@@ -133,7 +141,10 @@ class Localiser(pl.LightningModule):
             batch: the (desc, input, label) pair of batched data.
         """
         # Forward pass.
-        descs, x, y = batch
+        if MODE == 0:
+            descs, x, y = batch
+        elif MODE == 1:
+            descs, x, y, _, _ = batch
         y_hat = self._network(x)
         loss = self._loss(y_hat, y)
 
@@ -144,19 +155,11 @@ class Localiser(pl.LightningModule):
         self.log(f"val/batch/loss/{descs[0]}", loss, on_epoch=False, on_step=True)
 
         if 'dice' in self._metrics:
+            if MODE == 1:
+                y = y.argmax(axis=1).astype(np.bool_)
             dice = batch_mean_dice(y_hat, y)
             self.log('val/dice', dice, **self._log_args, sync_dist=True)
             self.log(f"val/batch/dice/{descs[0]}", dice, on_epoch=False, on_step=True)
-
-        if 'distances' in self._metrics and self.global_step > self._distances_delay and self.current_epoch % self._distances_interval == 0:
-            if y_hat.sum() > 0 and y.sum() > 0:
-                dists = batch_mean_all_distances(y_hat, y, self._spacing)
-                self.log('val/hd', dists['hd'], **self._log_args, sync_dist=True)
-                self.log('val/hd-95', dists['hd-95'], **self._log_args, sync_dist=True)
-                self.log('val/msd', dists['msd'], **self._log_args, sync_dist=True)
-                self.log(f"val/batch/hd/{descs[0]}", dists['hd'], on_epoch=False, on_step=True)
-                self.log(f"val/batch/hd-95/{descs[0]}", dists['hd-95'], **self._log_args, on_epoch=False, on_step=True)
-                self.log(f"val/batch/msd/{descs[0]}", dists['msd'], **self._log_args, on_epoch=False, on_step=True)
 
         # Log predictions.
         if self.logger:

@@ -99,7 +99,7 @@ def convert_to_training(
     cols = {
         'dataset': str,
         'sample-id': int,
-        'group-id': int,
+        'group-id': float,
         'origin-dataset': str,
         'origin-patient-id': str,
         'region': str,

@@ -10,10 +10,10 @@ from typing import List, Optional, Tuple, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.dataset.training import exists
-from mymi.loaders import Loader
-from mymi.losses import DiceLoss
+from mymi.loaders import Loader, MultiLoader
+from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi import logging
-from mymi.models.systems import Localiser
+from mymi.models.systems import Localiser, MultiSegmenter
 from mymi.utils import arg_to_list
 
 def train_localiser(
@@ -23,7 +23,7 @@ def train_localiser(
     region: str,
     loss: str = 'dice',
     n_epochs: int = 200,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     n_gpus: int = 1,
     n_nodes: int = 1,
     n_train: Optional[int] = None,
@@ -59,13 +59,13 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    loaders = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
-    train_loader = loaders[0]
-    val_loader = loaders[1]
+    # train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
 
     # Get loss function.
     if loss == 'dice':
-        loss_fn = DiceLoss()
+        # loss_fn = DiceLoss()
+        loss_fn = DiceWithFocalLoss()
     elif loss == 'scdice':
         loss_fn = DiceLoss(weights=[0, 1])
 
@@ -75,9 +75,14 @@ def train_localiser(
         pretrained = Localiser.load(*pretrained)
     model = Localiser(
         loss=loss_fn,
-        metrics=metrics,
+        metrics=['dice'],
         pretrained=pretrained,
         spacing=spacing)
+    # model = MultiSegmenter(
+    #     region,
+    #     loss_fn,
+    #     metrics=['dice']
+    # )
 
     # Create logger.
     if use_logger:

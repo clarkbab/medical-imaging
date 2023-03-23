@@ -1,39 +1,53 @@
-#! /usr/bin/env bash
-module load python/3.8.6
-source ~/venvs/medical-imaging/bin/activate
-python --version
+#!/bin/bash
 
-CROP_X_MM=400
-CROP_X_MM=None
-DATASETS="['PMCC-HN-TEST-MULTI','PMCC-HN-TRAIN-MULTI']"
-MODEL_NAME="segmenter-multi"
-N_EPOCHS=5
+module load python/3.8.6
+module load web_proxy
+source ~/venvs/medical-imaging/bin/activate
+
+version=$(python --version)
+echo $version
+
+DATASET="MICCAI-2015-222"
+# REGION="('Bone_Mandible','BrachialPlex_L','Brain','Lens_L','Parotid_L')"
+REGION="['Bone_Mandible','Glnd_Submand_R']"
+REGION_SHORT="BM"
+MODEL_NAME="segmenter-miccai-manual"
+RESOLUTION="222"
+RUN_NAME="baseline-2-regions-$REGION_SHORT-$RESOLUTION"
+LR_FIND=False
+LR_INIT=1e-3
+LR_SCHEDULER=False
+N_EPOCHS=500
 N_GPUS=1
 N_NODES=1
-N_WORKERS=1
-N_TRAIN=None
-REGIONS="['Brain','Lens_L','OpticNerve_L','Parotid_L','Submandibular_L']"
+N_SPLIT_CHANNELS=1
+N_WORKERS=8
 RESUME=False
-RESUME_CKPT=None
-RUN_NAME="gpu-test"
+RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-TEST_FOLD=0
+USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=False
+USE_STAND=True
 
-python $SCRIPT_DIR/train/segmenter/train_multi.py \
-    --dataset $DATASETS \
-    --model $MODEL_NAME \
-    --run $RUN_NAME \
-    --crop_x_mm $CROP_X_MM \
+python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
+    --dataset $DATASET \
+    --region $REGION \
+    --model_name $MODEL_NAME \
+    --run_name $RUN_NAME \
+    --halve_channels $HALVE_CHANNELS \
+    --lr_find $LR_FIND \
+    --lr_init $LR_INIT \
+    --lr_scheduler $LR_SCHEDULER \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
-    --n_train $N_TRAIN \
     --n_workers $N_WORKERS \
-    --regions $REGIONS \
     --resume $RESUME \
-    --resume_ckpt $RESUME_CKPT \
+    --resume_checkpoint $RESUME_CHECKPOINT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --test_fold $TEST_FOLD \
-    --use_logger $USE_LOGGER
+    --use_loader_split_file $USE_LOADER_SPLIT_FILE \
+    --use_logger $USE_LOGGER \
+    --use_stand $USE_STAND
+

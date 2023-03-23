@@ -11,23 +11,65 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi import dataset as ds
+from mymi.dataset.nifti import NIFTIDataset
 from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_segmenter_prediction
-from mymi.postprocessing import get_largest_cc, get_object, one_hot_encode
+from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import region_to_list as region_to_list
 from mymi.types import Axis, ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
+
+def get_region_overlap_summary(
+    dataset: str,
+    region: str) -> pd.DataFrame:
+    # List patients.
+    set = NIFTIDataset(dataset)
+    pat_ids = set.list_patients(labels='all', region=region)
+
+    cols = {
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'n-overlap': int
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for pat_id in tqdm(pat_ids):
+        pat = set.patient(pat_id)
+        if not pat.has_region(region, labels='all'):
+            continue
+
+        # Load region data.
+        region_data = pat.region_data(labels='all')
+
+        # Calculate overlap for other regions.
+        for r in region_data.keys():
+            if r == region:
+                continue
+
+            n_overlap = (region_data[region] & region_data[r]).sum()
+            data = {
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': r,
+                'n-overlap': n_overlap
+            }
+            df = append_row(df, data)
+
+    # Set column types as 'append' crushes them.
+    df = df.astype(cols)
+
+    return df
 
 def get_region_summary(
     dataset: str,
     region: str) -> pd.DataFrame:
     # List patients.
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     pats = set.list_patients(labels='all', region=region)
 
     cols = {
@@ -61,7 +103,7 @@ def get_region_summary(
             df = append_row(df, data)
 
         # Add 'connected' metrics.
-        lcc_label = get_largest_cc(label)
+        lcc_label = largest_cc_3D(label)
         data['metric'] = 'connected'
         data['value'] = 1 if lcc_label.sum() == label.sum() else 0
         df = append_row(df, data)
@@ -112,13 +154,27 @@ def get_region_summary(
 
     return df
 
+def create_region_overlap_summary(
+    dataset: str,
+    region: str) -> None:
+    logging.arg_log('Creating region overlap summary', ('dataset', 'region'), (dataset, region))
+
+    # Generate counts report.
+    df = get_region_overlap_summary(dataset, region)
+
+    # Save report.
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
 def create_region_summary(
     dataset: str,
     region: PatientRegions = 'all') -> None:
     logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     for region in tqdm(regions):
         # Check if there are patients with this region.
         n_pats = len(set.list_patients(labels='all', region=region))
@@ -188,16 +244,46 @@ def add_region_summary_outliers(
     df = pd.concat([df, out_df], axis=1)
     return df
 
+def load_region_overlap_summary(
+    dataset: str,
+    region: str,
+    labels: Literal['included', 'excluded', 'all'] = 'all',
+    raise_error: bool = True) -> Optional[pd.DataFrame]:
+
+    # Load summary.
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
+    if not os.path.exists(filepath):
+        if raise_error:
+            raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+        else:
+            return None
+    df = pd.read_csv(filepath)
+
+    # Filter by 'excluded-labels.csv'.
+    exc_df = set.excluded_labels
+    if labels != 'all':
+        if exc_df is None:
+            raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
+    if labels == 'included':
+        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
+        df = df[df._merge == 'left_only'].drop(columns='_merge')
+    elif labels == 'excluded':
+        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
+        df = df[df._merge == 'both'].drop(columns='_merge')
+
+    return df
+
 def load_region_summary(
     dataset: str,
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: PatientRegions = 'all',
-    raise_error: bool = True) -> None:
+    raise_error: bool = True) -> Optional[pd.DataFrame]:
     regions = region_to_list(region)
 
     # Load summary.
     dfs = []
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     for region in regions:
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
         if not os.path.exists(filepath):
@@ -213,6 +299,8 @@ def load_region_summary(
         dfs.append(df)
 
     # Concatenate loaded files.
+    if len(dfs) == 0:
+        return None
     df = pd.concat(dfs, axis=0)
     df = df.reset_index(drop=True)
 
@@ -253,7 +341,7 @@ def get_ct_summary(
     logging.info(f"Creating CT summary for dataset '{dataset}'.")
 
     # Get patients.
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     pats = set.list_patients(region=regions)
 
     cols = {
@@ -300,7 +388,7 @@ def create_ct_summary(
     df = get_ct_summary(dataset)
 
     # Save summary.
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -310,7 +398,7 @@ def load_ct_summary(
     region: PatientRegions = 'all') -> pd.DataFrame:
     regions = region_to_list(region)
 
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
@@ -399,7 +487,7 @@ def create_region_figures(
     logging.arg_log('Creating region figures', ('dataset', 'region', 'labels', 'subregions'), (dataset, region, labels, subregions))
 
     # Get patients.
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     pat_ids = set.list_patients(labels=labels, region=region)
 
     # Get excluded regions.
@@ -585,10 +673,11 @@ def create_region_figures(
 
 def get_object_summary(
     dataset: str,
-    patient: str,
+    pat_id: str,
     region: str) -> pd.DataFrame:
     # Get objects.
-    pat = ds.get(dataset, 'nifti').patient(patient)
+    pat = NIFTIDataset(dataset).patient(pat_id)
+
     spacing = pat.ct_spacing
     label = pat.region_data(region=region)[region]
     objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
@@ -640,7 +729,7 @@ def create_localiser_figures(
     logging.info(f"Creating localiser figures for dataset '{dataset}', region '{region}' and localiser '{localiser}'.")
 
     # Get patients.
-    set = ds.get(dataset, 'nifti')
+    set = NIFTIDataset(dataset)
     pats = set.list_patients(region=region)
 
     # Exit if region not present.

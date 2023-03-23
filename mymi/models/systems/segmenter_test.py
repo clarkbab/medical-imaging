@@ -13,7 +13,7 @@ from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
-from mymi.postprocessing import get_batch_largest_cc
+from mymi.postprocessing import largest_cc_4D
 from mymi import types
 
 from ..networks import UNet3D
@@ -106,7 +106,7 @@ class SegmenterTest(pl.LightningModule):
         
         # Apply postprocessing.
         pred = pred.cpu().numpy().astype(np.bool_)
-        pred = get_batch_largest_cc(pred)
+        pred = largest_cc_4D(pred)
 
         return pred
 

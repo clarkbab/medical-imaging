@@ -42,6 +42,7 @@ def replace_checkpoint_alias(
             ckpt = ckpts.iloc[-1].checkpoint
         else:
             ckptspath = os.path.join(config.directories.models, name, run)
-            ckpts = list(sorted([c.replace('.ckpt', '') for c in os.listdir(ckptspath)]))
+            ckpts = [c for c in os.listdir(ckptspath) if '.ckpt' in c]
+            ckpts = list(sorted([c.replace('.ckpt', '') for c in ckpts]))
             ckpt = ckpts[-1]
     return (name, run, ckpt)

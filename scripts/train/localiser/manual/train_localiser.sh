@@ -9,7 +9,7 @@ echo $version
 
 DATASET="PMCC-HN-REPLAN-444"
 REGION="Brain"
-MODEL_NAME="localiser-replan-$REGION"
+MODEL_NAME="localiser-$REGION"
 RUN_NAME="single-class"
 N_EPOCHS=200
 N_GPUS=1
@@ -19,20 +19,22 @@ PRETRAINED=None
 RESUME=False
 RESUME_CHECKPOINT="last"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+TEST_FOLD=0
 USE_LOGGER=True
 
 python $SCRIPT_DIR/train/localiser/train_localiser.py \
     --dataset $DATASET \
-    --region $REGION \
     --model_name $MODEL_NAME \
     --run_name $RUN_NAME \
-    --n_epochs $n_EPOCHS \
-    --n_gpus $n_GPUS \
-    --n_nodes $n_NODES \
-    --n_subset $n_SUBSET \
-    --n_workers $n_WORKERS \
+    --region $REGION \
+    --n_epochs $N_EPOCHS \
+    --n_gpus $N_GPUS \
+    --n_nodes $N_NODES \
+    --n_subset $N_SUBSET \
+    --n_workers $N_WORKERS \
     --pretrained $PRETRAINED \
     --resume $RESUME \
     --resume_checkpoint $RESUME_CHECKPOINT \
     --slurm_job_id $SLURM_JOB_ID \
+    --test_fold $TEST_FOLD \
     --use_logger $USE_LOGGER

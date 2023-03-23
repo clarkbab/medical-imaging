@@ -6,7 +6,7 @@ BrachialPlex_L,^plexus(\s|_)?g$
 BrachialPlex_R,^plexus(\s|_)?b(rac)(\s|_)?\(r\)$
 BrachialPlex_R,^pl(\s|_)?brachial(\s|_)?drt$
 BrachialPlex_R,^plexus(\s|_)?br(ac)?(\s|_)?d$
-BrachialPlex_L,^plexus(\s|_)?d$
+BrachialPlex_R,^plexus(\s|_)?d$
 Brain,^brain$
 Brain,^cerveau$
 Brainstem,^brain(\s|_)?stem$

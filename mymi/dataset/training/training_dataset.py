@@ -20,18 +20,24 @@ class TrainingDataset(Dataset):
         self.__name = name
         self.__global_id = f"TRAINING: {self.__name}"
         self.__path = os.path.join(config.directories.datasets, 'training', self.__name)
+        self.__loader_split = None     # Lazy-loaded.
 
         # Check if dataset exists.
         if not os.path.exists(self.__path):
             raise ValueError(f"Dataset '{self}' not found.")
 
-        # Check if processing from NIFTI has completed.
+        # Check if processing from NIFTI/NRRD has completed.
         if check_processed:
             path = os.path.join(self.__path, '__CONVERT_FROM_NIFTI_START__')
             if os.path.exists(path):
                 path = os.path.join(self.__path, '__CONVERT_FROM_NIFTI_END__')
                 if not os.path.exists(path):
                     raise ValueError(f"Dataset '{self}' processing from NIFTI not completed. To override check use 'check_processed=False'.")
+            path = os.path.join(self.__path, '__CONVERT_FROM_NRRD_START__')
+            if os.path.exists(path):
+                path = os.path.join(self.__path, '__CONVERT_FROM_NRRD_END__')
+                if not os.path.exists(path):
+                    raise ValueError(f"Dataset '{self}' processing from NRRD not completed. To override check use 'check_processed=False'.")
 
     @property
     def description(self) -> str:
@@ -46,6 +52,13 @@ class TrainingDataset(Dataset):
         if self.__index is None:
             self.__load_index()
         return self.__index
+
+    @property
+    def loader_split(self) -> pd.DataFrame:
+        if self.__loader_split is None:
+            self.__load_loader_split()
+            self.__loaded_loader_split = True
+        return self.__loader_split
 
     @property
     def name(self) -> str:
@@ -76,6 +89,7 @@ class TrainingDataset(Dataset):
 
     def list_groups(
         self,
+        include_empty: bool = False,
         region: types.PatientRegions = 'all') -> List[int]:
         if not self.has_grouping:
             raise ValueError(f"{self} has no grouping.")
@@ -83,7 +97,7 @@ class TrainingDataset(Dataset):
 
         # Filter out 'empty' labels.
         index = self.index
-        if 'empty' in self.index.columns:
+        if 'empty' in self.index.columns and not include_empty:
             index = index[~index['empty']]
 
         # Filter by regions.
@@ -97,14 +111,15 @@ class TrainingDataset(Dataset):
 
     def list_samples(
         self,
-        region: types.PatientRegions = 'all',
-        group_id: Optional[Union[int, List[int]]] = None) -> List[int]:
+        group_id: Optional[Union[int, List[int]]] = None,
+        include_empty: bool = False,
+        region: types.PatientRegions = 'all') -> List[int]:
         group_ids = arg_to_list(group_id, int)
         regions = region_to_list(region) 
 
         # Filter out 'empty' labels.
         index = self.index
-        if 'empty' in self.index.columns:
+        if 'empty' in self.index.columns and not include_empty:
             index = index[~index['empty']]
 
         # Filter by regions.
@@ -120,22 +135,13 @@ class TrainingDataset(Dataset):
 
         return sample_ids
 
-    def patient_id(
-        self,
-        sample_idx: int) -> types.PatientID:
-        df = self.__index[self.__index['sample-id'] == sample_idx]
-        if len(df) == 0:
-            raise ValueError(f"Sample '{sample_idx}' not found for dataset '{self}'.")
-        pat_id = df['patient-id'].iloc[0] 
-        return pat_id
-
     def sample(
         self,
         sample_id: Union[int, str],
-        by_patient_id: bool = False) -> TrainingSample:
+        by_origin_id: bool = False) -> TrainingSample:
         # Look up sample by patient ID.
-        if by_patient_id:
-            sample_id = self.__index[self.__index['patient-id'] == sample_id].iloc[0]['sample-id']
+        if by_origin_id:
+            sample_id = self.__index[self.__index['origin-patient-id'] == sample_id].iloc[0]['sample-id']
         return TrainingSample(self, sample_id)
 
     def __load_index(self) -> None:
@@ -143,6 +149,13 @@ class TrainingDataset(Dataset):
         if not os.path.exists(filepath):
             raise ValueError(f"Index not found for {self}.")
         self.__index = pd.read_csv(filepath).astype({ 'sample-id': int, 'origin-patient-id': str })
+
+    def __load_loader_split(self) -> None:
+        filepath = os.path.join(self.__path, 'loader-split.csv')
+        if os.path.exists(filepath):
+            self.__loader_split = pd.read_csv(filepath).astype({ 'sample-id': str })
+        else:
+            self.__loader_split = None
 
     def __str__(self) -> str:
         return self.__global_id

@@ -3,6 +3,7 @@ import pandas as pd
 from typing import List, Literal, Optional, Union
 
 from mymi import config
+from mymi import logging
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
@@ -92,6 +93,13 @@ class NIFTIDataset(Dataset):
         if os.path.exists(filepath):
             self.__excluded_labels = pd.read_csv(filepath).astype({ 'patient-id': str })
             self.__excluded_labels = self.__excluded_labels.sort_values(['patient-id', 'region'])
+
+            # Drop duplicates.
+            dup_cols = ['patient-id', 'region']
+            dup_df = self.__excluded_labels[self.__excluded_labels[dup_cols].duplicated()]
+            if len(dup_df) > 0:
+                logging.warning(f"Found {len(dup_df)} duplicate entries in 'excluded-labels.csv', removing.")
+                self.__excluded_labels = self.__excluded_labels[~self.__excluded_labels[dup_cols].duplicated()]
         else:
             self.__excluded_labels = None
 

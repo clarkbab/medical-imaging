@@ -7,7 +7,6 @@ from typing import Callable, Dict, List, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi import regions
 from mymi import types
 
 from ..dataset import Dataset, DatasetType
@@ -24,6 +23,7 @@ class DICOMDataset(Dataset):
         self.__path = os.path.join(config.directories.datasets, 'dicom', name)
         self.__index = None             # Lazy-loaded.
         self.__index_errors = None      # Lazy-loaded.
+        self.__region_dups = None       # Lazy-loaded.
         self.__region_map = None        # Lazy-loaded.
 
         # Load 'ct_from' flag.
@@ -69,6 +69,12 @@ class DICOMDataset(Dataset):
         return self.__path
 
     @property
+    def region_dups(self) -> pd.DataFrame:
+        if self.__region_dups is None:
+            self.__load_region_dups()
+        return self.__region_dups
+
+    @property
     def region_map(self) -> RegionMap:
         if self.__region_map is None:
             self.__load_region_map()
@@ -85,18 +91,18 @@ class DICOMDataset(Dataset):
 
     def list_patients(
         self,
-        regions: types.PatientRegions = 'all') -> List[str]:
+        region: types.PatientRegions = 'all') -> List[str]:
         pats = list(sorted(self.index['patient-id'].unique()))
 
         # Filter by 'regions'.
-        pats = list(filter(self.__filter_patient_by_regions(regions), pats))
+        pats = list(filter(self.__filter_patient_by_region(region), pats))
         return pats
 
     def patient(
         self,
         id: types.PatientID,
         **kwargs: Dict) -> DICOMPatient:
-        return DICOMPatient(self, id, region_map=self.region_map, **kwargs)
+        return DICOMPatient(self, id, region_dups=self.region_dups, region_map=self.region_map, **kwargs)
 
     def list_regions(
         self,
@@ -128,19 +134,19 @@ class DICOMDataset(Dataset):
                 return False
         return fn
 
-    def __filter_patient_by_regions(
+    def __filter_patient_by_region(
         self,
-        regions: types.PatientRegions,
+        region: types.PatientRegions,
         use_mapping: bool = True) -> Callable[[str], bool]:
         def fn(id):
-            if type(regions) == str:
-                if regions == 'all':
+            if type(region) == str:
+                if region == 'all':
                     return True
                 else:
-                    return self.patient(id).has_region(regions, use_mapping=use_mapping)
+                    return self.patient(id).has_region(region, use_mapping=use_mapping)
             else:
                 pat_regions = self.patient(id).list_regions(use_mapping=use_mapping)
-                if len(np.intersect1d(regions, pat_regions)) != 0:
+                if len(np.intersect1d(region, pat_regions)) != 0:
                     return True
                 else:
                     return False
@@ -165,6 +171,10 @@ class DICOMDataset(Dataset):
         except pd.errors.EmptyDataError:
             logging.info(f"Index-errors empty for dataset '{self}'.")
             self.__index_errors = pd.DataFrame(columns=ERRORS_COLS.keys())
+
+    def __load_region_dups(self) -> Optional[pd.DataFrame]:
+        filepath = os.path.join(self.__path, 'region-dups.csv')
+        self.__region_dups = pd.read_csv(filepath)
 
     def __load_region_map(self) -> Optional[RegionMap]:
         filepath = os.path.join(self.__path, 'region-map.csv')

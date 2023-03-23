@@ -19,7 +19,7 @@ from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
 from mymi.models import replace_checkpoint_alias
 from mymi.models.networks import UNet3D
-from mymi.postprocessing import get_batch_largest_cc
+from mymi.postprocessing import largest_cc_4D
 from mymi import types
 
 class Segmenter(pl.LightningModule):
@@ -42,18 +42,6 @@ class Segmenter(pl.LightningModule):
         pretrained_model = pretrained_model.network if pretrained_model else None
         self.__network = UNet3D(pretrained_model=pretrained_model)
         self.__spacing = spacing
-        self.__first_training_step = True
-
-    def configure_sharded_model(self):
-        auto_wrap_policy = partial(default_auto_wrap_policy, min_num_params=10)
-        self.__network = auto_wrap(self.__network, auto_wrap_policy=auto_wrap_policy)
-        # 'auto_wrap_policy' causes recursive layer wrapping using custom policy, 'device_id' ensures sharding happens
-        # on GPU.
-        # self.__network = FSDP(
-        #     self.__network,
-        #     auto_wrap_policy=auto_wrap_policy,
-        #     cpu_offload=CPUOffload(offload_params=True),
-        #     device_id=torch.distributed.get_rank())
 
     @property
     def network(self) -> nn.Module:
@@ -132,18 +120,13 @@ class Segmenter(pl.LightningModule):
         
         # Apply postprocessing.
         pred = pred.cpu().numpy().astype(np.bool_)
-        pred = get_batch_largest_cc(pred)
+        pred = largest_cc_4D(pred)
 
         return pred
 
     def training_step(self, batch, _):
-        print(self.learning_rate)
         # Forward pass.
-        _, x, y = batch
-        if self.__first_training_step:
-            print(self.__network)
-            self.__first_training_step = False
-        # y_hat = checkpoint_sequential(self.__network, 10, x)
+        _, x, y, _, _ = batch
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y)
 

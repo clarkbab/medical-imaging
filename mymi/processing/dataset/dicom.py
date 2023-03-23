@@ -20,7 +20,7 @@ def convert_to_nifti(
     regions: PatientRegions = 'all',
     anonymise: bool = False) -> None:
     # Create NIFTI dataset.
-    nifti_set = recreate_nifti(dataset.name)
+    nifti_set = recreate_nifti(dataset)
 
     logging.info(f"Converting dataset '{dataset}' to dataset '{nifti_set}', with regions '{regions}' and anonymise '{anonymise}'.")
 
@@ -68,7 +68,7 @@ def convert_to_nifti(
 
         # Create RTDOSE NIFTI.
         try:
-            patient = dataset.patient(pat, load_default_rtdose=True) 
+            patient = dataset.patient(pat) 
             dose_data = patient.dose_data
             img = Nifti1Image(dose_data, affine)
             filepath = os.path.join(nifti_set.path, 'data', 'dose', filename)

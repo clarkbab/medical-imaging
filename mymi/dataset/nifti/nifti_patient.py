@@ -135,7 +135,7 @@ class NIFTIPatient:
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
         region: PatientRegions = 'all') -> OrderedDict:
-        regions = region_to_list(region)
+        regions = arg_to_list(region, str, literals={ 'all': self.list_regions(labels=labels)})
 
         data = {}
         for region in regions:
@@ -143,7 +143,6 @@ class NIFTIPatient:
                 raise ValueError(f"Requested region '{region}' not a valid internal region.")
             if not self.has_region(region, labels=labels):
                 raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
-            
             path = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nii.gz')
             img = nib.load(path)
             rdata = img.get_fdata()

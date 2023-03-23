@@ -9,20 +9,78 @@ from typing import List, Optional, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi import dataset as ds
+from mymi.dataset import TrainingDataset
 from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
-from mymi.plotting.dataset.training import plot_sample_regions
 from mymi.postprocessing import get_object, one_hot_encode
-from mymi.regions import RegionNames
-from mymi import types
+from mymi.regions import RegionNames, region_to_list
+from mymi.types import PatientRegions
 from mymi.utils import append_row, encode
+
+def get_ct_summary(dataset: str) -> pd.DataFrame:
+    logging.info(f"Creating CT summary for dataset '{dataset}'.")
+
+    # Get patients.
+    set = TrainingDataset(dataset)
+    sample_ids = set.list_samples()
+
+    cols = {
+        'dataset': str,
+        'sample-id': str,
+        'axis': int,
+        'size': int,
+        'spacing': float,
+        'fov': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for sample_id in tqdm(sample_ids):
+        # Load values.
+        sample = set.sample(sample_id)
+        size = sample.size
+        spacing = sample.spacing
+
+        # Calculate FOV.
+        fov = np.array(size) * spacing
+
+        for axis in range(len(size)):
+            data = {
+                'dataset': dataset,
+                'sample-id': sample_id,
+                'axis': axis,
+                'size': size[axis],
+                'spacing': spacing[axis],
+                'fov': fov[axis]
+            }
+            df = append_row(df, data)
+
+    # Set column types as 'append' crushes them.
+    df = df.astype(cols)
+
+    return df
+
+def create_ct_summary(dataset: str) -> None:
+    # Get summary.
+    df = get_ct_summary(dataset)
+
+    # Save summary.
+    set = TrainingDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
+def load_ct_summary(dataset: str) -> pd.DataFrame:
+    set = TrainingDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
+    return pd.read_csv(filepath)
 
 def region_count(
     dataset: str,
     clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    regions: PatientRegions = 'all') -> pd.DataFrame:
     # List regions.
     set = ds.get(dataset, 'training')
     regions_df = set.list_regions(clear_cache=clear_cache)
@@ -56,7 +114,7 @@ def region_count(
 def create_region_count_report(
     dataset: str,
     clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     # Generate counts report.
     set = ds.get(dataset, 'training')
     count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
@@ -67,7 +125,7 @@ def create_region_count_report(
 
 def create_region_figures(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     # Get dataset.
     set = ds.get(dataset, 'training')
 
@@ -255,7 +313,7 @@ def get_object_summary(
 
 def create_ct_figures(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     # Get dataset.
     set = ds.get(dataset, 'training')
 

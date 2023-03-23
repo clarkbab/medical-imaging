@@ -16,6 +16,10 @@ def dice(
     if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'dice' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
 
+    # 'SimpleITK' filter doesn't handle empty a/b.
+    if a.sum() == 0 and b.sum() == 0:
+        return 1.0
+
     # Convert types for SimpleITK.
     a = a.astype(np.int64)
     b = b.astype(np.int64)

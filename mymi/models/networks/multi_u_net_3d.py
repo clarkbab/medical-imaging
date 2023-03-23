@@ -1,8 +1,8 @@
-from functools import reduce
+from functools import partial, reduce
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.functional import pad
+from torch.nn.functional import pad, sigmoid, softmax
 from torch.utils.checkpoint import checkpoint
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from typing import Dict, List, Literal, Optional
@@ -13,7 +13,7 @@ from mymi import logging
 CUDA_INT_MAX = 2 ** 31 - 1
 PRINT_ENABLED = False
 
-class MemoryTestSubmodule(nn.Module):
+class Submodule(nn.Module):
     def __init__(
         self,
         name: str,
@@ -33,6 +33,10 @@ class MemoryTestSubmodule(nn.Module):
         self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.values())
         self.__residual_input_layer_keys = list(residual_input_layers.keys())
         self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.values())
+
+    @property
+    def name(self) -> str:
+        return self.__name
 
     def __pad_upsampled(self, x, shape):
         if x.shape != shape: 
@@ -79,7 +83,18 @@ class MemoryTestSubmodule(nn.Module):
             n_voxels = reduce(np.multiply, x.shape)
             if n_voxels > CUDA_INT_MAX:
                 logging.error(f"Feature map of size '{x.shape}' (n_voxels={n_voxels}) has more voxels than 'CUDA_INT_MAX' ({CUDA_INT_MAX}) voxels.")
+            # x_in = x.detach().cpu().numpy()
             x = layer(x)
+            # if torch.any(torch.isnan(x)).item():
+            #     print(f"Layer {layer.name} has nan output.")
+            #     import os
+            #     from mymi import config
+            #     filepath = os.path.join(config.directories.temp, f'{i}-input.npy')
+            #     np.save(filepath, x_in)
+            #     filepath = os.path.join(config.directories.temp, f'{i}-output.npy')
+            #     np.save(filepath, x.detach().cpu().numpy())
+            #     filepath = os.path.join(config.directories.temp, f'{i}-layer.ckpt')
+            #     torch.save(layer.state_dict(), filepath)
 
             # Add 'x' to 'x_res'.
             if i in self.__residual_outputs:
@@ -99,6 +114,77 @@ class MemoryTestSubmodule(nn.Module):
 
         return x, *x_res
 
+class HybridOutput(nn.Module):
+    def __init__(
+        self,
+        sigmoid_channels: List[int] = [],
+        softmax_channels: List[int] = []) -> None:
+        if len(softmax_channels) == 1:
+            raise ValueError(f"'softmax_channels' must be 0 or greater than 1, otherwise channel output will always be 1.")
+        self.__sigmoid_channels = sigmoid_channels
+        self.__softmax_channels = softmax_channels
+
+    def forward(self, x):
+        n_channels = len(self.__sigmoid_channels) + len(self.__softmax_channels)
+        if x.shape[1] != n_channels:
+            raise ValueError(f"'x' channel dimension ({x.shape[1]}) should equal number of requested channels ({n_channels}).")
+
+        # Apply sigmoid.
+        x_sig = x[:, self.__sigmoid_channels]
+        x_sig = sigmoid(x_sig)
+
+        # Apply softmax.
+        x_soft = x[:, self.__softmax_channels]
+        x_soft = softmax(x_soft, dim=1)
+
+        # Create output.
+        x = torch.zeros_like(x)
+        x[:, self.__sigmoid_channels] = x_sig
+        x[:, self.__softmax_channels] = x_soft
+
+        return x
+
+class SplitConv3D(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        kernel_size: int = 3,
+        n_split_channels: int = 1,
+        groups: int = 1,
+        padding: int = 1,
+        stride: int = 1) -> None:
+        super().__init__()
+        assert in_channels % n_split_channels == 0
+        assert out_channels % n_split_channels == 0
+
+        self.__in_channels = in_channels
+        self.__split_size = self.__in_channels // n_split_channels
+
+        # Create split layers.
+        in_channels = self.__in_channels // n_split_channels
+        out_channels = out_channels // n_split_channels
+        layers = []
+        for _ in range(n_split_channels):
+            layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups)
+            layers.append(layer)
+        self.__layers = nn.ParameterList(layers)
+
+    def forward(self, x) -> torch.Tensor:
+        # Split tensor along channel dimension.
+        assert x.shape[1] == self.__in_channels
+        xs = list(torch.split(x, self.__split_size, dim=1))
+
+        # Process each split.
+        for i, x in enumerate(xs):
+            print(f"Split {i}: {x.shape}.")
+            xs[i] = self.__layers[i](x)
+
+        # Concatenate results.
+        x = torch.cat(xs, dim=1)
+
+        return x
+
 class LayerWrapper(nn.Module):
     def __init__(
         self,
@@ -109,6 +195,10 @@ class LayerWrapper(nn.Module):
         self.__print_enabled = print_enabled
         self.__layer = layer
         self.__name = name
+
+    @property
+    def name(self) -> str:
+        return f"{self.__name} ({self.__layer})"
 
     @property
     def out_channels(self) -> Optional[int]:
@@ -136,13 +226,16 @@ class MultiUNet3D(nn.Module):
     def __init__(
         self,
         n_output_channels: int,
-        ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-fairscale-offload'] = 'ckpt-fairscale-offload',
+        ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-fairscale-offload'] = 'baseline',
         ckpt_mode: Literal['', '-level'] = '',
-        halve_channels: bool = True,
-        n_ckpts: int = 23,
-        n_gpus: int = 1) -> None:
+        double_groups: bool = False,
+        halve_channels: bool = False,
+        n_ckpts: int = 22,
+        n_gpus: int = 1,
+        n_split_channels: int = 1) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
+        assert not ((double_groups and halve_channels) or (double_groups and n_split_channels > 1))
 
         # Set mode flags. 
         if ckpt_library == 'baseline':
@@ -183,10 +276,19 @@ class MultiUNet3D(nn.Module):
             [19, 42],
             [26, 35]
         ] 
+        # residuals = [
+        #     [3, 40],
+        #     [8, 35],
+        #     [13, 30],
+        #     [18, 25]
+        # ]
         if halve_channels:
             residual_halves = [     # Halve the number of channels for residual output and upsampled input.
                 [5, 56]
             ]
+            # residual_halves = [
+            #     [3, 40]
+            # ]
         else:
             residual_halves = []
         levels = [
@@ -230,11 +332,22 @@ class MultiUNet3D(nn.Module):
             in_channels = 2 ** (self.__n_up_levels - i) * n_features
             out_channels = 2 ** (self.__n_up_levels - i - 1) * n_features
             self.__layers.append(nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
-            if i == 3 and halve_channels:
-                # Halved the number of residual features maps passed on both residual and upsampling pathways.
-                # See: https://github.com/pytorch/pytorch/issues/95024.
-                in_channels = 32
-            self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_2))
+            # Perform some hacks  (largest features maps are too big for cuDNN 32-bit indexing).
+            module = nn.Conv3d
+            groups = 1
+            if i == 3:
+                if halve_channels:
+                    # Halved the number of residual features maps passed on both residual and upsampling pathways.
+                    # See: https://github.com/pytorch/pytorch/issues/95024.
+                    in_channels = 32
+                if double_groups:
+                    # This is equivalent to performing 3D conv operation of half the number of channels in parallel. 
+                    # But the implementation doesn't split tensors, so we still have the indexing issue.
+                    groups = 2
+                if n_split_channels > 1:
+                    # Manually split 3D conv operation to reduce tensor size.
+                    module = partial(SplitConv3D, n_split_channels=n_split_channels)
+            self.__layers.append(module(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1, groups=groups).to(self.__device_2))
             self.__layers.append(nn.InstanceNorm3d(out_channels))
             self.__layers.append(nn.ReLU())
             self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_3))
@@ -253,6 +366,7 @@ class MultiUNet3D(nn.Module):
         # Get checkpoint locations.
         n_layers = len(self.__layers)
         assert n_layers == 64
+        # assert n_layers == 46
         if ckpt_mode == '':
             ckpts = get_checkpoints(n_layers, n_ckpts)
         elif ckpt_mode == '-level':
@@ -281,7 +395,7 @@ class MultiUNet3D(nn.Module):
                         in_channels = self.__layers[out_layer].out_channels
                         out_layer -= 1
                     out_channels = in_channels // 2
-                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
                     residual_output_layers[res_output - start_layer] = res_layer
                 if res_input is not None and res_input >= start_layer and res_input <= end_layer:
                     out_layer = res_output
@@ -290,11 +404,11 @@ class MultiUNet3D(nn.Module):
                         in_channels = self.__layers[out_layer].out_channels
                         out_layer -= 1
                     out_channels = in_channels // 2
-                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to('cuda:0')
+                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
                     residual_input_layers[res_input - start_layer] = res_layer
 
             layers = self.__layers[start_layer:end_layer + 1]
-            module = MemoryTestSubmodule(str(i), layers, residual_outputs=residual_outputs, residual_output_layers=residual_output_layers, residual_inputs=residual_inputs, residual_input_layers=residual_input_layers)
+            module = Submodule(str(i), layers, residual_outputs=residual_outputs, residual_output_layers=residual_output_layers, residual_inputs=residual_inputs, residual_input_layers=residual_input_layers)
             if self.__use_fairscale_ckpt:
                 module = checkpoint_wrapper(module, offload_to_cpu=self.__use_fairscale_cpu_offload)
             self.__submodules.append(module)
@@ -309,7 +423,7 @@ class MultiUNet3D(nn.Module):
 
     def forward(self, x):
         x_res = []
-        for module in self.__submodules:
+        for i, module in enumerate(self.__submodules):
             if self.__use_pytorch_ckpt:
                 dummy_arg = torch.Tensor()
                 dummy_arg.requires_grad = True

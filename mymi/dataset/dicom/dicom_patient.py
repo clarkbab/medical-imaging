@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 from typing import Any, List, Optional
 
@@ -16,6 +17,7 @@ class DICOMPatient:
         dataset: 'DICOMDataset',
         id: types.PatientID,
         ct_from: Optional['DICOMPatient'] = None,
+        region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None,
         trimmed: bool = False):
         if trimmed:
@@ -29,6 +31,7 @@ class DICOMPatient:
         self.__default_study = None         # Lazy-loaded.
         self.__dataset = dataset
         self.__id = str(id)
+        self.__region_dups = region_dups
         self.__region_map = region_map
 
         # Get patient index.
@@ -141,6 +144,10 @@ class DICOMPatient:
         return getattr(self.get_cts()[0], 'PatientSize', '')
 
     @property
+    def study_date(self) -> datetime:
+        return self.default_rtstruct.ref_ct.study_date
+
+    @property
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
@@ -203,7 +210,7 @@ class DICOMPatient:
     def study(
         self,
         id: str) -> DICOMStudy:
-        return DICOMStudy(self, id, region_map=self.__region_map)
+        return DICOMStudy(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
         self.__default_rtplan = self.default_study.default_rtplan

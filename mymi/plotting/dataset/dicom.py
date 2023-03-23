@@ -68,7 +68,7 @@ def plot_model_prediction(
         models = [models]
     
     # Load data.
-    patient = DICOMDataset(dataset).patient(pat_id, load_default_rtdose=show_dose)
+    patient = DICOMDataset(dataset).patient(pat_id)
     ct_data = patient.ct_data
     region_data = patient.region_data(region=region)[region]
     spacing = patient.ct_spacing

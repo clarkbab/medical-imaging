@@ -23,7 +23,7 @@ class DiceWithFocalLoss(nn.Module):
         weights: Optional[torch.Tensor] = None,
         reduction: Literal['mean', 'sum'] = 'mean') -> float:
         """
-        returns: the TverskyWithFocal loss.
+        returns: the DiceWithFocal loss.
         args:
             pred: the B x C x X x Y x Z batch of network predictions probabilities.
             label: the the B x C x X x Y x Z batch of binary labels.
@@ -41,11 +41,13 @@ class DiceWithFocalLoss(nn.Module):
             label = label.bool()
         if mask is not None:
             assert mask.shape == pred.shape[:2]
+        batch_size = pred.shape[0]
         if weights is not None:
             assert weights.shape == pred.shape[:2]
-            weight_sum = weights.sum().round(decimals=3)
-            if weight_sum != 1:
-                raise ValueError(f"Weights must sum to 1. Got '{weight_sum}' (weights={weights}).")
+            for b in range(batch_size):
+                weight_sum = weights[b].sum().round(decimals=3)
+                if weight_sum != 1:
+                    raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         
         # Get hybrid loss.
         loss = self.__dice(pred, label, mask=mask, weights=weights, reduction=reduction) + self.__lam * self.__focal(pred, label, mask=mask, weights=weights, reduction=reduction)

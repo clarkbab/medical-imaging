@@ -1,5 +1,5 @@
 from numpy.lib.arraysetops import intersect1d
-from mymi.types.types import PatientRegions
+from mymi.types import ImageSize3D, ImageSpacing3D, PatientRegions
 import numpy as np
 import os
 import pandas as pd
@@ -46,16 +46,12 @@ class TrainingSample:
         return self.__index
 
     @property
-    def spacing(self) -> types.ImageSpacing3D:
-        return self.__spacing
-
-    def list_regions(self) -> List[str]:
-        return list(sorted(self.index.region))
-
-    def has_region(
-        self,
-        region: str) -> bool:
-        return region in self.list_regions()
+    def input(self) -> np.ndarray:
+        # Load the input data.
+        filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}.npz')
+        data = np.load(filepath)['data']
+        data = data.astype(np.float32)
+        return data
 
     @property
     def origin(self) -> Tuple:
@@ -64,16 +60,30 @@ class TrainingSample:
         return (record['origin-dataset'], record['origin-patient-id'])
 
     @property
-    def input(self) -> np.ndarray:
-        # Load the input data.
-        filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}.npz')
-        data = np.load(filepath)['data']
-        data = data.astype(np.float32)
-        return data
+    def size(self) -> ImageSize3D:
+        return self.input.shape
+
+    @property
+    def spacing(self) -> ImageSpacing3D:
+        return self.__spacing
+
+    def list_regions(
+        self,
+        include_empty: bool = False) -> List[str]:
+        # Don't list 'empty' regions.
+        df = self.index
+        if 'empty' in df and not include_empty:
+            df = df[~df['empty']]
+        return list(sorted(df.region))
+
+    def has_region(
+        self,
+        region: str) -> bool:
+        return region in self.list_regions()
 
     def label(
         self,
-        region: types.PatientRegions = 'all') -> Dict[str, np.ndarray]:
+        region: PatientRegions = 'all') -> Dict[str, np.ndarray]:
         regions = arg_to_list(region, str, literals={ 'all': self.list_regions() })
 
         # Load the label data.
@@ -83,21 +93,18 @@ class TrainingSample:
             if not os.path.exists(filepath):
                 raise ValueError(f"Region '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']
-            label = label.astype(np.float32)
             data[region] = label
 
         return data
 
     def pair(
         self,
-        region: types.PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        region: PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         return self.input, self.label(region=region)
 
     def __load_index(self) -> None:
         index = self.__dataset.index
         index = index[index['sample-id'] == self.__id]
-        # if 'empty' in index.columns:
-        #     index = index[~index['empty']]
         assert len(index == 1)
         self.__index = index
 

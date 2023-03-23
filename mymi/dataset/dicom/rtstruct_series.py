@@ -13,10 +13,12 @@ class RTSTRUCTSeries(DICOMSeries):
         self,
         study: 'DICOMStudy',
         id: SeriesInstanceUID,
+        region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None) -> None:
         self.__default_rtstruct = None      # Lazy-loaded.
         self.__global_id = f"{study} - {id}"
         self.__id = id
+        self.__region_dups = region_dups
         self.__region_map = region_map
         self.__study = study
 
@@ -61,7 +63,7 @@ class RTSTRUCTSeries(DICOMSeries):
     def rtstruct(
         self,
         id: SOPInstanceUID) -> RTSTRUCT:
-        return RTSTRUCT(self, id, region_map=self.__region_map)
+        return RTSTRUCT(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
     def __check_index(self) -> None:
         if len(self.__index) == 0:

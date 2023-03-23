@@ -16,10 +16,12 @@ class RTSTRUCT(DICOMFile):
         self,
         series: 'RTSTRUCTSeries',
         id: SOPInstanceUID,
+        region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None):
         self.__global_id = f"{series} - {id}"
         self.__id = id
         self.__ref_ct = None        # Lazy-loaded.
+        self.__region_dups = region_dups
         self.__region_map = region_map
         self.__series = series
 

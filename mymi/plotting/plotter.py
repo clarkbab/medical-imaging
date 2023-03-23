@@ -16,14 +16,14 @@ from typing import Callable, Dict, List, Literal, Optional, Sequence, Tuple, Uni
 from mymi import dataset
 from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
-from mymi.postprocessing import get_largest_cc
+from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size, is_region
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, crop_box
 from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSize3D, ImageSpacing3D, Point3D
 from mymi.utils import arg_to_list
 
-DEFAULT_FONT_SIZE = 15
+DEFAULT_FONT_SIZE = 8
 
 def __plot_region_data(
     data: Dict[str, np.ndarray],
@@ -73,7 +73,7 @@ def __plot_region_data(
 
         # Plot connected extent.
         if connected_extent:
-            extent = get_extent(get_largest_cc(data[region]))
+            extent = get_extent(largest_cc_3D(data[region]))
             if __box_in_plane(extent, view, slice_idx):
                 __plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
 
@@ -85,7 +85,7 @@ def __plot_region_data(
 
         # Get largest component.
         if cca:
-            slice_data = get_largest_cc(slice_data)
+            slice_data = largest_cc_3D(slice_data)
 
         # Plot region.
         ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_origin(view))
@@ -281,7 +281,7 @@ def plot_region(
     crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     ct_data: Optional[np.ndarray] = None,
-    window: Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]] = 'tissue',
+    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     dose_alpha: float = 0.3,
     dose_data: Optional[np.ndarray] = None,
     dose_legend_size: float = 0.03,
@@ -293,6 +293,7 @@ def plot_region(
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_show_all_regions: bool = False,
     linestyle_region: bool = 'solid',
+    norm: Optional[Tuple[float, float]] = None,
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,            # All data passed to 'region_data' is plotted.
@@ -371,6 +372,11 @@ def plot_region(
             region_data = dict(((r, postproc(d)) for r, d in region_data.items()))
 
     if ct_data is not None:
+        # Perform any normalisation.
+        if norm is not None:
+            mean, std_dev = norm
+
+            
         # Load CT slice.
         ct_slice_data = __get_slice_data(ct_data, slice_idx, view)
         if dose_data is not None:
@@ -737,6 +743,167 @@ def plot_distribution(
     plt.ylabel('Frequency')
     plt.show()
 
+def plot_multi_segmenter_prediction(
+    id: str,
+    spacing: ImageSpacing3D,
+    pred_data: Dict[str, np.ndarray],
+    alpha_pred: float = 0.5,
+    alpha_region: float = 0.5,
+    aspect: float = None,
+    ax: Optional[matplotlib.axes.Axes] = None,
+    centre_of: Optional[str] = None,
+    colour: Optional[Union[str, List[str]]] = None,
+    colour_match: bool = False,
+    crop: Optional[Union[str, Box2D]] = None,
+    crop_margin: float = 100,
+    ct_data: Optional[np.ndarray] = None,
+    extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
+    figsize: Tuple[float, float] = (8, 8),
+    fontsize: float = DEFAULT_FONT_SIZE,
+    latex: bool = False,
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    linestyle_pred: str = 'solid',
+    linestyle_region: str = 'solid',
+    region_data: Optional[Dict[str, np.ndarray]] = None,
+    savepath: Optional[str] = None,
+    show: bool = True,
+    show_legend: bool = True,
+    show_pred: bool = True,
+    show_pred_contour: bool = True,
+    show_pred_extent: bool = True,
+    show_region_extent: bool = True,
+    slice_idx: Optional[int] = None,
+    view: Axis = 0,
+    **kwargs: dict) -> None:
+    __assert_slice_idx(centre_of, extent_of, slice_idx)
+    model_names = tuple(pred_data.keys())
+    n_models = len(model_names)
+    n_regions = len(region_data.keys()) if region_data is not None else 0
+
+    # Create plot figure/axis.
+    if ax is None:
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+
+    # Get unique colours.
+    if colour is None:
+        if colour_match:
+            n_colours = np.max((n_regions, n_models))
+        else:
+            n_colours = n_regions + n_models
+        colours = sns.color_palette('colorblind', n_colours)
+    else:
+        colours = arg_to_list(colour, [str, tuple])
+
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
+
+    # Print prediction summary info.
+    for model_name, pred in pred_data.items():
+        logging.info(f"""
+Prediction: {model_name}""")
+        if pred.sum() != 0:
+            volume_vox = pred.sum()
+            volume_mm3 = volume_vox * np.product(spacing)
+            logging.info(f"""
+    Volume (vox): {volume_vox}
+    Volume (mm^3): {volume_mm3:.2f}""")
+        else:
+            logging.info(f"""
+    Empty""")
+
+    if centre_of is not None:
+        # Get 'slice_idx' at centre of data.
+        label = region_data[centre_of] if type(centre_of) == str else centre_of
+        extent_centre = get_extent_centre(label)
+        slice_idx = extent_centre[view]
+
+    if extent_of is not None:
+        # Get 'slice_idx' at min/max extent of data.
+        label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
+        extent_end = 0 if extent_of[1] == 'min' else 1
+        extent = get_extent(label)
+        slice_idx = extent[extent_end][view]
+
+    # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
+    size = ct_data.shape
+    region_colours = colours if colour_match else colours[:n_regions]
+    plot_region(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+
+    if crop is not None:
+        # Convert 'crop' to 'Box2D' type.
+        if type(crop) == str:
+            crop = __get_region_crop(region_data[crop], crop_margin, spacing, view)     # Crop was 'region_data' key.
+        elif type(crop) == np.ndarray:
+            crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
+        else:
+            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+
+    # Plot predictions.
+    for i in range(n_models):
+        model_name = model_names[i]
+        pred = pred_data[model_name]
+        colour = colours[i] if colour_match else colours[n_regions + i]
+
+        if pred.sum() != 0 and show_pred:
+            # Get aspect ratio.
+            if not aspect:
+                aspect = __get_aspect_ratio(view, spacing) 
+
+            # Get slice data.
+            pred_slice_data = __get_slice_data(pred, slice_idx, view)
+
+            # Crop the image.
+            if crop:
+                pred_slice_data = crop_2D(pred_slice_data, __reverse_box_coords_2D(crop))
+
+            # Plot prediction.
+            if pred_slice_data.sum() != 0: 
+                cmap = ListedColormap(((1, 1, 1, 0), colour))
+                ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+                ax.plot(0, 0, c=colour, label=model_name)
+                if show_pred_contour:
+                    ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+
+        # Plot prediction extent.
+        if pred.sum() != 0 and show_pred_extent:
+            # Get prediction extent.
+            pred_extent = get_extent(pred)
+
+            # Plot if extent box is in view.
+            label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
+            __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+
+    # Show legend.
+    if show_legend:
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        for l in plt_legend.get_lines():
+            l.set_linewidth(8)
+
+    # Save plot to disk.
+    if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
+
+    if show:
+        plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })
+
 def plot_segmenter_prediction(
     id: str,
     spacing: ImageSpacing3D,
@@ -1060,23 +1227,24 @@ def plot_dataframe_old(
     x: str = None,
     y: str = None,
     hue: str = None,
-    y_lim: Tuple[Optional[int], Optional[int]] = (None, None),
-    inner: str ='quartiles',
     annotate_outliers: bool = False,
-    annotation_model_offset=35,
+    annotation_overlap_offset: float = 25,
+    annotation_model_offset: float = 35,
+    debug: bool = False,
+    exclude_x: Union[str, List[str]] = None,
     fontsize: float = DEFAULT_FONT_SIZE,
     hue_order: Optional[List[str]] = None,
+    include_x: Union[str, List[str]] = None,
+    inner: str = 'quartiles',
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'best',
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
     n_col: int = 6,
     offset=5,
+    overlap_min_diff: bool = None,
     point_size: float = 5,
     point_style: str = 'strip',
-    overlap_min_diff=None,
-    annotation_overlap_offset=25,
-    debug=False,
     row_height: int = 6,
     row_width: int = 18,
     savepath: Optional[str] = None,
@@ -1088,8 +1256,7 @@ def plot_dataframe_old(
     style: Literal['box', 'violin'] = 'box',
     x_label_rot: float = 0,
     y_label: str = '',
-    include_x: Union[str, List[str]] = None,
-    exclude_x: Union[str, List[str]] = None):
+    y_lim: Tuple[Optional[int], Optional[int]] = (None, None)):
     df = data
 
     # Include/exclude.
@@ -1400,17 +1567,18 @@ def plot_dataframe(
     x: Optional[str] = None,
     y: Optional[str] = None,
     hue: Optional[str] = None,
-    box_line_colour: str = 'black',
-    box_line_width: float = 1,
+    hue_hatches: Optional[List[str]] = None,
     hue_order: Optional[List[str]] = None,
-    include_x: Optional[Union[str, List[str]]] = None,
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
     hue_palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
+    include_x: Optional[Union[str, List[str]]] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
+    linecolour: str = 'black',
+    linewidth: float = 0.5,
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
     n_col: Optional[int] = None,
@@ -1428,6 +1596,7 @@ def plot_dataframe(
     show_x_tick_label_counts: bool = True,
     stats_index: Optional[Union[str, List[str]]] = None,
     style: Optional[Literal['box', 'violin']] = 'box',
+    ticklength: float = 0.5,
     x_label: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
@@ -1554,7 +1723,7 @@ def plot_dataframe(
                         continue
                     x_pos = x_data.iloc[0]['x_pos']
                     if style == 'box':
-                        axs[i].boxplot(x_data[y], boxprops=dict(color=box_line_colour, linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width))
+                        axs[i].boxplot(x_data[y], boxprops=dict(color=linecolour, linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
                     elif style == 'violin':
                         axs[i].violinplot(x_data[y], positions=[x_pos])
                 else:
@@ -1567,9 +1736,14 @@ def plot_dataframe(
                         hue_pos = hue_data.iloc[0]['x_pos']
 
                         # Plot box.
+                        hatch = hue_hatches[k] if hue_hatches is not None else None
                         if style == 'box':
-                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=box_line_colour, facecolor=hue_palette[k], linewidth=box_line_width), capprops=dict(color=box_line_colour, linewidth=box_line_width), flierprops=dict(color=box_line_colour, linewidth=box_line_width, marker='D', markeredgecolor=box_line_colour), medianprops=dict(color=box_line_colour, linewidth=box_line_width), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=box_line_colour, linewidth=box_line_width), widths=hue_width)
+                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_palette[k], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
                             artist_labels.append((hue_name, res['boxes'][0]))
+                            # res['boxes'][0].set(hatch=hatch)
+                            res['boxes'][0].set_hatch(hatch)
+                            # res['boxes'][0].set_edgecolor('white')
+                            # res['boxes'][0].set(facecolor='white')
                         elif style == 'violin':
                             res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
                             artist_labels.append((hue_name, res['bodies']))
@@ -1584,14 +1758,14 @@ def plot_dataframe(
             if show_points:
                 if hue is None:
                     x_data = row_data[row_data[x] == x_val]
-                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
                 else:
                     artist_labels = []
                     for j, hue_name in enumerate(hue_order_f):
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
                             continue
-                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors='black', linewidth=0.5, s=point_size, zorder=100)
+                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
                         artist_labels.append((hue_name, res))
 
                     if not legend_added:
@@ -1758,6 +1932,12 @@ def plot_dataframe(
             axs[i].set_xticklabels([])
 
         axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
+
+        # Set axis spine/tick linewidths and tick lengths.
+        spines = ['top', 'bottom','left','right']
+        for spine in spines:
+            axs[i].spines[spine].set_linewidth(linewidth)
+        axs[i].tick_params(which='both', length=ticklength, width=linewidth)
 
     # Save plot to disk.
     if savepath is not None:

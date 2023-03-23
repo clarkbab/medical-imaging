@@ -33,7 +33,7 @@ patient-id,region,comment
 103-1,Brain,"missing region,added region"
 106-0,Brain,missing slices
 106-1,Brain,missing slices
-110-1,Brain ,missing region
+110-1,Brain,missing region
 111-1,Brain,missing region
 12-0,Brain,"missing slices, missing region"
 12-1,Brain,"missing slices, missing region"
@@ -239,9 +239,6 @@ patient-id,region,comment
 34-1,Glnd_Submand_R,added region
 49-1,Glnd_Submand_R,added region
 62-1,Glnd_Submand_R,missing slices
-13-1,Lens_L,translated region
-58-1,Lens_L,translated region
-69-1,Lens_L,translated region
 100-1,Lens_R,missing region
 108-1,Lens_R,translated region
 13-1,Lens_R,translated region
@@ -252,13 +249,6 @@ patient-id,region,comment
 13-1,Lens_L,translated region
 58-1,Lens_L,translated region
 69-1,Lens_L,translated region
-100-1,Lens_R,missing region
-108-1,Lens_R,translated region
-13-1,Lens_R,translated region
-52-1,Lens_R,added region
-58-1,Lens_R,translated region
-59-1,Lens_R,missing slices
-69-1,Lens_R,translated region
 103-0,OpticChiasm,added region
 14-0,OpticChiasm,added region
 14-1,OpticChiasm,added region

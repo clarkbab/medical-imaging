@@ -3,22 +3,26 @@ import numpy as np
 import os
 import pandas as pd
 import torch
+from torch.nn.functional import one_hot
 from tqdm import tqdm
-from typing import List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from ..prediction import get_localiser_prediction as get_localiser_prediction_base
 from mymi import config
 from mymi import dataset as ds
+from mymi.dataset import TrainingDataset
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
-from mymi.loaders import Loader
+from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.models import replace_checkpoint_alias
-from mymi.models.systems import Localiser, Segmenter
+from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
+from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
 from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import crop_foreground_3D, crop_or_pad_3D, resample_3D
+from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
 from mymi import types
 from mymi.utils import Timer, append_row, arg_broadcast, arg_to_list, encode, load_csv
+
+from ..prediction import get_localiser_prediction as get_localiser_prediction_base
 
 def get_localiser_prediction(
     dataset: str,
@@ -218,6 +222,65 @@ def load_localiser_centre(
 
     return ext_centre
 
+def get_multi_segmenter_prediction(
+    dataset: str,
+    pat_id: types.PatientID,
+    model: Union[types.ModelName, types.Model],
+    model_spacing: types.ImageSpacing3D,
+    device: torch.device = torch.device('cpu')) -> np.ndarray:
+
+    # Load model.
+    if type(model) == tuple:
+        model = MultiSegmenter.load(*model)
+    model.eval()
+    model.to(device)
+
+    # Load patient CT data and spacing.
+    set = NIFTIDataset(dataset)
+    patient = set.patient(pat_id)
+    input = patient.ct_data
+    input_spacing = patient.ct_spacing
+
+    # Resample input to model spacing.
+    input_size = input.shape
+    input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
+
+    # Apply 'naive' cropping.
+    crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+    crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
+    resampled_input_size = input.shape
+    input = centre_crop_3D(input, crop)
+
+    # Pass image to model.
+    input = torch.Tensor(input)
+    input = input.unsqueeze(0)      # Add 'batch' dimension.
+    input = input.unsqueeze(1)      # Add 'channel' dimension.
+    input = input.float()
+    input = input.to(device)
+    with torch.no_grad():
+        pred = model(input)
+    pred = pred.squeeze(0)          # Remove 'batch' dimension.
+
+    # Apply thresholding/one-hot-encoding.
+    pred = pred.argmax(dim=0)
+    pred = one_hot(pred)
+    pred = pred.moveaxis(-1, 0)
+    
+    # Apply postprocessing.
+    pred = pred.cpu().numpy().astype(np.bool_)
+    pred = largest_cc_4D(pred)
+
+    # Crop/pad to the resampled size, i.e. before 'naive' cropping.
+    pred = centre_pad_4D(pred, resampled_input_size)
+
+    # Resample to original spacing.
+    pred = resample_4D(pred, spacing=model_spacing, output_spacing=input_spacing)
+    # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
+    crop_box = ((0, 0, 0), input_size)
+    pred = crop_or_pad_4D(pred, crop_box)
+
+    return pred
+
 def get_segmenter_prediction(
     dataset: str,
     pat_id: types.PatientID,
@@ -226,6 +289,7 @@ def get_segmenter_prediction(
     probs: bool = False,
     seg_spacing: types.ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
+
     # Load model.
     if type(segmenter) == tuple:
         segmenter = Segmenter.load(*segmenter)
@@ -278,6 +342,49 @@ def get_segmenter_prediction(
     pred = crop_or_pad_3D(pred, crop_box)
 
     return pred
+
+def create_multi_segmenter_prediction(
+    dataset: Union[str, List[str]],
+    pat_id: Union[str, List[str]],
+    region: Union[str, List[str]],
+    model: Union[types.ModelName, types.Model],
+    model_spacing: types.ImageSpacing3D,
+    device: Optional[torch.device] = None,
+    savepath: Optional[str] = None,
+    **kwargs: Dict[str, Any]) -> None:
+    datasets = arg_to_list(dataset, str)
+    pat_ids = arg_to_list(pat_id, str)
+    assert len(datasets) == len(pat_ids)
+
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=region, **kwargs)
+
+    for dataset, pat_id in zip(datasets, pat_ids):
+        # Load dataset.
+        set = ds.get(dataset, 'nifti')
+        pat = set.patient(pat_id)
+
+        logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
+
+        # Make prediction.
+        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_spacing, device=device)
+
+        # Save segmentation.
+        if savepath is None:
+            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'pred.npz')
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        np.savez_compressed(savepath, data=pred)
 
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
@@ -337,6 +444,68 @@ def create_segmenter_prediction(
             savepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, pat_id, *localiser, *segmenter.name, filename)
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
+
+def create_multi_segmenter_predictions(
+    dataset: Union[str, List[str]],
+    region: Union[str, List[str]],
+    model: Union[types.ModelName, types.Model],
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False,
+    use_timing: bool = True,
+    **kwargs: Dict[str, Any]) -> None:
+    logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    model_spacing = TrainingDataset(datasets[0]).params['output-spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if use_timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Create test loader.
+    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+
+    # Make predictions.
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+
+            # Timing table data.
+            data = {
+                'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': str(regions),
+                'device': device.type
+            }
+
+            with timer.record(data, enabled=use_timing):
+                create_multi_segmenter_prediction(dataset, pat_id, regions, model, model_spacing, device=device, **kwargs)
+
+    # Save timing data.
+    if use_timing:
+        model_name = model if type(model) == tuple else model.name
+        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-device-{device.type}-timing.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
 
 def create_segmenter_predictions(
     datasets: Union[str, List[str]],
@@ -398,6 +567,28 @@ def create_segmenter_predictions(
         filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
+
+def load_multi_segmenter_prediction(
+    dataset: str,
+    pat_id: types.PatientID,
+    model: types.ModelName,
+    exists_only: bool = False,
+    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
+    model = replace_checkpoint_alias(*model, use_manifest=use_model_manifest)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'pred.npz')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
+    pred = np.load(filepath)['data']
+
+    return pred
 
 def load_segmenter_prediction(
     dataset: str,

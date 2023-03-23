@@ -8,16 +8,13 @@ filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(filepath)))
 sys.path.append(mymi_dir)
 from mymi import config
-from mymi.regions import RegionNames
+from mymi.regions import OldRegionNames
 
-for_real = True
-keep = 2
+for_real = False
 types = ['segmenter']
-regions = RegionNames
-regions.remove('BrainStem')
-regions.remove('OralCavity')
+regions = OldRegionNames
 runs = []
-folds = [1, 2, 3, 4]
+folds = [0, 1, 2, 3, 4]
 n_trains = [5, 10, 20, 50, 100, 200, None]
 for fold in folds:
     for n_train in n_trains:

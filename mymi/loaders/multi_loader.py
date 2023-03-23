@@ -1,5 +1,7 @@
+from itertools import chain
 import numpy as np
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
@@ -11,18 +13,69 @@ from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
 from mymi import logging
 from mymi.regions import region_to_list
+from torchio.transforms import Transform
+from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
+
+def collate_fn(batch) -> List[Tensor]:
+    # Get spatial dimensions of batch.
+    max_size = [-np.inf, -np.inf, -np.inf]
+    for _, input, _, _, _ in batch:     # Batch consists of (desc, input, label, mask, weights).
+        size = input.shape[1:]
+        for axis in range(3):
+            if size[axis] > max_size[axis]:
+                max_size[axis] = size[axis]
+    max_size = tuple(max_size)
+
+    # Gather all batch items.
+    descs = []
+    inputs = []
+    labels = []
+    masks = []
+    weights = []
+    for desc, input, label, mask, weight in batch:
+        descs.append(desc)
+        input_cs = []
+        for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad_4D' hasn't been written.
+            input_c = centre_crop_or_pad_3D(input[c], max_size)
+            input_cs.append(input_c)
+        input = np.stack(input_cs, axis=0)
+        inputs.append(input)
+        label_cs = []
+        for c in range(len(label)): 
+            label_c = centre_crop_or_pad_3D(label[c], max_size)
+            label_cs.append(label_c)
+        label = np.stack(label_cs, axis=0)
+        labels.append(label)
+        masks.append(mask)
+        weights.append(weight)
+
+    # Stack batch items.
+    desc = tuple(descs)
+    input = np.stack(inputs, axis=0)
+    label = np.stack(labels, axis=0)
+    mask = np.stack(masks, axis=0)
+    weights = np.stack(weights, axis=0)
+
+    # Convert to pytorch tensors.
+    input = torch.from_numpy(input)
+    label = torch.from_numpy(label)
+    mask = torch.from_numpy(mask)
+    weights = torch.from_numpy(weights)
+
+    return (desc, input, label, mask, weights)
 
 class MultiLoader:
     @staticmethod
     def build_loaders(
         dataset: Union[str, List[str]],
-        batch_size: int = 1,    # Doesn't support > 1 as probably not necessary and introduces problems like padding images to max batch size.
+        batch_size: int = 1,
         check_processed: bool = True,
         data_hook: Optional[Callable] = None,
         load_data: bool = True,
         load_test_origin: bool = True,
-        n_folds: Optional[int] = 5, 
+        n_folds: Optional[int] = None, 
+        n_subfolds: Optional[int] = None,
         n_train: Optional[int] = None,
         n_workers: int = 1,
         p_val: float = .2,
@@ -30,111 +83,202 @@ class MultiLoader:
         region: PatientRegions = 'all',
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
-        transform: torchio.transforms.Transform = None,
-        use_grouping: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
+        test_subfold: Optional[int] = None,
+        transform_train: Transform = None,
+        transform_val: Transform = None,
+        use_groups: bool = False,
+        use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
         regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
         # Get dataset spacing.
-        sets = {}
+        sets = []
         prev_spacing = None
         for i, dataset in enumerate(datasets):
-            sets[i] = ds.get(dataset, 'training', check_processed=check_processed) 
-            spacing = sets[i].params['output-spacing']
+            set = TrainingDataset(dataset, check_processed=check_processed)
+            sets.append(set)
+            spacing = set.params['output-spacing']
             if prev_spacing is not None and spacing != prev_spacing:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing
 
-        # Get all groups or samples.
-        set_id_pairs = []
-        for i, dataset in enumerate(datasets):
-            sets[i] = ds.get(dataset, 'training', check_processed=check_processed)
-            if use_grouping:
-                for group_id in sets[i].list_groups(region=regions):
-                    set_id_pairs.append((i, group_id))
+        # Load all samples/groups.
+        # Grouping can be used when multiple 'patient-id' values in a dataset belong to the same patient,
+        # e.g. replanning during treatment. It is important here that scans for the same patient don't 
+        # end up in both training and testing dataset - leakage of testing information into training process!
+        samples = []
+        for i, set in enumerate(sets):
+            if use_groups:
+                for group_id in set.list_groups(region=regions):
+                    samples.append((i, group_id))
             else:
-                for sample_id in sets[i].list_samples(region=regions):
-                    set_id_pairs.append((i, sample_id))
+                for sample_id in set.list_samples(region=regions):
+                    samples.append((i, sample_id))
 
-        # Shuffle groups.
+        # Shuffle samples.
         np.random.seed(random_seed)
-        np.random.shuffle(set_id_pairs)
+        np.random.shuffle(samples)
 
-        # Split groups into folds of equal size.
-        if n_folds:
-            n_pairs = len(set_id_pairs)
-            len_fold = int(np.floor(n_pairs / n_folds))
-            folds_pairs = []
+        # Get training/testing samples.
+        if n_folds is not None:     # Split samples into equally-sized folds for training/testing.
+            assert test_fold is not None
+
+            if use_split_file:
+                raise ValueError(f"Using 'n_folds={n_folds}' randomises the train/test split, whilst 'use_split_file={use_split_file}' reads 'loader-split.csv' to determine train/test split. These methods don't work together.")
+
+            # Split samples into folds.
+            # Note that 'samples' here could actually be groups if 'use_groups=True'.
+            n_samples = len(samples)
+            len_fold = int(np.floor(n_samples / n_folds))
+            n_samples_lost = n_samples - n_folds * len_fold
+            logging.info(f"Lost {n_samples_lost} samples due to {n_folds}-fold split.")
+
+            fold_sampleses = []
             for i in range(n_folds):
-                fold_pairs = set_id_pairs[i * len_fold:(i + 1) * len_fold]
-                folds_pairs.append(fold_pairs)
+                fold_samples = samples[i * len_fold:(i + 1) * len_fold]
+                fold_sampleses.append(fold_samples)
 
             # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
             # folds should be [3, 4, 0, 1] (for n_folds=5). This ensures that when we 
             # take a subset of groups (n_groups != None), we get different training groups
             # for each of the k-folds.
-            train_folds = list((np.array(range(n_folds)) + (test_fold + 1)) % 5)
+            train_folds = list((np.array(range(n_folds)) + (test_fold + 1)) % n_folds)
             train_folds.remove(test_fold)
+            train_samples = list(chain(*[fold_sampleses[f] for f in train_folds]))
+            test_samples = fold_sampleses[test_fold]
 
-            # Get train and test samples.
+        elif use_split_file:         # Use 'loader-split.csv' to determine training/testing split.
+            assert use_groups is False
+
             train_samples = []
-            for i in train_folds:
-                for j, id in folds_pairs[i]:
-                    if use_grouping:
-                        sample_ids = sets[j].list_samples(group_id=id)
-                        samples = [(j, id) for id in sample_ids]
-                    else:
-                        samples = [(j, id)]
-                    train_samples += samples
             test_samples = []
-            for i, id in folds_pairs[test_fold]:
-                if use_grouping:
-                    sample_ids = sets[i].list_samples(group_id=id)
-                    samples = [(i, id) for id in sample_ids]
-                else:
-                    samples = [(i, id)]
-                test_samples += samples
-        else:
+            for i, set in enumerate(sets):
+                # Get 'sample-id' values for this dataset.
+                sample_ids = [s[1] for s in samples if s[0] == i]
+
+                # Load patient 'loader-split.csv'.
+                df = set.loader_split
+                if df is None:
+                    raise ValueError(f"No 'loader-split.csv' found for '{set}'. Either create this file, or set 'use_split_file=False'.")
+
+                # Assign samples to partition based on 'loader-split.csv'.
+                for _, row in df.iterrows():
+                    sample_id, partition, use_origin = row['sample-id'], row['partition'], row['origin']
+                    assert partition in ('train', 'test')
+
+                    # If 'origin=True', then 'sample-id' defines ID at origin dataset.
+                    if use_origin:
+                        sample = set.sample(sample_id, by_origin_id=True) 
+                        sample_id = sample.id
+
+                    # Add patient to appropriate partition.
+                    # Don't thrown an error if 'sample-id' in 'loader-split.csv' not found in 'sample_ids'. This could
+                    # be because the number of patients used has been decreased due to 'region=...' filtering.
+                    if sample_id in sample_ids:
+                        sample = (i, sample_id)
+                        if partition == 'train':
+                            train_samples.append(sample)
+                        elif partition == 'test':
+                            test_samples.append(sample)
+
+        else:       # All samples are used for testing - no validation required.
+            # Note that these could be groups if 'use_groups=True'.
+            train_samples = samples 
+
+        # Split for hyper-parameter selection.
+        if n_subfolds is not None:
+            assert test_subfold is not None
+
+            # Split train samples/groups into folds.
+            n_samples = len(train_samples)
+            len_fold = int(np.floor(n_samples / n_subfolds))
+            n_samples_lost = n_samples - n_subfolds * len_fold
+            logging.info(f"Lost {n_samples_lost} samples due to {n_subfolds}-subfold split.")
+            fold_sampleses = []
+            for i in range(n_subfolds):
+                fold_samples = train_samples[i * len_fold:(i + 1) * len_fold]
+                fold_sampleses.append(fold_samples)
+
+            # Determine hyper-parameter selection train and test folds. Note if (e.g.) test_fold=2, then the train
+            # folds should be [3, 4, 0, 1] (for n_folds=5). This ensures that when we 
+            # take a subset of groups (n_groups != None), we get different training groups
+            # for each of the k-folds.
+            train_subfolds = list((np.array(range(n_subfolds)) + (test_subfold + 1)) % n_subfolds)
+            train_subfolds.remove(test_subfold)
+            train_samples = list(chain(*[fold_sampleses[f] for f in train_subfolds]))
+            test_subsamples = fold_sampleses[test_subfold]
+
+        # Split 'train_samples' into training/validation samples.
+        n_train_samples = int(len(train_samples) * (1 - p_val))
+        if use_groups:      # Maintain grouping until after final split of data (training/validation).
+            all_train_samples = train_samples
             train_samples = []
-            for i, id in set_id_pairs:
-                if use_grouping:
-                    sample_ids = sets[i].list_samples(group_id=id)
-                    samples = [(i, id) for id in sample_ids]
+            val_samples = []
+
+            # Expand groups to samples.
+            for set_i, group_id in all_train_samples:
+                samples = sets[set_i].list_samples(group_id=group_id)
+                if len(train_samples) < n_train_samples:
+                    train_samples += samples
                 else:
-                    samples = [(i, id)]
-                train_samples += samples
+                    val_samples += samples
+        else:
+            val_samples = train_samples[n_train_samples:] 
+            train_samples = train_samples[:n_train_samples]
+
+        # Convert test/subtest groups into samples.
+        if use_groups:
+            test_groups = test_samples
+            test_samples = []
+            for set_i, group_id in test_groups:
+                samples = sets[set_i].list_samples(group_id=group_id)
+                test_samples += samples
+
+            test_subgroups = test_subsamples
+            test_subsamples = []
+            for set_i, group_id in test_subgroups:
+                samples = sets[set_i].list_samples(group_id=group_id)
+                test_subsamples += samples
 
         # Take subset of train samples.
         if n_train is not None:
+            assert not use_split_file
             if n_train > len(train_samples):
                raise ValueError(f"'n_train={n_train}' requested larger number than training samples '{len(train_samples)}'.") 
             train_samples = train_samples[:n_train]
 
-        # Split train folds' samples into training and validation samples.
-        n_train = int(len(train_samples) * (1 - p_val))
-        train_train_samples = train_samples[:n_train]
-        train_val_samples = train_samples[n_train:] 
-
         # Create train loader.
-        train_ds = TrainingDataset(datasets, train_train_samples, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform)
-        train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
+        col_fn = collate_fn if batch_size > 1 else None
+        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform_train)
+        train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
         class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
-        val_ds = TrainingDataset(datasets, train_val_samples, class_weights=class_weights, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing)
-        val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
+        val_ds = TrainingSet(datasets, val_samples, class_weights=class_weights, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform_val)
+        val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
-        if n_folds:
-            test_ds = TestDataset(datasets, test_samples, load_origin=load_test_origin) 
+        if n_folds is not None or use_split_file:
+            test_ds = TestSet(datasets, test_samples, load_origin=load_test_origin) 
             test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=n_workers, shuffle=False)
-            return train_loader, val_loader, test_loader
+
+        # Create subtest loader.
+        if (n_folds is not None or use_split_file) and n_subfolds is not None:
+            test_ds = TestSet(datasets, test_subsamples, load_origin=load_test_origin) 
+            subtest_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=n_workers, shuffle=False)
+
+        # Return loaders.
+        if n_folds is not None or use_split_file:
+            if n_subfolds is not None:
+                return train_loader, val_loader, subtest_loader, test_loader 
+            else:
+                return train_loader, val_loader, test_loader
         else:
             return train_loader, val_loader
 
-class TrainingDataset(Dataset):
+class TrainingSet(Dataset):
     def __init__(
         self,
         datasets: List[str],
@@ -274,7 +418,7 @@ class TrainingDataset(Dataset):
 
         return desc, input, label, mask, self.__class_weights
     
-class TestDataset(Dataset):
+class TestSet(Dataset):
     def __init__(
         self,
         datasets: List[str],

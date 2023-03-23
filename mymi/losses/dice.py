@@ -24,7 +24,6 @@ class DiceLoss(nn.Module):
             pred: the B x C x X x Y x Z batch of network predictions probabilities.
             label: the B x C x X x Y x Z batch of one-hot-encoded labels.
         """
-        assert pred.shape[0] == 1   # TODO: 'SpinalCord' specific loss doesn't handle batch size > 1.
         if label.dtype != torch.bool:
             raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
         if pred.dtype == torch.bool:
@@ -39,74 +38,99 @@ class DiceLoss(nn.Module):
             label = label.movedim(-1, 1)
         if mask is not None:
             assert mask.shape == pred.shape[:2]
+        batch_size = pred.shape[0]
         if weights is not None:
             assert weights.shape == pred.shape[:2]
-            weight_sum = weights.sum().round(decimals=3)
-            if weight_sum != 1:
-                raise ValueError(f"Weights must sum to 1. Got '{weight_sum}' (weights={weights}).")
+            for b in range(batch_size):
+                weight_sum = weights[b].sum().round(decimals=3)
+                if weight_sum != 1:
+                    raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         assert reduction in ('mean', 'sum')
 
-        # Separate 'SpinalCord' channel if necessary.
+        # Separate 'SpinalCord' and 'background' channels if necessary.
+        # If all regions are present, the 'background' will be the inverse of the union of all regions.
+        # To encourage a long 'SpinalCord' prediction, we have to discount any loss due to voxels below
+        # the ground truth for 'SpinalCord' for both 'SpinalCord' and 'background' classes.
         if sc_channel is not None:
-            # Split 'SpinalCord' channel out from main data.
+            assert sc_channel >= 1
+            # Split 'SpinalCord' and 'background' channels out from main data.
+            bk_pred = pred[:, 0]
             sc_pred = pred[:, sc_channel]
+            bk_label = label[:, 0]
             sc_label = label[:, sc_channel]
-            pred_a = pred[:, :sc_channel]
+            pred_a = pred[:, 1:sc_channel]
+            label_a = label[:, 1:sc_channel]
             pred_b = pred[:, (sc_channel + 1):]
-            pred = torch.concat((pred_a, pred_b), dim=1)
-            label_a = label[:, :sc_channel]
             label_b = label[:, (sc_channel + 1):]
+            pred = torch.concat((pred_a, pred_b), dim=1)
             label = torch.concat((label_a, label_b), dim=1)
 
-            # Remove all voxels below 'label_min_z' from loss calculation.
-            # We don't want to penalise the model for predicting further in inferior
-            # direction than the label.
-            label_min_z = torch.argwhere(sc_label).min(axis=0).values[3].item()
-            sc_pred = sc_pred[:, :, :, label_min_z:]
-            sc_label = sc_label[:, :, :, label_min_z:]
+            # Separate 'SpinalCord' and 'background' labels along batch dimension as each will have different 'label_min_z'.
+            bk_preds = []
+            sc_preds = []
+            bk_labels = []
+            sc_labels = []
+            for i in range(batch_size):
+                # Remove all voxels below 'label_min_z' from loss calculation.
+                # We don't want to penalise the model for predicting further in inferior
+                # direction than the label.
+                label_min_z = torch.argwhere(sc_label[i]).min(axis=0).values[2].item()
+                bk_pred_i = bk_pred[i, :, :, label_min_z:]
+                sc_pred_i = sc_pred[i, :, :, label_min_z:]
+                bk_label_i = bk_label[i, :, :, label_min_z:]
+                sc_label_i = sc_label[i, :, :, label_min_z:]
+                bk_preds.append(bk_pred_i)
+                sc_preds.append(sc_pred_i)
+                bk_labels.append(bk_label_i)
+                sc_labels.append(sc_label_i)
 
-        # Flatten volumetric data.
+        # Flatten spatial dimensions (X, Y, Z).
         pred = pred.flatten(start_dim=2)
         label = label.flatten(start_dim=2)
         if sc_channel is not None:
-            sc_pred = sc_pred.flatten(start_dim=1)
-            sc_label = sc_label.flatten(start_dim=1)
+            for i in range(batch_size):
+                bk_preds[i] = bk_preds[i].flatten()
+                sc_preds[i] = sc_preds[i].flatten()
+                bk_labels[i] = bk_labels[i].flatten()
+                sc_labels[i] = sc_labels[i].flatten()
 
-        # Compute dice coefficient.
+        # Compute dice loss.
         intersection = (pred * label).sum(dim=2)
         denominator = (pred + label).sum(dim=2)
-        dice = (2. * intersection + self.__epsilon) / (denominator + self.__epsilon)
+        loss = -(2. * intersection + self.__epsilon) / (denominator + self.__epsilon)
         if sc_channel is not None:
-            # Calculate 'SpinalCord' dice.
-            sc_intersection = (sc_pred * sc_label).sum(dim=1)
-            sc_denominator = (sc_pred + sc_label).sum(dim=1)
-            sc_dice = (2. * sc_intersection + self.__epsilon) / (sc_denominator + self.__epsilon)
+            sc_losses = []
+            bk_losses = []
+            for i in range(batch_size):
+                # Calculate 'SpinalCord' loss.
+                bk_intersection = (bk_preds[i] * bk_labels[i]).sum()
+                sc_intersection = (sc_preds[i] * sc_labels[i]).sum()
+                bk_denominator = (bk_preds[i] + bk_labels[i]).sum()
+                sc_denominator = (sc_preds[i] + sc_labels[i]).sum()
+                bk_loss = -(2. * bk_intersection + self.__epsilon) / (bk_denominator + self.__epsilon)
+                sc_loss = -(2. * sc_intersection + self.__epsilon) / (sc_denominator + self.__epsilon)
+                bk_losses.append(bk_loss)
+                sc_losses.append(sc_loss)
 
             # Insert result back into main dice results.
-            dice_a = dice[:, :sc_channel]
-            sc_dice = sc_dice.unsqueeze(1)
-            dice_b = dice[:, sc_channel:]
-            dice = torch.concat((dice_a, sc_dice, dice_b), dim=1)
+            loss_a = loss[:, :sc_channel]
+            bk_loss = torch.Tensor(bk_losses).unsqueeze(1)
+            sc_loss = torch.Tensor(sc_losses).unsqueeze(1)
+            loss_b = loss[:, sc_channel:]
+            loss = torch.concat((bk_loss, loss_a, sc_loss, loss_b), dim=1)
 
         # Apply mask across channels.
         if mask is not None:
-            mask = torch.Tensor(mask).to(dice.device)
-            mask = mask.unsqueeze(0).repeat(dice.shape[0], 1, 1)
-            dice = mask * dice
+            loss = mask * loss
 
         # Apply weights across channels.
         if weights is not None:
-            weights = torch.Tensor(weights).to(dice.device)
-            weights = weights.unsqueeze(0).repeat(dice.shape[0], 1, 1)
-            dice = weights * dice
+            loss = weights * loss
 
         # Reduce across batch and channel dimensions.
         if reduction == 'mean':
-            dice = dice.mean()
+            loss = loss.mean()
         elif reduction == 'sum':
-            dice = dice.sum()
-
-        # Convert dice metric to loss.
-        loss = -dice
+            loss = loss.sum()
 
         return loss

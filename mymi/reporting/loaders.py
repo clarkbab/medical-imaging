@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from tqdm import tqdm
 from typing import List, Optional, Union
@@ -102,10 +103,13 @@ def get_test_fold(
 def get_multi_loader_manifest(
     dataset: Union[str, List[str]],
     check_processed: bool = True,
-    n_folds: Optional[int] = 5,
+    n_folds: Optional[int] = None,
+    n_subfolds: Optional[int] = None,
     n_train: Optional[int] = None,
     region: PatientRegions = 'all',
-    test_fold: Optional[int] = None) -> None:
+    test_fold: Optional[int] = None,
+    test_subfold: Optional[int] = None,
+    use_split_file: bool = False) -> None:
     datasets = arg_to_list(dataset, str)
 
     # Create empty dataframe.
@@ -114,7 +118,7 @@ def get_multi_loader_manifest(
         'loader-batch': int,
         'dataset': str,
         'sample-id': int,
-        'group-id': int,
+        'group-id': float,      # Can contain 'nan' values.
         'origin-dataset': str,
         'origin-patient-id': str
     }
@@ -125,11 +129,17 @@ def get_multi_loader_manifest(
 
     # Create test loader.
     # Create loaders.
-    tl, vl, tsl = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_train=n_train, region=region, shuffle_train=False, test_fold=test_fold)
-    loader_names = ['train', 'validate', 'test']
+    loaders = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_subfolds=n_subfolds, n_train=n_train, region=region, shuffle_train=False, test_fold=test_fold, test_subfold=test_subfold, use_split_file=use_split_file)
+    if n_folds is not None or use_split_file:
+        if n_subfolds is not None:
+            loader_names = ['train', 'validate', 'subtest', 'test']
+        else:
+            loader_names = ['train', 'validate', 'test']
+    else:
+        loader_names = ['train', 'validate']
 
     # Get values for this region.
-    for loader_name, loader in zip(loader_names, (tl, vl, tsl)):
+    for loader, loader_name in zip(loaders, loader_names):
         for b, pat_desc_b in tqdm(enumerate(iter(loader))):
             for pat_desc in pat_desc_b:
                 dataset, sample_id = pat_desc.split(':')
@@ -155,28 +165,38 @@ def get_multi_loader_manifest(
 def create_multi_loader_manifest(
     dataset: Union[str, List[str]],
     check_processed: bool = True,
-    n_folds: Optional[int] = 5,
+    n_folds: Optional[int] = None,
+    n_subfolds: Optional[int] = None,
     region: PatientRegions = 'all',
-    test_fold: Optional[int] = None) -> None:
+    test_fold: Optional[int] = None,
+    test_subfold: Optional[int] = None,
+    use_split_file: bool = False) -> None:
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
     logging.arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
 
     # Get manifest.
-    df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, region=regions, test_fold=test_fold)
+    df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, n_subfolds=n_subfolds, region=regions, test_fold=test_fold, test_subfold=test_subfold, use_split_file=use_split_file)
 
     # Save manifest.
-    save_csv(df, 'multi-loader-manifests', encode(datasets), encode(regions), f'fold-{test_fold}.csv', overwrite=True)
+    filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}', f'n-subfolds-{n_subfolds}-test-subfold-{test_subfold}', 'manifest.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def load_multi_loader_manifest(
     dataset: Union[str, List[str]],
     region: PatientRegions = 'all',
-    test_fold: Optional[int] = None) -> pd.DataFrame:
+    n_folds: Optional[int] = None,
+    n_subfolds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    test_subfold: Optional[int] = None,
+    use_split_file: bool = False) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
 
     # Load file.
-    df = load_csv('multi-loader-manifests', encode(datasets), encode(regions), f'fold-{test_fold}.csv')
+    filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}', f'n-subfolds-{n_subfolds}-test-subfold-{test_subfold}', 'manifest.csv')
+    df = pd.read_csv(filepath)
     df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
 
     return df

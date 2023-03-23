@@ -73,7 +73,7 @@ def create_segmenter_dose_evaluation_from_loader(
             set_cache[dataset] = ds.get(dataset, 'dicom')
             set = set_cache[dataset]
         try:
-            patient = set.patient(pat_id, load_default_rtdose=True)
+            patient = set.patient(pat_id)
         except ValueError as e:
             logging.error(str(e))
             continue
@@ -160,7 +160,7 @@ def create_dose_evaluation(
 
         # Load ground truth RTSTRUCT. Catch exception when RTDOSE isn't present.
         try:
-            patient_gt = sets[row.dataset].patient(row['patient-id'], load_default_rtdose=True)
+            patient_gt = sets[row.dataset].patient(row['patient-id'])
             rtstruct_gt = patient_gt.default_rtstruct
         except ValueError as e:
             logging.error(str(e))

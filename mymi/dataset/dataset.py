@@ -8,19 +8,17 @@ class Dataset:
 class DatasetType(Enum):
     DICOM = 0
     NIFTI = 1
-    TRAINING = 2
-    OTHER = 3
+    NRRD = 2
+    TRAINING = 3
+    OTHER = 4
 
 def to_type(name: str) -> DatasetType:
-    """
-    returns: the DatasetType from string.
-    args:
-        name: the type string.
-    """
     if name.lower() == DatasetType.DICOM.name.lower():
         return DatasetType.DICOM
     elif name.lower() == DatasetType.NIFTI.name.lower():
         return DatasetType.NIFTI
+    elif name.lower() == DatasetType.NRRD.name.lower():
+        return DatasetType.NRRD
     elif name.lower() == DatasetType.TRAINING.name.lower():
         return DatasetType.TRAINING
     elif name.lower() == DatasetType.OTHER.name.lower():

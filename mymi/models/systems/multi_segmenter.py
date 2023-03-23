@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
 import torch.nn.functional as F
 from typing import Dict, List, Optional, OrderedDict, Tuple
 from wandb import Image
@@ -12,6 +12,7 @@ from wandb import Image
 from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi import logging
+from mymi.losses import DiceWithFocalLoss
 from mymi.metrics import dice
 from mymi.models import replace_checkpoint_alias
 from mymi.models.networks import MultiUNet3D
@@ -24,21 +25,25 @@ LOG_ON_STEP = False
 class MultiSegmenter(pl.LightningModule):
     def __init__(
         self,
-        region: types.PatientRegions,
-        loss: nn.Module,
+        loss: nn.Module = DiceWithFocalLoss(),
         lr_init: float = 1e-3,
         max_image_batches: int = 2,
         metrics: List[str] = [],
+        region: types.PatientRegions = 'all',
+        use_lr_scheduler: bool = False,
+        weight_decay: float = 0,
         **kwargs):
         super().__init__()
-        self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__loss = loss
+        self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__name = None
         self.__max_image_batches = max_image_batches
         self.__metrics = metrics
         self.__regions = region_to_list(region)
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
+        self.__use_lr_scheduler = use_lr_scheduler
+        self.__weight_decay = weight_decay
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
@@ -81,13 +86,12 @@ class MultiSegmenter(pl.LightningModule):
         update = False
         for k, v in checkpoint_data['state_dict'].items():
             # Get new key.
-            if not k.startswith('_Segmenter_'):
+            if k.startswith('_Segmenter__MultiSegmenter__network'):
                 update = True
-                new_key = '_Segmenter_' + k
+                new_k = k.replace('_Segmenter__MultiSegmenter__network', '_MultiSegmenter__network')
             else:
-                new_key = k
-
-            pairs.append((new_key, v))
+                new_k = k
+            pairs.append((new_k, v))
         checkpoint_data['state_dict'] = OrderedDict(pairs)
         if update:
             logging.info(f"Updating checkpoint keys for model '{(model_name, run_name, checkpoint)}'.")
@@ -99,13 +103,16 @@ class MultiSegmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        self.__optimiser = Adam(self.parameters(), lr=self.lr)
-        # self.__scheduler = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=10, verbose=True)
-        return {
+        self.__optimiser = Adam(self.parameters(), lr=self.lr, weight_decay=self.__weight_decay) 
+        opt = {
             'optimizer': self.__optimiser,
-            # 'lr_scheduler': self.__scheduler,
             'monitor': 'val/loss'
         }
+        if self.__use_lr_scheduler:
+            # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, [120])
+            opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=100, verbose=True)
+
+        return opt
 
     def forward(
         self,
@@ -117,14 +124,24 @@ class MultiSegmenter(pl.LightningModule):
         desc, x, y, mask, weights = batch
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
-        self.log('train/loss', loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+        if np.isnan(loss.item()):
+            print(desc)
+            # names = ['x', 'y', 'mask', 'weights', 'y_hat']
+            # arrays = [x, y, mask, weights, y_hat]
+            # for name, arr in zip(names, arrays):
+            #     filepath = os.path.join(config.directories.temp, f'{name}.npy')
+            #     np.save(filepath, arr.detach().cpu().numpy())
+            # filepath = os.path.join(config.directories.temp, 'model.ckpt')
+            # torch.save(self.__network.state_dict(), filepath)
+        else:
+            self.log('train/loss', loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         # Convert pred to binary mask.
-        y = y.cpu().numpy()
         y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
         y_hat = y_hat.cpu().numpy().astype(bool)
 
         # Report metrics.
+        y = y.cpu().numpy()
         if 'dice' in self.__metrics:
             # Get mean dice score per-channel.
             for i in range(self.__n_output_channels):
@@ -139,7 +156,6 @@ class MultiSegmenter(pl.LightningModule):
 
                 if len(dice_scores) > 0:
                     mean_dice = np.mean(dice_scores)
-                    print(region, ': ', mean_dice)
                     self.log(f'train/dice/{region}', mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         return loss

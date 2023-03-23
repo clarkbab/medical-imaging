@@ -1,0 +1,49 @@
+sample-id,partition,origin,comment
+0522c0001,train,True,MICCAI training set
+0522c0002,train,True,MICCAI training set
+0522c0003,train,True,MICCAI training set
+0522c0009,train,True,MICCAI training set
+0522c0013,train,True,MICCAI training set
+0522c0014,train,True,MICCAI training set
+0522c0017,train,True,MICCAI training set
+0522c0057,train,True,MICCAI training set
+0522c0070,train,True,MICCAI training set
+0522c0077,train,True,MICCAI training set
+0522c0079,train,True,MICCAI training set
+0522c0081,train,True,MICCAI training set
+0522c0125,train,True,MICCAI training set
+0522c0132,train,True,MICCAI training set
+0522c0147,train,True,MICCAI training set
+0522c0149,train,True,MICCAI training set
+0522c0159,train,True,MICCAI training set
+0522c0161,train,True,MICCAI training set
+0522c0190,train,True,MICCAI training set
+0522c0195,train,True,MICCAI training set
+0522c0226,train,True,MICCAI training set
+0522c0248,train,True,MICCAI training set
+0522c0251,train,True,MICCAI training set
+0522c0253,train,True,MICCAI training set
+0522c0328,train,True,MICCAI training set
+0522c0329,train,True,MICCAI optional training set
+0522c0330,train,True,MICCAI optional training set
+0522c0427,train,True,MICCAI optional training set
+0522c0433,train,True,MICCAI optional training set
+0522c0441,train,True,MICCAI optional training set
+0522c0455,train,True,MICCAI optional training set
+0522c0457,train,True,MICCAI optional training set
+0522c0479,train,True,MICCAI optional training set
+0522c0788,train,True
+0522c0806,train,True
+0522c0845,train,True
+0522c0857,train,True
+0522c0878,train,True
+0522c0555,test,True
+0522c0576,test,True
+0522c0598,test,True
+0522c0659,test,True
+0522c0661,test,True
+0522c0667,test,True
+0522c0669,test,True
+0522c0708,test,True
+0522c0727,test,True
+0522c0746,test,True

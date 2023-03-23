@@ -1,128 +1,175 @@
 from datetime import datetime
 import json
-from monai.losses import DiceFocalLoss
+import numpy as np
 import os
-import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
-from torchio.transforms import RandomAffine
-from typing import List, Optional, Tuple, Union
+from torchio.transforms import Clamp, Compose, RandomAffine, ZNormalization
+from typing import List, Optional, Union
 
 from mymi import config
-from mymi import dataset as ds
-from mymi.dataset.training import exists
 from mymi.loaders import MultiLoader
 from mymi import logging
-from mymi.losses import TverskyWithFocalLoss
-from mymi.models.systems import MultiSegmenter
-from mymi.regions import region_to_list
+from mymi.losses import DiceLoss, DiceWithFocalLoss
+from mymi.models.systems import MultiSegmenter, Segmenter
 from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi import types
+from mymi.transforms import Standardise, centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_multi_segmenter(
     dataset: Union[str, List[str]],
-    model: str,
-    run: str,
-    crop_x_mm: Optional[float] = None,
+    region: str,
+    model_name: str,
+    run_name: str,
+    batch_size: int = 1,
+    ckpt_model: bool = True,
+    halve_channels: bool = False,
+    loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
-    n_epochs: int = 150,
-    n_folds: Optional[int] = 5,
+    lr_find_min_lr: float = 1e-6,
+    lr_find_max_lr: float = 1e3,
+    lr_find_num_train: int = 1e3,
+    lr_init: float = 1e-3,
+    n_epochs: int = 100,
+    n_folds: Optional[int] = None,
     n_gpus: int = 1,
     n_nodes: int = 1,
-    n_train: Optional[int] = None,
     n_workers: int = 1,
+    n_split_channels: int = 1,
     p_val: float = 0.2,
-    regions: types.PatientRegions = 'all',
+    precision: Union[str, int] = 16,
     resume: bool = False,
-    resume_run: Optional[str] = None,
-    resume_ckpt: str = 'last',
+    resume_checkpoint: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
+    stand_mean: Optional[float] = None,
+    stand_std: Optional[float] = None,
     test_fold: Optional[int] = None,
-    use_logger: bool = False) -> None:
-    model_name = model
-    logging.arg_log('Training model', ('dataset', 'model', 'run'), (dataset, model, run))
-
-    # 'libgcc'
-    import ctypes
-    libgcc_s = ctypes.CDLL('libgcc_s.so.1')
-
-    # Load datasets and check for consistent spacing.
+    thresh_low: Optional[float] = None,
+    thresh_high: Optional[float] = None,
+    use_loader_split_file: bool = False,
+    use_logger: bool = False,
+    use_lr_scheduler: bool = False,
+    use_stand: bool = False,
+    use_thresh: bool = False,
+    weight_decay: float = 0) -> None:
+    logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     datasets = arg_to_list(dataset, str)
-    spacing = ds.get(datasets[0], 'training').params['output-spacing']
-    for dataset in datasets[1:]:
-        sp = ds.get(dataset, 'training').params['output-spacing']
-        if sp != spacing:
-            raise ValueError(f'Datasets must have consistent spacing.')
 
     # Create transforms.
     rotation = (-5, 5)
     translation = (-50, 50)
     scale = (0.8, 1.2)
-    transform = RandomAffine(
+    transform_train = RandomAffine(
         degrees=rotation,
         scales=scale,
         translation=translation,
         default_pad_value='minimum')
+    transform_val = None
+
+    if use_thresh:
+        transform_train = Compose([
+            transform_train,
+            Clamp(out_min=thresh_low, out_max=thresh_high)
+        ])
+        transform_val = Clamp(out_min=thresh_low, out_max=thresh_high)
+
+    if use_stand:
+        stand = Standardise(-832.2, 362.1)
+        transform_train = Compose([
+            transform_train,
+            stand
+        ])
+        if transform_val is None:
+            transform_val = stand
+        else:
+            transform_val = Compose([
+                transform_val,
+                stand
+            ])
+
+    logging.info(f"Training transform: {transform_train}")
+    logging.info(f"Validation transform: {transform_val}")
+
+    # Define loss function.
+    if loss_fn == 'dice':
+        loss_fn = DiceLoss()
+    elif loss_fn == 'dice_with_focal':
+        loss_fn = DiceWithFocalLoss()
+
+    # Define crop function.
+    def naive_crop(input, labels, spacing=None):
+        assert spacing is not None
+
+        # Crop input.
+        crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+        crop = tuple(np.round(np.array(crop_mm) / spacing).astype(int))
+        input = centre_crop_or_pad_3D(input, crop)
+
+        # Crop labels.
+        for r in labels.keys():
+            labels[r] = centre_crop_or_pad_3D(labels[r], crop)
+
+        return input, labels
 
     # Create data loaders.
-    transform = None
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, crop_x_mm=crop_x_mm, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, regions=regions, spacing=spacing, test_fold=test_fold, transform=transform)
-
-    # Get loss function.
-    loss_fn = TverskyWithFocalLoss()
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=batch_size, data_hook=naive_crop, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
 
     # Create model.
-    metrics = ['dice']
     model = MultiSegmenter(
-        regions,
         loss=loss_fn,
-        metrics=metrics,
+        lr_init=lr_init,
+        halve_channels=halve_channels,
+        metrics=['dice'],
         n_gpus=n_gpus,
-        spacing=spacing)
+        n_split_channels=n_split_channels,
+        region=region,
+        use_lr_scheduler=use_lr_scheduler,
+        weight_decay=weight_decay)
 
     # Create logger.
     if use_logger:
         logger = WandbLogger(
-            # group=f"{model_name}-{run}",
+            # group=f"{model_name}-{run_name}",
             project=model_name,
-            name=run,
+            name=run_name,
             save_dir=config.directories.reports)
-        logger.watch(model)   # Caused multi-GPU training to hang.
+        logger.watch(model) # Caused multi-GPU training to hang.
     else:
         logger = None
 
     # Create callbacks.
-    checks_path = os.path.join(config.directories.models, model_name, run)
+    checks_path = os.path.join(config.directories.models, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
         #     patience=5),
-        ModelCheckpoint(
+    ]
+    if ckpt_model:
+        callbacks.append(ModelCheckpoint(
             auto_insert_metric_name=False,
             dirpath=checks_path,
             filename='loss={val/loss:.6f}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
             save_last=True,
-            save_top_k=1)
-    ]
+            save_top_k=1))
+    if logger is not None:
+        callbacks.append(LearningRateMonitor(logging_interval='epoch'))
 
     # Add optional trainer args.
     opt_kwargs = {}
     if resume:
-        # Get the checkpoint path.
-        resume_run = resume_run if resume_run is not None else run
-        logging.info(f'Loading ckpt {model_name}, {resume_run}, {resume_ckpt}')
-        ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
-        opt_kwargs['ckpt_path'] = ckpt_path
-
+        if resume_checkpoint is None:
+            raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
+        check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
+        opt_kwargs['resume_from_checkpoint'] = check_path
+    
     # Perform training.
     trainer = Trainer(
         accelerator='gpu' if n_gpus > 0 else 'cpu',
@@ -132,20 +179,20 @@ def train_multi_segmenter(
         max_epochs=n_epochs,
         num_nodes=n_nodes,
         num_sanity_val_steps=2,
-        precision=16,
-        strategy='ddp')
+        precision=precision)
 
     if lr_find:
-        lr_finder = trainer.tuner.lr_find(model, train_loader, val_loader)
+        lr_finder = trainer.tuner.lr_find(model, train_loader, val_loader, early_stop_threshold=None, min_lr=lr_find_min_lr, max_lr=lr_find_max_lr, num_training=lr_find_num_train)
         logging.info(lr_finder.results)
-        filepath = os.path.join(config.directories.models, model_name, run, 'lr-finder.json')
+        filepath = os.path.join(config.directories.models, model_name, run_name, 'lr-finder.json')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, 'w') as f:
             f.write(json.dumps(lr_finder.results))
         exit()
 
     # Save training information.
-    man_df = get_multi_loader_manifest(datasets, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
-    folderpath = os.path.join(config.directories.runs, model_name, run, datetime.now().strftime(DATETIME_FORMAT))
+    man_df = get_multi_loader_manifest(datasets, n_folds=n_folds, region=region, test_fold=test_fold, use_split_file=use_loader_split_file)
+    folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')
     man_df.to_csv(filepath, index=False)
