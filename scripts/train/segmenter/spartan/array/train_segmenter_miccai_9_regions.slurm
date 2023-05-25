@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 2-00:00:00
+#SBATCH --time 4-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -18,26 +18,18 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['Bone_Mandible','Glnd_Submand_R']"    # 0
-    "['Brainstem','OpticChiasm']"           # 1
-    "['Glnd_Submand_L','Glnd_Submand_R']"   # 2
-    "['OpticNrv_L','OpticNrv_R']"           # 3
-    "['Parotid_L','Parotid_R']"             # 4
+    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
 )
 SHORT_REGIONS=(
-    'BM'
-    'BS'
-    'SL'
-    'OL'
-    'PL'
+    "ALL"
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-1e-4"
-RESOLUTION="222"
+MODEL_NAME="segmenter-miccai"
+RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
-N_SPLIT_CHANNELS=1
-RUN_NAME="baseline-2-regions-$SHORT_REGION-$RESOLUTION-scheduler"
+N_SPLIT_CHANNELS=2
+RUN_NAME="9-regions-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 LR_INIT=1e-4
@@ -50,7 +42,7 @@ RESUME_CHECKPOINT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
-USE_LR_SCHEDULER=True
+USE_LR_SCHEDULER=False
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -69,5 +61,5 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --resume_checkpoint $RESUME_CHECKPOINT \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
-    --use_logger $USE_LOGGER \
-    --use_lr_scheduler $USE_LR_SCHEDULER
+    --use_logger $USE_LOGGER 
+    --use_lr_scheduler $USE_LR_SCHEDULER \

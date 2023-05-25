@@ -12,7 +12,7 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-# DATASET="HN1"
+DATASET="PMCC-HN-TRAIN"
 REGIONS=(
     'Bone_Mandible'     # 0
     'BrachialPlex_L'    # 1
@@ -43,4 +43,6 @@ REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/report/nifti/create_region_summary --dataset $DATASET --region $REGION
+python $SCRIPT_DIR/report/nifti/create_region_summary.py \
+    --dataset $DATASET \
+    --region $REGION

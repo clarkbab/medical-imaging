@@ -4,22 +4,22 @@ from typing import Tuple
 
 from mymi import config
 from mymi.reporting.models import load_model_manifest
-from mymi import types
+from mymi.types import ModelName
 
 CHECKPOINT_KEYS = [
     'epoch',
     'global_step'
 ]
 
-def get_localiser(region: str) -> types.ModelName:
+def get_localiser(region: str) -> ModelName:
     return (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
 
 def get_segmenter(
     region: str,
-    run: str) -> types.ModelName:
+    run: str) -> ModelName:
     return (f'segmenter-{region}', run, 'BEST')
 
-def print_checkpoint(model: types.ModelName) -> None:
+def print_checkpoint(model: ModelName) -> None:
     # Load data.
     checkpoint = f'{model[2]}.ckpt'
     path = os.path.join(config.directories.models, *model[:2], checkpoint)
@@ -30,19 +30,29 @@ def print_checkpoint(model: types.ModelName) -> None:
         print(f'{k}: {data[k]}')
 
 def replace_checkpoint_alias(
-    name: str,
-    run: str,
-    ckpt: str,
-    use_manifest: bool = False) -> Tuple[str, str, str]:
-    if ckpt.lower() == 'best': 
+    model: ModelName,
+    use_manifest: bool = False) -> ModelName:
+    ckpt = model[2].lower()
+    if '.ckpt' in ckpt:
+        raise ValueError(f"Please do not specify '.ckpt' in model name '{model}'.")
+
+    if ckpt == 'best': 
         if use_manifest:
+            # Load model manifest - contains record of all model checkpoint filenames.
+            # Remove 'last' and sort to get best checkpoint.
             man_df = load_model_manifest()
-            ckpts = man_df[(man_df.name == name) & (man_df.run == run) & (man_df.checkpoint != 'last')].sort_values('checkpoint')
-            assert len(ckpts) >= 1
-            ckpt = ckpts.iloc[-1].checkpoint
+            ckpts = man_df[(man_df['model'] == model[0]) & (man_df['run'] == model[1]) & (man_df['ckpt'] != 'last')].sort_values('ckpt', ascending=False)
+            if len(ckpts) == 0:
+                raise ValueError(f"No record of model '{model}' in model manifest.")
+            ckpt = ckpts.iloc[0]['ckpt']
         else:
-            ckptspath = os.path.join(config.directories.models, name, run)
-            ckpts = [c for c in os.listdir(ckptspath) if '.ckpt' in c]
+            # Read model checkpoints from directory.
+            # Remove 'last' and sort to get best checkpoint.
+            ckpts_path = os.path.join(config.directories.models, *model[:2])
+            if not os.path.exists(ckpts_path):
+                raise ValueError(f"No run '{model[1]}' found for model '{model[0]}'.")
+            ckpts = [c for c in os.listdir(ckpts_path) if '.ckpt' in c and c != 'last.ckpt']
             ckpts = list(sorted([c.replace('.ckpt', '') for c in ckpts]))
             ckpt = ckpts[-1]
-    return (name, run, ckpt)
+
+    return (*model[:2], ckpt)

@@ -7,23 +7,23 @@ from tqdm import tqdm
 from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
-from mymi.dataset.nrrd import NRRDDataset
+from mymi.dataset import NRRDDataset
 from mymi.geometry import get_box, get_extent_centre
-from mymi.loaders import Loader
+from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_checkpoint_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nrrd import load_localiser_prediction, load_segmenter_prediction
-from mymi.regions import get_region_patch_size, get_region_tolerance
-from mymi import types
-from mymi.utils import append_row, encode
+from mymi.prediction.dataset.nrrd import load_localiser_prediction, load_multi_segmenter_prediction, load_segmenter_prediction
+from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
+from mymi.types import ModelName, PatientRegions
+from mymi.utils import append_row, arg_to_list, encode
 
 def get_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: types.ModelName) -> Dict[str, float]:
+    localiser: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
     set = NRRDDataset(dataset)
@@ -105,11 +105,11 @@ def get_localiser_evaluation(
 def create_localiser_evaluation(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
+    localiser: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
     logging.info(f"Evaluating localiser predictions for NRRD datasets '{datasets}', region '{region}', localiser '{localiser}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
@@ -158,11 +158,11 @@ def create_localiser_evaluation(
 
 def load_localiser_evaluation(
     datasets: Union[str, List[str]],
-    localiser: types.ModelName,
+    localiser: ModelName,
     exists_only: bool = False,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> np.ndarray:
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
     if os.path.exists(filepath):
@@ -176,12 +176,74 @@ def load_localiser_evaluation(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
+def get_multi_segmenter_evaluation(
+    dataset: str,
+    pat_id: str,
+    model: ModelName,
+    model_region: PatientRegions) -> Dict[str, float]:
+    model_regions = region_to_list(model_region)
+
+    # Load ground truth and prediction.
+    set = NRRDDataset(dataset)
+    pat = set.patient(pat_id)
+    spacing = pat.ct_spacing
+    labels = pat.region_data(region=model_regions)
+    preds = load_multi_segmenter_prediction(dataset, pat_id, model)
+    if not preds.shape[0] == len(model_regions) + 1:
+        raise ValueError(f"Number of 'model_region' regions ({len(model_regions)}) should be equal to 'preds.shape[0] - 1' ({preds.shape[0] - 1}).")
+ 
+    metrics = []
+    for i, region in enumerate(model_regions):
+        label = labels[region]
+        pred = preds[i + 1]
+
+        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+        if region == 'SpinalCord':
+            z_min_pred = np.nonzero(pred)[2].min()
+            z_min_label = np.nonzero(label)[2].min()
+            z_min = np.max([z_min_label, z_min_pred])
+
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min), label.shape)
+            pred = crop_foreground_3D(pred, crop)
+            label = crop_foreground_3D(label, crop)
+
+        # Dice.
+        region_metrics = {}
+        region_metrics['dice'] = dice(pred, label)
+
+        # Distances.
+        if pred.sum() == 0 or label.sum() == 0:
+            region_metrics['apl'] = np.nan
+            region_metrics['hd'] = np.nan
+            region_metrics['hd-95'] = np.nan
+            region_metrics['msd'] = np.nan
+            region_metrics['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, spacing, tols)
+            for metric, value in dists.items():
+                region_metrics[metric] = value
+
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, spacing, tols)
+            for metric, value in dists.items():
+                region_metrics[f'dm-{metric}'] = value
+
+        metrics.append(region_metrics)
+
+    return metrics
+
 def get_segmenter_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName) -> Dict[str, float]:
+    localiser: ModelName,
+    segmenter: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
     set = NRRDDataset(dataset)
@@ -227,16 +289,70 @@ def get_segmenter_evaluation(
 
     return data
     
+def create_multi_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    model: ModelName,
+    model_region: PatientRegions,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False) -> None:
+    datasets = arg_to_list(dataset, str)
+    model = replace_checkpoint_alias(model)
+    model_regions = region_to_list(model_region)
+    logging.arg_log('Evaluating multi-segmenter predictions for NRRD dataset', ('dataset', 'model', 'model_region'), (dataset, model, model_region))
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Build test loader.
+    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=model_regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+
+    # Add evaluations to dataframe.
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            region_metrics = get_multi_segmenter_evaluation(dataset, pat_id, model, model_regions)
+            for region, metrics in zip(model_regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold if test_fold is not None else np.nan,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
 def create_segmenter_evaluation(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> None:
     # Get unique name.
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
+    localiser = replace_checkpoint_alias(localiser)
+    segmenter = replace_checkpoint_alias(segmenter)
     logging.info(f"Evaluating segmenter predictions for NRRD datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Create dataframe.
@@ -280,15 +396,37 @@ def create_segmenter_evaluation(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
+def load_multi_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    model: ModelName,
+    exists_only: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    model = replace_checkpoint_alias(model)
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), filename)
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+    data = pd.read_csv(filepath, dtype={'patient-id': str})
+    return data
+
 def load_segmenter_evaluation(
     datasets: Union[str, List[str]],
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     exists_only: bool = False,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> Union[np.ndarray, bool]:
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
+    localiser = replace_checkpoint_alias(localiser)
+    segmenter = replace_checkpoint_alias(segmenter)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     if os.path.exists(filepath):
@@ -305,13 +443,13 @@ def load_segmenter_evaluation(
 def create_two_stage_evaluation(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     n_folds: Optional[int] = None,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
+    localiser = replace_checkpoint_alias(localiser)
+    segmenter = replace_checkpoint_alias(segmenter)
     logging.info(f"Evaluating two-stage predictions for NRRD datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test folds '{test_folds}'.")
 
     # Perform for specified folds

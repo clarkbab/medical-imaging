@@ -41,6 +41,9 @@ def config(level: str) -> None:
     # Add console handler to logger.
     logger.addHandler(ch)
 
+def level():
+    return LEVEL_MAP[logger.level]
+
 def debug(*args, **kwargs):
     global logger
     return logger.debug(*args, **kwargs)

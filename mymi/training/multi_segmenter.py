@@ -107,7 +107,8 @@ def train_multi_segmenter(
         assert spacing is not None
 
         # Crop input.
-        crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+        # crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+        crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
         crop = tuple(np.round(np.array(crop_mm) / spacing).astype(int))
         input = centre_crop_or_pad_3D(input, crop)
 
@@ -144,7 +145,7 @@ def train_multi_segmenter(
         logger = None
 
     # Create callbacks.
-    checks_path = os.path.join(config.directories.models, model_name, run_name)
+    ckpts_path = os.path.join(config.directories.models, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
@@ -153,7 +154,7 @@ def train_multi_segmenter(
     if ckpt_model:
         callbacks.append(ModelCheckpoint(
             auto_insert_metric_name=False,
-            dirpath=checks_path,
+            dirpath=ckpts_path,
             filename='loss={val/loss:.6f}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
@@ -167,8 +168,8 @@ def train_multi_segmenter(
     if resume:
         if resume_checkpoint is None:
             raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
-        check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
-        opt_kwargs['resume_from_checkpoint'] = check_path
+        ckpt_path = os.path.join(ckpts_path, f"{resume_checkpoint}.ckpt")
+        opt_kwargs['ckpt_path'] = ckpt_path
     
     # Perform training.
     trainer = Trainer(

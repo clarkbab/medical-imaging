@@ -168,7 +168,7 @@ def load_localiser_prediction(
     pat_id: types.PatientID,
     localiser: types.ModelName,
     exists_only: bool = False) -> Union[np.ndarray, bool]:
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
 
     # Load prediction.
     set = ds.get(dataset, 'nifti')
@@ -192,7 +192,7 @@ def load_localiser_predictions_timings(
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
@@ -246,7 +246,8 @@ def get_multi_segmenter_prediction(
     input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
 
     # Apply 'naive' cropping.
-    crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+    # crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
+    crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
     crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
     resampled_input_size = input.shape
     input = centre_crop_3D(input, crop)
@@ -398,7 +399,7 @@ def create_segmenter_prediction(
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
     datasets = arg_broadcast(dataset, pat_ids, arg_type=str)
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
     assert len(datasets) == len(pat_ids)
 
     # Load segmenter.
@@ -470,7 +471,7 @@ def create_multi_segmenter_predictions(
     # Create timing table.
     if use_timing:
         cols = {
-            'fold': int,
+            'fold': float,
             'dataset': str,
             'patient-id': str,
             'region': str,
@@ -490,7 +491,7 @@ def create_multi_segmenter_predictions(
 
             # Timing table data.
             data = {
-                'fold': test_fold,
+                'fold': test_fold if test_fold is not None else np.nan,
                 'dataset': dataset,
                 'patient-id': pat_id,
                 'region': str(regions),
@@ -517,7 +518,7 @@ def create_segmenter_predictions(
     timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    localiser = replace_checkpoint_alias(*localiser)
+    localiser = replace_checkpoint_alias(localiser)
     segmenter = Segmenter.load(*segmenter)
     logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
@@ -574,7 +575,7 @@ def load_multi_segmenter_prediction(
     model: types.ModelName,
     exists_only: bool = False,
     use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
-    model = replace_checkpoint_alias(*model, use_manifest=use_model_manifest)
+    model = replace_checkpoint_alias(model, use_manifest=use_model_manifest)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'pred.npz')
@@ -597,8 +598,8 @@ def load_segmenter_prediction(
     segmenter: types.ModelName,
     exists_only: bool = False,
     use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
-    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
+    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
 
     # Load segmentation.
     filepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, str(pat_id), *localiser, *segmenter, 'pred.npz')
@@ -622,8 +623,8 @@ def load_segmenter_predictions_timings(
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    localiser = replace_checkpoint_alias(*localiser)
-    segmenter = replace_checkpoint_alias(*segmenter)
+    localiser = replace_checkpoint_alias(localiser)
+    segmenter = replace_checkpoint_alias(segmenter)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')

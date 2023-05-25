@@ -1,12 +1,9 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition gpgpu
+#SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --gres gpu:p100:1
-#SBATCH --cpus-per-gpu 4
-#SBATCH --time 0-00:30:00
+#SBATCH --time 0-2:00:00
 #SBATCH -A punim1413
-#SBATCH -q gpgpumse
 
 module load gcccore/8.3.0
 module load python/3.8.2
@@ -50,7 +47,7 @@ else
 fi
 SEGMENTER="('segmenter-$REGION$postfix','$run_name','BEST')"
 
-python $SCRIPT_DIR/predict/nifti/segmenter/predict.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate.py \
     --datasets $DATASETS \
     --region $REGION \
     --localiser $LOCALISER \

@@ -177,7 +177,6 @@ class SplitConv3D(nn.Module):
 
         # Process each split.
         for i, x in enumerate(xs):
-            print(f"Split {i}: {x.shape}.")
             xs[i] = self.__layers[i](x)
 
         # Concatenate results.

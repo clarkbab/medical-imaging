@@ -7,7 +7,7 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 4-00:00:00
+#SBATCH --time 0-00:30:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -42,40 +42,17 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai"
-RESOLUTION="112"
+RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
-N_SPLIT_CHANNELS=2
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
-BATCH_SIZE=1
-CKPT_MODEL=True
-LR_INIT=1e-4
-N_EPOCHS=2000
-N_GPUS=1
-N_NODES=1
-N_WORKERS=8
-RESUME=False
-RESUME_CHECKPOINT='last'
+MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
+N_SPLIT_CHANNELS=2
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
-USE_LOGGER=True
-USE_LR_SCHEDULER=False
 
-python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
+python $SCRIPT_DIR/predict/nrrd/segmenter/predict_multi.py \
     --dataset $DATASET \
     --region $REGION \
-    --model_name $MODEL_NAME \
-    --run_name $RUN_NAME \
-    --batch_size $BATCH_SIZE \
-    --ckpt_model $CKPT_MODEL \
-    --lr_init $LR_INIT \
-    --n_epochs $N_EPOCHS \
-    --n_gpus $N_GPUS \
-    --n_nodes $N_NODES \
+    --model $MODEL \
     --n_split_channels $N_SPLIT_CHANNELS \
-    --n_workers $N_WORKERS \
-    --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
-    --slurm_job_id $SLURM_JOB_ID \
-    --use_loader_split_file $USE_LOADER_SPLIT_FILE \
-    --use_logger $USE_LOGGER \
-    --use_lr_scheduler $USE_LR_SCHEDULER
+    --use_loader_split_file $USE_LOADER_SPLIT_FILE

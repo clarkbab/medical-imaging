@@ -69,13 +69,12 @@ class MultiSegmenter(pl.LightningModule):
         if check_epochs:
             filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_samples = run_name.split('-')[-1]
-            n_epochs = 150
+            n_epochs = 2000
             if state['epoch'] < n_epochs - 1:
-                raise ValueError(f"Can't load segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
+                raise ValueError(f"Can't load multi-segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = replace_checkpoint_alias(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = replace_checkpoint_alias((model_name, run_name, checkpoint))
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
@@ -110,7 +109,7 @@ class MultiSegmenter(pl.LightningModule):
         }
         if self.__use_lr_scheduler:
             # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, [120])
-            opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=100, verbose=True)
+            opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
 
         return opt
 

@@ -417,8 +417,8 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
     # Get unique name.
-    localiser = replace_checkpoint_alias(*localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(*segmenter, use_manifest=use_model_manifest)
+    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
     logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.
