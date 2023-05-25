@@ -4,6 +4,7 @@ import pydicom as dcm
 from typing import Dict, List, Optional, OrderedDict
 
 from mymi import logging
+from mymi.regions import region_to_list
 from mymi.types import PatientRegion, PatientRegions
 
 from .ct_series import CTSeries
@@ -106,14 +107,25 @@ class RTSTRUCT(DICOMFile):
             pat_id = self.__series.study.patient.id
             new_regions = []
             for region in regions:
-                mapped_region = self.__region_map.to_internal(region, pat_id=pat_id)
+                mapped_region, priority = self.__region_map.to_internal(region, pat_id=pat_id)
                 # Don't map regions that would map to an existing region name.
                 if mapped_region != region and mapped_region in regions:
-                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in unmapped regions for '{self}'. Skipping...")
-                    new_regions.append(region)
+                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in unmapped regions for '{self}'. Skipping.")
+                    new_regions.append((region, priority))
+                # Don't map regions that are already present in 'new_regions'.
+                elif mapped_region in new_regions:
+                    raise ValueError(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
                 else:
-                    new_regions.append(mapped_region)
-            regions = new_regions
+                    new_regions.append((mapped_region, priority))
+
+            # Deduplicate 'new_regions' by priority. I.e. if 'GTVp' (priority=0) and 'GTVp' (priority=1) are both present,
+            # then choose 'GTVp' (priority=1) and don't map 'GTVp' (priority=0).
+            for i in range(len(new_regions)):
+                n_r, n_p = new_regions[i]
+                for r, p in new_regions:
+                    if r == n_r and p > n_p:
+                        new_regions[i] = (regions[i], n_p)
+            regions = [r[0] for r in new_regions]
 
         # Check for multiple regions.
         # Probably not an issue? Do RTSTRUCT DICOMs support duplicates - probably not,
@@ -126,8 +138,9 @@ class RTSTRUCT(DICOMFile):
 
     def region_data(
         self,
-        regions: PatientRegions = 'all',
+        region: PatientRegions = 'all',
         use_mapping: bool = True) -> OrderedDict:
+        regions = region_to_list(region)
         self.__assert_requested_regions(regions, use_mapping=use_mapping)
 
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.

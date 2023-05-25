@@ -24,7 +24,7 @@ def append_row(
     df: pd.DataFrame,
     data: Dict[str, Union[int, float, str]],
     index: Optional[int] = None) -> pd.DataFrame:
-    odf = pd.DataFrame([data], index=index)
+    odf = pd.DataFrame([data], index=[index])
     use_odf_types = True if len(df) == 0 else False
     df = pd.concat((df, odf), axis=0)
 

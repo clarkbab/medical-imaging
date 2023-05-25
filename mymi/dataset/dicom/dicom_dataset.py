@@ -14,31 +14,33 @@ from .dicom_patient import DICOMPatient
 from .index import ERRORS_COLS, INDEX_COLS, build_index
 from .region_map import RegionMap
 
+REGEXP_CT_FROM = r'^__ct_from_(.*)__$'
 Z_SPACING_ROUND_DP = 2
 
 class DICOMDataset(Dataset):
     def __init__(
         self,
         name: str):
-        self.__path = os.path.join(config.directories.datasets, 'dicom', name)
+        self.__name = name
         self.__index = None             # Lazy-loaded.
         self.__index_errors = None      # Lazy-loaded.
+        self.__loaded_region_dups = False
+        self.__loaded_region_map = False
+        self.__path = os.path.join(config.directories.datasets, 'dicom', name)
+        if not os.path.exists(self.__path):
+            raise ValueError(f"Dataset '{self}' not found.")
         self.__region_dups = None       # Lazy-loaded.
         self.__region_map = None        # Lazy-loaded.
 
         # Load 'ct_from' flag.
         ct_from_name = None
         for f in os.listdir(self.__path):
-            match = re.match('^ct_from_(.*)$', f)
+            match = re.match(REGEXP_CT_FROM, f)
             if match:
                 ct_from_name = match.group(1)
-
         self.__ct_from = DICOMDataset(ct_from_name) if ct_from_name is not None else None
-        self.__global_id = f"DICOM: {name}"
-        self.__global_id = self.__global_id + f" (CT from - {self.__ct_from})" if self.__ct_from is not None else self.__global_id
-        self.__name = name
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset '{self}' not found.")
+
+        self.__global_id = f"DICOM: {name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"DICOM: {name}"
 
     @property
     def ct_from(self) -> Optional['DICOMDataset']:
@@ -70,14 +72,16 @@ class DICOMDataset(Dataset):
 
     @property
     def region_dups(self) -> pd.DataFrame:
-        if self.__region_dups is None:
+        if not self.__loaded_region_dups:
             self.__load_region_dups()
+            self.__loaded_region_dups = True
         return self.__region_dups
 
     @property
     def region_map(self) -> RegionMap:
-        if self.__region_map is None:
+        if not self.__loaded_region_map:
             self.__load_region_map()
+            self.__loaded_region_map = True
         return self.__region_map
 
     @property
@@ -155,7 +159,12 @@ class DICOMDataset(Dataset):
     def __load_index(self) -> None:
         filepath = os.path.join(self.__path, 'index.csv')
         if not os.path.exists(filepath):
-            build_index(self.__name)
+            if self.__ct_from is not None:
+                ct_index = self.__ct_from.index.copy()
+                ct_index = ct_index[ct_index['modality'] == 'CT']
+            else:
+                ct_index = None
+            build_index(self.__name, ct_index=ct_index)
         try:
             self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str })
         except pd.errors.EmptyDataError:
@@ -165,7 +174,12 @@ class DICOMDataset(Dataset):
     def __load_index_errors(self) -> None:
         filepath = os.path.join(self.__path, 'index-errors.csv')
         if not os.path.exists(filepath):
-            build_index(self.__name)
+            if self.__ct_from is not None:
+                ct_index = self.__ct_from.index.copy()
+                ct_index = ct_index[ct_index['modality'] == 'CT']
+            else:
+                ct_index = None
+            build_index(self.__name, ct_index=ct_index)
         try:
             self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
         except pd.errors.EmptyDataError:
@@ -174,11 +188,17 @@ class DICOMDataset(Dataset):
 
     def __load_region_dups(self) -> Optional[pd.DataFrame]:
         filepath = os.path.join(self.__path, 'region-dups.csv')
-        self.__region_dups = pd.read_csv(filepath)
+        if os.path.exists(filepath):
+            self.__region_dups = pd.read_csv(filepath)
+        else:
+            self.__region_dups = None
 
     def __load_region_map(self) -> Optional[RegionMap]:
         filepath = os.path.join(self.__path, 'region-map.csv')
-        self.__region_map = RegionMap.load(filepath)
+        if os.path.exists(filepath):
+            self.__region_map = RegionMap.load(filepath)
+        else:
+            self.__region_map = None
 
     def __str__(self) -> str:
         return self.__global_id

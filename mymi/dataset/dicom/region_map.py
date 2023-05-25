@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import re
-from typing import Optional
+from typing import Optional, Tuple
 
 from mymi.regions import is_region
 from mymi.types import PatientID
@@ -34,8 +34,11 @@ class RegionMap:
     def to_internal(
         self,
         region: str,
-        pat_id: Optional[PatientID] = None) -> str:
+        pat_id: Optional[PatientID] = None) -> Tuple[str, int]:
+
         # Iterate over map rows.
+        match = None
+        priority = -np.inf
         for _, row in self.__data.iterrows():
             if 'patient-id' in row:
                 # Skip if this map row is for a different patient.
@@ -45,15 +48,23 @@ class RegionMap:
 
             args = []
             # Add case sensitivity to regexp match args.
-            if 'case-sensitive' in row:
-                case_sensitive = row['case-sensitive']
-                if not np.isnan(case_sensitive) and not case_sensitive:
+            if 'case' in row:
+                case = row['case']
+                if not np.isnan(case) and not case:
                     args += [re.IGNORECASE]
             else:
                 args += [re.IGNORECASE]
                 
             # Perform match.
             if re.match(row['dataset'], region, *args):
-                return row.internal
+                if 'priority' in row and not np.isnan(row['priority']):
+                    if row['priority'] > priority:
+                        match = row['internal']
+                        priority = row['priority']
+                else:
+                    match = row['internal']
+
+        if match is None:
+            match = region
         
-        return region
+        return match, priority
