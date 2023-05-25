@@ -2,12 +2,13 @@ from ast import literal_eval
 from distutils.dir_util import copy_tree
 import numpy as np
 import pandas as pd
+from pandas import DataFrame
 from pathlib import Path
 import pydicom as dcm
 import os
 from time import time
 from tqdm import tqdm
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from mymi import config
 from mymi import logging
@@ -27,6 +28,7 @@ ERRORS_COLS['error'] = str
 
 def build_index(
     dataset: str,
+    ct_index: Optional[DataFrame] = None,
     from_temp_index: bool = False) -> None:
     start = time()
 
@@ -34,7 +36,10 @@ def build_index(
     dataset_path = os.path.join(config.directories.datasets, 'dicom', dataset) 
 
     # Create index.
-    index = pd.DataFrame(columns=INDEX_COLS.keys())
+    if ct_index is None:
+        index = pd.DataFrame(columns=INDEX_COLS.keys())
+    else:
+        index = ct_index.copy()
 
     # Crawl folder structure.
     temp_filepath = os.path.join(config.directories.temp, f'{dataset}-index.csv')
@@ -53,6 +58,10 @@ def build_index(
         # Add all DICOM files.
         logging.info(f"Building index for dataset '{dataset}'...")
         file_index = 0
+        if ct_index is None:
+            mods = ('CT', 'RTSTRUCT', 'RTPLAN', 'RTDOSE')
+        else:
+            mods = ('RTSTRUCT', 'RTPLAN', 'RTDOSE')
         for root, _, files in tqdm(os.walk(data_path)):
             for f in files:
                 # Check if DICOM file.
@@ -64,7 +73,7 @@ def build_index(
 
                 # Get modality.
                 modality = dicom.Modality
-                if not modality in ('CT', 'RTSTRUCT', 'RTPLAN', 'RTDOSE'):
+                if not modality in mods:
                     continue
 
                 # Get patient ID.

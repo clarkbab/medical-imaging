@@ -3,6 +3,7 @@ import pandas as pd
 import pydicom as dcm
 from pydicom.dataset import FileDataset
 
+from mymi import logging
 from mymi.transforms import resample_3D
 from mymi.types import ImageSize3D, ImageSpacing3D, PhysPoint3D
 
@@ -13,6 +14,7 @@ class RTDOSE(DICOMFile):
         self,
         series: 'RTDOSESeries',
         id: SOPInstanceUID):
+        self.__loaded_data = False
         self.__data = None      # Lazy-loaded.
         self.__global_id = f"{series} - {id}"
         self.__offset = None    # Lazy-loaded.
@@ -29,8 +31,9 @@ class RTDOSE(DICOMFile):
 
     @property
     def data(self) -> np.ndarray:
-        if self.__data is None:
+        if not self.__loaded_data:
             self.__load_rtdose_data()
+            self.__loaded_data = True
         return self.__data
 
     @property
@@ -47,8 +50,9 @@ class RTDOSE(DICOMFile):
 
     @property
     def offset(self) -> PhysPoint3D:
-        if self.__offset is None:
+        if not self.__loaded_data:
             self.__load_rtdose_data()
+            self.__loaded_data = True
         return self.__offset
 
     @property
@@ -65,8 +69,9 @@ class RTDOSE(DICOMFile):
 
     @property
     def spacing(self) -> ImageSpacing3D:
-        if self.__spacing is None:
+        if not self.__loaded_data:
             self.__load_rtdose_data()
+            self.__loaded_data = True
         return self.__spacing
 
     def get_rtdose(self) -> FileDataset:
@@ -88,7 +93,13 @@ class RTDOSE(DICOMFile):
         # Store spacing.
         spacing_x_y = rtdose.PixelSpacing 
         z_diffs = np.unique(np.diff(rtdose.GridFrameOffsetVector))
-        assert len(z_diffs) == 1
+        if len(z_diffs) != 1:
+            logging.warning(f"Slice z spacings for RTDOSE {self} not equal, setting RTDOSE data to 'None'.")
+            self.__offset = None
+            self.__spacing = None
+            self.__data = None
+            return
+
         spacing_z = z_diffs[0]
         self.__spacing = tuple(np.append(spacing_x_y, spacing_z))
 

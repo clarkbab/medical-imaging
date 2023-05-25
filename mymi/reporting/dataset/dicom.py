@@ -109,7 +109,7 @@ def get_patient_regions(
 
     return df
 
-def create_patient_regions_report(
+def create_regions_report(
     dataset: str,
     use_mapping: bool = True) -> None:
     # Generate counts report.
@@ -120,7 +120,7 @@ def create_patient_regions_report(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pr_df.to_csv(filepath, index=False)
 
-def load_patient_regions_report(
+def load_regions_report(
     dataset: str,
     use_mapping: bool = True) -> None:
     set = DICOMDataset(dataset)

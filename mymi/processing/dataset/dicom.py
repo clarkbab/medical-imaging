@@ -17,36 +17,40 @@ from .dataset import write_flag
 
 def convert_to_nifti(
     dataset: 'Dataset',
-    regions: PatientRegions = 'all',
+    region: PatientRegions = 'all',
     anonymise: bool = False) -> None:
+    logging.info(f"Converting DICOMDataset '{dataset}' to NIFTIDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
+
+    regions = region_to_list(region)
+
     # Create NIFTI dataset.
+    dicom_set = DICOMDataset(dataset)
     nifti_set = recreate_nifti(dataset)
 
-    logging.info(f"Converting dataset '{dataset}' to dataset '{nifti_set}', with regions '{regions}' and anonymise '{anonymise}'.")
-
     # Load all patients.
-    pats = dataset.list_patients(regions=regions)
+    pat_ids = dicom_set.list_patients(region=region)
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
-        df = pd.DataFrame(pats, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
+        df = pd.DataFrame(pat_ids, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
 
         # Save map.
-        save_csv(df, 'anon-maps', f'{dataset.name}.csv', overwrite=True)
+        filepath = os.path.join(dicom_set.path, 'anon-nifti-map.csv')
+        save_csv(df, filepath, overwrite=True)
 
-    for pat in tqdm(pats):
+    for pat_id in tqdm(pat_ids):
         # Get anonymous ID.
         if anonymise:
-            anon_id = df[df['patient-id'] == pat].index.values[0]
+            anon_id = df[df['patient-id'] == pat_id].index.values[0]
             filename = f'{anon_id}.nii.gz'
         else:
-            filename = f'{pat}.nii.gz'
+            filename = f'{pat_id}.nii.gz'
 
         # Create CT NIFTI.
-        patient = dataset.patient(pat)
-        data = patient.ct_data
-        spacing = patient.ct_spacing
-        offset = patient.ct_offset
+        pat = dicom_set.patient(pat_id)
+        data = pat.ct_data
+        spacing = pat.ct_spacing
+        offset = pat.ct_offset
         affine = np.array([
             [spacing[0], 0, 0, offset[0]],
             [0, spacing[1], 0, offset[1]],
@@ -58,8 +62,9 @@ def convert_to_nifti(
         nib.save(img, filepath)
 
         # Create region NIFTIs.
-        pat_regions = patient.list_regions(whitelist=regions)
-        region_data = patient.region_data(region=pat_regions)
+        pat_regions = pat.list_regions()
+        pat_regions = [r for r in pat_regions if r in regions]
+        region_data = pat.region_data(region=pat_regions)
         for region, data in region_data.items():
             img = Nifti1Image(data.astype(np.int32), affine)
             filepath = os.path.join(nifti_set.path, 'data', 'regions', region, filename)
@@ -67,15 +72,12 @@ def convert_to_nifti(
             nib.save(img, filepath)
 
         # Create RTDOSE NIFTI.
-        try:
-            patient = dataset.patient(pat) 
-            dose_data = patient.dose_data
+        dose_data = pat.dose_data
+        if dose_data is not None:
             img = Nifti1Image(dose_data, affine)
             filepath = os.path.join(nifti_set.path, 'data', 'dose', filename)
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
-        except ValueError as e:
-            logging.error(str(e))
 
     # Indicate success.
     write_flag(nifti_set, '__CONVERT_FROM_NIFTI_END__')

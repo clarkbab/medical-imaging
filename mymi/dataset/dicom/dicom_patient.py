@@ -78,7 +78,7 @@ class DICOMPatient:
     @property
     def default_rtdose(self) -> str:
         if self.__default_rtdose is None:
-            self.__load_default_rtplan_and_rtdose()
+            self.__load_default_rtdose_and_rtplan()
         return self.__default_rtdose
 
     @property
@@ -105,19 +105,31 @@ class DICOMPatient:
 
     @property
     def dose_data(self):
-        return self.default_rtdose.data
+        if self.default_rtdose is not None:
+            return self.default_rtdose.data
+        else:
+            return None
 
     @property
     def dose_offset(self):
-        return self.default_rtdose.offset
+        if self.default_rtdose is not None:
+            return self.default_rtdose.offset
+        else:
+            return None
 
     @property
     def dose_size(self):
-        return self.default_rtdose.size
+        if self.default_rtdose is not None:
+            return self.default_rtdose.size
+        else:
+            return None
 
     @property
     def dose_spacing(self):
-        return self.default_rtdose.spacing
+        if self.default_rtdose is not None:
+            return self.default_rtdose.spacing
+        else:
+            return None
 
     @property
     def id(self) -> str:
