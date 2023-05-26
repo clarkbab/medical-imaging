@@ -26,7 +26,7 @@ test_folds = [0, 1, 2, 3, 4]
 # Load localiser checkpoints.
 loc_ckpts = {}
 for region in regions:
-    ckpt = Localiser.replace_checkpoint_aliases(f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')[2]
+    ckpt = Localiser.replace_ckpt_aliases(f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')[2]
     loc_ckpts[region] = ckpt
 
 for region in regions:

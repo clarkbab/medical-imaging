@@ -725,7 +725,7 @@ def create_localiser_figures(
     dataset: str,
     region: str,
     localiser: Tuple[str, str, str]) -> None:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
+    localiser = Localiser.replace_ckpt_aliases(*localiser)
     logging.info(f"Creating localiser figures for dataset '{dataset}', region '{region}' and localiser '{localiser}'.")
 
     # Get patients.

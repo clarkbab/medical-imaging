@@ -21,7 +21,7 @@ from mymi.dataset.training import create as create_training
 from mymi.dataset.training import recreate as recreate_training
 from mymi.loaders import Loader
 from mymi import logging
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.regions import region_to_list
@@ -417,8 +417,8 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
     # Get unique name.
-    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
+    localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
     logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Build test loader.

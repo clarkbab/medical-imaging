@@ -1,15 +1,17 @@
 import os
+from re import match
 import torch
-from typing import Tuple
+from typing import Optional
 
 from mymi import config
 from mymi.reporting.models import load_model_manifest
 from mymi.types import ModelName
 
-CHECKPOINT_KEYS = [
+CKPT_KEYS = [
     'epoch',
     'global_step'
 ]
+CKPT_LAST_REGEXP = r'^last(-v([0-1]+))?$'
 
 def get_localiser(region: str) -> ModelName:
     return (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
@@ -26,11 +28,12 @@ def print_checkpoint(model: ModelName) -> None:
     data = torch.load(path, map_location=torch.device('cpu'))
 
     # Print data.
-    for k in CHECKPOINT_KEYS:
+    for k in CKPT_KEYS:
         print(f'{k}: {data[k]}')
 
-def replace_checkpoint_alias(
+def replace_ckpt_alias(
     model: ModelName,
+    ckpt_version: Optional[int] = None,
     use_manifest: bool = False) -> ModelName:
     ckpt = model[2].lower()
     if '.ckpt' in ckpt:
@@ -54,5 +57,29 @@ def replace_checkpoint_alias(
             ckpts = [c for c in os.listdir(ckpts_path) if '.ckpt' in c and c != 'last.ckpt']
             ckpts = list(sorted([c.replace('.ckpt', '') for c in ckpts]))
             ckpt = ckpts[-1]
+
+    elif ckpt == 'last':
+        # Get specific version of 'last' checkpoint.
+        if ckpt_version is not None:
+            if ckpt_version > 0:
+                ckpt = f'last-v{ckpt_version}'
+                filepath = os.path.join(config.directories.models, *model[:2], f'{ckpt}.ckpt')
+                if not os.path.exists(filepath):
+                    raise ValueError(f"No '{ckpt}' checkpoint exists for model '{model[0]}', run '{model[1]}'. Filepath: {filepath}.")
+
+        # Get latest 'last' checkpoint.
+        else:
+            ckpts_path = os.path.join(config.directories.models, *model[:2])
+            ckpts = os.listdir(ckpts_path)
+            ckpts = [c.replace('.ckpt', '') for c in ckpts]
+            last_ckpts = [c for c in ckpts if match(CKPT_LAST_REGEXP, c) is not None]
+            if len(last_ckpts) == 0:
+                raise ValueError(f"No 'last' checkpoint exists for model '{model[0]}', run '{model[1]}'. Filepath: {filepath}.")
+
+            # Find the latest 'last' checkpoint.
+            if len(last_ckpts) == 1:
+                ckpt = last_ckpts[0]
+            else:
+                ckpt = last_ckpts[-2]
 
     return (*model[:2], ckpt)

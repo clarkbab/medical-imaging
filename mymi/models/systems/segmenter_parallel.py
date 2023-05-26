@@ -65,7 +65,7 @@ class SegmenterParallel(pl.LightningModule):
             raise ValueError(f"Can't load SegmenterParallel ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = SegmenterParallel.replace_checkpoint_aliases(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = SegmenterParallel.replace_ckpt_aliases(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"SegmenterParallel '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
@@ -75,7 +75,7 @@ class SegmenterParallel(pl.LightningModule):
         return segmenter
 
     @staticmethod
-    def replace_checkpoint_aliases(
+    def replace_ckpt_aliases(
         model_name: str,
         run_name: str,
         checkpoint: str) -> Tuple[str, str, str]:

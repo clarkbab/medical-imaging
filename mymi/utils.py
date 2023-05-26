@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
+from re import match
 from time import perf_counter, time
 import torch
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
@@ -121,43 +122,6 @@ def fplot(
     plt.title(f"{f_str}, {param_str}")
 
     plt.show()
-
-def get_n_epochs(model:  Union[ModelName, List[ModelName]]) -> pd.DataFrame:
-    models = arg_to_list(model, tuple)
-    
-    cols = {
-        'model': str,
-        'run': str,
-        'ckpt': str,
-        'exists': bool,
-        'n-epochs': int,
-    }
-    df = pd.DataFrame(columns=cols.keys())
-    
-    for model in models:
-        if '.ckpt' in model[2]:
-            raise ValueError(f"Please do not specify '.ckpt' in model name '{model}'.")
-
-        ckpt = f'{model[2]}.ckpt'
-        filepath = os.path.join(config.directories.models, *model[:2], ckpt)
-        if not os.path.exists(filepath):
-            exists = False
-            n_epochs = 0
-        else:
-            exists = True
-            state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_epochs = state['epoch']
-        
-        data = {
-            'model': model[0],
-            'run': model[1],
-            'ckpt': model[2],
-            'exists': exists,
-            'n-epochs': n_epochs
-        }
-        df = append_row(df, data)
-            
-    return df
 
 def save_csv(
     data: pd.DataFrame,

@@ -9,7 +9,7 @@ mymi_dir = up(up(up(up(filepath))))
 sys.path.append(mymi_dir)
 from mymi import config
 from mymi.loaders import Loader
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.regions import RegionNames
 
 for_real = True
@@ -23,7 +23,7 @@ test_folds = list(range(5))
 # Load localiser checkpoints - localiser is shared by segmenter stage models.
 loc_ckpts = {}
 for region in regions:
-    ckpt = replace_checkpoint_alias(f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')[2]
+    ckpt = replace_ckpt_alias(f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')[2]
     loc_ckpts[region] = ckpt
 
 for region in regions:

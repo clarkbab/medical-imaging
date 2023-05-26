@@ -12,7 +12,7 @@ from mymi.dataset.dicom import RTSTRUCTConverter
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import dice
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.reporting.loaders import load_loader_manifest
 from mymi import types
 from mymi.utils import append_row, encode, load_csv, save_csv
@@ -24,8 +24,8 @@ def load_segmenter_dose_evaluation(
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_model_manifest: bool = False) -> pd.DataFrame:
-    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
+    localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{n_folds}-test-{test_fold}.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Segmenter dose evaluation for datasets '{datasets}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
@@ -41,8 +41,8 @@ def create_segmenter_dose_evaluation_from_loader(
     test_fold: Optional[int] = None,
     use_loader_manifest: bool = False,
     use_model_manifest: bool = False) -> None:
-    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
+    localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
     logging.info(f"Creating dose evaluation for region '{region}', fold '{test_fold}', with localiser '{localiser}' and segmenter '{segmenter}'.")
 
     # Build test loader.

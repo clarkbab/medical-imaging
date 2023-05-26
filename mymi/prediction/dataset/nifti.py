@@ -13,7 +13,7 @@ from mymi.dataset import TrainingDataset
 from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
@@ -168,7 +168,7 @@ def load_localiser_prediction(
     pat_id: types.PatientID,
     localiser: types.ModelName,
     exists_only: bool = False) -> Union[np.ndarray, bool]:
-    localiser = replace_checkpoint_alias(localiser)
+    localiser = replace_ckpt_alias(localiser)
 
     # Load prediction.
     set = ds.get(dataset, 'nifti')
@@ -192,7 +192,7 @@ def load_localiser_predictions_timings(
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    localiser = replace_checkpoint_alias(localiser)
+    localiser = replace_ckpt_alias(localiser)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
@@ -399,7 +399,7 @@ def create_segmenter_prediction(
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
     datasets = arg_broadcast(dataset, pat_ids, arg_type=str)
-    localiser = replace_checkpoint_alias(localiser)
+    localiser = replace_ckpt_alias(localiser)
     assert len(datasets) == len(pat_ids)
 
     # Load segmenter.
@@ -518,7 +518,7 @@ def create_segmenter_predictions(
     timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    localiser = replace_checkpoint_alias(localiser)
+    localiser = replace_ckpt_alias(localiser)
     segmenter = Segmenter.load(*segmenter)
     logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
@@ -575,7 +575,7 @@ def load_multi_segmenter_prediction(
     model: types.ModelName,
     exists_only: bool = False,
     use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
-    model = replace_checkpoint_alias(model, use_manifest=use_model_manifest)
+    model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'pred.npz')
@@ -598,8 +598,8 @@ def load_segmenter_prediction(
     segmenter: types.ModelName,
     exists_only: bool = False,
     use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
-    localiser = replace_checkpoint_alias(localiser, use_manifest=use_model_manifest)
-    segmenter = replace_checkpoint_alias(segmenter, use_manifest=use_model_manifest)
+    localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
+    segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
 
     # Load segmentation.
     filepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, str(pat_id), *localiser, *segmenter, 'pred.npz')
@@ -623,8 +623,8 @@ def load_segmenter_predictions_timings(
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
-    localiser = replace_checkpoint_alias(localiser)
-    segmenter = replace_checkpoint_alias(segmenter)
+    localiser = replace_ckpt_alias(localiser)
+    segmenter = replace_ckpt_alias(segmenter)
 
     # Load prediction.
     filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
@@ -640,8 +640,8 @@ def save_patient_segmenter_prediction(
     localiser: types.ModelName,
     segmenter: types.ModelName,
     data: np.ndarray) -> None:
-    localiser = Localiser.replace_checkpoint_aliases(*localiser)
-    segmenter = Segmenter.replace_checkpoint_aliases(*segmenter)
+    localiser = Localiser.replace_ckpt_aliases(*localiser)
+    segmenter = Segmenter.replace_ckpt_aliases(*segmenter)
 
     # Load segmentation.
     set = ds.get(dataset, 'nifti')

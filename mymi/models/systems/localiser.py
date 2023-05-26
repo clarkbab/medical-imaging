@@ -11,7 +11,7 @@ from mymi import config
 from mymi.geometry import get_extent_centre
 from mymi.losses import DiceLoss
 from mymi.metrics import batch_mean_dice, batch_mean_all_distances
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.postprocessing import largest_cc_4D
 from mymi import types
 
@@ -69,7 +69,7 @@ class Localiser(pl.LightningModule):
             raise ValueError(f"Can't load localiser ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = replace_checkpoint_alias(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = replace_ckpt_alias(model_name, run_name, checkpoint)
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")

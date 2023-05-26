@@ -14,7 +14,7 @@ from mymi.geometry import get_extent_centre
 from mymi import logging
 from mymi.losses import DiceWithFocalLoss
 from mymi.metrics import dice
-from mymi.models import replace_checkpoint_alias
+from mymi.models import replace_ckpt_alias
 from mymi.models.networks import MultiUNet3D
 from mymi.regions import region_to_list
 from mymi import types
@@ -69,12 +69,12 @@ class MultiSegmenter(pl.LightningModule):
         if check_epochs:
             filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_epochs = 2000
+            n_epochs = 3000
             if state['epoch'] < n_epochs - 1:
                 raise ValueError(f"Can't load multi-segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
-        model_name, run_name, checkpoint = replace_checkpoint_alias((model_name, run_name, checkpoint))
+        model_name, run_name, checkpoint = replace_ckpt_alias((model_name, run_name, checkpoint))
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Segmenter '{model_name}' with run name '{run_name}' and checkpoint '{checkpoint}' not found.")
