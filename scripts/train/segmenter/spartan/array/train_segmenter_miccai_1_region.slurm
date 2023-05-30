@@ -7,7 +7,7 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 1-00:00:00
+#SBATCH --time 6-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -42,19 +42,19 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai"
-RESOLUTION="444"
+RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 LR_INIT=1e-4
-N_EPOCHS=3000
+N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
 RESUME=True
-RESUME_CHECKPOINT='last'
+RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
@@ -74,7 +74,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \

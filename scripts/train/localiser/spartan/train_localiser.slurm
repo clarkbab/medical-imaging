@@ -25,11 +25,11 @@ n_NODES=1
 n_WORKERS=4
 PRETRAINED="('localiser-$REGION','public-1gpu-100epochs','BEST')"
 RESUME=False
-RESUME_CHECKPOINT="last"
+RESUME_CKPT="last"
 RUN_NAME="tl-100epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
 
 python $SCRIPT_DIR/train/localiser --slurm_job_id $SLURM_JOB_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS --n_epochs $n_EPOCHS --n_gpus $n_GPUS \
-    --n_nodes $n_NODES --n_subset $n_SUBSET --n_workers $n_WORKERS --pretrained $PRETRAINED --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+    --n_nodes $n_NODES --n_subset $n_SUBSET --n_workers $n_WORKERS --pretrained $PRETRAINED --region $REGION --resume $RESUME --resume_ckpt $RESUME_CKPT \
     --use_logger $USE_LOGGER

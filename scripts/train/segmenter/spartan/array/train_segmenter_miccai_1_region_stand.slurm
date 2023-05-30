@@ -47,7 +47,7 @@ N_GPUS=1
 N_NODES=1
 N_WORKERS=8
 RESUME=False
-RESUME_CHECKPOINT='last'
+RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 THRESH_LOW=-1000
 THRESH_HIGH=1000
@@ -71,7 +71,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --slurm_job_id $SLURM_JOB_ID \
     --thresh_low $THRESH_LOW \
     --thresh_high $THRESH_HIGH \

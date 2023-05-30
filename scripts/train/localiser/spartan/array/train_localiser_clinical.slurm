@@ -42,12 +42,12 @@ n_GPUS=1
 n_NODES=1
 n_WORKERS=4
 RESUME=False
-RESUME_CHECKPOINT='last'
+RESUME_CKPT='last'
 RUN_NAME="clinical-1gpu-150epochs"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TRUNCATE_SPINE=True
 USE_LOGGER=True
 
 python $SCRIPT_DIR/train/localiser --slurm_array_job_id $SLURM_ARRAY_JOB_ID --slurm_array_task_id $SLURM_ARRAY_TASK_ID --model_name $MODEL_NAME --run_name $RUN_NAME --datasets $DATASETS \
-    --n_epochs $n_EPOCHS --n_gpus $n_GPUS --n_nodes $n_NODES --n_workers $n_WORKERS --region $REGION --resume $RESUME --resume_checkpoint $RESUME_CHECKPOINT \
+    --n_epochs $n_EPOCHS --n_gpus $n_GPUS --n_nodes $n_NODES --n_workers $n_WORKERS --region $REGION --resume $RESUME --resume_ckpt $RESUME_CKPT \
     --truncate_spine $TRUNCATE_SPINE --use_logger $USE_LOGGER

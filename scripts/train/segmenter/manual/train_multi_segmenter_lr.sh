@@ -23,7 +23,7 @@ N_NODES=1
 N_SPLIT_CHANNELS=1
 N_WORKERS=8
 RESUME=False
-RESUME_CHECKPOINT='last'
+RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
@@ -42,7 +42,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_nodes $N_NODES \
     --n_workers $N_WORKERS \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --test_fold $TEST_FOLD \

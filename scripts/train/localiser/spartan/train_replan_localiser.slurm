@@ -21,7 +21,7 @@ n_GPUS=1
 n_NODES=1
 n_WORKERS=4
 RESUME=False
-RESUME_CHECKPOINT='last'
+RESUME_CKPT='last'
 RUN_NAME="test"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TRUNCATE_SPINE=True
@@ -39,6 +39,6 @@ python $SCRIPT_DIR/train/localiser/train_replan_localiser.py \
     --n_workers $n_WORKERS \
     --region $REGION \
     --resume $RESUME \
-    --resume_checkpoint $RESUME_CHECKPOINT \
+    --resume_ckpt $RESUME_CKPT \
     --truncate_spine $TRUNCATE_SPINE \
     --use_logger $USE_LOGGER

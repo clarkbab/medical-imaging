@@ -6,16 +6,16 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
-from torchio.transforms import Clamp, Compose, RandomAffine, ZNormalization
 from typing import List, Optional, Union
 
 from mymi import config
 from mymi.loaders import MultiLoader
+from mymi.loaders.augmentation import get_transforms
+from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models.systems import MultiSegmenter, Segmenter
 from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi.transforms import Standardise, centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
@@ -28,6 +28,7 @@ def train_multi_segmenter(
     batch_size: int = 1,
     ckpt_model: bool = True,
     halve_channels: bool = False,
+    lam: float = 0.5,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
     lr_find_min_lr: float = 1e-6,
@@ -43,7 +44,7 @@ def train_multi_segmenter(
     p_val: float = 0.2,
     precision: Union[str, int] = 16,
     resume: bool = False,
-    resume_checkpoint: Optional[str] = None,
+    resume_ckpt: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
@@ -61,38 +62,8 @@ def train_multi_segmenter(
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     datasets = arg_to_list(dataset, str)
 
-    # Create transforms.
-    rotation = (-5, 5)
-    translation = (-50, 50)
-    scale = (0.8, 1.2)
-    transform_train = RandomAffine(
-        degrees=rotation,
-        scales=scale,
-        translation=translation,
-        default_pad_value='minimum')
-    transform_val = None
-
-    if use_thresh:
-        transform_train = Compose([
-            transform_train,
-            Clamp(out_min=thresh_low, out_max=thresh_high)
-        ])
-        transform_val = Clamp(out_min=thresh_low, out_max=thresh_high)
-
-    if use_stand:
-        stand = Standardise(-832.2, 362.1)
-        transform_train = Compose([
-            transform_train,
-            stand
-        ])
-        if transform_val is None:
-            transform_val = stand
-        else:
-            transform_val = Compose([
-                transform_val,
-                stand
-            ])
-
+    # Get augmentation transforms.
+    transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_stand=use_stand, use_thresh=use_thresh)
     logging.info(f"Training transform: {transform_train}")
     logging.info(f"Validation transform: {transform_val}")
 
@@ -100,23 +71,7 @@ def train_multi_segmenter(
     if loss_fn == 'dice':
         loss_fn = DiceLoss()
     elif loss_fn == 'dice_with_focal':
-        loss_fn = DiceWithFocalLoss()
-
-    # Define crop function.
-    def naive_crop(input, labels, spacing=None):
-        assert spacing is not None
-
-        # Crop input.
-        # crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
-        crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
-        crop = tuple(np.round(np.array(crop_mm) / spacing).astype(int))
-        input = centre_crop_or_pad_3D(input, crop)
-
-        # Crop labels.
-        for r in labels.keys():
-            labels[r] = centre_crop_or_pad_3D(labels[r], crop)
-
-        return input, labels
+        loss_fn = DiceWithFocalLoss(lam=lam)
 
     # Create data loaders.
     train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=batch_size, data_hook=naive_crop, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
@@ -166,10 +121,9 @@ def train_multi_segmenter(
     # Add optional trainer args.
     opt_kwargs = {}
     if resume:
-        if resume_checkpoint is None:
-            raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
-        ckpt_path = os.path.join(ckpts_path, f"{resume_checkpoint}.ckpt")
-        opt_kwargs['ckpt_path'] = ckpt_path
+        if resume_ckpt is None:
+            raise ValueError(f"Must pass 'resume_ckpt' when resuming training run.")
+        opt_kwargs['ckpt_path'] = os.path.join(ckpts_path, f'{resume_ckpt}.ckpt')
     
     # Perform training.
     trainer = Trainer(

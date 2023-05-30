@@ -31,7 +31,7 @@ def train_localiser(
     pretrained: Optional[Tuple[str, str, str]] = None,
     p_val: float = 0.2,
     resume: bool = False,
-    resume_checkpoint: Optional[str] = None,
+    resume_ckpt: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
@@ -114,9 +114,9 @@ def train_localiser(
     # Add optional trainer args.
     opt_kwargs = {}
     if resume:
-        if resume_checkpoint is None:
-            raise ValueError(f"Must pass 'resume_checkpoint' when resuming training run.")
-        check_path = os.path.join(checks_path, f"{resume_checkpoint}.ckpt")
+        if resume_ckpt is None:
+            raise ValueError(f"Must pass 'resume_ckpt' when resuming training run.")
+        check_path = os.path.join(checks_path, f"{resume_ckpt}.ckpt")
         opt_kwargs['resume_from_checkpoint'] = check_path
     
     # Perform training.

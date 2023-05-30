@@ -1,12 +1,17 @@
+from fpdf import FPDF, TitleStyle
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from tqdm import tqdm
 from typing import List, Optional, Union
+from uuid import uuid1
 
 from mymi import config
-from mymi import dataset as ds
+from mymi.dataset.training import TrainingDataset 
 from mymi.loaders import Loader, MultiLoader
+from mymi.loaders.hooks import naive_crop
 from mymi import logging
+from mymi.plotting import plot_region
 from mymi.regions import region_to_list
 from mymi.types import PatientID, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
@@ -33,7 +38,7 @@ def get_loader_manifest(
     df = pd.DataFrame(columns=cols.keys())
 
     # Cache datasets in memory.
-    dataset_map = dict((d, ds.get(d, 'training', check_processed=check_processed)) for d in datasets)
+    dataset_map = dict((d, TrainingDataset(d, check_processed=check_processed)) for d in datasets)
 
     # Create test loader.
     # Create loaders.
@@ -125,7 +130,7 @@ def get_multi_loader_manifest(
     df = pd.DataFrame(columns=cols.keys())
 
     # Cache datasets in memory.
-    dataset_map = dict((d, ds.get(d, 'training', check_processed=check_processed)) for d in datasets)
+    dataset_map = dict((d, TrainingDataset(d, check_processed=check_processed)) for d in datasets)
 
     # Create test loader.
     # Create loaders.
@@ -200,3 +205,109 @@ def load_multi_loader_manifest(
     df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
 
     return df
+
+def create_multi_loader_figures(
+    dataset: Union[str, List[str]],
+    region: PatientRegions = 'all',
+    n_folds: Optional[int] = None,
+    n_subfolds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    test_subfold: Optional[int] = None,
+    use_split_file: bool = False) -> None:
+    logging.arg_log('Creating loader figures', ('dataset', 'region'), (dataset, region))
+
+    # Create loaders.
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    loaders = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_split_file)
+
+    # Set PDF margins.
+    img_t_margin = 30
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=12,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=12,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    names = ('train', 'val', 'test')
+    for loader, name in zip(loaders, names):
+        # Start sample section.
+        pdf.add_page()
+        pdf.start_section(f'Loader: {name}')
+
+        logging.info(f"Creating '{name}' loader figures.")
+        for i, (desc_b, x_b, y_b, mask_b, weights_b) in enumerate(tqdm(iter(loader))):
+            ct_data = x_b[0, 0]
+            size = ct_data.shape
+            spacing = TrainingDataset(datasets[0]).params['output-spacing']
+            region_data = dict((r, y_b[0, i + 1]) for i, r in enumerate(regions))
+
+            # Start sample section.
+            if i != 0:
+                pdf.add_page()
+            pdf.start_section(f'Sample: {desc_b[0]}')
+
+            for i, region in enumerate(regions):
+                if not mask_b[0, i + 1]:
+                    continue
+
+                label = y_b[0, i + 1].numpy()
+                region_data = { region: label }
+                
+                # Start region section.
+                if i != 0:
+                    pdf.add_page()
+                pdf.start_section(f'Region: {region}', level=1)
+
+                views = [0, 1, 2]
+                img_coords = (
+                    (img_l_margin, img_t_margin),
+                    (img_l_margin + img_width, img_t_margin),
+                    (img_l_margin, img_t_margin + img_height)
+                )
+                for view, page_coord in zip(views, img_coords):
+                    # Set figure.
+                    filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                    plot_region(desc_b[0], size, spacing, centre_of=region, ct_data=x_b[0, 0].numpy(), region_data=region_data, savepath=filepath, show=False, show_extent=True, view=view)
+
+                    # Add image to report.
+                    pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+
+                    # Delete temp file.
+                    os.remove(filepath)
+
+        # Save PDF.
+        filepath = os.path.join(config.directories.reports, 'loader-figures', encode(datasets), encode(regions), 'figures.pdf')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        pdf.output(filepath, 'F')
+ 

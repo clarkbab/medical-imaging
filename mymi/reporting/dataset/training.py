@@ -82,7 +82,7 @@ def region_count(
     clear_cache: bool = True,
     regions: PatientRegions = 'all') -> pd.DataFrame:
     # List regions.
-    set = ds.get(dataset, 'training')
+    set = TrainingDataset(dataset)
     regions_df = set.list_regions(clear_cache=clear_cache)
 
     # Filter on requested regions.
@@ -116,7 +116,7 @@ def create_region_count_report(
     clear_cache: bool = True,
     regions: PatientRegions = 'all') -> None:
     # Generate counts report.
-    set = ds.get(dataset, 'training')
+    set = TrainingDataset(dataset)
     count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
     filename = 'region-count.csv'
     filepath = os.path.join(set.path, 'reports', filename)
@@ -127,7 +127,7 @@ def create_region_figures(
     dataset: str,
     regions: PatientRegions = 'all') -> None:
     # Get dataset.
-    set = ds.get(dataset, 'training')
+    set = TrainingDataset(dataset)
 
     # Get regions.
     if type(regions) == str:
@@ -268,7 +268,7 @@ def get_object_summary(
     partition: str,
     sample: str,
     region: str) -> pd.DataFrame:
-    set = ds.get(dataset, 'training')
+    set = TrainingDatset(dataset)
     samp = set.partition(partition).sample(sample)
     spacing = eval(set.params.spacing[0])
     label = samp.label(regions=region)[region]
@@ -315,7 +315,7 @@ def create_ct_figures(
     dataset: str,
     regions: PatientRegions = 'all') -> None:
     # Get dataset.
-    set = ds.get(dataset, 'training')
+    set = TrainingDataset(dataset)
 
     # Set PDF margins.
     img_t_margin = 30
