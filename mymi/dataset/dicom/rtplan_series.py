@@ -17,9 +17,8 @@ class RTPLANSeries(DICOMSeries):
 
         # Get index.
         index = self.__study.index
-        index = index[(index.modality == DICOMModality.RTPLAN) & (index['series-id'] == id)]
-        self.__index = index
-        self.__check_index()
+        self.__index = index[(index.modality == DICOMModality.RTPLAN) & (index['series-id'] == self.__id)]
+        self.__verify_index()
 
     @property
     def default_rtplan(self) -> str:
@@ -48,14 +47,14 @@ class RTPLANSeries(DICOMSeries):
         return self.__index
 
     def list_rtplans(self) -> List[SOPInstanceUID]:
-        return list(sorted(self.__index['sop-id']))
+        return list(sorted(self.__index.index))
 
     def rtplan(
         self,
         id: SOPInstanceUID) -> RTPLAN:
         return RTPLAN(self, id)
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTPLANSeries '{self}' not found in index for study '{self.__study}'.")
 

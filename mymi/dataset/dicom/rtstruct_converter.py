@@ -115,6 +115,9 @@ class RTSTRUCTConverter:
 
             # Get z index of slice.
             z_idx = int((points[0, 2] - offset[2]) / spacing[2])
+            if z_idx > data.shape[2] - 1:
+                # Happened with 'PMCC-COMP:PMCC_AI_GYN_011' - Kidney_L...
+                continue
 
             # Write slice data to label, using XOR.
             data[:, :, z_idx][slice_data == True] = np.invert(data[:, :, z_idx][slice_data == True])

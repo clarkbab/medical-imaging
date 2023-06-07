@@ -24,9 +24,12 @@ class RTSTRUCTSeries(DICOMSeries):
 
         # Get index.
         index = self.__study.index
-        index = index[(index.modality == DICOMModality.RTSTRUCT) & (index['series-id'] == id)]
-        self.__index = index
-        self.__check_index()
+        self.__index = index[(index.modality == DICOMModality.RTSTRUCT) & (index['series-id'] == self.__id)]
+        self.__verify_index()
+
+        # Get policies.
+        self.__index_policy = self.__study.index_policy['rtstruct']
+        self.__region_policy = self.__study.region_policy
 
     @property
     def default_rtstruct(self) -> RTSTRUCT:
@@ -47,8 +50,16 @@ class RTSTRUCTSeries(DICOMSeries):
         return self.__index
 
     @property
+    def index_policy(self) -> pd.DataFrame:
+        return self.__index_policy
+
+    @property
     def modality(self) -> DICOMModality:
         return DICOMModality.RTSTRUCT
+
+    @property
+    def region_policy(self) -> pd.DataFrame:
+        return self.__region_policy
 
     @property
     def study(self) -> str:
@@ -58,14 +69,14 @@ class RTSTRUCTSeries(DICOMSeries):
         return self.default_rtstruct.list_regions(*args, **kwargs)
 
     def list_rtstructs(self) -> List[SOPInstanceUID]:
-        return list(sorted(self.__index['sop-id']))
+        return list(sorted(self.__index.index))
 
     def rtstruct(
         self,
         id: SOPInstanceUID) -> RTSTRUCT:
         return RTSTRUCT(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTSTRUCTSeries '{self}' not found in index for study '{self.__study}'.")
 

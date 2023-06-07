@@ -7,10 +7,8 @@ import numpy as np
 import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
-from re import match
 from time import perf_counter, time
-import torch
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
@@ -19,14 +17,47 @@ from mymi import config
 from mymi.types import ModelName
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
-    return pd.concat((df, odf), axis=0)
+    # Pandas doesn't preserve index name when names are different between concatenated dataframes,
+    # this could occur when one of the dataframes is empty.
+    index_name = None
+    if len(df) == 0 and odf.index.name is not None:
+        index_name = odf.index.name
+    elif len(odf) == 0 and df.index.name is not None:
+        index_name = df.index.name
+
+    # Perform concatenation.
+    df = pd.concat((df, odf), axis=0)
+    
+    # Update index name.
+    if index_name is not None:
+        df.index.name = index_name
+
+    return df
 
 def append_row(
     df: pd.DataFrame,
     data: Dict[str, Union[int, float, str]],
-    index: Optional[int] = None) -> pd.DataFrame:
-    odf = pd.DataFrame([data], index=[index])
+    index: Optional[Union[Union[int, str], List[Union[int, str]]]] = None) -> pd.DataFrame:
+    # Create 'other' dataframe - to be concatenated.
+    if index is not None:
+        if type(index) == list or type(index) == tuple:
+            # Handle multi-indexes.
+            pass
+        else:
+            index = pd.Index(data=[index], name=df.index.name)
+    else:
+        max_index = df.index.max()
+        if np.isnan(max_index):
+            idx = 0
+        else:
+            idx = max_index + 1
+        index = pd.Index(data[idx], name=df.index.name)
+    odf = pd.DataFrame([data], index=index)
+
+    # Preserve types when adding to any empty dataframe.
     use_odf_types = True if len(df) == 0 else False
+    
+    # Perform concat.
     df = pd.concat((df, odf), axis=0)
 
     # Automatic assigning of types to columns will break when we concat with an empty dataframe.
@@ -154,9 +185,10 @@ def load_csv(
         return None
 
 def arg_assert_lengths(args: List[List[Any]]) -> None:
-    len_0 = len(args[0])
+    arg_0 = args[0]
     for arg in args[1:]:
-        assert len(arg) == len_0
+        if len(arg) != len(arg_0):
+            raise ValueError(f"Expected arg lengths to match. Length of arg '{arg}' didn't match '{arg_0}'.")
 
 def arg_assert_literal(
     arg: Any,
@@ -183,20 +215,26 @@ def arg_assert_present(
 
 def arg_to_list(
     arg: Optional[Any],
-    arg_type: Any,
+    arg_type: Union[Any, List[Any]],
     literals: Dict[str, List[Any]] = {},
     out_type: Optional[Any] = None) -> List[Any]:
     if arg is None:
         return arg
 
+    # Allow multiple types in 'arg_type'.
+    if type(arg_type) is list:
+        if out_type is None:
+            raise ValueError(f"Must specify 'out_type' when multiple input types are used ({arg_type}).")
+        arg_types = arg_type
+    else:
+        arg_types = [arg_type]
+
     # Convert to list.
-    if type(arg) is arg_type:
+    if type(arg) in arg_types:
         if arg in literals:
             arg = literals[arg]
         else:
             arg = [arg]
-    elif type(arg_type) is list and type(arg) in arg_type:      # Allow multiple types to be specified in 't'.
-        arg = [arg]
         
     # Convert to output type. Used when multiple types are specified in 't'.
     if out_type is not None:

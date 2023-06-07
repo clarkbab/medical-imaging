@@ -1,46 +1,53 @@
+from ast import literal_eval
+import json
 import numpy as np
 import os
-import pandas as pd
+from pandas import DataFrame, read_csv
+from pandas.errors import EmptyDataError
 import re
 from tqdm import tqdm
-from typing import Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi import types
+from mymi.types import PatientID, PatientIDs, PatientRegions
+from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
-from .index import ERRORS_COLS, INDEX_COLS, build_index
+from .index import INDEX_COLS, INDEX_ERRORS_COLS, INDEX_INDEX_COL, build_index
+from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY
 from .region_map import RegionMap
+from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
-REGEXP_CT_FROM = r'^__ct_from_(.*)__$'
+CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 Z_SPACING_ROUND_DP = 2
 
 class DICOMDataset(Dataset):
     def __init__(
         self,
         name: str):
+        # Create 'global ID'.
         self.__name = name
-        self.__index = None             # Lazy-loaded.
-        self.__index_errors = None      # Lazy-loaded.
-        self.__loaded_region_dups = False
-        self.__loaded_region_map = False
-        self.__path = os.path.join(config.directories.datasets, 'dicom', name)
+        self.__path = os.path.join(config.directories.datasets, 'dicom', self.__name)
         if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset '{self}' not found.")
-        self.__region_dups = None       # Lazy-loaded.
-        self.__region_map = None        # Lazy-loaded.
-
-        # Load 'ct_from' flag.
+            raise ValueError(f"Dataset 'DICOM: {self.__name}' not found.")
         ct_from_name = None
         for f in os.listdir(self.__path):
-            match = re.match(REGEXP_CT_FROM, f)
+            match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from_name = match.group(1)
         self.__ct_from = DICOMDataset(ct_from_name) if ct_from_name is not None else None
+        self.__global_id = f"DICOM: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"DICOM: {self.__name}"
 
-        self.__global_id = f"DICOM: {name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"DICOM: {name}"
+        self.__index = None             # Lazy-loaded.
+        self.__index_errors = None      # Lazy-loaded.
+        self.__index_policy = None      # Lazy-loaded.
+        self.__loaded_region_dups = False
+        self.__loaded_region_map = False
+        self.__region_dups = None       # Lazy-loaded.
+        self.__region_map = None        # Lazy-loaded.
+        self.__region_policy = None     # Lazy-loaded.
 
     @property
     def ct_from(self) -> Optional['DICOMDataset']:
@@ -51,16 +58,28 @@ class DICOMDataset(Dataset):
         return self.__global_id
 
     @property
-    def index(self) -> pd.DataFrame:
+    def index(self) -> DataFrame:
         if self.__index is None:
             self.__load_index()
         return self.__index
 
     @property
-    def index_errors(self) -> pd.DataFrame:
+    def index_errors(self) -> DataFrame:
         if self.__index_errors is None:
-            self.__load_index_errors()
+            self.__load_index()
         return self.__index_errors
+
+    @property
+    def index_policy(self) -> Dict[str, Any]:
+        if self.__index_policy is None:
+            self.__load_index()
+        return self.__index_policy
+
+    @property
+    def region_policy(self) -> Dict[str, Any]:
+        if self.__region_policy is None:
+            self.__load_region_policy()
+        return self.__region_policy
 
     @property
     def name(self) -> str:
@@ -71,7 +90,7 @@ class DICOMDataset(Dataset):
         return self.__path
 
     @property
-    def region_dups(self) -> pd.DataFrame:
+    def region_dups(self) -> DataFrame:
         if not self.__loaded_region_dups:
             self.__load_region_dups()
             self.__loaded_region_dups = True
@@ -90,31 +109,51 @@ class DICOMDataset(Dataset):
 
     def has_patient(
         self,
-        id: types.PatientID) -> bool:
+        id: PatientID) -> bool:
         return id in self.list_patients()
 
     def list_patients(
         self,
-        region: types.PatientRegions = 'all') -> List[str]:
-        pats = list(sorted(self.index['patient-id'].unique()))
+        region: Optional[PatientRegions] = None,
+        use_mapping: bool = True) -> List[str]:
+        # Load patient IDs from index.
+        pat_ids = list(sorted(self.index['patient-id'].unique()))
 
-        # Filter by 'regions'.
-        pats = list(filter(self.__filter_patient_by_region(region), pats))
-        return pats
+        # Filter on 'region'.
+        if region is not None:
+            def filter_fn(pat_id):
+                pat_regions = self.patient(pat_id).list_regions(only=region, use_mapping=use_mapping)
+                if len(pat_regions) > 0:
+                    return True
+                else:
+                    return False
+            pat_ids = list(filter(filter_fn, pat_ids))
+
+        return pat_ids
 
     def patient(
         self,
-        id: types.PatientID,
+        id: PatientID,
         **kwargs: Dict) -> DICOMPatient:
         return DICOMPatient(self, id, region_dups=self.region_dups, region_map=self.region_map, **kwargs)
 
     def list_regions(
         self,
-        pat_ids: types.PatientIDs = 'all',
-        use_mapping: bool = True) -> pd.DataFrame:
-        # Filter patients.
+        pat_id: Optional[PatientIDs] = None,
+        use_mapping: bool = True) -> DataFrame:
+        # Load all patients.
         pats = self.list_patients()
-        pats = list(filter(self.__filter_patient_by_pat_ids(pat_ids), pats))
+
+        # Filter on 'pat_ids'.
+        if pat_id is not None:
+            pat_ids = arg_to_list(pat_id, PatientID)
+            def filter_fn(pat_id):
+                if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
+                    ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
+                    return True
+                else:
+                    return False
+            pats = list(filter(self.__filter_patient_by_pat_ids(pat_ids), pats))
 
         # Get patient regions.
         regions = []
@@ -140,23 +179,28 @@ class DICOMDataset(Dataset):
 
     def __filter_patient_by_region(
         self,
-        region: types.PatientRegions,
+        region: PatientRegions,
         use_mapping: bool = True) -> Callable[[str], bool]:
-        def fn(id):
-            if type(region) == str:
-                if region == 'all':
-                    return True
-                else:
-                    return self.patient(id).has_region(region, use_mapping=use_mapping)
+        regions = arg_to_list(region, str)
+
+        def fn(pat_id):
+            pat_regions = self.patient(pat_id).list_regions(only=regions, use_mapping=use_mapping)
+            if len(pat_regions) > 0:
+                return True
             else:
-                pat_regions = self.patient(id).list_regions(use_mapping=use_mapping)
-                if len(np.intersect1d(region, pat_regions)) != 0:
-                    return True
-                else:
-                    return False
+                return False
         return fn
 
     def __load_index(self) -> None:
+        # Load index policy.
+        filepath = os.path.join(self.__path, 'index-policy.json')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                self.__index_policy = json.load(f)
+        else:
+            self.__index_policy = DEFAULT_INDEX_POLICY
+
+        # Trigger index build if not present.
         filepath = os.path.join(self.__path, 'index.csv')
         if not os.path.exists(filepath):
             if self.__ct_from is not None:
@@ -164,32 +208,29 @@ class DICOMDataset(Dataset):
                 ct_index = ct_index[ct_index['modality'] == 'CT']
             else:
                 ct_index = None
+
             build_index(self.__name, ct_index=ct_index)
+
+        # Load index.
         try:
-            self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        except pd.errors.EmptyDataError:
+            self.__index = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+            self.__index['mod-spec'] = self.__index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
+        except EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = pd.DataFrame(columns=INDEX_COLS.keys())
+            self.__index = DataFrame(columns=INDEX_COLS.keys())
 
-    def __load_index_errors(self) -> None:
-        filepath = os.path.join(self.__path, 'index-errors.csv')
-        if not os.path.exists(filepath):
-            if self.__ct_from is not None:
-                ct_index = self.__ct_from.index.copy()
-                ct_index = ct_index[ct_index['modality'] == 'CT']
-            else:
-                ct_index = None
-            build_index(self.__name, ct_index=ct_index)
+        # Load index errors.
         try:
-            self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        except pd.errors.EmptyDataError:
-            logging.info(f"Index-errors empty for dataset '{self}'.")
-            self.__index_errors = pd.DataFrame(columns=ERRORS_COLS.keys())
+            filepath = os.path.join(self.__path, 'index-errors.csv')
+            self.__index_errors = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+        except EmptyDataError:
+            logging.info(f"Index empty for dataset '{self}'.")
+            self.__index = DataFrame(columns=INDEX_ERRORS_COLS.keys())
 
-    def __load_region_dups(self) -> Optional[pd.DataFrame]:
+    def __load_region_dups(self) -> Optional[DataFrame]:
         filepath = os.path.join(self.__path, 'region-dups.csv')
         if os.path.exists(filepath):
-            self.__region_dups = pd.read_csv(filepath)
+            self.__region_dups = read_csv(filepath)
         else:
             self.__region_dups = None
 
@@ -199,6 +240,14 @@ class DICOMDataset(Dataset):
             self.__region_map = RegionMap.load(filepath)
         else:
             self.__region_map = None
+    
+    def __load_region_policy(self) -> Dict[str, Any]:
+        filepath = os.path.join(self.__path, 'region-policy.json')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                self.__region_policy = json.load(f)
+        else:
+            self.__region_policy = DEFAULT_REGION_POLICY
 
     def __str__(self) -> str:
         return self.__global_id

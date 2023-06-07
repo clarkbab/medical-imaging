@@ -3,6 +3,7 @@ from nibabel.nifti1 import Nifti1Image
 import numpy as np
 import os
 import pandas as pd
+import re
 from typing import Optional
 from tqdm import tqdm
 
@@ -11,21 +12,33 @@ from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import region_to_list
 from mymi.types import PatientRegions
-from mymi.utils import append_row, save_csv
+from mymi.utils import append_row, arg_to_list, save_csv
 
 from .dataset import write_flag
 
+CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
+
 def convert_to_nifti(
     dataset: 'Dataset',
-    region: PatientRegions = 'all',
+    region: PatientRegions,
     anonymise: bool = False) -> None:
     logging.info(f"Converting DICOMDataset '{dataset}' to NIFTIDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
-
-    regions = region_to_list(region)
 
     # Create NIFTI dataset.
     dicom_set = DICOMDataset(dataset)
     nifti_set = recreate_nifti(dataset)
+
+    # Check '__ct_from_' for DICOM dataset.
+    ct_from = None
+    for f in os.listdir(dicom_set.path):
+        match = re.match(CT_FROM_REGEXP, f)
+        if match:
+            ct_from = match.group(1)
+
+    # Add '__ct_from_' tag to NIFTI dataset.
+    if ct_from is not None:
+        filepath = os.path.join(nifti_set.path, f'__ct_from_{ct_from}__')
+        open(filepath, 'w').close()
 
     # Load all patients.
     pat_ids = dicom_set.list_patients(region=region)
@@ -38,6 +51,7 @@ def convert_to_nifti(
         filepath = os.path.join(dicom_set.path, 'anon-nifti-map.csv')
         save_csv(df, filepath, overwrite=True)
 
+    regions = arg_to_list(region, str)
     for pat_id in tqdm(pat_ids):
         # Get anonymous ID.
         if anonymise:
@@ -56,13 +70,14 @@ def convert_to_nifti(
             [0, spacing[1], 0, offset[1]],
             [0, 0, spacing[2], offset[2]],
             [0, 0, 0, 1]])
-        img = Nifti1Image(data, affine)
-        filepath = os.path.join(nifti_set.path, 'data', 'ct', filename)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        nib.save(img, filepath)
+        if ct_from is None:
+            img = Nifti1Image(data, affine)
+            filepath = os.path.join(nifti_set.path, 'data', 'ct', filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            nib.save(img, filepath)
 
         # Create region NIFTIs.
-        pat_regions = pat.list_regions()
+        pat_regions = pat.list_regions(only=regions)
         pat_regions = [r for r in pat_regions if r in regions]
         region_data = pat.region_data(region=pat_regions)
         for region, data in region_data.items():

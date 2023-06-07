@@ -1,29 +1,40 @@
 import os
 import pandas as pd
+import re
 from typing import List, Literal, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi import types
+from mymi.types import PatientRegions
 
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
+
+CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 
 class NIFTIDataset(Dataset):
     def __init__(
         self,
         name: str):
-        self.__global_id = f"NIFTI: {name}"
+        # Create 'global ID'.
+        self.__name = name
+        self.__path = os.path.join(config.directories.datasets, 'nifti', self.__name)
+        if not os.path.exists(self.__path):
+            raise ValueError(f"Dataset 'NIFTI: {self.__name}' not found.")
+        ct_from_name = None
+        for f in os.listdir(self.__path):
+            match = re.match(CT_FROM_REGEXP, f)
+            if match:
+                ct_from_name = match.group(1)
+        self.__ct_from = NIFTIDataset(ct_from_name) if ct_from_name is not None else None
+        self.__global_id = f"NIFTI: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"NIFTI: {self.__name}"
+
         self.__anon_index = None                # Lazy-loaded.
         self.__excluded_labels = None          # Lazy-loaded.
         self.__group_index = None               # Lazy-loaded.
         self.__loaded_anon_index = False
         self.__loaded_excluded_labels = False
         self.__loaded_group_index = False
-        self.__name = name
-        self.__path = os.path.join(config.directories.datasets, 'nifti', name)
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset '{self}' not found.")
 
     @property
     def anon_index(self) -> Optional[pd.DataFrame]:
@@ -65,7 +76,11 @@ class NIFTIDataset(Dataset):
     def list_patients(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: types.PatientRegions = 'all') -> List[str]:
+        region: Optional[PatientRegions] = None) -> List[str]:
+
+        # Handle 'ct_from' datasets.
+        if self.__ct_from is not None:
+            return self.__ct_from.list_patients(labels=labels, region=region)
 
         # Load patients.
         ct_path = os.path.join(self.__path, 'data', 'ct')
@@ -73,13 +88,21 @@ class NIFTIDataset(Dataset):
         pat_ids = [f.replace('.nii.gz', '') for f in files]
 
         # Filter by 'region'.
-        pat_ids = list(filter(lambda pat_id: self.patient(pat_id).has_region(region, labels=labels), pat_ids))
+        if region is not None:
+            def filter_fn(pat_id) -> bool:
+                pat_regions = self.patient(pat_id).list_regions(labels=labels, only=region)
+                if len(pat_regions) > 0:
+                    return True
+                else:
+                    return False
+            pat_ids = list(filter(filter_fn, pat_ids))
+
         return pat_ids
 
     def patient(
         self,
         id: Union[int, str]) -> NIFTIPatient:
-        return NIFTIPatient(self, id, excluded_labels=self.excluded_labels)
+        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=self.excluded_labels)
     
     def __load_anon_index(self) -> None:
         filepath = os.path.join(self.__path, 'anon-index.csv')

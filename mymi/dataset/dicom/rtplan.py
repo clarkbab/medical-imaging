@@ -17,9 +17,8 @@ class RTPLAN(DICOMFile):
 
         # Get index.
         index = self.__series.index
-        index = index[index['sop-id'] == self.__id]
-        self.__index = index
-        self.__check_index()
+        self.__index = index.loc[[self.__id]]
+        self.__verify_index()
         self.__path = self.__index.iloc[0]['filepath']
 
     @property
@@ -48,7 +47,7 @@ class RTPLAN(DICOMFile):
     def __str__(self) -> str:
         return self.__global_id
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTPLAN '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:

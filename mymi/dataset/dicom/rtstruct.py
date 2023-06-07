@@ -4,11 +4,12 @@ import pydicom as dcm
 from typing import Dict, List, Optional, OrderedDict
 
 from mymi import logging
-from mymi.regions import region_to_list
 from mymi.types import PatientRegion, PatientRegions
+from mymi.utils import arg_to_list
 
 from .ct_series import CTSeries
 from .dicom_file import DICOMFile, SOPInstanceUID
+from .dicom_series import DICOMModality
 from .region_map import RegionMap
 from .rtstruct_converter import RTSTRUCTConverter
 
@@ -28,10 +29,13 @@ class RTSTRUCT(DICOMFile):
 
         # Get index.
         index = self.__series.index
-        index = index[index['sop-id'] == self.__id]
-        self.__index = index
-        self.__check_index()
+        self.__index = index.loc[[self.__id]]
+        self.__verify_index()
         self.__path = self.__index.iloc[0]['filepath']
+
+        # Get policies.
+        self.__index_policy = self.__series.index_policy
+        self.__region_policy = self.__series.region_policy
 
     @property
     def description(self) -> str:
@@ -46,6 +50,10 @@ class RTSTRUCT(DICOMFile):
         return self.__index
 
     @property
+    def index_policy(self) -> pd.DataFrame:
+        return self.__index_policy
+
+    @property
     def path(self) -> str:
         return self.__path
 
@@ -56,8 +64,8 @@ class RTSTRUCT(DICOMFile):
         return self.__ref_ct
 
     @property
-    def series(self) -> str:
-        return self.__series
+    def region_policy(self) -> pd.DataFrame:
+        return self.__region_policy
 
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
         return dcm.read_file(self.__path)
@@ -89,10 +97,11 @@ class RTSTRUCT(DICOMFile):
         self,
         region: PatientRegion,
         use_mapping: bool = True) -> bool:
-        return region in self.list_regions(use_mapping=use_mapping)
+        return region in self.list_regions(only=region, use_mapping=use_mapping)
 
     def list_regions(
         self,
+        only: Optional[PatientRegions] = None,
         use_mapping: bool = True) -> List[PatientRegion]:
         # Get region names.
         rtstruct = self.get_rtstruct()
@@ -127,38 +136,41 @@ class RTSTRUCT(DICOMFile):
                         new_regions[i] = (regions[i], n_p)
             regions = [r[0] for r in new_regions]
 
+        # Filter on 'only'.
+        if only is not None:
+            only = arg_to_list(only, str)
+            regions = [r for r in regions if r in only]
+
         # Check for multiple regions.
-        # Probably not an issue? Do RTSTRUCT DICOMs support duplicates - probably not,
-        # and we check for duplicates after we apply the region map.
-        dup_regions = [r for r in regions if regions.count(r) > 1]
-        if len(dup_regions) > 0:
-            raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
+        if not self.__region_policy['duplicates']['allow']:
+            dup_regions = [r for r in regions if regions.count(r) > 1]
+            if len(dup_regions) > 0:
+                if use_mapping and self.__region_map is not None:
+                    raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
+                else:
+                    raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}'. Duplicated regions: '{dup_regions}'")
 
         return regions
 
     def region_data(
         self,
-        region: PatientRegions = 'all',
+        region: Optional[PatientRegions] = None,
         use_mapping: bool = True) -> OrderedDict:
-        regions = region_to_list(region)
-        self.__assert_requested_regions(regions, use_mapping=use_mapping)
+        # Check that requested regions exist.
+        regions = arg_to_list(region, str)
+        if regions is not None:
+            for region in regions:
+                if not self.has_region(region, use_mapping=use_mapping):
+                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
 
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        unmapped_names = self.list_regions(use_mapping=False)
-        names = self.list_regions(use_mapping=use_mapping)
-        names = list(zip(names, unmapped_names))
+        unmapped_region_names = self.list_regions(use_mapping=False)
+        region_names = self.list_regions(use_mapping=use_mapping)
+        region_names = list(zip(region_names, unmapped_region_names))
 
         # Filter on requested regions.
-        def fn(pair):
-            name, _ = pair
-            if type(regions) == str:
-                if regions == 'all':
-                    return True
-                else:
-                    return name == regions
-            else:
-                return name in regions
-        names = list(filter(fn, names))
+        if regions is not None:
+            region_names = list(filter(lambda r: r[0] in regions, region_names))
 
         # Get reference CTs.
         cts = self.ref_ct.get_cts()
@@ -168,7 +180,7 @@ class RTSTRUCT(DICOMFile):
 
         # Add ROI data.
         region_dict = {}
-        for name, unmapped_name in names:
+        for name, unmapped_name in region_names:
             data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
             region_dict[name] = data
 
@@ -177,29 +189,22 @@ class RTSTRUCT(DICOMFile):
 
         return ordered_dict
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTSTRUCT '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
             raise ValueError(f"Multiple RTSTRUCTs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
-    def __assert_requested_regions(
-        self,
-        regions: PatientRegions = 'all',
-        use_mapping: bool = True) -> None:
-        if type(regions) == str:
-            if regions != 'all' and not self.has_region(regions, use_mapping=use_mapping):
-                raise ValueError(f"Requested region '{regions}' not present for RTSTRUCT '{self}'.")
-        elif hasattr(regions, '__iter__'):
-            for region in regions:
-                if not self.has_region(region, use_mapping=use_mapping):
-                    raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
-        else:
-            raise ValueError(f"Requested regions '{regions}' isn't 'str' or 'iterable'.")
-
     def __load_ref_ct(self) -> None:
-        rtstruct = self.get_rtstruct()
-        ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+        if not self.__index_policy['no-ref-ct']['allow']:
+            # Get CT series referenced in RTSTRUCT DICOM.
+            rtstruct = self.get_rtstruct()
+            ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+
+        elif self.__index_policy['no-ref-ct']['only'] == 'at-least-one-ct' or self.__index_policy['no-ref-ct']['only'] == 'single-ct':
+            # Load first CT series in study.
+            ct_id = self.__series.study.list_series(DICOMModality.CT)[-1]
+
         self.__ref_ct = CTSeries(self.__series.study, ct_id)
 
     def __str__(self) -> str:

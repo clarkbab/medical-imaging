@@ -18,10 +18,10 @@ class RegionMap:
         if os.path.exists(filepath):
             map_df = pd.read_csv(filepath, dtype={ 'patient-id': str })
 
-            # Check that internal region names are entered correctly.
-            for region in map_df.internal:
-                if not is_region(region):
-                    raise ValueError(f"Error in region map. '{region}' is not an internal region.")
+            # # Check that internal region names are entered correctly.
+            # for region in map_df.internal:
+            #     if not is_region(region):
+            #         raise ValueError(f"Error in region map. '{region}' is not an internal region.")
             
             return RegionMap(map_df)
         else:

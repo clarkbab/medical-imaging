@@ -13,28 +13,31 @@ class NIFTIPatient:
         self,
         dataset: 'NIFTIDataset',
         id: PatientID,
+        ct_from: Optional['NIFTIDataset'] = None,
         excluded_labels: Optional[pd.DataFrame] = None):
         self.__dataset = dataset
+        self.__ct_from = ct_from
         self.__id = str(id)
         self.__excluded_labels = excluded_labels[excluded_labels['patient-id'] == self.__id] if excluded_labels is not None else None
-        self.__global_id = f"{dataset} - {self.__id}"
+        self.__global_id = f"{dataset} - {self.__id} (CT from '{self.__ct_from}')" if self.__ct_from is not None else f'{dataset} - {self.__id}'
 
         # Check that patient ID exists.
-        self.__path = os.path.join(dataset.path, 'data', 'ct', f'{self.__id}.nii.gz')
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Patient '{self}' not found.")
+        if ct_from is not None:
+            self.__ct_path = os.path.join(self.__ct_from.path, 'data', 'ct', f'{self.__id}.nii.gz')
+        else:
+            self.__ct_path = os.path.join(dataset.path, 'data', 'ct', f'{self.__id}.nii.gz')
+        if not os.path.exists(self.__ct_path):
+            raise ValueError(f"Patient '{self}' not found. Filepath: '{self.__ct_path}'.")
 
     @property
     def ct_data(self) -> np.ndarray:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
+        img = nib.load(self.__ct_path)
         data = img.get_data()
         return data
 
     @property
     def ct_offset(self) -> Point3D:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
+        img = nib.load(self.__ct_path)
         affine = img.affine
         offset = (affine[0][3], affine[1][3], affine[2][3])
         return offset
@@ -45,8 +48,7 @@ class NIFTIPatient:
 
     @property
     def ct_spacing(self) -> ImageSpacing3D:
-        path = os.path.join(self.__dataset.path, 'data', 'ct', f"{self.__id}.nii.gz")
-        img = nib.load(path)
+        img = nib.load(self.__ct_path)
         affine = img.affine
         spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
         return spacing
@@ -92,8 +94,8 @@ class NIFTIPatient:
         return pat_id
 
     @property
-    def path(self) -> str:
-        return self.__path
+    def ct_path(self) -> str:
+        return self.__ct_path
 
     def has_region(
         self,
@@ -109,7 +111,8 @@ class NIFTIPatient:
 
     def list_regions(
         self,
-        labels: Literal['included', 'excluded', 'all'] = 'included') -> List[str]:
+        labels: Literal['included', 'excluded', 'all'] = 'included',
+        only: Optional[PatientRegions] = None) -> List[str]:
         # Find regions by file names.
         dirpath = os.path.join(self.__dataset.path, 'data', 'regions')
         folders = os.listdir(dirpath)
@@ -128,7 +131,14 @@ class NIFTIPatient:
                         continue
                 regions.append(f)
 
+        # Filter on 'only'.
+        if only is not None:
+            only = arg_to_list(only, str)
+            regions = [r for r in regions if r in only]
+
+        # Sort regions.
         regions = list(sorted(regions))
+
         return regions
 
     def region_data(

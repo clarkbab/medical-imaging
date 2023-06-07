@@ -28,7 +28,7 @@ class CTSeries(DICOMSeries):
         index = self.__study.index
         index = index[(index.modality == 'CT') & (index['series-id'] == id)]
         self.__index = index
-        self.__check_index()
+        self.__verify_index()
 
     @property
     def data(self) -> np.ndarray:
@@ -89,7 +89,7 @@ class CTSeries(DICOMSeries):
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"CTSeries '{self}' not found in index for study '{self.__study}'.")
 

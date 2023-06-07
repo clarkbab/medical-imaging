@@ -17,9 +17,8 @@ class RTDOSESeries(DICOMSeries):
 
         # Get index.
         index = self.__study.index
-        index = index[(index.modality == DICOMModality.RTDOSE) & (index['series-id'] == id)]
-        self.__index = index
-        self.__check_index()
+        self.__index = index[(index.modality == DICOMModality.RTDOSE) & (index['series-id'] == self.__id)]
+        self.__verify_index()
 
     @property
     def default_rtdose(self) -> str:
@@ -48,14 +47,14 @@ class RTDOSESeries(DICOMSeries):
         return self.__index
 
     def list_rtdoses(self) -> List[SOPInstanceUID]:
-        return list(sorted(self.__index['sop-id']))
+        return list(sorted(self.__index.index))
 
     def rtdose(
         self,
         id: SOPInstanceUID) -> RTDOSE:
         return RTDOSE(self, id)
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTDOSESeries '{self}' not found in index for study '{self.__study}'.")
 

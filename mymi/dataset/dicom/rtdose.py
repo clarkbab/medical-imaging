@@ -24,9 +24,8 @@ class RTDOSE(DICOMFile):
 
         # Get index.
         index = self.__series.index
-        index = index[index['sop-id'] == self.__id]
-        self.__index = index
-        self.__check_index()
+        self.__index = index.loc[[self.__id]]       # Double brackets ensure result is DataFrame not Series.
+        self.__verify_index()
         self.__path = self.__index.iloc[0]['filepath']
 
     @property
@@ -77,7 +76,7 @@ class RTDOSE(DICOMFile):
     def get_rtdose(self) -> FileDataset:
         return dcm.read_file(self.__path)
 
-    def __check_index(self) -> None:
+    def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTPLAN '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:

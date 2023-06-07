@@ -39,6 +39,10 @@ class DICOMPatient:
         index = index[index['patient-id'] == str(id)]
         self.__index = index
 
+        # Get policies.
+        self.__index_policy = self.__dataset.index_policy
+        self.__region_policy = self.__dataset.region_policy
+
         # Check that patient ID exists.
         if len(index) == 0:
             raise ValueError(f"Patient '{self}' not found in index for dataset '{dataset}'.")
@@ -140,12 +144,20 @@ class DICOMPatient:
         return self.__index
 
     @property
+    def index_policy(self) -> pd.DataFrame:
+        return self.__index_policy
+
+    @property
     def id(self) -> str:
         return self.__id
 
     @property
     def name(self) -> str:
         return self.get_cts()[0].PatientName
+
+    @property
+    def region_policy(self) -> pd.DataFrame:
+        return self.__region_policy
 
     @property
     def sex(self) -> str:

@@ -1,3 +1,4 @@
+from typing import Optional
 
 # Tolerances in mm.
 class RegionTolerances:
@@ -27,5 +28,8 @@ class RegionTolerances:
     Parotid_R = 2.85
     SpinalCord = 2.93
 
-def get_region_tolerance(region):
-    return getattr(RegionTolerances, region)
+def get_region_tolerance(region: str) -> Optional[float]:
+    if hasattr(RegionTolerances, region):
+        return getattr(RegionTolerances, region)
+    else:
+        return None

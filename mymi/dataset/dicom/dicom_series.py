@@ -13,3 +13,7 @@ class DICOMSeries:
     @property
     def modality(self) -> DICOMModality:
         raise NotImplementedError("Child class must implement 'modality'.")
+
+    @property
+    def study(self) -> 'DICOMStudy':
+        raise NotImplementedError("Child class must implement 'study'.")
