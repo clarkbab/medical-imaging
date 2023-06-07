@@ -72,6 +72,7 @@ class MultiLoader:
         batch_size: int = 1,
         check_processed: bool = True,
         data_hook: Optional[Callable] = None,
+        include_background: bool = True,
         load_data: bool = True,
         load_test_origin: bool = True,
         n_folds: Optional[int] = None, 
@@ -251,12 +252,12 @@ class MultiLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform_train)
+        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_train)
         train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
         class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
-        val_ds = TrainingSet(datasets, val_samples, class_weights=class_weights, data_hook=data_hook, load_data=load_data, region=regions, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -285,12 +286,14 @@ class TrainingSet(Dataset):
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
         data_hook: Optional[Callable] = None,
+        include_background: bool = True,
         load_data: bool = True,
         region: PatientRegions = 'all',
         spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
         self.__data_hook = data_hook
+        self.__include_background = include_background
         self.__load_data = load_data
         self.__regions = region_to_list(region)
         self.__spacing = spacing
@@ -381,7 +384,7 @@ class TrainingSet(Dataset):
         # When all foreground regions are annotated, we can invert their union to return background label.
         # If a region is missing, we can't get the background label as we don't know which voxels are foreground
         # for the missing region and which are background.
-        if len(regions) == len(self.__regions):
+        if self.__include_background and len(regions) == len(self.__regions):
             mask[0] = True
             label[0] = np.invert(label.any(axis=0))
 

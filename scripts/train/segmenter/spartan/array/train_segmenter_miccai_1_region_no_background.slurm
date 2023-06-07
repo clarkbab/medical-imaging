@@ -7,13 +7,7 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 0-14:00:00
-##SBATCH --time 2-00:00:00
-#SBATCH --time 7-00:00:00
+#SBATCH --time 6-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -24,14 +18,26 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R']"
-    "['OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
-    "['OpticChiasm','Bone_Mandible','Brainstem','Glnd_Submand_L']"
+    'Bone_Mandible'     # 0
+    'Brainstem'         # 1
+    'Glnd_Submand_L'    # 2
+    'Glnd_Submand_R'    # 3
+    'OpticChiasm'       # 4
+    'OpticNrv_L'        # 5
+    'OpticNrv_R'        # 6
+    'Parotid_L'         # 7
+    'Parotid_R'         # 8
 )
 SHORT_REGIONS=(
-    'BM_BS_SL_SR'
-    'OL_OR_PL_PR'
+    'BM'
+    'BS'
+    'SL'
+    'SR'
     'OC'
+    'OL'
+    'OR'
+    'PL'
+    'PR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
@@ -39,7 +45,7 @@ MODEL_NAME="segmenter-miccai-no-background"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
-RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION"
+RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 INCLUDE_BACKGROUND=False
@@ -71,7 +77,6 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_workers $N_WORKERS \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
-    --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \

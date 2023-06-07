@@ -2,6 +2,7 @@ from fpdf import FPDF, TitleStyle
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from pytorch_lightning import seed_everything
 from tqdm import tqdm
 from typing import List, Optional, Union
 from uuid import uuid1
@@ -9,6 +10,7 @@ from uuid import uuid1
 from mymi import config
 from mymi.dataset.training import TrainingDataset 
 from mymi.loaders import Loader, MultiLoader
+from mymi.loaders.augmentation import get_transforms
 from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.plotting import plot_region
@@ -211,15 +213,27 @@ def create_multi_loader_figures(
     region: PatientRegions = 'all',
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
+    random_seed: float = 42,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
+    use_augmentation: bool = False,
     use_split_file: bool = False) -> None:
     logging.arg_log('Creating loader figures', ('dataset', 'region'), (dataset, region))
+
+    # Create transforms.
+    if use_augmentation:
+        seed_everything(random_seed, workers=True)      # Ensure reproducible augmentation.
+        train_transform, val_transform = get_transforms()
+    else:
+        train_transform = None
+        val_transform = None
 
     # Create loaders.
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
-    loaders = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_split_file)
+    train_loader, val_loader, test_loader = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, shuffle_train=False, test_fold=test_fold, transform_train=train_transform, transform_val=val_transform, use_split_file=use_split_file)
+    # loaders = (train_loader, val_loader, test_loader)
+    loaders = (train_loader, val_loader)
 
     # Set PDF margins.
     img_t_margin = 30
@@ -259,7 +273,8 @@ def create_multi_loader_figures(
         )
     ) 
 
-    names = ('train', 'val', 'test')
+    # names = ('train', 'val', 'test')
+    names = ('train', 'val')
     for loader, name in zip(loaders, names):
         # Start sample section.
         pdf.add_page()
@@ -275,7 +290,7 @@ def create_multi_loader_figures(
             # Start sample section.
             if i != 0:
                 pdf.add_page()
-            pdf.start_section(f'Sample: {desc_b[0]}')
+            pdf.start_section(f'Sample: {desc_b[0]}', level=1)
 
             for i, region in enumerate(regions):
                 if not mask_b[0, i + 1]:
@@ -287,7 +302,7 @@ def create_multi_loader_figures(
                 # Start region section.
                 if i != 0:
                     pdf.add_page()
-                pdf.start_section(f'Region: {region}', level=1)
+                pdf.start_section(f'Region: {region}', level=2)
 
                 views = [0, 1, 2]
                 img_coords = (
@@ -306,8 +321,9 @@ def create_multi_loader_figures(
                     # Delete temp file.
                     os.remove(filepath)
 
-        # Save PDF.
-        filepath = os.path.join(config.directories.reports, 'loader-figures', encode(datasets), encode(regions), 'figures.pdf')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        pdf.output(filepath, 'F')
+    # Save PDF.
+    filename = 'figures-aug.pdf' if use_augmentation else 'figures.pdf'
+    filepath = os.path.join(config.directories.reports, 'loader-figures', encode(datasets), encode(regions), filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
  

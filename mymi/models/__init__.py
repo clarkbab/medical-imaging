@@ -70,6 +70,8 @@ def replace_ckpt_alias(
         # Get latest 'last' checkpoint.
         else:
             ckpts_path = os.path.join(config.directories.models, *model[:2])
+            if not os.path.exists(ckpts_path):
+                raise ValueError(f"No run '{model[1]}' exists for model '{model[0]}'.")
             ckpts = os.listdir(ckpts_path)
             ckpts = [c.replace('.ckpt', '') for c in ckpts]
             last_ckpts = [c for c in ckpts if match(CKPT_LAST_REGEXP, c) is not None]

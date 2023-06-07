@@ -318,10 +318,12 @@ def plot_region(
         # Create figure/axes.
         plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
+        close_figure = True
     else:
         # Assume that parent routine will call 'plt.show()' after
         # all axes are plotted.
         show = False
+        close_figure = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -504,6 +506,9 @@ def plot_region(
                 "font.family": rc_params['font.family'],
                 'text.usetex': rc_params['text.usetex']
             })
+
+    if close_figure:
+        plt.close() 
 
 def plot_localiser_prediction(
     id: str,

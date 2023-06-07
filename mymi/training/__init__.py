@@ -30,7 +30,7 @@ def get_n_epochs(
         'run': str,
         'ckpt': str,
         'exists': bool,
-        'n-epochs': int,
+        'n-epochs': int
     }
     df = pd.DataFrame(columns=cols.keys())
     

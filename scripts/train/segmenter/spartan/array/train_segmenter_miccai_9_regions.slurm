@@ -1,13 +1,19 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 4-00:00:00
+## Timing guidelines:
+## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
+## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
+## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
+#SBATCH --time 0-14:00:00
+##SBATCH --time 2-00:00:00
+##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -25,15 +31,16 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai"
-RESOLUTION="112"
+MODEL_NAME="segmenter-miccai-no-background"
+RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
 RUN_NAME="9-regions-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
+INCLUDE_BACKGROUND=False
 LR_INIT=1e-4
-N_EPOCHS=6000
+N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
@@ -51,6 +58,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
+    --include_background $INCLUDE_BACKGROUND \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
@@ -59,6 +67,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_workers $N_WORKERS \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
+    --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER 

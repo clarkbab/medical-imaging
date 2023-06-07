@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 import numpy as np
 import os
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DDPPlugin
@@ -28,6 +28,7 @@ def train_multi_segmenter(
     batch_size: int = 1,
     ckpt_model: bool = True,
     halve_channels: bool = False,
+    include_background: bool = True,
     lam: float = 0.5,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
@@ -43,6 +44,7 @@ def train_multi_segmenter(
     n_split_channels: int = 1,
     p_val: float = 0.2,
     precision: Union[str, int] = 16,
+    random_seed: float = 42,
     resume: bool = False,
     resume_ckpt: Optional[str] = None,
     slurm_job_id: Optional[str] = None,
@@ -53,6 +55,7 @@ def train_multi_segmenter(
     test_fold: Optional[int] = None,
     thresh_low: Optional[float] = None,
     thresh_high: Optional[float] = None,
+    use_augmentation: bool = True,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
@@ -60,10 +63,16 @@ def train_multi_segmenter(
     use_thresh: bool = False,
     weight_decay: float = 0) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
-    datasets = arg_to_list(dataset, str)
+
+    # Allow for reproducible training runs.
+    seed_everything(random_seed, workers=True)
 
     # Get augmentation transforms.
-    transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_stand=use_stand, use_thresh=use_thresh)
+    if use_augmentation:
+        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_stand=use_stand, use_thresh=use_thresh)
+    else:
+        transform_train = None
+        transform_val = None
     logging.info(f"Training transform: {transform_train}")
     logging.info(f"Validation transform: {transform_val}")
 
@@ -74,7 +83,7 @@ def train_multi_segmenter(
         loss_fn = DiceWithFocalLoss(lam=lam)
 
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=batch_size, data_hook=naive_crop, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
 
     # Create model.
     model = MultiSegmenter(
@@ -95,7 +104,7 @@ def train_multi_segmenter(
             project=model_name,
             name=run_name,
             save_dir=config.directories.reports)
-        logger.watch(model) # Caused multi-GPU training to hang.
+        logger.watch(model, log='all') # Caused multi-GPU training to hang.
     else:
         logger = None
 
@@ -146,7 +155,7 @@ def train_multi_segmenter(
         exit()
 
     # Save training information.
-    man_df = get_multi_loader_manifest(datasets, n_folds=n_folds, region=region, test_fold=test_fold, use_split_file=use_loader_split_file)
+    man_df = get_multi_loader_manifest(dataset, n_folds=n_folds, region=region, test_fold=test_fold, use_split_file=use_loader_split_file)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')
