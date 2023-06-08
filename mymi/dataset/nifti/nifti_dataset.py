@@ -5,7 +5,7 @@ from typing import List, Literal, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi.types import PatientRegions
+from mymi.types import PatientID, PatientRegions
 
 from ..dataset import Dataset, DatasetType
 from .nifti_patient import NIFTIPatient
@@ -72,6 +72,11 @@ class NIFTIDataset(Dataset):
     @property
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
+
+    def has_patient(
+        self,
+        pat_id: PatientID) -> bool:
+        return pat_id in self.list_patients()
 
     def list_patients(
         self,

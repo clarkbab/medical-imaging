@@ -16,7 +16,7 @@ def plot_region(
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     study_id: Optional[str] = None,
-    use_mapping: bool = False,
+    use_mapping: bool = True,
     **kwargs) -> None:
     regions = arg_to_list(region, str)
     region_labels = arg_to_list(region_label, str)

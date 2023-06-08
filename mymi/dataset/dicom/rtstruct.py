@@ -1,7 +1,7 @@
 import collections
 import pandas as pd
 import pydicom as dcm
-from typing import Dict, List, Optional, OrderedDict
+from typing import Dict, List, Optional, OrderedDict, Tuple, Union
 
 from mymi import logging
 from mymi.types import PatientRegion, PatientRegions
@@ -97,58 +97,97 @@ class RTSTRUCT(DICOMFile):
         self,
         region: PatientRegion,
         use_mapping: bool = True) -> bool:
+        print(region)
+        print(use_mapping)
         return region in self.list_regions(only=region, use_mapping=use_mapping)
 
     def list_regions(
         self,
         only: Optional[PatientRegions] = None,
-        use_mapping: bool = True) -> List[PatientRegion]:
-        # Get region names.
+        return_unmapped: bool = False,
+        use_mapping: bool = True) -> Union[List[PatientRegion], Tuple[List[PatientRegion], List[PatientRegion]]]:
+        # Get unmapped region names.
         rtstruct = self.get_rtstruct()
-        regions = list(sorted(RTSTRUCTConverter.get_roi_names(rtstruct)))
+        unmapped_regions = RTSTRUCTConverter.get_roi_names(rtstruct)
 
         # Filter regions on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        regions = list(filter(lambda r: RTSTRUCTConverter.has_roi_data(rtstruct, r), regions))
+        unmapped_regions = list(filter(lambda r: RTSTRUCTConverter.has_roi_data(rtstruct, r), unmapped_regions))
 
-        # Map to internal regions.
-        if use_mapping and self.__region_map is not None:
+        # Map regions using 'region-map.csv'.
+        if self.__region_map is None:
+            use_mapping = False
+        if use_mapping:
             pat_id = self.__series.study.patient.id
-            new_regions = []
-            for region in regions:
-                mapped_region, priority = self.__region_map.to_internal(region, pat_id=pat_id)
+            # Store as ('unmapped region', 'mapped region', 'priority').
+            mapped_regions = []
+            for unmapped_region in unmapped_regions:
+                mapped_region, priority = self.__region_map.to_internal(unmapped_region, pat_id=pat_id)
                 # Don't map regions that would map to an existing region name.
-                if mapped_region != region and mapped_region in regions:
-                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in unmapped regions for '{self}'. Skipping.")
-                    new_regions.append((region, priority))
+                if mapped_region != unmapped_region and mapped_region in unmapped_regions:
+                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{unmapped_region}') already found in unmapped regions for '{self}'. Skipping.")
+                    mapped_regions.append((unmapped_region, mapped_region, priority))
+
                 # Don't map regions that are already present in 'new_regions'.
-                elif mapped_region in new_regions:
-                    raise ValueError(f"Mapped region '{mapped_region}' (mapped from '{region}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
+                elif mapped_region in mapped_regions:
+                    raise ValueError(f"Mapped region '{mapped_region}' (mapped from '{unmapped_region}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
+
+                # Map region.
                 else:
-                    new_regions.append((mapped_region, priority))
+                    mapped_regions.append((unmapped_region, mapped_region, priority))
 
-            # Deduplicate 'new_regions' by priority. I.e. if 'GTVp' (priority=0) and 'GTVp' (priority=1) are both present,
-            # then choose 'GTVp' (priority=1) and don't map 'GTVp' (priority=0).
-            for i in range(len(new_regions)):
-                n_r, n_p = new_regions[i]
-                for r, p in new_regions:
-                    if r == n_r and p > n_p:
-                        new_regions[i] = (regions[i], n_p)
-            regions = [r[0] for r in new_regions]
+            # If multiple unmapped regions map to the same region, then choose to map the one with
+            # higher priorty.
+            for i in range(len(mapped_regions)):
+                unmapped_region, mapped_region, priority = mapped_regions[i]
+                for _, mr, p in mapped_regions:
+                    # If another mapped region exists with a higher priority, then set this region
+                    # back to its unmapped form.
+                    if mr == mapped_region and p > priority:
+                        mapped_regions[i] = (unmapped_region, unmapped_region, priority)
 
-        # Filter on 'only'.
+            # Remove priority.
+            mapped_regions = [r[:-1] for r in mapped_regions]
+
+        # Filter on 'only'. If region mapping is used (i.e. mapped_regions != None),
+        # this will try to match mapped names, otherwise it will map unmapped names.
         if only is not None:
             only = arg_to_list(only, str)
-            regions = [r for r in regions if r in only]
+
+            if use_mapping:
+                mapped_regions = [r for r in mapped_regions if r[1] in only]
+            else:
+                regions = [r for r in regions if r in only]
 
         # Check for multiple regions.
         if not self.__region_policy['duplicates']['allow']:
-            dup_regions = [r for r in regions if regions.count(r) > 1]
+            if use_mapping:
+                # Only check for duplicates on mapped regions.
+                names = [r[1] for r in mapped_regions]
+            else:
+                names = regions
+
+            # Get duplicated regions.
+            dup_regions = [r for r in names if names.count(r) > 1]
+
             if len(dup_regions) > 0:
                 if use_mapping and self.__region_map is not None:
                     raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
                 else:
                     raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}'. Duplicated regions: '{dup_regions}'")
+
+        # Sort regions.
+        if use_mapping:
+            mapped_regions.sort(key=lambda r: r[1])
+        else:
+            regions = list(sorted(regions))
+
+        # Choose return type when using mapping.
+        if use_mapping:
+            if return_unmapped:
+                regions = mapped_region
+            else:
+                regions = [r[1] for r in mapped_regions]
 
         return regions
 
@@ -164,9 +203,7 @@ class RTSTRUCT(DICOMFile):
                     raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
 
         # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        unmapped_region_names = self.list_regions(use_mapping=False)
-        region_names = self.list_regions(use_mapping=use_mapping)
-        region_names = list(zip(region_names, unmapped_region_names))
+        region_names = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
 
         # Filter on requested regions.
         if regions is not None:
@@ -180,9 +217,16 @@ class RTSTRUCT(DICOMFile):
 
         # Add ROI data.
         region_dict = {}
-        for name, unmapped_name in region_names:
-            data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
-            region_dict[name] = data
+        if use_mapping:
+            # Load region using unmapped name, store using mapped name.
+            for name, unmapped_name in region_names:
+                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
+                region_dict[name] = data
+        else:
+            # Load and store region using unmapped name.
+            for name in region_names:
+                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
+                region_dict[name] = data
 
         # Create ordered dict.
         ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 

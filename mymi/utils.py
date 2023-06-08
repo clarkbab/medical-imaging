@@ -51,7 +51,7 @@ def append_row(
             idx = 0
         else:
             idx = max_index + 1
-        index = pd.Index(data[idx], name=df.index.name)
+        index = pd.Index(data=[idx], name=df.index.name)
     odf = pd.DataFrame([data], index=index)
 
     # Preserve types when adding to any empty dataframe.
