@@ -97,8 +97,6 @@ class RTSTRUCT(DICOMFile):
         self,
         region: PatientRegion,
         use_mapping: bool = True) -> bool:
-        print(region)
-        print(use_mapping)
         return region in self.list_regions(only=region, use_mapping=use_mapping)
 
     def list_regions(
@@ -165,7 +163,7 @@ class RTSTRUCT(DICOMFile):
                 # Only check for duplicates on mapped regions.
                 names = [r[1] for r in mapped_regions]
             else:
-                names = regions
+                names = unmapped_regions
 
             # Get duplicated regions.
             dup_regions = [r for r in names if names.count(r) > 1]
@@ -178,18 +176,19 @@ class RTSTRUCT(DICOMFile):
 
         # Sort regions.
         if use_mapping:
-            mapped_regions.sort(key=lambda r: r[1])
+            mapped_regions = list(sorted(mapped_regions, key=lambda r: r[1]))
         else:
-            regions = list(sorted(regions))
+            unmapped_regions = list(sorted(unmapped_regions))
 
         # Choose return type when using mapping.
         if use_mapping:
             if return_unmapped:
-                regions = mapped_region
+                return mapped_regions
             else:
-                regions = [r[1] for r in mapped_regions]
-
-        return regions
+                mapped_regions = [r[1] for r in mapped_regions]
+                return mapped_regions
+        else:
+            return unmapped_regions
 
     def region_data(
         self,
@@ -202,12 +201,16 @@ class RTSTRUCT(DICOMFile):
                 if not self.has_region(region, use_mapping=use_mapping):
                     raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
 
-        # Get region names - include unmapped as we need these to load RTSTRUCT regions later.
-        region_names = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
+        # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
+        # need these to load regions from RTSTRUCT dicom.
+        pat_regions = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
 
         # Filter on requested regions.
         if regions is not None:
-            region_names = list(filter(lambda r: r[0] in regions, region_names))
+            if use_mapping:
+                pat_regions = [r for r in pat_regions if r[1] in regions]
+            else:
+                pat_regions = [r for r in pat_regions if r in regions]
 
         # Get reference CTs.
         cts = self.ref_ct.get_cts()
@@ -216,22 +219,22 @@ class RTSTRUCT(DICOMFile):
         rtstruct = self.get_rtstruct()
 
         # Add ROI data.
-        region_dict = {}
+        results = {}
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
-            for name, unmapped_name in region_names:
-                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
-                region_dict[name] = data
+            for unmapped_region, mapped_region in pat_regions:
+                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_region, cts)
+                results[mapped_region] = data
         else:
             # Load and store region using unmapped name.
-            for name in region_names:
-                data = RTSTRUCTConverter.get_roi_data(rtstruct, unmapped_name, cts)
-                region_dict[name] = data
+            for region in pat_regions:
+                data = RTSTRUCTConverter.get_roi_data(rtstruct, region, cts)
+                results[region] = data
 
         # Create ordered dict.
-        ordered_dict = collections.OrderedDict((n, region_dict[n]) for n in sorted(region_dict.keys())) 
+        results = collections.OrderedDict((n, results[n]) for n in sorted(results.keys())) 
 
-        return ordered_dict
+        return results
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:

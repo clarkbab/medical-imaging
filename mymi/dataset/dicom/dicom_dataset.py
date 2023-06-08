@@ -203,13 +203,7 @@ class DICOMDataset(Dataset):
         # Trigger index build if not present.
         filepath = os.path.join(self.__path, 'index.csv')
         if not os.path.exists(filepath):
-            if self.__ct_from is not None:
-                ct_index = self.__ct_from.index.copy()
-                ct_index = ct_index[ct_index['modality'] == 'CT']
-            else:
-                ct_index = None
-
-            build_index(self.__name, ct_index=ct_index)
+            build_index(self.__name)
 
         # Load index.
         try:
