@@ -1,4 +1,4 @@
-internal,dataset
+after,before
 BrachialPlex_L,^plexus(\s|_)?b(rac)?(\s|_)?\(l\)$
 BrachialPlex_L,^pl(\s|_)?brachial(\s|_)?gche$
 BrachialPlex_L,^plexus(\s|_)?br(ac)?(\s|_)?g$

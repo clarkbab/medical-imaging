@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import re
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from mymi.regions import is_region
 from mymi.types import PatientID
@@ -16,14 +16,32 @@ class RegionMap:
     @staticmethod
     def load(filepath: str) -> Optional['RegionMap']:
         if os.path.exists(filepath):
-            map_df = pd.read_csv(filepath, dtype={ 'patient-id': str })
+            # Load file.
+            df = pd.read_csv(filepath)
+
+            # Convert patient ID only/except to array.
+            cols = ['except', 'only']
+            for col in cols:
+                if col in df.columns:
+                    def split_fn(e: Union[float, int, str]) -> List[str]:
+                        if type(e) is float and np.isnan(e):
+                            return []
+                        elif type(e) is str:
+                            return e.split(',')
+                        elif type(e) is int:
+                            return [str(e)]
+                        else:
+                            assert False
+                    df[col] = df[col].apply(split_fn)
+                else:
+                    df[col] = [[]] * len(df)
 
             # # Check that internal region names are entered correctly.
             # for region in map_df.internal:
             #     if not is_region(region):
             #         raise ValueError(f"Error in region map. '{region}' is not an internal region.")
             
-            return RegionMap(map_df)
+            return RegionMap(df)
         else:
             return None
 
@@ -40,14 +58,17 @@ class RegionMap:
         match = None
         priority = -np.inf
         for _, row in self.__data.iterrows():
-            if 'patient-id' in row:
-                # Skip if this map row is for a different patient.
-                map_pat_id = row['patient-id']
-                if isinstance(map_pat_id, str) and str(pat_id) != map_pat_id:
-                    continue
+            # Check 'only'/'except' to see if rule applies to this patient.
+            # Check if the rule applies to this specific patient.
+            excpt = row['except']
+            if pat_id in excpt:
+                continue
+            only = row['only']
+            if len(only) > 0 and pat_id not in only:
+                continue
 
-            args = []
             # Add case sensitivity to regexp match args.
+            args = []
             if 'case' in row:
                 case = row['case']
                 if not np.isnan(case) and not case:
@@ -56,13 +77,13 @@ class RegionMap:
                 args += [re.IGNORECASE]
                 
             # Perform match.
-            if re.match(row['dataset'], region, *args):
+            if re.match(row['before'], region, *args):
                 if 'priority' in row and not np.isnan(row['priority']):
                     if row['priority'] > priority:
-                        match = row['internal']
+                        match = row['after']
                         priority = row['priority']
                 else:
-                    match = row['internal']
+                    match = row['after']
 
         if match is None:
             match = region

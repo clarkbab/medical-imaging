@@ -155,7 +155,7 @@ class RTSTRUCT(DICOMFile):
             if use_mapping:
                 mapped_regions = [r for r in mapped_regions if r[1] in only]
             else:
-                regions = [r for r in regions if r in only]
+                unmapped_regions = [r for r in unmapped_regions if r in only]
 
         # Check for multiple regions.
         if not self.__region_policy['duplicates']['allow']:

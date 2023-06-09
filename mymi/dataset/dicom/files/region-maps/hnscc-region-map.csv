@@ -1,4 +1,4 @@
-internal,dataset
+after,before
 BrachialPlex_L,^(l|lt|left)(\s|_)?brachial(\s|_)?plexus$
 BrachialPlex_R,^(r|rt|right)(\s|_)?brachial(\s|_)?plexus$
 Brain,^brain$

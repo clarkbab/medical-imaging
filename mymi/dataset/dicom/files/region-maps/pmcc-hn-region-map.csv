@@ -1,4 +1,4 @@
-dataset,internal,priority
+before,after,priority
 ^bone_mandible$,Bone_Mandible,
 ^brachialplex(u|us)?_l$,BrachialPlex_L,
 ^brachialplex(u|us)?_r$,BrachialPlex_R,
