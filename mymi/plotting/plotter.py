@@ -465,8 +465,6 @@ def plot_region(
     if dose_data is not None:
         axim = ax.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=__get_origin(view))
         cbar = plt.colorbar(axim, fraction=dose_legend_size)
-        print('here')
-        print(fontsize)
         cbar.set_label(label='Dose [Gray]', size=fontsize)
         cbar.ax.tick_params(labelsize=fontsize)
 
@@ -1642,15 +1640,16 @@ def plot_dataframe(
     else:
         x_vals = x_order
 
-    # Get x labels.
-    # Show number of data points in x-label (e.g. "Parotid_L (n=99)") if all hue
-    # classes have the same number of data points.
+    # Determine x labels.
     groupby = x if hue is None else [x, hue]
     count_map = data.groupby(groupby)[y].count()
     x_tick_labels = []
     for x_val in x_vals:
         counts = count_map.loc[x_val]
-        ns = list(counts.unique()) if hasattr(counts, '__iter__') else [counts]
+        ns = counts.values
+        # Use a single number, e.g. (n=99) if all hues have the same number of points.
+        if len(np.unique(ns)) == 1:
+            ns = ns[:1]
         label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
         x_tick_labels.append(label)
 
@@ -1685,6 +1684,9 @@ def plot_dataframe(
         if len(hue_order) > len(hue_palette):
             raise ValueError(f"'hue_palette' doesn't have enough colours, needs '{len(hue_order)}'.")
 
+        # Create map from hue to colour.
+        hue_colours = dict((h, hue_palette[i]) for i, h in enumerate(hue_order))
+
     # Plot rows.
     for i in range(n_rows):
         # Split data.
@@ -1693,6 +1695,9 @@ def plot_dataframe(
 
         # Get row data.
         row_data = data[data[x].isin(row_x_vals)].copy()
+
+        # Keep track of legend item.
+        hue_artists = {}
 
         for j, x_val in enumerate(row_x_vals):
             # Filter hue from 'hue_order' if it doesn't have any data.
@@ -1715,9 +1720,6 @@ def plot_dataframe(
                 for k, hue_name in enumerate(hue_order_f):
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
                     row_data.loc[(row_data[x] == x_val) & (row_data[hue] == hue_name), 'x_pos'] = x_pos
-
-            # Keep track of legend.
-            legend_added = False
                 
             # Plot boxes.
             if show_boxes:
@@ -1732,7 +1734,6 @@ def plot_dataframe(
                     elif style == 'violin':
                         axs[i].violinplot(x_data[y], positions=[x_pos])
                 else:
-                    artist_labels = []
                     for k, hue_name in enumerate(hue_order_f):
                         # Get hue data and pos.
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
@@ -1743,21 +1744,17 @@ def plot_dataframe(
                         # Plot box.
                         hatch = hue_hatches[k] if hue_hatches is not None else None
                         if style == 'box':
-                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_palette[k], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
-                            artist_labels.append((hue_name, res['boxes'][0]))
+                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
+                            if not hue_name in hue_artists:
+                                hue_artists[hue_name] = res['boxes'][0]
                             # res['boxes'][0].set(hatch=hatch)
                             res['boxes'][0].set_hatch(hatch)
                             # res['boxes'][0].set_edgecolor('white')
                             # res['boxes'][0].set(facecolor='white')
                         elif style == 'violin':
                             res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
-                            artist_labels.append((hue_name, res['bodies']))
-
-                    # Add legend.
-                    if show_legend:
-                        legend_added = True
-                        labels, artists = list(zip(*artist_labels))
-                        axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+                            if not hue_name in hue_artists:
+                                hue_artists[hue_name] = res['boxes'][0]
 
             # Plot points.
             if show_points:
@@ -1765,17 +1762,13 @@ def plot_dataframe(
                     x_data = row_data[row_data[x] == x_val]
                     axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
                 else:
-                    artist_labels = []
                     for j, hue_name in enumerate(hue_order_f):
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
                             continue
-                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_palette[j], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
-                        artist_labels.append((hue_name, res))
-
-                    if not legend_added:
-                        labels, artists = list(zip(*artist_labels))
-                        axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
+                        if not show_boxes and not hue_name in hue_artists:
+                            hue_artists[hue_name] = res
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:
@@ -1823,6 +1816,12 @@ def plot_dataframe(
 
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)
+
+        # Add legend.
+        if hue is not None:
+            if show_legend:
+                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_order]))
+                axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
 
         # Plot statistical significance.
         if hue is not None and show_stats:
