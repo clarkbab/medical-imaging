@@ -31,6 +31,7 @@ class MultiSegmenter(pl.LightningModule):
         metrics: List[str] = [],
         region: types.PatientRegions = 'all',
         use_lr_scheduler: bool = False,
+        val_image_interal: int = 10,
         weight_decay: float = 0,
         **kwargs):
         super().__init__()
@@ -43,6 +44,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
         self.__use_lr_scheduler = use_lr_scheduler
+        self.__val_image_interval = val_image_interal
         self.__weight_decay = weight_decay
 
         # Create channel -> region map.
@@ -187,8 +189,8 @@ class MultiSegmenter(pl.LightningModule):
                     mean_dice = np.mean(dice_scores)
                     self.log(f'val/dice/{region}', mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
-        # Log predictions.
-        if self.logger:
+        # Log prediction images.
+        if self.logger and self.current_epoch % self.__val_image_interval == 0:
             class_labels = {
                 1: 'foreground'
             }

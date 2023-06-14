@@ -3,6 +3,7 @@ import pandas as pd
 from re import match
 import torch
 from typing import List, Optional, Union
+from tqdm import tqdm
 
 from mymi import config
 from mymi.models import replace_ckpt_alias
@@ -34,6 +35,7 @@ def get_n_epochs(
     }
     df = pd.DataFrame(columns=cols.keys())
     
+    models = tqdm(models) if len(models) > 1 else models
     for model in models:
         try:
             model = replace_ckpt_alias(model, **kwargs)

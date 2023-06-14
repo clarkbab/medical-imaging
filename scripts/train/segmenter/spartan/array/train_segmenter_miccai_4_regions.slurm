@@ -12,8 +12,8 @@
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
 ##SBATCH --time 0-14:00:00
-##SBATCH --time 2-00:00:00
-#SBATCH --time 7-00:00:00
+#SBATCH --time 2-00:00:00
+##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -36,7 +36,7 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai-no-background"
-RESOLUTION="112"
+RESOLUTION="222"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
 RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION"
@@ -48,7 +48,7 @@ N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
+RESUME=True
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
