@@ -104,6 +104,10 @@ class RTSTRUCT(DICOMFile):
         only: Optional[PatientRegions] = None,
         return_unmapped: bool = False,
         use_mapping: bool = True) -> Union[List[PatientRegion], Tuple[List[PatientRegion], List[PatientRegion]]]:
+        # If not 'region-map.csv' exists, set 'use_mapping=False'.
+        if self.__region_map is None:
+            use_mapping = False
+
         # Get unmapped region names.
         rtstruct = self.get_rtstruct()
         unmapped_regions = RTSTRUCTConverter.get_roi_names(rtstruct)
@@ -113,8 +117,6 @@ class RTSTRUCT(DICOMFile):
         unmapped_regions = list(filter(lambda r: RTSTRUCTConverter.has_roi_data(rtstruct, r), unmapped_regions))
 
         # Map regions using 'region-map.csv'.
-        if self.__region_map is None:
-            use_mapping = False
         if use_mapping:
             pat_id = self.__series.study.patient.id
             # Store as ('unmapped region', 'mapped region', 'priority').
@@ -194,6 +196,10 @@ class RTSTRUCT(DICOMFile):
         self,
         region: Optional[PatientRegions] = None,
         use_mapping: bool = True) -> OrderedDict:
+        # If not 'region-map.csv' exists, set 'use_mapping=False'.
+        if self.__region_map is None:
+            use_mapping = False
+
         # Check that requested regions exist.
         regions = arg_to_list(region, str)
         if regions is not None:

@@ -18,11 +18,15 @@ def plot_region(
     study_id: Optional[str] = None,
     use_mapping: bool = True,
     **kwargs) -> None:
-    regions = arg_to_list(region, str)
     region_labels = arg_to_list(region_label, str)
 
-    # Load data.
+    # Deal with 'regions' arg.
     patient = DICOMDataset(dataset).patient(pat_id)
+    if region == 'all':
+        regions = patient.list_regions()
+    else:
+        regions = arg_to_list(region, str)
+
     if study_id is not None:
         study = patient.study(study_id)
     else:

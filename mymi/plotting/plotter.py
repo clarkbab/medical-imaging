@@ -1225,345 +1225,6 @@ Diff: {diff_name}""")
             'text.usetex': rc_params['text.usetex']
         })
 
-def plot_dataframe_old(
-    data: pd.DataFrame = None,
-    x: str = None,
-    y: str = None,
-    hue: str = None,
-    annotate_outliers: bool = False,
-    annotation_overlap_offset: float = 25,
-    annotation_model_offset: float = 35,
-    debug: bool = False,
-    exclude_x: Union[str, List[str]] = None,
-    fontsize: float = DEFAULT_FONT_SIZE,
-    hue_order: Optional[List[str]] = None,
-    include_x: Union[str, List[str]] = None,
-    inner: str = 'quartiles',
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
-    legend_loc: str = 'best',
-    major_tick_freq: Optional[float] = None,
-    minor_tick_freq: Optional[float] = None,
-    n_col: int = 6,
-    offset=5,
-    overlap_min_diff: bool = None,
-    point_size: float = 5,
-    point_style: str = 'strip',
-    row_height: int = 6,
-    row_width: int = 18,
-    savepath: Optional[str] = None,
-    show_points: bool = True,
-    show_outliers: bool = True,
-    show_stats: bool = False,
-    show_x_tick_labels: bool = True,
-    stats_index: Optional[List[str]] = None,
-    style: Literal['box', 'violin'] = 'box',
-    x_label_rot: float = 0,
-    y_label: str = '',
-    y_lim: Tuple[Optional[int], Optional[int]] = (None, None)):
-    df = data
-
-    # Include/exclude.
-    if include_x:
-        if type(include_x) == str:
-            include_x = [include_x]
-        df = df[df[x].isin(include_x)]
-    if exclude_x:
-        if type(exclude_x) == str:
-            exclude_x = [exclude_x]
-        df = df[~df[x].isin(exclude_x)]
-    
-    # Add region numbers and outliers.
-    df = _add_x_info(df, x, y, hue)
-    df = _add_outlier_info(df, x, y, hue)
-    
-    # Split data.
-    xs = list(sorted(df[x].unique()))
-    if hue_order is None:
-        hue_order = list(sorted(df[hue].unique())) if hue is not None else None
-    n_rows = int(np.ceil(len(xs) / n_col))
-    if n_rows > 1:
-        _, axs = plt.subplots(n_rows, 1, figsize=(row_width, n_rows * row_height), sharey=True)
-    else:
-        plt.figure(figsize=(row_width, row_height))
-        axs = [plt.gca()]
-    for i in range(n_rows):
-        # Split data.
-        split_xs = xs[i * n_col:(i + 1) * n_col]
-        split_df = df[df[x].isin(split_xs)]
-        if len(split_df) == 0:
-            continue
-            
-        # Determine category label order.
-        x_label = f'{x}_label'
-        order = list(sorted(split_df[x_label].unique()))
-        if len(xs) < n_col:
-            order += [''] * (n_col - len(order))
-
-        # Plot data.
-        if style == 'box':
-            sns.boxplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, showfliers=False, order=order, hue_order=hue_order)
-        elif style == 'violin':
-            # Exclude outliers manually.
-            split_df = split_df[~split_df.outlier]
-            sns.violinplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, inner=inner, split=True, showfliers=False, order=order, hue_order=hue_order)
-        else:
-            raise ValueError(f"Invalid style {style}, expected 'box' or 'violin'.")
-
-        # Plot points.
-        if show_points:
-            if point_style == 'strip':
-                sns.stripplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, dodge=True, jitter=False, order=order, linewidth=1, label=None, hue_order=hue_order, size=point_size)
-            elif point_style == 'swarm':
-                sns.swarmplot(ax=axs[i], data=split_df, x=x_label, y=y, hue=hue, dodge=True, order=order, linewidth=1, label=None, hue_order=hue_order, size=point_size)
-            else:
-                raise ValueError(f"Invalid point style {point_style}, expected 'strip' or 'swarm'.")
-
-            # Plot outliers.
-            if show_outliers:
-                outlier_df = split_df[split_df.outlier]
-                if len(outlier_df) != 0:
-                    sns.stripplot(ax=axs[i], data=outlier_df, x=x_label, y=y, hue=hue, dodge=True, jitter=False, edgecolor='white', linewidth=1, order=order, hue_order=hue_order)
-                    plt.setp(axs[i].collections, zorder=100, label="")
-                    if annotate_outliers:
-                        first_region = i * n_col
-                        _annotate_outliers(axs[i], outlier_df, f'{x}_num', y, 'patient-id', offset, overlap_min_diff, annotation_overlap_offset, annotation_model_offset, debug, first_region)
-
-        # Plot statistical significance.
-        if hue is not None and show_stats:
-            if len(hue_order) != 2:
-                raise ValueError(f"Hue set must have cardinality 2, got '{len(hue_order)}'.")
-            if stats_index is None:
-                raise ValueError(f"Please set 'stats_index' to determine sample pairing.")
-
-            # Create pairs to compare. Only works when len(hue_order) == 2.
-            pairs = []
-            for o in order:
-                pair = []
-                for h in hue_order:
-                    pair.append((o, h))
-                pairs.append(tuple(pair))
-
-            # Calculate p-values.
-            p_vals = []
-            for o in order:
-                osplit_df = split_df[split_df[x_label] == o]
-                opivot_df = osplit_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
-                _, p_val = wilcoxon(opivot_df[y][hue_order[0]], opivot_df[y][hue_order[1]])
-                p_vals.append(p_val)
-
-            # Format p-values.
-            p_vals = __format_p_values(p_vals) 
-
-            # Remove non-significant pairs.
-            tpairs = []
-            tp_vals = []
-            for pair, p_val in zip(pairs, p_vals):
-                if p_val != '':
-                    tpairs.append(pair)
-                    tp_vals.append(p_val)
-
-            # Annotate figure.
-            annotator = Annotator(axs[i], tpairs, data=split_df, x=x_label, y=y, order=order, hue=hue, hue_order=hue_order, verbose=False)
-            annotator.set_custom_annotations(tp_vals)
-            annotator.annotate()
-
-        # Set y axis major ticks.
-        if major_tick_freq is not None:
-            major_tick_min = y_lim[0]
-            if major_tick_min is None:
-                major_tick_min = axs[i].get_ylim()[0]
-            major_tick_max = y_lim[1]
-            if major_tick_max is None:
-                major_tick_max = axs[i].get_ylim()[1]
-            
-            # Round range to nearest multiple of 'major_tick_freq'.
-            major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
-            major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
-            n_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
-            major_ticks = np.linspace(major_tick_min, major_tick_max, n_major_ticks)
-            integers = True
-            for t in major_ticks:
-                if not t.is_integer():
-                    integers = False
-            if integers:
-                major_ticks = [int(t) for t in major_ticks]
-            major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
-            axs[i].set_yticks(major_ticks)
-            axs[i].set_yticklabels(major_tick_labels)
-
-        # Set y axis minor ticks.
-        if minor_tick_freq is not None:
-            minor_tick_min = y_lim[0]
-            if minor_tick_min is None:
-                minor_tick_min = axs[i].get_ylim()[0]
-            minor_tick_max = y_lim[1]
-            if minor_tick_max is None:
-                minor_tick_max = axs[i].get_ylim()[1]
-            
-            # Round range to nearest multiple of 'minor_tick_freq'.
-            minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
-            minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
-            n_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
-            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, n_minor_ticks)
-            axs[i].set_yticks(minor_ticks, minor=True)
-
-        # Set y grid lines.
-        axs[i].grid(axis='y', linestyle='dashed')
-        axs[i].set_axisbelow(True)
-          
-        # Set axis labels.
-        if y_lim:
-            axs[i].set_ylim(*y_lim)
-        axs[i].set_xlabel('')
-        axs[i].set_ylabel(y_label, fontsize=fontsize)
-
-        # Set axis tick labels fontsize/rotation.
-        if show_x_tick_labels:
-            # Rotate x labels.
-            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_label_rot)
-        else:
-            axs[i].set_xticklabels([])
-
-        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
-        
-        # Set legend location and fix multiple series problem.
-        if hue is not None:
-            n_hues = len(hue_order)
-            handles, labels = axs[i].get_legend_handles_labels()
-            handles = handles[:n_hues]
-            labels = labels[:n_hues]
-            axs[i].legend(handles, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
-        else:
-            axs[i].legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
-
-    # Save plot to disk.
-    if savepath is not None:
-        dirpath = os.path.dirname(savepath)
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-        logging.info(f"Saved plot to '{savepath}'.")
-
-    plt.show()
-
-def _add_x_info(df, x, y, hue):
-    if hue is not None:
-        groupby = [hue, x] 
-    else:
-        groupby = x
-    df = df.assign(**{ f'{x}_num': df.groupby(groupby).ngroup() })
-    count_map = df.groupby(groupby)[y].count()
-    def x_count_func(row):
-        if type(groupby) == list:
-            key = tuple(row[groupby])
-        else:
-            key = row[groupby]
-        return count_map[key]
-    df = df.assign(**{ f'{x}_count': df.apply(x_count_func, axis=1) })
-    def x_label_func(row):
-        return f"{row[x]}\n(n={row[f'{x}_count']})"
-    df = df.assign(**{ f'{x}_label': df.apply(x_label_func, axis=1) })
-    return df
-
-def _add_outlier_info(df, x, y, hue):
-    if hue is not None:
-        groupby = [hue, x]
-    else:
-        groupby = x
-    q1_map = df.groupby(groupby)[y].quantile(.25)
-    q3_map = df.groupby(groupby)[y].quantile(.75)
-    def q_func_build(qmap):
-        def q_func(row):
-            if type(groupby) == list:
-                key = tuple(row[groupby])
-            else:
-                key = row[groupby]
-            return qmap[key]
-        return q_func
-    df = df.assign(q1=df.apply(q_func_build(q1_map), axis=1))
-    df = df.assign(q3=df.apply(q_func_build(q3_map), axis=1))
-    df = df.assign(iqr=df.q3 - df.q1)
-    df = df.assign(outlier_lim_low=df.q1 - 1.5 * df.iqr)
-    df = df.assign(outlier_lim_high=df.q3 + 1.5 * df.iqr)
-    df = df.assign(outlier=(df[y] < df.outlier_lim_low) | (df[y] > df.outlier_lim_high))
-    return df
-
-def _annotate_outliers(ax, data, x, y, label, default_offset, overlap_min_diff, annotation_overlap_offset, annotation_offset, debug, first_region):
-    models = None
-    if 'model' in data:
-        models = data.model.unique()
-    offset_transform = lambda p: transforms.ScaledTranslation(p/72.,0, plt.gcf().dpi_scale_trans)
-    base_transform = ax.transData
-    data = data.sort_values([x, y], ascending=False)
-    prev_model = None
-    prev_x = None
-    prev_y = None
-    prev_digits = None
-    offset = default_offset
-    
-    # Print annotations.
-    for _, row in data.iterrows():
-        if debug:
-            print(f'region: {row[x]}')
-            print(f'patient: {row[label]}')
-
-        # Get model offset.
-        if models is not None:
-            if row['model'] == models[0]:
-                ann_offset = -annotation_offset
-            else:
-                ann_offset = annotation_offset
-        else:
-            ann_offset = 0
-        
-        # Apply offset to labels when outliers are overlapping.
-        if overlap_min_diff is not None:
-            # Check that model hasn't changed.
-            if prev_model is None or row['model'] == prev_model:
-                # Check that region hasn't changed.
-                if prev_x is not None and row[x] == prev_x:
-                    if debug:
-                        print('checking diff')
-                    if prev_y is not None:
-                        diff = prev_y - row[y]
-                        if debug:
-                            print(f'diff: {diff}')
-                        if diff < overlap_min_diff:
-                            if debug:
-                                print(f'offsetting point {row[label]}')
-                            offset += (annotation_overlap_offset * prev_digits / 3)
-                        else:
-                            offset = default_offset
-                else:
-                    offset = default_offset
-            else:
-                offset = default_offset
-                
-        # Save previous values.
-        if models is not None:
-            prev_model = row['model']
-        prev_y = row[y]
-        prev_x = row[x]
-        prev_digits = len(row[label])
-        x_val = row[x] - first_region
-        ax.text(x_val, row[y], row[label], transform=base_transform + offset_transform(offset) + offset_transform(ann_offset))
-
-def __format_p_values(p_vals: List[float]) -> List[str]:
-    f_p_vals = []
-    for p_val in p_vals:
-        if p_val >= 0.05:
-            p_val = ''
-        elif p_val >= 0.01:
-            p_val = '*'
-        elif p_val >= 0.001:
-            p_val = '**'
-        elif p_val >= 0.0001:
-            p_val = '***'
-        else:
-            p_val = '****'
-        f_p_vals.append(p_val)
-    return f_p_vals
-
 def plot_dataframe(
     ax: Optional[matplotlib.axes.Axes] = None,
     data: Optional[pd.DataFrame] = None,
@@ -1614,7 +1275,7 @@ def plot_dataframe(
     if show_hue_connections and hue_connections_index is None:
         raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
     if show_stats and stats_index is None:
-        raise ValueError(f"Please set 'stats_index' to determine sample pairing.")
+        raise ValueError(f"Please set 'stats_index' to determine sample pairing for Wilcoxon test.")
         
     # Include/exclude.
     if include_x:
@@ -1627,7 +1288,7 @@ def plot_dataframe(
         data = data[~data[x].isin(exclude_x)]
 
     # Add outlier data.
-    data = _add_outlier_info(data, x, y, hue)
+    data = __add_outlier_info(data, x, y, hue)
 
     # Get min/max values for y-lim.
     if share_y:
@@ -1636,15 +1297,13 @@ def plot_dataframe(
 
     # Get x values.
     if x_order is None:
-        x_vals = list(sorted(data[x].unique()))
-    else:
-        x_vals = x_order
+        x_order = list(sorted(data[x].unique()))
 
     # Determine x labels.
     groupby = x if hue is None else [x, hue]
     count_map = data.groupby(groupby)[y].count()
     x_tick_labels = []
-    for x_val in x_vals:
+    for x_val in x_order:
         counts = count_map.loc[x_val]
         ns = counts.values
         # Use a single number, e.g. (n=99) if all hues have the same number of points.
@@ -1655,8 +1314,8 @@ def plot_dataframe(
 
     # Create subplots if required.
     if n_col is None:
-        n_col = len(x_vals)
-    n_rows = int(np.ceil(len(x_vals) / n_col))
+        n_col = len(x_order)
+    n_rows = int(np.ceil(len(x_order) / n_col))
     if ax is not None:
         assert n_rows == 1
         axs = [ax]
@@ -1680,6 +1339,9 @@ def plot_dataframe(
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
 
+        # Calculate x width for each hue.
+        hue_width = x_width / len(hue_order) 
+
         # Check there are enough hue colors.
         if len(hue_order) > len(hue_palette):
             raise ValueError(f"'hue_palette' doesn't have enough colours, needs '{len(hue_order)}'.")
@@ -1690,51 +1352,29 @@ def plot_dataframe(
     # Plot rows.
     for i in range(n_rows):
         # Split data.
-        row_x_vals = x_vals[i * n_col:(i + 1) * n_col]
+        row_x_order = x_order[i * n_col:(i + 1) * n_col]
         row_x_tick_labels = x_tick_labels[i * n_col:(i + 1) * n_col]
 
         # Get row data.
-        row_data = data[data[x].isin(row_x_vals)].copy()
+        row_data = data[data[x].isin(row_x_order)].copy()
 
         # Keep track of legend item.
         hue_artists = {}
 
-        for j, x_val in enumerate(row_x_vals):
-            # Filter hue from 'hue_order' if it doesn't have any data.
-            if hue is not None:
-                hue_order_f = []
-                for hue_name in hue_order:
-                    hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
-                    if len(hue_data) != 0:
-                        hue_order_f.append(hue_name)
-
-            # Calculate hue width.
-            if hue is not None:
-                hue_width = x_width / len(hue_order_f)
-
+        for j, x_val in enumerate(row_x_order):
             # Add x positions.
-            if hue is None:
-                x_pos = j
-                row_data.loc[row_data[x] == x_val, 'x_pos'] = x_pos
-            else:
-                for k, hue_name in enumerate(hue_order_f):
+            if hue is not None:
+                for k, hue_name in enumerate(hue_order):
                     x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
                     row_data.loc[(row_data[x] == x_val) & (row_data[hue] == hue_name), 'x_pos'] = x_pos
+            else:
+                x_pos = j
+                row_data.loc[row_data[x] == x_val, 'x_pos'] = x_pos
                 
             # Plot boxes.
             if show_boxes:
-                if hue is None:
-                    # Plot box.
-                    x_data = row_data[row_data[x] == x_val]
-                    if len(x_data) == 0:
-                        continue
-                    x_pos = x_data.iloc[0]['x_pos']
-                    if style == 'box':
-                        axs[i].boxplot(x_data[y], boxprops=dict(color=linecolour, linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
-                    elif style == 'violin':
-                        axs[i].violinplot(x_data[y], positions=[x_pos])
-                else:
-                    for k, hue_name in enumerate(hue_order_f):
+                if hue is not None:
+                    for k, hue_name in enumerate(hue_order):
                         # Get hue data and pos.
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
@@ -1755,20 +1395,30 @@ def plot_dataframe(
                             res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
                             if not hue_name in hue_artists:
                                 hue_artists[hue_name] = res['boxes'][0]
+                else:
+                    # Plot box.
+                    x_data = row_data[row_data[x] == x_val]
+                    if len(x_data) == 0:
+                        continue
+                    x_pos = x_data.iloc[0]['x_pos']
+                    if style == 'box':
+                        axs[i].boxplot(x_data[y], boxprops=dict(color=linecolour, linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
+                    elif style == 'violin':
+                        axs[i].violinplot(x_data[y], positions=[x_pos])
 
             # Plot points.
             if show_points:
-                if hue is None:
-                    x_data = row_data[row_data[x] == x_val]
-                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
-                else:
-                    for j, hue_name in enumerate(hue_order_f):
+                if hue is not None:
+                    for j, hue_name in enumerate(hue_order):
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
                             continue
                         res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
                         if not show_boxes and not hue_name in hue_artists:
                             hue_artists[hue_name] = res
+                else:
+                    x_data = row_data[row_data[x] == x_val]
+                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:
@@ -1825,39 +1475,46 @@ def plot_dataframe(
 
         # Plot statistical significance.
         if hue is not None and show_stats:
-            if len(hue_order) != 2:
-                raise ValueError(f"Hue set must have cardinality 2, got '{len(hue_order)}'.")
-
-            # Create pairs to compare. Only works when len(hue_order) == 2.
+            # Create pairs for stats annotation.
             pairs = []
-            for o in x_vals:
+            for x_val in row_x_order:
                 pair = []
-                for h in hue_order:
-                    pair.append((o, h))
-                pairs.append(tuple(pair))
+                for j, hue_val in enumerate(hue_order):
+                    for hue_val_two in hue_order[j + 1:]:
+                        pair = ((x_val, hue_val), (x_val, hue_val_two))
+                        pairs.append(pair)
 
             # Calculate p-values.
             p_vals = []
-            for o in x_vals:
-                x_df = row_data[row_data[x] == o]
+            pairs_tmp = pairs
+            pairs = []  # Some pairs may be removed if there is not data.
+            for (x_a, hue_a), (x_b, hue_b) in pairs_tmp:
+                assert x_a == x_b
+                x_val = x_a
+                x_df = row_data[row_data[x] == x_val]
                 x_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
-                _, p_val = wilcoxon(x_df[y][hue_order[0]], x_df[y][hue_order[1]])
-                p_vals.append(p_val)
+                if (y, hue_a) in x_df.columns and (y, hue_b) in x_df.columns:
+                    vals_a = x_df[y][hue_a]
+                    vals_b = x_df[y][hue_b]
+                    # Perform 'Wilcoxon signed rank test' in both directions.
+                    _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
+                    if p_val <= 0.05:
+                        p_vals.append((p_val, '>'))
+                        pair = ((x_a, hue_a), (x_b, hue_b))
+                        pairs.append(pair)
+                    else:
+                        _, p_val = wilcoxon(vals_a, vals_b, alternative='less')
+                        if p_val <= 0.05:
+                            p_vals.append((p_val, '<'))
+                            pair = ((x_a, hue_a), (x_b, hue_b))
+                            pairs.append(pair)
 
             # Format p-values.
             p_vals = __format_p_values(p_vals) 
 
-            # Remove non-significant pairs.
-            tpairs = []
-            tp_vals = []
-            for pair, p_val in zip(pairs, p_vals):
-                if p_val != '':
-                    tpairs.append(pair)
-                    tp_vals.append(p_val)
-
             # Annotate figure.
-            annotator = Annotator(axs[i], tpairs, data=row_data, x=x, y=y, order=x_order, hue=hue, hue_order=hue_order, verbose=False)
-            annotator.set_custom_annotations(tp_vals)
+            annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
+            annotator.set_custom_annotations(p_vals)
             annotator.annotate()
                 
         # Set axis ticks and labels.
@@ -1962,6 +1619,50 @@ def style_rows(
     else:
         styles += __get_styles(series, exclude_cols=exclude_cols)
     return styles
+
+def __add_outlier_info(df, x, y, hue):
+    if hue is not None:
+        groupby = [hue, x]
+    else:
+        groupby = x
+    q1_map = df.groupby(groupby)[y].quantile(.25)
+    q3_map = df.groupby(groupby)[y].quantile(.75)
+    def q_func_build(qmap):
+        def q_func(row):
+            if type(groupby) == list:
+                key = tuple(row[groupby])
+            else:
+                key = row[groupby]
+            return qmap[key]
+        return q_func
+    df = df.assign(q1=df.apply(q_func_build(q1_map), axis=1))
+    df = df.assign(q3=df.apply(q_func_build(q3_map), axis=1))
+    df = df.assign(iqr=df.q3 - df.q1)
+    df = df.assign(outlier_lim_low=df.q1 - 1.5 * df.iqr)
+    df = df.assign(outlier_lim_high=df.q3 + 1.5 * df.iqr)
+    df = df.assign(outlier=(df[y] < df.outlier_lim_low) | (df[y] > df.outlier_lim_high))
+    return df
+
+def __format_p_values(p_vals: List[float]) -> List[str]:
+    # Format p value for display.
+    p_vals_tmp = p_vals
+    p_vals = []
+    for p_val, direction in p_vals_tmp:
+        if p_val >= 0.05:
+            p_val = ''
+        elif p_val >= 0.01:
+            p_val = '*'
+        elif p_val >= 0.001:
+            p_val = '**'
+        elif p_val >= 0.0001:
+            p_val = '***'
+        else:
+            p_val = '****'
+
+        p_val = f'{p_val} ({direction})'
+        p_vals.append(p_val)
+
+    return p_vals
 
 def __get_styles(
     series: pd.Series,
