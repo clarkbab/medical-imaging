@@ -25,11 +25,12 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai"
+MODEL_NAME="segmenter-miccai-no-background"
 RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 RUN_NAME="9-regions-$SHORT_REGION-$RESOLUTION"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
+CHECK_EPOCHS=False
 N_SPLIT_CHANNELS=2
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
@@ -38,5 +39,6 @@ python $SCRIPT_DIR/predict/nrrd/segmenter/predict_multi.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
+    --check_epochs $CHECK_EPOCHS \
     --n_split_channels $N_SPLIT_CHANNELS \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE

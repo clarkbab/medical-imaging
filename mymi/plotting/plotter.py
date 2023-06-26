@@ -46,7 +46,7 @@ def __plot_region_data(
     if colour is None:
         colours = sns.color_palette('colorblind', n_colors=len(regions))
     else:
-        colours = arg_to_list(colour, [str, tuple])
+        colours = arg_to_list(colour, (str, tuple))
 
     if not ax:
         ax = plt.gca()
@@ -797,7 +797,7 @@ def plot_multi_segmenter_prediction(
             n_colours = n_regions + n_models
         colours = sns.color_palette('colorblind', n_colours)
     else:
-        colours = arg_to_list(colour, [str, tuple])
+        colours = arg_to_list(colour, (str, tuple))
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -947,7 +947,7 @@ def plot_segmenter_prediction(
     model_names = tuple(pred_data.keys())
     n_models = len(model_names)
     n_regions = len(region_data.keys()) if region_data is not None else 0
-    loc_centres = arg_to_list(loc_centre, Point3D)
+    loc_centres = arg_to_list(loc_centre, tuple)
     if loc_centres is not None:
         assert len(loc_centres) == n_models
 
@@ -1304,11 +1304,14 @@ def plot_dataframe(
     count_map = data.groupby(groupby)[y].count()
     x_tick_labels = []
     for x_val in x_order:
-        counts = count_map.loc[x_val]
-        ns = counts.values
-        # Use a single number, e.g. (n=99) if all hues have the same number of points.
-        if len(np.unique(ns)) == 1:
-            ns = ns[:1]
+        count = count_map.loc[x_val]
+        if hue is not None:
+            ns = count.values
+            # Use a single number, e.g. (n=99) if all hues have the same number of points.
+            if len(np.unique(ns)) == 1:
+                ns = ns[:1]
+        else:
+            ns = [count]
         label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
         x_tick_labels.append(label)
 
@@ -1513,7 +1516,7 @@ def plot_dataframe(
             p_vals = __format_p_values(p_vals) 
 
             # Annotate figure.
-            annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
+            annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, line_offset=20, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
             annotator.set_custom_annotations(p_vals)
             annotator.annotate()
                 

@@ -78,11 +78,6 @@ def train_localiser(
         metrics=['dice'],
         pretrained=pretrained,
         spacing=spacing)
-    # model = MultiSegmenter(
-    #     region,
-    #     loss_fn,
-    #     metrics=['dice']
-    # )
 
     # Create logger.
     if use_logger:

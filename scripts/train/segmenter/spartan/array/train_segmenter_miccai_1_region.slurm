@@ -50,10 +50,12 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai-no-background"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
-LR_INIT=1e-5
+LR_INIT=1e-4
 N_SPLIT_CHANNELS=2
-RANDOM_SEED=42
-RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-lr-$LR_INIT"
+RANDOM_SEED=43
+#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-bfloat16"
+#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 INCLUDE_BACKGROUND=False
@@ -61,6 +63,7 @@ N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
+PRECISION='bf16'
 RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
@@ -82,10 +85,12 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_nodes $N_NODES \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
+    --precision $PRECISION \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
+    --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \

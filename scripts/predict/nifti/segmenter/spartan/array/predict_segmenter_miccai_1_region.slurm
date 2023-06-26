@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --time 0-00:30:00
-##SBATCH --test-only
 
 module load python/3.8.6
 module load web_proxy
@@ -42,19 +41,18 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai-no-background"
-RESOLUTION="222"
+RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
+RANDOM_SEED=42
+#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
-MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
-CHECK_EPOCHS=False
+MODEL="('$MODEL_NAME','$RUN_NAME','best')"
 N_SPLIT_CHANNELS=2
-SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-USE_LOADER_SPLIT_FILE=True
+USE_LOADER_SPLIT_FILE=TRUE
 
-python $SCRIPT_DIR/predict/nrrd/segmenter/predict_multi.py \
+python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --dataset $DATASET \
-    --region $REGION \
+    --region $REGIONS \
     --model $MODEL \
-    --check_epochs $CHECK_EPOCHS \
     --n_split_channels $N_SPLIT_CHANNELS \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE

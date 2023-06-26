@@ -4,31 +4,29 @@ import pandas as pd
 import torch
 from torch.nn.functional import one_hot
 from tqdm import tqdm
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
-from mymi import dataset as ds
 from mymi.dataset import NRRDDataset, TrainingDataset
-from mymi.geometry import get_box, get_extent, get_extent_centre, get_extent_width_mm
+from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
-from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
-from mymi import types
-from mymi.utils import Timer, append_row, arg_broadcast, arg_to_list, encode, load_csv
+from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
 
 def get_localiser_prediction(
     dataset: str,
     pat_id: str,
-    localiser: types.Model,
-    loc_size: types.ImageSize3D = (128, 128, 150),
-    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
+    localiser: Model,
+    loc_size: ImageSize3D = (128, 128, 150),
+    loc_spacing: ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = NRRDDataset(dataset)
@@ -44,7 +42,7 @@ def get_localiser_prediction(
 def create_localiser_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[Union[int, str], List[Union[int, str]]],
-    localiser: Union[types.ModelName, types.Model],
+    localiser: Union[ModelName, Model],
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None) -> None:
     datasets = arg_to_list(dataset, str)
@@ -84,7 +82,7 @@ def create_localiser_prediction(
 def create_localiser_predictions_for_first_n_pats(
     n_pats: int,
     region: str,
-    localiser: types.ModelName,
+    localiser: ModelName,
     savepath: Optional[str] = None) -> None:
     localiser = Localiser.load(*localiser)
     logging.info(f"Making localiser predictions for NRRD datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
@@ -106,7 +104,7 @@ def create_localiser_predictions_for_first_n_pats(
 def create_localiser_predictions(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
+    localiser: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     timing: bool = True) -> None:
@@ -164,8 +162,8 @@ def create_localiser_predictions(
 
 def load_localiser_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    localiser: types.ModelName,
+    pat_id: PatientID,
+    localiser: ModelName,
     exists_only: bool = False) -> Union[np.ndarray, bool]:
     localiser = replace_ckpt_alias(localiser)
 
@@ -187,7 +185,7 @@ def load_localiser_prediction(
 def load_localiser_predictions_timings(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
+    localiser: ModelName,
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
@@ -203,8 +201,8 @@ def load_localiser_predictions_timings(
 
 def load_localiser_centre(
     dataset: str,
-    pat_id: types.PatientID,
-    localiser: types.ModelName) -> types.Point3D:
+    pat_id: PatientID,
+    localiser: ModelName) -> Point3D:
     spacing = NRRDDataset(dataset).patient(pat_id).ct_spacing
 
     # Get localiser prediction.
@@ -223,9 +221,9 @@ def load_localiser_centre(
 
 def get_multi_segmenter_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    model: Union[types.ModelName, types.Model],
-    model_spacing: types.ImageSpacing3D,
+    pat_id: PatientID,
+    model: Union[ModelName, Model],
+    model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -283,11 +281,11 @@ def get_multi_segmenter_prediction(
 
 def get_segmenter_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    loc_centre: types.Point3D,
-    segmenter: Union[types.Model, types.ModelName],
+    pat_id: PatientID,
+    loc_centre: Point3D,
+    segmenter: Union[Model, ModelName],
     probs: bool = False,
-    seg_spacing: types.ImageSpacing3D = (1, 1, 2),
+    seg_spacing: ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -346,14 +344,16 @@ def get_segmenter_prediction(
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    region: Union[str, List[str]],
-    model: Union[types.ModelName, types.Model],
-    model_spacing: types.ImageSpacing3D,
+    region: PatientRegions,
+    model: Union[ModelName, Model],
+    model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
+    # 'regions' is used to determine the output channels for the multi-class model.
+    regions = arg_to_list(region, str)
     assert len(datasets) == len(pat_ids)
 
     # Load gpu if available.
@@ -368,7 +368,7 @@ def create_multi_segmenter_prediction(
     # Load PyTorch model.
     if type(model) == tuple:
         n_gpus = 0 if device.type == 'cpu' else 1
-        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=region, **kwargs)
+        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=regions, **kwargs)
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
@@ -386,11 +386,19 @@ def create_multi_segmenter_prediction(
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
+        # Save region names.
+        if savepath is None:
+            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'regions.csv')
+        else:
+            savepath = os.path.join(os.path.dirname(savepath), 'regions.csv')
+        df = pd.DataFrame(regions, columns=['region'])
+        df.to_csv(savepath, index=False)
+
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    localiser: types.ModelName,
-    segmenter: Union[types.Model, types.ModelName],
+    localiser: ModelName,
+    segmenter: Union[Model, ModelName],
     device: Optional[torch.device] = None,
     probs: bool = False,
     raise_error: bool = False,
@@ -448,7 +456,7 @@ def create_segmenter_prediction(
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: Union[str, List[str]],
-    model: Union[types.ModelName, types.Model],
+    model: Union[ModelName, Model],
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,
@@ -456,6 +464,8 @@ def create_multi_segmenter_predictions(
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
+    # 'regions' is used both to determine which patients are loaded (those that have at least
+    # one of the listed regions), and to determine the output channels for the multi-class model.
     regions = arg_to_list(region, str)
     model_spacing = TrainingDataset(datasets[0]).params['output-spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
@@ -480,6 +490,11 @@ def create_multi_segmenter_predictions(
 
     # Create test loader.
     _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=regions, **kwargs)
 
     # Make predictions.
     for pat_desc_b in tqdm(iter(test_loader)):
@@ -510,8 +525,8 @@ def create_multi_segmenter_predictions(
 def create_segmenter_predictions(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     timing: bool = True) -> None:
@@ -570,10 +585,10 @@ def create_segmenter_predictions(
 
 def load_multi_segmenter_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    model: types.ModelName,
+    pat_id: PatientID,
+    model: ModelName,
     exists_only: bool = False,
-    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
+    use_model_manifest: bool = False) -> Union[Tuple[np.ndarray, List[str]], bool]:
     model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
 
     # Load prediction.
@@ -588,13 +603,18 @@ def load_multi_segmenter_prediction(
             raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
     pred = np.load(filepath)['data']
 
-    return pred
+    # Load regions.
+    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'regions.csv')
+    df = pd.read_csv(filepath)
+    regions = list(df['region'])
+
+    return pred, regions
 
 def load_segmenter_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    pat_id: PatientID,
+    localiser: ModelName,
+    segmenter: ModelName,
     exists_only: bool = False,
     use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
     localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
@@ -617,8 +637,8 @@ def load_segmenter_prediction(
 def load_segmenter_predictions_timings(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None) -> pd.DataFrame:
@@ -635,9 +655,9 @@ def load_segmenter_predictions_timings(
 
 def save_patient_segmenter_prediction(
     dataset: str,
-    pat_id: types.PatientID,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    pat_id: PatientID,
+    localiser: ModelName,
+    segmenter: ModelName,
     data: np.ndarray) -> None:
     localiser = Localiser.replace_ckpt_aliases(*localiser)
     segmenter = Segmenter.replace_ckpt_aliases(*segmenter)
@@ -650,8 +670,8 @@ def save_patient_segmenter_prediction(
 def create_two_stage_predictions(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[Union[int, List[int], Literal['all']]] = None,
     timing: bool = True) -> None:

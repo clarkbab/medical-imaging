@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-2:00:00
+#SBATCH --time 0-00:10:00
 #SBATCH -A punim1413
 
 module load python/3.8.6
@@ -29,7 +29,7 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai"
-RESOLUTION="444"
+RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
@@ -39,5 +39,5 @@ USE_LOADER_SPLIT_FILE=True
 python $SCRIPT_DIR/evaluate/nrrd/segmenter/evaluate_multi.py \
     --dataset $DATASET \
     --model $MODEL \
-    --model_regions $REGION \
+    --model_region $REGION \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE

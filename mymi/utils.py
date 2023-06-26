@@ -215,19 +215,20 @@ def arg_assert_present(
 
 def arg_to_list(
     arg: Optional[Any],
-    arg_type: Union[Any, List[Any]],
-    literals: Dict[str, List[Any]] = {},
+    arg_type: Union[Any, Tuple[Any]],
+    literals: Dict[str, Tuple[Any]] = {},
     out_type: Optional[Any] = None) -> List[Any]:
     if arg is None:
         return arg
 
     # Allow multiple types in 'arg_type'.
-    if type(arg_type) is list:
-        if out_type is None:
-            raise ValueError(f"Must specify 'out_type' when multiple input types are used ({arg_type}).")
+    # E.g. patient ID can be str/int, colours can be str/tuple.
+    if type(arg_type) is tuple:
+        # if out_type is None:
+        #     raise ValueError(f"Must specify 'out_type' when multiple input types are used ({arg_type}).")
         arg_types = arg_type
     else:
-        arg_types = [arg_type]
+        arg_types = (arg_type,)
 
     # Convert to list.
     if type(arg) in arg_types:
@@ -236,7 +237,7 @@ def arg_to_list(
         else:
             arg = [arg]
         
-    # Convert to output type. Used when multiple types are specified in 't'.
+    # Convert to output type.
     if out_type is not None:
         arg = [out_type(a) for a in arg]
 

@@ -2,7 +2,7 @@
 #SBATCH --nodes 1
 #SBATCH --partition physical
 #SBATCH --mem 32G
-#SBATCH --time 0-00:10:00
+#SBATCH --time 0-00:20:00
 #SBATCH -A punim1413
 
 module load python/3.8.6
@@ -13,33 +13,19 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    'Bone_Mandible'     # 0
-    'Brainstem'         # 1
-    'Glnd_Submand_L'    # 2
-    'Glnd_Submand_R'    # 3
-    'OpticChiasm'       # 4
-    'OpticNrv_L'        # 5
-    'OpticNrv_R'        # 6
-    'Parotid_L'         # 7
-    'Parotid_R'         # 8
+    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
+    "['OpticChiasm','Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L']"
 )
 SHORT_REGIONS=(
-    'BM'
-    'BS'
-    'SL'
-    'SR'
+    'BM_BS_SL_SR_OL_OR_PL_PR'
     'OC'
-    'OL'
-    'OR'
-    'PL'
-    'PR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-no-background"
-RESOLUTION="444"
+MODEL_NAME="segmenter-miccai"
+RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
-RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
+RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True

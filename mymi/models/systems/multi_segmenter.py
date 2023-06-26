@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 from typing import Dict, List, Optional, OrderedDict, Tuple
 from wandb import Image
@@ -16,8 +16,8 @@ from mymi.losses import DiceWithFocalLoss
 from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.models.networks import MultiUNet3D
-from mymi.regions import region_to_list
-from mymi import types
+from mymi.types import PatientRegions
+from mymi.utils import arg_to_list
 
 LOG_ON_EPOCH = True
 LOG_ON_STEP = False
@@ -29,7 +29,7 @@ class MultiSegmenter(pl.LightningModule):
         lr_init: float = 1e-3,
         max_image_batches: int = 2,
         metrics: List[str] = [],
-        region: types.PatientRegions = 'all',
+        region: PatientRegions = None,
         use_lr_scheduler: bool = False,
         val_image_interal: int = 10,
         weight_decay: float = 0,
@@ -40,7 +40,9 @@ class MultiSegmenter(pl.LightningModule):
         self.__name = None
         self.__max_image_batches = max_image_batches
         self.__metrics = metrics
-        self.__regions = region_to_list(region)
+        if region is None:
+            raise ValueError(f"Must specify region name/s for reporting when training multi-segmenter.")
+        self.__regions = arg_to_list(region, str)
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
         self.__use_lr_scheduler = use_lr_scheduler
@@ -71,7 +73,7 @@ class MultiSegmenter(pl.LightningModule):
         if check_epochs:
             filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_epochs = 3000
+            n_epochs = np.inf
             if state['epoch'] < n_epochs - 1:
                 raise ValueError(f"Can't load multi-segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 

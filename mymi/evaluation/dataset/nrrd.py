@@ -179,21 +179,17 @@ def load_localiser_evaluation(
 def get_multi_segmenter_evaluation(
     dataset: str,
     pat_id: str,
-    model: ModelName,
-    model_region: PatientRegions) -> Dict[str, float]:
-    model_regions = region_to_list(model_region)
+    model: ModelName) -> List[Dict[str, float]]:
 
-    # Load ground truth and prediction.
+    # Load preds and ground truth.
     set = NRRDDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    labels = pat.region_data(region=model_regions)
-    preds = load_multi_segmenter_prediction(dataset, pat_id, model)
-    if not preds.shape[0] == len(model_regions) + 1:
-        raise ValueError(f"Number of 'model_region' regions ({len(model_regions)}) should be equal to 'preds.shape[0] - 1' ({preds.shape[0] - 1}).")
+    preds, regions = load_multi_segmenter_prediction(dataset, pat_id, model)
+    labels = pat.region_data(region=regions)
  
     metrics = []
-    for i, region in enumerate(model_regions):
+    for i, region in enumerate(regions):
         label = labels[region]
         pred = preds[i + 1]
 
@@ -291,15 +287,17 @@ def get_segmenter_evaluation(
     
 def create_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
+    region: PatientRegions,
     model: ModelName,
-    model_region: PatientRegions,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False) -> None:
     datasets = arg_to_list(dataset, str)
+    # 'regions' is used to determine which patients are loaded (those that have at least one of
+    # the listed regions).
+    regions = arg_to_list(region, str)
     model = replace_ckpt_alias(model)
-    model_regions = region_to_list(model_region)
-    logging.arg_log('Evaluating multi-segmenter predictions for NRRD dataset', ('dataset', 'model', 'model_region'), (dataset, model, model_region))
+    logging.arg_log('Evaluating multi-segmenter predictions for NRRD dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
     # Create dataframe.
     cols = {
@@ -313,7 +311,7 @@ def create_multi_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=model_regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
 
     # Add evaluations to dataframe.
     for pat_desc_b in tqdm(iter(test_loader)):
@@ -321,8 +319,8 @@ def create_multi_segmenter_evaluation(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            region_metrics = get_multi_segmenter_evaluation(dataset, pat_id, model, model_regions)
-            for region, metrics in zip(model_regions, region_metrics):
+            region_metrics = get_multi_segmenter_evaluation(dataset, pat_id, model)
+            for metrics in region_metrics:
                 for metric, value in metrics.items():
                     data = {
                         'fold': test_fold if test_fold is not None else np.nan,
