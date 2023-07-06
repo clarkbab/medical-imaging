@@ -33,26 +33,37 @@ class MultiSegmenter(pl.LightningModule):
         use_lr_scheduler: bool = False,
         val_image_interal: int = 10,
         weight_decay: float = 0,
+        weights: Optional[List[Optional[List[float]]]] = None,
+        weights_schedule: Optional[List[int]] = None,
         **kwargs):
         super().__init__()
+        assert region
         self.__loss = loss
         self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__name = None
         self.__max_image_batches = max_image_batches
         self.__metrics = metrics
-        if region is None:
-            raise ValueError(f"Must specify region name/s for reporting when training multi-segmenter.")
         self.__regions = arg_to_list(region, str)
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
         self.__use_lr_scheduler = use_lr_scheduler
         self.__val_image_interval = val_image_interal
+        self.__weights = weights
         self.__weight_decay = weight_decay
+        self.__weights_schedule = weights_schedule
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
         for i, region in enumerate(self.__regions):
             self.__channel_region_map[i + 1] = region 
+
+        # Check weights and weights schedule.
+        if self.__weights is not None:
+            assert self.__weights_schedule is not None
+            if len(self.__weights) != len(self.__weights_schedule):
+                raise ValueError(f"Weights ({self.__weights}) and weights schedule ({self.__weights_schedule}) must have same length.")
+            if list(sorted(self.__weights_schedule)) != self.__weights_schedule:
+                raise ValueError(f"Weights schedule should be in ascending order. Got '{self.__weights_schedule}'.")
 
     @property
     def name(self) -> Optional[Tuple[str, str, str]]:
@@ -125,6 +136,30 @@ class MultiSegmenter(pl.LightningModule):
     def training_step(self, batch, _):
         # Forward pass.
         desc, x, y, mask, weights = batch
+
+        # Overwrite loader weights if desired.
+        # E.g:
+        #   schedule = [0, 1000, 2000]
+        #   weights = [
+        #       [0, 1],
+        #       [0, 0.8],
+        #       None
+        #   ]
+        #
+        # This will weight the second class for first 2k epochs, then apply loader weighting.
+        if self.__weights is not None:
+            n_batch_items = len(desc)
+            start_epochs = self.__weights_schedule
+            end_epochs = self.__weights_schedule[1:] + [None]
+            for schedule_weights, start_epoch, end_epoch in zip(self.__weights, start_epochs, end_epochs):
+                if self.current_epoch >= start_epoch and (end_epoch is None or self.current_epoch < end_epoch):
+                    if schedule_weights is not None:
+                        weights = torch.Tensor([schedule_weights] * n_batch_items).to(x.device)
+
+        # Log weights. First batch only.
+        for i, weight in enumerate(weights[0]):
+            self.log(f'train/weight/{i}', weight, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
         if np.isnan(loss.item()):
@@ -241,4 +276,4 @@ class MultiSegmenter(pl.LightningModule):
                                 }
                             )
                             title = f'desc:{desc}:class:{j}:axis:{axis}'
-                            self.logger.experiment.log({ title: image })
+                            self.logger.log_image(key=title, images=[image])

@@ -3,7 +3,6 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
 from typing import List, Optional, Union
 
@@ -121,7 +120,6 @@ def train_segmenter_2d(
         max_epochs=n_epochs,
         n_nodes=n_nodes,
         n_sanity_val_steps=0,
-        plugins=DDPPlugin(find_unused_parameters=False),
         precision=precision,
         **opt_kwargs)
     trainer.fit(model, train_loader, val_loader)

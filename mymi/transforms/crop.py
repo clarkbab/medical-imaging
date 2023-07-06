@@ -279,6 +279,11 @@ def crop_box(
 
         # Crop points.
         new_box[0] = crop_point(tuple(new_box[0]), crop)
+        print('here')
+        print(new_box)
+        print(new_box[1])
+        print(tuple(new_box[1]))
+        print(crop_point(tuple(new_box[1]), crop))
         new_box[1] = crop_point(tuple(new_box[1]), crop)
 
         # Convert to tuple.

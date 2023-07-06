@@ -4,7 +4,6 @@ import os
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
 from torchio.transforms import RandomAffine
 from typing import List, Optional, Union
 

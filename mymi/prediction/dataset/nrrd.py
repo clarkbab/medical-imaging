@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pandas as pd
+from pandas import DataFrame
 import torch
 from torch.nn.functional import one_hot
 from tqdm import tqdm
@@ -188,7 +189,7 @@ def load_localiser_predictions_timings(
     localiser: ModelName,
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
-    test_fold: Optional[int] = None) -> pd.DataFrame:
+    test_fold: Optional[int] = None) -> DataFrame:
     localiser = replace_ckpt_alias(localiser)
 
     # Load prediction.
@@ -344,16 +345,14 @@ def get_segmenter_prediction(
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    region: PatientRegions,
     model: Union[ModelName, Model],
+    model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
-    # 'regions' is used to determine the output channels for the multi-class model.
-    regions = arg_to_list(region, str)
     assert len(datasets) == len(pat_ids)
 
     # Load gpu if available.
@@ -368,7 +367,7 @@ def create_multi_segmenter_prediction(
     # Load PyTorch model.
     if type(model) == tuple:
         n_gpus = 0 if device.type == 'cpu' else 1
-        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=regions, **kwargs)
+        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=model_region, **kwargs)
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
@@ -385,14 +384,6 @@ def create_multi_segmenter_prediction(
             savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'pred.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
-
-        # Save region names.
-        if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'regions.csv')
-        else:
-            savepath = os.path.join(os.path.dirname(savepath), 'regions.csv')
-        df = pd.DataFrame(regions, columns=['region'])
-        df.to_csv(savepath, index=False)
 
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
@@ -455,7 +446,7 @@ def create_segmenter_prediction(
 
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
-    region: Union[str, List[str]],
+    region: PatientRegions,
     model: Union[ModelName, Model],
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
@@ -464,8 +455,6 @@ def create_multi_segmenter_predictions(
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    # 'regions' is used both to determine which patients are loaded (those that have at least
-    # one of the listed regions), and to determine the output channels for the multi-class model.
     regions = arg_to_list(region, str)
     model_spacing = TrainingDataset(datasets[0]).params['output-spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
@@ -513,7 +502,7 @@ def create_multi_segmenter_predictions(
             }
 
             with timer.record(data, enabled=use_timing):
-                create_multi_segmenter_prediction(dataset, pat_id, regions, model, model_spacing, device=device, **kwargs)
+                create_multi_segmenter_prediction(dataset, pat_id, model, regions, model_spacing, device=device, **kwargs)
 
     # Save timing data.
     if use_timing:
@@ -588,7 +577,7 @@ def load_multi_segmenter_prediction(
     pat_id: PatientID,
     model: ModelName,
     exists_only: bool = False,
-    use_model_manifest: bool = False) -> Union[Tuple[np.ndarray, List[str]], bool]:
+    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
     model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
 
     # Load prediction.
@@ -603,12 +592,48 @@ def load_multi_segmenter_prediction(
             raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
     pred = np.load(filepath)['data']
 
-    # Load regions.
-    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'regions.csv')
-    df = pd.read_csv(filepath)
-    regions = list(df['region'])
+    return pred
 
-    return pred, regions
+def load_multi_segmenter_prediction_dict(
+    dataset: str,
+    pat_id: PatientID,
+    model: ModelName,
+    model_region: PatientRegions,
+    **kwargs) -> Union[Dict[str, np.ndarray], bool]:
+    model_regions = arg_to_list(model_region, str)
+
+    # Load prediction.
+    pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
+    if pred.shape[0] != len(model_regions) + 1:
+        raise ValueError(f"Number of 'model_regions' ({model_regions}) should match number of channels in prediction '{pred.shape[0]}'.")
+
+    # Convert to dict.
+    data = {}
+    for i, region in enumerate(model_region):
+        region_pred = pred[i + 1]
+        data[region] = region_pred
+
+    return data
+
+def load_multi_segmenter_prediction_timings(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    device: str = 'cuda',
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False) -> DataFrame:
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    model = replace_ckpt_alias(model)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-device-{device}-timing.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Multi-segmenter prediction timings not found for dataset '{dataset}', region '{region}', model '{model}'. Filepath: {filepath}.")
+    df = pd.read_csv(filepath)
+
+    return df
 
 def load_segmenter_prediction(
     dataset: str,
@@ -641,7 +666,7 @@ def load_segmenter_predictions_timings(
     segmenter: ModelName,
     device: str = 'cuda',
     n_folds: Optional[int] = 5,
-    test_fold: Optional[int] = None) -> pd.DataFrame:
+    test_fold: Optional[int] = None) -> DataFrame:
     localiser = replace_ckpt_alias(localiser)
     segmenter = replace_ckpt_alias(segmenter)
 

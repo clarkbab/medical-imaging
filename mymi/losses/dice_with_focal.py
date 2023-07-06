@@ -41,9 +41,12 @@ class DiceWithFocalLoss(nn.Module):
             label = label.bool()
         if mask is not None:
             assert mask.shape == pred.shape[:2]
+            if mask.shape != pred.shape[:2]:
+                raise ValueError(f"Expected mask to have shape '{pred.shape[:2]}', got '{mask.shape}'.")
         batch_size = pred.shape[0]
         if weights is not None:
-            assert weights.shape == pred.shape[:2]
+            if weights.shape != pred.shape[:2]:
+                raise ValueError(f"Expected weights to have shape '{pred.shape[:2]}', got '{weights.shape}'.")
             for b in range(batch_size):
                 weight_sum = weights[b].sum().round(decimals=3)
                 if weight_sum != 1:

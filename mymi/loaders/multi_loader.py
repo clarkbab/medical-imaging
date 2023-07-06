@@ -72,7 +72,7 @@ class MultiLoader:
         batch_size: int = 1,
         check_processed: bool = True,
         data_hook: Optional[Callable] = None,
-        include_background: bool = True,
+        include_background: bool = False,
         load_data: bool = True,
         load_test_origin: bool = True,
         n_folds: Optional[int] = None, 
@@ -286,7 +286,7 @@ class TrainingSet(Dataset):
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
         data_hook: Optional[Callable] = None,
-        include_background: bool = True,
+        include_background: bool = False,
         load_data: bool = True,
         region: PatientRegions = 'all',
         spacing: Optional[ImageSpacing3D] = None,
@@ -326,8 +326,9 @@ class TrainingSet(Dataset):
                     region_counts[self.__region_channel_map[region]] += 1
 
                 # If all regions are present, we can train background class.
-                if len(regions) == len(self.__regions):
-                    region_counts[0] += 1
+                if self.__include_background:
+                    if len(regions) == len(self.__regions):
+                        region_counts[0] += 1
 
             logging.info(f"Calculated region counts '{region_counts}'.")
 

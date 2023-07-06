@@ -4,7 +4,7 @@ from typing import Dict, List, Literal, Optional, Union
 
 from mymi.dataset import NRRDDataset
 from mymi import logging
-from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction
+from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
 from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
@@ -119,12 +119,13 @@ def plot_multi_segmenter_prediction(
     dataset: str,
     pat_id: str,
     model: Union[ModelName, List[ModelName]],
-    model_region: Union[PatientRegions, List[PatientRegions]],
+    model_region: PatientRegions,
     centre_of: Optional[str] = None,
     check_epochs: bool = True,
     crop: Optional[Union[str, Crop2D]] = None,
     load_pred: bool = True,
     model_spacing: Optional[ImageSpacing3D] = None,
+    model_region_visible: Optional[PatientRegions] = None,
     pred_label: Union[str, List[str]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
@@ -133,7 +134,7 @@ def plot_multi_segmenter_prediction(
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
     # If only a single model, allow 'model_region=Brain' or 'model_region=['Brain']'.
-    # If multiple models, list of lists must be specified, e.g. 'model_region=[['Brain'], 'Brainstem']'.
+    # If multiple models, list of lists must be specified, e.g. 'model_region=[['Brain'], ['Brainstem']]'.
     #   Flat list not supported, e.g. 'model_region=['Brain', 'Brainstem']'.
     if len(models) == 1:
         model_regionses = [arg_to_list(model_region, str)]
@@ -141,6 +142,7 @@ def plot_multi_segmenter_prediction(
         model_regionses = model_region
     regions = arg_to_list(region, str) if region is not None else None
     region_labels = arg_to_list(region_label, str) if region_label is not None else None
+    model_regions_visible = arg_to_list(model_region_visible, str)
     n_models = len(models)
     if pred_label is not None:
         pred_labels = arg_to_list(pred_label, str)
@@ -161,38 +163,38 @@ def plot_multi_segmenter_prediction(
     spacing = pat.ct_spacing
 
     # Load predictions.
-    pred_data = {}
     for i in range(n_models):
         model = models[i]
         model_regions = model_regionses[i]
         pred_label = pred_labels[i]
 
         # Load segmenter prediction.
-        pred = None
+        region_preds = None
         if load_pred:
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
             try:
-                pred = load_multi_segmenter_prediction(dataset, pat_id, model)
+                region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, model_regions)
             except ValueError as e:
                 logging.info(str(e))
 
         # Make prediction if necessary.
-        if pred is None:
+        if region_preds is None:
             assert spacing is not None
             if model_spacing is None:
                 raise ValueError(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
-            create_multi_segmenter_prediction(dataset, pat_id, model_regions, model, model_spacing, check_epochs=check_epochs)
-            pred = load_multi_segmenter_prediction(dataset, pat_id, model)
+            create_multi_segmenter_prediction(dataset, pat_id, model, model_spacing, check_epochs=check_epochs)
+            region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, model_regions)
 
-        # Assign a different 'pred_label' to each region.
-        n_regions = len(model_regions)
-        if pred.shape[0] != n_regions + 1:
-            raise ValueError(f"With 'model_regions={model_regions}', expected {n_regions + 1} channels in prediction for dataset '{dataset}', patient '{pat_id}', model '{model}', got {pred.shape[0]}.")
-        assert pred.shape[0] == n_regions + 1
-        for r, p_data in zip(model_regions, pred[1:]):
-            p_label = f'{pred_label}:{r}'
-            pred_data[p_label] = p_data
+        # Filter regions based on visibility.
+        region_preds = dict((region, pred) for region, pred in region_preds.items() if model_regions_visible is None or region in model_regions_visible)
+
+        # Assign label to each predicted region.
+        new_region_preds = {}
+        for region, pred in region_preds.items():
+            region = f'{pred_label}:{region}'
+            new_region_preds[region] = pred
+        region_preds = new_region_preds
 
     if centre_of is not None:
         match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)
@@ -204,21 +206,21 @@ def plot_multi_segmenter_prediction(
                 model_i = int(match.group(2))
                 assert model_i < n_models
             region = match.group(3)
-            p_label = f'model:{model_i}:{region}'
-            centre_of = pred_data[p_label]
+            label = f'model:{model_i}:{region}'
+            centre_of = region_preds[label]
         elif region_data is None or centre_of not in region_data:
             centre_of = pat.region_data(region=centre_of)[centre_of]
 
     if type(crop) == str:
         if crop == 'model':
             assert n_models == 1
-            crop = pred_data[pred_label[0]]
+            crop = region_preds[pred_labels[0]]
         else:
             match = re.search(MODEL_SELECT_PATTERN, crop)
             if match is not None:
                 model_i = int(match.group(1))
                 assert model_i < n_models
-                crop = pred_data[pred_label[model_i]]
+                crop = region_preds[pred_labels[model_i]]
             elif region_data is None or crop not in region_data:
                 crop = pat.region_data(region=crop)[crop]
 
@@ -237,7 +239,7 @@ def plot_multi_segmenter_prediction(
         regions = region_labels
     
     # Plot.
-    plot_multi_segmenter_prediction_base(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_multi_segmenter_prediction_base(pat_id, spacing, region_preds, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_segmenter_prediction(
     dataset: str,

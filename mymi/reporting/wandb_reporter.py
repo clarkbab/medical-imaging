@@ -17,7 +17,7 @@ class WandbReporter(Reporter):
             os.environ['WANDB_MODE'] = 'offline'
 
         # Configure wandb.
-        wandb.init(dir=config.directories.reports, project=project_name, name=run_name)
+        wnandb.init(dir=config.directories.reports, project=project_name, name=run_name)
 
     """
     For method doc strings, see parent class.

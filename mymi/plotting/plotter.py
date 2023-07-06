@@ -1,4 +1,5 @@
-import matplotlib
+import matplotlib as mpl
+from matplotlib.axes import Axes
 from matplotlib.colors import ListedColormap, rgb2hex
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
@@ -214,6 +215,7 @@ def __plot_box_slice(
 
     # Apply crop.
     if crop:
+        print(crop)
         box_2D = crop_box(box_2D, crop)
 
     # Draw bounding box.
@@ -274,7 +276,7 @@ def plot_region(
     spacing: ImageSpacing3D,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[Axes] = None,
     cca: bool = False,
     centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'region_data' if 'str', else uses 'np.ndarray'.
     colour: Optional[Union[str, List[str]]] = None,
@@ -753,7 +755,7 @@ def plot_multi_segmenter_prediction(
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
     aspect: float = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[Axes] = None,
     centre_of: Optional[str] = None,
     colour: Optional[Union[str, List[str]]] = None,
     colour_match: bool = False,
@@ -914,7 +916,7 @@ def plot_segmenter_prediction(
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
     aspect: float = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[Axes] = None,
     centre_of: Optional[str] = None,
     colour: Optional[Union[str, List[str]]] = None,
     colour_match: bool = False,
@@ -1116,7 +1118,7 @@ def plot_segmenter_prediction_diff(
     diff_data: Dict[str, np.ndarray],
     alpha_diff: float = 1.0,
     aspect: float = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[Axes] = None,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
@@ -1226,17 +1228,23 @@ Diff: {diff_name}""")
         })
 
 def plot_dataframe(
-    ax: Optional[matplotlib.axes.Axes] = None,
+    ax: Optional[Axes] = None,
     data: Optional[pd.DataFrame] = None,
     x: Optional[str] = None,
     y: Optional[str] = None,
     hue: Optional[str] = None,
-    hue_hatches: Optional[List[str]] = None,
-    hue_order: Optional[List[str]] = None,
+    dpi: float = 1000,
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
+    fontsize_axis_tick_labels: Optional[float] = None,
+    fontsize_legend: Optional[float] = None,
+    fontsize_stats: Optional[float] = None,
+    fontsize_title: Optional[float] = None,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
+    hue_hatches: Optional[List[str]] = None,
+    hue_labels: Optional[List[str]] = None,
+    hue_order: Optional[List[str]] = None,
     hue_palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
     include_x: Optional[Union[str, List[str]]] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
@@ -1247,7 +1255,7 @@ def plot_dataframe(
     minor_tick_freq: Optional[float] = None,
     n_col: Optional[int] = None,
     outlier_legend_loc: str = 'upper left',
-    point_size: float = 10,
+    pointsize: float = 10,
     savepath: Optional[str] = None,
     share_y: bool = False,
     show_boxes: bool = True,
@@ -1259,12 +1267,18 @@ def plot_dataframe(
     show_x_tick_labels: bool = True,
     show_x_tick_label_counts: bool = True,
     stats_index: Optional[Union[str, List[str]]] = None,
+    stats_text_offset: Optional[float] = None,
+    stats_two_sided: bool = False,
     style: Optional[Literal['box', 'violin']] = 'box',
     ticklength: float = 0.5,
+    title: Optional[str] = None,
+    title_x: Optional[float] = None,
+    title_y: Optional[float] = None,
     x_label: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
+    x_tick_labels: Optional[List[str]] = None,
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
     y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
@@ -1276,6 +1290,16 @@ def plot_dataframe(
         raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
     if show_stats and stats_index is None:
         raise ValueError(f"Please set 'stats_index' to determine sample pairing for Wilcoxon test.")
+
+    # Set default fontsizes.
+    if fontsize_axis_tick_labels is None:
+        fontsize_axis_tick_labels = fontsize
+    if fontsize_legend is None:
+        fontsize_legend = fontsize
+    if fontsize_stats is None:
+        fontsize_stats = fontsize
+    if fontsize_title is None:
+        fontsize_title = fontsize
         
     # Include/exclude.
     if include_x:
@@ -1302,18 +1326,19 @@ def plot_dataframe(
     # Determine x labels.
     groupby = x if hue is None else [x, hue]
     count_map = data.groupby(groupby)[y].count()
-    x_tick_labels = []
-    for x_val in x_order:
-        count = count_map.loc[x_val]
-        if hue is not None:
-            ns = count.values
-            # Use a single number, e.g. (n=99) if all hues have the same number of points.
-            if len(np.unique(ns)) == 1:
-                ns = ns[:1]
-        else:
-            ns = [count]
-        label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
-        x_tick_labels.append(label)
+    if x_tick_labels is None:
+        x_tick_labels = []
+        for x_val in x_order:
+            count = count_map.loc[x_val]
+            if hue is not None:
+                ns = count.values
+                # Use a single number, e.g. (n=99) if all hues have the same number of points.
+                if len(np.unique(ns)) == 1:
+                    ns = ns[:1]
+            else:
+                ns = [count]
+            label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
+            x_tick_labels.append(label)
 
     # Create subplots if required.
     if n_col is None:
@@ -1325,9 +1350,9 @@ def plot_dataframe(
         # Figsize will have been handled externally.
     else:
         if n_rows > 1:
-            _, axs = plt.subplots(n_rows, 1, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
+            _, axs = plt.subplots(n_rows, 1, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
         else:
-            plt.figure(figsize=figsize)
+            plt.figure(dpi=dpi, figsize=figsize)
             axs = [plt.gca()]
 
     # Get x-axis limits.
@@ -1351,6 +1376,10 @@ def plot_dataframe(
 
         # Create map from hue to colour.
         hue_colours = dict((h, hue_palette[i]) for i, h in enumerate(hue_order))
+
+        if hue_labels is not None:
+            if len(hue_labels) != len(hue_order):
+                raise ValueError(f"Length of 'hue_labels' ({hue_labels}) should match hues ({hue_order}).")
 
     # Plot rows.
     for i in range(n_rows):
@@ -1384,20 +1413,25 @@ def plot_dataframe(
                             continue
                         hue_pos = hue_data.iloc[0]['x_pos']
 
+                        # Get hue 'label' - allows us to use names more display-friendly than the data values.
+                        hue_label = hue_name if hue_labels is None else hue_labels[k]
+
                         # Plot box.
                         hatch = hue_hatches[k] if hue_hatches is not None else None
                         if style == 'box':
                             res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
-                            if not hue_name in hue_artists:
-                                hue_artists[hue_name] = res['boxes'][0]
+                            if not hue_label in hue_artists:
+                                hue_artists[hue_label] = res['boxes'][0]
                             # res['boxes'][0].set(hatch=hatch)
-                            res['boxes'][0].set_hatch(hatch)
+                            if hatch is not None:
+                                mpl.rcParams['hatch.linewidth'] = linewidth
+                                res['boxes'][0].set_hatch(hatch)
                             # res['boxes'][0].set_edgecolor('white')
                             # res['boxes'][0].set(facecolor='white')
                         elif style == 'violin':
                             res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
-                            if not hue_name in hue_artists:
-                                hue_artists[hue_name] = res['boxes'][0]
+                            if not hue_label in hue_artists:
+                                hue_artists[hue_label] = res['boxes'][0]
                 else:
                     # Plot box.
                     x_data = row_data[row_data[x] == x_val]
@@ -1416,12 +1450,12 @@ def plot_dataframe(
                         hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
                         if len(hue_data) == 0:
                             continue
-                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
-                        if not show_boxes and not hue_name in hue_artists:
-                            hue_artists[hue_name] = res
+                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
+                        if not show_boxes and not hue_label in hue_artists:
+                            hue_artists[hue_label] = res
                 else:
                     x_data = row_data[row_data[x] == x_val]
-                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=point_size, zorder=100)
+                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:
@@ -1473,8 +1507,13 @@ def plot_dataframe(
         # Add legend.
         if hue is not None:
             if show_legend:
-                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_order]))
-                axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+                hue_labels = hue_order if hue_labels is None else hue_labels
+                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels]))
+                legend = axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=legend_loc)
+                frame = legend.get_frame()
+                frame.set_boxstyle('square')
+                frame.set_edgecolor('black')
+                frame.set_linewidth(linewidth)
 
         # Plot statistical significance.
         if hue is not None and show_stats:
@@ -1499,30 +1538,51 @@ def plot_dataframe(
                 if (y, hue_a) in x_df.columns and (y, hue_b) in x_df.columns:
                     vals_a = x_df[y][hue_a]
                     vals_b = x_df[y][hue_b]
-                    # Perform 'Wilcoxon signed rank test' in both directions.
-                    _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
-                    if p_val <= 0.05:
-                        p_vals.append((p_val, '>'))
-                        pair = ((x_a, hue_a), (x_b, hue_b))
-                        pairs.append(pair)
-                    else:
-                        _, p_val = wilcoxon(vals_a, vals_b, alternative='less')
+                    pair = ((x_a, hue_a), (x_b, hue_b))
+                    if stats_two_sided:
+                        # Perform two-sided 'Wilcoxon signed rank test'.
+                        _, p_val = wilcoxon(vals_a, vals_b, alternative='two-sided')
                         if p_val <= 0.05:
-                            p_vals.append((p_val, '<'))
-                            pair = ((x_a, hue_a), (x_b, hue_b))
+                            p_vals.append((p_val, ''))
                             pairs.append(pair)
+                    else:
+                        # Perform one-sided 'Wilcoxon signed rank test'.
+                        _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
+                        if p_val <= 0.05:
+                            p_vals.append((p_val, '>'))
+                            pairs.append(pair)
+                        else:
+                            _, p_val = wilcoxon(vals_a, vals_b, alternative='less')
+                            if p_val <= 0.05:
+                                p_vals.append((p_val, '<'))
+                                pairs.append(pair)
 
             # Format p-values.
             p_vals = __format_p_values(p_vals) 
 
             # Annotate figure.
-            annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, line_offset=20, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
+            annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
+            conf_kwargs = { 'fontsize': fontsize_stats, 'line_width': linewidth }
+            if stats_text_offset is not None:
+                conf_kwargs['text_offset'] = stats_text_offset
+            annotator.configure(**conf_kwargs)
             annotator.set_custom_annotations(p_vals)
             annotator.annotate()
+          
+        # Set axis labels.
+        x_label = x_label if x_label is not None else ''
+        y_label = y_label if y_label is not None else ''
+        axs[i].set_xlabel(x_label, fontsize=fontsize)
+        axs[i].set_ylabel(y_label, fontsize=fontsize)
                 
-        # Set axis ticks and labels.
+        # Set axis tick labels.
         axs[i].set_xticks(list(range(len(row_x_tick_labels))))
-        axs[i].set_xticklabels(row_x_tick_labels)
+        if show_x_tick_labels:
+            axs[i].set_xticklabels(row_x_tick_labels, fontsize=fontsize_axis_tick_labels, rotation=x_tick_label_rot)
+        else:
+            axs[i].set_xticklabels([])
+
+        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
 
         # Set axis limits.
         axs[i].set_xlim(*x_lim)
@@ -1580,22 +1640,8 @@ def plot_dataframe(
             axs[i].set_yticks(minor_ticks, minor=True)
 
         # Set y grid lines.
-        axs[i].grid(axis='y', linestyle='dashed')
+        axs[i].grid(axis='y', linestyle='dashed', linewidth=linewidth)
         axs[i].set_axisbelow(True)
-          
-        # Set axis labels.
-        x_label = x_label if x_label is not None else ''
-        y_label = y_label if y_label is not None else ''
-        axs[i].set_xlabel(x_label, fontsize=fontsize)
-        axs[i].set_ylabel(y_label, fontsize=fontsize)
-
-        # Set axis tick labels fontsize/rotation.
-        if show_x_tick_labels:
-            axs[i].set_xticklabels(axs[i].get_xticklabels(), fontsize=fontsize, rotation=x_tick_label_rot)
-        else:
-            axs[i].set_xticklabels([])
-
-        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
 
         # Set axis spine/tick linewidths and tick lengths.
         spines = ['top', 'bottom','left','right']
@@ -1603,12 +1649,23 @@ def plot_dataframe(
             axs[i].spines[spine].set_linewidth(linewidth)
         axs[i].tick_params(which='both', length=ticklength, width=linewidth)
 
+    # Set title.
+    title_kwargs = {
+        'fontsize': fontsize_title,
+        'style': 'italic'
+    }
+    if title_x is not None:
+        title_kwargs['x'] = title_x
+    if title_y is not None:
+        title_kwargs['y'] = title_y
+    plt.title(title, **title_kwargs)
+
     # Save plot to disk.
     if savepath is not None:
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=0.03)
         logging.info(f"Saved plot to '{savepath}'.")
 
 def style_rows(
@@ -1662,7 +1719,9 @@ def __format_p_values(p_vals: List[float]) -> List[str]:
         else:
             p_val = '****'
 
-        p_val = f'{p_val} ({direction})'
+        # Add direction if necessary.
+        if direction != '':
+            p_val = f'{p_val} ({direction})'
         p_vals.append(p_val)
 
     return p_vals

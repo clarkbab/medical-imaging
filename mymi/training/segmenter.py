@@ -136,7 +136,6 @@ def train_segmenter(
         max_epochs=n_epochs,
         num_nodes=n_nodes,
         num_sanity_val_steps=2,
-        # plugins=DDPPlugin(find_unused_parameters=False),
         precision=16,
         strategy='ddp')
 

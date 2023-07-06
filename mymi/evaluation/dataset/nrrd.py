@@ -14,7 +14,7 @@ from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nrrd import load_localiser_prediction, load_multi_segmenter_prediction, load_segmenter_prediction
+from mymi.prediction.dataset.nrrd import load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
 from mymi.types import ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
@@ -178,20 +178,21 @@ def load_localiser_evaluation(
 
 def get_multi_segmenter_evaluation(
     dataset: str,
+    region: PatientRegions,
     pat_id: str,
     model: ModelName) -> List[Dict[str, float]]:
+    regions = arg_to_list(region, str)
 
-    # Load preds and ground truth.
+    # Load ground truth and prediction.
     set = NRRDDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    preds, regions = load_multi_segmenter_prediction(dataset, pat_id, model)
     labels = pat.region_data(region=regions)
+    region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, regions)
  
-    metrics = []
-    for i, region in enumerate(regions):
+    region_metrics = []
+    for region, pred in region_preds.items():
         label = labels[region]
-        pred = preds[i + 1]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
@@ -205,16 +206,16 @@ def get_multi_segmenter_evaluation(
             label = crop_foreground_3D(label, crop)
 
         # Dice.
-        region_metrics = {}
-        region_metrics['dice'] = dice(pred, label)
+        metrics = {}
+        metrics['dice'] = dice(pred, label)
 
         # Distances.
         if pred.sum() == 0 or label.sum() == 0:
-            region_metrics['apl'] = np.nan
-            region_metrics['hd'] = np.nan
-            region_metrics['hd-95'] = np.nan
-            region_metrics['msd'] = np.nan
-            region_metrics['surface-dice'] = np.nan
+            metrics['apl'] = np.nan
+            metrics['hd'] = np.nan
+            metrics['hd-95'] = np.nan
+            metrics['msd'] = np.nan
+            metrics['surface-dice'] = np.nan
         else:
             # Calculate distances for OAR tolerance.
             tols = [0, 0.5, 1, 1.5, 2, 2.5]
@@ -223,16 +224,16 @@ def get_multi_segmenter_evaluation(
                 tols.append(tol)
             dists = all_distances(pred, label, spacing, tols)
             for metric, value in dists.items():
-                region_metrics[metric] = value
+                metrics[metric] = value
 
             # Add 'deepmind' comparison.
             dists = distances_deepmind(pred, label, spacing, tols)
             for metric, value in dists.items():
-                region_metrics[f'dm-{metric}'] = value
+                metrics[f'dm-{metric}'] = value
 
-        metrics.append(region_metrics)
+        region_metrics.append(metrics)
 
-    return metrics
+    return region_metrics
 
 def get_segmenter_evaluation(
     dataset: str,
@@ -319,8 +320,10 @@ def create_multi_segmenter_evaluation(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            region_metrics = get_multi_segmenter_evaluation(dataset, pat_id, model)
-            for metrics in region_metrics:
+
+            # Get metrics per region.
+            region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model)
+            for region, metrics in zip(regions, region_metrics):
                 for metric, value in metrics.items():
                     data = {
                         'fold': test_fold if test_fold is not None else np.nan,
@@ -337,7 +340,7 @@ def create_multi_segmenter_evaluation(
 
     # Save evaluation.
     filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), filename)
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -396,15 +399,17 @@ def create_segmenter_evaluation(
 
 def load_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
+    region: PatientRegions,
     model: ModelName,
     exists_only: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
     model = replace_ckpt_alias(model)
     filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), filename)
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
     if os.path.exists(filepath):
         if exists_only:
             return True

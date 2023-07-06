@@ -5,7 +5,7 @@ import os
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.tuner import Tuner
 from typing import List, Optional, Union
 
 from mymi import config
@@ -28,13 +28,13 @@ def train_multi_segmenter(
     batch_size: int = 1,
     ckpt_model: bool = True,
     halve_channels: bool = False,
-    include_background: bool = True,
+    include_background: bool = False,
     lam: float = 0.5,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
+    lr_find_iter: int = 1e3,
     lr_find_min_lr: float = 1e-6,
     lr_find_max_lr: float = 1e3,
-    lr_find_num_train: int = 1e3,
     lr_init: float = 1e-3,
     n_epochs: int = 100,
     n_folds: Optional[int] = None,
@@ -43,7 +43,7 @@ def train_multi_segmenter(
     n_workers: int = 1,
     n_split_channels: int = 1,
     p_val: float = 0.2,
-    precision: Union[str, int] = 16,
+    precision: Union[str, int] = 32,
     random_seed: float = 42,
     resume: bool = False,
     resume_ckpt: Optional[str] = None,
@@ -61,8 +61,11 @@ def train_multi_segmenter(
     use_lr_scheduler: bool = False,
     use_stand: bool = False,
     use_thresh: bool = False,
-    weight_decay: float = 0) -> None:
+    use_weights: bool = False,
+    weight_decay: float = 0,
+    weights_scheme: Optional[int] = None) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
+    regions = arg_to_list(region, str)
 
     # Allow for reproducible training runs.
     seed_everything(random_seed, workers=True)
@@ -83,7 +86,368 @@ def train_multi_segmenter(
         loss_fn = DiceWithFocalLoss(lam=lam)
 
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+
+    # Create weighting scheme.
+    if use_weights:
+        if weights_scheme == 0:
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[OpticNrv_L_idx] = 1
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[OpticNrv_R_idx] = 1
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000]
+        elif weights_scheme == 1:
+            weights = [[
+                0,
+                0.0034936,
+                0.00722492,
+                0.02615894,
+                0.02589116,
+                0.33027497,
+                0.2783234,
+                0.31547564,
+                0.00664951,
+                0.00650785
+            ]]
+            weights_schedule = [0]
+        elif weights_scheme == 2:
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [1] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 0
+            weight_1[OpticNrv_L_idx] = 0
+            weight_1[OpticNrv_R_idx] = 0
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2[OpticNrv_R_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weights = [
+                weight_1,
+                weight_2,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000]
+        elif weights_scheme == 3:
+            weights_1 = [[
+                0,
+                0.0034936,
+                0.00722492,
+                0.02615894,
+                0.02589116,
+                0.33027497,
+                0.2783234,
+                0.31547564,
+                0.00664951,
+                0.00650785
+            ]]
+            weights = [
+                weights_1,
+                None
+            ]
+            weights_schedule = [0, 1000]
+        elif weights_scheme == 4:
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weights = [
+                weight_1,
+                None
+            ]
+            weights_schedule = [0, 1000]
+        elif weights_scheme == 5:
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[OpticChiasm_idx] = 1
+            weight_3[OpticNrv_L_idx] = 1
+            weight_3[OpticNrv_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000]
+        elif weights_scheme == 6:
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[OpticChiasm_idx] = 1
+            weight_3[OpticNrv_L_idx] = 1
+            weight_3[OpticNrv_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weight_4[Glnd_Submand_L_idx] = 1
+            weight_4[OpticChiasm_idx] = 1
+            weight_4[OpticNrv_L_idx] = 1
+            weight_4[OpticNrv_R_idx] = 1
+            weight_4 = weight_4 / np.sum(weight_4)
+            weight_5[Glnd_Submand_L_idx] = 1
+            weight_5[Glnd_Submand_R_idx] = 1
+            weight_5[OpticChiasm_idx] = 1
+            weight_5[OpticNrv_L_idx] = 1
+            weight_5[OpticNrv_R_idx] = 1
+            weight_5 = weight_5 / np.sum(weight_5)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                weight_4,
+                weight_5,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000, 4000, 5000]
+        elif weights_scheme == 7:
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[OpticChiasm_idx] = 1
+            weight_3[OpticNrv_L_idx] = 1
+            weight_3[OpticNrv_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weight_4[Glnd_Submand_L_idx] = 1
+            weight_4[OpticChiasm_idx] = 1
+            weight_4[OpticNrv_L_idx] = 1
+            weight_4[OpticNrv_R_idx] = 1
+            weight_4 = weight_4 / np.sum(weight_4)
+            weight_5[Glnd_Submand_L_idx] = 1
+            weight_5[Glnd_Submand_R_idx] = 1
+            weight_5[OpticChiasm_idx] = 1
+            weight_5[OpticNrv_L_idx] = 1
+            weight_5[OpticNrv_R_idx] = 1
+            weight_5 = weight_5 / np.sum(weight_5)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                weight_4,
+                weight_5,
+                None
+            ]
+            weights_schedule = [0, 500, 1000, 1500, 2000, 2500]
+        elif weights_scheme == 8:
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[Glnd_Submand_L_idx] = 1
+            weight_2[Glnd_Submand_R_idx] = 1
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2[OpticNrv_R_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weights = [
+                weight_1,
+                weight_2,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000]
+        elif weights_scheme == 9:
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[Glnd_Submand_L_idx] = 1
+            weight_2[Glnd_Submand_R_idx] = 1
+            weight_2[OpticChiasm_idx] = 1
+            weight_2[OpticNrv_L_idx] = 1
+            weight_2[OpticNrv_R_idx] = 1
+            weight_2 = weight_2 / np.sum(weight_2)
+            weights = [
+                weight_1,
+                weight_2,
+                None
+            ]
+            weights_schedule = [0, 500, 1000]
+        elif weights_scheme == 10:
+            idle_weight = 0.1
+            Bone_Mandible_idx = 1
+            Brainstem_idx = 2
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            Parotid_L_idx = 8
+            Parotid_R_idx = 9
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[Glnd_Submand_L_idx] = 1
+            weight_2[Glnd_Submand_R_idx] = 1
+            weight_2[OpticChiasm_idx] = idle_weight
+            weight_2[OpticNrv_L_idx] = idle_weight
+            weight_2[OpticNrv_R_idx] = idle_weight
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[Bone_Mandible_idx] = 1
+            weight_3[Brainstem_idx] = 1
+            weight_3[Glnd_Submand_L_idx] = idle_weight
+            weight_3[Glnd_Submand_R_idx] = idle_weight
+            weight_3[OpticChiasm_idx] = idle_weight
+            weight_3[OpticNrv_L_idx] = idle_weight
+            weight_3[OpticNrv_R_idx] = idle_weight
+            weight_3[Parotid_L_idx] = 1
+            weight_3[Parotid_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000]
+        elif weights_scheme == 11:
+            idle_weight = 0.2
+            Bone_Mandible_idx = 1
+            Brainstem_idx = 2
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            Parotid_L_idx = 8
+            Parotid_R_idx = 9
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[Glnd_Submand_L_idx] = 1
+            weight_2[Glnd_Submand_R_idx] = 1
+            weight_2[OpticChiasm_idx] = idle_weight
+            weight_2[OpticNrv_L_idx] = idle_weight
+            weight_2[OpticNrv_R_idx] = idle_weight
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[Bone_Mandible_idx] = 1
+            weight_3[Brainstem_idx] = 1
+            weight_3[Glnd_Submand_L_idx] = idle_weight
+            weight_3[Glnd_Submand_R_idx] = idle_weight
+            weight_3[OpticChiasm_idx] = idle_weight
+            weight_3[OpticNrv_L_idx] = idle_weight
+            weight_3[OpticNrv_R_idx] = idle_weight
+            weight_3[Parotid_L_idx] = 1
+            weight_3[Parotid_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000]
+        elif weights_scheme == 12:
+            idle_weight = 0.5
+            Bone_Mandible_idx = 1
+            Brainstem_idx = 2
+            Glnd_Submand_L_idx = 3
+            Glnd_Submand_R_idx = 4
+            OpticChiasm_idx = 5
+            OpticNrv_L_idx = 6
+            OpticNrv_R_idx = 7
+            Parotid_L_idx = 8
+            Parotid_R_idx = 9
+            weight_1 = [0] * (len(regions) + 1)
+            weight_1[OpticChiasm_idx] = 1
+            weight_1[OpticNrv_L_idx] = 1
+            weight_1[OpticNrv_R_idx] = 1
+            weight_1 = weight_1 / np.sum(weight_1)
+            weight_2 = [0] * (len(regions) + 1)
+            weight_2[Glnd_Submand_L_idx] = 1
+            weight_2[Glnd_Submand_R_idx] = 1
+            weight_2[OpticChiasm_idx] = idle_weight
+            weight_2[OpticNrv_L_idx] = idle_weight
+            weight_2[OpticNrv_R_idx] = idle_weight
+            weight_2 = weight_2 / np.sum(weight_2)
+            weight_3 = [0] * (len(regions) + 1)
+            weight_3[Bone_Mandible_idx] = 1
+            weight_3[Brainstem_idx] = 1
+            weight_3[Glnd_Submand_L_idx] = idle_weight
+            weight_3[Glnd_Submand_R_idx] = idle_weight
+            weight_3[OpticChiasm_idx] = idle_weight
+            weight_3[OpticNrv_L_idx] = idle_weight
+            weight_3[OpticNrv_R_idx] = idle_weight
+            weight_3[Parotid_L_idx] = 1
+            weight_3[Parotid_R_idx] = 1
+            weight_3 = weight_3 / np.sum(weight_3)
+            weights = [
+                weight_1,
+                weight_2,
+                weight_3,
+                None
+            ]
+            weights_schedule = [0, 1000, 2000, 3000]
+        else:
+            raise ValueError(f"Invalid weights scheme: {weights_scheme}.")
+    else:
+        weights = None
+        weights_schedule = None
 
     # Create model.
     model = MultiSegmenter(
@@ -93,9 +457,11 @@ def train_multi_segmenter(
         metrics=['dice'],
         n_gpus=n_gpus,
         n_split_channels=n_split_channels,
-        region=region,
+        region=regions,
         use_lr_scheduler=use_lr_scheduler,
-        weight_decay=weight_decay)
+        weights=weights,
+        weight_decay=weight_decay,
+        weights_schedule=weights_schedule)
 
     # Create logger.
     if use_logger:
@@ -106,7 +472,7 @@ def train_multi_segmenter(
             save_dir=config.directories.reports)
         logger.watch(model, log='all') # Caused multi-GPU training to hang.
     else:
-        logger = None
+        logger = False
 
     # Create callbacks.
     ckpts_path = os.path.join(config.directories.models, model_name, run_name)
@@ -124,7 +490,7 @@ def train_multi_segmenter(
             monitor='val/loss',
             save_last=True,
             save_top_k=1))
-    if logger is not None:
+    if logger:
         callbacks.append(LearningRateMonitor(logging_interval='epoch'))
 
     # Add optional trainer args.
@@ -146,16 +512,17 @@ def train_multi_segmenter(
         precision=precision)
 
     if lr_find:
-        lr_finder = trainer.tuner.lr_find(model, train_loader, val_loader, early_stop_threshold=None, min_lr=lr_find_min_lr, max_lr=lr_find_max_lr, num_training=lr_find_num_train)
-        logging.info(lr_finder.results)
+        tuner = Tuner(trainer)
+        lr = tuner.lr_find(model, train_loader, val_loader, early_stop_threshold=None, min_lr=lr_find_min_lr, max_lr=lr_find_max_lr, num_training=lr_find_iter)
+        logging.info(lr.results)
         filepath = os.path.join(config.directories.models, model_name, run_name, 'lr-finder.json')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, 'w') as f:
-            f.write(json.dumps(lr_finder.results))
+            f.write(json.dumps(lr.results))
         exit()
 
     # Save training information.
-    man_df = get_multi_loader_manifest(dataset, n_folds=n_folds, region=region, test_fold=test_fold, use_split_file=use_loader_split_file)
+    man_df = get_multi_loader_manifest(dataset, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')
