@@ -6,13 +6,13 @@ class RegionList(list, Enum):
 
     # PMCC vendor evaluation.
     PMCC_COMP = [
-        'A_Aorta', 'A_Pulmonary', 'Bladder', 'Bone_Ilium_L', 'Bone_Ilium_R', 'Bone_Mandible', 'BrachialPlex_L', 'BrachialPlex_R',
-        'Brain', 'Brainstem', 'Bronchus', 'Breast_L',
-        'Breast_R', 'Chestwall', 'Cavity_Oral', 'Cochlea_L', 'Cochlea_R', 'Colon_Sigmoid', 'Duodenum', 'Esophagus', 'Femur_Head_L',
-        'Femur_Head_R', 'Gallbladder', 'Glnd_Submand_L', 'Glnd_Submand_R', 'Heart', 'Kidney_L', 'Kidney_R',
-        'Larynx', 'Liver', 'Lung_L', 'Lung_R', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R', 
-        'Pericardium', 'Rectum', 'Skin',
-        'SpinalCanal', 'SpinalCord', 'Stomach', 'Trachea'
+        'A_Aorta', 'A_Pulmonary', 'Bladder', 'Bone_Ilium_L', 'Bone_Ilium_R', 'Bone_Mandible', 'BrachialPlex_L',
+        'BrachialPlex_R', 'Brain', 'Brainstem', 'Bronchus', 'Breast_L', 'Breast_R', 'Cavity_Oral', 'Chestwall',
+        'Cochlea_L', 'Cochlea_R', 'Colon_Sigmoid', 'Duodenum', 'Esophagus', 'Eye_L', 'Eye_R', 'Femur_Head_L',
+        'Femur_Head_R', 'Gallbladder', 'Glnd_Submand_L', 'Glnd_Submand_R', 'Glottis', 'Heart', 'Kidney_L',
+        'Kidney_R', 'Larynx', 'Lens_L', 'Lens_R', 'Lips', 'Liver', 'Lung_L', 'Lung_R', 'OpticChiasm',
+        'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R', 'Pericardium', 'Prostate', 'Rectum', 'Skin',
+        'SpinalCanal', 'SpinalCord', 'Spleen', 'Stomach', 'Trachea'
     ]
 
     # Replan dataset.
