@@ -15,7 +15,7 @@ from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
-from .index import INDEX_COLS, INDEX_ERRORS_COLS, INDEX_INDEX_COL, build_index
+from .index import INDEX_COLS, ERRORS_INDEX_COLS, INDEX_INDEX_COL, build_index
 from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY
 from .region_map import RegionMap
 from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY
@@ -41,7 +41,7 @@ class DICOMDataset(Dataset):
         self.__global_id = f"DICOM: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"DICOM: {self.__name}"
 
         self.__index = None             # Lazy-loaded.
-        self.__index_errors = None      # Lazy-loaded.
+        self.__errors_index = None      # Lazy-loaded.
         self.__index_policy = None      # Lazy-loaded.
         self.__loaded_region_dups = False
         self.__loaded_region_map = False
@@ -64,10 +64,10 @@ class DICOMDataset(Dataset):
         return self.__index
 
     @property
-    def index_errors(self) -> DataFrame:
-        if self.__index_errors is None:
+    def errors_index(self) -> DataFrame:
+        if self.__errors_index is None:
             self.__load_index()
-        return self.__index_errors
+        return self.__errors_index
 
     @property
     def index_policy(self) -> Dict[str, Any]:
@@ -216,10 +216,10 @@ class DICOMDataset(Dataset):
         # Load index errors.
         try:
             filepath = os.path.join(self.__path, 'index-errors.csv')
-            self.__index_errors = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+            self.__errors_index = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
         except EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = DataFrame(columns=INDEX_ERRORS_COLS.keys())
+            self.__index = DataFrame(columns=ERRORS_INDEX_COLS.keys())
 
     def __load_region_dups(self) -> Optional[DataFrame]:
         filepath = os.path.join(self.__path, 'region-dups.csv')

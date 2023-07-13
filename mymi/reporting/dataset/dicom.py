@@ -1,6 +1,8 @@
+from collections import Counter
 import numpy as np
 import os
 import pandas as pd
+from pandas import DataFrame
 from tqdm import tqdm
 from typing import List
 
@@ -109,10 +111,9 @@ def get_patient_regions(
 
     return df
 
-def create_regions_report(
+def create_patient_regions_report(
     dataset: str,
     use_mapping: bool = True) -> None:
-    # Generate counts report.
     pr_df = get_patient_regions(dataset, use_mapping=use_mapping)
     set = DICOMDataset(dataset)
     filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
@@ -120,13 +121,39 @@ def create_regions_report(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pr_df.to_csv(filepath, index=False)
 
-def load_regions_report(
+def load_patient_regions_report(
     dataset: str,
     use_mapping: bool = True) -> None:
     set = DICOMDataset(dataset)
     filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
     filepath = os.path.join(set.path, 'reports', filename)
     return pd.read_csv(filepath)
+
+def get_regions_containing(
+    dataset: str,
+    s: str,
+    case: bool = False,
+    use_mapping: bool = False) -> DataFrame:
+    df = load_patient_regions_report(dataset, use_mapping=use_mapping)
+    count_df = df.groupby('region')['patient-id'].count().rename('count').reset_index()
+    if case:
+        count_df = count_df[count_df['region'].str.contains(s)]
+    else:
+        count_df = count_df[count_df['region'].str.lower().str.contains(s.lower())]
+    count_df = count_df.sort_values('count', ascending=False)
+    return count_df
+
+def get_mapped_duplicates(dataset: str) -> DataFrame:
+    # Allows us to check 'region-map.csv' mapping for duplicates rather than running 
+    # 'create_patient_regions_report(..., use_mapping=True)' which will break on each duplicate.
+    region_map = DICOMDataset(dataset).region_map
+    df = load_patient_regions_report(dataset, use_mapping=False)
+    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: region_map.to_internal(row['region'], pat_id=row['patient-id'])[0], axis=1)
+    df = df.groupby('patient-id')['mapped'].apply(list).reset_index()
+    df['mapped'] = df['mapped'].apply(lambda regions: [i for i, count in Counter(regions).items() if count > 1])
+    df['duplicates'] = df['mapped'].apply(lambda dups: len(dups) > 0)
+    df = df[df['duplicates']]
+    return df
 
 def region_overlap(
     dataset: str,
@@ -214,7 +241,7 @@ def region_summary(
 def create_region_summary_report(
     dataset: str,
     regions: List[str]) -> None:
-    # Generate counts report.
+    # Generate summary report.
     df = region_summary(dataset, regions)
 
     # Save report.
