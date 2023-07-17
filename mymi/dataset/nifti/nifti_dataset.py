@@ -83,14 +83,14 @@ class NIFTIDataset(Dataset):
         labels: Literal['included', 'excluded', 'all'] = 'included',
         region: Optional[PatientRegions] = None) -> List[str]:
 
-        # Handle 'ct_from' datasets.
         if self.__ct_from is not None:
-            return self.__ct_from.list_patients(labels=labels, region=region)
-
-        # Load patients.
-        ct_path = os.path.join(self.__path, 'data', 'ct')
-        files = list(sorted(os.listdir(ct_path)))
-        pat_ids = [f.replace('.nii.gz', '') for f in files]
+            # Load patients from 'ct_from' dataset.
+            pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
+        else:
+            # Load patients from filenames.
+            ct_path = os.path.join(self.__path, 'data', 'ct')
+            files = list(sorted(os.listdir(ct_path)))
+            pat_ids = [f.replace('.nii.gz', '') for f in files]
 
         # Filter by 'region'.
         if region is not None:

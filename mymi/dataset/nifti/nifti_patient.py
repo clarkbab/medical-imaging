@@ -18,7 +18,7 @@ class NIFTIPatient:
         self.__ct_from = ct_from
         self.__id = str(id)
         self.__excluded_labels = excluded_labels[excluded_labels['patient-id'] == self.__id] if excluded_labels is not None else None
-        self.__global_id = f"{dataset} - {self.__id} (CT from '{self.__ct_from}')" if self.__ct_from is not None else f'{dataset} - {self.__id}'
+        self.__global_id = f'{dataset} - {self.__id}'
 
         # Check that patient ID exists.
         if ct_from is not None:
