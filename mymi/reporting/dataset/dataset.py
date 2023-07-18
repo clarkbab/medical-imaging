@@ -4,7 +4,7 @@ import os
 from tqdm import tqdm
 
 from mymi import config
-from mymi.dataset.dicom import DicomDataset
+from mymi.dataset.dicom import DICOMDataset
 from mymi import plotting
 from mymi.utils import filterOnPatIDs
 from mymi import types
@@ -24,7 +24,7 @@ def generate_dataset_regions_report(
         report_name: the name of the report.
     """
     # Get patients.
-    ds = DicomDataset(dataset)
+    ds = DICOMDataset(dataset)
     pats = ds.list_patients()
 
     # Filter patients.

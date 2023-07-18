@@ -15,7 +15,7 @@ from mymi import config
 from mymi import logging
 from mymi.utils import append_dataframe, append_row
 
-CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
+CT_FROM_REGEXP = r'^__CT_FROM_(.*)__$'
 INDEX_INDEX_COL = 'sop-id'
 INDEX_COLS = {
     'dataset': str,
@@ -92,7 +92,7 @@ def build_index(
         logging.info('Using default policy.')
         policy = DEFAULT_POLICY
 
-    # Check '__ct_from_' tag.
+    # Check '__CT_FROM_<dataset>__' tag.
     ct_from = None
     for f in os.listdir(dataset_path):
         m = match(CT_FROM_REGEXP, f)

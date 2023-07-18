@@ -15,12 +15,11 @@ from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
 from .dicom_patient import DICOMPatient
-from .index import INDEX_COLS, ERRORS_INDEX_COLS, INDEX_INDEX_COL, build_index
+from .index import CT_FROM_REGEXP, INDEX_COLS, ERRORS_INDEX_COLS, INDEX_INDEX_COL, build_index
 from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY
 from .region_map import RegionMap
 from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
-CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 Z_SPACING_ROUND_DP = 2
 
 class DICOMDataset(Dataset):
@@ -112,10 +111,42 @@ class DICOMDataset(Dataset):
         id: PatientID) -> bool:
         return id in self.list_patients()
 
+    # Copied from 'mymi/reporting/dataset/dicom.py' to avoid circular dependency.
+    def __load_patient_regions_report(
+        self,
+        exists_only: bool = False,
+        use_mapping: bool = True) -> None:
+        filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+        filepath = os.path.join(self.__path, 'reports', filename)
+        if os.path.exists(filepath):
+            if exists_only:
+                return True
+            else:
+                return read_csv(filepath)
+        else:
+            if exists_only:
+                return False
+            else:
+                raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
+
     def list_patients(
         self,
         region: Optional[PatientRegions] = None,
-        use_mapping: bool = True) -> List[str]:
+        show_progress: bool = False,
+        use_mapping: bool = True,
+        use_patient_regions_report: bool = True) -> List[str]:
+        regions = arg_to_list(region, str)
+
+        # Use patient regions report to accelerate listing if filtering on regions.
+        if region is not None:
+            if use_patient_regions_report:
+                if self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
+                    logging.info(f"Using patient regions report to accelerate listing (filtered by region).")
+                    df = self.__load_patient_regions_report(use_mapping=use_mapping)
+                    df = df[df['region'].isin(regions)]
+                    pat_ids = list(sorted(df['patient-id'].unique()))
+                    return pat_ids
+
         # Load patient IDs from index.
         pat_ids = list(sorted(self.index['patient-id'].unique()))
 
@@ -127,6 +158,8 @@ class DICOMDataset(Dataset):
                     return True
                 else:
                     return False
+            if show_progress:
+                pat_ids = tqdm(pat_ids)
             pat_ids = list(filter(filter_fn, pat_ids))
 
         return pat_ids

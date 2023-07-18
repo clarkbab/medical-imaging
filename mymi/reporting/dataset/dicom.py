@@ -123,11 +123,21 @@ def create_patient_regions_report(
 
 def load_patient_regions_report(
     dataset: str,
+    exists_only: bool = False,
     use_mapping: bool = True) -> None:
     set = DICOMDataset(dataset)
     filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
     filepath = os.path.join(set.path, 'reports', filename)
-    return pd.read_csv(filepath)
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+        else:
+            return pd.read_csv(filepath)
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
 def get_regions_containing(
     dataset: str,

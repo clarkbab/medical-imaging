@@ -21,7 +21,8 @@ CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 def convert_to_nifti(
     dataset: 'Dataset',
     region: PatientRegions,
-    anonymise: bool = False) -> None:
+    anonymise: bool = False,
+    show_list_patients_progress: bool = True) -> None:
     logging.info(f"Converting DICOMDataset '{dataset}' to NIFTIDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
 
     # Create NIFTI dataset.
@@ -41,7 +42,7 @@ def convert_to_nifti(
         open(filepath, 'w').close()
 
     # Load all patients.
-    pat_ids = dicom_set.list_patients(region=region)
+    pat_ids = dicom_set.list_patients(region=region, show_progress=show_list_patients_progress)
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
