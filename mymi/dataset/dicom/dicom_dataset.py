@@ -137,11 +137,11 @@ class DICOMDataset(Dataset):
         use_patient_regions_report: bool = True) -> List[str]:
         regions = arg_to_list(region, str)
 
-        # Use patient regions report to accelerate listing if filtering on regions.
+        # Use patient regions report to accelerate 'list_patients' if filtering on regions.
         if region is not None:
             if use_patient_regions_report:
                 if self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
-                    logging.info(f"Using patient regions report to accelerate listing (filtered by region).")
+                    logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
                     df = self.__load_patient_regions_report(use_mapping=use_mapping)
                     df = df[df['region'].isin(regions)]
                     pat_ids = list(sorted(df['patient-id'].unique()))
