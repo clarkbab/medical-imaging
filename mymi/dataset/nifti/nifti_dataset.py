@@ -88,13 +88,14 @@ class NIFTIDataset(Dataset):
             pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
         else:
             # Load patients from filenames.
+            pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
             ct_path = os.path.join(self.__path, 'data', 'ct')
             files = list(sorted(os.listdir(ct_path)))
             pat_ids = [f.replace('.nii.gz', '') for f in files]
 
         # Filter by 'region'.
         if region is not None:
-            def filter_fn(pat_id) -> bool:
+            def filter_fn(pat_id: PatientID) -> bool:
                 pat_regions = self.patient(pat_id).list_regions(labels=labels, only=region)
                 if len(pat_regions) > 0:
                     return True

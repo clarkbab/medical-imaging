@@ -4,9 +4,9 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
 import torch.nn.functional as F
-from typing import Dict, List, Optional, OrderedDict, Tuple
+from typing import Dict, List, Literal, Optional, OrderedDict, Tuple, Union
 from wandb import Image
 
 from mymi import config
@@ -17,7 +17,7 @@ from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.models.networks import MultiUNet3D
 from mymi.types import PatientRegions
-from mymi.utils import arg_to_list
+from mymi.utils import arg_to_list, gpu_usage_nvml
 
 LOG_ON_EPOCH = True
 LOG_ON_STEP = False
@@ -31,6 +31,7 @@ class MultiSegmenter(pl.LightningModule):
         metrics: List[str] = [],
         region: PatientRegions = None,
         use_lr_scheduler: bool = False,
+        lr_milestones: List[int] = None,
         val_image_interal: int = 10,
         weight_decay: float = 0,
         weights: Optional[List[Optional[List[float]]]] = None,
@@ -47,6 +48,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
         self.__use_lr_scheduler = use_lr_scheduler
+        self.__lr_milestones = lr_milestones
         self.__val_image_interval = val_image_interal
         self.__weights = weights
         self.__weight_decay = weight_decay
@@ -78,14 +80,13 @@ class MultiSegmenter(pl.LightningModule):
         model_name: str,
         run_name: str,
         checkpoint: str,
-        check_epochs: bool = True,
+        check_epochs: Union[int, Literal[False]] = np.inf,
         **kwargs: Dict) -> pl.LightningModule:
         # Check that model training has finished.
-        if check_epochs:
+        if check_epochs != False:
             filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_epochs = np.inf
-            if state['epoch'] < n_epochs - 1:
+            if state['epoch'] < check_epochs - 1:
                 raise ValueError(f"Can't load multi-segmenter ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
 
         # Load model.
@@ -123,8 +124,8 @@ class MultiSegmenter(pl.LightningModule):
             'monitor': 'val/loss'
         }
         if self.__use_lr_scheduler:
-            # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, [120])
-            opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
+            opt['lr_scheduler'] = MultiStepLR(self.__optimiser, self.__lr_milestones, gamma=0.1)
+            # opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
 
         return opt
 
@@ -210,6 +211,11 @@ class MultiSegmenter(pl.LightningModule):
         y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
         y_hat = y_hat.cpu().numpy().astype(bool)
 
+        # Record gpu usage.
+        for i, usage_mb in enumerate(gpu_usage_nvml()):
+            self.log(f'gpu/{i}', usage_mb, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+        # Record dice.
         if 'dice' in self.__metrics:
             # Get mean dice score per-channel.
             for i in range(self.__n_output_channels):

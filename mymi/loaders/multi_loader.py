@@ -256,7 +256,13 @@ class MultiLoader:
         train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
 
         # Create validation loader.
-        class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
+        if include_background:
+            # Give all classes equal weight.
+            class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
+        else:
+            # Give all foreground classes equal weight.
+            class_weights = np.ones(len(regions) + 1) / len(regions)
+            class_weights[0] = 0
         val_ds = TrainingSet(datasets, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 

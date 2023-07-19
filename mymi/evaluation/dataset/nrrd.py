@@ -418,8 +418,9 @@ def load_multi_segmenter_evaluation(
             return False
         else:
             raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
-    data = pd.read_csv(filepath, dtype={'patient-id': str})
-    return data
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
 
 def load_segmenter_evaluation(
     datasets: Union[str, List[str]],

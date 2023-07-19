@@ -71,12 +71,14 @@ class TrainingDataset(Dataset):
         params = df.iloc[0].to_dict()
         
         # Replace special columns.
+        old_cols = ['size', 'spacing']
         cols = ['output-size', 'output-spacing']
-        for col in cols:
-            if col == 'None':
-                params[col] = None
-            else:
+        for col, old_col in zip(cols, old_cols):
+            if col in params:
                 params[col] = eval(params[col])
+            else:
+                params[col] = eval(params[old_col])
+                del(params[old_col])
         return params
 
     @property

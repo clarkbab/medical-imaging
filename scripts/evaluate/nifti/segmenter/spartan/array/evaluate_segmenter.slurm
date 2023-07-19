@@ -5,9 +5,9 @@
 #SBATCH --time 0-2:00:00
 #SBATCH -A punim1413
 
-module load gcccore/8.3.0
-module load python/3.8.2
+module load python/3.8.6
 module load web_proxy
+source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
 echo $version

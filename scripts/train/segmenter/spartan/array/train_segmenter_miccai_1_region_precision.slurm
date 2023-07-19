@@ -13,8 +13,9 @@
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
 ##SBATCH --time 0-14:00:00
 ##SBATCH --time 2-00:00:00
-#SBATCH --time 7-00:00:00
+##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
+#SBATCH --time 1-00:00:00
 
 module load python/3.8.6
 module load web_proxy
@@ -43,7 +44,7 @@ DATASET="MICCAI-2015-$RESOLUTION"
 LR_INIT=1e-4
 N_SPLIT_CHANNELS=2
 RANDOM_SEED=43
-PRECISION='bf16'
+PRECISION=32
 RUN_NAME="region-$SHORT_REGION-precision-$PRECISION-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
@@ -52,7 +53,7 @@ N_EPOCHS=5000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
+RESUME=True
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True

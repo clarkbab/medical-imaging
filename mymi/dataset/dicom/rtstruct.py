@@ -101,7 +101,7 @@ class RTSTRUCT(DICOMFile):
 
     def list_regions(
         self,
-        only: Optional[PatientRegions] = None,
+        only: Optional[PatientRegions] = None,      # Only return regions in the 'only' list.
         return_unmapped: bool = False,
         use_mapping: bool = True) -> Union[List[PatientRegion], Tuple[List[PatientRegion], List[PatientRegion]]]:
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
@@ -194,7 +194,8 @@ class RTSTRUCT(DICOMFile):
 
     def region_data(
         self,
-        region: Optional[PatientRegions] = None,
+        only: Optional[PatientRegions] = None,
+        region: Optional[PatientRegions] = None,    # Request specific region/s, otherwise get all region data. Specific regions must exist.
         use_mapping: bool = True) -> OrderedDict:
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
@@ -203,13 +204,14 @@ class RTSTRUCT(DICOMFile):
         # Check that requested regions exist.
         regions = arg_to_list(region, str)
         if regions is not None:
+            pat_regions = self.list_regions(only=regions, use_mapping=use_mapping)
             for region in regions:
-                if not self.has_region(region, use_mapping=use_mapping):
+                if not region in pat_regions:
                     raise ValueError(f"Requested region '{region}' not present for RTSTRUCT '{self}'.")
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
         # need these to load regions from RTSTRUCT dicom.
-        pat_regions = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
+        pat_regions = self.list_regions(only=only, return_unmapped=True, use_mapping=use_mapping)
 
         # Filter on requested regions.
         if regions is not None:

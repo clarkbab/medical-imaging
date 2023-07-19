@@ -247,16 +247,14 @@ def get_segmenter_evaluation(
     set = NIFTIDataset(dataset)
     label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
-    # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+    # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
     if region == 'SpinalCord':
         z_min_pred = np.nonzero(pred)[2].min()
         z_min_label = np.nonzero(label)[2].min()
-        z_min = np.max([z_min_label, z_min_pred])
-
-        # Crop pred/label foreground voxels.
-        crop = ((0, 0, z_min), label.shape)
-        pred = crop_foreground_3D(pred, crop)
-        label = crop_foreground_3D(label, crop)
+        if z_min_pred < z_min_label:
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min_label), label.shape)
+            pred = crop_foreground_3D(pred, crop)
 
     # Dice.
     data = {}

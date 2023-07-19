@@ -3,8 +3,11 @@ import subprocess
 regions = '14'
 script = 'scripts/evaluate/nifti/segmenter/spartan/array/evaluate_segmenter.slurm'
 test_folds = [0, 1, 2, 3, 4]
+test_folds = [0]
 models = ['public', 'clinical', 'transfer']
+models = ['public']
 n_trains = [5, 10, 20, 50, 100, 200, None]
+n_trains = [5]
 
 for model in models:
     for test_fold in test_folds:
