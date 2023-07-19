@@ -108,6 +108,8 @@ class RTSTRUCTConverter:
                 raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{i}', ROI '{name}'.")
 
             # Coords are stored in flat array.
+            print(i)
+            print(contour_data)
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.

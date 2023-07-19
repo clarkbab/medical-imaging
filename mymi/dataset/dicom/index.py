@@ -3,7 +3,6 @@ import json
 import numpy as np
 import os
 import pandas as pd
-from pandas import DataFrame
 from pathlib import Path
 import pydicom as dcm
 from re import match
