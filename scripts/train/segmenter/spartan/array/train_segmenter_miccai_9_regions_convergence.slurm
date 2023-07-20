@@ -11,7 +11,7 @@
 ## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-#SBATCH --time 2-00:00:00
+#SBATCH --time 0-00:05:00
 ##SBATCH --time 3-00:00:00
 ##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
@@ -31,16 +31,13 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-convergence-part-2"
+MODEL_NAME="segmenter-miccai-convergence-part-3"
 RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 #RANDOM_SEED=44
-USE_WEIGHTING=True
-#WEIGHTING_SCHEME='4c'
 #RUN_NAME="9-regions-$SHORT_REGION-scheme-$WEIGHTING_SCHEME-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
-INCLUDE_BACKGROUND=False
 #LR_INIT=1e-3
 #N_EPOCHS=10000
 N_GPUS=1
@@ -50,9 +47,15 @@ N_WORKERS=8
 #RESUME=False
 #RESUME_RUN=None
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+USE_DYNAMIC_WEIGHTS=True
+#DYNAMIC_WEIGHTS_FACTOR=0.1
+#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=100
+#DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[]",
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
 USE_LR_SCHEDULER=False
+USE_WEIGHTING=False
+#WEIGHTING_SCHEME='4c'
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -61,7 +64,9 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
-    --include_background $INCLUDE_BACKGROUND \
+    --dynamic_weights_factor $DYNAMIC_WEIGHTS_FACTOR \
+    --dynamic_weights_convergence_delay $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY \
+    --dynamic_weights_convergence_thresholds $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
@@ -74,6 +79,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
+    --use_dynamic_weights $USE_DYNAMIC_WEIGHTS \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
     --use_lr_scheduler $USE_LR_SCHEDULER \

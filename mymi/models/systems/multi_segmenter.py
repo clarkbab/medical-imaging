@@ -25,11 +25,15 @@ LOG_ON_STEP = False
 class MultiSegmenter(pl.LightningModule):
     def __init__(
         self,
+        dynamic_weights_factor: float = 0.1,
+        dynamic_weights_convergence_delay: int = 100,
+        dynamic_weights_convergence_thresholds: List[float] = [],
         loss: nn.Module = DiceWithFocalLoss(),
         lr_init: float = 1e-3,
         max_image_batches: int = 2,
         metrics: List[str] = [],
         region: PatientRegions = None,
+        use_dynamic_weights: bool = False,
         use_lr_scheduler: bool = False,
         lr_milestones: List[int] = None,
         val_image_interal: int = 10,
@@ -38,7 +42,12 @@ class MultiSegmenter(pl.LightningModule):
         weights_schedule: Optional[List[int]] = None,
         **kwargs):
         super().__init__()
-        assert region
+        assert region is not None
+        self.__dynamic_weights_convergence_delay = dynamic_weights_convergence_delay
+        self.__dynamic_weights_convergence_thresholds = dynamic_weights_convergence_thresholds
+        self.__dynamic_weights_factor = dynamic_weights_factor
+        self.__dynamic_weights_mean_dices = {}
+        self.__dynamic_weights_prev_epochs = {}
         self.__loss = loss
         self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__name = None
@@ -47,12 +56,22 @@ class MultiSegmenter(pl.LightningModule):
         self.__regions = arg_to_list(region, str)
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
+        self.__use_dynamic_weights = use_dynamic_weights
         self.__use_lr_scheduler = use_lr_scheduler
         self.__lr_milestones = lr_milestones
         self.__val_image_interval = val_image_interal
         self.__weights = weights
         self.__weight_decay = weight_decay
         self.__weights_schedule = weights_schedule
+
+        # Handle dynamic weighting.
+        if self.__use_dynamic_weights:
+            logging.info(f"Using dynamic weights with factor={self.__dynamic_weights_factor}, thresholds={self.__dynamic_weights_convergence_thresholds}, and delay={self.__dynamic_weights_convergence_delay}.")
+            if len(dynamic_weights_convergence_thresholds) != len(self.__regions):
+                raise ValueError(f"Expected convergence thresholds '{dynamic_weights_convergence_thresholds}' (len={len(dynamic_weights_convergence_thresholds)}) to have same length as regions '{self.__regions}' (len={len(self.__regions)}).")
+            self.__dynamic_weights_convergences = np.zeros(len(self.__regions), dtype=bool)
+            self.__dynamic_weights_convergence_epochs = np.empty(len(self.__regions))
+            self.__dynamic_weights_convergence_epochs[:] = np.nan
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
@@ -137,6 +156,7 @@ class MultiSegmenter(pl.LightningModule):
     def training_step(self, batch, _):
         # Forward pass.
         desc, x, y, mask, weights = batch
+        n_batch_items = len(desc)
 
         # Overwrite loader weights if desired.
         # E.g:
@@ -149,7 +169,6 @@ class MultiSegmenter(pl.LightningModule):
         #
         # This will weight the second class for first 2k epochs, then apply loader weighting.
         if self.__weights is not None:
-            n_batch_items = len(desc)
             start_epochs = self.__weights_schedule
             end_epochs = self.__weights_schedule[1:] + [None]
             for schedule_weights, start_epoch, end_epoch in zip(self.__weights, start_epochs, end_epochs):
@@ -157,9 +176,20 @@ class MultiSegmenter(pl.LightningModule):
                     if schedule_weights is not None:
                         weights = torch.Tensor([schedule_weights] * n_batch_items).to(x.device)
 
+        # Apply dynamic weighting. Use first batch only.
+        if self.__use_dynamic_weights:
+            weights = [self.__dynamic_weights_factor * w if i != 0 and self.__dynamic_weights_convergences[i - 1] else w for i, w in enumerate(weights[0].cpu())]
+            weights = list(np.array(weights) / np.sum(weights))
+            weights = torch.Tensor([weights] * n_batch_items).to(x.device)
+
         # Log weights. First batch only.
         for i, weight in enumerate(weights[0]):
             self.log(f'train/weight/{i}', weight, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+        # Log convergences.
+        if self.__use_dynamic_weights:
+            for i, convergence in enumerate(self.__dynamic_weights_convergences):
+                self.log(f'train/convergence/{i + 1}', float(convergence), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
@@ -232,6 +262,47 @@ class MultiSegmenter(pl.LightningModule):
                     mean_dice = np.mean(dice_scores)
                     self.log(f'val/dice/{region}', mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
+                    # Track convergence.
+                    if self.__use_dynamic_weights:
+                        # Skip 'background' channel.
+                        if i == 0:
+                            continue
+
+                        # Add 'mean_dice' score for first time.
+                        if region not in self.__dynamic_weights_mean_dices:
+                            self.__dynamic_weights_mean_dices[region] = [mean_dice]
+                            self.__dynamic_weights_prev_epochs[region] = self.current_epoch
+
+                        # Time to average and log.
+                        if self.current_epoch > self.__dynamic_weights_prev_epochs[region]:
+                            # Average over epoch.
+                            epoch_mean_dice = np.mean(self.__dynamic_weights_mean_dices[region])
+                            logging.info(f'{region}={epoch_mean_dice}')
+                            self.__dynamic_weights_mean_dices[region] = [mean_dice]
+                            self.__dynamic_weights_prev_epochs[region] = self.current_epoch
+
+                            # Check if OAR has already converged.
+                            converged = self.__dynamic_weights_convergences[i - 1]
+                            if not converged:
+                                cvg_thresh = self.__dynamic_weights_convergence_thresholds[i - 1]
+                                if epoch_mean_dice >= cvg_thresh:
+                                    # If convergence epoch hasn't been set, metric has just crossed threshold.
+                                    cvg_epoch = self.__dynamic_weights_convergence_epochs[i - 1] 
+                                    if np.isnan(cvg_epoch):
+                                        self.__dynamic_weights_convergence_epochs[i - 1] = self.current_epoch
+                                    cvg_epoch = self.__dynamic_weights_convergence_epochs[i - 1] 
+
+                                    # Check if metric has converged for 'delay' epochs.
+                                    cvg_epochs = self.current_epoch - cvg_epoch
+                                    logging.info(f'{region} epochs={cvg_epochs}')
+                                    if cvg_epochs >= self.__dynamic_weights_convergence_delay:
+                                        self.__dynamic_weights_convergences[i - 1] = True
+                                else:
+                                    # Metric may have crossed back under threshold.
+                                    self.__dynamic_weights_convergence_epochs[i - 1] = np.nan
+                        else:
+                            self.__dynamic_weights_mean_dices[region] += [mean_dice]
+                        
         # Log prediction images.
         if self.logger and self.current_epoch % self.__val_image_interval == 0:
             class_labels = {

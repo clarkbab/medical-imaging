@@ -44,7 +44,6 @@ RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
-INCLUDE_BACKGROUND=False
 LR_INIT=1e-4
 N_EPOCHS=10000
 N_GPUS=1
@@ -64,7 +63,6 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
-    --include_background $INCLUDE_BACKGROUND \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \

@@ -27,6 +27,9 @@ def train_multi_segmenter(
     run_name: str,
     batch_size: int = 1,
     ckpt_model: bool = True,
+    dynamic_weights_factor: float = 0.1,
+    dynamic_weights_convergence_delay: int = 100,
+    dynamic_weights_convergence_thresholds: List[float] = [],
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
@@ -58,6 +61,7 @@ def train_multi_segmenter(
     thresh_low: Optional[float] = None,
     thresh_high: Optional[float] = None,
     use_augmentation: bool = True,
+    use_dynamic_weights: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
@@ -112,7 +116,7 @@ def train_multi_segmenter(
             ]]
             weights_schedule = [0]
         elif weighting_scheme == '2b':
-            # Volume weighting, and back to frequency.
+            # Volume weighting, and back to frequency after 2k epochs.
             weights_1 = [
                 0,
                 0.0034936,
@@ -130,6 +134,25 @@ def train_multi_segmenter(
                 None
             ]
             weights_schedule = [0, 2000]
+        elif weighting_scheme == '2c':
+            # Volume weighting, and back to frequency after 1k epochs.
+            weights_1 = [
+                0,
+                0.0034936,
+                0.00722492,
+                0.02615894,
+                0.02589116,
+                0.33027497,
+                0.2783234,
+                0.31547564,
+                0.00664951,
+                0.00650785
+            ]
+            weights = [
+                weights_1,
+                None
+            ]
+            weights_schedule = [0, 1000]
         elif weighting_scheme == '3a':
             # Bring OARs into play in groups based on volume.
             Bone_Mandible_idx = 1
@@ -773,6 +796,9 @@ def train_multi_segmenter(
 
     # Create model.
     model = MultiSegmenter(
+        dynamic_weights_factor=dynamic_weights_factor,
+        dynamic_weights_convergence_delay=dynamic_weights_convergence_delay,
+        dynamic_weights_convergence_thresholds=dynamic_weights_convergence_thresholds,
         loss=loss_fn,
         lr_init=lr_init,
         lr_milestones=lr_milestones,
@@ -781,6 +807,7 @@ def train_multi_segmenter(
         n_gpus=n_gpus,
         n_split_channels=n_split_channels,
         region=regions,
+        use_dynamic_weights=use_dynamic_weights,
         use_lr_scheduler=use_lr_scheduler,
         weights=weights,
         weight_decay=weight_decay,
