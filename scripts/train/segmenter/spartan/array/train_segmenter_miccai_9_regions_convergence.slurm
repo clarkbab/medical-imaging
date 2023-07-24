@@ -11,7 +11,7 @@
 ## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-#SBATCH --time 0-00:05:00
+#SBATCH --time 1-06:00:00
 ##SBATCH --time 3-00:00:00
 ##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
@@ -51,6 +51,8 @@ USE_DYNAMIC_WEIGHTS=True
 #DYNAMIC_WEIGHTS_FACTOR=0.1
 #DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=100
 #DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[]",
+# Remove quotations from string passed via python script.
+DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS=$( echo $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS | tr -d '"' )
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
 USE_LR_SCHEDULER=False

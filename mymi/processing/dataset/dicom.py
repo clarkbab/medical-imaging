@@ -104,17 +104,18 @@ def convert_to_nifti(
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 nib.save(img, filepath)
         except ValueError as e:
+            
             data = {
                 'dataset': dataset,
                 'patient-id': pat_id,
                 'error': str(e)
             }
-            error_df = append_row(error_df, data)
+            error_df = append_row(error_df, data, index=data_index)
 
     # Save errors index.
     if len(error_df) > 0:
         error_df = error_df.astype(ERROR_COLS)
-    filepath = os.path.join(error_df, 'conversion-errors.csv')
+    filepath = os.path.join(nifti_set.path, 'conversion-errors.csv')
     error_df.to_csv(filepath, index=True)
 
     # Save indexing time.

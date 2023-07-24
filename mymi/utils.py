@@ -40,12 +40,14 @@ def append_row(
     index: Optional[Union[Union[int, str], List[Union[int, str]]]] = None) -> pd.DataFrame:
     # Create 'other' dataframe - to be concatenated.
     if index is not None:
+        # Assign passed index to new row.
         if type(index) == list or type(index) == tuple:
             # Handle multi-indexes.
             pass
         else:
             index = pd.Index(data=[index], name=df.index.name)
     else:
+        # Assign index to new row based on existing index.
         max_index = df.index.max()
         if np.isnan(max_index):
             idx = 0

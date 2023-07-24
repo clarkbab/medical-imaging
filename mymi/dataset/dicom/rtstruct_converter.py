@@ -101,15 +101,15 @@ class RTSTRUCTConverter:
         # Convert points into voxel data.
         for i, contour in enumerate(contour_seq):
             # Get contour data.
-            contour_data = contour.ContourData
+            contour_data = np.array(contour.ContourData)
 
             # This code handles 'CLOSED_PLANAR' and 'POINT' types.
             if not contour.ContourGeometricType in CONTOUR_FORMATS:
                 raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{i}', ROI '{name}'.")
 
             # Coords are stored in flat array.
-            print(i)
-            print(contour_data)
+            if contour_data.size % 3 != 0:
+                raise ValueError(f"Size of 'contour_data' (array of points in 3D) should be divisible by 3.")
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.

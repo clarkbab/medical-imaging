@@ -36,7 +36,7 @@ class MultiSegmenter(pl.LightningModule):
         use_dynamic_weights: bool = False,
         use_lr_scheduler: bool = False,
         lr_milestones: List[int] = None,
-        val_image_interal: int = 10,
+        val_image_interval: int = 10,
         weight_decay: float = 0,
         weights: Optional[List[Optional[List[float]]]] = None,
         weights_schedule: Optional[List[int]] = None,
@@ -59,7 +59,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__use_dynamic_weights = use_dynamic_weights
         self.__use_lr_scheduler = use_lr_scheduler
         self.__lr_milestones = lr_milestones
-        self.__val_image_interval = val_image_interal
+        self.__val_image_interval = val_image_interval
         self.__weights = weights
         self.__weight_decay = weight_decay
         self.__weights_schedule = weights_schedule
