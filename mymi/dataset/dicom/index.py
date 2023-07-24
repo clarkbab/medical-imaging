@@ -25,8 +25,8 @@ INDEX_COLS = {
     'filepath': str,
     'mod-spec': object
 }
-ERRORS_INDEX_COLS = INDEX_COLS.copy()
-ERRORS_INDEX_COLS['error'] = str
+ERROR_INDEX_COLS = INDEX_COLS.copy()
+ERROR_INDEX_COLS['error'] = str
 
 DEFAULT_POLICY = {
     'ct': {
@@ -200,8 +200,8 @@ def build_index(
         index.to_csv(temp_filepath, index=True)
 
     # Create errors index.
-    errors_index_index = pd.Index([], name=INDEX_INDEX_COL)
-    errors_index = pd.DataFrame(columns=ERRORS_INDEX_COLS.keys(), index=errors_index_index)
+    error_index_index = pd.Index([], name=INDEX_INDEX_COL)
+    error_index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys(), index=error_index_index)
 
     # Remove duplicates by 'SOPInstanceUID'.
     if not policy['duplicates']['allow']:
@@ -210,7 +210,7 @@ def build_index(
         dup_rows = index.index.duplicated()
         dup = index[dup_rows]
         dup['error'] = 'DUPLICATE'
-        errors_index = append_dataframe(errors_index, dup)
+        error_index = append_dataframe(error_index, dup)
         index = index[~dup_rows]
 
     # Check CT slices have standard orientation.
@@ -225,7 +225,7 @@ def build_index(
         nonstand_idx = stand_orient[~stand_orient].index
         nonstand = index.loc[nonstand_idx]
         nonstand['error'] = 'NON-STANDARD-ORIENTATION'
-        errors_index = append_dataframe(errors_index, nonstand)
+        error_index = append_dataframe(error_index, nonstand)
         index = index.drop(nonstand_idx)
 
     # Check CT slices have consistent x/y spacing.
@@ -241,7 +241,7 @@ def build_index(
         incons_idx = cons_xy[~cons_xy].index
         incons = index.loc[incons_idx]
         incons['error'] = 'INCONSISTENT-SPACING-XY'
-        errors_index = append_dataframe(errors_index, incons)
+        error_index = append_dataframe(error_index, incons)
         index = index.drop(incons_idx)
 
     # Check CT slices have consistent x/y position.
@@ -257,7 +257,7 @@ def build_index(
         incons_idx = cons_xy[~cons_xy].index
         incons = index.loc[incons_idx]
         incons['error'] = 'INCONSISTENT-POSITION-XY'
-        errors_index = append_dataframe(errors_index, incons)
+        error_index = append_dataframe(error_index, incons)
         index = index.drop(incons_idx)
 
     # Check CT slices have consistent z spacing.
@@ -274,7 +274,7 @@ def build_index(
         incons_idx = cons_z[~cons_z].index
         incons = index.loc[incons_idx]
         incons['error'] = 'INCONSISTENT-SPACING-Z'
-        errors_index = append_dataframe(errors_index, incons)
+        error_index = append_dataframe(error_index, incons)
         index = index.drop(incons_idx)
 
     # Load RTSTRUCT series without referenced CT series.
@@ -290,7 +290,7 @@ def build_index(
 
         # Discard RTSTRUCTS with no referenced CT.
         no_ref_ct['error'] = 'NO-REF-CT'
-        errors_index = append_dataframe(errors_index, no_ref_ct)
+        error_index = append_dataframe(error_index, no_ref_ct)
         index = index.drop(no_ref_ct_idx)
 
     else:
@@ -305,7 +305,7 @@ def build_index(
             no_ct_series_idx = no_ref_ct[no_ref_ct['ct-count'].isna()].index
             no_ct_series = index.loc[no_ct_series_idx]
             no_ct_series['error'] = 'NO-REF-CT:NO-CT-SERIES'
-            errors_index = append_dataframe(errors_index, no_ct_series)
+            error_index = append_dataframe(error_index, no_ct_series)
             index = index.drop(no_ct_series_idx)
 
         elif policy['rtstruct']['no-ref-ct']['only'] == 'single-ct':
@@ -315,12 +315,12 @@ def build_index(
             no_ct_series_idx = no_ref_ct[no_ref_ct['ct-count'].isna()].index
             no_ct_series = index.loc[no_ct_series_idx]
             no_ct_series['error'] = 'NO-REF-CT:NO-CT-SERIES'
-            errors_index = append_dataframe(errors_index, no_ct_series)
+            error_index = append_dataframe(error_index, no_ct_series)
             index = index.drop(no_ct_series_idx)
             multiple_ct_series_idx = no_ref_ct[no_ref_ct['ct-count'] != 1].index
             multiple_ct_series = index.loc[multiple_ct_series_idx]
             multiple_ct_series['error'] = 'NO-REF-CT:MULTIPLE-CT-SERIES'
-            errors_index = append_dataframe(errors_index, multiple_ct_series)
+            error_index = append_dataframe(error_index, multiple_ct_series)
             index = index.drop(multiple_ct_series_idx)
 
     # Check that RTPLAN references RTSTRUCT SOP instance ID in index.
@@ -335,7 +335,7 @@ def build_index(
 
         # Discard RTPLANs without references RTSTRUCT.
         no_ref_rtstruct['error'] = 'NO-REF-RTSTRUCT'
-        errors_index = append_dataframe(errors_index, no_ref_rtstruct)
+        error_index = append_dataframe(error_index, no_ref_rtstruct)
         index = index.drop(no_ref_rtstruct_idx)
 
     else:
@@ -350,7 +350,7 @@ def build_index(
             no_rtstruct_series_idx = no_ref_rtstruct[no_ref_rtstruct['rtstruct-count'].isna()].index
             no_rtstruct_series = index.loc[no_rtstruct_series_idx]
             no_rtstruct_series['error'] = 'NO-REF-RTSTRUCT:NO-RTSTRUCT-SERIES'
-            errors_index = append_dataframe(errors_index, no_rtstruct_series)
+            error_index = append_dataframe(error_index, no_rtstruct_series)
             index = index.drop(no_rtstruct_series_idx)
 
     # Check that RTDOSE references RTPLAN SOP in index.
@@ -366,7 +366,7 @@ def build_index(
 
         # Discard RTDOSEs with no referenced RTPLAN.
         no_ref_rtplan['error'] = 'NO-REF-RTPLAN'
-        errors_index = append_dataframe(errors_index, no_ref_rtplan)
+        error_index = append_dataframe(error_index, no_ref_rtplan)
         index = index.drop(no_ref_rtplan_idx)
 
     else:
@@ -381,7 +381,7 @@ def build_index(
             no_rtplan_series_idx = no_ref_rtplan[no_ref_rtplan['rtplan-count'].isna()].index
             no_rtplan_series = index.loc[no_rtplan_series_idx]
             no_rtplan_series['error'] = 'NO-REF-RTPLAN:NO-RTPLAN-SERIES'
-            errors_index = append_dataframe(errors_index, no_rtplan_series)
+            error_index = append_dataframe(error_index, no_rtplan_series)
             index = index.drop(no_rtplan_series_idx)
 
     # Check that study has RTSTRUCT series.
@@ -391,7 +391,7 @@ def build_index(
         incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
         nonincl = index[~incl_rows]
         nonincl['error'] = 'STUDY-NO-RTSTRUCT'
-        errors_index = append_dataframe(errors_index, nonincl)
+        error_index = append_dataframe(error_index, nonincl)
         index = index[incl_rows]
 
     # Save index.
@@ -401,10 +401,10 @@ def build_index(
     index.to_csv(filepath, index=True)
 
     # Save errors index.
-    if len(errors_index) > 0:
-        errors_index = errors_index.astype(ERRORS_INDEX_COLS)
+    if len(error_index) > 0:
+        error_index = error_index.astype(ERROR_INDEX_COLS)
     filepath = os.path.join(dataset_path, 'index-errors.csv')
-    errors_index.to_csv(filepath, index=True)
+    error_index.to_csv(filepath, index=True)
 
     # Save indexing time.
     end = time()

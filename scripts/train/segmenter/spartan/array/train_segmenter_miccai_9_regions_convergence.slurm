@@ -11,7 +11,8 @@
 ## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-#SBATCH --time 1-06:00:00
+##SBATCH --time 1-06:00:00
+#SBATCH --time 0-00:05:00
 ##SBATCH --time 3-00:00:00
 ##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
@@ -44,8 +45,8 @@ N_GPUS=1
 N_NODES=1
 N_SPLIT_CHANNELS=2
 N_WORKERS=8
-#RESUME=False
-#RESUME_RUN=None
+RESUME=False
+RESUME_RUN=None
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_DYNAMIC_WEIGHTS=True
 #DYNAMIC_WEIGHTS_FACTOR=0.1

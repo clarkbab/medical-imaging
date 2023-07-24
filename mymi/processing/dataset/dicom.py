@@ -2,7 +2,7 @@ import nibabel as nib
 from nibabel.nifti1 import Nifti1Image
 import numpy as np
 import os
-from pandas import DataFrame, read_csv
+from pandas import DataFrame, MultiIndex, read_csv
 from pathlib import Path
 import re
 from time import time
@@ -20,10 +20,12 @@ from .dataset import write_flag
 
 CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 ERROR_COLS = {
-    'dataset': str,
-    'patient-id': str,
     'error': str
 }
+ERROR_INDEX = [
+    'dataset',
+    'patient-id'
+]
 
 def convert_to_nifti(
     dataset: 'Dataset',
@@ -61,7 +63,8 @@ def convert_to_nifti(
         save_csv(df, filepath, overwrite=True)
 
     # Keep track of errors - but don't let errors stop the processing.
-    error_df = DataFrame(columns=ERROR_COLS.keys())
+    error_index = MultiIndex(levels=[[], []], codes=[[], []], names=ERROR_INDEX)
+    error_df = DataFrame(columns=ERROR_COLS.keys(), index=error_index)
 
     for pat_id in tqdm(pat_ids):
         try:
@@ -104,10 +107,8 @@ def convert_to_nifti(
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 nib.save(img, filepath)
         except ValueError as e:
-            
+            data_index = [dataset, pat_id] 
             data = {
-                'dataset': dataset,
-                'patient-id': pat_id,
                 'error': str(e)
             }
             error_df = append_row(error_df, data, index=data_index)
