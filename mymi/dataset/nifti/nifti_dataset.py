@@ -8,9 +8,8 @@ from mymi import logging
 from mymi.types import PatientID, PatientRegions
 
 from ..dataset import Dataset, DatasetType
+from ..shared import CT_FROM_REGEXP
 from .nifti_patient import NIFTIPatient
-
-CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 
 class NIFTIDataset(Dataset):
     def __init__(
@@ -42,6 +41,10 @@ class NIFTIDataset(Dataset):
             self.__load_anon_index()
             self.__loaded_anon_index = True
         return self.__anon_index
+
+    @property
+    def ct_from(self) -> Optional[Dataset]:
+        return self.__ct_from
     
     @property
     def description(self) -> str:
@@ -88,7 +91,7 @@ class NIFTIDataset(Dataset):
             pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
         else:
             # Load patients from filenames.
-            pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
+            pat_ids = self.list_patients(labels=labels, region=None)
             ct_path = os.path.join(self.__path, 'data', 'ct')
             files = list(sorted(os.listdir(ct_path)))
             pat_ids = [f.replace('.nii.gz', '') for f in files]

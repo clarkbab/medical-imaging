@@ -14,8 +14,9 @@ from mymi.types import PatientID, PatientIDs, PatientRegions
 from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
+from ..shared import CT_FROM_REGEXP
 from .dicom_patient import DICOMPatient
-from .index import CT_FROM_REGEXP, INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index
+from .index import INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index
 from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY
 from .region_map import RegionMap
 from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY

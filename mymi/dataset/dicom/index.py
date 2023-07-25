@@ -14,7 +14,8 @@ from mymi import config
 from mymi import logging
 from mymi.utils import append_dataframe, append_row
 
-CT_FROM_REGEXP = r'^__CT_FROM_(.*)__$'
+from ..shared import CT_FROM_REGEXP
+
 INDEX_INDEX_COL = 'sop-id'
 INDEX_COLS = {
     'dataset': str,

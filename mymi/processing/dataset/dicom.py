@@ -16,9 +16,9 @@ from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, arg_to_list, save_csv
 
+from ..shared import CT_FROM_REGEXP
 from .dataset import write_flag
 
-CT_FROM_REGEXP = r'^__ct_from_(.*)__$'
 ERROR_COLS = {
     'error': str
 }
