@@ -11,8 +11,7 @@
 ## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-#SBATCH --time 0-00:05:00
+#SBATCH --time 1-06:00:00
 ##SBATCH --time 3-00:00:00
 ##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
@@ -39,8 +38,8 @@ DATASET="MICCAI-2015-$RESOLUTION"
 #RUN_NAME="9-regions-$SHORT_REGION-scheme-$WEIGHTING_SCHEME-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
-#LR_INIT=1e-3
-#N_EPOCHS=10000
+LR_INIT=1e-3
+N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_SPLIT_CHANNELS=2

@@ -1,11 +1,8 @@
 import subprocess
 
 factors = [0.01, 0.1, 0.2, 0.4, 0.8]
-factors = [0.01]
 delays = [10, 50, 100, 200, 500, 1000]
-delays = [10]
 random_seeds = [42, 43, 44]
-random_seeds = [42]
 # 'sbatch' needs quotations around value otherwise it will split on ','.
 cvg_thresholds = "\"[0.8,0.8,0.6,0.6,0.3,0.4,0.4,0.7,0.7]\""
 script = 'scripts/train/segmenter/spartan/array/train_segmenter_miccai_9_regions_convergence.slurm'
