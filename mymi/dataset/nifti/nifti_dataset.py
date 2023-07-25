@@ -91,7 +91,6 @@ class NIFTIDataset(Dataset):
             pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
         else:
             # Load patients from filenames.
-            pat_ids = self.list_patients(labels=labels, region=None)
             ct_path = os.path.join(self.__path, 'data', 'ct')
             files = list(sorted(os.listdir(ct_path)))
             pat_ids = [f.replace('.nii.gz', '') for f in files]
