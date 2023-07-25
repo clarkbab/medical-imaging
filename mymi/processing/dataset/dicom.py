@@ -9,6 +9,7 @@ from time import time
 from typing import Optional
 from tqdm import tqdm
 
+from mymi.dataset.shared import CT_FROM_REGEXP
 from mymi.dataset.dicom import DICOMDataset
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
@@ -16,7 +17,6 @@ from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, arg_to_list, save_csv
 
-from ..shared import CT_FROM_REGEXP
 from .dataset import write_flag
 
 ERROR_COLS = {
