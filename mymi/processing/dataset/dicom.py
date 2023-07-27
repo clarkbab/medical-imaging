@@ -48,7 +48,7 @@ def convert_to_nifti(
 
     # Add '__ct_from_' tag to NIFTI dataset.
     if ct_from is not None:
-        filepath = os.path.join(nifti_set.path, f'__ct_from_{ct_from}__')
+        filepath = os.path.join(nifti_set.path, f'__CT_FROM_{ct_from}__')
         open(filepath, 'w').close()
 
     # Load all patients.
