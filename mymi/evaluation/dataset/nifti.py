@@ -56,12 +56,12 @@ def get_localiser_evaluation(
         tol = get_region_tolerance(region)
         if tol is not None:
             tols.append(tol)
-        dists = all_distances(pred, label, spacing, tols)
+        dists = all_distances(pred, label, spacing, tols=tols)
         for metric, value in dists.items():
             data[metric] = value
 
         # Add 'deepmind' comparison.
-        dists = distances_deepmind(pred, label, spacing, tols)
+        dists = distances_deepmind(pred, label, spacing, tols=tols)
         for metric, value in dists.items():
             data[f'dm-{metric}'] = value
 
@@ -225,12 +225,12 @@ def get_multi_segmenter_evaluation(
             tol = get_region_tolerance(region)
             if tol is not None:
                 tols.append(tol)
-            dists = all_distances(pred, label, spacing, tols)
+            dists = all_distances(pred, label, spacing, tols=tols)
             for metric, value in dists.items():
                 region_metrics[metric] = value
 
             # Add 'deepmind' comparison.
-            dists = distances_deepmind(pred, label, spacing, tols)
+            dists = distances_deepmind(pred, label, spacing, tols=tols)
             for metric, value in dists.items():
                 region_metrics[f'dm-{metric}'] = value
 
@@ -274,12 +274,12 @@ def get_segmenter_evaluation(
         tol = get_region_tolerance(region)
         if tol is not None:
             tols.append(tol)
-        dists = all_distances(pred, label, spacing, tols)
+        dists = all_distances(pred, label, spacing, tols=tols)
         for metric, value in dists.items():
             data[metric] = value
 
         # Add 'deepmind' comparison.
-        dists = distances_deepmind(pred, label, spacing, tols)
+        dists = distances_deepmind(pred, label, spacing, tols=tols)
         for metric, value in dists.items():
             data[f'dm-{metric}'] = value
 

@@ -11,7 +11,7 @@
 ## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
 ## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-#SBATCH --time 1-00:00:00
+#SBATCH --time 1-06:00:00
 ##SBATCH --time 3-00:00:00
 ##SBATCH --time 7-00:00:00
 ##SBATCH --test-only
@@ -35,15 +35,15 @@ MODEL_NAME="segmenter-miccai-no-background"
 RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
-RANDOM_SEED=43
-USE_WEIGHTS=True
-WEIGHTS_SCHEME=12
-RUN_NAME="9-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-scheme-$WEIGHTS_SCHEME"
+RANDOM_SEED=44
+USE_WEIGHTING=True
+WEIGHTING_SCHEME='2c'
+RUN_NAME="9-regions-$SHORT_REGION-scheme-$WEIGHTS_SCHEME-seed-$RANDOM_SEED"
 #RUN_NAME="9-regions-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 INCLUDE_BACKGROUND=False
-LR_INIT=1e-4
+LR_INIT=1e-3
 N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
@@ -78,5 +78,5 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
     --use_lr_scheduler $USE_LR_SCHEDULER \
-    --use_weights $USE_WEIGHTS \
-    --weights_scheme $WEIGHTS_SCHEME
+    --use_weighting $USE_WEIGHTING \
+    --weighting_scheme $WEIGHTING_SCHEME

@@ -1,10 +1,11 @@
 import numpy as np
 import SimpleITK as sitk
+from surface_distance import compute_average_surface_distance, compute_robust_hausdorff, compute_surface_dice_at_tolerance, compute_surface_distances
 from typing import Dict, List, Literal, Tuple, Union
 
 from mymi.geometry import get_extent, get_extent_centre
 from mymi import types
-from surface_distance import compute_average_surface_distance, compute_robust_hausdorff, compute_surface_dice_at_tolerance, compute_surface_distances
+from mymi.utils import arg_to_list
 
 def distances_deepmind(
     a: np.ndarray,
@@ -64,15 +65,14 @@ def all_distances(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D,
-    tols: Union[int, float, List[Union[int, float]]]) -> Dict[str, float]:
+    tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
-    if type(tols) == int or type(tols) == float:
-        tols = [tols]
+    tols = arg_to_list(tol, (int, float))
 
     # Add metrics.
     surf_dists = surface_distances(a, b, spacing)
@@ -131,7 +131,7 @@ def batch_mean_all_distances(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D,
-    tols: Union[float, List[float]]) -> Dict[str, float]:
+    tol: Union[int, float, List[float]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'batch_mean_all_distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:
@@ -140,7 +140,7 @@ def batch_mean_all_distances(
     # Average metrics over all batch items.
     mean_dists = {}
     for a, b in zip(a, b):
-        dists = all_distances(a, b, spacing, tols)
+        dists = all_distances(a, b, spacing, tol=tol)
         for metric, value in dists.items():
             if metric not in mean_dists:
                 dists[metric] = []
