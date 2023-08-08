@@ -1390,7 +1390,7 @@ def plot_dataframe(
         # Get row data.
         row_data = data[data[x].isin(row_x_order)].copy()
 
-        # Keep track of legend item.
+        # Keep track of legend items.
         hue_artists = {}
 
         for j, x_val in enumerate(row_x_order):
@@ -1416,20 +1416,25 @@ def plot_dataframe(
                         # Get hue 'label' - allows us to use names more display-friendly than the data values.
                         hue_label = hue_name if hue_labels is None else hue_labels[k]
 
-                        # Plot box.
                         hatch = hue_hatches[k] if hue_hatches is not None else None
                         if style == 'box':
+                            # Plot box.
                             res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
-                            if not hue_label in hue_artists:
-                                hue_artists[hue_label] = res['boxes'][0]
-                            # res['boxes'][0].set(hatch=hatch)
                             if hatch is not None:
                                 mpl.rcParams['hatch.linewidth'] = linewidth
                                 res['boxes'][0].set_hatch(hatch)
-                            # res['boxes'][0].set_edgecolor('white')
-                            # res['boxes'][0].set(facecolor='white')
+                                # res['boxes'][0].set(hatch=hatch)
+                                # res['boxes'][0].set_edgecolor('white')
+                                # res['boxes'][0].set(facecolor='white')
+
+                            # Save reference to plot for legend.
+                            if not hue_label in hue_artists:
+                                hue_artists[hue_label] = res['boxes'][0]
                         elif style == 'violin':
+                            # Plot violin.
                             res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
+
+                            # Save reference to plot for legend.
                             if not hue_label in hue_artists:
                                 hue_artists[hue_label] = res['boxes'][0]
                 else:
@@ -1451,7 +1456,7 @@ def plot_dataframe(
                         if len(hue_data) == 0:
                             continue
                         res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
-                        if not show_boxes and not hue_label in hue_artists:
+                        if not hue_label in hue_artists:
                             hue_artists[hue_label] = res
                 else:
                     x_data = row_data[row_data[x] == x_val]
@@ -1504,11 +1509,14 @@ def plot_dataframe(
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)
 
-        # Add legend.
         if hue is not None:
             if show_legend:
+                # Filter 'hue_labels' based on hue 'artists'. Some hues may not be present in this row,
+                # and 'hue_labels' is a global (across all rows) tracker.
                 hue_labels = hue_order if hue_labels is None else hue_labels
-                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels]))
+                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels if h in hue_artists]))
+
+                # Show legend.
                 legend = axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=legend_loc)
                 frame = legend.get_frame()
                 frame.set_boxstyle('square')

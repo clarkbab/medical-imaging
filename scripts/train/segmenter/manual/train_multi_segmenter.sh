@@ -17,8 +17,15 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[0]}
 SHORT_REGION=${SHORT_REGIONS[0]}
-MODEL_NAME="segmenter-miccai-convergence-part-3"
-RUN_NAME="test"
+MODEL_NAME="test"
+USE_DYNAMIC_WEIGHTS=True
+DYNAMIC_WEIGHTS_FACTOR=10
+DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=20
+DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2=5
+DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[0.8,0.8,0.6,0.6,0.3,0.4,0.4,0.7,0.7]"
+RANDOM_SEED=43
+# RUN_NAME="factor-$DYNAMIC_WEIGHTS_FACTOR-delay-$DYNAMIC_WEIGHTS_CONVERGENCE_DELAY-seed-$RANDOM_SEED-test"
+RUN_NAME="test-media-logging-step"
 LR_FIND=False
 LR_INIT=1e-3
 LR_SCHEDULER=False
@@ -29,18 +36,13 @@ N_SPLIT_CHANNELS=2
 N_WORKERS=8
 PRECISION='bf16'
 BATCH_SIZE=1
-RANDOM_SEED=42
 RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
-USE_DYNAMIC_WEIGHTS=True
 USE_WEIGHTING=False
 WEIGHTING_SCHEME=None
-DYNAMIC_WEIGHTS_FACTOR=0.1
-DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=10
-DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[0.8,0.8,0.6,0.6,0.3,0.4,0.4,0.7,0.7]"
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -51,6 +53,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --ckpt_model $CKPT_MODEL \
     --dynamic_weights_factor $DYNAMIC_WEIGHTS_FACTOR \
     --dynamic_weights_convergence_delay $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY \
+    --dynamic_weights_convergence_delay_2 $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2 \
     --dynamic_weights_convergence_thresholds $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \

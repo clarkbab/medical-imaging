@@ -87,7 +87,7 @@ class RTSTRUCT(DICOMFile):
         if use_mapping and self.__region_map:
             pat_id = self.__series.study.patient.id
             def map_name(info):
-                info['name'] = self.__region_map.to_internal(info['name'], pat_id=pat_id)
+                info['name'], _ = self.__region_map.to_internal(info['name'], pat_id=pat_id)
                 return info
             roi_info = dict((id, map_name(info)) for id, info in roi_info.items())
 

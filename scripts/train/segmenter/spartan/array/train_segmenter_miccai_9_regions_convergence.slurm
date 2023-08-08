@@ -31,7 +31,7 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-convergence-part-3"
+MODEL_NAME="segmenter-miccai-convergence-part-6"
 RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 #RANDOM_SEED=44
@@ -44,12 +44,13 @@ N_GPUS=1
 N_NODES=1
 N_SPLIT_CHANNELS=2
 N_WORKERS=8
-RESUME=False
+#RESUME=False
 RESUME_RUN=None
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_DYNAMIC_WEIGHTS=True
-#DYNAMIC_WEIGHTS_FACTOR=0.1
-#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=100
+#DYNAMIC_WEIGHTS_FACTOR=1
+#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=20
+#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2=5
 #DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[]",
 # Remove quotations from string passed via python script.
 DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS=$( echo $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS | tr -d '"' )
@@ -68,6 +69,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --ckpt_model $CKPT_MODEL \
     --dynamic_weights_factor $DYNAMIC_WEIGHTS_FACTOR \
     --dynamic_weights_convergence_delay $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY \
+    --dynamic_weights_convergence_delay_2 $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2 \
     --dynamic_weights_convergence_thresholds $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
