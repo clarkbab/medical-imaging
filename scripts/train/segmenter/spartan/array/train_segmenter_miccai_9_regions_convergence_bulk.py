@@ -1,10 +1,12 @@
 import subprocess
 
 factors = [1, 2, 5, 10, 20]
+factors = [20]
 delays = [20, 50, 100]
-delays_2 = [5, 5, 5]
-assert len(delays) == len(delays_2)
-random_seeds = [44]
+delays = [20]
+delays_2 = [5] * len(delays)
+random_seeds = [42, 43, 44]
+random_seeds = [42]
 # 'sbatch' needs quotations around value otherwise it will split on ','.
 cvg_thresholds = "\"[0.8,0.8,0.6,0.6,0.3,0.4,0.4,0.7,0.7]\""
 resume = False
