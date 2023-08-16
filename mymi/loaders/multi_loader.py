@@ -17,6 +17,8 @@ from torchio.transforms import Transform
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
+from .random_sampler import RandomSampler
+
 def collate_fn(batch) -> List[Tensor]:
     # Get spatial dimensions of batch.
     max_size = [-np.inf, -np.inf, -np.inf]
@@ -72,6 +74,7 @@ class MultiLoader:
         batch_size: int = 1,
         check_processed: bool = True,
         data_hook: Optional[Callable] = None,
+        epoch: int = 0,
         include_background: bool = False,
         load_data: bool = True,
         load_test_origin: bool = True,
@@ -80,7 +83,7 @@ class MultiLoader:
         n_train: Optional[int] = None,
         n_workers: int = 1,
         p_val: float = .2,
-        random_seed: int = 42,
+        random_seed: int = 0,
         region: PatientRegions = 'all',
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
@@ -253,7 +256,8 @@ class MultiLoader:
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
         train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_train)
-        train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
+        train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
+        train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, sampler=train_sampler)
 
         # Create validation loader.
         if include_background:

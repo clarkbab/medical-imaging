@@ -21,6 +21,7 @@ class DiceWithFocalLoss(nn.Module):
         label: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
         weights: Optional[torch.Tensor] = None,
+        reduce_channels: bool = True,
         reduction: Literal['mean', 'sum'] = 'mean') -> float:
         """
         returns: the DiceWithFocal loss.
@@ -53,6 +54,6 @@ class DiceWithFocalLoss(nn.Module):
                     raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         
         # Get hybrid loss.
-        loss = self.__dice(pred, label, mask=mask, weights=weights, reduction=reduction) + self.__lam * self.__focal(pred, label, mask=mask, weights=weights, reduction=reduction)
+        loss = self.__dice(pred, label, mask=mask, weights=weights, reduce_channels=reduce_channels, reduction=reduction) + self.__lam * self.__focal(pred, label, mask=mask, weights=weights, reduce_channels=reduce_channels, reduction=reduction)
 
         return loss

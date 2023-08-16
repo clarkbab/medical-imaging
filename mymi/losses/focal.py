@@ -16,6 +16,7 @@ class FocalLoss(nn.Module):
         label: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
         weights: Optional[torch.Tensor] = None,
+        reduce_channels: bool = True,
         reduction: Literal['mean', 'sum'] = 'mean',
         sc_channel: Optional[int] = None) -> float:
         """
@@ -126,14 +127,20 @@ class FocalLoss(nn.Module):
         if weights is not None:
             loss = weights * loss
 
-        # Reduce over batch and channel dimensions.
+        if reduce_channels:
+            # Reduce across batch and channel dimensions.
+            dim = (0, 1)
+        else:
+            # Reduce across batch dimension only.
+            dim = 0
+
         if reduction == 'mean':
-            loss = loss.mean()
+            loss = loss.mean(dim)
         elif reduction == 'sum':
-            loss = loss.sum()
+            loss = loss.sum(dim)
 
         # Normalise on number of voxels.
         assert label.shape[2] != 0
-        loss = (1 / label.shape[2] ) * loss
+        loss /= label.shape[2]
 
         return loss

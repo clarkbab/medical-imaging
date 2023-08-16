@@ -6,6 +6,7 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.tuner import Tuner
+import torch
 from typing import List, Optional, Union
 
 from mymi import config
@@ -27,10 +28,12 @@ def train_multi_segmenter(
     run_name: str,
     batch_size: int = 1,
     ckpt_model: bool = True,
-    dynamic_weights_factor: float = 1,
-    dynamic_weights_convergence_delay: int = 20,
-    dynamic_weights_convergence_delay_2: int = 5,
-    dynamic_weights_convergence_thresholds: List[float] = [],
+    complexity_weights_factor: float = 1,
+    complexity_weights_window: int = 5,
+    dw_cvg_delay_above: int = 20,
+    dw_cvg_delay_below: int = 5,
+    dw_cvg_thresholds: List[float] = [],
+    dw_factor: float = 1,
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
@@ -49,7 +52,7 @@ def train_multi_segmenter(
     n_split_channels: int = 2,
     p_val: float = 0.2,
     precision: Union[str, int] = 'bf16',
-    random_seed: float = 42,
+    random_seed: float = 0,
     resume: bool = False,
     resume_run: Optional[str] = None,
     resume_ckpt: str = 'last',
@@ -62,20 +65,22 @@ def train_multi_segmenter(
     thresh_low: Optional[float] = None,
     thresh_high: Optional[float] = None,
     use_augmentation: bool = True,
-    use_dynamic_weights: bool = False,
+    use_complexity_weights: bool = False,
+    use_downweighting: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
     use_stand: bool = False,
     use_thresh: bool = False,
-    use_weighting: bool = False,
+    use_weights: bool = False,
     weight_decay: float = 0,
-    weighting_scheme: Optional[int] = None) -> None:
+    weights: Optional[List[float]] = None,
+    weights_iv_factor: Optional[int] = None) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     regions = arg_to_list(region, str)
 
     # Allow for reproducible training runs.
-    seed_everything(random_seed, workers=True)
+    seed_everything(random_seed)
 
     # Get augmentation transforms.
     if use_augmentation:
@@ -92,715 +97,51 @@ def train_multi_segmenter(
     elif loss_fn == 'dice_with_focal':
         loss_fn = DiceWithFocalLoss(lam=lam)
 
-    # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+    # Calculate volume weights.
+    if use_weights and weights_iv_factor is not None:
+        assert weights is None
+        inv_volumes = np.array([
+            1.81605095e-05,
+            3.75567497e-05,
+            1.35979999e-04,
+            1.34588032e-04,
+            1.71684281e-03,
+            1.44678695e-03,
+            1.63991258e-03,
+            3.45656440e-05,
+            3.38292316e-05
+        ])
+        weights = list(inv_volumes ** (1 / weights_iv_factor))
 
-    # Create weighting scheme.
-    if use_weighting:
-        if weighting_scheme == '1a':
-            # Default (frequency) weighting.
-            weights = None
-            weights_schedule = None
-        elif weighting_scheme == '2a':
-            # Volume weighting for all epochs.
-            weights = [[
-                0,
-                0.0034936,
-                0.00722492,
-                0.02615894,
-                0.02589116,
-                0.33027497,
-                0.2783234,
-                0.31547564,
-                0.00664951,
-                0.00650785
-            ]]
-            weights_schedule = [0]
-        elif weighting_scheme == '2b':
-            # Volume weighting, and back to frequency after 2k epochs.
-            weights_1 = [
-                0,
-                0.0034936,
-                0.00722492,
-                0.02615894,
-                0.02589116,
-                0.33027497,
-                0.2783234,
-                0.31547564,
-                0.00664951,
-                0.00650785
-            ]
-            weights = [
-                weights_1,
-                None
-            ]
-            weights_schedule = [0, 2000]
-        elif weighting_scheme == '2c':
-            # Volume weighting, and back to frequency after 1k epochs.
-            weights_1 = [
-                0,
-                0.0034936,
-                0.00722492,
-                0.02615894,
-                0.02589116,
-                0.33027497,
-                0.2783234,
-                0.31547564,
-                0.00664951,
-                0.00650785
-            ]
-            weights = [
-                weights_1,
-                None
-            ]
-            weights_schedule = [0, 1000]
-        elif weighting_scheme == '3a':
-            # Bring OARs into play in groups based on volume.
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = 1 / 5
-            weight_2[Glnd_Submand_R_idx] = 1 / 5
-            weight_2[OpticChiasm_idx] = 1 / 5
-            weight_2[OpticNrv_L_idx] = 1 / 5
-            weight_2[OpticNrv_R_idx] = 1 / 5
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = 1 / 8
-            weight_3[Glnd_Submand_L_idx] = 1 / 8
-            weight_3[Glnd_Submand_R_idx] = 1 / 8
-            weight_3[OpticChiasm_idx] = 1 / 8
-            weight_3[OpticNrv_L_idx] = 1 / 8
-            weight_3[OpticNrv_R_idx] = 1 / 8
-            weight_3[Parotid_L_idx] = 1 / 8
-            weight_3[Parotid_R_idx] = 1 / 8
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = 1 / 9
-            weight_4[Brainstem_idx] = 1 / 9
-            weight_4[Glnd_Submand_L_idx] = 1 / 9
-            weight_4[Glnd_Submand_R_idx] = 1 / 9
-            weight_4[OpticChiasm_idx] = 1 / 9
-            weight_4[OpticNrv_L_idx] = 1 / 9
-            weight_4[OpticNrv_R_idx] = 1 / 9
-            weight_4[Parotid_L_idx] = 1 / 9
-            weight_4[Parotid_R_idx] = 1 / 9
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 1000, 2000, 3000, 4000]
-        elif weighting_scheme == '3b':
-            # Bring OARs into play in groups based on volume.
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = 1 / 5
-            weight_2[Glnd_Submand_R_idx] = 1 / 5
-            weight_2[OpticChiasm_idx] = 1 / 5
-            weight_2[OpticNrv_L_idx] = 1 / 5
-            weight_2[OpticNrv_R_idx] = 1 / 5
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = 1 / 8
-            weight_3[Glnd_Submand_L_idx] = 1 / 8
-            weight_3[Glnd_Submand_R_idx] = 1 / 8
-            weight_3[OpticChiasm_idx] = 1 / 8
-            weight_3[OpticNrv_L_idx] = 1 / 8
-            weight_3[OpticNrv_R_idx] = 1 / 8
-            weight_3[Parotid_L_idx] = 1 / 8
-            weight_3[Parotid_R_idx] = 1 / 8
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = 1 / 9
-            weight_4[Brainstem_idx] = 1 / 9
-            weight_4[Glnd_Submand_L_idx] = 1 / 9
-            weight_4[Glnd_Submand_R_idx] = 1 / 9
-            weight_4[OpticChiasm_idx] = 1 / 9
-            weight_4[OpticNrv_L_idx] = 1 / 9
-            weight_4[OpticNrv_R_idx] = 1 / 9
-            weight_4[Parotid_L_idx] = 1 / 9
-            weight_4[Parotid_R_idx] = 1 / 9
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 2000, 4000, 6000, 8000]
-        elif weighting_scheme == '4a':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.6
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 1000, 2000, 3000, 4000]
-        elif weighting_scheme == '4a-b':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.6
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 2000, 4000, 6000, 8000]
-        elif weighting_scheme == '4b':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.8
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 1000, 2000, 3000, 4000]
-        elif weighting_scheme == '4b-b':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.8
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 2000, 4000, 6000, 8000]
-        elif weighting_scheme == '4c':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.9
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 1000, 2000, 3000, 4000]
-        elif weighting_scheme == '4c-b':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.9
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 2000, 4000, 6000, 8000]
-        elif weighting_scheme == '4d':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.95
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 1000, 2000, 3000, 4000]
-        elif weighting_scheme == '4d-b':
-            # Bring OARs into play in groups and focus on recent OARs.
-            focus_weight = 0.95
-            Bone_Mandible_idx = 1
-            Brainstem_idx = 2
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add small OARs.
-            weight_1 = [0] * (len(regions) + 1)
-            weight_1[OpticChiasm_idx] = 1 / 3
-            weight_1[OpticNrv_L_idx] = 1 / 3
-            weight_1[OpticNrv_R_idx] = 1 / 3
-
-            # Add medium OARs.
-            weight_2 = [0] * (len(regions) + 1)
-            weight_2[Glnd_Submand_L_idx] = focus_weight / 2
-            weight_2[Glnd_Submand_R_idx] = focus_weight / 2
-            weight_2[OpticChiasm_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_L_idx] = (1 - focus_weight) / 3
-            weight_2[OpticNrv_R_idx] = (1 - focus_weight) / 3
-
-            # Add large OARs.
-            weight_3 = [0] * (len(regions) + 1)
-            weight_3[Brainstem_idx] = focus_weight / 3
-            weight_3[Parotid_L_idx] = focus_weight / 3
-            weight_3[Parotid_R_idx] = focus_weight / 3
-            weight_3[Glnd_Submand_L_idx] = (1 - focus_weight) / 5
-            weight_3[Glnd_Submand_R_idx] = (1 - focus_weight) / 5
-            weight_3[OpticChiasm_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_L_idx] = (1 - focus_weight) / 5
-            weight_3[OpticNrv_R_idx] = (1 - focus_weight) / 5
-
-            # Add Mandible.
-            weight_4 = [0] * (len(regions) + 1)
-            weight_4[Bone_Mandible_idx] = focus_weight
-            weight_4[Brainstem_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_L_idx] = (1 - focus_weight) / 8
-            weight_4[Parotid_R_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_L_idx] = (1 - focus_weight) / 8
-            weight_4[Glnd_Submand_R_idx] = (1 - focus_weight) / 8
-            weight_4[OpticChiasm_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_L_idx] = (1 - focus_weight) / 8
-            weight_4[OpticNrv_R_idx] = (1 - focus_weight) / 8
-            weights = [
-                weight_1,
-                weight_2,
-                weight_3,
-                weight_4,
-                None
-            ]
-            weights_schedule = [0, 2000, 4000, 6000, 8000]
-        elif weighting_scheme == '5a':
-            # Only bring small OARs in (for LR find).
-            OpticChiasm_idx = 5
-            OpticNrv_L_idx = 6
-            OpticNrv_R_idx = 7
-
-            # Add small OARs.
-            weight = [0] * (len(regions) + 1)
-            weight[OpticChiasm_idx] = 1 / 3
-            weight[OpticNrv_L_idx] = 1 / 3
-            weight[OpticNrv_R_idx] = 1 / 3
-            weights = [
-                weight
-            ]
-            weights_schedule = [0]
-        elif weighting_scheme == '5b':
-            # Only bring medium OARs in (for LR find).
-            Glnd_Submand_L_idx = 3
-            Glnd_Submand_R_idx = 4
-
-            # Add medium OARs.
-            weight = [0] * (len(regions) + 1)
-            weight[Glnd_Submand_L_idx] = 1 / 2
-            weight[Glnd_Submand_R_idx] = 1 / 2
-            weights = [
-                weight
-            ]
-            weights_schedule = [0]
-        elif weighting_scheme == '5c':
-            # Only bring large OARs in (for LR find).
-            Brainstem_idx = 2
-            Parotid_L_idx = 8
-            Parotid_R_idx = 9
-
-            # Add large OARs.
-            weight = [0] * (len(regions) + 1)
-            weight[Brainstem_idx] = 1 / 3
-            weight[Parotid_L_idx] = 1 / 3
-            weight[Parotid_R_idx] = 1 / 3
-            weights = [
-                weight
-            ]
-            weights_schedule = [0]
-        elif weighting_scheme == '5d':
-            # Only bring extra large OAR in (for LR find).
-            Bone_Mandible_idx = 1
-
-            # Add large OARs.
-            weight = [0] * (len(regions) + 1)
-            weight[Bone_Mandible_idx] = 1
-            weights = [
-                weight
-            ]
-            weights_schedule = [0]
-        elif weighting_scheme == '6a':
-            # LR=1e=3 to 1e-4 after 2k epochs.
-            use_lr_scheduler = True
-            lr_milestones = [2000]
-            weights = None
-            weights_schedule = None
+    # Get checkpoint path.
+    # Also get training epoch so that our random sampler knows which seed to use
+    # when shuffling training data for this epoch.
+    opt_kwargs = {}
+    if resume:
+        # Get checkpoint path.
+        if resume_run is not None:
+            ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
         else:
-            raise ValueError(f"Invalid weighting_scheme scheme: {weighting_scheme}.")
-    else:
-        weights = None
-        weights_schedule = None
+            ckpt_path = os.path.join(ckpts_path, f'{resume_ckpt}.ckpt')
+        opt_kwargs['ckpt_path'] = ckpt_path
 
-    # Validate weights.
-    if weights is not None:
-        assert len(weights) == len(weights_schedule)
-        for w, e in zip(weights, weights_schedule):
-            if w is not None and np.sum(w).round(decimals=3) != 1:
-                raise ValueError(f"Weights for epoch {e} don't sum to 1 (3dp).")
+        # Get training epoch.
+        ckpt = torch.load(ckpt_path, map_location=torch.device('cpu'))
+        epoch = ckpt['epoch'] + 1
+    else:
+        epoch = 0
+
+    # Create data loaders.
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, epoch=epoch, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
 
     # Create model.
     model = MultiSegmenter(
-        dynamic_weights_factor=dynamic_weights_factor,
-        dynamic_weights_convergence_delay=dynamic_weights_convergence_delay,
-        dynamic_weights_convergence_delay_2=dynamic_weights_convergence_delay_2,
-        dynamic_weights_convergence_thresholds=dynamic_weights_convergence_thresholds,
+        complexity_weights_factor=complexity_weights_factor,
+        complexity_weights_window=complexity_weights_window,
+        dw_factor=dw_factor,
+        dw_cvg_delay_above=dw_cvg_delay_above,
+        dw_cvg_delay_below=dw_cvg_delay_below,
+        dw_cvg_thresholds=dw_cvg_thresholds,
         loss=loss_fn,
         lr_init=lr_init,
         lr_milestones=lr_milestones,
@@ -808,12 +149,14 @@ def train_multi_segmenter(
         metrics=['dice'],
         n_gpus=n_gpus,
         n_split_channels=n_split_channels,
+        random_seed=random_seed,
         region=regions,
-        use_dynamic_weights=use_dynamic_weights,
+        use_complexity_weights=use_complexity_weights,
+        use_downweighting=use_downweighting,
         use_lr_scheduler=use_lr_scheduler,
+        use_weights=use_weights,
         weights=weights,
-        weight_decay=weight_decay,
-        weights_schedule=weights_schedule)
+        weight_decay=weight_decay)
 
     # Create logger.
     if use_logger:
@@ -844,15 +187,6 @@ def train_multi_segmenter(
             save_top_k=1))
     if logger:
         callbacks.append(LearningRateMonitor(logging_interval='epoch'))
-
-    # Add optional trainer args.
-    opt_kwargs = {}
-    if resume:
-        if resume_run is not None:
-            ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
-        else:
-            ckpt_path = os.path.join(ckpts_path, f'{resume_ckpt}.ckpt')
-        opt_kwargs['ckpt_path'] = ckpt_path
     
     # Perform training.
     trainer = Trainer(

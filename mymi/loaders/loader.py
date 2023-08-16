@@ -27,7 +27,7 @@ class Loader:
         n_folds: Optional[int] = 5, 
         n_train: Optional[int] = None,
         n_workers: int = 1,
-        random_seed: int = 42,
+        random_seed: int = 0,
         shuffle_train: bool = True,
         spacing: Optional[types.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,

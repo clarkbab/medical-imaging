@@ -1,6 +1,8 @@
 import numpy as np
 import os
 import pytorch_lightning as pl
+from pytorch_lightning import seed_everything
+import random
 import torch
 from torch import nn
 from torch.optim import Adam
@@ -25,71 +27,81 @@ LOG_ON_STEP = False
 class MultiSegmenter(pl.LightningModule):
     def __init__(
         self,
-        dynamic_weights_factor: float = 1,
-        dynamic_weights_convergence_delay: int = 20,
-        dynamic_weights_convergence_delay_2: int = 5,
-        dynamic_weights_convergence_thresholds: List[float] = [],
+        complexity_weights_factor: float = 1,
+        complexity_weights_window: int = 5,
+        dw_cvg_delay_above: int = 20,
+        dw_cvg_delay_below: int = 5,
+        dw_cvg_thresholds: List[float] = [],
+        dw_factor: float = 1,
         loss: nn.Module = DiceWithFocalLoss(),
         lr_init: float = 1e-3,
         metrics: List[str] = [],
         region: PatientRegions = None,
-        use_dynamic_weights: bool = False,
+        use_complexity_weights: bool = False,
+        use_downweighting: bool = False,
         use_lr_scheduler: bool = False,
+        use_weights: bool = False,
         lr_milestones: List[int] = None,
+        random_seed: float = 0,
         val_image_interval: int = 50,
         val_image_samples: Optional[List[PatientID]] = ['43', '44'],
         val_max_image_batches: Optional[int] = None,
         weight_decay: float = 0,
-        weights: Optional[List[Optional[List[float]]]] = None,
-        weights_schedule: Optional[List[int]] = None,
+        weights: Optional[List[float]] = None,
         **kwargs):
         super().__init__()
         assert region is not None
-        self.__dynamic_weights_convergence_delay = dynamic_weights_convergence_delay
-        self.__dynamic_weights_convergence_delay_2 = dynamic_weights_convergence_delay_2
-        self.__dynamic_weights_convergence_thresholds = dynamic_weights_convergence_thresholds
-        self.__dynamic_weights_factor = dynamic_weights_factor
-        self.__dynamic_weights_batch_mean_dices = {}
+        self.__complexity_weights_batch_losses = {}
+        self.__complexity_weights_epoch_mean_losses = {}
+        self.__complexity_weights_rolling_losses = {}
+        self.__complexity_weights_factor = complexity_weights_factor
+        self.__complexity_weights_window = complexity_weights_window
+        self.__dw_batch_mean_dices = {}
+        self.__dw_cvg_delay_above = dw_cvg_delay_above
+        self.__dw_cvg_delay_below = dw_cvg_delay_below
+        self.__dw_cvg_thresholds = dw_cvg_thresholds
+        self.__dw_factor = dw_factor
         self.__loss = loss
         self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__name = None
         self.__metrics = metrics
+        self.__random_seed = random_seed
         self.__regions = arg_to_list(region, str)
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
-        self.__use_dynamic_weights = use_dynamic_weights
+        self.__use_complexity_weights = use_complexity_weights
+        self.__use_downweighting = use_downweighting
         self.__use_lr_scheduler = use_lr_scheduler
+        self.__use_weights = use_weights
         self.__lr_milestones = lr_milestones
         self.__val_image_interval = val_image_interval
         self.__val_image_samples = val_image_samples
         self.__val_max_image_batches = val_max_image_batches
         self.__weights = weights
         self.__weight_decay = weight_decay
-        self.__weights_schedule = weights_schedule
 
-        # Handle dynamic weighting.
-        if self.__use_dynamic_weights:
-            logging.info(f"Using dynamic weights with factor={self.__dynamic_weights_factor}, thresholds={self.__dynamic_weights_convergence_thresholds}, and delay={self.__dynamic_weights_convergence_delay}.")
-            if len(dynamic_weights_convergence_thresholds) != len(self.__regions):
-                raise ValueError(f"Expected convergence thresholds '{dynamic_weights_convergence_thresholds}' (len={len(dynamic_weights_convergence_thresholds)}) to have same length as regions '{self.__regions}' (len={len(self.__regions)}).")
-            self.__dynamic_weights_convergence_states = np.zeros(len(self.__regions), dtype=bool)
-            self.__dynamic_weights_above_threshold_epochs = np.empty(len(self.__regions))
-            self.__dynamic_weights_above_threshold_epochs[:] = np.nan
-            self.__dynamic_weights_below_threshold_epochs = np.empty(len(self.__regions))
-            self.__dynamic_weights_below_threshold_epochs[:] = np.nan
+        # Handle static weighting.
+        if self.__use_weights:
+            if len(self.__weights) != len(self.__regions):
+                raise ValueError(f"Expected static weights '{self.__weights}' (len={len(self.__weights)}) to have same length as regions '{self.__regions}' (len={len(self.__regions)}).")
+            logging.info(f"Using static weights '{self.__weights}'.")
+
+        # Handle down-weighting.
+        if self.__use_downweighting:
+            if len(self.__dw_cvg_thresholds) != len(self.__regions):
+                raise ValueError(f"Expected convergence thresholds '{self.__dw_cvg_thresholds}' (len={len(self.__dw_cvg_thresholds)}) to have same length as regions '{self.__regions}' (len={len(self.__regions)}).")
+            logging.info(f"Using down-weighting with factor={self.__dw_factor}, thresholds={self.__dw_cvg_thresholds}, and delay=({self.__dw_cvg_delay_above},{self.__dw_cvg_delay_below}).")
+
+            self.__dw_cvg_states = np.zeros(len(self.__regions), dtype=bool)
+            self.__dw_cvg_epochs_above = np.empty(len(self.__regions))
+            self.__dw_cvg_epochs_above[:] = np.nan
+            self.__dw_cvg_epochs_below = np.empty(len(self.__regions))
+            self.__dw_cvg_epochs_below[:] = np.nan
 
         # Create channel -> region map.
         self.__channel_region_map = { 0: 'background' }
         for i, region in enumerate(self.__regions):
             self.__channel_region_map[i + 1] = region 
-
-        # Check weights and weights schedule.
-        if self.__weights is not None:
-            assert self.__weights_schedule is not None
-            if len(self.__weights) != len(self.__weights_schedule):
-                raise ValueError(f"Weights ({self.__weights}) and weights schedule ({self.__weights_schedule}) must have same length.")
-            if list(sorted(self.__weights_schedule)) != self.__weights_schedule:
-                raise ValueError(f"Weights schedule should be in ascending order. Got '{self.__weights_schedule}'.")
 
     @property
     def name(self) -> Optional[Tuple[str, str, str]]:
@@ -158,51 +170,97 @@ class MultiSegmenter(pl.LightningModule):
         x: torch.Tensor) -> torch.Tensor:
         return self.__network(x)
 
-    def training_step(self, batch, _):
+    def load_state_dict(self, state_dict, *args, **kwargs):
+        # Load 'down-weighting' state.
+        dw_state = state_dict.pop('down-weighting')
+        self.__dw_cvg_epochs_above = dw_state['cvg-epochs-above']
+        self.__dw_cvg_epochs_below = dw_state['cvg-epochs-below']
+        self.__dw_cvg_states = dw_state['cvg-states']
+
+        # Load random number generator state.
+        rng_state = state_dict.pop('rng')
+        np.random.set_state(rng_state['numpy'])
+        random.setstate(rng_state['python'])
+        torch.random.set_rng_state(rng_state['torch'])
+        torch.cuda.random.set_rng_state(rng_state['torch-cuda'])
+
+        super().load_state_dict(state_dict, *args, **kwargs)
+
+    def state_dict(self, *args, **kwargs):
+        state_dict = super().state_dict(*args, **kwargs)
+
+        # Add 'down-weighting' state.
+        state_dict['down-weighting'] = {
+            'cvg-epochs-above': self.__dw_cvg_epochs_above,
+            'cvg-epochs-below': self.__dw_cvg_epochs_below,
+            'cvg-states': self.__dw_cvg_states
+        } 
+
+        # Add random number generator state.
+        state_dict['rng'] = {
+            'numpy': np.random.get_state(),
+            'python': random.getstate(),
+            'torch': torch.random.get_rng_state(),
+            'torch-cuda': torch.cuda.random.get_rng_state()
+        }
+
+        return state_dict
+
+    def training_step(self, batch, batch_idx):
+        # Set RNG at start of every training epoch.
+        if batch_idx == 0:
+            seed = self.__random_seed + self.current_epoch
+            print(f"setting model seed {seed}")
+            seed_everything(seed)
+
         # Forward pass.
         desc, x, y, mask, weights = batch
-        n_batch_items = len(desc)
+        if batch_idx < 5: 
+            logging.info(f"Training... (epoch={self.current_epoch},batch={batch_idx},samples={desc})")
 
-        # Overwrite loader weights if desired.
-        # E.g:
-        #   schedule = [0, 1000, 2000]
-        #   weights = [
-        #       [0, 1],
-        #       [0, 0.8],
-        #       None
-        #   ]
-        #
-        # This will weight the second class for first 2k epochs, then apply loader weighting.
-        if self.__weights is not None:
-            start_epochs = self.__weights_schedule
-            end_epochs = self.__weights_schedule[1:] + [None]
-            for schedule_weights, start_epoch, end_epoch in zip(self.__weights, start_epochs, end_epochs):
-                if self.current_epoch >= start_epoch and (end_epoch is None or self.current_epoch < end_epoch):
-                    if schedule_weights is not None:
-                        weights = torch.Tensor([schedule_weights] * n_batch_items).to(x.device)
+        batch_size = len(desc)
 
-        # Apply dynamic weighting.
-        if self.__use_dynamic_weights:
-            # Apply volume-based up-weighting if OAR hasn't converged.
-            volume_weights = [
-                1,
-                2.06804494,
-                7.48767535,
-                7.41102734,
-                94.53714972,
-                79.66664996,
-                90.30102293,
-                1.9033411,
-                1.86279089
-            ]
+        # Apply static weights.
+        if self.__use_weights:
+            # Chain weights.
             weights = weights[0].cpu()
-            weights = [self.__dynamic_weights_factor * volume_weights[i - 1] * w if i != 0 and not self.__dynamic_weights_convergence_states[i - 1] else w for i, w in enumerate(weights)]
 
-            # Normalise weights.
-            weights = list(np.array(weights) / np.sum(weights))
-            weights = torch.Tensor([weights] * n_batch_items).to(x.device)
+            # Apply static weighting.
+            weights = [self.__weights[i - 1] * w if i != 0 else w for i, w in enumerate(weights)]
+            weights = torch.Tensor([weights] * batch_size).to(x.device)
 
-        # Log weights. First batch only.
+        # Apply down-weighting.
+        if self.__use_downweighting:
+            # Chain weights.
+            weights = weights[0].cpu()
+
+            # Apply down-weighting.
+            weights = [(1 / (self.__dw_factor ** 2)) * w if i != 0 and self.__dw_cvg_states[i - 1] else w for i, w in enumerate(weights)]
+            weights = torch.Tensor([weights] * batch_size).to(x.device)
+
+        # Apply complexity weighting.
+        if self.__use_complexity_weights:
+            # Calculate distance from 'loss_min' per region.
+            loss_min = -1
+            rlosses = []
+            for region in self.__regions:
+                rloss = self.__complexity_weights_rolling_losses[region]
+                rlosses.append(rloss)
+            rlosses = np.array(rlosses)
+            weights = rlosses - loss_min
+
+            # Apply factor and normalise.
+            weights = weights ** self.__complexity_weights_factor
+            weights = list(weights / np.sum(weights))
+            weights = [0] + weights
+            weights = torch.Tensor([weights] * batch_size).to(x.device)
+
+        # Normalise weights. Do this last as we might combine static and dynamic weights.
+        weights = weights[0].cpu()
+        weights = list(weights / weights.sum())
+        weights = torch.Tensor([weights] * batch_size).to(x.device)
+
+        # Log weights. First batch item only.
         for i, weight in enumerate(weights[0]):
             region = self.__channel_region_map[i]
             self.log(f'train/weight/{region}', weight, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
@@ -249,7 +307,19 @@ class MultiSegmenter(pl.LightningModule):
         # Forward pass.
         descs, x, y, mask, weights = batch
         y_hat = self.forward(x)
-        loss = self.__loss(y_hat, y, mask, weights)
+        if self.__use_complexity_weights:
+            # Store loss per-region.
+            loss = self.__loss(y_hat, y, mask, weights, reduce_channels=False)
+            for region, loss in zip(self.__regions, loss[1:]):
+                if region not in self.__complexity_weights_batch_losses:
+                    self.__complexity_weights_batch_losses[region] = [loss.item()]
+                else:
+                    self.__complexity_weights_batch_losses[region] += [loss.item()]
+
+            loss = loss.mean()
+        else:
+            loss = self.__loss(y_hat, y, mask, weights)
+
         self.log('val/loss', loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
         # Convert pred to binary mask.
@@ -286,12 +356,12 @@ class MultiSegmenter(pl.LightningModule):
                 # Log to wandb.
                 self.log(f'val/dice/{region}', batch_mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
-                # Save batch mean values to calculate dynamic weighting after validation loop.
-                if self.__use_dynamic_weights:
-                    if region not in self.__dynamic_weights_batch_mean_dices:
-                        self.__dynamic_weights_batch_mean_dices[region] = [batch_mean_dice]
+                # Save batch mean values for down-weighting convergence calculations.
+                if self.__use_downweighting:
+                    if region in self.__dw_batch_mean_dices:
+                        self.__dw_batch_mean_dices[region] += [batch_mean_dice]
                     else:
-                        self.__dynamic_weights_batch_mean_dices[region] += [batch_mean_dice]
+                        self.__dw_batch_mean_dices[region] = [batch_mean_dice]
                         
         # Log prediction images.
         if self.logger:
@@ -352,7 +422,7 @@ class MultiSegmenter(pl.LightningModule):
                             self.logger.log_image(key=title, images=[image], step=self.global_step)
 
     def on_validation_epoch_end(self):
-        if self.__use_dynamic_weights:
+        if self.__use_complexity_weights:
             for i in range(self.__n_output_channels):
                 # Skip 'background' channel.
                 if i == 0:
@@ -360,64 +430,96 @@ class MultiSegmenter(pl.LightningModule):
 
                 # Calculate mean value.
                 region = self.__channel_region_map[i]
-                if region not in self.__dynamic_weights_batch_mean_dices:
+                if region not in self.__complexity_weights_batch_losses:
                     # Skip if region wasn't present in validation samples.
-                    logging.info(f"Skipping dynamic weights for region '{region}'. Wasn't present in validation samples.")
+                    logging.info(f"Skipping complexity weights for region '{region}'. Wasn't present in validation samples.")
                     continue
-                epoch_mean_dice = np.mean(self.__dynamic_weights_batch_mean_dices[region])
-                self.__dynamic_weights_batch_mean_dices[region] = []
-                self.log(f'train/dw-dice/{region}', epoch_mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+                epoch_mean_loss = np.mean(self.__complexity_weights_batch_losses[region])
+                if region in self.__complexity_weights_epoch_mean_losses:
+                    self.__complexity_weights_epoch_mean_losses[region] += [epoch_mean_loss]
+                else:
+                    self.__complexity_weights_epoch_mean_losses[region] = [epoch_mean_loss]
+                self.log(f'train/cw-loss/{region}', epoch_mean_loss, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+                # Calculate rolling loss.
+                epoch_mean_losses = self.__complexity_weights_epoch_mean_losses[region]
+                if len(epoch_mean_losses) < self.__complexity_weights_window:
+                    self.__complexity_weights_rolling_losses[region] = np.mean(epoch_mean_losses)
+                else:
+                    self.__complexity_weights_rolling_losses[region] = np.mean(epoch_mean_losses[-self.__complexity_weights_window:])
+                self.log(f'train/cw-rolling-loss/{region}', self.__complexity_weights_rolling_losses[region], on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+            # Reset batch mean losses.
+            self.__complexity_weights_batch_losses = {}
+
+        if self.__use_downweighting:
+            for i in range(self.__n_output_channels):
+                # Skip 'background' channel.
+                if i == 0:
+                    continue
+
+                # Calculate mean value.
+                region = self.__channel_region_map[i]
+                if region not in self.__dw_batch_mean_dices:
+                    # Skip if region wasn't present in validation samples.
+                    logging.info(f"Skipping down-weighting for region '{region}'. Wasn't present in validation samples.")
+                    continue
+                epoch_mean_dice = np.mean(self.__dw_batch_mean_dices[region])
+                self.log(f'val/dw/dice/{region}', epoch_mean_dice, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
                 # Check OAR convergence state.
-                converged = self.__dynamic_weights_convergence_states[i - 1]
-                cvg_thresh = self.__dynamic_weights_convergence_thresholds[i - 1]
+                converged = self.__dw_cvg_states[i - 1]
+                cvg_thresh = self.__dw_cvg_thresholds[i - 1]
                 if not converged:
                     # Check if over convergence threshold.
                     if epoch_mean_dice >= cvg_thresh:
                         # Get epoch when first went over threshold.
-                        above_thresh_epoch = self.__dynamic_weights_above_threshold_epochs[i - 1] 
-                        if np.isnan(above_thresh_epoch):
-                            self.__dynamic_weights_above_threshold_epochs[i - 1] = self.current_epoch
-                        above_thresh_epoch = self.__dynamic_weights_above_threshold_epochs[i - 1] 
+                        epoch_above = self.__dw_cvg_epochs_above[i - 1] 
+                        if np.isnan(epoch_above):
+                            self.__dw_cvg_epochs_above[i - 1] = self.current_epoch
+                        epoch_above = self.__dw_cvg_epochs_above[i - 1] 
 
                         # Check if region has converged.
-                        above_thresh_epochs = self.current_epoch - above_thresh_epoch + 1
-                        if above_thresh_epochs >= self.__dynamic_weights_convergence_delay:
-                            self.__dynamic_weights_convergence_states[i - 1] = True
-                            self.__dynamic_weights_below_threshold_epochs[i - 1] = np.nan
+                        epochs_above = self.current_epoch - epoch_above + 1
+                        if epochs_above >= self.__dw_cvg_delay_above:
+                            self.__dw_cvg_states[i - 1] = True
+                            self.__dw_cvg_epochs_below[i - 1] = np.nan
                     else:
-                        self.__dynamic_weights_above_threshold_epochs[i - 1] = np.nan
+                        self.__dw_cvg_epochs_above[i - 1] = np.nan
                 else:
                     if epoch_mean_dice < cvg_thresh:
                         # Get epoch when first went under threshold.
-                        below_thresh_epoch = self.__dynamic_weights_below_threshold_epochs[i - 1] 
-                        if np.isnan(below_thresh_epoch):
-                            self.__dynamic_weights_below_threshold_epochs[i - 1] = self.current_epoch
-                        below_thresh_epoch = self.__dynamic_weights_below_threshold_epochs[i - 1] 
+                        epoch_below = self.__dw_cvg_epochs_below[i - 1] 
+                        if np.isnan(epoch_below):
+                            self.__dw_cvg_epochs_below[i - 1] = self.current_epoch
+                        epoch_below = self.__dw_cvg_epochs_below[i - 1] 
 
                         # Check if metric has unconverged.
-                        below_thresh_epochs = self.current_epoch - below_thresh_epoch + 1
-                        if below_thresh_epochs >= self.__dynamic_weights_convergence_delay_2:
-                            self.__dynamic_weights_convergence_states[i - 1] = False
-                            self.__dynamic_weights_above_threshold_epochs[i - 1] = np.nan
+                        epochs_below = self.current_epoch - epoch_below + 1
+                        if epochs_below >= self.__dw_cvg_delay_below:
+                            self.__dw_cvg_states[i - 1] = False
+                            self.__dw_cvg_epochs_above[i - 1] = np.nan
                     else:
                         # Metric may have crossed back over threshold.
-                        self.__dynamic_weights_below_threshold_epochs[i - 1] = np.nan
+                        self.__dw_cvg_epochs_below[i - 1] = np.nan
 
                 # Log convergence state.
-                cvg = self.__dynamic_weights_convergence_states[i - 1]
-                self.log(f'train/convergence/{region}', float(cvg), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
-                thresh = self.__dynamic_weights_convergence_thresholds[i - 1]
-                self.log(f'train/convergence/thresholds/{region}', thresh, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
-                epoch = self.__dynamic_weights_above_threshold_epochs[i - 1]
-                if np.isnan(epoch):
-                    num_epochs = 0
+                cvg = self.__dw_cvg_states[i - 1]
+                self.log(f'val/dw/cvg/{region}', float(cvg), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+                thresh = self.__dw_cvg_thresholds[i - 1]
+                self.log(f'val/dw/cvg/thresholds/{region}', thresh, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+                epoch_above = self.__dw_cvg_epochs_above[i - 1]
+                if np.isnan(epoch_above):
+                    epochs_above = 0
                 else:
-                    num_epochs = self.current_epoch - epoch + 1
-                self.log(f'train/convergence/epochs-above/{region}', float(num_epochs), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
-                epoch = self.__dynamic_weights_below_threshold_epochs[i - 1]
-                if np.isnan(epoch):
-                    num_epochs = 0
+                    epochs_above = self.current_epoch - epoch_above + 1
+                self.log(f'val/dw/cvg/epochs-above/{region}', float(epochs_above), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+                epoch_below = self.__dw_cvg_epochs_below[i - 1]
+                if np.isnan(epoch_below):
+                    epochs_below = 0
                 else:
-                    num_epochs = self.current_epoch - epoch + 1
-                self.log(f'train/convergence/epochs-below/{region}', float(num_epochs), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+                    epochs_below = self.current_epoch - epoch_below + 1
+                self.log(f'val/dw/cvg/epochs-below/{region}', float(epochs_below), on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+            # Reset batch means.
+            self.__dw_batch_mean_dices = {}

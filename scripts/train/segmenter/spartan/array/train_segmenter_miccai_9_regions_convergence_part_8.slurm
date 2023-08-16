@@ -31,11 +31,14 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-convergence-part-6"
+MODEL_NAME="segmenter-miccai-convergence-part-8"
 RESOLUTION="444"
 DATASET="MICCAI-2015-$RESOLUTION"
 #RANDOM_SEED=44
 #RUN_NAME="9-regions-$SHORT_REGION-scheme-$WEIGHTING_SCHEME-seed-$RANDOM_SEED"
+USE_COMPLEXITY_WEIGHTS=True
+#COMPLEXITY_WEIGHTS_FACTOR=1
+COMPLEXITY_WEIGHTS_WINDOW=5
 BATCH_SIZE=1
 CKPT_MODEL=True
 LR_INIT=1e-3
@@ -47,18 +50,17 @@ N_WORKERS=8
 #RESUME=False
 RESUME_RUN=None
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-USE_DYNAMIC_WEIGHTS=True
-#DYNAMIC_WEIGHTS_FACTOR=1
-#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=20
-#DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2=5
-#DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS="[]",
+USE_DYNAMIC_WEIGHTS=False
+DYNAMIC_WEIGHTS_CONVERGENCE_DELAY=20
+DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2=5
 # Remove quotations from string passed via python script.
 DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS=$( echo $DYNAMIC_WEIGHTS_CONVERGENCE_THRESHOLDS | tr -d '"' )
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
 USE_LR_SCHEDULER=False
 USE_WEIGHTING=False
-#WEIGHTING_SCHEME='4c'
+WEIGHTING_SCHEME='2d'
+#WEIGHTING_FACTOR=1
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -67,6 +69,8 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
+    --complexity_weights_factor $COMPLEXITY_WEIGHTS_FACTOR \
+    --complexity_weights_window $COMPLEXITY_WEIGHTS_WINDOW \
     --dynamic_weights_factor $DYNAMIC_WEIGHTS_FACTOR \
     --dynamic_weights_convergence_delay $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY \
     --dynamic_weights_convergence_delay_2 $DYNAMIC_WEIGHTS_CONVERGENCE_DELAY_2 \
@@ -83,9 +87,11 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
+    --use_complexity_weights $USE_COMPLEXITY_WEIGHTS \
     --use_dynamic_weights $USE_DYNAMIC_WEIGHTS \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
     --use_lr_scheduler $USE_LR_SCHEDULER \
     --use_weighting $USE_WEIGHTING \
+    --weighting_factor $WEIGHTING_FACTOR \
     --weighting_scheme $WEIGHTING_SCHEME
