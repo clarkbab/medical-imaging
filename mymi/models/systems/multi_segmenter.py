@@ -177,12 +177,12 @@ class MultiSegmenter(pl.LightningModule):
         self.__dw_cvg_epochs_below = dw_state['cvg-epochs-below']
         self.__dw_cvg_states = dw_state['cvg-states']
 
-        # Load random number generator state.
+        # # Load random number generator state.
         rng_state = state_dict.pop('rng')
-        np.random.set_state(rng_state['numpy'])
-        random.setstate(rng_state['python'])
-        torch.random.set_rng_state(rng_state['torch'])
-        torch.cuda.random.set_rng_state(rng_state['torch-cuda'])
+        # np.random.set_state(rng_state['numpy'])
+        # random.setstate(rng_state['python'])
+        # torch.random.set_rng_state(rng_state['torch'])
+        # torch.cuda.random.set_rng_state(rng_state['torch-cuda'])
 
         super().load_state_dict(state_dict, *args, **kwargs)
 
@@ -207,16 +207,11 @@ class MultiSegmenter(pl.LightningModule):
         return state_dict
 
     def training_step(self, batch, batch_idx):
-        # Set RNG at start of every training epoch.
-        if batch_idx == 0:
-            seed = self.__random_seed + self.current_epoch
-            print(f"setting model seed {seed}")
-            seed_everything(seed)
-
         # Forward pass.
         desc, x, y, mask, weights = batch
         if batch_idx < 5: 
-            logging.info(f"Training... (epoch={self.current_epoch},batch={batch_idx},samples={desc})")
+            pass
+            # logging.info(f"Training... (epoch={self.current_epoch},batch={batch_idx},samples={desc})")
 
         batch_size = len(desc)
 
@@ -264,6 +259,9 @@ class MultiSegmenter(pl.LightningModule):
         for i, weight in enumerate(weights[0]):
             region = self.__channel_region_map[i]
             self.log(f'train/weight/{region}', weight, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
+
+        if batch_idx < 3:
+            logging.info(f"Forward pass (epoch={self.current_epoch},batch={batch_idx},desc={desc},x_mean={x.mean()},mask={mask.type(torch.float).mean()},weights={weights[0].mean()})")
 
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)

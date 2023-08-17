@@ -79,8 +79,8 @@ def train_multi_segmenter(
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     regions = arg_to_list(region, str)
 
-    # Allow for reproducible training runs.
-    seed_everything(random_seed)
+    # Ensure model parameter initialisation is deterministic.
+    seed_everything(random_seed, workers=True)
 
     # Get augmentation transforms.
     if use_augmentation:

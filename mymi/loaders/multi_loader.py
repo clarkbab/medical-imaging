@@ -1,5 +1,7 @@
 from itertools import chain
 import numpy as np
+import os
+from pytorch_lightning import seed_everything
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
@@ -255,9 +257,14 @@ class MultiLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_train)
-        train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
-        train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, sampler=train_sampler)
+        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, random_seed=random_seed, region=regions, spacing=spacing, transform=transform_train)
+        if shuffle_train:
+            shuffle = None
+            train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
+        else:
+            shuffle = False
+            train_sampler = None
+        train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, sampler=train_sampler, shuffle=shuffle)
 
         # Create validation loader.
         if include_background:
@@ -298,6 +305,7 @@ class TrainingSet(Dataset):
         data_hook: Optional[Callable] = None,
         include_background: bool = False,
         load_data: bool = True,
+        random_seed: float = 0,
         region: PatientRegions = 'all',
         spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None):
@@ -305,6 +313,7 @@ class TrainingSet(Dataset):
         self.__data_hook = data_hook
         self.__include_background = include_background
         self.__load_data = load_data
+        self.__random_seed = random_seed
         self.__regions = region_to_list(region)
         self.__spacing = spacing
         self.__transform = transform
@@ -355,6 +364,9 @@ class TrainingSet(Dataset):
 
         logging.info(f"Using class weights '{class_weights}'.")
         self.__class_weights = class_weights
+
+        # Count iterations for reproducibility.
+        self.__n_iter = 0
 
     def __len__(self):
         return self.__n_samples
@@ -417,6 +429,9 @@ class TrainingSet(Dataset):
             })
 
             # Transform the subject.
+            # seed = self.__random_seed + index
+            # print(f"(pid={os.getpid()},index={index}) seeding transform {seed}")
+            # seed_everything(seed)   # Ensure reproducibility when resuming training.
             output = self.__transform(subject)
 
             # Remove 'channel' dimension.
@@ -429,6 +444,9 @@ class TrainingSet(Dataset):
 
         # Add channel dimension - expected by pytorch.
         input = np.expand_dims(input, 0)
+
+        # Increment counter.
+        self.__n_iter += 1
 
         return desc, input, label, mask, self.__class_weights
     

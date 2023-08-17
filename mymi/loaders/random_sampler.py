@@ -15,11 +15,10 @@ class RandomSampler(Sampler):
 
     def __iter__(self):
         # Create random number generator.
-        # Seed is based on 'random_seed' and starting epoch - this allows
-        # us to create deterministic training runs, even when training is resumed
-        # following a crash.
+        # Seed is based on 'random_seed' and 'epoch'. This allows us to create data loading
+        # that is deterministic for a particular random seed, even if we resume training following
+        # a crash due to time limit or error.
         seed = self.__random_seed + self.__epoch
-        print(f"setting random seed {seed}")
         generator = torch.Generator()
         generator.manual_seed(seed)
         
