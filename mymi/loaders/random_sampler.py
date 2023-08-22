@@ -15,9 +15,8 @@ class RandomSampler(Sampler):
 
     def __iter__(self):
         # Create random number generator.
-        # Seed is based on 'random_seed' and 'epoch'. This allows us to create data loading
-        # that is deterministic for a particular random seed, even if we resume training following
-        # a crash due to time limit or error.
+        # Seed is based on both 'random_seed' and 'epoch'. This allows for deterministic sampling
+        # order for a particular 'random_seed', even if training is resumed from a checkpoint.
         seed = self.__random_seed + self.__epoch
         generator = torch.Generator()
         generator.manual_seed(seed)

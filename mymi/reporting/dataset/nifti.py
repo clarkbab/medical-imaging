@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from pandas import DataFrame
 from scipy.ndimage.measurements import label as label_objects
 import torch
 from tqdm import tqdm
@@ -25,7 +26,7 @@ from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_overlap_summary(
     dataset: str,
-    region: str) -> pd.DataFrame:
+    region: str) -> DataFrame:
     # List patients.
     set = NIFTIDataset(dataset)
     pat_ids = set.list_patients(labels='all', region=region)
@@ -36,7 +37,7 @@ def get_region_overlap_summary(
         'region': str,
         'n-overlap': int
     }
-    df = pd.DataFrame(columns=cols.keys())
+    df = DataFrame(columns=cols.keys())
 
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
@@ -67,7 +68,7 @@ def get_region_overlap_summary(
 
 def get_region_summary(
     dataset: str,
-    region: str) -> pd.DataFrame:
+    region: str) -> DataFrame:
     # List patients.
     set = NIFTIDataset(dataset)
     pats = set.list_patients(labels='all', region=region)
@@ -78,7 +79,7 @@ def get_region_summary(
         'metric': str,
         'value': float
     }
-    df = pd.DataFrame(columns=cols.keys())
+    df = DataFrame(columns=cols.keys())
 
     for pat in tqdm(pats):
         spacing = set.patient(pat).ct_spacing
@@ -154,6 +155,13 @@ def get_region_summary(
 
     return df
 
+def create_patient_regions_report(dataset: str) -> None:
+    pr_df = get_patient_regions(dataset)
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pr_df.to_csv(filepath, index=False)
+
 def create_region_overlap_summary(
     dataset: str,
     region: str) -> None:
@@ -170,11 +178,15 @@ def create_region_overlap_summary(
 
 def create_region_summary(
     dataset: str,
-    region: PatientRegions = 'all') -> None:
+    region: Optional[PatientRegions] = None) -> None:
     logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
-    regions = region_to_list(region)
+    regions = arg_to_list(region, str)
 
+    # Use all regions if 'regions=None'.
     set = NIFTIDataset(dataset)
+    if regions is None:
+        regions = set.list_regions()
+
     for region in tqdm(regions):
         # Check if there are patients with this region.
         n_pats = len(set.list_patients(labels='all', region=region))
@@ -191,8 +203,48 @@ def create_region_summary(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
+def get_patient_regions(dataset: str) -> DataFrame:
+    # List patients.
+    set = NIFTIDataset(dataset)
+    pat_ids = set.list_patients()
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str
+    }
+    df = DataFrame(columns=cols.keys())
+
+    # Add rows.
+    for pat_id in tqdm(pat_ids):
+        pat_regions = set.patient(pat_id).list_regions()
+        for pat_region in pat_regions:
+            data = {
+                'patient-id': pat_id,
+                'region': pat_region
+            }
+            df = append_row(df, data)
+
+    return df
+
+def load_patient_regions_report(
+    dataset: str,
+    exists_only: bool = False) -> Union[DataFrame, bool]:
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+        else:
+            return pd.read_csv(filepath)
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
+
 def _get_outlier_cols_func(
-    lim_df: pd.DataFrame) -> Callable[[pd.Series], Dict]:
+    lim_df: DataFrame) -> Callable[[pd.Series], Dict]:
     # Create function to operate on row of 'region summary' table.
     def _outlier_cols(row: pd.Series) -> Dict:
         data = {}
@@ -227,8 +279,8 @@ def _get_outlier_cols_func(
     return _outlier_cols
 
 def add_region_summary_outliers(
-    df: pd.DataFrame,
-    columns: List[str]) -> pd.DataFrame:
+    df: DataFrame,
+    columns: List[str]) -> DataFrame:
 
     # Get outlier limits.
     q1 = df.quantile(0.25, numeric_only=True)[columns].rename('q1')
@@ -277,13 +329,17 @@ def load_region_overlap_summary(
 def load_region_summary(
     dataset: str,
     labels: Literal['included', 'excluded', 'all'] = 'all',
-    region: PatientRegions = 'all',
+    region: Optional[PatientRegions] = None,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
-    regions = region_to_list(region)
+    regions = arg_to_list(region, str)
+
+    # Get regions if 'None'.
+    set = NIFTIDataset(dataset)
+    if regions is None:
+        regions = set.list_regions()
 
     # Load summary.
     dfs = []
-    set = NIFTIDataset(dataset)
     for region in regions:
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
         if not os.path.exists(filepath):

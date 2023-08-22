@@ -112,24 +112,6 @@ class DICOMDataset(Dataset):
         id: PatientID) -> bool:
         return id in self.list_patients()
 
-    # Copied from 'mymi/reporting/dataset/dicom.py' to avoid circular dependency.
-    def __load_patient_regions_report(
-        self,
-        exists_only: bool = False,
-        use_mapping: bool = True) -> None:
-        filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
-        filepath = os.path.join(self.__path, 'reports', filename)
-        if os.path.exists(filepath):
-            if exists_only:
-                return True
-            else:
-                return read_csv(filepath)
-        else:
-            if exists_only:
-                return False
-            else:
-                raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
-
     def list_patients(
         self,
         region: Optional[PatientRegions] = None,
@@ -139,14 +121,12 @@ class DICOMDataset(Dataset):
         regions = arg_to_list(region, str)
 
         # Use patient regions report to accelerate 'list_patients' if filtering on regions.
-        if region is not None:
-            if use_patient_regions_report:
-                if self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
-                    logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
-                    df = self.__load_patient_regions_report(use_mapping=use_mapping)
-                    df = df[df['region'].isin(regions)]
-                    pat_ids = list(sorted(df['patient-id'].unique()))
-                    return pat_ids
+        if region is not None and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
+            logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
+            df = self.__load_patient_regions_report(use_mapping=use_mapping)
+            df = df[df['region'].isin(regions)]
+            pat_ids = list(sorted(df['patient-id'].unique()))
+            return pat_ids
 
         # Load patient IDs from index.
         pat_ids = list(sorted(self.index['patient-id'].unique()))
@@ -254,6 +234,24 @@ class DICOMDataset(Dataset):
         except EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
             self.__index = DataFrame(columns=ERROR_INDEX_COLS.keys())
+
+    # Copied from 'mymi/reporting/dataset/dicom.py' to avoid circular dependency.
+    def __load_patient_regions_report(
+        self,
+        exists_only: bool = False,
+        use_mapping: bool = True) -> Union[DataFrame, bool]:
+        filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+        filepath = os.path.join(self.__path, 'reports', filename)
+        if os.path.exists(filepath):
+            if exists_only:
+                return True
+            else:
+                return read_csv(filepath)
+        else:
+            if exists_only:
+                return False
+            else:
+                raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
     def __load_region_dups(self) -> Optional[DataFrame]:
         filepath = os.path.join(self.__path, 'region-dups.csv')

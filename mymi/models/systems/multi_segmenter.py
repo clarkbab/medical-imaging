@@ -260,9 +260,6 @@ class MultiSegmenter(pl.LightningModule):
             region = self.__channel_region_map[i]
             self.log(f'train/weight/{region}', weight, on_epoch=LOG_ON_EPOCH, on_step=LOG_ON_STEP)
 
-        if batch_idx < 3:
-            logging.info(f"Forward pass (epoch={self.current_epoch},batch={batch_idx},desc={desc},x_mean={x.mean()},mask={mask.type(torch.float).mean()},weights={weights[0].mean()})")
-
         y_hat = self.forward(x)
         loss = self.__loss(y_hat, y, mask, weights)
         if np.isnan(loss.item()):

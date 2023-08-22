@@ -1,5 +1,6 @@
+import numpy as np
 import os
-import pandas as pd
+from pandas import DataFrame, read_csv
 import re
 from typing import List, Literal, Optional, Union
 
@@ -36,7 +37,7 @@ class NIFTIDataset(Dataset):
         self.__loaded_group_index = False
 
     @property
-    def anon_index(self) -> Optional[pd.DataFrame]:
+    def anon_index(self) -> Optional[DataFrame]:
         if not self.__loaded_anon_index:
             self.__load_anon_index()
             self.__loaded_anon_index = True
@@ -51,14 +52,14 @@ class NIFTIDataset(Dataset):
         return self.__global_id
 
     @property
-    def excluded_labels(self) -> Optional[pd.DataFrame]:
+    def excluded_labels(self) -> Optional[DataFrame]:
         if not self.__loaded_excluded_labels:
             self.__load_excluded_labels()
             self.__loaded_excluded_labels = True
         return self.__excluded_labels
 
     @property
-    def group_index(self) -> Optional[pd.DataFrame]:
+    def group_index(self) -> Optional[DataFrame]:
         if not self.__loaded_group_index:
             self.__load_group_index()
             self.__loaded_group_index = True
@@ -107,6 +108,26 @@ class NIFTIDataset(Dataset):
 
         return pat_ids
 
+    def list_regions(
+        self,
+        use_patient_regions_report: bool = True) -> List[str]:
+        # # Use patient regions report to accelerate 'list_regions'.
+        # if use_patient_regions_report and self.__load_patient_regions_report(exists_only=True):
+        #     logging.info(f"Using patient regions report to accelerate 'list_regions'.")
+        #     df = self.__load_patient_regions_report()
+        #     regions = list(sorted(df['region'].unique()))
+        #     return regions
+
+        # Load each patient.
+        regions = []
+        pat_ids = self.list_patients()
+        for pat_id in pat_ids:
+            pat_regions = self.patient(pat_id).list_regions()
+            regions += pat_regions
+        regions = list(sorted(np.unique(regions)))
+
+        return regions
+
     def patient(
         self,
         id: Union[int, str]) -> NIFTIPatient:
@@ -115,14 +136,14 @@ class NIFTIDataset(Dataset):
     def __load_anon_index(self) -> None:
         filepath = os.path.join(self.__path, 'anon-index.csv')
         if os.path.exists(filepath):
-            self.__anon_index = pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
+            self.__anon_index = read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
         else:
             self.__anon_index = None
     
     def __load_excluded_labels(self) -> None:
         filepath = os.path.join(self.__path, 'excluded-labels.csv')
         if os.path.exists(filepath):
-            self.__excluded_labels = pd.read_csv(filepath).astype({ 'patient-id': str })
+            self.__excluded_labels = read_csv(filepath).astype({ 'patient-id': str })
             self.__excluded_labels = self.__excluded_labels.sort_values(['patient-id', 'region'])
 
             # Drop duplicates.
@@ -137,9 +158,25 @@ class NIFTIDataset(Dataset):
     def __load_group_index(self) -> None:
         filepath = os.path.join(self.__path, 'group-index.csv')
         if os.path.exists(filepath):
-            self.__group_index = pd.read_csv(filepath).astype({ 'patient-id': str })
+            self.__group_index = read_csv(filepath).astype({ 'patient-id': str })
         else:
             self.__group_index = None
+
+    # Copied from 'mymi/reporting/dataset/nift.py' to avoid circular dependency.
+    def __load_patient_regions_report(
+        self,
+        exists_only: bool = False) -> Union[DataFrame, bool]:
+        filepath = os.path.join(self.__path, 'reports', 'region-count.csv')
+        if os.path.exists(filepath):
+            if exists_only:
+                return True
+            else:
+                return read_csv(filepath)
+        else:
+            if exists_only:
+                return False
+            else:
+                raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
 
     def __str__(self) -> str:
         return self.__global_id

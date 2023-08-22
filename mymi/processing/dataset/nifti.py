@@ -27,26 +27,31 @@ from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.regions import region_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
-from mymi import types
+from mymi.types import ImageSize3D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_to_training(
     dataset: str,
-    region: types.PatientRegions,
     create_data: bool = True,
+    dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    output_size: Optional[ImageSize3D] = None,
+    output_spacing: Optional[ImageSpacing3D] = None,
     recreate_dataset: bool = True,
-    round_dp: Optional[int] = None,
-    training_dataset: Optional[str] = None) -> None:
+    region: Optional[PatientRegions] = None,
+    round_dp: Optional[int] = None) -> None:
     logging.arg_log('Converting to training', ('dataset', 'region'), (dataset, region))
-    regions = region_to_list(region)
+    regions = arg_to_list(region, str)
+
+    # Use all regions if region is 'None'.
+    set = NIFTIDataset(dataset)
+    if regions is None:
+        regions = set.list_regions()
 
     # Create the dataset.
-    dest_dataset = dataset if training_dataset is None else training_dataset
+    dest_dataset = dataset if dest_dataset is None else dest_dataset
     if exists(dest_dataset):
         if recreate_dataset:
             created = True
@@ -89,7 +94,6 @@ def convert_to_training(
             params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    set = NIFTIDataset(dataset)
     pat_ids = set.list_patients(region=regions)
 
     # Get exclusions.
@@ -410,8 +414,8 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],
     region: str,
-    localiser: types.ModelName,
-    segmenter: types.ModelName,
+    localiser: ModelName,
+    segmenter: ModelName,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_manifest: bool = False,

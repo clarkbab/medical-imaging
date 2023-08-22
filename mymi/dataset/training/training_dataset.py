@@ -4,8 +4,7 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
-from mymi.regions import region_to_list
-from mymi import types
+from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
@@ -92,10 +91,9 @@ class TrainingDataset(Dataset):
     def list_groups(
         self,
         include_empty: bool = False,
-        region: types.PatientRegions = 'all') -> List[int]:
+        region: Optional[PatientRegions] = None) -> List[int]:
         if not self.has_grouping:
             raise ValueError(f"{self} has no grouping.")
-        regions = region_to_list(region) 
 
         # Filter out 'empty' labels.
         index = self.index
@@ -103,7 +101,9 @@ class TrainingDataset(Dataset):
             index = index[~index['empty']]
 
         # Filter by regions.
-        index = index[index.region.isin(regions)]
+        if region is not None:
+            regions = arg_to_list(region, str)
+            index = index[index['region'].isin(regions)]
 
         # Get sample IDs.
         group_ids = list(sorted(index['group-id'].unique()))
@@ -111,13 +111,15 @@ class TrainingDataset(Dataset):
 
         return group_ids
 
+    def list_regions(self) -> List[str]:
+        return list(sorted(self.index['region'].unique())) 
+
     def list_samples(
         self,
         group_id: Optional[Union[int, List[int]]] = None,
         include_empty: bool = False,
-        region: types.PatientRegions = 'all') -> List[int]:
+        region: Optional[PatientRegions] = None) -> List[int]:
         group_ids = arg_to_list(group_id, int)
-        regions = region_to_list(region) 
 
         # Filter out 'empty' labels.
         index = self.index
@@ -125,7 +127,9 @@ class TrainingDataset(Dataset):
             index = index[~index['empty']]
 
         # Filter by regions.
-        index = index[index.region.isin(regions)]
+        if region is not None:
+            regions = arg_to_list(region, str)
+            index = index[index['region'].isin(regions)]
 
         # Filter by groups.
         if group_id is not None:

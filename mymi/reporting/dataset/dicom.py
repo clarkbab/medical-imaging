@@ -4,7 +4,7 @@ import os
 import pandas as pd
 from pandas import DataFrame
 from tqdm import tqdm
-from typing import List
+from typing import List, Union
 
 from mymi.dataset.dicom import DICOMDataset
 from mymi.evaluation.dataset.dicom import evaluate_model
@@ -124,7 +124,7 @@ def create_patient_regions_report(
 def load_patient_regions_report(
     dataset: str,
     exists_only: bool = False,
-    use_mapping: bool = True) -> None:
+    use_mapping: bool = True) -> Union[DataFrame, bool]:
     set = DICOMDataset(dataset)
     filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
     filepath = os.path.join(set.path, 'reports', filename)

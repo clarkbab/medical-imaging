@@ -1,6 +1,5 @@
 from itertools import chain
 import numpy as np
-import os
 from pytorch_lightning import seed_everything
 import torch
 from torch import Tensor
@@ -9,12 +8,11 @@ import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.types import ImageSpacing3D, PatientRegions
+from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
 from mymi import logging
-from mymi.regions import region_to_list
 from torchio.transforms import Transform
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
@@ -86,7 +84,7 @@ class MultiLoader:
         n_workers: int = 1,
         p_val: float = .2,
         random_seed: int = 0,
-        region: PatientRegions = 'all',
+        region: Optional[PatientRegions] = None,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
         test_subfold: Optional[int] = None,
@@ -95,7 +93,7 @@ class MultiLoader:
         use_groups: bool = False,
         use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
-        regions = region_to_list(region)
+        regions = arg_to_list(region, str)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
@@ -109,6 +107,14 @@ class MultiLoader:
             if prev_spacing is not None and spacing != prev_spacing:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing
+
+        # Get regions if 'None'.
+        if regions is None:
+            regions = []
+            for i, set in enumerate(sets):
+                set_regions = set.list_regions()
+                regions += set_regions
+            regions = list(sorted(np.unique(regions)))
 
         # Load all samples/groups.
         # Grouping can be used when multiple 'patient-id' values in a dataset belong to the same patient,
@@ -257,7 +263,7 @@ class MultiLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, random_seed=random_seed, region=regions, spacing=spacing, transform=transform_train)
+        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
         if shuffle_train:
             shuffle = None
             train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
@@ -274,7 +280,7 @@ class MultiLoader:
             # Give all foreground classes equal weight.
             class_weights = np.ones(len(regions) + 1) / len(regions)
             class_weights[0] = 0
-        val_ds = TrainingSet(datasets, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, region=regions, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -300,13 +306,13 @@ class TrainingSet(Dataset):
     def __init__(
         self,
         datasets: List[str],
+        regions: List[PatientRegion],
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
         data_hook: Optional[Callable] = None,
         include_background: bool = False,
         load_data: bool = True,
         random_seed: float = 0,
-        region: PatientRegions = 'all',
         spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
@@ -314,7 +320,7 @@ class TrainingSet(Dataset):
         self.__include_background = include_background
         self.__load_data = load_data
         self.__random_seed = random_seed
-        self.__regions = region_to_list(region)
+        self.__regions = regions
         self.__spacing = spacing
         self.__transform = transform
         if transform:

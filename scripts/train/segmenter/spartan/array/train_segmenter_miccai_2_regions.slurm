@@ -79,6 +79,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
+    --use_downweighting $USE_DOWNWEIGHTING \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
     --use_lr_scheduler $USE_LR_SCHEDULER

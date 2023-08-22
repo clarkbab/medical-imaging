@@ -15,6 +15,7 @@ from mymi.loaders.augmentation import get_transforms
 from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
+from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter, Segmenter
 from mymi.reporting.loaders import get_multi_loader_manifest
 from mymi.utils import arg_to_list
@@ -56,6 +57,7 @@ def train_multi_segmenter(
     resume: bool = False,
     resume_run: Optional[str] = None,
     resume_ckpt: str = 'last',
+    resume_ckpt_version: Optional[int] = None,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
@@ -119,10 +121,9 @@ def train_multi_segmenter(
     opt_kwargs = {}
     if resume:
         # Get checkpoint path.
-        if resume_run is not None:
-            ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
-        else:
-            ckpt_path = os.path.join(ckpts_path, f'{resume_ckpt}.ckpt')
+        resume_run = resume_run if resume_run is not None else run_name
+        _, _, resume_ckpt = replace_ckpt_alias((model_name, resume_run, resume_ckpt), ckpt_version=resume_ckpt_version)
+        ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
         opt_kwargs['ckpt_path'] = ckpt_path
 
         # Get training epoch.
