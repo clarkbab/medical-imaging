@@ -127,17 +127,35 @@ class FocalLoss(nn.Module):
         if weights is not None:
             loss = weights * loss
 
-        if reduce_channels:
-            # Reduce across batch and channel dimensions.
-            dim = (0, 1)
-        else:
-            # Reduce across batch dimension only.
-            dim = 0
+        # Get "batch-channel" losses. Preserve channel information
+        # if not reducing across channels.
+        n_channels = label.shape[1]
+        bc_losses = [] if reduce_channels else [[] for _ in range(n_channels)]
+        for batch, channel in torch.argwhere(mask):
+            bc_loss = loss[batch, channel]
 
+            if reduce_channels:
+                bc_losses.append(bc_loss)
+            else:
+                # Preserve channel information.
+                bc_losses[channel].append(bc_loss)
+
+        if reduce_channels:
+            bc_losses = torch.stack(bc_losses)
+        else:
+            bc_losses = [torch.stack(l) if len(l) > 0 else None for l in bc_losses]
+
+        # Perform reduction across batches or batches/channels.
         if reduction == 'mean':
-            loss = loss.mean(dim)
+            if reduce_channels:
+                loss = bc_loss.mean()
+            else:
+                loss = torch.cat([l.mean().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
         elif reduction == 'sum':
-            loss = loss.sum(dim)
+            if reduce_channels:
+                loss = bc_loss.sum()
+            else:
+                loss = torch.cat([l.sum().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
 
         # Normalise on number of voxels.
         assert label.shape[2] != 0

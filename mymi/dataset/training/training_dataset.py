@@ -74,9 +74,13 @@ class TrainingDataset(Dataset):
         cols = ['output-size', 'output-spacing']
         for col, old_col in zip(cols, old_cols):
             if col in params:
-                params[col] = eval(params[col])
+                if not (isinstance(params[col], float) and np.isnan(params[col])):
+                    params[col] = eval(params[col])
             else:
-                params[col] = eval(params[old_col])
+                if params[old_col] is not np.nan:
+                    params[col] = eval(params[old_col])
+                else:
+                    params[col] = params[old_col]
                 del(params[old_col])
         return params
 

@@ -31,10 +31,11 @@ def train_multi_segmenter(
     ckpt_model: bool = True,
     complexity_weights_factor: float = 1,
     complexity_weights_window: int = 5,
-    dw_cvg_delay_above: int = 20,
-    dw_cvg_delay_below: int = 5,
-    dw_cvg_thresholds: List[float] = [],
-    dw_factor: float = 1,
+    cw_cvg_delay_above: int = 20,
+    cw_cvg_delay_below: int = 5,
+    cw_cvg_thresholds: List[float] = [],
+    cw_factor: Optional[Union[float, List[float]]] = None,
+    cw_schedule: Optional[List[float]] = None,
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
@@ -68,7 +69,7 @@ def train_multi_segmenter(
     thresh_high: Optional[float] = None,
     use_augmentation: bool = True,
     use_complexity_weights: bool = False,
-    use_downweighting: bool = False,
+    use_cvg_weighting: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
@@ -77,7 +78,8 @@ def train_multi_segmenter(
     use_weights: bool = False,
     weight_decay: float = 0,
     weights: Optional[List[float]] = None,
-    weights_iv_factor: Optional[int] = None) -> None:
+    weights_iv_factor: Optional[Union[float, List[float]]] = None,
+    weights_schedule: Optional[List[float]] = None) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     regions = arg_to_list(region, str)
 
@@ -101,7 +103,18 @@ def train_multi_segmenter(
 
     # Calculate volume weights.
     if use_weights and weights_iv_factor is not None:
-        assert weights is None
+        if weights is not None:
+            raise ValueError(f"Can't specify both 'weights' and 'weights_iv_factor'.")
+
+        weights_iv_factors = arg_to_list(weights_iv_factor, float)
+        if weights_schedule is not None:
+            if len(weights_iv_factors) != len(weights_schedule):
+                raise ValueError(f"When using inverse volume weighting, number of factors ({len(weights_iv_factors)}) should equal number of schedule points ({len(weights_schedule)}).")
+        else:
+            if len(weights_iv_factors) != 1:
+                raise ValueError(f"When using inverse volume weighting with multiple factors ({len(weights_iv_factors)}), must pass 'weights_schedule'.")
+
+        # Define inverse volumes.
         inv_volumes = np.array([
             1.81605095e-05,
             3.75567497e-05,
@@ -113,7 +126,16 @@ def train_multi_segmenter(
             3.45656440e-05,
             3.38292316e-05
         ])
-        weights = list(inv_volumes ** (1 / weights_iv_factor))
+
+        # Calculate weights.
+        weights = []
+        schedule = []
+        for i, weights_iv_factor in enumerate(weights_iv_factors):
+            weights_i = list(np.array(inv_volumes) ** weights_iv_factor)
+            weights.append(weights_i)
+            schedule_i = weights_schedule[i] if weights_schedule is not None else 0
+            schedule.append(schedule_i)
+        weights_schedule = schedule
 
     # Get checkpoint path.
     # Also get training epoch so that our random sampler knows which seed to use
@@ -139,10 +161,11 @@ def train_multi_segmenter(
     model = MultiSegmenter(
         complexity_weights_factor=complexity_weights_factor,
         complexity_weights_window=complexity_weights_window,
-        dw_factor=dw_factor,
-        dw_cvg_delay_above=dw_cvg_delay_above,
-        dw_cvg_delay_below=dw_cvg_delay_below,
-        dw_cvg_thresholds=dw_cvg_thresholds,
+        cw_cvg_delay_above=cw_cvg_delay_above,
+        cw_cvg_delay_below=cw_cvg_delay_below,
+        cw_cvg_thresholds=cw_cvg_thresholds,
+        cw_factor=cw_factor,
+        cw_schedule=cw_schedule,
         loss=loss_fn,
         lr_init=lr_init,
         lr_milestones=lr_milestones,
@@ -153,10 +176,11 @@ def train_multi_segmenter(
         random_seed=random_seed,
         region=regions,
         use_complexity_weights=use_complexity_weights,
-        use_downweighting=use_downweighting,
+        use_cvg_weighting=use_cvg_weighting,
         use_lr_scheduler=use_lr_scheduler,
         use_weights=use_weights,
         weights=weights,
+        weights_schedule=weights_schedule,
         weight_decay=weight_decay)
 
     # Create logger.
@@ -197,7 +221,7 @@ def train_multi_segmenter(
         logger=logger,
         max_epochs=n_epochs,
         num_nodes=n_nodes,
-        num_sanity_val_steps=2,
+        num_sanity_val_steps=0,
         precision=precision)
 
     if lr_find:

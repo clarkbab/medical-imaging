@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from .dataset import Dataset, DatasetType, to_type
 from .dicom import DICOMDataset
@@ -12,13 +12,28 @@ from .training import list as list_training
 from .other import OtherDataset
 from .other import list as list_other
 
+def list(type_str: str) -> List[str]:
+    # Convert from string to type.
+    type = to_type(type_str)
+    
+    if type == DatasetType.DICOM:
+        return list_dicom()
+    elif type == DatasetType.NIFTI:
+        return list_nifti()
+    elif type == DatasetType.NRRD:
+        return list_nrrd()
+    elif type == DatasetType.TRAINING:
+        return list_training()
+    else:
+        raise ValueError(f"Dataset type '{type}' not found.")
+
 def get(
     name: str,
-    type: Optional[str] = None,
+    type_str: Optional[str] = None,
     **kwargs) -> Dataset:
-    if type:
+    if type_str:
         # Convert from string to type.
-        type = to_type(type)
+        type = to_type(type_str)
     
         # Create dataset.
         if type == DatasetType.DICOM:

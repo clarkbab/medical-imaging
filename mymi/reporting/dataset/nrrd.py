@@ -168,7 +168,7 @@ def create_region_overlap_summary(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def create_region_summary(
+def create_region_summary_report(
     dataset: str,
     region: PatientRegions = 'all') -> None:
     logging.arg_log('Creating region summary', ('dataset', 'region'), (dataset, region))
@@ -274,7 +274,7 @@ def load_region_overlap_summary(
 
     return df
 
-def load_region_summary(
+def load_region_summary_report(
     dataset: str,
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: PatientRegions = 'all',
@@ -337,12 +337,10 @@ def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
 
 def get_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> pd.DataFrame:
-    logging.info(f"Creating CT summary for dataset '{dataset}'.")
-
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get patients.
     set = NRRDDataset(dataset)
-    pats = set.list_patients(region=regions)
+    pats = set.list_patients(region=region)
 
     cols = {
         'dataset': str,
@@ -379,29 +377,31 @@ def get_ct_summary(
 
     return df
 
-def create_ct_summary(
+def create_ct_summary_report(
     dataset: str,
-    region: PatientRegions = 'all') -> None:
-    regions = region_to_list(region)
+    region: Optional[PatientRegions] = None) -> None:
+    # Get regions.
+    set = NRRDDataset(dataset)
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     # Get summary.
-    df = get_ct_summary(dataset)
+    df = get_ct_summary(dataset, region=regions)
 
     # Save summary.
-    set = NRRDDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
+    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def load_ct_summary(
+def load_ct_summary_report(
     dataset: str,
-    region: PatientRegions = 'all') -> pd.DataFrame:
-    regions = region_to_list(region)
-
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get regions.
     set = NRRDDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
+
+    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
+        raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
     return pd.read_csv(filepath)
 
 def create_segmenter_prediction_figures(

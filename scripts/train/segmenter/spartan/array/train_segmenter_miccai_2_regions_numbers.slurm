@@ -13,7 +13,7 @@
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
 ##SBATCH --time 1-06:00:00
 ##SBATCH --time 4-00:00:00
-#SBATCH --time 5-00:00:00
+#SBATCH --time 4-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -26,7 +26,7 @@ echo $version
 REGIONS=(
     "['Bone_Mandible','Brainstem']"         # 0
     "['Glnd_Submand_L','Glnd_Submand_R']"   # 1
-    "['OpticChiasm','Bone_Mandible']"       # 2
+    "['OpticChiasm','OpticNrv_L']"          # 2
     "['OpticNrv_L','OpticNrv_R']"           # 3
     "['Parotid_L','Parotid_R']"             # 4
 )
@@ -40,7 +40,7 @@ SHORT_REGIONS=(
 DW_CVG_THRESHOLDSES=(
     "[0.8,0.8]"
     "[0.6,0.6]"
-    "[0.3,0.8]"
+    "[0.3,0.4]"
     "[0.4,0.4]"
     "[0.7,0.7]"
 )

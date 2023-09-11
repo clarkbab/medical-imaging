@@ -38,10 +38,10 @@ class DiceLoss(nn.Module):
             label = F.one_hot(label, num_classes=2)
             label = label.movedim(-1, 1)
         if mask is not None:
-            assert mask.shape == pred.shape[:2]
-        batch_size = pred.shape[0]
+            assert mask.shape == label.shape[:2]
+        batch_size = label.shape[0]
         if weights is not None:
-            assert weights.shape == pred.shape[:2]
+            assert weights.shape == label.shape[:2]
             for b in range(batch_size):
                 weight_sum = weights[b].sum().round(decimals=3)
                 if weight_sum != 1:
@@ -128,16 +128,34 @@ class DiceLoss(nn.Module):
         if weights is not None:
             loss = weights * loss
 
-        if reduce_channels:
-            # Reduce across batch and channel dimensions.
-            dim = (0, 1)
-        else:
-            # Reduce across batch dimension only.
-            dim = 0
+        # Get "batch-channel" losses. Preserve channel information
+        # if not reducing across channels.
+        n_channels = label.shape[1]
+        bc_losses = [] if reduce_channels else [[] for _ in range(n_channels)]
+        for batch, channel in torch.argwhere(mask):
+            bc_loss = loss[batch, channel]
 
+            if reduce_channels:
+                bc_losses.append(bc_loss)
+            else:
+                # Preserve channel information.
+                bc_losses[channel].append(bc_loss)
+
+        if reduce_channels:
+            bc_losses = torch.stack(bc_losses)
+        else:
+            bc_losses = [torch.stack(l) if len(l) > 0 else None for l in bc_losses]
+
+        # Perform reduction across batches or batches/channels.
         if reduction == 'mean':
-            loss = loss.mean(dim)
+            if reduce_channels:
+                loss = bc_losses.mean()
+            else:
+                loss = torch.cat([l.mean().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
         elif reduction == 'sum':
-            loss = loss.sum(dim)
+            if reduce_channels:
+                loss = bc_losses.sum()
+            else:
+                loss = torch.cat([l.sum().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
 
         return loss

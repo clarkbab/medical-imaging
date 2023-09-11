@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import pandas as pd
 from typing import List, Literal, Optional, Union
@@ -75,6 +76,17 @@ class NRRDDataset(Dataset):
         # Filter by 'region'.
         pat_ids = list(filter(lambda pat_id: self.patient(pat_id).has_region(region, labels=labels), pat_ids))
         return pat_ids
+
+    def list_regions(self) -> List[str]:
+        # Load each patient.
+        regions = []
+        pat_ids = self.list_patients()
+        for pat_id in pat_ids:
+            pat_regions = self.patient(pat_id).list_regions()
+            regions += pat_regions
+        regions = list(sorted(np.unique(regions)))
+
+        return regions
 
     def patient(
         self,

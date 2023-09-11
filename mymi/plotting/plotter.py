@@ -1242,10 +1242,9 @@ def plot_dataframe(
     fontsize_stats: Optional[float] = None,
     fontsize_title: Optional[float] = None,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
-    hue_hatches: Optional[List[str]] = None,
-    hue_labels: Optional[List[str]] = None,
+    hue_hatch: Optional[Union[str, List[str]]] = None,
+    hue_label: Optional[Union[str, List[str]]] = None,
     hue_order: Optional[List[str]] = None,
-    hue_palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
     include_x: Optional[Union[str, List[str]]] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: str = 'upper right',
@@ -1253,8 +1252,9 @@ def plot_dataframe(
     linewidth: float = 0.5,
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
-    n_col: Optional[int] = None,
+    n_cols: Optional[int] = None,
     outlier_legend_loc: str = 'upper left',
+    palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
     pointsize: float = 10,
     savepath: Optional[str] = None,
     share_y: bool = False,
@@ -1282,10 +1282,10 @@ def plot_dataframe(
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
     y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
-    if type(include_x) == str:
-        include_x = [include_x]
-    if type(exclude_x) == str:
-        exclude_x = [exclude_x]
+    hue_hatches = arg_to_list(hue_hatch, str)
+    hue_labels = arg_to_list(hue_label, str)
+    include_xs = arg_to_list(include_x, str)
+    exclude_xs = arg_to_list(exclude_x, str)
     if show_hue_connections and hue_connections_index is None:
         raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
     if show_stats and stats_index is None:
@@ -1302,14 +1302,10 @@ def plot_dataframe(
         fontsize_title = fontsize
         
     # Include/exclude.
-    if include_x:
-        if type(include_x) == str:
-            include_x = [include_x]
-        data = data[data[x].isin(include_x)]
-    if exclude_x:
-        if type(exclude_x) == str:
-            exclude_x = [exclude_x]
-        data = data[~data[x].isin(exclude_x)]
+    if include_xs is not None:
+        data = data[data[x].isin(include_xs)]
+    if exclude_xs is not None:
+        data = data[~data[x].isin(exclude_xs)]
 
     # Add outlier data.
     data = __add_outlier_info(data, x, y, hue)
@@ -1341,9 +1337,9 @@ def plot_dataframe(
             x_tick_labels.append(label)
 
     # Create subplots if required.
-    if n_col is None:
-        n_col = len(x_order)
-    n_rows = int(np.ceil(len(x_order) / n_col))
+    if n_cols is None:
+        n_cols = len(x_order)
+    n_rows = int(np.ceil(len(x_order) / n_cols))
     if ax is not None:
         assert n_rows == 1
         axs = [ax]
@@ -1360,9 +1356,9 @@ def plot_dataframe(
     if x_lim[0] is None:
         x_lim[0] = -0.5
     if x_lim[1] is None:
-        x_lim[1] = n_col - 0.5
+        x_lim[1] = n_cols - 0.5
 
-    # Get hue order/colours.
+    # Get hue order/colour/labels.
     if hue is not None:
         if hue_order is None:
             hue_order = list(sorted(data[hue].unique()))
@@ -1370,12 +1366,12 @@ def plot_dataframe(
         # Calculate x width for each hue.
         hue_width = x_width / len(hue_order) 
 
-        # Check there are enough hue colors.
-        if len(hue_order) > len(hue_palette):
-            raise ValueError(f"'hue_palette' doesn't have enough colours, needs '{len(hue_order)}'.")
+        # Check there are enough colours in palette.
+        if len(hue_order) > len(palette):
+            raise ValueError(f"'palette' doesn't have enough colours for hues '{hue_order}', needs '{len(hue_order)}'.")
 
         # Create map from hue to colour.
-        hue_colours = dict((h, hue_palette[i]) for i, h in enumerate(hue_order))
+        hue_colours = dict((h, palette[i]) for i, h in enumerate(hue_order))
 
         if hue_labels is not None:
             if len(hue_labels) != len(hue_order):
@@ -1384,8 +1380,15 @@ def plot_dataframe(
     # Plot rows.
     for i in range(n_rows):
         # Split data.
-        row_x_order = x_order[i * n_col:(i + 1) * n_col]
-        row_x_tick_labels = x_tick_labels[i * n_col:(i + 1) * n_col]
+        row_x_order = x_order[i * n_cols:(i + 1) * n_cols]
+        row_x_tick_labels = x_tick_labels[i * n_cols:(i + 1) * n_cols]
+
+        # Get x colours.
+        if hue is None:
+            # Check there are enough colors in palette.
+            if len(row_x_order) > len(palette):
+                raise ValueError(f"'palette' doesn't have enough colours for x values '{row_x_order}', needs '{len(row_x_order)}'.")
+            x_colours = dict((x, palette[i]) for i, x in enumerate(row_x_order))
 
         # Get row data.
         row_data = data[data[x].isin(row_x_order)].copy()
@@ -1444,7 +1447,7 @@ def plot_dataframe(
                         continue
                     x_pos = x_data.iloc[0]['x_pos']
                     if style == 'box':
-                        axs[i].boxplot(x_data[y], boxprops=dict(color=linecolour, linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
+                        axs[i].boxplot(x_data[y], boxprops=dict(color=linecolour, facecolor=x_colours[x_val], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
                     elif style == 'violin':
                         axs[i].violinplot(x_data[y], positions=[x_pos])
 
@@ -1460,7 +1463,7 @@ def plot_dataframe(
                             hue_artists[hue_label] = res
                 else:
                     x_data = row_data[row_data[x] == x_val]
-                    axs[i].scatter(x_data['x_pos'], x_data[y], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
+                    axs[i].scatter(x_data['x_pos'], x_data[y], color=x_colours[x_val], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:

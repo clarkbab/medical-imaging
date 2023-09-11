@@ -14,9 +14,104 @@ from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
-from mymi.regions import RegionNames, region_to_list
 from mymi.types import PatientRegions
-from mymi.utils import append_row, encode
+from mymi.utils import append_row, arg_to_list, encode
+
+def create_ct_figures(
+    dataset: str,
+    regions: PatientRegions = 'all') -> None:
+    # Get dataset.
+    set = TrainingDataset(dataset)
+
+    # Set PDF margins.
+    img_t_margin = 30
+    img_l_margin = 5
+    img_width = 100
+    img_height = 100
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=12,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    logging.info(f"Creating CT figures for dataset '{dataset}', regions '{regions}'...")
+    partitions = ['train', 'validation', 'test']
+    for partition in tqdm(partitions):
+        # Get patients.
+        part = set.partition(partition)
+        samples = part.list_samples(regions=regions)
+        if len(samples) == 0:
+            continue
+
+        # Start partition section.
+        pdf.add_page()
+        pdf.start_section(f'Partition: {partition}')
+
+        for s in tqdm(samples, leave=False):
+            # Load sample.
+            sample = part.sample(s)
+            input = sample.input()
+
+            # Show images.
+            pdf.add_page()
+            pdf.start_section(f'Sample: {s}', level=1)
+
+            # Save images.
+            axes = [2, 1, 0]
+            views = ['axial', 'coronal', 'sagittal']
+            img_coords = (
+                (img_l_margin, img_t_margin),
+                (img_l_margin + img_width, img_t_margin),
+                (img_l_margin, img_t_margin + img_height)
+            )
+            for axis, view, page_coord in zip(axes, views, img_coords):
+                # Set figure.
+                slice_idx = int(input.shape[axis] / 2)
+                plot_sample_regions(dataset, partition, s, regions=None, slice_idx=slice_idx, view=view, window=(3000, 500))
+
+                # Save temp file.
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                plt.savefig(filepath)
+                plt.close()
+
+                # Add image to report.
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+
+                # Delete temp file.
+                os.remove(filepath)
+
+    # Save PDF.
+    filepath = os.path.join(set.path, 'reports', 'ct-figures.pdf') 
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
+
+def create_ct_summary(dataset: str) -> None:
+    # Get summary.
+    df = get_ct_summary(dataset)
+
+    # Save summary.
+    set = TrainingDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def get_ct_summary(dataset: str) -> pd.DataFrame:
     logging.info(f"Creating CT summary for dataset '{dataset}'.")
@@ -60,68 +155,18 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
 
     return df
 
-def create_ct_summary(dataset: str) -> None:
-    # Get summary.
-    df = get_ct_summary(dataset)
-
-    # Save summary.
+def create_region_counts_report(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> None:
+    # Get regions.
     set = TrainingDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    regions = set.list_regions() if region is None else arg_to_list(region, str)
+
+    # Generate counts report.
+    df = get_region_counts(dataset, region=regions)
+    filepath = os.path.join(set.path, 'reports', 'region-counts', encode(regions), 'region-counts.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
-
-def load_ct_summary(dataset: str) -> pd.DataFrame:
-    set = TrainingDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
-    if not os.path.exists(filepath):
-        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
-    return pd.read_csv(filepath)
-
-def region_count(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: PatientRegions = 'all') -> pd.DataFrame:
-    # List regions.
-    set = TrainingDataset(dataset)
-    regions_df = set.list_regions(clear_cache=clear_cache)
-
-    # Filter on requested regions.
-    def filter_fn(row):
-        if type(regions) == str:
-            if regions == 'all':
-                return True
-            else:
-                return row['region'] == regions
-        else:
-            for region in regions:
-                if row['region'] == region:
-                    return True
-            return False
-    regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
-
-    # Generate counts report.
-    count_df = regions_df.groupby(['partition', 'region']).count().rename(columns={'sample-index': 'count'})
-
-    # Add 'p' column.
-    count_df = count_df.reset_index()
-    total_df = count_df.groupby('region').sum().rename(columns={'count': 'total'})
-    count_df = count_df.join(total_df, on='region')
-    count_df['p'] = count_df['count'] / count_df['total']
-    count_df = count_df.drop(columns='total')
-    count_df = count_df.set_index(['partition', 'region'])
-    return count_df
-
-def create_region_count_report(
-    dataset: str,
-    clear_cache: bool = True,
-    regions: PatientRegions = 'all') -> None:
-    # Generate counts report.
-    set = TrainingDataset(dataset)
-    count_df = region_count(dataset, clear_cache=clear_cache, regions=regions)
-    filename = 'region-count.csv'
-    filepath = os.path.join(set.path, 'reports', filename)
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    count_df.to_csv(filepath)
 
 def create_region_figures(
     dataset: str,
@@ -263,6 +308,32 @@ def create_region_figures(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         pdf.output(filepath, 'F')
 
+def get_region_counts(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get regions.
+    set = TrainingDataset(dataset)
+    regions = set.list_regions() if region is None else arg_to_list(region, str)
+
+    cols = {
+        'dataset': str,
+        'region': str,
+        'n-samples': int
+    }
+    df = pd.DataFrame(columns=cols.keys())
+    for region in regions:
+        n_samples = len(set.list_samples(region=region))
+        data = {
+            'dataset': dataset,
+            'region': region,
+            'n-samples': n_samples
+        }
+        df = append_row(df, data)
+
+    df = df.astype(cols)
+
+    return df
+
 def get_object_summary(
     dataset: str,
     partition: str,
@@ -311,88 +382,22 @@ def get_object_summary(
     df = df.astype(cols)
     return df
 
-def create_ct_figures(
-    dataset: str,
-    regions: PatientRegions = 'all') -> None:
-    # Get dataset.
+def load_ct_summary(dataset: str) -> pd.DataFrame:
     set = TrainingDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', f'ct-summary.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
+    return pd.read_csv(filepath)
 
-    # Set PDF margins.
-    img_t_margin = 30
-    img_l_margin = 5
-    img_width = 100
-    img_height = 100
+def load_region_counts_report(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get regions.
+    set = TrainingDataset(dataset)
+    regions = set.list_regions() if region is None else arg_to_list(region, str)
 
-    # Create PDF.
-    pdf = FPDF()
-    pdf.set_section_title_styles(
-        TitleStyle(
-            font_family='Times',
-            font_style='B',
-            font_size_pt=24,
-            color=0,
-            t_margin=3,
-            l_margin=12,
-            b_margin=0
-        ),
-        TitleStyle(
-            font_family='Times',
-            font_style='B',
-            font_size_pt=18,
-            color=0,
-            t_margin=12,
-            l_margin=12,
-            b_margin=0
-        )
-    ) 
+    # Generate counts report.
+    filepath = os.path.join(set.path, 'reports', 'region-counts', encode(regions), 'region-counts.csv')
+    df = pd.read_csv(filepath)
 
-    logging.info(f"Creating CT figures for dataset '{dataset}', regions '{regions}'...")
-    partitions = ['train', 'validation', 'test']
-    for partition in tqdm(partitions):
-        # Get patients.
-        part = set.partition(partition)
-        samples = part.list_samples(regions=regions)
-        if len(samples) == 0:
-            continue
-
-        # Start partition section.
-        pdf.add_page()
-        pdf.start_section(f'Partition: {partition}')
-
-        for s in tqdm(samples, leave=False):
-            # Load sample.
-            sample = part.sample(s)
-            input = sample.input()
-
-            # Show images.
-            pdf.add_page()
-            pdf.start_section(f'Sample: {s}', level=1)
-
-            # Save images.
-            axes = [2, 1, 0]
-            views = ['axial', 'coronal', 'sagittal']
-            img_coords = (
-                (img_l_margin, img_t_margin),
-                (img_l_margin + img_width, img_t_margin),
-                (img_l_margin, img_t_margin + img_height)
-            )
-            for axis, view, page_coord in zip(axes, views, img_coords):
-                # Set figure.
-                slice_idx = int(input.shape[axis] / 2)
-                plot_sample_regions(dataset, partition, s, regions=None, slice_idx=slice_idx, view=view, window=(3000, 500))
-
-                # Save temp file.
-                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plt.savefig(filepath)
-                plt.close()
-
-                # Add image to report.
-                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
-
-                # Delete temp file.
-                os.remove(filepath)
-
-    # Save PDF.
-    filepath = os.path.join(set.path, 'reports', 'ct-figures.pdf') 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    pdf.output(filepath, 'F')
+    return df

@@ -31,7 +31,7 @@ class NIFTIPatient:
     @property
     def ct_data(self) -> np.ndarray:
         img = nib.load(self.__ct_path)
-        data = img.get_data()
+        data = img.get_fdata()
         return data
 
     @property
@@ -142,6 +142,7 @@ class NIFTIPatient:
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
         region: PatientRegions = 'all') -> OrderedDict:
+        from mymi import logging
         regions = arg_to_list(region, str, literals={ 'all': self.list_regions(labels=labels)})
 
         data = {}

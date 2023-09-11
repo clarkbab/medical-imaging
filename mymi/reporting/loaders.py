@@ -1,5 +1,5 @@
 from fpdf import FPDF, TitleStyle
-import matplotlib.pyplot as plt
+import numpy as np
 import os
 import pandas as pd
 from pytorch_lightning import seed_everything
@@ -14,7 +14,6 @@ from mymi.loaders.augmentation import get_transforms
 from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.plotting import plot_region
-from mymi.regions import region_to_list
 from mymi.types import PatientID, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
 
@@ -127,7 +126,8 @@ def get_multi_loader_manifest(
         'sample-id': int,
         'group-id': float,      # Can contain 'nan' values.
         'origin-dataset': str,
-        'origin-patient-id': str
+        'origin-patient-id': str,
+        'regions': str
     }
     df = pd.DataFrame(columns=cols.keys())
 
@@ -153,6 +153,7 @@ def get_multi_loader_manifest(
                 sample = dataset_map[dataset].sample(sample_id)
                 group_id = sample.group_id
                 origin_ds, origin_pat_id = sample.origin
+                regions = ','.join(sample.list_regions())
                 data = {
                     'loader': loader_name,
                     'loader-batch': b,
@@ -160,7 +161,8 @@ def get_multi_loader_manifest(
                     'sample-id': sample_id,
                     'group-id': group_id,
                     'origin-dataset': origin_ds,
-                    'origin-patient-id': origin_pat_id
+                    'origin-patient-id': origin_pat_id,
+                    'regions': regions
                 }
                 df = append_row(df, data)
 
@@ -174,13 +176,21 @@ def create_multi_loader_manifest(
     check_processed: bool = True,
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
-    region: PatientRegions = 'all',
+    region: Optional[PatientRegions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
     use_split_file: bool = False) -> None:
-    datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
     logging.arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+
+    # Get regions if 'None'.
+    if regions is None:
+        regions = []
+        for dataset in datasets: 
+            set_regions = TrainingDataset(dataset).list_regions()
+            regions += set_regions
+        regions = list(sorted(np.unique(regions)))
 
     # Get manifest.
     df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, n_subfolds=n_subfolds, region=regions, test_fold=test_fold, test_subfold=test_subfold, use_split_file=use_split_file)
@@ -192,14 +202,22 @@ def create_multi_loader_manifest(
 
 def load_multi_loader_manifest(
     dataset: Union[str, List[str]],
-    region: PatientRegions = 'all',
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
+    region: Optional[PatientRegions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
     use_split_file: bool = False) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = arg_to_list(region, str)
+
+    # Get regions if 'None'.
+    if regions is None:
+        regions = []
+        for dataset in datasets: 
+            set_regions = TrainingDataset(dataset).list_regions()
+            regions += set_regions
+        regions = list(sorted(np.unique(regions)))
 
     # Load file.
     filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}', f'n-subfolds-{n_subfolds}-test-subfold-{test_subfold}', 'manifest.csv')
@@ -210,15 +228,25 @@ def load_multi_loader_manifest(
 
 def create_multi_loader_figures(
     dataset: Union[str, List[str]],
-    region: PatientRegions = 'all',
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
     random_seed: float = 42,
+    region: Optional[PatientRegions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
     use_augmentation: bool = False,
     use_split_file: bool = False) -> None:
     logging.arg_log('Creating loader figures', ('dataset', 'region'), (dataset, region))
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+
+    # Get regions if 'None'.
+    if regions is None:
+        regions = []
+        for dataset in datasets: 
+            set_regions = TrainingDataset(dataset).list_regions()
+            regions += set_regions
+        regions = list(sorted(np.unique(regions)))
 
     # Create transforms.
     if use_augmentation:
@@ -229,9 +257,8 @@ def create_multi_loader_figures(
         val_transform = None
 
     # Create loaders.
-    datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
-    train_loader, val_loader, test_loader = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, shuffle_train=False, test_fold=test_fold, transform_train=train_transform, transform_val=val_transform, use_split_file=use_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, shuffle_train=False, test_fold=test_fold, transform_train=train_transform, transform_val=val_transform, use_split_file=use_split_file)
+
     # loaders = (train_loader, val_loader, test_loader)
     loaders = (train_loader, val_loader)
 

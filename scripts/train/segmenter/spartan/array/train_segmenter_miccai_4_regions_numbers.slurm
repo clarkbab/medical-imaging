@@ -13,7 +13,7 @@
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
 ##SBATCH --time 1-06:00:00
 ##SBATCH --time 4-00:00:00
-#SBATCH --time 5-00:00:00
+#SBATCH --time 4-00:00:00
 ##SBATCH --test-only
 
 module load python/3.8.6
@@ -24,9 +24,9 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R']"
-    "['OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
-    "['OpticChiasm','Bone_Mandible','Brainstem','Glnd_Submand_L']"
+    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R']"   # 0
+    "['OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"               # 1
+    "['OpticChiasm','OpticNrv_L','OpticNrv_R','Glnd_Submand_L']"        # 2
 )
 SHORT_REGIONS=(
     'BM_BS_SL_SR'
@@ -36,7 +36,7 @@ SHORT_REGIONS=(
 DW_CVG_THRESHOLDSES=(
     "[0.8,0.8,0.6,0.6]"
     "[0.4,0.4,0.7,0.7]"
-    "[0.3,0.8,0.8,0.6]"
+    "[0.3,0.4,0.4,0.6]"
 )
 DW_CVG_THRESHOLDS=${DW_CVG_THRESHOLDSES[$SLURM_ARRAY_TASK_ID]}
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}

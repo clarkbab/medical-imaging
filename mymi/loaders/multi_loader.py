@@ -111,7 +111,7 @@ class MultiLoader:
         # Get regions if 'None'.
         if regions is None:
             regions = []
-            for i, set in enumerate(sets):
+            for set in sets:
                 set_regions = set.list_regions()
                 regions += set_regions
             regions = list(sorted(np.unique(regions)))

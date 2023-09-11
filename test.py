@@ -1,10 +1,9 @@
-class Test:
-    def __init__(self):
-        self.__a = [1, 2, 3, 4, 5]
-    
-    def __getitem__(self, index):
-        index, other = index
-        return other * self.__a[index]
+from mymi.processing.dataset.nifti import convert_to_training
 
-t = Test()
-print(t[1, 2])
+dataset = 'PMCC-HN-TRAIN'
+resolutions = [(4, 4, 4), (2, 2, 2), (1, 1, 2)]
+short_resolutions = ['444', '222', '112']
+
+for res, short_res in zip(resolutions, short_resolutions):
+    dest_dataset = f'{dataset}-{short_res}'
+    convert_to_training(dataset, dest_dataset=dest_dataset, output_spacing=res)

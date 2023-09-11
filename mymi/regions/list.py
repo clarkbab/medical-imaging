@@ -3,6 +3,8 @@ from enum import Enum
 class RegionList(list, Enum):
     # MICCAI 2015 dataset (PDDCA).
     MICCAI = ['Bone_Mandible', 'Brainstem', 'Glnd_Submand_L', 'Glnd_Submand_R', 'OpticChiasm', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R']
+    MICCAI_SHORT = ['BM', 'BS', 'SL', 'SR', 'OC', 'OL', 'OR', 'PL', 'PR']
+    MICCAI_CVG_THRESHOLDS = [0.75, 0.71, 0.63, 0.61, 0.11, 0.59, 0.54, 0.7, 0.71]
 
     # PMCC vendor evaluation.
     PMCC_COMP = [

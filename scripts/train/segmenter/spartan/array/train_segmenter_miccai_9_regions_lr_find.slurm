@@ -7,11 +7,11 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 0-03:00:00
+#SBATCH --time 0-00:05:00
 ##SBATCH --test-only
 
-module load python/3.8.6
-module load web_proxy
+module load GCCcore/11.3.0
+module load Python/3.10.4
 source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
@@ -27,13 +27,11 @@ REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai-lr-find"
 #RESOLUTION="444"
-#PRECISION=32
 DATASET="MICCAI-2015-$RESOLUTION"
+PRECISION='bf16'
 #RANDOM_SEED=42
 LR_FIND=True
-USE_WEIGHTING=True
-#WEIGHTING_SCHEME='5a'
-RUN_NAME="9-regions-$RESOLUTION-$PRECISION-$RANDOM_SEED-scheme-$WEIGHTING_SCHEME"
+RUN_NAME="9-regions-$RESOLUTION-$RANDOM_SEED"
 CKPT_MODEL=True
 N_GPUS=1
 N_NODES=1
@@ -62,6 +60,4 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
-    --use_logger $USE_LOGGER \
-    --use_weighting $USE_WEIGHTING \
-    --weighting_scheme $WEIGHTING_SCHEME
+    --use_logger $USE_LOGGER

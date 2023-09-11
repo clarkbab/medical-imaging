@@ -108,23 +108,14 @@ class NIFTIDataset(Dataset):
 
         return pat_ids
 
-    def list_regions(
-        self,
-        use_patient_regions_report: bool = True) -> List[str]:
-        # # Use patient regions report to accelerate 'list_regions'.
-        # if use_patient_regions_report and self.__load_patient_regions_report(exists_only=True):
-        #     logging.info(f"Using patient regions report to accelerate 'list_regions'.")
-        #     df = self.__load_patient_regions_report()
-        #     regions = list(sorted(df['region'].unique()))
-        #     return regions
-
+    def list_regions(self) -> List[str]:
         # Load each patient.
         regions = []
         pat_ids = self.list_patients()
         for pat_id in pat_ids:
             pat_regions = self.patient(pat_id).list_regions()
             regions += pat_regions
-        regions = list(sorted(np.unique(regions)))
+        regions = list(sorted([str(r) for r in np.unique(regions)]))
 
         return regions
 

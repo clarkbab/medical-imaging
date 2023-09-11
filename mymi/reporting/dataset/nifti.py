@@ -68,10 +68,11 @@ def get_region_overlap_summary(
 
 def get_region_summary(
     dataset: str,
-    region: str) -> DataFrame:
+    region: str,
+    labels: Literal['included', 'excluded', 'all'] = 'included') -> DataFrame:
     # List patients.
     set = NIFTIDataset(dataset)
-    pats = set.list_patients(labels='all', region=region)
+    pat_ids = set.list_patients(labels=labels, region=region)
 
     cols = {
         'dataset': str,
@@ -81,13 +82,13 @@ def get_region_summary(
     }
     df = DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats):
-        spacing = set.patient(pat).ct_spacing
-        label = set.patient(pat).region_data(labels='all', region=region)[region]
+    for pat_id in tqdm(pat_ids):
+        spacing = set.patient(pat_id).ct_spacing
+        label = set.patient(pat_id).region_data(labels=labels, region=region)[region]
 
         data = {
             'dataset': dataset,
-            'patient-id': pat,
+            'patient-id': pat_id,
         }
 
         # Add 'min/max' extent metrics.
@@ -176,7 +177,7 @@ def create_region_overlap_summary(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def create_region_summary(
+def create_region_summary_report(
     dataset: str,
     region: Optional[PatientRegions] = None) -> None:
     logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
@@ -196,7 +197,7 @@ def create_region_summary(
             return
 
         # Generate counts report.
-        df = get_region_summary(dataset, region)
+        df = get_region_summary(dataset, region, labels='all')
 
         # Save report.
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
@@ -326,33 +327,35 @@ def load_region_overlap_summary(
 
     return df
 
-def load_region_summary(
-    dataset: str,
-    labels: Literal['included', 'excluded', 'all'] = 'all',
+def load_region_summary_report(
+    dataset: Union[str, List[str]],
+    labels: Literal['included', 'excluded', 'all'] = 'included',
     region: Optional[PatientRegions] = None,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
+    datasets = arg_to_list(dataset, str)
     regions = arg_to_list(region, str)
-
-    # Get regions if 'None'.
-    set = NIFTIDataset(dataset)
-    if regions is None:
-        regions = set.list_regions()
 
     # Load summary.
     dfs = []
-    for region in regions:
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        if not os.path.exists(filepath):
-            if raise_error:
-                raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
-            else:
-                # Skip this region.
-                continue
+    for dataset in datasets:
+        # Get regions if 'None'.
+        set = NIFTIDataset(dataset)
+        if regions is None:
+            regions = set.list_regions()
 
-        # Add CSV.
-        df = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        df.insert(1, 'region', region)
-        dfs.append(df)
+        for region in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+            if not os.path.exists(filepath):
+                if raise_error:
+                    raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+                else:
+                    # Skip this region.
+                    continue
+
+            # Add CSV.
+            df = pd.read_csv(filepath, dtype={ 'patient-id': str })
+            df.insert(1, 'region', region)
+            dfs.append(df)
 
     # Concatenate loaded files.
     if len(dfs) == 0:
@@ -374,14 +377,15 @@ def load_region_summary(
 
     return df
 
-def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
-    if type(datasets) == str:
-        datasets = [datasets]
+def load_region_count_report(
+        dataset: Union[str, List[str]],
+        labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
+    datasets = arg_to_list(dataset, str)
 
     # Load/concat region counts.
     dfs = []
     for dataset in datasets:
-        df = load_region_summary(dataset)
+        df = load_region_summary_report(dataset, labels=labels)
         df = df.groupby('region').count()[['patient-id']].rename(columns={ 'patient-id': 'count' }).reset_index()
         df.insert(0, 'dataset', dataset)
         dfs.append(df)
@@ -393,12 +397,10 @@ def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
 
 def get_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> pd.DataFrame:
-    logging.info(f"Creating CT summary for dataset '{dataset}'.")
-
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get patients.
     set = NIFTIDataset(dataset)
-    pats = set.list_patients(region=regions)
+    pats = set.list_patients(region=region)
 
     cols = {
         'dataset': str,
@@ -435,29 +437,31 @@ def get_ct_summary(
 
     return df
 
-def create_ct_summary(
+def create_ct_summary_report(
     dataset: str,
-    region: PatientRegions = 'all') -> None:
-    regions = region_to_list(region)
+    region: Optional[PatientRegions] = None) -> None:
+    # Get regions.
+    set = NIFTIDataset(dataset)
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     # Get summary.
-    df = get_ct_summary(dataset)
+    df = get_ct_summary(dataset, region=regions)
 
     # Save summary.
-    set = NIFTIDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
+    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def load_ct_summary(
+def load_ct_summary_report(
     dataset: str,
-    region: PatientRegions = 'all') -> pd.DataFrame:
-    regions = region_to_list(region)
-
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get regions.
     set = NIFTIDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
+
+    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"CT summary doesn't exist for dataset '{dataset}'.")
+        raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
     return pd.read_csv(filepath)
 
 def create_segmenter_prediction_figures(
@@ -611,7 +615,6 @@ def create_region_figures(
         table_l_margin = 12
         table_line_height = 2 * pdf.font_size
         table_col_widths = (15, 35, 30, 45, 45)
-        print(pat_id)
         pat_info = df[df['patient-id'] == pat_id].iloc[0]
         table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
         for axis in ['x', 'y', 'z']:
