@@ -7,11 +7,11 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 0-01:00:00
+#SBATCH --time 0-06:00:00
 ##SBATCH --test-only
 
-module load python/3.8.6
-module load web_proxy
+module load GCCcore/11.3.0
+module load Python/3.10.4
 source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
@@ -19,31 +19,36 @@ echo $version
 
 REGIONS=(
     "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
+    "['OpticChiasm','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
 )
 SHORT_REGIONS=(
-    "ALL"
+    'BM_BS_SL_SR_OL_OR_PL_PR'
+    'OC'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai"
-RESOLUTION="222"
+MODEL_NAME="segmenter-miccai-lr-find"
+RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
-N_SPLIT_CHANNELS=1
-RUN_NAME="baseline-8-regions-$SHORT_REGION-$RESOLUTION"
+LR_INIT=1e-4
+LR_FIND=True
+N_SPLIT_CHANNELS=2
+#RANDOM_SEED=42
+RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
-LR_FIND=True
-LR_INIT=1e-3
-LR_SCHEDULER=False
-N_EPOCHS=500
+INCLUDE_BACKGROUND=False
+N_EPOCHS=10000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
+PRECISION='bf16'
 RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
-USE_LOGGER=False
+USE_LOGGER=True
+USE_LR_SCHEDULER=False
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -52,16 +57,21 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
+    --include_background $INCLUDE_BACKGROUND \
     --lr_find $LR_FIND \
     --lr_init $LR_INIT \
-    --lr_scheduler $LR_SCHEDULER \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
+    --precision $PRECISION \
+    --random_seed $RANDOM_SEED \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
+    --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
+    --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
-    --use_logger $USE_LOGGER 
+    --use_logger $USE_LOGGER \
+    --use_lr_scheduler $USE_LR_SCHEDULER

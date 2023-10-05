@@ -270,6 +270,118 @@ def __assert_slice_idx(
 def __assert_view(view: int):
     assert view in (0, 1, 2)
 
+def plot_heatmap(
+    pat_id: str,
+    spacing: ImageSpacing3D,
+    alpha_region: float = 0.5,
+    centre_of: Optional[str] = None,
+    crop: Optional[Union[str, Crop2D]] = None,
+    crop_margin: float = 100,
+    ct_data: Optional[np.ndarray] = None,
+    extent_of: Optional[str] = None,
+    figsize: Tuple[int, int] = (8, 8),
+    latex: bool = False,
+    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    linestyle_region: bool = 'solid',
+    region_data: Optional[Dict[str, np.ndarray]] = None,
+    show_region_extent: bool = True,
+    slice_idx: Optional[int] = None,
+    view: Axis = 0, 
+    **kwargs) -> None:
+    __assert_slice_idx(centre_of, extent_of, slice_idx)
+
+    # Create plot figure/axis.
+    if ax is None:
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+
+    # Set latex as text compiler.
+    rc_params = plt.rcParams.copy()
+    if latex:
+        plt.rcParams.update({
+            "font.family": "serif",
+            'text.usetex': True
+        })
+
+    if centre_of is not None:
+        # Get 'slice_idx' at centre of data.
+        label = region_data[centre_of] if type(centre_of) == str else centre_of
+        extent_centre = get_extent_centre(label)
+        slice_idx = extent_centre[view]
+
+    if extent_of is not None:
+        # Get 'slice_idx' at min/max extent of data.
+        label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
+        extent_end = 0 if extent_of[1] == 'min' else 1
+        extent = get_extent(label)
+        slice_idx = extent[extent_end][view]
+
+    # Plot patient regions.
+    size = ct_data.shape
+    plot_region(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
+
+    if crop is not None:
+        # Convert 'crop' to 'Box2D' type.
+        if type(crop) == str:
+            crop = __get_region_crop(region_data[crop], crop_margin, spacing, view)     # Crop was 'region_data' key.
+        elif type(crop) == np.ndarray:
+            crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
+        else:
+            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+
+    # Plot heatmap.
+    # Get aspect ratio.
+    if not aspect:
+        aspect = __get_aspect_ratio(view, spacing) 
+
+    # Get slice data.
+    heatmap_slice = __get_slice_data(heatmap, slice_idx, view)
+
+    # Crop the image.
+    if crop:
+        pred_slice_data = crop_2D(pred_slice_data, __reverse_box_coords_2D(crop))
+
+    # Plot prediction.
+    if pred_slice_data.sum() != 0: 
+        cmap = ListedColormap(((1, 1, 1, 0), colour))
+        ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+        ax.plot(0, 0, c=colour, label=model_name)
+        if show_pred_contour:
+            ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+
+    # Plot prediction extent.
+    if pred.sum() != 0 and show_pred_extent:
+        # Get prediction extent.
+        pred_extent = get_extent(pred)
+
+        # Plot if extent box is in view.
+        label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
+        __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+
+    # Show legend.
+    if show_legend:
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        for l in plt_legend.get_lines():
+            l.set_linewidth(8)
+
+    # Save plot to disk.
+    if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
+
+    if show:
+        plt.show()
+
+    # Revert latex settings.
+    if latex:
+        plt.rcParams.update({
+            "font.family": rc_params['font.family'],
+            'text.usetex': rc_params['text.usetex']
+        })
+
 def plot_region(
     id: str,
     size: ImageSize3D,
@@ -302,6 +414,7 @@ def plot_region(
     savepath: Optional[str] = None,
     show: bool = True,
     show_axis: bool = True,
+    show_ct: bool = True,
     show_extent: bool = False,
     show_legend: bool = True,
     show_title: bool = True,
@@ -1237,9 +1350,10 @@ def plot_dataframe(
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
-    fontsize_axis_tick_labels: Optional[float] = None,
+    fontsize_label: Optional[float] = None,
     fontsize_legend: Optional[float] = None,
     fontsize_stats: Optional[float] = None,
+    fontsize_tick_label: Optional[float] = None,
     fontsize_title: Optional[float] = None,
     hue_connections_index: Optional[Union[str, List[str]]] = None,
     hue_hatch: Optional[Union[str, List[str]]] = None,
@@ -1292,12 +1406,14 @@ def plot_dataframe(
         raise ValueError(f"Please set 'stats_index' to determine sample pairing for Wilcoxon test.")
 
     # Set default fontsizes.
-    if fontsize_axis_tick_labels is None:
-        fontsize_axis_tick_labels = fontsize
+    if fontsize_label is None:
+        fontsize_label = fontsize
     if fontsize_legend is None:
         fontsize_legend = fontsize
     if fontsize_stats is None:
         fontsize_stats = fontsize
+    if fontsize_tick_label is None:
+        fontsize_tick_label = fontsize
     if fontsize_title is None:
         fontsize_title = fontsize
         
@@ -1507,7 +1623,7 @@ def plot_dataframe(
                     main_legend = axs[i].get_legend()
 
                     # Show outlier legend.
-                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=outlier_legend_loc)
+                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=outlier_legend_loc)
 
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)
@@ -1583,17 +1699,17 @@ def plot_dataframe(
         # Set axis labels.
         x_label = x_label if x_label is not None else ''
         y_label = y_label if y_label is not None else ''
-        axs[i].set_xlabel(x_label, fontsize=fontsize)
-        axs[i].set_ylabel(y_label, fontsize=fontsize)
+        axs[i].set_xlabel(x_label, fontsize=fontsize_label)
+        axs[i].set_ylabel(y_label, fontsize=fontsize_label)
                 
         # Set axis tick labels.
         axs[i].set_xticks(list(range(len(row_x_tick_labels))))
         if show_x_tick_labels:
-            axs[i].set_xticklabels(row_x_tick_labels, fontsize=fontsize_axis_tick_labels, rotation=x_tick_label_rot)
+            axs[i].set_xticklabels(row_x_tick_labels, fontsize=fontsize_tick_label, rotation=x_tick_label_rot)
         else:
             axs[i].set_xticklabels([])
 
-        axs[i].tick_params(axis='y', which='major', labelsize=fontsize)
+        axs[i].tick_params(axis='y', which='major', labelsize=fontsize_tick_label)
 
         # Set axis limits.
         axs[i].set_xlim(*x_lim)
@@ -1772,8 +1888,8 @@ def __get_styles(
 
 def __view_to_text(view: int) -> str:
     if view == 0:
-        return 'axial'
+        return 'sagittal'
     elif view == 1:
         return 'coronal'
     elif view == 2:
-        return 'sagittal'
+        return 'axial'

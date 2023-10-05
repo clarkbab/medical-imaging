@@ -14,6 +14,7 @@ class FocalLoss(nn.Module):
         self,
         pred: torch.Tensor,
         label: torch.Tensor,
+        include_background: bool = True,
         mask: Optional[torch.Tensor] = None,
         weights: Optional[torch.Tensor] = None,
         reduce_channels: bool = True,
@@ -127,35 +128,21 @@ class FocalLoss(nn.Module):
         if weights is not None:
             loss = weights * loss
 
-        # Get "batch-channel" losses. Preserve channel information
-        # if not reducing across channels.
-        n_channels = label.shape[1]
-        bc_losses = [] if reduce_channels else [[] for _ in range(n_channels)]
-        for batch, channel in torch.argwhere(mask):
-            bc_loss = loss[batch, channel]
-
-            if reduce_channels:
-                bc_losses.append(bc_loss)
-            else:
-                # Preserve channel information.
-                bc_losses[channel].append(bc_loss)
-
         if reduce_channels:
-            bc_losses = torch.stack(bc_losses)
+            # Reduce across batch and channel dimensions.
+            dim = (0, 1)
         else:
-            bc_losses = [torch.stack(l) if len(l) > 0 else None for l in bc_losses]
+            # Reduce across batch dimension only.
+            dim = 0
 
-        # Perform reduction across batches or batches/channels.
+        # Remove background channel before computing final loss.
+        if not include_background:
+            loss = loss[:, 1:]
+
         if reduction == 'mean':
-            if reduce_channels:
-                loss = bc_loss.mean()
-            else:
-                loss = torch.cat([l.mean().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
+            loss = loss.mean(dim)
         elif reduction == 'sum':
-            if reduce_channels:
-                loss = bc_loss.sum()
-            else:
-                loss = torch.cat([l.sum().unsqueeze(0) if l is not None else torch.Tensor([torch.nan]).to(label.device) for l in bc_losses])
+            loss = loss.sum(dim)
 
         # Normalise on number of voxels.
         assert label.shape[2] != 0

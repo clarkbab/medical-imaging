@@ -1,15 +1,15 @@
 import subprocess
 
-resolutions = ['112', '222', '444']
-resolutions = ['444']
-random_seeds = [42, 43, 44, 45, 46]
-random_seeds = [42]
+dry_run = False
+
+regions = '0-
+seeds = [42, 43, 44, 45, 46]
 script = 'scripts/train/segmenter/spartan/array/train_segmenter_miccai_9_regions_lr_find.slurm'
 
-for resolution in resolutions:
-    for random_seed in random_seeds:
-        export = f'ALL,RESOLUTION={resolution},RANDOM_SEED={random_seed}'
-        command = f'sbatch --array=0 --export={export} {script}' 
-        print(command)
+for seed in seeds:
+    export = f'ALL,RANDOM_SEED={seed}'
+    command = f'sbatch --array={regions} --export={export} {script}' 
+    print(command)
+    if not dry_run:
         process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
         process.communicate()

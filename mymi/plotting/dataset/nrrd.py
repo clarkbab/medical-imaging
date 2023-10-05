@@ -3,12 +3,14 @@ import re
 from typing import Dict, List, Literal, Optional, Union
 
 from mymi.dataset import NRRDDataset
+from mymi.multi_class.gradcam import load_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
 from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
+from ..plotter import plot_heatmap as plot_heatmap_base
 from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
 from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
@@ -473,3 +475,31 @@ def __reduce_region_diffs(diffs: List[int]) -> int:
         
     # If no pos/neg diffs, or conflicting diffs, show nothing.
     return 0
+
+def plot_heatmap(
+    dataset: str,
+    pat_id: str,
+    model: ModelName,
+    region: str,
+    layer: int,
+    centre_of: Optional[str] = None,
+    crop: Optional[Union[str, Crop2D]] = None,
+    **kwargs) -> None:
+    # Load data.
+    set = NRRDDataset(dataset)
+    pat = set.patient(pat_id)
+    ct_data = pat.ct_data
+    region_data = pat.region_data(region=region)
+    spacing = pat.ct_spacing
+
+    # Load heatmap.
+    heatmap = load_heatmap(dataset, pat_id, model, region, layer)
+
+    if centre_of is not None:
+        centre_of = pat.region_data(region=centre_of)[centre_of]
+
+    if type(crop) == str:
+        crop = pat.region_data(region=crop)[crop]
+    
+    # Plot.
+    plot_heatmap_base(pat_id, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)

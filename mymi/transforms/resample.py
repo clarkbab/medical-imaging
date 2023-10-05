@@ -34,6 +34,12 @@ def resample_3D(
         - if None, will take on value of 'spacing'.
         - if specified, will change the spatial resolution of the image.
     """
+    # Convert datatypes.
+    if spacing is not None:
+        spacing = tuple(float(s) for s in spacing)
+    if output_spacing is not None:
+        output_spacing = tuple(float(s) for s in output_spacing)
+
     # Convert boolean data to sitk-friendly type.
     boolean = input.dtype == bool
     if boolean:

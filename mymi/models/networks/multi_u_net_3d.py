@@ -196,6 +196,10 @@ class LayerWrapper(nn.Module):
         self.__name = name
 
     @property
+    def layer(self) -> nn.Module:
+        return self.__layer
+
+    @property
     def name(self) -> str:
         return f"{self.__name} ({self.__layer})"
 

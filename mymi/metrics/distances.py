@@ -11,15 +11,14 @@ def distances_deepmind(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D,
-    tolerances: Union[float, List[float]]) -> Dict[str, float]:
+    tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:
         raise ValueError(f"Metric 'distances' expects boolean arrays. Got '{a.dtype}' and '{b.dtype}'.")
     if a.sum() == 0 or b.sum() == 0:
         raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
-    if type(tolerances) == int or type(tolerances) == float:
-        tolerances = [tolerances]
+    tols = arg_to_list(tol, (int, float))
 
     surf_dists = compute_surface_distances(a, b, spacing) 
     metrics = {
@@ -27,7 +26,7 @@ def distances_deepmind(
         'msd': np.mean(compute_average_surface_distance(surf_dists)),
         'hd-95': compute_robust_hausdorff(surf_dists, 95)
     }
-    for tol in tolerances:
+    for tol in tols:
         metrics[f'surface-dice-tol-{tol}'] = compute_surface_dice_at_tolerance(surf_dists, tol)
 
     return metrics

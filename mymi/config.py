@@ -32,6 +32,13 @@ class Directories:
         return filepath
 
     @property
+    def lr_find(self):
+        filepath = os.path.join(self.root, 'lr-find')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
+
+    @property
     def predictions(self):
         filepath = os.path.join(self.root, 'predictions')
         if not os.path.exists(filepath):

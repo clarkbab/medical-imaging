@@ -1,23 +1,17 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
-#SBATCH --mem 128G
+#SBATCH --mem 64G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 0-14:00:00
-##SBATCH --time 2-00:00:00
-#SBATCH --time 7-00:00:00
+#SBATCH --time 0-06:00:00
 ##SBATCH --test-only
 
-module load python/3.8.6
-module load web_proxy
+module load GCCcore/11.3.0
+module load Python/3.10.4
 source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
@@ -47,15 +41,14 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-no-background"
+MODEL_NAME="segmenter-miccai-lr-find"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 LR_INIT=1e-4
 LR_FIND=True
 N_SPLIT_CHANNELS=2
-RANDOM_SEED=43
+#RANDOM_SEED=42
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION"
 BATCH_SIZE=1
 CKPT_MODEL=True
 INCLUDE_BACKGROUND=False

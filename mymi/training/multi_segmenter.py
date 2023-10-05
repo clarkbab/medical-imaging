@@ -17,33 +17,38 @@ from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter, Segmenter
+from mymi.regions import RegionList
 from mymi.reporting.loaders import get_multi_loader_manifest
+from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_multi_segmenter(
     dataset: Union[str, List[str]],
-    region: str,
+    region: PatientRegions,
     model_name: str,
     run_name: str,
     batch_size: int = 1,
     ckpt_model: bool = True,
     complexity_weights_factor: float = 1,
     complexity_weights_window: int = 5,
+    cw_cvg_calculate: bool = True,
     cw_cvg_delay_above: int = 20,
     cw_cvg_delay_below: int = 5,
-    cw_cvg_thresholds: List[float] = [],
     cw_factor: Optional[Union[float, List[float]]] = None,
     cw_schedule: Optional[List[float]] = None,
+    dilate_iters: Optional[List[int]] = None,
+    dilate_region: Optional[PatientRegions] = None,
+    dilate_schedule: Optional[List[int]] = None,
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
-    lr_find_iter: int = 1e3,
+    lr_find_iter: int = 10,
     lr_find_min_lr: float = 1e-6,
-    lr_find_max_lr: float = 1e3,
+    lr_find_max_lr: float = 1,
     lr_init: float = 1e-3,
     lr_milestones: List[int] = [],
     n_epochs: int = 100,
@@ -70,12 +75,14 @@ def train_multi_segmenter(
     use_augmentation: bool = True,
     use_complexity_weights: bool = False,
     use_cvg_weighting: bool = False,
+    use_dilation: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
     use_stand: bool = False,
     use_thresh: bool = False,
     use_weights: bool = False,
+    val_image_interval: int = 50,
     weight_decay: float = 0,
     weights: Optional[List[float]] = None,
     weights_iv_factor: Optional[Union[float, List[float]]] = None,
@@ -100,6 +107,7 @@ def train_multi_segmenter(
         loss_fn = DiceLoss()
     elif loss_fn == 'dice_with_focal':
         loss_fn = DiceWithFocalLoss(lam=lam)
+    logging.info(f"Using loss function: {loss_fn}")
 
     # Calculate volume weights.
     if use_weights and weights_iv_factor is not None:
@@ -114,18 +122,20 @@ def train_multi_segmenter(
             if len(weights_iv_factors) != 1:
                 raise ValueError(f"When using inverse volume weighting with multiple factors ({len(weights_iv_factors)}), must pass 'weights_schedule'.")
 
-        # Define inverse volumes.
-        inv_volumes = np.array([
-            1.81605095e-05,
-            3.75567497e-05,
-            1.35979999e-04,
-            1.34588032e-04,
-            1.71684281e-03,
-            1.44678695e-03,
-            1.63991258e-03,
-            3.45656440e-05,
-            3.38292316e-05
-        ])
+        # Infer inverse volumes from dataset name.
+        first_dataset = arg_to_list(dataset, str)[0]
+        if 'MICCAI-2015' in first_dataset:
+            all_regions = RegionList.MICCAI
+            all_inv_volumes = RegionList.MICCAI_INVERSE_VOLUMES
+            region_idxs = [all_regions.index(r) for r in regions]
+            inv_volumes = [all_inv_volumes[i] for i in region_idxs]
+        elif 'PMCC' in first_dataset:
+            all_regions = RegionList.PMCC
+            all_inv_volumes = RegionList.PMCC_INVERSE_VOLUMES
+            region_idxs = [all_regions.index(r) for r in regions]
+            inv_volumes = [all_inv_volumes[i] for i in region_idxs]
+        else:
+            raise ValueError(f"Couldn't infer 'inv_volumes' from dataset name '{first_dataset}'.")
 
         # Calculate weights.
         weights = []
@@ -157,34 +167,65 @@ def train_multi_segmenter(
     # Create data loaders.
     train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, epoch=epoch, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
 
+    # Infer convergence thresholds from dataset name.
+    # We need these even when 'use_cvg_weighting=False' as it allows us to track
+    # converged OARs via wandb API.
+    if cw_cvg_calculate:
+        first_dataset = arg_to_list(dataset, str)[0]
+        if 'MICCAI-2015' in first_dataset:
+            all_regions = RegionList.MICCAI
+            all_thresholds = RegionList.MICCAI_CVG_THRESHOLDS
+            region_idxs = [all_regions.index(r) for r in regions]
+            cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
+        elif 'PMCC' in first_dataset:
+            all_regions = RegionList.PMCC
+            all_thresholds = RegionList.PMCC_CVG_THRESHOLDS
+            region_idxs = [all_regions.index(r) for r in regions]
+            cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
+        else:
+            raise ValueError(f"Couldn't infer 'cw_cvg_thresholds' from dataset name '{first_dataset}'.")
+    else:
+        cw_cvg_thresholds = None
+
     # Create model.
     model = MultiSegmenter(
         complexity_weights_factor=complexity_weights_factor,
         complexity_weights_window=complexity_weights_window,
+        cw_cvg_calculate=cw_cvg_calculate,
         cw_cvg_delay_above=cw_cvg_delay_above,
         cw_cvg_delay_below=cw_cvg_delay_below,
         cw_cvg_thresholds=cw_cvg_thresholds,
         cw_factor=cw_factor,
         cw_schedule=cw_schedule,
+        dilate_iters=dilate_iters,
+        dilate_region=dilate_region,
+        dilate_schedule=dilate_schedule,
         loss=loss_fn,
+        lr_find=lr_find,
         lr_init=lr_init,
         lr_milestones=lr_milestones,
         halve_channels=halve_channels,
         metrics=['dice'],
+        model_name=model_name,
         n_gpus=n_gpus,
         n_split_channels=n_split_channels,
         random_seed=random_seed,
         region=regions,
+        run_name=run_name,
         use_complexity_weights=use_complexity_weights,
         use_cvg_weighting=use_cvg_weighting,
+        use_dilation=use_dilation,
         use_lr_scheduler=use_lr_scheduler,
         use_weights=use_weights,
+        val_image_interval=val_image_interval,
         weights=weights,
         weights_schedule=weights_schedule,
         weight_decay=weight_decay)
 
     # Create logger.
     if use_logger:
+        logging.info(f"Creating Wandb logger.")
+
         logger = WandbLogger(
             # group=f"{model_name}-{run_name}",
             project=model_name,

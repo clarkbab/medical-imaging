@@ -11,7 +11,7 @@ CKPT_KEYS = [
     'epoch',
     'global_step'
 ]
-CKPT_LAST_REGEXP = r'^last(-v([0-1]+))?$'
+CKPT_LAST_REGEXP = r'^last(-v([0-9]+))?$'
 
 def get_localiser(region: str) -> ModelName:
     return (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
@@ -74,14 +74,11 @@ def replace_ckpt_alias(
                 raise ValueError(f"No run '{model[1]}' exists for model '{model[0]}'.")
             ckpts = os.listdir(ckpts_path)
             ckpts = [c.replace('.ckpt', '') for c in ckpts]
-            last_ckpts = [c for c in ckpts if match(CKPT_LAST_REGEXP, c) is not None]
+            last_ckpts = list(sorted([c for c in ckpts if match(CKPT_LAST_REGEXP, c) is not None]))
             if len(last_ckpts) == 0:
                 raise ValueError(f"No 'last' checkpoint exists for model '{model[0]}', run '{model[1]}'. Filepath: {filepath}.")
 
             # Find the latest 'last' checkpoint.
-            if len(last_ckpts) == 1:
-                ckpt = last_ckpts[0]
-            else:
-                ckpt = last_ckpts[-2]
+            ckpt = last_ckpts[-1]
 
     return (*model[:2], ckpt)
