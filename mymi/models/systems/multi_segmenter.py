@@ -433,8 +433,6 @@ class MultiSegmenter(pl.LightningModule):
         if not reduce_channels:
             losses.update(region_losses)
 
-        logging.info(losses)
-
         return losses
 
     def validation_step(self, batch, batch_idx):

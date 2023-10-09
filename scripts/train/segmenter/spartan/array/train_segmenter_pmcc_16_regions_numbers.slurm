@@ -1,18 +1,12 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 16
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-##SBATCH --time 4-00:00:00
 #SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
@@ -37,29 +31,29 @@ MODEL_NAME="segmenter-pmcc-numbers"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
-RANDOM_SEED=42
-SCHEDULE_EPOCHS=1000
 USE_CVG_WEIGHTING=False
 CW_CVG_DELAY_ABOVE=20
 CW_CVG_DELAY_BELOW=5
 CW_FACTOR_0=2
 CW_FACTOR="[$CW_FACTOR_0,0]"
 CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
-USE_WEIGHTS=True
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.7
+WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
-#RUN_NAME="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-cw-$CW_FACTOR_0-ivw-$WEIGHTS_IV_FACTOR_0"
+RESUME=False
+LR_INIT=1e-3
+RANDOM_SEED=46
+USE_WEIGHTS=True
+SCHEDULE_EPOCHS=1000
 RUN_NAME="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+#RUN_NAME="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
+WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 BATCH_SIZE=1
 CKPT_MODEL=True
-LR_INIT=1e-3
 N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False

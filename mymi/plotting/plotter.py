@@ -1380,6 +1380,7 @@ def plot_dataframe(
     show_stats: bool = False,
     show_x_tick_labels: bool = True,
     show_x_tick_label_counts: bool = True,
+    stats_exclude: List[str] = [],
     stats_index: Optional[Union[str, List[str]]] = None,
     stats_text_offset: Optional[float] = None,
     stats_two_sided: bool = False,
@@ -1654,9 +1655,9 @@ def plot_dataframe(
                         pairs.append(pair)
 
             # Calculate p-values.
-            p_vals = []
-            pairs_tmp = pairs
+            pairs_tmp = pairs.copy()
             pairs = []  # Some pairs may be removed if there is not data.
+            p_vals = []
             for (x_a, hue_a), (x_b, hue_b) in pairs_tmp:
                 assert x_a == x_b
                 x_val = x_a
@@ -1683,6 +1684,17 @@ def plot_dataframe(
                             if p_val <= 0.05:
                                 p_vals.append((p_val, '<'))
                                 pairs.append(pair)
+
+            # Exclude pairs.
+            pairs_tmp = pairs.copy()
+            p_vals_tmp = p_vals.copy()
+            pairs = []
+            p_vals = []
+            for pair, p_val in zip(pairs_tmp, p_vals_tmp):
+                (x_a, hue_a), (x_b, hue_b) = pair    
+                if hue_a not in stats_exclude and hue_b not in stats_exclude:
+                    pairs.append(pair)
+                    p_vals.append(p_val)
 
             # Format p-values.
             p_vals = __format_p_values(p_vals) 

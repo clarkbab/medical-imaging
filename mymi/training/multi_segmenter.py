@@ -61,6 +61,7 @@ def train_multi_segmenter(
     precision: Union[str, int] = 'bf16',
     random_seed: float = 0,
     resume: bool = False,
+    resume_model: Optional[str] = None,
     resume_run: Optional[str] = None,
     resume_ckpt: str = 'last',
     resume_ckpt_version: Optional[int] = None,
@@ -117,7 +118,7 @@ def train_multi_segmenter(
         weights_iv_factors = arg_to_list(weights_iv_factor, float)
         if weights_schedule is not None:
             if len(weights_iv_factors) != len(weights_schedule):
-                raise ValueError(f"When using inverse volume weighting, number of factors ({len(weights_iv_factors)}) should equal number of schedule points ({len(weights_schedule)}).")
+                raise ValueError(f"When using inverse volume weighting, number of factors ({weights_iv_factors}, len={len(weights_iv_factors)}) should equal number of schedule points ({weights_schedule}, len={len(weights_schedule)}).")
         else:
             if len(weights_iv_factors) != 1:
                 raise ValueError(f"When using inverse volume weighting with multiple factors ({len(weights_iv_factors)}), must pass 'weights_schedule'.")
@@ -153,9 +154,10 @@ def train_multi_segmenter(
     opt_kwargs = {}
     if resume:
         # Get checkpoint path.
+        resume_model = resume_model if resume_model is not None else model_name
         resume_run = resume_run if resume_run is not None else run_name
-        _, _, resume_ckpt = replace_ckpt_alias((model_name, resume_run, resume_ckpt), ckpt_version=resume_ckpt_version)
-        ckpt_path = os.path.join(config.directories.models, model_name, resume_run, f'{resume_ckpt}.ckpt')
+        _, _, resume_ckpt = replace_ckpt_alias((resume_model, resume_run, resume_ckpt), ckpt_version=resume_ckpt_version)
+        ckpt_path = os.path.join(config.directories.models, resume_model, resume_run, f'{resume_ckpt}.ckpt')
         opt_kwargs['ckpt_path'] = ckpt_path
 
         # Get training epoch.

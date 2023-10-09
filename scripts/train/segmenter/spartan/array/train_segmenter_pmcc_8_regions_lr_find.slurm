@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -38,7 +38,7 @@ RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
 LR_FIND=True
-LR_FIND_ITER=10
+LR_FIND_ITER=500
 LR_INIT=1e-3
 N_EPOCHS=1000
 N_GPUS=1

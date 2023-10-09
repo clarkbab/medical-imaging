@@ -27,6 +27,7 @@ def train_localiser(
     n_nodes: int = 1,
     n_train: Optional[int] = None,
     n_workers: int = 1,
+    precision: Union[int, str] = 16,
     pretrained: Optional[Tuple[str, str, str]] = None,
     p_val: float = 0.2,
     resume: bool = False,
@@ -58,8 +59,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    # train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, region=region, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
 
     # Get loss function.
     if loss == 'dice':
@@ -115,12 +115,13 @@ def train_localiser(
     
     # Perform training.
     trainer = Trainer(
-        # accelerator='ddp',
+        accelerator='gpu' if n_gpus > 0 else 'cpu',
         callbacks=callbacks,
-        gpus=list(range(n_gpus)),
+        devices=list(range(n_gpus)) if n_gpus > 0 else 1,
         logger=logger,
         max_epochs=n_epochs,
+        num_nodes=n_nodes,
         num_sanity_val_steps=0,
-        precision=16,
+        precision=precision,
         **opt_kwargs)
     trainer.fit(model, train_loader, val_loader)

@@ -17,7 +17,7 @@ from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
 from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
-from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, Point3D
+from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -345,16 +345,14 @@ def get_segmenter_prediction(
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    region: Union[str, List[str]],
     model: Union[ModelName, Model],
+    model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
-    # 'regions' is used to determine the output channels for the multi-class model.
-    regions = arg_to_list(region, str)
     assert len(datasets) == len(pat_ids)
 
     # Load gpu if available.
@@ -369,7 +367,7 @@ def create_multi_segmenter_prediction(
     # Load PyTorch model.
     if type(model) == tuple:
         n_gpus = 0 if device.type == 'cpu' else 1
-        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=region, **kwargs)
+        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=model_region, **kwargs)
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
@@ -386,14 +384,6 @@ def create_multi_segmenter_prediction(
             savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'pred.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
-
-        # Save region names.
-        if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'regions.csv')
-        else:
-            savepath = os.path.join(os.path.dirname(savepath), 'regions.csv')
-        df = pd.DataFrame(regions, columns='region')
-        df.to_csv(savepath)
 
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
@@ -456,16 +446,16 @@ def create_segmenter_prediction(
 
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
+    region: PatientRegions,
     model: Union[ModelName, Model],
-    model_region: Union[str, List[str]],
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
-    logging.arg_log('Making multi-segmenter predictions', ('dataset', 'model', 'model_regions'), (dataset, model, model_regions))
+    logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    model_regions = arg_to_list(model_region, str)
+    regions = arg_to_list(region, str)
     model_spacing = TrainingDataset(datasets[0]).params['output-spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
     # Load gpu if available.
@@ -488,7 +478,12 @@ def create_multi_segmenter_predictions(
         timer = Timer(cols)
 
     # Create test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=model_regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = MultiSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
 
     # Make predictions.
     for pat_desc_b in tqdm(iter(test_loader)):
@@ -507,11 +502,11 @@ def create_multi_segmenter_predictions(
             }
 
             with timer.record(data, enabled=use_timing):
-                create_multi_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, device=device, **kwargs)
+                create_multi_segmenter_prediction(dataset, pat_id, model, regions, model_spacing, device=device, **kwargs)
 
     # Save timing data.
     if use_timing:
-        model_name = model if type(model) == tuple else model.name
+        model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
         filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-device-{device.type}-timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)

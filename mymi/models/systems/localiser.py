@@ -17,7 +17,7 @@ from mymi import types
 
 from ..networks import MultiUNet3D, UNet3D
 
-MODE = 1
+MODE = 0
 
 class Localiser(pl.LightningModule):
     def __init__(

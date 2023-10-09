@@ -1,13 +1,11 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100-short
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 1
-#SBATCH --time 0-06:00:00
+#SBATCH --cpus-per-gpu 8
+#SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -18,43 +16,41 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['BrachialPlexus_L','BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"     # 0
-    "['Brain','OralCavity','BrainStem','Mandible']"                             # 1
-    "['Cochlea_L','Cochlea_R','Lens_L','Lens_R']"                               # 2
-    "['Parotid_L','Parotid_R','Submandibular_L','Submandibular_R']"             # 3
-    "['SpinalCord','Brainstem','Parotid_L','Parotid_R']"                        # 4
+    "['Bone_Mandible','Brainstem']"         # 0
+    "['Glnd_Submand_L','Glnd_Submand_R']"   # 1
+    "['OpticChiasm','OpticNrv_L']"          # 2
+    "['OpticNrv_L','OpticNrv_R']"           # 3
+    "['Parotid_L','Parotid_R']"             # 4
 )
 SHORT_REGIONS=(
-    'BL_BR_OL_OR'
-    'B_OC_BS_M'  
-    'CL_CR_LL_LR'
-    'PL_PR_SL_SR'
-    'SC'
+    'BM_BS'
+    'SL_SR'
+    'OC'
+    'OL_OR'
+    'PL_PR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-lr-find"
+MODEL_NAME="segmenter-miccai-numbers-boost"
 RESOLUTION="112"
-DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
+DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
-#RANDOM_SEED=42
-RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+RANDOM_SEED=42
+LR_INIT=1e-4
+RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
 BATCH_SIZE=1
 CKPT_MODEL=True
-LR_FIND=True
-LR_FIND_ITER=500
-LR_INIT=1e-3
-N_EPOCHS=1000
+N_EPOCHS=7000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
+RESUME=True
 RESUME_CKPT='last'
+RESUME_MODEL="segmenter-miccai-numbers"
+RESUME_RUN="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
-USE_LOADER_SPLIT_FILE=False
-N_FOLDS=5
-TEST_FOLD=0
-USE_LOGGER=False
+USE_LOADER_SPLIT_FILE=True
+USE_LOGGER=True
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -63,21 +59,19 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
-    --lr_find $LR_FIND \
-    --lr_find_iter $LR_FIND_ITER \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
-    --n_folds $N_FOLDS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \
+    --resume_model $RESUME_MODEL \
+    --resume_run $RESUME_RUN \
     --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
-    --test_fold $TEST_FOLD \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER

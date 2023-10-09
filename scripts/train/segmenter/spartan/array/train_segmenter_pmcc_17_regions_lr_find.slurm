@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -18,12 +18,10 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['BrachialPlexus_L','BrachialPlexus_R','OpticNerve_L','OpticNerve_R','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Brain','OralCavity','BrainStem','Mandible','Parotid_L','Parotid_R','Submandibular_L','Submandibular_R']"           # 0
-    "['SpinalCord','Mandible','BrainStem','OralCavity','Parotid_L','Parotid_R','Submandibular_L','Submandibular_R','BrachialPlexus_L','BrachialPlexus_R','OpticNerve_L','OpticNerve_R','Cochlea_L','Cochlea_R','Lens_L','Lens_R']"      # 1
+    "['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"           # 0
 )
 SHORT_REGIONS=(
-    'BL_BR_OL_OR_CL_CR_LL_LR_B_OC_BS_M_PL_PR_SL_SR'
-    'SC'
+    'ALL'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
@@ -36,7 +34,7 @@ RUN_NAME="17-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
 LR_FIND=True
-LR_FIND_ITER=10
+LR_FIND_ITER=500
 LR_INIT=1e-3
 N_EPOCHS=1000
 N_GPUS=1

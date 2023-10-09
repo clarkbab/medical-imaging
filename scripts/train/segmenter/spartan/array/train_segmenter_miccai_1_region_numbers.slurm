@@ -13,7 +13,7 @@
 ## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
 ##SBATCH --time 1-06:00:00
 ##SBATCH --time 4-00:00:00
-#SBATCH --time 5-00:00:00
+#SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0

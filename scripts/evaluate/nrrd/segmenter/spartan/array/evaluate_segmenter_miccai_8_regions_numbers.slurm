@@ -20,21 +20,21 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
+    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
+    "['OpticChiasm','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
 )
 SHORT_REGIONS=(
-    "ALL"
+    'BM_BS_SL_SR_OL_OR_PL_PR'
+    'OC'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-resolution"
+MODEL_NAME="segmenter-miccai-numbers"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 RANDOM_SEED=42
-CW_FACTOR_0=1
-WEIGHTS_IV_FACTOR_0=0.5
-SCHEDULE_EPOCHS=1000
-RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-cw-$CW_FACTOR_0-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+#RUN_NAME="8-regions-BM_BS_SL_SR_OL_OR_PL_PR-112-seed-42-cw-0-ivw-0.5-schedule-1500"
+RUN_NAME="8-regions-OC-112-seed-43-cw-2-ivw-0.5-schedule-1000"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=True
