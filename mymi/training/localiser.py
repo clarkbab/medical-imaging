@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
@@ -13,7 +14,10 @@ from mymi.loaders import Loader, MultiLoader
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi import logging
 from mymi.models.systems import Localiser, MultiSegmenter
+from mymi.reporting.loaders import get_loader_manifest
 from mymi.utils import arg_to_list
+
+DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_localiser(
     dataset: Union[str, List[str]],
@@ -102,7 +106,7 @@ def train_localiser(
             every_n_epochs=1,
             monitor='val/loss',
             save_last=True,
-            save_top_k=3)
+            save_top_k=1)
     ]
 
     # Add optional trainer args.
@@ -124,4 +128,12 @@ def train_localiser(
         num_sanity_val_steps=0,
         precision=precision,
         **opt_kwargs)
+
+    # Save training information.
+    man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
+    folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
+    os.makedirs(folderpath, exist_ok=True)
+    filepath = os.path.join(folderpath, 'loader-manifest.csv')
+    man_df.to_csv(filepath, index=False)
+
     trainer.fit(model, train_loader, val_loader)

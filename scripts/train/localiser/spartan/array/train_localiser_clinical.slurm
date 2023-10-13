@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --mem 128G
-#SBATCH --time 7-00:00:00
+#SBATCH --time 0-06:00:00
 
 module load GCCcore/11.3.0
 module load Python/3.10.4
@@ -16,7 +16,7 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-DATASET="['PMCC-HN-TEST-444','PMCC-HN-TRAIN-444']"
+DATASET="['PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC']"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -38,14 +38,15 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="localiser-$REGION"
-TEST_FOLD=4
-RUN_NAME="clinical-fold-$TEST_FOLD"
-N_EPOCHS=150
+#TEST_FOLD=0
+#N_TRAIN=None
+RUN_NAME="clinical-fold-$TEST_FOLD-samples-$N_TRAIN"
+#N_EPOCHS=150
 N_FOLDS=5
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
+#RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOGGER=True
@@ -61,6 +62,7 @@ python $SCRIPT_DIR/train/localiser/train_localiser.py \
     --n_folds $N_FOLDS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
+    --n_train $N_TRAIN \
     --n_workers $N_WORKERS \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \

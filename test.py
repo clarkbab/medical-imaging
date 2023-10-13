@@ -12,18 +12,39 @@
 # model = ('segmenter-miccai-arch-modification', 'channels-1-seed-42-cw-1-ivw-1', 'last')
 # print(replace_ckpt_alias(model))
 
-import torch
+# import torch
 
-from mymi.multi_class.gradcam import create_heatmap
+# from mymi.multi_class.gradcam import create_heatmap
 
-dataset = 'MICCAI-2015'
-pat_id = '0522c0001'
-model = ('segmenter-miccai-numbers', '1-region-BM-112-seed-42', 'best')
-model_region = 'Bone_Mandible'
-model_spacing = (1, 1, 2)
-region = 'Bone_Mandible'
-layers = ['5', '12', '19', '26', '33']
-device = torch.device('cuda:0')
+# dataset = 'MICCAI-2015'
+# pat_id = '0522c0001'
+# model = ('segmenter-miccai-numbers', '1-region-BM-112-seed-42', 'best')
+# model_region = 'Bone_Mandible'
+# model_spacing = (1, 1, 2)
+# region = 'Bone_Mandible'
+# layers = ['5', '12', '19', '26', '33']
+# device = torch.device('cuda:0')
 
-create_heatmap(dataset, pat_id, model, model_region, model_spacing, region, layers, device=device)
+# create_heatmap(dataset, pat_id, model, model_region, model_spacing, region, layers, device=device)
+
+from mymi.processing.dataset.nifti import convert_to_training
+from mymi.regions import RegionList
+
+dataset = 'PMCC-HN-TRAIN'
+dest_dataset = f'{dataset}-LOC'
+dilate_regions = [
+    'BrachialPlexus_L',  # 0
+    'BrachialPlexus_R',  # 1
+    'Cochlea_L',         # 4
+    'Cochlea_R',         # 5
+    'Lens_L',            # 6
+    'Lens_R',            # 7
+    'OpticNerve_L',      # 9
+    'OpticNerve_R'       # 10
+]
+output_size = (128, 128, 150)
+output_spacing = (4, 4, 4)
+regions = RegionList.PMCC
+
+convert_to_training(dataset, dest_dataset=dest_dataset, dilate_regions=dilate_regions, output_size=output_size, output_spacing=output_spacing, region=regions)
 

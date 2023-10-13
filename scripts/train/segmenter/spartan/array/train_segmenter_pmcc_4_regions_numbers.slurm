@@ -1,18 +1,12 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-##SBATCH --time 4-00:00:00
 #SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
@@ -53,7 +47,7 @@ WEIGHTS_IV_FACTOR_0=1
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 RESUME=False
 LR_INIT=1e-3
-RANDOM_SEED=42
+RANDOM_SEED=44
 USE_WEIGHTS=False
 SCHEDULE_EPOCHS=1000
 RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"

@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition physical
+#SBATCH --partition cascade
 #SBATCH --mem 32G
 #SBATCH --time 0-02:00:00
 #SBATCH -A punim1413
 
-module load gcccore/8.3.0
-module load python/3.8.2
-module load web_proxy
+module load GCCcore/11.3.0
+module load Python/3.10.4
+source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
 echo $version
@@ -19,7 +19,7 @@ join () {
 }
 
 DATASET="PMCC-HN-TEST"
-DEST_DATASET="$DATASET-LOC"
+DEST_DATASET="$DATASET-LOC-v2"
 REGIONS=(
     'BrachialPlexus_L'  # 0
     'BrachialPlexus_R'  # 1
@@ -60,5 +60,11 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 REGIONS=$(join , "${REGIONS[@]}")
 DILATE_REGIONS=$(join , "${DILATE_REGIONS[@]}")
 
-python $SCRIPT_DIR/process/nifti/convert_to_training --dataset $DATASET --regions $REGIONS --dest_dataset $DEST_DATASET --dilate_regions $DILATE_REGIONS \
-    --round_dp $ROUND_DP --size $SIZE --spacing $SPACING
+python $SCRIPT_DIR/process/nifti/convert_to_training.py \
+    --dataset $DATASET \
+    --dest_dataset $DEST_DATASET \
+    --dilate_regions $DILATE_REGIONS \
+    --region $REGIONS \
+    --round_dp $ROUND_DP \
+    --size $SIZE \
+    --spacing $SPACING

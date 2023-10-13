@@ -1,13 +1,15 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 16
-#SBATCH --time 7-00:00:00
+##SBATCH --time 1-00:00:00
+##SBATCH --time 2-00:00:00
+#SBATCH --time 5-00:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -36,7 +38,7 @@ CW_FACTOR_0=2
 CW_FACTOR="[$CW_FACTOR_0,0]"
 CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.7
+WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 RESUME=False
 LR_INIT=1e-3
@@ -45,6 +47,7 @@ USE_WEIGHTS=True
 SCHEDULE_EPOCHS=1000
 #RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-cw-$CW_FACTOR_0-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
 WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 BATCH_SIZE=1
 CKPT_MODEL=True
