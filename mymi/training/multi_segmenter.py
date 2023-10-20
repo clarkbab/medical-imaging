@@ -38,9 +38,12 @@ def train_multi_segmenter(
     cw_cvg_delay_below: int = 5,
     cw_factor: Optional[Union[float, List[float]]] = None,
     cw_schedule: Optional[List[float]] = None,
+    cyclic_min: Optional[float] = None,
+    cyclic_max: Optional[float] = None,
     dilate_iters: Optional[List[int]] = None,
     dilate_region: Optional[PatientRegions] = None,
     dilate_schedule: Optional[List[int]] = None,
+    grad_acc: int = 1,
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
@@ -77,6 +80,7 @@ def train_multi_segmenter(
     use_complexity_weights: bool = False,
     use_cvg_weighting: bool = False,
     use_dilation: bool = False,
+    use_elastic: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
@@ -96,7 +100,7 @@ def train_multi_segmenter(
 
     # Get augmentation transforms.
     if use_augmentation:
-        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_stand=use_stand, use_thresh=use_thresh)
+        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh)
     else:
         transform_train = None
         transform_val = None
@@ -199,6 +203,8 @@ def train_multi_segmenter(
         cw_cvg_thresholds=cw_cvg_thresholds,
         cw_factor=cw_factor,
         cw_schedule=cw_schedule,
+        cyclic_min=cyclic_min,
+        cyclic_max=cyclic_max,
         dilate_iters=dilate_iters,
         dilate_region=dilate_region,
         dilate_schedule=dilate_schedule,
@@ -259,6 +265,7 @@ def train_multi_segmenter(
     # Perform training.
     trainer = Trainer(
         accelerator='gpu' if n_gpus > 0 else 'cpu',
+        accumulate_grad_batches=grad_acc,
         callbacks=callbacks,
         devices=list(range(n_gpus)) if n_gpus > 0 else 1,
         logger=logger,

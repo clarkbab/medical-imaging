@@ -283,10 +283,10 @@ class Timer:
         try:
             if enabled:
                 start = time()
-
             yield None
         finally:
             if enabled:
+                print(data)
                 data['time'] = time() - start
                 self.__df = append_row(self.__df, data)
 

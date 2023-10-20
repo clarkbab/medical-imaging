@@ -8,7 +8,7 @@ from scipy.ndimage import binary_dilation
 import torch
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import CyclicLR, MultiStepLR, ReduceLROnPlateau
 import torch.nn.functional as F
 from typing import Dict, List, Literal, Optional, OrderedDict, Tuple, Union
 from wandb import Image
@@ -34,6 +34,8 @@ class MultiSegmenter(pl.LightningModule):
         cw_cvg_thresholds: List[float] = [],
         cw_factor: Optional[Union[float, List[float]]] = None,
         cw_schedule: Optional[List[int]] = None,
+        cyclic_min: Optional[float] = None,
+        cyclic_max: Optional[float] = None,
         dilate_iters: Optional[List[int]] = None,
         dilate_region: Optional[PatientRegions] = None,
         dilate_schedule: Optional[List[int]] = None,
@@ -74,6 +76,8 @@ class MultiSegmenter(pl.LightningModule):
         self.__cw_cvg_thresholds = cw_cvg_thresholds
         self.__cw_factor = cw_factor
         self.__cw_schedule = cw_schedule
+        self.__cyclic_min = cyclic_min
+        self.__cyclic_max = cyclic_max
         self.__dilate_iters = dilate_iters
         self.__dilate_schedule = dilate_schedule
         self.__log_on_epoch = log_on_epoch
@@ -220,8 +224,14 @@ class MultiSegmenter(pl.LightningModule):
             'monitor': 'val/loss'
         }
         if self.__use_lr_scheduler:
-            opt['lr_scheduler'] = MultiStepLR(self.__optimiser, self.__lr_milestones, gamma=0.1)
+            if self.__cyclic_min is None or self.__cyclic_max is None:
+                raise ValueError(f"Both 'cyclic_min', and 'cyclic_max' must be specified when using cyclic LR.")
+
+            opt['lr_scheduler'] = CyclicLR(self.__optimiser, self.__cyclic_min, self.__cyclic_max)
+            # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, self.__lr_milestones, gamma=0.1)
             # opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
+
+            logging.info(f"Using cyclic LR with min={self.__cyclic_min}, max={self.__cyclic_max}).")
 
         return opt
 

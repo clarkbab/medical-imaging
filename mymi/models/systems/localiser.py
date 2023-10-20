@@ -60,16 +60,20 @@ class Localiser(pl.LightningModule):
         model_name: str,
         run_name: str,
         checkpoint: str,
+        check_epochs: bool = True,
+        n_epochs: Optional[int] = np.inf,
         **kwargs: Dict) -> pl.LightningModule:
-        # Check that model completed 150 epochs training.
-        filepath = os.path.join(config.directories.models, model_name, run_name, 'last.ckpt')
-        state = torch.load(filepath, map_location=torch.device('cpu'))
-        n_epochs = 150
-        if state['epoch'] != n_epochs:
-            raise ValueError(f"Can't load localiser ('{model_name}','{run_name}','{checkpoint}') - hasn't completed {n_epochs} epochs training.")
+        # Check that model training has finished.
+        if check_epochs:
+            last_model = replace_ckpt_alias((model_name, run_name, 'last'))
+            filepath = os.path.join(config.directories.models, last_model[0], last_model[1], f'{last_model[2]}.ckpt')
+            state = torch.load(filepath, map_location=torch.device('cpu'))
+            n_epochs_complete = state['epoch'] + 1
+            if n_epochs_complete < n_epochs:
+                raise ValueError(f"Can't load localiser ('{model_name}', '{run_name}'), has only completed {n_epochs_complete} of {n_epochs} epochs.")
 
         # Load model.
-        model_name, run_name, checkpoint = replace_ckpt_alias(model_name, run_name, checkpoint)
+        model_name, run_name, checkpoint = replace_ckpt_alias((model_name, run_name, checkpoint))
         filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for localiser run '{model_name}:{run_name}'.")

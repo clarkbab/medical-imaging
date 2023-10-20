@@ -30,7 +30,89 @@ class RegionList(list, Enum):
     ]
 
     # Replan dataset.
-    REPLAN = []
+    PMCC_REPLAN = [
+        'Bone_Mandible',
+        'BrachialPlex_L',
+        'BrachialPlex_R',
+        'Brain',
+        'Brainstem',
+        'Cavity_Oral',
+        'Cochlea_L',
+        'Cochlea_R',
+        'Esophagus_S',
+        'Eye_L',
+        'Eye_R',
+        'GTVp',
+        'Glnd_Submand_L',
+        'Glnd_Submand_R',
+        'Glottis',
+        'Larynx',
+        'Lens_L',
+        'Lens_R',
+        'Musc_Constrict',
+        'OpticChiasm',
+        'OpticNrv_L',
+        'OpticNrv_R',
+        'Parotid_L',
+        'Parotid_R',
+        'SpinalCord'
+    ]
+    PMCC_REPLAN_CVG_THRESHOLDS = []
+    PMCC_REPLAN_INV_VOLUMES = [
+        1.2937933022269647e-05,
+        0.00011431883233820832,
+        0.0001160421372817061,
+        7.04443295518197e-07,
+        3.783638005916425e-05,
+        8.45901601256752e-06,
+        0.003001606135764661,
+        0.0033476280849826525,
+        8.306122217507318e-05,
+        0.00010363227956173657,
+        0.00010157727789858287,
+        2.9514039194735845e-05,
+        9.421716755555447e-05,
+        9.506018822834804e-05,
+        4.3696848314141504e-05,
+        2.33866869029497e-05,
+        0.0031775138796888763,
+        0.0031586113628843137,
+        4.2703493087156644e-05,
+        0.0011668649939908305,
+        0.0007894397655065801,
+        0.000797525580829336,
+        3.106137352694446e-05,
+        2.9621564096699957e-05,
+        3.592121091349627e-05
+    ]
+    PMCC_REPLAN_SHORT = [
+        'BM',
+        'BL',
+        'BR',
+        'B',
+        'BS',
+        'CO',
+        'CL',
+        'CR',
+        'E',
+        'EL',
+        'ER',
+        'GTV',
+        'SL',
+        'SR',
+        'G',
+        'L',
+        'LL',
+        'LR',
+        'MC',
+        'OC',
+        'OL',
+        'OR',
+        'PL',
+        'PR',
+        'SC'
+    ]
+    assert len(PMCC_REPLAN) == len(PMCC_REPLAN_INV_VOLUMES) == len(PMCC_REPLAN_SHORT)
 
     # Transfer learning project.
     PMCC = ['BrachialPlexus_L', 'BrachialPlexus_R', 'Brain', 'BrainStem', 'Cochlea_L', 'Cochlea_R', 'Lens_L', 'Lens_R', 'Mandible', 'OpticNerve_L', 'OpticNerve_R', 'OralCavity', 'Parotid_L', 'Parotid_R', 'SpinalCord', 'Submandibular_L', 'Submandibular_R']

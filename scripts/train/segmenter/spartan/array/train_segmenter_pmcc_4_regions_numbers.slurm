@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -22,7 +22,7 @@ REGIONS=(
     "['Brain','OralCavity','BrainStem','Mandible']"                             # 1
     "['Cochlea_L','Cochlea_R','Lens_L','Lens_R']"                               # 2
     "['Parotid_L','Parotid_R','Submandibular_L','Submandibular_R']"             # 3
-    "['SpinalCord','Brainstem','Parotid_L','Parotid_R']"                        # 4
+    "['SpinalCord','BrainStem','Parotid_L','Parotid_R']"                        # 4
 )
 SHORT_REGIONS=(
     'BL_BR_OL_OR'
@@ -45,9 +45,9 @@ CW_FACTOR="[$CW_FACTOR_0,0]"
 WEIGHTS=None
 WEIGHTS_IV_FACTOR_0=1
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=False
+RESUME=True
 LR_INIT=1e-3
-RANDOM_SEED=44
+RANDOM_SEED=42
 USE_WEIGHTS=False
 SCHEDULE_EPOCHS=1000
 RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"

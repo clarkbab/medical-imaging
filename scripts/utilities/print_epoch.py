@@ -1,4 +1,4 @@
-from fire import Fire
+import fire
 import os
 import sys
 import torch
@@ -7,19 +7,21 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi import config
+from mymi.models import replace_ckpt_alias
 
 def print_epoch(
     model: str,
     run: str,
-    checkpoint: str = 'last') -> None:
-    # Load checkpoint state.
-    model = (model, run, f'{checkpoint}.ckpt')
-    path = os.path.join(config.directories.models, *model)
-    state = torch.load(path, map_location=torch.device('cpu'))
+    ckpt: str = 'last') -> None:
+    # Get number of epochs.
+    model = replace_ckpt_alias((model, run, ckpt))
+    filepath = os.path.join(config.directories.models, *model[:2], f'{model[2]}.ckpt')
+    state = torch.load(filepath, map_location=torch.device('cpu'))
+    n_epochs = state['epoch'] + 1       # Starts at 0.
 
     print(f"""
 Model: {model}
-Epoch: {state['epoch']}
+Num. Epochs: {n_epochs}
 """)
 
-Fire(print_epoch)
+fire.Fire(print_epoch)

@@ -2,14 +2,12 @@ import subprocess
 
 dry_run = False
 
-script = 'scripts/train/localiser/spartan/array/train_localiser_clinical.slurm'
+script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser_clinical.slurm'
 regions = list(range(17))
-regions = [14, 15, 16]
 test_folds = list(range(5))
 test_folds = [0]
 n_trains = [5, 10, 20, 50, 100, 200, None]
-n_trains = [5]
-resume = True
+n_trains = [5, None]
 
 n_train_epochses = {
     0: {
@@ -132,7 +130,7 @@ for region in regions:
             n_epochs = n_train_epochs[n_train] if n_train in n_train_epochs else n_train_epochs['default']
 
             # Create slurm command.
-            export = f'ALL,N_EPOCHS={n_epochs},N_TRAIN={n_train},RESUME={resume},TEST_FOLD={test_fold}'
+            export = f'ALL,N_EPOCHS={n_epochs},N_TRAIN={n_train},TEST_FOLD={test_fold}'
             command = f'sbatch --array={region} --export={export} {script}' 
             print(command)
             if not dry_run:

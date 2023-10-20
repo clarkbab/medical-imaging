@@ -94,14 +94,14 @@ def train_localiser(
         logger = None
 
     # Create callbacks.
-    checks_path = os.path.join(config.directories.models, model_name, run_name)
+    ckpts_path = os.path.join(config.directories.models, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',
         #     patience=5),
         ModelCheckpoint(
             auto_insert_metric_name=False,
-            dirpath=checks_path,
+            dirpath=ckpts_path,
             filename='loss={val/loss:.6f}-epoch={epoch}-step={trainer/global_step}',
             every_n_epochs=1,
             monitor='val/loss',
@@ -114,8 +114,8 @@ def train_localiser(
     if resume:
         if resume_ckpt is None:
             raise ValueError(f"Must pass 'resume_ckpt' when resuming training run.")
-        check_path = os.path.join(checks_path, f"{resume_ckpt}.ckpt")
-        opt_kwargs['resume_from_checkpoint'] = check_path
+        ckpt_path = os.path.join(ckpts_path, f"{resume_ckpt}.ckpt")
+        opt_kwargs['ckpt_path'] = ckpt_path
     
     # Perform training.
     trainer = Trainer(
@@ -126,8 +126,7 @@ def train_localiser(
         max_epochs=n_epochs,
         num_nodes=n_nodes,
         num_sanity_val_steps=0,
-        precision=precision,
-        **opt_kwargs)
+        precision=precision)
 
     # Save training information.
     man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
@@ -136,4 +135,4 @@ def train_localiser(
     filepath = os.path.join(folderpath, 'loader-manifest.csv')
     man_df.to_csv(filepath, index=False)
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_loader, **opt_kwargs)

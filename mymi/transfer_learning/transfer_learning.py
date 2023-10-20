@@ -917,23 +917,22 @@ def plot_bootstrap_fit(
                 axs[2][1].set_xlim(4.5, x_upper_lim)
 
     # Set x/y tick label style.
-    axs[0][0].tick_params(axis='x', which='major', labelsize=fontsize_tick_label, pad=tickpad)
-    axs[0][0].tick_params(axis='y', which='major', labelsize=fontsize_tick_label, pad=tickpad)
-    axs[0][0].tick_params(axis='x', which='minor', direction='in')
+    axs[0][0].tick_params(axis='x', which='major', labelsize=fontsize_tick_label, length=ticklength, pad=tickpad, width=linewidth)
+    axs[0][0].tick_params(axis='x', which='minor', direction='in', length=ticklength, width=linewidth)
+    axs[0][0].tick_params(axis='y', which='major', labelsize=fontsize_tick_label, length=ticklength, pad=tickpad, width=linewidth)
     if split:
-        axs[0][1].tick_params(axis='x', which='major', labelsize=fontsize_tick_label, pad=tickpad)
-        axs[0][1].tick_params(axis='x', which='minor', direction='in')
-        axs[0][1].tick_params(color='white', labelleft=False)   # Can't remove y tick params, as gridlines will disappear too.
+        axs[0][1].tick_params(axis='x', which='major', labelsize=fontsize_tick_label, length=ticklength, pad=tickpad, width=linewidth)
+        axs[0][1].tick_params(axis='x', which='minor', direction='in', length=ticklength, width=linewidth)
+        axs[0][1].tick_params(axis='y', color='white', labelleft=False)      # Hide split's y axis labels and ticks. Can't remove as grid lines disappear.
+        # axs[0][1].tick_params(color='white', labelleft=False)   # Can't remove y tick params, as gridlines will disappear too.
 
-    # Set axis spine/tick linewidths and tick lengths.
+    # Set spine linewidths.
     spines = ['top', 'bottom','left','right']
     for spine in spines:
         axs[0][0].spines[spine].set_linewidth(linewidth)
-    axs[0][0].tick_params(which='both', length=ticklength, width=linewidth)
     if split:
         for spine in spines:
             axs[0][1].spines[spine].set_linewidth(linewidth)
-        axs[0][1].tick_params(which='both', length=ticklength, width=linewidth)
 
         if show_diff:
             for spine in spines:

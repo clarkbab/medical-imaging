@@ -30,21 +30,8 @@
 from mymi.processing.dataset.nifti import convert_to_training
 from mymi.regions import RegionList
 
-dataset = 'PMCC-HN-TRAIN'
-dest_dataset = f'{dataset}-LOC'
-dilate_regions = [
-    'BrachialPlexus_L',  # 0
-    'BrachialPlexus_R',  # 1
-    'Cochlea_L',         # 4
-    'Cochlea_R',         # 5
-    'Lens_L',            # 6
-    'Lens_R',            # 7
-    'OpticNerve_L',      # 9
-    'OpticNerve_R'       # 10
-]
-output_size = (128, 128, 150)
-output_spacing = (4, 4, 4)
-regions = RegionList.PMCC
+dataset = 'PMCC-HN-REPLAN'
+output_spacing = (1.171875, 1.171875, 2.0)
 
-convert_to_training(dataset, dest_dataset=dest_dataset, dilate_regions=dilate_regions, output_size=output_size, output_spacing=output_spacing, region=regions)
+convert_to_training(dataset, output_spacing=output_spacing)
 

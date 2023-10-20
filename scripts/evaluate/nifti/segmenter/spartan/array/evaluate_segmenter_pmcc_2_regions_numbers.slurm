@@ -21,50 +21,34 @@ echo $version
 
 DATASET="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')"
 REGIONS=(
-    'BrachialPlexus_L'  # 0
-    'BrachialPlexus_R'  # 1
-    'Brain'             # 2
-    'BrainStem'         # 3
-    'Cochlea_L'         # 4
-    'Cochlea_R'         # 5
-    'Lens_L'            # 6
-    'Lens_R'            # 7
-    'Mandible'          # 8
-    'OpticNerve_L'      # 9
-    'OpticNerve_R'      # 10
-    'OralCavity'        # 11
-    'Parotid_L'         # 12
-    'Parotid_R'         # 13
-    'SpinalCord'        # 14
-    'Submandibular_L'   # 15
-    'Submandibular_R'   # 16
+    "['BrachialPlexus_L','BrachialPlexus_R']"   # 0
+    "['Brain','OralCavity']"                    # 1
+    "['BrainStem','Mandible']"                  # 2
+    "['Cochlea_L','Cochlea_R']"                 # 3
+    "['Lens_L','Lens_R']"                       # 4
+    "['OpticNerve_L','OpticNerve_R']"           # 5
+    "['Parotid_L','Parotid_R']"                 # 6
+    "['SpinalCord','Mandible']"                 # 7
+    "['Submandibular_L','Submandibular_R']"     # 8
 )
 SHORT_REGIONS=(
-    'BL'
-    'BR'
-    'B'  
-    'BS'
-    'CL'
-    'CR'
-    'LL'
-    'LR'
-    'M' 
-    'OL'
-    'OR'
-    'OC' 
-    'PL'
-    'PR'
-    'SC'
-    'SL'
-    'SR'
+    'BL_BR'
+    'B_OC'  
+    'BS_M'
+    'CL_CR'
+    'LL_LR'
+    'OL_OR'
+    'PL_PR'
+    'SC_M'
+    'SL_SR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-pmcc-numbers"
 RESOLUTION="112"
 RANDOM_SEED=42
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+#RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False

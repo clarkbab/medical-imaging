@@ -1,5 +1,5 @@
 from torchio import Transform
-from torchio.transforms import Clamp, Compose, RandomAffine, ZNormalization
+from torchio.transforms import Clamp, Compose, RandomAffine, RandomElasticDeformation, ZNormalization
 from typing import Optional, Tuple
 
 from mymi.transforms import Standardise
@@ -7,6 +7,7 @@ from mymi.transforms import Standardise
 def get_transforms(
     thresh_high: Optional[float] = None,
     thresh_low: Optional[float] = None,
+    use_elastic: bool = False,
     use_stand: bool = False,
     use_thresh: bool = False) -> Tuple[Transform, Transform]:
 
@@ -20,6 +21,12 @@ def get_transforms(
         translation=translation,
         default_pad_value='minimum')
     transform_val = None
+
+    if use_elastic:
+        transform_train = Compose([
+           transform_train,
+           RandomElasticDeformation() 
+        ])
 
     if use_thresh:
         transform_train = Compose([

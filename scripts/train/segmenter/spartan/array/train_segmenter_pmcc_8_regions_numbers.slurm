@@ -7,12 +7,6 @@
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-##SBATCH --time 4-00:00:00
 #SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
@@ -46,16 +40,16 @@ CW_FACTOR_0=2
 CW_FACTOR="[$CW_FACTOR_0,0]"
 CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.8
+WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=False
-LR_INIT=1e-4
+RESUME=True
+LR_INIT=1e-3
 USE_WEIGHTS=False
-RANDOM_SEED=44
+RANDOM_SEED=42
 SCHEDULE_EPOCHS=1000
-#RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
-RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
+#RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
 WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 BATCH_SIZE=1
 CKPT_MODEL=True

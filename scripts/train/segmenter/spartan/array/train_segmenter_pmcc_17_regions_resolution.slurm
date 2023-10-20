@@ -3,13 +3,14 @@
 #SBATCH --qos feit
 #SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 128G
+#SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 16
 ##SBATCH --time 1-00:00:00
 ##SBATCH --time 2-00:00:00
-#SBATCH --time 5-00:00:00
+#SBATCH --time 7-00:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -27,7 +28,7 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-resolution"
+MODEL_NAME="segmenter-pmcc-resolution-test"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
@@ -36,22 +37,35 @@ CW_CVG_DELAY_ABOVE=20
 CW_CVG_DELAY_BELOW=5
 CW_FACTOR_0=2
 CW_FACTOR="[$CW_FACTOR_0,0]"
-CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
 WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 RESUME=False
 LR_INIT=1e-3
-RANDOM_SEED=44
+RANDOM_SEED=45
 USE_WEIGHTS=True
-SCHEDULE_EPOCHS=1000
+SCHEDULE_EPOCHS=100
+GRAD_ACC=1
+LAM=0.5
+USE_LR_SCHEDULER=False
+CYCLIC_MIN=1e-4
+CYCLIC_MAX=1e-3
+USE_ELASTIC=False
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-acc-$GRAD_ACC"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-lam-$LAM"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-cyclic-$CYCLIC_MIN-$CYCLIC_MAX"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-elastic"
 #RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-cw-$CW_FACTOR_0-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+#RESUME_RUN="$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-1000"
 RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+#RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS-lr-$LR_INIT"
 #RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
+N_EPOCHS=1000
 WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
+CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 BATCH_SIZE=1
 CKPT_MODEL=True
-N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
@@ -73,6 +87,10 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --cw_cvg_delay_below $CW_CVG_DELAY_BELOW \
     --cw_factor $CW_FACTOR \
     --cw_schedule $CW_SCHEDULE \
+    --cyclic_min $CYCLIC_MIN \
+    --cyclic_max $CYCLIC_MAX \
+    --grad_acc $GRAD_ACC \
+    --lam $LAM \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
@@ -82,14 +100,17 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_workers $N_WORKERS \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \
+    --resume_run $RESUME_RUN \
     --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --test_fold $TEST_FOLD \
     --use_cvg_weighting $USE_CVG_WEIGHTING \
+    --use_elastic $USE_ELASTIC \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
+    --use_lr_scheduler $USE_LR_SCHEDULER \
     --use_weights $USE_WEIGHTS \
     --weights $WEIGHTS \
     --weights_iv_factor $WEIGHTS_IV_FACTOR \

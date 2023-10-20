@@ -41,7 +41,7 @@ def get_n_epochs(
             model = replace_ckpt_alias(model, **kwargs)
             filepath = os.path.join(config.directories.models, *model[:2], f'{model[2]}.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
-            n_epochs = state['epoch']
+            n_epochs = state['epoch'] + 1       # Starts at 0.
             exists = True
         except ValueError as e:
             exists = False

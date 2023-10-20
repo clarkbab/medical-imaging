@@ -106,12 +106,13 @@ def create_localiser_predictions(
     datasets: Union[str, List[str]],
     region: str,
     localiser: ModelName,
+    n_epochs: int = np.inf,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     timing: bool = True) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    localiser = Localiser.load(*localiser)
+    localiser = Localiser.load(*localiser, n_epochs=n_epochs)
     logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
 
     # Load gpu if available.
@@ -152,7 +153,7 @@ def create_localiser_predictions(
                 'device': device.type
             }
 
-            with timer.record(timing, data):
+            with timer.record(data, enabled=timing):
                 create_localiser_prediction(dataset, pat_id, localiser, device=device)
 
     # Save timing data.
@@ -593,6 +594,27 @@ def load_multi_segmenter_prediction(
     pred = np.load(filepath)['data']
 
     return pred
+
+def load_multi_segmenter_prediction_dict(
+    dataset: str,
+    pat_id: PatientID,
+    model: ModelName,
+    model_region: PatientRegions,
+    **kwargs) -> Union[Dict[str, np.ndarray], bool]:
+    model_regions = arg_to_list(model_region, str)
+
+    # Load prediction.
+    pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
+    if pred.shape[0] != len(model_regions) + 1:
+        raise ValueError(f"Number of 'model_regions' ({model_regions}) should match number of channels in prediction '{pred.shape[0]}'.")
+
+    # Convert to dict.
+    data = {}
+    for i, region in enumerate(model_region):
+        region_pred = pred[i + 1]
+        data[region] = region_pred
+
+    return data
 
 def load_segmenter_prediction(
     dataset: str,

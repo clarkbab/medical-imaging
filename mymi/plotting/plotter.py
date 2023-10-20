@@ -1393,7 +1393,7 @@ def plot_dataframe(
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
-    x_tick_labels: Optional[List[str]] = None,
+    x_tick_label: Optional[List[str]] = None,
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
     y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
@@ -1405,6 +1405,7 @@ def plot_dataframe(
         raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
     if show_stats and stats_index is None:
         raise ValueError(f"Please set 'stats_index' to determine sample pairing for Wilcoxon test.")
+    x_tick_labels = arg_to_list(x_tick_label, str)
 
     # Set default fontsizes.
     if fontsize_label is None:
