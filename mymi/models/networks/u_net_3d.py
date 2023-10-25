@@ -109,7 +109,7 @@ class UNet3D(nn.Module):
         super().__init__()
 
         # Define layers.
-        n_features = 32
+        n_features = 64
         self.first = DoubleConv(1, n_features)
         self.down1 = Down(n_features, 2 * n_features)
         self.down2 = Down(2 * n_features, 4 * n_features)

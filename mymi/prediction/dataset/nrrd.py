@@ -152,7 +152,7 @@ def create_localiser_predictions(
                 'device': device.type
             }
 
-            with timer.record(timing, data):
+            with timer.record(data, enabled=timing):
                 create_localiser_prediction(dataset, pat_id, localiser, device=device)
 
     # Save timing data.
@@ -563,7 +563,7 @@ def create_segmenter_predictions(
                 'device': device.type
             }
 
-            with timer.record(timing, data):
+            with timer.record(data, enabled=timing):
                 create_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device)
 
     # Save timing data.

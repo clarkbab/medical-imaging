@@ -6,8 +6,7 @@ from mymi import types
 class RegionPatchSizes:
     BrachialPlexus_L = (170, 165, 160)
     BrachialPlexus_R = (170, 165, 160)
-    # Brain = (170, 205, 180)
-    Brain = (512, 512, 250)
+    Brain = (170, 205, 180)
     BrainStem = (105, 100, 130)
     Cochlea_L = (70, 65, 60)
     Cochlea_R = (70, 65, 60)

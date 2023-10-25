@@ -273,12 +273,12 @@ def get_segmenter_evaluation(
         tol = get_region_tolerance(region)
         if tol is not None:
             tols.append(tol)
-        dists = all_distances(pred, label, spacing, tols=tols)
+        dists = all_distances(pred, label, spacing, tol=tols)
         for metric, value in dists.items():
             data[metric] = value
 
         # Add 'deepmind' comparison.
-        dists = distances_deepmind(pred, label, spacing, tols=tols)
+        dists = distances_deepmind(pred, label, spacing, tol=tols)
         for metric, value in dists.items():
             data[f'dm-{metric}'] = value
 

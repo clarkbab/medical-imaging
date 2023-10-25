@@ -492,11 +492,10 @@ def load_evaluation_data(
     # Load evaluations and combine.
     dfs = []
     for region in regions:
-        localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
-
         for test_fold in test_folds:
             # Add public evaluation as 'transfer' with 'n=0'.
             if 'transfer' in model_types:
+                localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
                 seg_run = 'public-1gpu-150epochs'
                 segmenter = (f'segmenter-{region}', seg_run, 'BEST')
                 df = load_segmenter_evaluation(datasets, localiser, segmenter, n_folds=n_folds, test_fold=test_fold)
@@ -514,6 +513,12 @@ def load_evaluation_data(
                     if n_train is not None and n_train >= n_train_max:
                         continue
 
+                    if model_type == 'clinical':
+                        localiser = (f'localiser-{region}', f'{model_type}', 'BEST')
+                    elif model_type == 'transfer':
+                        localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
+                    else:
+                        raise ValueError(f"Unrecognised model_type '{model_type}'.")
                     seg_run = f'{model_type}-fold-{test_fold}-samples-{n_train}'
                     segmenter = (f'segmenter-{region}-v2', seg_run, 'BEST')
                     df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)

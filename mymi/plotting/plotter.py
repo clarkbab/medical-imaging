@@ -414,7 +414,6 @@ def plot_region(
     savepath: Optional[str] = None,
     show: bool = True,
     show_axis: bool = True,
-    show_ct: bool = True,
     show_extent: bool = False,
     show_legend: bool = True,
     show_title: bool = True,
@@ -492,7 +491,6 @@ def plot_region(
         # Perform any normalisation.
         if norm is not None:
             mean, std_dev = norm
-
             
         # Load CT slice.
         ct_slice_data = __get_slice_data(ct_data, slice_idx, view)
@@ -629,6 +627,7 @@ def plot_localiser_prediction(
     pred_data: np.ndarray,
     pred_region: str,
     aspect: float = None,
+    ax: Optional[Axes] = None,
     centre_of: Optional[str] = None,
     crop: Box2D = None,
     crop_margin: float = 100,
@@ -646,6 +645,7 @@ def plot_localiser_prediction(
     pred_extent_colour: str = 'deepskyblue',
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
+    show: bool = True,
     show_label_extent: bool = True,
     show_legend: bool = True,
     show_pred_centre: bool = True,
@@ -659,6 +659,17 @@ def plot_localiser_prediction(
     **kwargs: dict) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
     __assert_view(view)
+
+    if ax is None:
+        # Create figure/axes.
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+        close_figure = True
+    else:
+        # Assume that parent routine will call 'plt.show()' after
+        # all axes are plotted.
+        show = False
+        close_figure = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -698,7 +709,7 @@ def plot_localiser_prediction(
         slice_idx = extent[eo_end][axis]
 
     # Plot patient regions.
-    plot_region(id, pred_data.shape, spacing, aspect=aspect, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
+    plot_region(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -801,14 +812,18 @@ def plot_localiser_prediction(
         plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         logging.info(f"Saved plot to '{savepath}'.")
 
-    plt.show()
+    if show:
+        plt.show()
 
-    # Revert latex settings.
-    if latex:
-        plt.rcParams.update({
-            "font.family": rc_params['font.family'],
-            'text.usetex': rc_params['text.usetex']
-        })
+        # Revert latex settings.
+        if latex:
+            plt.rcParams.update({
+                "font.family": rc_params['font.family'],
+                'text.usetex': rc_params['text.usetex']
+            })
+
+    if close_figure:
+        plt.close() 
 
 def __get_region_crop(
     data: np.ndarray,

@@ -4,10 +4,11 @@ dry_run = False
 
 script = 'scripts/predict/nifti/localiser/spartan/array/predict_localiser_clinical.slurm'
 regions = list(range(17))
+regions = [14]
 test_folds = list(range(5))
-test_folds = [0]
+test_folds = [1]
 n_trains = [5, 10, 20, 50, 100, 200, None]
-n_trains = [5, None]
+n_trains = [None]
 
 n_train_epochses = {
     0: {
