@@ -40,6 +40,7 @@ def train_localiser(
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
     test_fold: Optional[int] = None,
+    use_loader_seg_run: bool = False,
     use_logger: bool = False) -> None:
     logging.info(f"Training model '({model_name}, {run_name})' on dataset '{dataset}' with region '{region}' using '{n_folds}' folds with test fold '{test_fold}'.")
 
@@ -63,7 +64,7 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform)
+    train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform, use_seg_run=use_loader_seg_run)
 
     # Get loss function.
     if loss == 'dice':
@@ -129,7 +130,7 @@ def train_localiser(
         precision=precision)
 
     # Save training information.
-    man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
+    man_df = get_loader_manifest(datasets, region, n_folds=n_folds, n_train=n_train, test_fold=test_fold, use_seg_run=use_loader_seg_run)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'loader-manifest.csv')

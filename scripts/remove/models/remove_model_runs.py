@@ -5,20 +5,20 @@ import shutil
 import sys
 
 filepath = pathlib.Path(__file__).resolve()
-mymi_dir = up(up(up(filepath)))
+mymi_dir = up(up(up(up(filepath))))
 sys.path.append(mymi_dir)
 from mymi import config
-from mymi.regions import OldRegionNames
+from mymi.regions import RegionList
 
-for_real = False
-types = ['segmenter']
-regions = OldRegionNames
+for_real = True
+types = ['localiser']
+regions = RegionList.PMCC
 runs = []
 folds = [0, 1, 2, 3, 4]
 n_trains = [5, 10, 20, 50, 100, 200, None]
 for fold in folds:
     for n_train in n_trains:
-        runs.append(f'transfer-fold-{fold}-samples-{n_train}')
+        runs.append(f'clinical-fold-{fold}-samples-{n_train}')
 
 for type in types:
     for region in regions:

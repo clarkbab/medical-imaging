@@ -18,7 +18,7 @@ from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_registration, plot_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import region_to_list as region_to_list
 from mymi.types import Axis, ModelName, PatientRegions
@@ -727,6 +727,76 @@ def create_region_figures(
     # Save PDF.
     postfix = '' if labels == 'all' else f'-{labels}'
     filepath = os.path.join(set.path, 'reports', 'region-figures', f'{region}{postfix}.pdf')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
+
+def create_registration_figures_report(
+    dataset: str,
+    **kwargs) -> None:
+    logging.arg_log('Creating registration report', ('dataset',), (dataset,))
+
+    # Set PDF margins.
+    img_t_margin = 2
+    img_l_margin = 52
+    img_width = 150
+    img_height = 95
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    # Get patients.
+    set = NIFTIDataset(dataset)
+    pat_ids = set.list_patients()
+    n_pats = len(pat_ids) // 2
+    n_pats = 1
+
+    for pat_id in tqdm(range(n_pats)):
+        fixed_pat_id = f'{pat_id}-1'
+        moving_pat_id = f'{pat_id}-0'
+
+        # Add registration plots.
+        pdf.add_page()
+        pdf.start_section(f"Patient: {pat_id}")
+
+        # Create axial image.
+        views = list(range(3))
+        img_coords = [
+            (img_l_margin, img_t_margin),
+            (img_l_margin, 2 * img_t_margin + img_height),
+            (img_l_margin, 3 * img_t_margin + 2 * img_height),
+        ]
+
+        for view, (x, y) in zip(views, img_coords):
+            # Save temporary figure.
+            savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            plot_registration(dataset, fixed_pat_id, moving_pat_id, savepath=savepath, show=False, view=view, **kwargs)
+
+            # Add image to report.
+            pdf.image(savepath, x=x, y=y, w=img_width, h=img_height)
+            os.remove(savepath)
+
+    # Save PDF.
+    filepath = os.path.join(set.path, 'reports', 'registration-figures', 'report.pdf')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 

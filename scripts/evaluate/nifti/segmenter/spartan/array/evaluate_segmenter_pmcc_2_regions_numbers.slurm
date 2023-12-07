@@ -1,15 +1,11 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+#SBATCH --partition cascade
+##SBATCH --partition gpu-a100-short
+##SBATCH --gres gpu:1
 #SBATCH --nodes 1
-##SBATCH --mem 128G
 #SBATCH --mem 64G
-#SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 8
-#SBATCH --time 0-00:30:00
+#SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -19,7 +15,6 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-DATASET="('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC')"
 REGIONS=(
     "['BrachialPlexus_L','BrachialPlexus_R']"   # 0
     "['Brain','OralCavity']"                    # 1
@@ -44,14 +39,16 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers"
+MODEL_NAME="segmenter-pmcc-numbers-v2"
 RESOLUTION="112"
+DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 RANDOM_SEED=42
 RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False
+LOAD_ALL_SAMPLES=True
 N_FOLDS=5
 TEST_FOLD=0
 
@@ -59,6 +56,7 @@ python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
+    --load_all_samples $LOAD_ALL_SAMPLES \
     --n_folds $N_FOLDS \
     --test_fold $TEST_FOLD \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE

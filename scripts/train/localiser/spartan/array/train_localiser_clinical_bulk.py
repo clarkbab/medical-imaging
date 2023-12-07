@@ -4,12 +4,12 @@ dry_run = False
 
 script = 'scripts/train/localiser/spartan/array/train_localiser_clinical.slurm'
 regions = list(range(17))
-regions = [7]
+regions = [12, 13]
 test_folds = list(range(5))
-test_folds = [1]
+# test_folds = [3, 4]
 n_trains = [5, 10, 20, 50, 100, 200, None]
-n_trains = [100]
-resume = False
+n_trains = [20]
+resume = True
 
 n_train_epochses = {
     0: {
@@ -39,15 +39,15 @@ n_train_epochses = {
     4: {
         5: 2500,
         10: 1350,
-        20: 600,
-        50: 300,
+        20: 900,
+        50: 450,
         'default': 150
     },
     5: {
         5: 2500,
         10: 1350,
-        20: 600,
-        50: 300,
+        20: 900,
+        50: 450,
         'default': 150
     },
     6: {
@@ -91,15 +91,15 @@ n_train_epochses = {
         'default': 150      # All other models.
     },
     12: {
-        5: 900,             # BP_L/R @ n=5 took this long to plateau.
-        10: 450,            # BP_L/R, L_L/R @ n=10.
-        20: 300,            # BP_L/R, ON_L/R @ n=20.
+        5: 1350,             # BP_L/R @ n=5 took this long to plateau.
+        10: 900,            # BP_L/R, L_L/R @ n=10.
+        20: 450,            # BP_L/R, ON_L/R @ n=20.
         'default': 150      # All other models.
     },
     13: {
-        5: 900,             # BP_L/R @ n=5 took this long to plateau.
-        10: 450,            # BP_L/R, L_L/R @ n=10.
-        20: 300,            # BP_L/R, ON_L/R @ n=20.
+        5: 1350,             # BP_L/R @ n=5 took this long to plateau.
+        10: 900,            # BP_L/R, L_L/R @ n=10.
+        20: 450,            # BP_L/R, ON_L/R @ n=20.
         'default': 150      # All other models.
     },
     14: {

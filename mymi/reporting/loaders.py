@@ -21,9 +21,7 @@ def get_loader_manifest(
     dataset: Union[str, List[str]],
     region: str,
     check_processed: bool = True,
-    n_folds: Optional[int] = 5,
-    n_train: Optional[int] = None,
-    test_fold: Optional[int] = None) -> None:
+    **kwargs) -> None:
     datasets = arg_to_list(dataset, str)
 
     # Create empty dataframe.
@@ -43,7 +41,7 @@ def get_loader_manifest(
 
     # Create test loader.
     # Create loaders.
-    tl, vl, tsl = Loader.build_loaders(datasets, region, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_train=n_train, shuffle_train=False, test_fold=test_fold)
+    tl, vl, tsl = Loader.build_loaders(datasets, region, check_processed=check_processed, load_data=False, load_test_origin=False, shuffle_train=False, **kwargs)
     loader_names = ['train', 'validate', 'test']
 
     # Get values for this region.
@@ -111,11 +109,8 @@ def get_multi_loader_manifest(
     check_processed: bool = True,
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
-    n_train: Optional[int] = None,
-    region: PatientRegions = 'all',
-    test_fold: Optional[int] = None,
-    test_subfold: Optional[int] = None,
-    use_split_file: bool = False) -> None:
+    use_split_file: bool = False,
+    **kwargs) -> None:
     datasets = arg_to_list(dataset, str)
 
     # Create empty dataframe.
@@ -136,7 +131,7 @@ def get_multi_loader_manifest(
 
     # Create test loader.
     # Create loaders.
-    loaders = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_subfolds=n_subfolds, n_train=n_train, region=region, shuffle_train=False, test_fold=test_fold, test_subfold=test_subfold, use_split_file=use_split_file)
+    loaders = MultiLoader.build_loaders(datasets, check_processed=check_processed, load_data=False, load_test_origin=False, n_folds=n_folds, n_subfolds=n_subfolds, shuffle_train=False, use_split_file=use_split_file, **kwargs)
     if n_folds is not None or use_split_file:
         if n_subfolds is not None:
             loader_names = ['train', 'validate', 'subtest', 'test']
@@ -179,7 +174,8 @@ def create_multi_loader_manifest(
     region: Optional[PatientRegions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
-    use_split_file: bool = False) -> None:
+    use_split_file: bool = False,
+    **kwargs) -> None:
     logging.arg_log('Creating multi-loader manifest', ('dataset', 'check_processed', 'n_folds', 'test_fold'), (dataset, check_processed, n_folds, test_fold))
     datasets = arg_to_list(dataset, str)
     regions = arg_to_list(region, str)
@@ -193,7 +189,7 @@ def create_multi_loader_manifest(
         regions = list(sorted(np.unique(regions)))
 
     # Get manifest.
-    df = get_multi_loader_manifest(datasets, check_processed=check_processed, n_folds=n_folds, n_subfolds=n_subfolds, region=regions, test_fold=test_fold, test_subfold=test_subfold, use_split_file=use_split_file)
+    df = get_multi_loader_manifest(datasets, check_processed=check_processed, region=regions, **kwargs)
 
     # Save manifest.
     filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}', f'n-subfolds-{n_subfolds}-test-subfold-{test_subfold}', 'manifest.csv')

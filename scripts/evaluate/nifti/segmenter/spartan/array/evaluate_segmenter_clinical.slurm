@@ -41,9 +41,10 @@ SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 LOCALISER="('localiser-$REGION','clinical-fold-$TEST_FOLD-samples-$N_TRAIN','BEST')"
 SEGMENTER="('segmenter-$REGION-v2','clinical-fold-$TEST_FOLD-samples-$N_TRAIN','BEST')"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_v2.py \
     --datasets $DATASETS \
     --region $REGION \
     --localiser $LOCALISER \
     --segmenter $SEGMENTER \
+    --n_train $N_TRAIN \
     --test_fold $TEST_FOLD

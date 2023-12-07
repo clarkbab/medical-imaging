@@ -141,14 +141,17 @@ class NIFTIPatient:
     def region_data(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: PatientRegions = 'all') -> OrderedDict:
-        from mymi import logging
+        region: PatientRegions = 'all',
+        region_ignore_missing: bool = False) -> OrderedDict:
         regions = arg_to_list(region, str, literals={ 'all': self.list_regions(labels=labels)})
 
         data = {}
         for region in regions:
             if not self.has_region(region, labels=labels):
-                raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
+                if region_ignore_missing:
+                    continue    
+                else:
+                    raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
             path = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nii.gz')
             img = nib.load(path)
             rdata = img.get_fdata()

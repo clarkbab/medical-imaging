@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --nodes 1
-##SBATCH --partition cascade
-#SBATCH --partition gpu-a100-short
-#SBATCH --gres gpu:1
+#SBATCH --partition cascade
+##SBATCH --partition gpu-a100-short
+##SBATCH --gres gpu:1
 #SBATCH --mem 32G
-#SBATCH --time 0-4:00:00
+#SBATCH --time 0-6:00:00
 #SBATCH -A punim1413
 
 module load GCCcore/11.3.0
@@ -35,7 +35,6 @@ REGIONS=(
     'Submandibular_R'   # 16
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-#N_EPOCHS=150
 #N_TRAIN=5
 #TEST_FOLD=0
 RUN_NAME="clinical-fold-$TEST_FOLD-samples-$N_TRAIN"
@@ -43,7 +42,7 @@ LOCALISER="('localiser-$REGION','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 # TEST_FOLD=0
 
-python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation.py \
+python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation_v2.py \
     --datasets $DATASETS \
     --region $REGION \
     --localiser $LOCALISER \

@@ -58,12 +58,12 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers"
+MODEL_NAME="segmenter-pmcc-numbers-v2"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 RANDOM_SEED=42
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True
 N_EPOCHS=1000
@@ -72,12 +72,14 @@ N_SPLIT_CHANNELS=2
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TEST_FOLD=0
 USE_LOADER_SPLIT_FILE=False
+LOAD_ALL_SAMPLES=True
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
     --check_epochs $CHECK_EPOCHS \
+    --load_all_samples $LOAD_ALL_SAMPLES \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
     --n_split_channels $N_SPLIT_CHANNELS \

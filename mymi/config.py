@@ -25,6 +25,13 @@ class Directories:
         return filepath
 
     @property
+    def heatmaps(self):
+        filepath = os.path.join(self.root, 'heatmaps')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
+
+    @property
     def models(self):
         filepath = os.path.join(self.root, 'models')
         if not os.path.exists(filepath):
@@ -41,6 +48,13 @@ class Directories:
     @property
     def predictions(self):
         filepath = os.path.join(self.root, 'predictions')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
+
+    @property
+    def registrations(self):
+        filepath = os.path.join(self.root, 'registrations')
         if not os.path.exists(filepath):
             os.makedirs(filepath)
         return filepath

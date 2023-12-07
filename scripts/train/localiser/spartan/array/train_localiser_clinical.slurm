@@ -1,14 +1,15 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --mem 120G
-#SBATCH --time 0-04:00:00
+#SBATCH --time 0-06:00:00
+##SBATCH --time 0-04:00:00
 
 module load GCCcore/11.3.0
 module load Python/3.10.4
@@ -46,10 +47,11 @@ RUN_NAME="clinical-fold-$TEST_FOLD-samples-$N_TRAIN"
 N_FOLDS=5
 N_GPUS=1
 N_NODES=1
-N_WORKERS=8
+N_WORKERS=1
 #RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+USE_LOADER_SEG_RUN=True
 USE_LOGGER=True
 
 python $SCRIPT_DIR/train/localiser/train_localiser.py \
@@ -68,4 +70,41 @@ python $SCRIPT_DIR/train/localiser/train_localiser.py \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
     --test_fold $TEST_FOLD \
+    --use_loader_seg_run $USE_LOADER_SEG_RUN \
     --use_logger $USE_LOGGER
+
+TIMING=True
+LOCALISER="('localiser-$REGION','$RUN_NAME','BEST')"
+
+python $SCRIPT_DIR/predict/nifti/localiser/create_predictions_v2.py \
+    --datasets $DATASET \
+    --region $REGION \
+    --localiser $LOCALISER \
+    --n_epochs $N_EPOCHS \
+    --region $REGION \
+    --test_fold $TEST_FOLD \
+    --timing $TIMING
+
+SEGMENTER="('segmenter-$REGION-v2','clinical-fold-$TEST_FOLD-samples-$N_TRAIN','BEST')"
+
+python $SCRIPT_DIR/predict/nifti/segmenter/predict_v2.py \
+    --datasets $DATASET \
+    --region $REGION \
+    --localiser $LOCALISER \
+    --segmenter $SEGMENTER \
+    --n_train $N_TRAIN \
+    --test_fold $TEST_FOLD
+
+python $SCRIPT_DIR/evaluate/nifti/localiser/create_evaluation_v2.py \
+    --datasets $DATASET \
+    --region $REGION \
+    --localiser $LOCALISER \
+    --test_fold $TEST_FOLD
+
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_v2.py \
+    --datasets $DATASET \
+    --region $REGION \
+    --localiser $LOCALISER \
+    --segmenter $SEGMENTER \
+    --n_train $N_TRAIN \
+    --test_fold $TEST_FOLD

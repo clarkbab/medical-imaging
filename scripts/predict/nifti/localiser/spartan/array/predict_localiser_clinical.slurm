@@ -46,7 +46,7 @@ LOCALISER="('localiser-$REGION','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 TIMING=True
 
-python $SCRIPT_DIR/predict/nifti/localiser/create_predictions.py \
+python $SCRIPT_DIR/predict/nifti/localiser/create_predictions_v2.py \
     --datasets $DATASETS \
     --region $REGION \
     --localiser $LOCALISER \

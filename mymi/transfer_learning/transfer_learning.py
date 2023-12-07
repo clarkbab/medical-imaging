@@ -53,7 +53,10 @@ DEFAULT_N_TRAINS = [5, 10, 20, 50, 100, 200, 400, 800, None]
 LOG_SCALE_X_UPPER_LIMS = [100, 150, 200, 300, 400, 600, 800]
 LOG_SCALE_X_TICK_LABELS = [5, 10, 20, 50, 100, 200, 400, 800]
 
-def __bootstrap_n_train_sample(x, n_samples, seed=42):
+def __bootstrap_n_train_sample(
+    x,
+    n_samples: int,
+    seed: float = 42):
     np.random.seed(seed)
     return np.random.choice(x, size=(len(x), n_samples), replace=True)
 
@@ -117,7 +120,7 @@ def create_bootstrap_predictions(
 
     # Set 'clinical' model predictions to 'NaN' as 'clinical' model must be trained on
     # 5 or more training cases.
-    if model_type == 'clinical':
+    if model_type in ('clinical', 'clinical-v2'):
         preds[:, :5] = np.nan
         
     # Save data.
@@ -155,7 +158,7 @@ def create_bootstrap_samples(
                 elif stat == 'q3':
                     data = get_q3_evaluation_data(df)
 
-                # Bootstrap each 'n_train=...' sample to create a 3D array of 'n_samples' samples for each 'n_train'.
+                # Bootstrap each 'n_train' to create a 3D array of 'n_samples' x 'n_trains' x 5.
                 boot_df = data[(data.metric == metric) & (data['model-type'] == model_type) & (data.region == region)]
                 boot_df = boot_df.pivot(index=['region', 'model-type', 'n-train', 'metric'], columns='fold', values='value')
                 boot_data = np.moveaxis(np.apply_along_axis(lambda x: __bootstrap_n_train_sample(x, n_samples), arr=boot_df.values, axis=1), 2, 0)
@@ -209,6 +212,8 @@ def __fit_curve(
     weights: Optional[List[float]] = None):
     # Make fit.
     x_min = np.min(x)
+    res_f = __residuals(__f)
+    res = res_f(p_init, x, y, weights)
     result = least_squares(__residuals(__f), p_init, args=(x, y, weights), bounds=((-np.inf, -np.inf, 0), (np.inf, x_min, np.inf)), max_nfev=max_nfev)
 
     # Check fit status.
@@ -479,7 +484,7 @@ def load_bootstrap_significant_differences(
 def load_evaluation_data(
     dataset: Union[str, List[str]],
     region: Union[str, List[str]],
-    model_type: Union[Literal['clinical', 'transfer'], List[Literal['clinical', 'transfer']]],
+    model_type: Union[Literal['clinical', 'clinical-v2', 'transfer'], List[Literal['clinical', 'clinical-v2', 'transfer']]],
     n_train: Union[Optional[int], List[Optional[int]]] = DEFAULT_N_TRAINS,
     n_folds: Optional[int] = 5,
     test_fold: Union[int, List[int]] = list(range(5))) -> pd.DataFrame:
@@ -513,15 +518,17 @@ def load_evaluation_data(
                     if n_train is not None and n_train >= n_train_max:
                         continue
 
-                    if model_type == 'clinical':
-                        localiser = (f'localiser-{region}', f'{model_type}', 'BEST')
-                    elif model_type == 'transfer':
+                    if model_type in ('clinical', 'transfer'):
                         localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'BEST')
+                        segmenter = (f'segmenter-{region}-v2', f'{model_type}-fold-{test_fold}-samples-{n_train}', 'BEST')
+                        df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)
+                    elif model_type == 'clinical-v2':
+                        # Don't include 'localiser' as this changes depending on the patient.
+                        localiser = (f'localiser-{region}', f'clinical-fold-{test_fold}-samples-{n_train}', 'BEST')
+                        segmenter = (f'segmenter-{region}-v2', f'clinical-fold-{test_fold}-samples-{n_train}', 'BEST')
+                        df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)
                     else:
                         raise ValueError(f"Unrecognised model_type '{model_type}'.")
-                    seg_run = f'{model_type}-fold-{test_fold}-samples-{n_train}'
-                    segmenter = (f'segmenter-{region}-v2', seg_run, 'BEST')
-                    df = load_segmenter_evaluation(datasets, localiser, segmenter, test_fold=test_fold)
                     df['model-type'] = model_type
                     df['n-train'] = n_train
                     dfs.append(df)
@@ -532,9 +539,13 @@ def load_evaluation_data(
     # Replace `n_train=None` with true value.
     none_nums = {}
     for region in regions:
-        tl, vl, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=0)
-        n_train = len(tl) + len(vl)
-        none_nums[region] = n_train
+        if region == 'Cochlea_L':
+            n_train_max = 164
+        elif region == 'Cochlea_R':
+            n_train_max = 160
+        else:
+            n_train_max = get_n_train_max(datasets, region, n_folds=n_folds, test_fold=0)
+        none_nums[region] = n_train_max
     df.loc[df['n-train'].isnull(), 'n-train'] = df[df['n-train'].isnull()].region.apply(lambda r: none_nums[r])
     df['n-train'] = df['n-train'].astype(int)
 
@@ -762,10 +773,14 @@ def plot_bootstrap_fit(
 
             # Load bootstrapped predictions.
             preds = load_bootstrap_predictions(datasets, region, model_type, metric, stat, n_samples=n_samples)
+            if model_type in ('clinical', 'clinical-v2'):
+                preds[:, :5] = np.nan
 
             # Load data for secondary statistic.
             if secondary_stat:
                 sec_preds = load_bootstrap_predictions(datasets, region, model_type, metric, secondary_stat, n_samples=n_samples)
+                if model_type in ('clinical', 'clinical-v2'):
+                    sec_preds[:, :5] = np.nan
 
             # Plot original data (before bootstrapping was applied).
             if show_points:
@@ -1028,7 +1043,7 @@ def raw_data(
 
 def __residuals(f):
     def inner(params, x, y, weights):
-        y_pred = __f(x, params)
+        y_pred = f(x, params)
         rs = y - y_pred
         if weights is not None:
             rs *= weights

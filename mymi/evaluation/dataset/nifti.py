@@ -14,7 +14,7 @@ from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
-from mymi.prediction.dataset.nifti import load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
+from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
 from mymi.types import ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
@@ -102,6 +102,70 @@ def get_localiser_evaluation(
 
     return data
 
+def create_localiser_evaluation_v2(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: ModelName,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None) -> None:
+    # Get unique name.
+    localiser = replace_ckpt_alias(localiser)
+    logging.info(f"Evaluating localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+
+    # Create dataframe.
+    cols = {
+        'fold': int,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Get patient IDs from original evaluation.
+    # We have to evaluate the segmenter using the original evaluation patient IDs
+    # as our 'Loader' now returns different patients per fold.
+    orig_localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+    orig_localiser = replace_ckpt_alias(orig_localiser)
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    segmenter = (f'segmenter-{region}-v2', localiser[1], 'best')
+    segmenter = replace_ckpt_alias(segmenter)
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *orig_localiser, *segmenter, encode(datasets), f'{filename}.csv')
+    orig_df = pd.read_csv(filepath, dtype={'patient-id': str})
+    orig_df = orig_df[['dataset', 'patient-id']].drop_duplicates()
+
+    for i, row in tqdm(orig_df.iterrows()):
+        dataset, pat_id = row['dataset'], row['patient-id']
+
+        if region == 'BrachialPlexus_R' and dataset == 'PMCC-HN-TRAIN' and str(pat_id) == '177':
+            # Skip this manually.
+            continue
+
+        metrics = get_localiser_evaluation(dataset, pat_id, region, localiser)
+        for metric, value in metrics.items():
+            data = {
+                'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': region,
+                'metric': metric,
+                'value': value
+            }
+            df = append_row(df, data)
+
+    # Add fold.
+    df['fold'] = test_fold
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
 def create_localiser_evaluation(
     datasets: Union[str, List[str]],
     region: str,
@@ -183,16 +247,21 @@ def get_multi_segmenter_evaluation(
     model: ModelName) -> List[Dict[str, float]]:
     regions = arg_to_list(region, str)
 
-    # Load ground truth and prediction.
+    # Load predictions.
     set = NIFTIDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    labels = pat.region_data(region=regions)
     region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, regions)
  
     region_metrics = []
     for region, pred in region_preds.items():
-        label = labels[region]
+        # Patient ground truth may not have all the predicted regions.
+        if not pat.has_region(region):
+            region_metrics.append({})
+            continue
+        
+        # Load label.
+        label = pat.region_data(region=region)[region]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
@@ -288,6 +357,7 @@ def create_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
+    load_all_samples: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False) -> None:
@@ -310,14 +380,16 @@ def create_multi_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
 
     # Add evaluations to dataframe.
-    for pat_desc_b in tqdm(iter(test_loader)):
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
         if type(pat_desc_b) == torch.Tensor:
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
 
             # Get metrics per region.
             region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model)
@@ -337,10 +409,73 @@ def create_multi_segmenter_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}.csv'
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def create_segmenter_evaluation_v2(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: ModelName,
+    segmenter: ModelName,
+    n_train: float,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None) -> None:
+    # Get unique name.
+    localiser = replace_ckpt_alias(localiser)
+    segmenter = replace_ckpt_alias(segmenter)
+    logging.info(f"Evaluating segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+
+    # Create dataframe.
+    cols = {
+        'fold': int,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Get patient IDs from original evaluation.
+    # We have to evaluate the segmenter using the original evaluation patient IDs
+    # as our 'Loader' now returns different patients per fold.
+    orig_localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+    orig_localiser = replace_ckpt_alias(orig_localiser)
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *orig_localiser, *segmenter, encode(datasets), f'{filename}.csv')
+    orig_df = pd.read_csv(filepath, dtype={'patient-id': str})
+    orig_df = orig_df[['dataset', 'patient-id']].drop_duplicates()
+
+    for i, row in tqdm(list(orig_df.iterrows())):
+        dataset, pat_id = row['dataset'], row['patient-id']
+
+        if region == 'BrachialPlexus_R' and dataset == 'PMCC-HN-TRAIN' and str(pat_id) == '177':
+            # Skip this manually.
+            continue
+
+        metrics = get_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter)
+        for metric, value in metrics.items():
+            data = {
+                'fold': test_fold,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': region,
+                'metric': metric,
+                'value': value
+            }
+            df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+
 def create_segmenter_evaluation(
     datasets: Union[str, List[str]],
     region: str,
@@ -393,6 +528,32 @@ def create_segmenter_evaluation(
     filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def load_multi_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    exists_only: bool = False,
+    load_all_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    model = replace_ckpt_alias(model)
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
 
 def load_segmenter_evaluation(
     datasets: Union[str, List[str]],

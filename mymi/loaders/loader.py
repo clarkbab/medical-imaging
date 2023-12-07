@@ -1,17 +1,23 @@
 import numpy as np
+import os
 import pandas as pd
+from scipy.ndimage import binary_dilation
+from time import sleep
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Optional, Tuple, Union
 
-from mymi import types
+from mymi import config
 from mymi import dataset as ds
+from mymi.dataset.nifti import NIFTIDataset
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_box, get_extent_centre
+from mymi import logging
 from mymi.metrics import get_encaps_dist_vox
 from mymi.regions import get_region_patch_size
-from mymi.transforms import point_crop_or_pad_3D
+from mymi.transforms import point_crop_or_pad_3D, resample_3D, top_crop_or_pad_3D
+from mymi import types
 from mymi.utils import append_row
 
 class Loader:
@@ -32,6 +38,7 @@ class Loader:
         spacing: Optional[types.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
+        use_seg_run: bool = False,
         p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         if type(datasets) == str:
             datasets = [datasets]
@@ -39,6 +46,59 @@ class Loader:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
         if extract_patch and not spacing:
             raise ValueError(f"'spacing' must be specified when extracting segmentation patches.") 
+
+        if use_seg_run:
+            ds_map = dict((d.replace('LOC', 'SEG'), i) for i, d in enumerate(datasets))
+            datasets = [ds.get(d, 'training', check_processed=check_processed) for d in datasets]
+
+            # Load seg run split.
+            model = (f'segmenter-{region}-v2', f'clinical-fold-{test_fold}-samples-{n_train}')
+            runpath = os.path.join(config.directories.runs, *model)
+            runs = os.listdir(runpath)
+            if len(runs) == 0:
+                raise ValueError("Big problem, no run data for '{model}'.")
+            run = runs[-1]
+            manpath = os.path.join(runpath, run, 'loader-manifest.csv')
+            df = pd.read_csv(manpath)
+            df['dataset'] = df['dataset'].replace(ds_map)
+
+            # Create train loader.
+            nn_train_samples = list(df[df['loader'] == 'train'][['dataset', 'sample-id']].itertuples(index=False, name=None))
+            print(nn_train_samples)
+            print(f'before train: {len(nn_train_samples)}')
+            before = len(nn_train_samples)
+            nn_train_samples = list(filter(lambda p: not (p[0] == 1 and p[1] == 87), nn_train_samples))
+            print(f'after train: {len(nn_train_samples)}')
+            after = len(nn_train_samples)
+            assert after == before or after == before - 1
+            train_ds = TrainingDataset(datasets, region, nn_train_samples, extract_patch=extract_patch, load_data=load_data, spacing=spacing, transform=transform)
+            train_loader = DataLoader(batch_size=batch_size, dataset=train_ds, num_workers=n_workers, shuffle=shuffle_train)
+
+            # Create validation loader.
+            nn_val_samples = list(df[df['loader'] == 'validate'][['dataset', 'sample-id']].itertuples(index=False, name=None))
+            print(nn_val_samples)
+            print(f'before val: {len(nn_val_samples)}')
+            before = len(nn_val_samples)
+            nn_val_samples = list(filter(lambda p: not (p[0] == 1 and p[1] == 87), nn_val_samples))
+            print(f'after val: {len(nn_val_samples)}')
+            after = len(nn_val_samples)
+            assert after == before or after == before - 1
+            val_ds = TrainingDataset(datasets, region, nn_val_samples, extract_patch=extract_patch, load_data=load_data, spacing=spacing)
+            val_loader = DataLoader(batch_size=batch_size, dataset=val_ds, num_workers=n_workers, shuffle=False)
+
+            # Create test loader.
+            test_samples = list(df[df['loader'] == 'test'][['dataset', 'sample-id']].itertuples(index=False, name=None))
+            print(test_samples)
+            print(f'before test: {len(test_samples)}')
+            before = len(test_samples)
+            test_samples = list(filter(lambda p: not (p[0] == 1 and p[1] == 87), test_samples))
+            print(f'after test: {len(test_samples)}')
+            after = len(test_samples)
+            assert after == before or after == before - 1
+            test_ds = TestDataset(datasets, test_samples, load_origin=load_test_origin) 
+            test_loader = DataLoader(batch_size=batch_size, dataset=test_ds, num_workers=n_workers, shuffle=False)
+
+            return train_loader, val_loader, test_loader
 
         # Get all samples.
         datasets = [ds.get(d, 'training', check_processed=check_processed) for d in datasets]
@@ -144,8 +204,53 @@ class TrainingDataset(Dataset):
             return desc
 
         # Load data.
-        input, labels = dataset.sample(s_i).pair(region=self.__region)
-        label = labels[self.__region]
+        try:
+            input, labels = dataset.sample(s_i).pair(region=self.__region)
+            label = labels[self.__region]
+        except EOFError:
+            # Data is being copied by another process.
+            sleep(60)
+            input, labels = dataset.sample(s_i).pair(region=self.__region)
+            label = labels[self.__region]
+        except ValueError as e:
+            # Pull in data on the fly.
+            if dataset.name in ('PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC'):
+                logging.error(f"Missing region '{self.__region}' for sample '{dataset.sample(s_i)}'. Pulling in from NIFTI...")
+
+                # Load data.
+                orig_dataset, orig_pat_id = dataset.sample(s_i).origin
+                orig_pat = NIFTIDataset(orig_dataset).patient(orig_pat_id)
+                orig_spacing = orig_pat.ct_spacing
+                input = orig_pat.ct_data 
+                label = orig_pat.region_data(region=self.__region)[self.__region]
+                
+                # Process data.
+                output_size = (128, 128, 150)
+                output_spacing = (4, 4, 4)
+                dilate_regions = ('BrachialPlexus_L', 'BrachialPlexus_R', 'Cochlea_L', 'Cochlea_R', 'Lens_L', 'Lens_R', 'OpticNerve_L', 'OpticNerve_R')
+                dilate_iter = 3
+                input = resample_3D(input, spacing=orig_spacing, output_spacing=output_spacing)
+                label = resample_3D(label, spacing=orig_spacing, output_spacing=output_spacing)
+                input = top_crop_or_pad_3D(input, output_size)
+                label = top_crop_or_pad_3D(label, output_size)
+                if self.__region in dilate_regions:
+                    label = binary_dilation(label, iterations=dilate_iter)
+                
+                # Save input/label to dataset.
+                filepath = os.path.join(dataset.path, 'data', 'inputs', f'{s_i}.npz')
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.savez_compressed(filepath, data=input)
+                logging.info(f"Saved new input to filepath:{filepath}.")
+
+                filepath = os.path.join(dataset.path, 'data', 'labels', self.__region, f'{s_i}.npz')
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                np.savez_compressed(filepath, data=label)
+                logging.info(f"Saved new label to filepath:{filepath}.")
+            else:
+                raise e
+
+        if input.shape != label.shape:
+            raise ValueError(f"Should delete label {ds_i}:{s_i}.")
 
         # Perform transform.
         if self.__transform:

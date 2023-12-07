@@ -1,7 +1,6 @@
 import subprocess
 
 regions = '0-16'
-regions = '1-16'
 script = 'scripts/transfer-learning/spartan/array/create_bootstrap_samples_and_predictions.slurm'
 model_types = "\"['clinical','transfer']\""
 metrics = "\"['apl-mm-tol-{tol}','dice','dm-surface-dice-tol-{tol}','hd','hd-95','msd']\""

@@ -3,17 +3,14 @@
 #SBATCH --qos feit
 #SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
+##SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-##SBATCH --time 4-00:00:00
 #SBATCH --time 7-00:00:00
+##SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -63,24 +60,25 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers"
+MODEL_NAME="segmenter-pmcc-numbers-v2"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
-RANDOM_SEED=44
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-LR_INIT=1e-4
-RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
+RESUME=False
+LR_INIT=1e-3
+RANDOM_SEED=45
+RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
 BATCH_SIZE=1
 CKPT_MODEL=True
 N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False
+LOAD_ALL_SAMPLES=True
 N_FOLDS=5
 TEST_FOLD=0
 USE_LOGGER=True
@@ -92,6 +90,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
+    --load_all_samples $LOAD_ALL_SAMPLES \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \

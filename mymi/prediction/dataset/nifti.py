@@ -44,6 +44,7 @@ def create_localiser_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[PatientID, List[PatientID]],
     localiser: Union[ModelName, Model],
+    check_epochs: bool = True,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None) -> None:
     datasets = arg_to_list(dataset, str)
@@ -53,7 +54,7 @@ def create_localiser_prediction(
 
     # Load localiser.
     if type(localiser) == tuple:
-        localiser = Localiser.load(*localiser)
+        localiser = Localiser.load(*localiser, check_epochs=check_epochs)
 
     # Load gpu if available.
     if device is None:
@@ -101,6 +102,71 @@ def create_localiser_predictions_for_first_n_pats(
 
     # Get dataset/patient IDs.
     create_localiser_prediction(*df, localiser, device=device, savepath=savepath)
+    
+def create_localiser_predictions_v2(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: ModelName,
+    n_epochs: int = np.inf,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None,
+    timing: bool = True) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    localiser = Localiser.load(*localiser, n_epochs=n_epochs)
+    logging.info(f"Making localiser predictions for NIFTI datasets '{datasets}', region '{region}', localiser '{localiser.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Get patient IDs from original evaluation.
+    # We have to evaluate the segmenter using the original evaluation patient IDs
+    # as our 'Loader' now returns different patients per fold.
+    orig_localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+    orig_localiser = replace_ckpt_alias(orig_localiser)
+    segmenter = (f'segmenter-{region}-v2', localiser.name[1], 'best')
+    segmenter = replace_ckpt_alias(segmenter)
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *orig_localiser, *segmenter, encode(datasets), f'{filename}.csv')
+    orig_df = pd.read_csv(filepath, dtype={'patient-id': str})
+    orig_df = orig_df[['dataset', 'patient-id']].drop_duplicates()
+
+    for i, row in tqdm(orig_df.iterrows()):
+        dataset, pat_id = row['dataset'], row['patient-id']
+
+        # Timing table data.
+        data = {
+            'fold': test_fold,
+            'dataset': dataset,
+            'patient-id': pat_id,
+            'region': region,
+            'device': device.type
+        }
+
+        with timer.record(data, enabled=timing):
+            create_localiser_prediction(dataset, pat_id, localiser, device=device)
+
+    # Save timing data.
+    if timing:
+        filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), region, *localiser.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
 
 def create_localiser_predictions(
     datasets: Union[str, List[str]],
@@ -225,8 +291,10 @@ def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, Model],
+    model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
+    model_regions = arg_to_list(model_region, str)
 
     # Load model.
     if type(model) == tuple:
@@ -263,7 +331,7 @@ def get_multi_segmenter_prediction(
 
     # Apply thresholding/one-hot-encoding.
     pred = pred.argmax(dim=0)
-    pred = one_hot(pred)
+    pred = one_hot(pred, num_classes=len(model_regions) + 1)
     pred = pred.moveaxis(-1, 0)
     
     # Apply postprocessing.
@@ -275,6 +343,7 @@ def get_multi_segmenter_prediction(
 
     # Resample to original spacing.
     pred = resample_4D(pred, spacing=model_spacing, output_spacing=input_spacing)
+
     # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_4D(pred, crop_box)
@@ -378,7 +447,7 @@ def create_multi_segmenter_prediction(
         logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
 
         # Make prediction.
-        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_spacing, device=device)
+        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device)
 
         # Save segmentation.
         if savepath is None:
@@ -449,6 +518,7 @@ def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: Union[ModelName, Model],
+    load_all_samples: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,
@@ -479,7 +549,7 @@ def create_multi_segmenter_predictions(
         timer = Timer(cols)
 
     # Create test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
 
     # Load PyTorch model.
     if type(model) == tuple:
@@ -508,7 +578,92 @@ def create_multi_segmenter_predictions(
     # Save timing data.
     if use_timing:
         model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-device-{device.type}-timing.csv')
+        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}-device-{device.type}-timing.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
+
+def get_institutional_localiser(
+    datasets: Union[str, List[str]],
+    dataset: str,
+    pat_id: str,
+    region: str,
+    n_train: float) -> Optional[ModelName]:
+    n_folds = 5
+    test_folds = list(range(5))
+    for test_fold in test_folds:
+        localiser = (f'localiser-{region}', f'clinical-fold-{test_fold}-samples-{n_train}', 'best')
+        localiser = replace_ckpt_alias(localiser)
+        filename = f'eval-folds-{n_folds}-test-{test_fold}'
+        filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+        df = pd.read_csv(filepath, dtype={'patient-id': str})
+        pdf = df[['dataset', 'patient-id']].drop_duplicates()
+        pdf = pdf[(pdf['dataset'] == dataset) & (pdf['patient-id'] == str(pat_id))]
+        if len(pdf) == 1:
+            return localiser
+
+    return None
+
+def create_segmenter_predictions_v2(
+    datasets: Union[str, List[str]],
+    region: str,
+    localiser: ModelName,
+    segmenter: ModelName,
+    n_train: int,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None,
+    timing: bool = True) -> None:
+    if type(datasets) == str:
+        datasets = [datasets]
+    segmenter = Segmenter.load(*segmenter)
+    logging.info(f"Making segmenter predictions for NIFTI datasets '{datasets}', region '{region}', localiser 'TBD', segmenter '{segmenter.name}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if timing:
+        cols = {
+            'fold': int,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Get patient IDs from original evaluation.
+    # We have to evaluate the segmenter using the original evaluation patient IDs
+    # as our 'Loader' now returns different patients per fold.
+    orig_localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
+    orig_localiser = replace_ckpt_alias(orig_localiser)
+    filename = f'eval-folds-{n_folds}-test-{test_fold}'
+    filepath = os.path.join(config.directories.evaluations, 'segmenter', *orig_localiser, *segmenter.name, encode(datasets), f'{filename}.csv')
+    orig_df = pd.read_csv(filepath, dtype={'patient-id': str})
+    orig_df = orig_df[['dataset', 'patient-id']].drop_duplicates()
+
+    for i, row in tqdm(list(orig_df.iterrows())):
+        dataset, pat_id = row['dataset'], row['patient-id']
+
+        # Timing table data.
+        data = {
+            'fold': test_fold,
+            'dataset': dataset,
+            'patient-id': pat_id,
+            'region': region,
+            'device': device.type
+        }
+
+        with timer.record(data, enabled=timing):
+            create_segmenter_prediction(dataset, pat_id, localiser, segmenter, device=device)
+
+    # Save timing data.
+    if timing:
+        filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -606,7 +761,8 @@ def load_multi_segmenter_prediction_dict(
     # Load prediction.
     pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
     if pred.shape[0] != len(model_regions) + 1:
-        raise ValueError(f"Number of 'model_regions' ({model_regions}) should match number of channels in prediction '{pred.shape[0]}'.")
+        logging.error(f"Error when processing patient '{dataset}:{pat_id}'.")
+        raise ValueError(f"Number of channels in prediction ({pred.shape[0]}) should be one more than number of 'model_regions' ({len(model_regions)}).")
 
     # Convert to dict.
     data = {}

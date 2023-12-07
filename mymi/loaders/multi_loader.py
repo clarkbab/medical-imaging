@@ -76,6 +76,7 @@ class MultiLoader:
         data_hook: Optional[Callable] = None,
         epoch: int = 0,
         include_background: bool = False,
+        load_all_samples: bool = False,
         load_data: bool = True,
         load_test_origin: bool = True,
         n_folds: Optional[int] = None, 
@@ -121,12 +122,21 @@ class MultiLoader:
         # e.g. replanning during treatment. It is important here that scans for the same patient don't 
         # end up in both training and testing dataset - leakage of testing information into training process!
         samples = []
+        logging.info(f"loading samples.")
         for i, set in enumerate(sets):
             if use_groups:
                 for group_id in set.list_groups(region=regions):
                     samples.append((i, group_id))
             else:
-                for sample_id in set.list_samples(region=regions):
+                # If 'load_all_samples=False', load only patients with requested 'region/s'.
+                # When performing k-fold (e.g. n_folds=5 and test_fold=0) this will result
+                # in different patient splits when different 'region/s' are requested.
+                # If 'load_all_samples=True', load all patients even if they don't have the
+                # requested 'region/s'. This will give consistent splits across different requested
+                # 'region/s', however some patients will not have any of the requested regions.
+                samples_region = None if load_all_samples else regions
+                set_samples = set.list_samples(region=samples_region)
+                for sample_id in set_samples:
                     samples.append((i, sample_id))
 
         # Shuffle samples.
@@ -143,6 +153,7 @@ class MultiLoader:
             # Split samples into folds.
             # Note that 'samples' here could actually be groups if 'use_groups=True'.
             n_samples = len(samples)
+            logging.info(f"found {n_samples} samples.")
             len_fold = int(np.floor(n_samples / n_folds))
             n_samples_lost = n_samples - n_folds * len_fold
             logging.info(f"Lost {n_samples_lost} samples due to {n_folds}-fold split.")
@@ -150,6 +161,7 @@ class MultiLoader:
             fold_sampleses = []
             for i in range(n_folds):
                 fold_samples = samples[i * len_fold:(i + 1) * len_fold]
+                logging.info(f"putting {len(fold_samples)} samples into fold {i}.")
                 fold_sampleses.append(fold_samples)
 
             # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
@@ -159,7 +171,9 @@ class MultiLoader:
             train_folds = list((np.array(range(n_folds)) + (test_fold + 1)) % n_folds)
             train_folds.remove(test_fold)
             train_samples = list(chain(*[fold_sampleses[f] for f in train_folds]))
+            logging.info(f"got {len(train_samples)} train samples.")
             test_samples = fold_sampleses[test_fold]
+            logging.info(f"got {len(test_samples)} test samples.")
 
         elif use_split_file:         # Use 'loader-split.csv' to determine training/testing split.
             assert use_groups is False
@@ -260,6 +274,30 @@ class MultiLoader:
             if n_train > len(train_samples):
                raise ValueError(f"'n_train={n_train}' requested larger number than training samples '{len(train_samples)}'.") 
             train_samples = train_samples[:n_train]
+
+        # Filter out patients without one of the requested 'region/s'.
+        if load_all_samples:
+            # 'load_all_samples' is used to ensure that 'region/s' doesn't affect the patient split,
+            # but we don't want to load samples that don't have any of the requested regions as
+            # this will increase training times.
+            train_samples_tmp = train_samples.copy()
+            train_samples = []
+            val_samples_tmp = val_samples.copy()
+            val_samples = []
+            test_samples_tmp = test_samples.copy() 
+            test_samples = []
+            for set_i, sample_id in train_samples_tmp:
+                samp = sets[set_i].sample(sample_id)
+                if samp.has_region(regions):
+                    train_samples.append((set_i, sample_id))
+            for set_i, sample_id in val_samples_tmp:
+                samp = sets[set_i].sample(sample_id)
+                if samp.has_region(regions):
+                    val_samples.append((set_i, sample_id))
+            for set_i, sample_id in test_samples_tmp:
+                samp = sets[set_i].sample(sample_id)
+                if samp.has_region(regions):
+                    test_samples.append((set_i, sample_id))
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None

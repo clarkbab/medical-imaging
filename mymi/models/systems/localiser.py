@@ -177,6 +177,9 @@ class Localiser(pl.LightningModule):
 
                     # Get centre of extent of ground truth.
                     centre = get_extent_centre(y_vol)
+                    if centre is None:
+                        # Empty ground truth.
+                        continue
 
                     for axis, centre_ax in enumerate(centre):
                         # Get slices.

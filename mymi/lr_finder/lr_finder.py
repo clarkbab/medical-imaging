@@ -10,6 +10,7 @@ from scipy.ndimage import gaussian_filter1d
 from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import config
+from mymi import logging
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
@@ -62,12 +63,13 @@ def plot(
     label: Optional[Union[str, List[str]]] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
     region: Optional[PatientRegions] = 'all',
+    savepath: Optional[str] = None,
     show: bool = True,
+    show_sugg_lr: bool = True,
     skip_end: int = 0,
     skip_start: int = 0,
     smooth: bool = False,
     smooth_kernel_sd: float = 1,
-    sugg_lr: bool = True,
     sugg_skip_end: int = 0,
     sugg_skip_start: int = 0,
     vline: Optional[Union[float, List[float]]] = None,
@@ -149,11 +151,12 @@ def plot(
             if labels is not None:
                 label = labels[i]
             else:
-                label = f'{run_name}: {sugg_lr_val:.6f}' if sugg_lr else run_name
+                label = f'{run_name}: {sugg_lr_val:.6f}' if show_sugg_lr else run_name
             if region != 'all':
                 label = f"{label} - {region}"
             ax.plot(lrs, losses, label=label)
-            ax.scatter(sugg_lr_val, sugg_loss, color='red')
+            if show_sugg_lr:
+                ax.scatter(sugg_lr_val, sugg_loss, color='red')
 
         # Plot vlines.
         if vline is not None:
@@ -173,6 +176,14 @@ def plot(
     ax.xaxis.set_minor_locator(FixedLocator(minor_tick_locations))
     ax.grid(axis='both', which='major')
     ax.grid(axis='x', which='minor', linestyle='--')
+
+    # Save plot to disk.
+    if savepath is not None:
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
 
     if show:
         plt.show()

@@ -47,6 +47,7 @@ def train_multi_segmenter(
     halve_channels: bool = False,
     include_background: bool = False,
     lam: float = 0.5,
+    load_all_samples: bool = False,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
     lr_find_iter: int = 10,
@@ -171,7 +172,7 @@ def train_multi_segmenter(
         epoch = 0
 
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, epoch=epoch, include_background=include_background, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, epoch=epoch, include_background=include_background, load_all_samples=load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
 
     # Infer convergence thresholds from dataset name.
     # We need these even when 'use_cvg_weighting=False' as it allows us to track
@@ -287,7 +288,7 @@ def train_multi_segmenter(
         return
 
     # Save training information.
-    man_df = get_multi_loader_manifest(dataset, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file)
+    man_df = get_multi_loader_manifest(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')

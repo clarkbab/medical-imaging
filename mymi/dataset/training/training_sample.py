@@ -49,6 +49,8 @@ class TrainingSample:
     def input(self) -> np.ndarray:
         # Load the input data.
         filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}.npz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Input data not found for sample '{self}'.")
         data = np.load(filepath)['data']
         data = data.astype(np.float32)
         return data
@@ -78,8 +80,13 @@ class TrainingSample:
 
     def has_region(
         self,
-        region: str) -> bool:
-        return region in self.list_regions()
+        region: PatientRegions) -> bool:
+        regions = arg_to_list(region, str)
+        pat_regions = self.list_regions()
+        for region in regions:
+            if region in pat_regions:
+                return True
+        return False
 
     def label(
         self,
@@ -91,7 +98,7 @@ class TrainingSample:
         for region in regions:
             filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
             if not os.path.exists(filepath):
-                raise ValueError(f"Region '{region}' not found for sample '{self}'.")
+                raise ValueError(f"Label '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']
             data[region] = label
 

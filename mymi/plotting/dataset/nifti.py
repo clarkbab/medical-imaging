@@ -7,6 +7,7 @@ from mymi.dataset import NIFTIDataset
 from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction
 from mymi.regions import region_to_list
+from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
@@ -15,6 +16,7 @@ from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_pr
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
 from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_registration as plot_registration_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
@@ -61,6 +63,115 @@ def plot_region(
 
     # Plot.
     plot_region_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+
+def plot_registration(
+    dataset: str,
+    fixed_pat_id: str,
+    moving_pat_id: str,
+    centre_of: Optional[Union[str, List[str]]] = None,
+    crop: Optional[Union[str, List[str], Crop2D]] = None,
+    crop_margin: float = 100,
+    labels: Literal['included', 'excluded', 'all'] = 'all',
+    region: Optional[PatientRegions] = None,
+    **kwargs) -> None:
+    # Find first shared 'centre_of' and 'crop'.
+    set = NIFTIDataset(dataset)
+    centres_of = arg_to_list(centre_of, str)
+    if centres_of is not None:
+        for i, c in enumerate(centres_of):
+            if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+                centre_of = c
+                break
+            elif i == len(centres_of) - 1:
+                raise ValueError(f"Could not find shared 'centre_of' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
+    crops = arg_to_list(crop, str)
+    if crops is not None and not isinstance(crop, tuple):
+        for i, c in enumerate(crops):
+            if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+                crop = c
+                break
+            elif i == len(crops) - 1:
+                raise ValueError(f"Could not find shared 'crop' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
+    logging.info(f"Selected 'centre_of={centre_of}' and 'crop={crop}'.")
+
+    # Load data.
+    pat_ids = (fixed_pat_id, moving_pat_id)
+    ct_data = []
+    region_data = []
+    sizes = []
+    spacings = []
+    centres_of = []
+    crops = []
+    for pat_id in pat_ids:
+        pat = set.patient(pat_id)
+        ct_data.append(pat.ct_data)
+        pat_region_data = pat.region_data(labels=labels, region=region, region_ignore_missing=True) if region is not None else None
+        region_data.append(pat_region_data)
+        sizes.append(pat.ct_size)
+        spacings.append(pat.ct_spacing)
+
+        # Load 'centre_of' data if not already in 'region_data'.
+        if centre_of is not None:
+            if type(centre_of) == str:
+                if pat_region_data is None or centre_of not in pat_region_data:
+                    pat_centre_of = pat.region_data(region=centre_of)[centre_of]
+                    centres_of.append(pat_centre_of)
+                else:
+                    centres_of.append(centre_of)
+            else:
+                raise ValueError('Case not handled.')
+        else:
+            centres_of.append(None)
+
+        # Load 'crop' data if not already in 'region_data'.
+        if crop is not None:
+            if type(crop) == str:
+                if pat_region_data is None or crop not in pat_region_data:
+                    pat_crop = pat.region_data(region=crop)[crop]
+                    crops.append(pat_crop)
+                else:
+                    crops.append(crop)
+            else:
+                raise ValueError('Case not handled.')
+        else:
+            crops.append(None)
+
+    # Load registered data.
+    reg_ct_data, reg_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, region_ignore_missing=True)
+
+    # Load 'centre_of' data if not already in 'reg_region_data'.
+    if centre_of is not None:
+        if type(centre_of) == str:
+            if reg_region_data is None or centre_of not in reg_region_data:
+                _, centre_of_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=centre_of)
+                centres_of.append(centre_of_region_data[centre_of])
+            else:
+                centres_of.append(centre_of)
+        else:
+            raise ValueError('Case not handled.')
+    else:
+        centres_of.append(None)
+
+    # Load 'crop' data if not already in 'reg_region_data'.
+    if crop is not None:
+        if type(crop) == str:
+            if reg_region_data is None or crop not in reg_region_data:
+                _, crop_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=crop)
+                crops.append(crop_region_data[crop])
+            else:
+                crops.append(crop)
+        else:
+            raise ValueError('Case not handled.')
+    else:
+        crops.append(None)
+
+    # Plot.
+    fixed_centre_of, moving_centre_of, reg_centre_of = centres_of
+    fixed_crop, moving_crop, reg_crop = crops
+    fixed_ct_data, moving_ct_data = ct_data
+    fixed_region_data, moving_region_data = region_data
+    fixed_spacing, moving_spacing = spacings
+    plot_registration_base(*pat_ids, *sizes, fixed_centre_of=fixed_centre_of, fixed_crop=fixed_crop, fixed_crop_margin=crop_margin, fixed_ct_data=fixed_ct_data, fixed_spacing=fixed_spacing, fixed_region_data=fixed_region_data, moving_centre_of=moving_centre_of, moving_crop=moving_crop, moving_crop_margin=crop_margin, moving_ct_data=moving_ct_data, moving_spacing=moving_spacing, moving_region_data=moving_region_data, registered_centre_of=reg_centre_of, registered_crop=reg_crop, registered_crop_margin=crop_margin, registered_ct_data=reg_ct_data, registered_region_data=reg_region_data, **kwargs)
 
 def plot_localiser_prediction(
     dataset: str,
