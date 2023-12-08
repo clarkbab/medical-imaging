@@ -768,7 +768,6 @@ def create_registration_figures_report(
     set = NIFTIDataset(dataset)
     pat_ids = set.list_patients()
     n_pats = len(pat_ids) // 2
-    n_pats = 1
 
     for pat_id in tqdm(range(n_pats)):
         fixed_pat_id = f'{pat_id}-1'

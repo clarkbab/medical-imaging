@@ -1899,6 +1899,7 @@ def plot_registration(
     registered_ct_data: Optional[np.ndarray] = None,
     registered_region_data: Optional[np.ndarray] = None,
     registered_slice_idx: Optional[int] = None,
+    registered_use_fixed_crop: bool = True,
     registered_use_fixed_slice: bool = True,
     savepath: Optional[str] = None,
     show: bool = True,
@@ -1970,7 +1971,11 @@ def plot_registration(
 
     # Convert each 'crop' to 'Box2D' type.
     crops_tmp = []
-    for crop, data, margin, spacing in zip(crops, region_data, crop_margins, spacings):
+    for i, (crop, data, margin, spacing) in enumerate(zip(crops, region_data, crop_margins, spacings)):
+        if registered_use_fixed_crop and i == 1:
+            crops_tmp.append(crops_tmp[0])
+            continue
+
         if crop is not None:
             if type(crop) == str:
                 crop = __get_region_crop(data[crop], margin, spacing, view)     # Crop was 'region_data' key.
@@ -2077,6 +2082,39 @@ def plot_registration(
                 plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
                 for l in plt_legend.get_lines():
                     l.set_linewidth(8)
+
+    # Set axis limits if cropped.
+    for ax, crop, slice in zip(axs, crops, ct_slice_data):
+        if crop is not None:
+            # Get new x ticks/labels.
+            x_diff = int(np.diff(ax.get_xticks())[0])
+            x_tick_label_max = int(np.floor(crop[1][0] / x_diff) * x_diff)
+            x_tick_labels = list(range(crop[0][0], x_tick_label_max, x_diff))
+            x_ticks = list((i * x_diff for i in range(len(x_tick_labels))))
+
+            # Round up to nearest 'x_diff'.
+            x_tick_labels_tmp = x_tick_labels.copy()
+            x_tick_labels = [int(np.ceil(x / x_diff) * x_diff) for x in x_tick_labels_tmp]
+            x_tick_diff = list(np.array(x_tick_labels) - np.array(x_tick_labels_tmp))
+            x_ticks = list(np.array(x_ticks) + np.array(x_tick_diff))
+
+            # Set x ticks.
+            ax.set_xticks(x_ticks, labels=x_tick_labels)
+
+            # Get new y ticks/labels.
+            y_diff = int(np.diff(ax.get_yticks())[0])
+            y_tick_label_max = int(np.floor(crop[1][1] / y_diff) * y_diff)
+            y_tick_labels = list(range(crop[0][1], y_tick_label_max, y_diff))
+            y_ticks = list((i * y_diff for i in range(len(y_tick_labels))))
+
+            # Round up to nearest 'y_diff'.
+            y_tick_labels_tmp = y_tick_labels.copy()
+            y_tick_labels = [int(np.ceil(y / y_diff) * y_diff) for y in y_tick_labels_tmp]
+            y_tick_diff = list(np.array(y_tick_labels) - np.array(y_tick_labels_tmp))
+            y_ticks = list(np.array(y_ticks) + np.array(y_tick_diff))
+
+            # Set y ticks.
+            ax.set_yticks(y_ticks, labels=y_tick_labels)
 
     # Show axis ticks.
     if not show_x_ticks:

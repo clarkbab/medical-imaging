@@ -19,9 +19,16 @@ echo $version
 
 DATASET="PMCC-HN-REPLAN"
 CENTRE_OF="['Brain','Brainstem','Cavity_Oral','Bone_Mandible']"
-REGION=
+CROP="['Brain','Brainstem','Cavity_Oral','Bone_Mandible']"
+CROP_MARGIN=150
+REGION="['Bone_Mandible','BrachialPlex_L','BrachialPlex_R','Brain','Brainstem','Cavity_Oral','Cochlea_L','Cochlea_R','Esophagus_S','Eye_L','Eye_R','GTVp','Glnd_Submand_L','Glnd_Submand_R','Glottis','Larynx','Lens_L','Lens_R','Musc_Constrict','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R','SpinalCord']"
+SHOW_LEGEND=False
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
 python $SCRIPT_DIR/report/nifti/create_registration_figures.py \
     --dataset $DATASET \
-    --centre_of $CENTRE_OF
+    --centre_of $CENTRE_OF \
+    --crop $CROP \
+    --crop_margin $CROP_MARGIN \
+    --region $REGION \
+    --show_legend $SHOW_LEGEND

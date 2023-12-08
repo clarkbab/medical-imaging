@@ -91,7 +91,7 @@ class MultiLoader:
         test_subfold: Optional[int] = None,
         transform_train: Transform = None,
         transform_val: Transform = None,
-        use_groups: bool = False,
+        use_grouping: bool = False,
         use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
         regions = arg_to_list(region, str)
@@ -118,13 +118,12 @@ class MultiLoader:
             regions = list(sorted(np.unique(regions)))
 
         # Load all samples/groups.
-        # Grouping can be used when multiple 'patient-id' values in a dataset belong to the same patient,
-        # e.g. replanning during treatment. It is important here that scans for the same patient don't 
-        # end up in both training and testing dataset - leakage of testing information into training process!
         samples = []
         logging.info(f"loading samples.")
         for i, set in enumerate(sets):
-            if use_groups:
+            if use_grouping:
+                # Grouping is used when multiple 'patient-id' values belong to the same patient. E.g.
+                # sample with 'group=0,patient-id=0-0' is the same patient as 'group=0,patient-id=0-1'.
                 for group_id in set.list_groups(region=regions):
                     samples.append((i, group_id))
             else:
@@ -143,17 +142,18 @@ class MultiLoader:
         np.random.seed(random_seed)
         np.random.shuffle(samples)
 
-        # Get training/testing samples.
-        if n_folds is not None:     # Split samples into equally-sized folds for training/testing.
+        # Get training and testing samples.
+        if n_folds is not None:     
+            # Split samples into equally-sized folds for training/testing.
             assert test_fold is not None
 
             if use_split_file:
                 raise ValueError(f"Using 'n_folds={n_folds}' randomises the train/test split, whilst 'use_split_file={use_split_file}' reads 'loader-split.csv' to determine train/test split. These methods don't work together.")
 
             # Split samples into folds.
-            # Note that 'samples' here could actually be groups if 'use_groups=True'.
+            # Note that 'samples' here could actually be groups if 'use_grouping=True'.
             n_samples = len(samples)
-            logging.info(f"found {n_samples} samples.")
+            logging.info(f"Loaded {n_samples} samples total.")
             len_fold = int(np.floor(n_samples / n_folds))
             n_samples_lost = n_samples - n_folds * len_fold
             logging.info(f"Lost {n_samples_lost} samples due to {n_folds}-fold split.")
@@ -161,7 +161,7 @@ class MultiLoader:
             fold_sampleses = []
             for i in range(n_folds):
                 fold_samples = samples[i * len_fold:(i + 1) * len_fold]
-                logging.info(f"putting {len(fold_samples)} samples into fold {i}.")
+                logging.info(f"Putting {len(fold_samples)} samples into fold {i}.")
                 fold_sampleses.append(fold_samples)
 
             # Determine train and test folds. Note if (e.g.) test_fold=2, then the train
@@ -171,12 +171,13 @@ class MultiLoader:
             train_folds = list((np.array(range(n_folds)) + (test_fold + 1)) % n_folds)
             train_folds.remove(test_fold)
             train_samples = list(chain(*[fold_sampleses[f] for f in train_folds]))
-            logging.info(f"got {len(train_samples)} train samples.")
+            logging.info(f"Found {len(train_samples)} train samples.")
             test_samples = fold_sampleses[test_fold]
-            logging.info(f"got {len(test_samples)} test samples.")
+            logging.info(f"Found {len(test_samples)} test samples.")
 
-        elif use_split_file:         # Use 'loader-split.csv' to determine training/testing split.
-            assert use_groups is False
+        elif use_split_file:         
+            # Use 'loader-split.csv' to determine training/testing split.
+            assert use_grouping is False
 
             train_samples = []
             test_samples = []
@@ -208,12 +209,11 @@ class MultiLoader:
                             train_samples.append(sample)
                         elif partition == 'test':
                             test_samples.append(sample)
-
-        else:       # All samples are used for testing - no validation required.
-            # Note that these could be groups if 'use_groups=True'.
+        else:       
+            # All samples are used for training.
             train_samples = samples 
 
-        # Split for hyper-parameter selection.
+        # Split training samples into 'subfolds' - for hyper-parameter selection.
         if n_subfolds is not None:
             assert test_subfold is not None
 
@@ -236,15 +236,17 @@ class MultiLoader:
             train_samples = list(chain(*[fold_sampleses[f] for f in train_subfolds]))
             test_subsamples = fold_sampleses[test_subfold]
 
-        # Split 'train_samples' into training/validation samples.
+        # Get number of training (minus validation) samples.
         n_train_samples = int(len(train_samples) * (1 - p_val))
-        if use_groups:      # Maintain grouping until after final split of data (training/validation).
-            all_train_samples = train_samples
+
+        # Split train samples into training/validation samples.
+        if use_grouping:
+            train_samples_tmp = train_samples.copy()
             train_samples = []
             val_samples = []
 
             # Expand groups to samples.
-            for set_i, group_id in all_train_samples:
+            for set_i, group_id in train_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 if len(train_samples) < n_train_samples:
                     train_samples += samples
@@ -254,19 +256,20 @@ class MultiLoader:
             val_samples = train_samples[n_train_samples:] 
             train_samples = train_samples[:n_train_samples]
 
-        # Convert test/subtest groups into samples.
-        if use_groups:
+        # Expand test groups to samples.
+        if use_grouping:
             test_groups = test_samples
             test_samples = []
             for set_i, group_id in test_groups:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 test_samples += samples
 
-            test_subgroups = test_subsamples
-            test_subsamples = []
-            for set_i, group_id in test_subgroups:
-                samples = sets[set_i].list_samples(group_id=group_id)
-                test_subsamples += samples
+            if n_subfolds is not None:
+                test_subgroups = test_subsamples
+                test_subsamples = []
+                for set_i, group_id in test_subgroups:
+                    samples = sets[set_i].list_samples(group_id=group_id)
+                    test_subsamples += samples
 
         # Take subset of train samples.
         if n_train is not None:

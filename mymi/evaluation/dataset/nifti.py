@@ -12,10 +12,10 @@ from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
-from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
+from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
@@ -304,6 +304,77 @@ def get_multi_segmenter_evaluation(
 
     return region_metrics
 
+def get_registration_evaluation(
+    dataset: str,
+    pat_id: str,
+    region: PatientRegions) -> List[Dict[str, float]]:
+
+    # Load ground truth (fixed) region data.
+    fixed_pat_id = f'{pat_id}-1'
+    fixed_pat = NIFTIDataset(dataset).patient(fixed_pat_id)
+    fixed_spacing = fixed_pat.ct_spacing
+    region_data_gt = fixed_pat.region_data(region=region, region_ignore_missing=True)
+
+    # Load prediction (registered from moving) region data.
+    moving_pat_id = f'{pat_id}-0'
+    _, region_data_pred = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, region_ignore_missing=True)
+    
+    # Get overlapping regions.
+    shared_regions = list(np.intersect1d(list(region_data_gt.keys()), list(region_data_pred.keys())))
+ 
+    # Calculate metrics for each region.
+    regions = arg_to_list(region, str)
+    region_metrics = []
+    for region in regions:
+        if region not in shared_regions:
+            region_metrics.append({})
+            continue
+
+        # Get labels.
+        pred = region_data_pred[region]
+        label = region_data_gt[region]
+
+        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+        if region == 'SpinalCord':
+            z_min_pred = np.nonzero(pred)[2].min()
+            z_min_label = np.nonzero(label)[2].min()
+            z_min = np.max([z_min_label, z_min_pred])
+
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min), label.shape)
+            pred = crop_foreground_3D(pred, crop)
+            label = crop_foreground_3D(label, crop)
+
+        # Dice.
+        metrics = {}
+        metrics['dice'] = dice(pred, label)
+
+        # Distances.
+        if pred.sum() == 0 or label.sum() == 0:
+            metrics['apl'] = np.nan
+            metrics['hd'] = np.nan
+            metrics['hd-95'] = np.nan
+            metrics['msd'] = np.nan
+            metrics['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, fixed_spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[metric] = value
+
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, fixed_spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[f'dm-{metric}'] = value
+
+        region_metrics.append(metrics)
+
+    return region_metrics
+
 def get_segmenter_evaluation(
     dataset: str,
     pat_id: str,
@@ -411,6 +482,56 @@ def create_multi_segmenter_evaluation(
     # Save evaluation.
     filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
+def create_registration_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions) -> None:
+    logging.arg_log('Evaluating NIFTI registrations', ('dataset', 'region'), (dataset, region))
+
+    # Get patients.
+    set = NIFTIDataset(dataset)
+    pat_ids = set.list_patients()
+    n_pats = len(pat_ids) // 2
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Add evaluations to dataframe.
+    regions = arg_to_list(region, str)
+    for pat_id in tqdm(range(n_pats)):
+
+        # Get metrics per region.
+        region_metrics = get_registration_evaluation(dataset, pat_id, regions)
+        for region, metrics in zip(regions, region_metrics):
+            for metric, value in metrics.items():
+                fixed_pat_id = f'{pat_id}-1'
+                data = {
+                    'dataset': dataset,
+                    'patient-id': fixed_pat_id,
+                    'region': region,
+                    'metric': metric,
+                    'value': value
+                }
+                df = append_row(df, data)
+
+        break
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    datasets = arg_to_list(dataset, str)
+    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -553,6 +674,24 @@ def load_multi_segmenter_evaluation(
             raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+
+def load_registration_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    exists_only: bool = False) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), 'eval.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Registration evaluation for dataset '{dataset}' not found. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
     return df
 
 def load_segmenter_evaluation(
