@@ -234,6 +234,7 @@ class MultiUNet3D(nn.Module):
         double_groups: bool = False,
         halve_channels: bool = False,
         n_ckpts: int = 22,
+        n_input_channels: int = 1,
         n_gpus: int = 1,
         n_split_channels: int = 2) -> None:
         super().__init__()
@@ -307,7 +308,7 @@ class MultiUNet3D(nn.Module):
         ]
 
         # Add first level.
-        in_channels = 1
+        in_channels = n_input_channels
         out_channels = n_features
         self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
         self.__layers.append(nn.InstanceNorm3d(out_channels))

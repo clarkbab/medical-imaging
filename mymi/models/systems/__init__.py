@@ -1,3 +1,4 @@
+from .adaptive_segmenter import AdaptiveSegmenter
 from .auto_encoder_2d import AutoEncoder2D
 from .localiser import Localiser
 from .multi_segmenter import MultiSegmenter

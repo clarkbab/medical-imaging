@@ -90,7 +90,8 @@ class TrainingSample:
 
     def label(
         self,
-        region: PatientRegions = 'all') -> Dict[str, np.ndarray]:
+        region: PatientRegions = 'all',
+        region_ignore_missing: bool = False) -> Dict[str, np.ndarray]:
         regions = arg_to_list(region, str, literals={ 'all': self.list_regions() })
 
         # Load the label data.
@@ -98,7 +99,10 @@ class TrainingSample:
         for region in regions:
             filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
             if not os.path.exists(filepath):
-                raise ValueError(f"Label '{region}' not found for sample '{self}'.")
+                if region_ignore_missing:
+                    continue
+                else:
+                    raise ValueError(f"Label '{region}' not found for sample '{self}'.")
             label = np.load(filepath)['data']
             data[region] = label
 

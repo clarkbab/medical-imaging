@@ -487,13 +487,16 @@ def create_multi_segmenter_evaluation(
     
 def create_registration_evaluation(
     dataset: Union[str, List[str]],
-    region: PatientRegions) -> None:
+    region: PatientRegions,
+    load_all_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_grouping: bool = False,
+    use_split_file: bool = False) -> None:
     logging.arg_log('Evaluating NIFTI registrations', ('dataset', 'region'), (dataset, region))
 
-    # Get patients.
-    set = NIFTIDataset(dataset)
-    pat_ids = set.list_patients()
-    n_pats = len(pat_ids) // 2
+    # Build test loader.
+    _, _, test_loader = MultiLoader.build_loaders(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=region, test_fold=test_fold, use_grouping=use_grouping, use_split_file=use_split_file) 
 
     # Create dataframe.
     cols = {
@@ -508,30 +511,37 @@ def create_registration_evaluation(
 
     # Add evaluations to dataframe.
     regions = arg_to_list(region, str)
-    for pat_id in tqdm(range(n_pats)):
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            pat_id = pat_id.split('-')[0]
 
-        # Get metrics per region.
-        region_metrics = get_registration_evaluation(dataset, pat_id, regions)
-        for region, metrics in zip(regions, region_metrics):
-            for metric, value in metrics.items():
-                fixed_pat_id = f'{pat_id}-1'
-                data = {
-                    'dataset': dataset,
-                    'patient-id': fixed_pat_id,
-                    'region': region,
-                    'metric': metric,
-                    'value': value
-                }
-                df = append_row(df, data)
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
 
-        break
+            # Get metrics per region.
+            region_metrics = get_registration_evaluation(dataset, pat_id, regions)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
 
     # Set column types.
     df = df.astype(cols)
 
     # Save evaluation.
     datasets = arg_to_list(dataset, str)
-    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), 'eval.csv')
+    filename = f"load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-grouping-{use_grouping}-use-split-file-{use_split_file}.csv"
+    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -679,10 +689,16 @@ def load_multi_segmenter_evaluation(
 def load_registration_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
-    exists_only: bool = False) -> Union[np.ndarray, bool]:
+    exists_only: bool = False,
+    load_all_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_grouping: bool = False,
+    use_split_file: bool = False) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
     regions = arg_to_list(region, str)
-    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), 'eval.csv')
+    filename = f"load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-grouping-{use_grouping}-use-split-file-{use_split_file}.csv"
+    filepath = os.path.join(config.directories.evaluations, 'registration', encode(datasets), encode(regions), filename)
     if os.path.exists(filepath):
         if exists_only:
             return True

@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
-##SBATCH --partition gpu-a100-short
-##SBATCH --gres gpu:1
+##SBATCH --partition cascade
+#SBATCH --partition gpu-a100-short
+#SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 64G
-#SBATCH --time 0-08:00:00
+#SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -24,10 +24,10 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-pmcc-resolution-v2"
-RESOLUTION="112"
+RESOLUTION="444"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
-RANDOM_SEED=45
-RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-0.5-schedule-100"
+RANDOM_SEED=42
+RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-0.5-schedule-200"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=False
 N_EPOCHS=1000

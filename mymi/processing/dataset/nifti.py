@@ -25,6 +25,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.regions import region_to_list
+from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi.types import ImageSize3D, ImageSpacing3D, ModelName, PatientRegions
@@ -41,8 +42,9 @@ def convert_to_training(
     output_spacing: Optional[ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
-    round_dp: Optional[int] = None) -> None:
-    logging.arg_log('Converting to training', ('dataset', 'region'), (dataset, region))
+    round_dp: Optional[int] = None,
+    use_registration: bool = False) -> None:
+    logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = arg_to_list(region, str)
 
     # Use all regions if region is 'None'.
@@ -119,10 +121,21 @@ def convert_to_training(
     start = time()
     if create_data:
         for i, pat_id in enumerate(tqdm(pat_ids)):
-            # Load input data.
-            patient = set.patient(pat_id)
-            spacing = patient.ct_spacing
-            input = patient.ct_data
+            should_register = True if use_registration and '-0' in pat_id else False
+
+            if should_register:
+                # Load registered pre-treatment CT and regions.
+                pat_id_mt = pat_id.replace('-0', '-1')
+                input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, region_ignore_missing=True)
+                
+                # Get spacing from mid-treatment CT.
+                pat_mt = set.patient(pat_id_mt)
+                spacing = pat_mt.ct_spacing
+            else:
+                # Load input data.
+                patient = set.patient(pat_id)
+                spacing = patient.ct_spacing
+                input = patient.ct_data
 
             # Resample input.
             if output_spacing:
@@ -150,8 +163,12 @@ def convert_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
-                    continue
+                if should_register:
+                    if not region in region_data:
+                        continue
+                else:
+                    if not set.patient(pat_id).has_region(region):
+                        continue
 
                 # Skip if region in 'excluded-labels.csv'.
                 if exc_df is not None:
@@ -160,7 +177,10 @@ def convert_to_training(
                         continue
 
                 # Load label data.
-                label = patient.region_data(region=region)[region]
+                if should_register:
+                    label = region_data[region]
+                else:
+                    label = patient.region_data(region=region)[region]
 
                 # Resample data.
                 if output_spacing:

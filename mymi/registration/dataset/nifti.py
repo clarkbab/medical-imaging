@@ -1,3 +1,4 @@
+from nibabel.nifti1 import Nifti1Image
 import numpy as np
 import os
 from typing import Dict, Optional, Union
@@ -15,10 +16,11 @@ def create_patient_registration(
     moving_pat_id: PatientID) -> None:
 
     # Load CT data.
-    fixed_pat = NIFTIDataset(dataset).patient(fixed_pat_id)
+    set = NIFTIDataset(dataset)
+    fixed_pat = set.patient(fixed_pat_id)
     fixed_ct = fixed_pat.ct_data
     fixed_spacing = fixed_pat.ct_spacing
-    moving_pat = NIFTIDataset(dataset).patient(moving_pat_id)
+    moving_pat = set.patient(moving_pat_id)
     moving_ct = moving_pat.ct_data
     moving_spacing = moving_pat.ct_spacing
 
@@ -29,8 +31,28 @@ def create_patient_registration(
     logging.info(f"Registering patient '{moving_pat_id}' CT to patient '{fixed_pat_id}' CT.")
     reg_ct, reg_transform = register_image(fixed_ct, moving_ct, fixed_spacing, fixed_spacing, return_transform=True)
 
+        # patient = set.patient(pat)
+        # data = patient.ct_data()
+        # spacing = patient.ct_spacing()
+        # offset = patient.ct_offset()
+        # affine = np.array([
+        #     [spacing[0], 0, 0, offset[0]],
+        #     [0, spacing[1], 0, offset[1]],
+        #     [0, 0, spacing[2], offset[2]],
+        #     [0, 0, 0, 1]])
+        # img = Nifti1Image(data, affine)
+        # filepath = os.path.join(nifti_ds.path, 'ct', f'{pat}.nii.gz')
+        # os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        # nib.save(img, filepath)
+
     # Save registered CT.
-    filepath = os.path.join(config.directories.registrations, 'data', dataset, f'{moving_pat_id}-{fixed_pat_id}', 'ct.npz') 
+    affine = np.array([
+        [fixed_spacing[0], 0, 0, offset[0]],
+        [0, fixed_spacing[1], 0, offset[1]],
+        [0, 0, fixed_spacing[2], offset[2]],
+        [0, 0, 0, 1]])
+    image = Nifti1Image(reg_ct, affine)
+    filepath = os.path.join(set.path, 'data', 'registrations', 'ct', f'{moving_pat_id}-{fixed_pat_id}.nii.gz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=reg_ct)
@@ -43,7 +65,7 @@ def create_patient_registration(
         moving_label = resample_3D(moving_label, spacing=moving_spacing, output_spacing=fixed_spacing)
 
         # Apply CT registration transform.
-        reg_label = register_label(moving_label, fixed_spacing, moving_spacing, fixed_ct.shape, reg_transform)
+        reg_label = register_label(moving_label, fixed_spacing, fixed_spacing, fixed_ct.shape, reg_transform)
 
         # Save registered region.
         filepath = os.path.join(config.directories.registrations, 'data', dataset, f'{moving_pat_id}-{fixed_pat_id}', f'{region}.npz')

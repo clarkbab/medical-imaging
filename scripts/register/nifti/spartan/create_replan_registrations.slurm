@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
+##SBATCH --partition cascade
 ##SBATCH --qos feit
 ##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
@@ -20,4 +21,4 @@ echo $version
 
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/register/nifti/register_replan_ct.py
+python $SCRIPT_DIR/register/nifti/create_replan_registrations.py

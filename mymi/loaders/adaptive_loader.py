@@ -67,7 +67,7 @@ def collate_fn(batch) -> List[Tensor]:
 
     return (desc, input, label, mask, weights)
 
-class MultiLoader:
+class AdaptiveLoader:
     @staticmethod
     def build_loaders(
         dataset: Union[str, List[str]],
@@ -119,30 +119,30 @@ class MultiLoader:
 
         # Load all samples/groups.
         samples = []
-        logging.info(f"loading samples.")
         for i, set in enumerate(sets):
+            # Grouping is used when multiple 'patient-id' values belong to the same patient. E.g.
+            # sample with 'group=0,patient-id=0-0' is the same patient as 'group=0,patient-id=0-1'.
             if use_grouping:
-                # Grouping is used when multiple 'patient-id' values belong to the same patient. E.g.
-                # sample with 'group=0,patient-id=0-0' is the same patient as 'group=0,patient-id=0-1'.
-                for group_id in set.list_groups(region=regions):
-                    samples.append((i, group_id))
+                # Loading all samples is required to ensure consistent train/test split per region
+                # when passing different 'regions'.
+                if load_all_samples:
+                    set_samples = set.list_groups()
+                else:
+                    set_samples = set.list_groups(region=regions)
             else:
-                # If 'load_all_samples=False', load only patients with requested 'region/s'.
-                # When performing k-fold (e.g. n_folds=5 and test_fold=0) this will result
-                # in different patient splits when different 'region/s' are requested.
-                # If 'load_all_samples=True', load all patients even if they don't have the
-                # requested 'region/s'. This will give consistent splits across different requested
-                # 'region/s', however some patients will not have any of the requested regions.
-                samples_region = None if load_all_samples else regions
-                set_samples = set.list_samples(region=samples_region)
-                for sample_id in set_samples:
-                    samples.append((i, sample_id))
+                if load_all_samples:
+                    set_samples = set.list_samples()
+                else:
+                    set_samples = set.list_samples(region=regions)
+
+            for sample_id in set_samples:
+                samples.append((i, sample_id))
 
         # Shuffle samples.
         np.random.seed(random_seed)
         np.random.shuffle(samples)
 
-        # Get training and testing samples.
+        # Split into training/testing samples.
         if n_folds is not None:     
             # Split samples into equally-sized folds for training/testing.
             assert test_fold is not None
@@ -240,35 +240,45 @@ class MultiLoader:
         n_train_samples = int(len(train_samples) * (1 - p_val))
 
         # Split train samples into training/validation samples.
+        val_samples = train_samples[n_train_samples:] 
+        train_samples = train_samples[:n_train_samples]
+
+        # Expand groups to samples.
         if use_grouping:
+            # Expand training samples.
             train_samples_tmp = train_samples.copy()
             train_samples = []
-            val_samples = []
-
-            # Expand groups to samples.
             for set_i, group_id in train_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
-                if len(train_samples) < n_train_samples:
-                    train_samples += samples
-                else:
-                    val_samples += samples
-        else:
-            val_samples = train_samples[n_train_samples:] 
-            train_samples = train_samples[:n_train_samples]
+                samples = [(set_i, sample_id) for sample_id in samples]
+                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
+                train_samples += samples
 
-        # Expand test groups to samples.
-        if use_grouping:
-            test_groups = test_samples
-            test_samples = []
-            for set_i, group_id in test_groups:
+            # Expand validation samples.
+            val_samples_tmp = val_samples.copy()
+            val_samples = []
+            for set_i, group_id in val_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
+                samples = [(set_i, sample_id) for sample_id in samples]
+                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
+                val_samples += samples
+
+            # Expand test samples.
+            test_samples_tmp = test_samples.copy()
+            test_samples = []
+            for set_i, group_id in test_samples_tmp:
+                samples = sets[set_i].list_samples(group_id=group_id)
+                samples = [(set_i, sample_id) for sample_id in samples]
+                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                 test_samples += samples
 
+            # Expand test sub-samples.
             if n_subfolds is not None:
-                test_subgroups = test_subsamples
+                test_subsamples_tmp = test_subsamples.copy()
                 test_subsamples = []
-                for set_i, group_id in test_subgroups:
+                for set_i, group_id in test_subsamples_tmp:
                     samples = sets[set_i].list_samples(group_id=group_id)
+                    samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                     test_subsamples += samples
 
         # Take subset of train samples.
@@ -280,26 +290,28 @@ class MultiLoader:
 
         # Filter out patients without one of the requested 'region/s'.
         if load_all_samples:
-            # 'load_all_samples' is used to ensure that 'region/s' doesn't affect the patient split,
-            # but we don't want to load samples that don't have any of the requested regions as
-            # this will increase training times.
+            # Filter training samples.
             train_samples_tmp = train_samples.copy()
             train_samples = []
+            for set_i, sample_id in train_samples_tmp:
+                sample = sets[set_i].sample(sample_id)
+                if sample.has_region(regions):
+                    train_samples.append((set_i, sample_id))
+                    
+            # Filter validation samples.
             val_samples_tmp = val_samples.copy()
             val_samples = []
+            for set_i, sample_id in val_samples_tmp:
+                sample = sets[set_i].sample(sample_id)
+                if sample.has_region(regions):
+                    val_samples.append((set_i, sample_id))
+
+            # Filter test samples.
             test_samples_tmp = test_samples.copy() 
             test_samples = []
-            for set_i, sample_id in train_samples_tmp:
-                samp = sets[set_i].sample(sample_id)
-                if samp.has_region(regions):
-                    train_samples.append((set_i, sample_id))
-            for set_i, sample_id in val_samples_tmp:
-                samp = sets[set_i].sample(sample_id)
-                if samp.has_region(regions):
-                    val_samples.append((set_i, sample_id))
             for set_i, sample_id in test_samples_tmp:
-                samp = sets[set_i].sample(sample_id)
-                if samp.has_region(regions):
+                sample = sets[set_i].sample(sample_id)
+                if sample.has_region(regions):
                     test_samples.append((set_i, sample_id))
 
         # Create train loader.
@@ -376,20 +388,22 @@ class TrainingSet(Dataset):
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
 
-        # Create map from region names to channels.
-        self.__n_channels = len(self.__regions) + 1
-        self.__region_channel_map = { 'background': 0 }
+        # Create map from regions to input/output channels.
+        self.__n_input_channels = len(self.__regions) + 2
+        self.__region_input_channel_map = dict((region, i + 2) for i, region in enumerate(self.__regions))
+        self.__n_output_channels = len(self.__regions) + 1
+        self.__region_output_channel_map = { 'background': 0 }
         for i, region in enumerate(self.__regions):
-            self.__region_channel_map[region] = i + 1
+            self.__region_output_channel_map[region] = i + 1
 
         if class_weights is None:
             # Calculate weights based on training data.
-            region_counts = np.zeros(self.__n_channels, dtype=int)
+            region_counts = np.zeros(self.__n_output_channels, dtype=int)
             for ds_i, s_i in samples:
                 regions = self.__sets[ds_i].sample(s_i).list_regions()
                 regions = [r for r in regions if r in self.__regions]
                 for region in regions:
-                    region_counts[self.__region_channel_map[region]] += 1
+                    region_counts[self.__region_output_channel_map[region]] += 1
 
                 # If all regions are present, we can train background class.
                 if self.__include_background:
@@ -421,40 +435,54 @@ class TrainingSet(Dataset):
     def __getitem__(
         self,
         index: int) -> Tuple[np.ndarray, np.ndarray]:
-        # Get dataset/sample.
-        ds_i, s_i = self.__sample_map[index]
-        set = self.__sets[ds_i]
+        logging.info(f"Loading sample {self.__sample_map[index]}")
 
         # Get description.
+        ds_i, s_i = self.__sample_map[index]
+        set = self.__sets[ds_i]
         desc = f'{set.name}:{s_i}'
         if not self.__load_data:
             return desc
 
-        # Load region data.
-        sample = set.sample(s_i)
-        regions = sample.list_regions()
-        regions = [r for r in regions if r in self.__regions]
-        input, labels = sample.pair(region=regions)
+        # Load mid-treatment sample.
+        sample_mt = set.sample(s_i)
+        regions_mt = sample_mt.list_regions()
+        regions_mt = [r for r in regions_mt if r in self.__regions]
+        input_mt, labels_mt = sample_mt.pair(region=regions_mt)
+
+        # Load pre-treatment_sample.
+        sample_pt = set.sample(s_i - 1)
+        regions_pt = sample_pt.list_regions()
+        regions_pt = [r for r in regions_pt if r in self.__regions]
+        input_pt, labels_pt = sample_pt.pair(region=regions_pt)
 
         # Apply data hook.
         if self.__data_hook is not None:
-            input, labels = self.__data_hook(input, labels, spacing=self.__spacing)
+            input_mt, labels_mt = self.__data_hook(input_mt, labels_mt, spacing=self.__spacing)
+            input_pt, labels_pt = self.__data_hook(input_pt, labels_pt, spacing=self.__spacing)
 
-        # Create multi-class mask and label.
-        # Note that using this method we may end up with multiple foreground classes for a
-        # single voxel. E.g. brain/brainstem both present. Don't worry about this for now,
-        # the network will just try to maximise both (and fail).
-        mask = np.zeros(self.__n_channels, dtype=bool)
-        label = np.zeros((self.__n_channels, *input.shape), dtype=bool)
-        for region in regions:
-            mask[self.__region_channel_map[region]] = True
-            label[self.__region_channel_map[region]] = labels[region]
+        # Create input - pre/mid-treatment CT plus pre-treatment labels.
+        # Don't add background class.
+        if input_pt.shape != input_mt.shape:
+            raise ValueError(f"Pre- and mid-treatment input shapes must be equal. Got '{input_pt.shape}' and '{input_mt.shape}'.")
+        input = np.zeros((self.__n_input_channels, *input_mt.shape), dtype=float)
+        input[0] = input_mt
+        input[1] = input_pt
+        for region in self.__regions:
+            if region in regions_pt:
+                logging.info(f"{s_i}: Adding region '{region}' ({labels_pt[region].sum()}) to channel '{self.__region_input_channel_map[region]}'.")
+                input[self.__region_input_channel_map[region]] = labels_pt[region].astype(float)
+
+        # Create mask and label - using mid-treatment data.
+        mask = np.zeros(self.__n_output_channels, dtype=bool)
+        label = np.zeros((self.__n_output_channels, *input_mt.shape), dtype=bool)
+        for region in regions_mt:
+            mask[self.__region_output_channel_map[region]] = True
+            label[self.__region_output_channel_map[region]] = labels_mt[region]
 
         # Add background class.
-        # When all foreground regions are annotated, we can invert their union to return background label.
-        # If a region is missing, we can't get the background label as we don't know which voxels are foreground
-        # for the missing region and which are background.
-        if self.__include_background and len(regions) == len(self.__regions):
+        # When all foreground regions are present, we can train using background class also.
+        if self.__include_background and len(regions_mt) == len(self.__regions):
             mask[0] = True
             label[0] = np.invert(label.any(axis=0))
 
@@ -467,7 +495,6 @@ class TrainingSet(Dataset):
                 [0, 0, self.__spacing[2], 1],
                 [0, 0, 0, 1]
             ])
-            input = np.expand_dims(input, axis=0)
             input = ScalarImage(tensor=input, affine=affine)
             label = LabelMap(tensor=label, affine=affine)
             subject = Subject({
@@ -480,17 +507,12 @@ class TrainingSet(Dataset):
             # print(f"(pid={os.getpid()},index={index}) seeding transform {seed}")
             # seed_everything(seed)   # Ensure reproducibility when resuming training.
             output = self.__transform(subject)
-
-            # Remove 'channel' dimension.
-            input = output['input'].data.squeeze(0)
-            label = output['label'].data.squeeze(0)
+            input = output['input'].data
+            label = output['label'].data
 
             # Convert to numpy.
             input = input.numpy()
             label = label.numpy().astype(bool)
-
-        # Add channel dimension - expected by pytorch.
-        input = np.expand_dims(input, 0)
 
         # Increment counter.
         self.__n_iter += 1

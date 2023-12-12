@@ -2072,10 +2072,11 @@ def plot_registration(
 
             ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
 
-    for ax, region_data_i, slice_idx, crop, aspect in zip(axs, region_data, slice_idxs, crops, aspects):
-        if region_data_i is not None:
+    # Plot region data.
+    for ax, data, slice_idx, crop, aspect in zip(axs, region_data, slice_idxs, crops, aspects):
+        if data is not None:
             # Plot regions.
-            should_show_legend = __plot_region_data(region_data_i, slice_idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
+            should_show_legend = __plot_region_data(data, slice_idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
 
             # Create legend.
             if show_legend and should_show_legend:
