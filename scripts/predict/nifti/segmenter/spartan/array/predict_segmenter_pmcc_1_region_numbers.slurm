@@ -58,9 +58,9 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers-v2"
+MODEL_NAME="segmenter-pmcc-numbers-v3"
 RESOLUTION="112"
-DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
+DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 RANDOM_SEED=42
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
@@ -76,12 +76,7 @@ LOAD_ALL_SAMPLES=True
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --dataset $DATASET \
-    --region $REGION \
+    --pat_id $PAT_ID \
     --model $MODEL \
-    --check_epochs $CHECK_EPOCHS \
-    --load_all_samples $LOAD_ALL_SAMPLES \
-    --n_epochs $N_EPOCHS \
-    --n_folds $N_FOLDS \
-    --n_split_channels $N_SPLIT_CHANNELS \
-    --test_fold $TEST_FOLD \
-    --use_loader_split_file $USE_LOADER_SPLIT_FILE
+    --model_region $MODEL_REGION \
+    --model_spacing $MODEL_SPACING

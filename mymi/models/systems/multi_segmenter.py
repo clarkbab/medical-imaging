@@ -227,7 +227,7 @@ class MultiSegmenter(pl.LightningModule):
             if self.__cyclic_min is None or self.__cyclic_max is None:
                 raise ValueError(f"Both 'cyclic_min', and 'cyclic_max' must be specified when using cyclic LR.")
 
-            opt['lr_scheduler'] = CyclicLR(self.__optimiser, self.__cyclic_min, self.__cyclic_max)
+            opt['lr_scheduler'] = CyclicLR(self.__optimiser, self.__cyclic_min, self.__cyclic_max, cycle_momentum=False)
             # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, self.__lr_milestones, gamma=0.1)
             # opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
 

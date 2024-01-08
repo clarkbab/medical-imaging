@@ -14,6 +14,7 @@ from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
 from mymi import logging
 from torchio.transforms import Transform
+from mymi.regions import region_to_list
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
@@ -86,6 +87,7 @@ class MultiLoader:
         p_val: float = .2,
         random_seed: int = 0,
         region: Optional[PatientRegions] = None,
+        shuffle_samples: bool = True,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
         test_subfold: Optional[int] = None,
@@ -94,7 +96,7 @@ class MultiLoader:
         use_grouping: bool = False,
         use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
-        regions = arg_to_list(region, str)
+        regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
@@ -104,7 +106,7 @@ class MultiLoader:
         for i, dataset in enumerate(datasets):
             set = TrainingDataset(dataset, check_processed=check_processed)
             sets.append(set)
-            spacing = set.params['output-spacing']
+            spacing = set.params['spacing']
             if prev_spacing is not None and spacing != prev_spacing:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing
@@ -126,9 +128,9 @@ class MultiLoader:
                 # Loading all samples is required to ensure consistent train/test split per region
                 # when passing different 'regions'.
                 if load_all_samples:
-                    set_samples = set.list_groups()
+                    set_samples = set.list_groups(sort_by_sample_id=True)
                 else:
-                    set_samples = set.list_groups(region=regions)
+                    set_samples = set.list_groups(region=regions, sort_by_sample_id=True)
             else:
                 if load_all_samples:
                     set_samples = set.list_samples()
@@ -139,8 +141,11 @@ class MultiLoader:
                 samples.append((i, sample_id))
 
         # Shuffle samples.
-        np.random.seed(random_seed)
-        np.random.shuffle(samples)
+        if shuffle_samples:
+            np.random.seed(random_seed)
+            np.random.shuffle(samples)
+
+        print(samples[:5])
 
         # Split into training/testing samples.
         if n_folds is not None:     
@@ -153,7 +158,7 @@ class MultiLoader:
             # Split samples into folds.
             # Note that 'samples' here could actually be groups if 'use_grouping=True'.
             n_samples = len(samples)
-            logging.info(f"Loaded {n_samples} samples total.")
+            logging.info(f"Loaded {n_samples} { '(grouped) ' if use_grouping else '' }samples total.")
             len_fold = int(np.floor(n_samples / n_folds))
             n_samples_lost = n_samples - n_folds * len_fold
             logging.info(f"Lost {n_samples_lost} samples due to {n_folds}-fold split.")
@@ -252,6 +257,7 @@ class MultiLoader:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
                 train_samples += samples
+            logging.info(f"Expanded grouped train samples to {len(train_samples)} samples.")
 
             # Expand validation samples.
             val_samples_tmp = val_samples.copy()
@@ -260,6 +266,7 @@ class MultiLoader:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
                 val_samples += samples
+            logging.info(f"Expanded grouped val samples to {len(val_samples)} samples.")
 
             # Expand test samples.
             test_samples_tmp = test_samples.copy()
@@ -268,6 +275,7 @@ class MultiLoader:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
                 test_samples += samples
+            logging.info(f"Expanded grouped test samples to {len(test_samples)} samples.")
 
             # Expand test sub-samples.
             if n_subfolds is not None:
@@ -276,6 +284,7 @@ class MultiLoader:
                 for set_i, group_id in test_subsamples_tmp:
                     samples = sets[set_i].list_samples(group_id=group_id)
                     test_subsamples += samples
+                logging.info(f"Expanded grouped test subsamples to {len(test_subsamples)} samples.")
 
         # Take subset of train samples.
         if n_train is not None:
@@ -446,7 +455,7 @@ class TrainingSet(Dataset):
 
         # Apply data hook.
         if self.__data_hook is not None:
-            input, labels = self.__data_hook(input, labels, spacing=self.__spacing)
+            input, labels = self.__data_hook(set.name, s_i, input, labels, spacing=self.__spacing)
 
         # Create multi-class mask and label.
         # Note that using this method we may end up with multiple foreground classes for a

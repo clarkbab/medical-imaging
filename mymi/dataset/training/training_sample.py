@@ -19,7 +19,7 @@ class TrainingSample:
         self.__index = None         # Lazy-loaded.
         self.__global_id = f'{self.__dataset} - {self.__id}'
         self.__group_id = None      # Lazy-loaded.
-        self.__spacing = self.__dataset.params['output-spacing']
+        self.__spacing = self.__dataset.params['spacing']
 
         # Load sample index.
         if self.__id not in self.__dataset.list_samples():

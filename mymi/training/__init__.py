@@ -10,6 +10,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.types import ModelName
 from mymi.utils import append_row, arg_to_list
 
+from .adaptive_segmenter import train_adaptive_segmenter
 # from .auto_encoder_2d import train_auto_encoder_2d
 from .localiser import train_localiser
 # from .segmenter_2d import train_segmenter_2d

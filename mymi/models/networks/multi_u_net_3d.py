@@ -75,9 +75,13 @@ class Submodule(nn.Module):
                     x = self.__residual_input_layer_values[self.__residual_input_layer_keys.index(i)](x)
 
                 # Concatenate upsampled and residual features.
+                if self.__print_enabled:
+                    print(f"(layer {layer.name}) pre-concat shape: {x.shape}")
+                    print(f"(layer {layer.name}) residual shape: {x_res_i.shape}")
                 x = torch.cat((x, x_res_i), dim=1)
                 if self.__print_enabled:
-                    print('concat size (GB): ', x.numel() * x.element_size() / 1e9)
+                    print(f"(layer {layer.name}) concat shape: {x.shape}")
+                    print(f"(layer {layer.name}) concat size (GB): {x.numel() * x.element_size() / 1e9}")
 
             # Execute layer.
             n_voxels = reduce(np.multiply, x.shape)

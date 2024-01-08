@@ -1,8 +1,15 @@
 import numpy as np
+from typing import Callable, Dict, Tuple
 
-from mymi.transforms import centre_crop_or_pad_3D
+from mymi.transforms import centre_crop_or_pad_3D, crop_3D
+from mymi.types import ImageSpacing3D
 
-def naive_crop(input, labels, spacing=None):
+def naive_crop(
+    dataset: str,
+    sample_id: str,
+    input: np.ndarray,
+    labels: Dict[str, np.ndarray],
+    spacing: ImageSpacing3D = None):
     assert spacing is not None
 
     # Crop input.

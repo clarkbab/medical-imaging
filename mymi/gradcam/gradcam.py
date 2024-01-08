@@ -1,42 +1,46 @@
 import numpy as np
 import os
 import torch
+from torch.nn.functional import one_hot
 from typing import List, Optional, Union
+from tqdm import tqdm
 
-from mymi import config
-from mymi.dataset import NRRDDataset
+from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
-from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_or_pad_3D, resample_3D
-from mymi.types import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
+from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_3D, crop_or_pad_3D, pad_3D, resample_3D_v2
+from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegions
 from mymi.utils import arg_to_list
 
 def get_heatmap(
     input: np.ndarray,
     input_spacing: ImageSpacing3D,
     label: np.ndarray,
-    model: ModelName,
+    model: Union[Model, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     region: str,
     layer: Union[str, List[str]],
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    brain_label: Optional[np.ndarray] = None,
     device: torch.device = torch.device('cpu'),
+    save_tmp_files: bool = False,
+    use_crop: str = 'brain',
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
     layers = arg_to_list(layer, str)
     layer_spacings = arg_to_list(layer_spacing, tuple)
     if len(layers) != len(layer_spacings):
         raise ValueError(f"'layer' and 'layer_spacings' must have same number of elements. Got {len(layers)} and {len(layer_spacings)} respectively.")
-    model = replace_ckpt_alias(model)
     model_regions = arg_to_list(model_region, str)
     region_channel = model_regions.index(region) + 1
 
     # Load model.
-    logging.info('loading model')
-    model = MultiSegmenter.load(model, region=model_region, **kwargs)
-    model.eval()
-    model.to(device)
+    if isinstance(model, tuple):
+        logging.info('loading model')
+        model = MultiSegmenter.load(model, region=model_region, **kwargs)
+        model.eval()
+        model.to(device)
 
     # Register hooks.
     logging.info('registering hooks')
@@ -62,24 +66,53 @@ def get_heatmap(
     # Resample input to model spacing.
     logging.info('resampling input')
     input_size = input.shape
-    input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
-    label = resample_3D(label, spacing=input_spacing, output_spacing=model_spacing) 
+    input = resample_3D_v2(input, spacing=input_spacing, output_spacing=model_spacing) 
+    label = resample_3D_v2(label, spacing=input_spacing, output_spacing=model_spacing) 
+    input_size_after_resample = input.shape
 
-    # Apply 'naive' cropping.
-    logging.info('naive cropping')
-    # crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
-    crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
-    crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
-    resampled_input_size = input.shape
-    input = centre_crop_3D(input, crop)
-    label = centre_crop_3D(label, crop)
+    if use_crop == 'naive':
+        # Apply 'naive' cropping.
+        logging.info('naive cropping')
+        # This value used for MICCAI-2015 multi-segmenter only.
+        crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
+        crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
+        input = centre_crop_3D(input, crop)
+        label = centre_crop_3D(label, crop)
+    elif use_crop == 'brain':
+        assert brain_label is not None
+        # Convert to voxel crop.
+        # This value used for PMCC-HN-TEST/TRAIN multi-segmenter only.
+        crop_mm = (300, 400, 500)
+        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
+
+        # Get brain extent.
+        brain_label = resample_3D_v2(brain_label, spacing=input_spacing, output_spacing=model_spacing)
+        brain_extent = get_extent(brain_label)
+
+        # Get crop coordinates.
+        # Crop origin is centre-of-extent in x/y, and max-extent in z.
+        # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
+        # in - direction for z.
+        p_above_brain = 0.04
+        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
+        crop = (
+            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
+            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
+        )
+
+        # Crop input.
+        input = crop_3D(input, crop)
+    else:
+        raise ValueError(f"Unknown 'use_crop' value '{use_crop}'.")
 
     # TODO: remove.
-    filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-input.npz')
-    np.savez_compressed(filepath, data=input)
+    if save_tmp_files:
+        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-input.npz')
+        np.savez_compressed(filepath, data=input)
 
     # Pass image to model.
     logging.info('forward pass')
+    input_size_model = input.shape
     input = torch.Tensor(input)
     input = input.unsqueeze(0)      # Add 'batch' dimension.
     input = input.unsqueeze(1)      # Add 'channel' dimension.
@@ -88,9 +121,29 @@ def get_heatmap(
     pred = model(input)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
 
-    # Sum all foreground voxels for OAR or interest.
-    region_pred = pred[region_channel]
-    y = region_pred[label].sum()
+    # TODO: remove.
+    if save_tmp_files:
+        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-pred.npz')
+        np.savez_compressed(filepath, data=pred.detach().numpy())
+
+    # Sum all foreground voxels for OAR of interest.
+    pred_region = pred[region_channel]
+    use_pred_foreground = True
+    if use_pred_foreground:
+        # Apply thresholding.4D
+        pred_bin = pred.argmax(dim=0)
+        pred_bin = one_hot(pred_bin, num_classes=len(model_regions) + 1)
+        pred_bin = pred_bin.moveaxis(-1, 0)
+        pred_bin = pred_bin.type(torch.bool)
+        pred_region_bin = pred_bin[region_channel]
+
+        # TODO: remove.
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-pred-region-bin.npz')
+            np.savez_compressed(filepath, data=pred_region_bin.detach().numpy())
+        y = pred_region[pred_region_bin].sum()
+    else:
+        y = pred_region[label].sum()
 
     # Perform backward pass.
     logging.info('backward pass')
@@ -99,15 +152,16 @@ def get_heatmap(
     # Get heatmaps.
     logging.info('creating heatmaps')
     heatmaps = []
-    for layer, spacing in zip(layers, layer_spacings):
+    for layer, spacing in tqdm(zip(layers, layer_spacings)):
         layer_activations = activations[layer]
         layer_gradients = gradients[layer]
 
         # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-activations.npz')
-        np.savez_compressed(filepath, data=layer_activations)
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-gradients.npz')
-        np.savez_compressed(filepath, data=layer_gradients)
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-activations.npz')
+            np.savez_compressed(filepath, data=layer_activations)
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-gradients.npz')
+            np.savez_compressed(filepath, data=layer_gradients)
 
         # Calculate weightings.
         n_channels = layer_activations.shape[1]
@@ -120,38 +174,39 @@ def get_heatmap(
         heatmap = np.maximum(heatmap, 0)    # Apply ReLU.
 
         # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-raw.npz')
-        np.savez_compressed(filepath, data=heatmap)
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-raw.npz')
+            np.savez_compressed(filepath, data=heatmap)
 
-        # Resample to input spacing.
-        logging.info(f"resampling from {spacing} to {model_spacing}")
-        heatmap = resample_3D(heatmap, spacing=spacing, output_spacing=model_spacing) 
-
-        # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-input.npz')
-        np.savez_compressed(filepath, data=heatmap)
-
-        # Crop/pad to the resampled size, i.e. before 'naive' cropping.
-        heatmap = centre_pad_3D(heatmap, resampled_input_size)
+        # Resample to model spacing/size.
+        heatmap = resample_3D_v2(heatmap, spacing=spacing, output_size=input_size_model, output_spacing=model_spacing) 
 
         # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-input-crop.npz')
-        np.savez_compressed(filepath, data=heatmap)
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-input.npz')
+            np.savez_compressed(filepath, data=heatmap)
 
-        # Resample to original spacing.
-        heatmap = resample_3D(heatmap, spacing=model_spacing, output_spacing=input_spacing)
+        # Reverse the 'naive' or 'brain' cropping.
+        if use_crop == 'naive':
+            heatmap = centre_pad_3D(heatmap, input_size_after_resample)
+        elif use_crop == 'brain':
+            pad_min = tuple(-np.array(crop[0]))
+            pad_max = np.array(pad_min) + np.array(input_size_after_resample)
+            pad = (pad_min, pad_max)
+            heatmap = pad_3D(heatmap, pad)
 
         # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-native.npz')
-        np.savez_compressed(filepath, data=heatmap)
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-input-size-before-crop.npz')
+            np.savez_compressed(filepath, data=heatmap)
 
-        # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
-        crop_box = ((0, 0, 0), input_size)
-        heatmap = crop_or_pad_3D(heatmap, crop_box)
+        # Resample to original spacing/size.
+        heatmap = resample_3D_v2(heatmap, spacing=model_spacing, output_size=input_size, output_spacing=input_spacing)
 
         # TODO: remove.
-        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-native-crop.npz')
-        np.savez_compressed(filepath, data=heatmap)
+        if save_tmp_files:
+            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{region}-layer-{layer}-native.npz')
+            np.savez_compressed(filepath, data=heatmap)
 
         heatmaps.append(heatmap)
 

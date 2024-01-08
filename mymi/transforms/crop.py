@@ -113,6 +113,28 @@ def centre_crop_3D(
 
     return output
 
+def pad_2D(
+    data: np.ndarray,
+    bounding_box: Box2D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    assert len(data.shape) == 2, f"Input 'data' must have dimension 2."
+    fill = np.min(data) if fill == 'min' else fill
+
+    min, max = bounding_box
+    for i in range(2):
+        width = max[i] - min[i]
+        if width <= 0:
+            raise ValueError(f"Pad width must be positive, got '{bounding_box}'.")
+
+    # Perform padding.
+    size = np.array(data.shape)
+    pad_min = (-np.array(min)).clip(0)
+    pad_max = (max - size).clip(0)
+    padding = tuple(zip(pad_min, pad_max))
+    data = np.pad(data, padding, constant_values=fill)
+
+    return data
+
 def pad_3D(
     data: np.ndarray,
     bounding_box: Box3D,
@@ -135,6 +157,17 @@ def pad_3D(
 
     return data
 
+def pad_4D(
+    data: np.ndarray,
+    *args,
+    **kwargs) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = pad_3D(d, *args, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
+
 def crop_3D(
     data: np.ndarray,
     bounding_box: Box3D) -> np.ndarray:
@@ -154,6 +187,17 @@ def crop_3D(
     data = data[slices]
 
     return data
+
+def crop_4D(
+    data: np.ndarray,
+    size: ImageSize3D,
+    **kwargs: Dict[str, Any]) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = crop_3D(d, size, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
 
 def crop_foreground_3D(
     data: np.ndarray,
@@ -176,6 +220,17 @@ def centre_crop_or_pad_3D(
     # Perform crop or padding.
     output = crop_or_pad_3D(data, bounding_box, fill=fill)
 
+    return output
+
+def centre_crop_or_pad_4D(
+    data: np.ndarray,
+    size: ImageSize3D,
+    **kwargs: Dict[str, Any]) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = centre_crop_or_pad_3D(d, size, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
     return output
 
 def top_crop_or_pad_3D(

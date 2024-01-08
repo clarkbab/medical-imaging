@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import logging
+from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
@@ -59,12 +60,13 @@ def plot(
     model_name: str,
     run_name: Union[str, List[Union[str, List[str]]]],
     ax: Optional[Axes] = None,
-    figsize: Tuple[float, float] = (8, 8),
+    figsize: Tuple[float, float] = (12, 12),
     label: Optional[Union[str, List[str]]] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
     region: Optional[PatientRegions] = 'all',
     savepath: Optional[str] = None,
     show: bool = True,
+    show_legend: bool = True,
     show_sugg_lr: bool = True,
     skip_end: int = 0,
     skip_start: int = 0,
@@ -74,7 +76,7 @@ def plot(
     sugg_skip_start: int = 0,
     vline: Optional[Union[float, List[float]]] = None,
     y_lim: Tuple[Optional[float], Optional[float]] = (None, None)) -> None:
-    regions = arg_to_list(region, str)
+    regions = region_to_list(region)
     run_names = arg_to_list(run_name, str)
     labels = arg_to_list(label, str)
     if labels is not None and len(labels) != len(run_names):
@@ -168,7 +170,8 @@ def plot(
     ax.set_ylabel('loss')
     ax.set_xscale('log')
     ax.set_title('LR Find')
-    ax.legend(bbox_to_anchor=legend_bbox_to_anchor)
+    if show_legend:
+        ax.legend(bbox_to_anchor=legend_bbox_to_anchor)
     ax.set_ylim(y_lim)
     min_exp = int(np.floor(np.log10(np.min(lrs)))) - 1
     max_exp = int(np.ceil(np.log10(np.max(lrs)))) + 1

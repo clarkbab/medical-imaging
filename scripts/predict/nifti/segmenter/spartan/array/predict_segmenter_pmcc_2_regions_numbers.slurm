@@ -26,7 +26,7 @@ REGIONS=(
     "['Lens_L','Lens_R']"                       # 4
     "['OpticNerve_L','OpticNerve_R']"           # 5
     "['Parotid_L','Parotid_R']"                 # 6
-    "['SpinalCord','Mandible']"                 # 7
+    "['SpinalCord','BrainStem']"                # 7
     "['Submandibular_L','Submandibular_R']"     # 8
 )
 SHORT_REGIONS=(
@@ -42,9 +42,9 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers-v2"
+MODEL_NAME="segmenter-pmcc-numbers-v3"
 RESOLUTION="112"
-DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
+DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 RANDOM_SEED=48
 #RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"

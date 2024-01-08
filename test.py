@@ -1,8 +1,34 @@
-from mymi.processing.dataset.nifti import convert_to_training
+from mymi.processing.dataset.nifti import convert_adaptive_brain_crop_to_training_v2
+from mymi.regions import RegionList
 
 dataset = 'PMCC-HN-REPLAN'
-output_spacing = (1.171875, 1.171875, 2)
-regions = ['Bone_Mandible', 'BrachialPlex_L', 'BrachialPlex_R', 'Brain', 'Brainstem', 'Cavity_Oral', 'Cochlea_L', 'Cochlea_R', 'Esophagus_S', 'Eye_L', 'Eye_R', 'GTVp', 'Glnd_Submand_L', 'Glnd_Submand_R', 'Glottis', 'Larynx', 'Lens_L', 'Lens_R', 'Musc_Constrict', 'OpticChiasm', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R', 'SpinalCord']
-use_registration = True
+spacing = (2, 2, 2)
+dest_dataset = 'PMCC-HN-REPLAN-ADPT-222'
+crop_mm = (330, 380, 500)
+regions = RegionList.PMCC_REPLAN
 
-convert_to_training(dataset, output_spacing=output_spacing, region=regions, use_registration=use_registration)
+convert_adaptive_brain_crop_to_training_v2(dataset, dest_dataset=dest_dataset, crop_mm=crop_mm, spacing=spacing, region=regions)
+
+# from mymi.processing.dataset.nifti import convert_population_to_training_v2
+# from mymi.regions import RegionList
+
+# dataset = 'PMCC-HN-REPLAN'
+# # output_spacing = (1.171875, 1.171875, 2)
+# output_spacing = (2, 2, 2)
+# dest_dataset = 'PMCC-HN-REPLAN-POP-222'
+# output_size_mm = (250, 400, 500)
+# regions = RegionList.PMCC_REPLAN
+# use_compression = True
+
+# convert_population_to_training_v2(dataset, dest_dataset=dest_dataset, output_size_mm=output_size_mm, output_spacing=output_spacing, region=regions, use_compression=use_compression)
+
+# from mymi.processing.dataset.nifti import convert_adaptive_mirror_to_training_v2
+
+# dataset = 'PMCC-HN-REPLAN'
+# output_spacing = (2, 2, 2)
+# dest_dataset = 'PMCC-HN-REPLAN-ADPTM-222'
+# output_size_mm = (250, 400, 500)
+# regions = 'RL:PMCC_REPLAN'
+# use_compression = True
+
+# convert_adaptive_mirror_to_training_v2(dataset, dest_dataset=dest_dataset, output_size_mm=output_size_mm, output_spacing=output_spacing, region=regions, use_compression=use_compression)

@@ -23,7 +23,7 @@ REGIONS=(
     "['Lens_L','Lens_R']"                       # 4
     "['OpticNerve_L','OpticNerve_R']"           # 5
     "['Parotid_L','Parotid_R']"                 # 6
-    "['SpinalCord','Mandible']"                 # 7
+    "['SpinalCord','BrainStem']"                # 7
     "['Submandibular_L','Submandibular_R']"     # 8
 )
 SHORT_REGIONS=(

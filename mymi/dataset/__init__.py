@@ -9,6 +9,8 @@ from .nrrd import NRRDDataset
 from .nrrd import list as list_nrrd
 from .training import TrainingDataset
 from .training import list as list_training
+from .training_adaptive import TrainingAdaptiveDataset
+from .training_adaptive import list as list_training_adaptive
 from .other import OtherDataset
 from .other import list as list_other
 
@@ -24,6 +26,8 @@ def list(type_str: str) -> List[str]:
         return list_nrrd()
     elif type == DatasetType.TRAINING:
         return list_training()
+    elif type == DatasetType.TRAINING_ADAPTIVE:
+        return list_training_adaptive()
     else:
         raise ValueError(f"Dataset type '{type}' not found.")
 
@@ -44,6 +48,8 @@ def get(
             return NRRDDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
             return TrainingDataset(name, **kwargs)
+        elif type == DatasetType.TRAINING_ADAPTIVE:
+            return TrainingAdaptiveDataset(name, **kwargs)
         elif type == DatasetType.OTHER:
             return OtherDataset(name)
         else:
@@ -53,6 +59,11 @@ def get(
         proc_ds = list_training()
         if name in proc_ds:
             return TrainingDataset(name, **kwargs)
+
+        # Preference 1: TRAINING ADAPTIVE.
+        proc_ds = list_training_adaptive()
+        if name in proc_ds:
+            return TrainingAdaptiveDataset(name, **kwargs)
 
         # Preference 2a: NIFTI.
         nifti_ds = list_nifti()
@@ -80,6 +91,11 @@ def default() -> Optional[Dataset]:
     """
     # Preference 1: Training.
     proc_ds = list_training()
+    if len(proc_ds) != 0:
+        return get(proc_ds[0])
+
+    # Preference 1: Training Adaptive.
+    proc_ds = list_training_adaptive()
     if len(proc_ds) != 0:
         return get(proc_ds[0])
 

@@ -5,6 +5,7 @@ import pandas as pd
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
+from mymi.regions import region_to_list
 from mymi.utils import arg_to_list
 
 class NIFTIPatient:
@@ -143,7 +144,7 @@ class NIFTIPatient:
         labels: Literal['included', 'excluded', 'all'] = 'included',
         region: PatientRegions = 'all',
         region_ignore_missing: bool = False) -> OrderedDict:
-        regions = arg_to_list(region, str, literals={ 'all': self.list_regions(labels=labels)})
+        regions = region_to_list(region, literals={ 'all': self.list_regions(labels=labels) })
 
         data = {}
         for region in regions:

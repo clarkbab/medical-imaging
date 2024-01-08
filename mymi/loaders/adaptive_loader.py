@@ -9,8 +9,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, List, Optional, Tuple, Union
 
 from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
-from mymi import dataset as ds
-from mymi.dataset.training import TrainingDataset
+from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.geometry import get_centre
 from mymi import logging
 from torchio.transforms import Transform
@@ -73,7 +72,6 @@ class AdaptiveLoader:
         dataset: Union[str, List[str]],
         batch_size: int = 1,
         check_processed: bool = True,
-        data_hook: Optional[Callable] = None,
         epoch: int = 0,
         include_background: bool = False,
         load_all_samples: bool = False,
@@ -85,7 +83,7 @@ class AdaptiveLoader:
         n_workers: int = 1,
         p_val: float = .2,
         random_seed: int = 0,
-        region: Optional[PatientRegions] = None,
+        shuffle_samples: bool = True,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
         test_subfold: Optional[int] = None,
@@ -93,8 +91,8 @@ class AdaptiveLoader:
         transform_val: Transform = None,
         use_grouping: bool = False,
         use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
+        logging.arg_log('Building adaptive loaders', ('n_folds', 'n_subfolds', 'n_train', 'p_val', 'random_seed', 'shuffle_samples', 'shuffle_train', 'test_fold', 'test_subfold', 'use_grouping', 'use_split_file'), (n_folds, n_subfolds, n_train, p_val, random_seed, shuffle_samples, shuffle_train, test_fold, test_subfold, use_grouping, use_split_file))
         datasets = arg_to_list(dataset, str)
-        regions = arg_to_list(region, str)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
@@ -102,20 +100,12 @@ class AdaptiveLoader:
         sets = []
         prev_spacing = None
         for i, dataset in enumerate(datasets):
-            set = TrainingDataset(dataset, check_processed=check_processed)
+            set = TrainingAdaptiveDataset(dataset, check_processed=check_processed)
             sets.append(set)
-            spacing = set.params['output-spacing']
+            spacing = set.params['spacing']
             if prev_spacing is not None and spacing != prev_spacing:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing
-
-        # Get regions if 'None'.
-        if regions is None:
-            regions = []
-            for set in sets:
-                set_regions = set.list_regions()
-                regions += set_regions
-            regions = list(sorted(np.unique(regions)))
 
         # Load all samples/groups.
         samples = []
@@ -125,22 +115,19 @@ class AdaptiveLoader:
             if use_grouping:
                 # Loading all samples is required to ensure consistent train/test split per region
                 # when passing different 'regions'.
-                if load_all_samples:
-                    set_samples = set.list_groups()
-                else:
-                    set_samples = set.list_groups(region=regions)
+                set_samples = set.list_groups(sort_by_sample_id=True)
             else:
-                if load_all_samples:
-                    set_samples = set.list_samples()
-                else:
-                    set_samples = set.list_samples(region=regions)
+                set_samples = set.list_samples()
 
             for sample_id in set_samples:
                 samples.append((i, sample_id))
 
         # Shuffle samples.
-        np.random.seed(random_seed)
-        np.random.shuffle(samples)
+        if shuffle_samples:
+            np.random.seed(random_seed)
+            np.random.shuffle(samples)
+
+        print(samples[:5])
 
         # Split into training/testing samples.
         if n_folds is not None:     
@@ -151,12 +138,11 @@ class AdaptiveLoader:
                 raise ValueError(f"Using 'n_folds={n_folds}' randomises the train/test split, whilst 'use_split_file={use_split_file}' reads 'loader-split.csv' to determine train/test split. These methods don't work together.")
 
             # Split samples into folds.
-            # Note that 'samples' here could actually be groups if 'use_grouping=True'.
             n_samples = len(samples)
             logging.info(f"Loaded {n_samples} samples total.")
             len_fold = int(np.floor(n_samples / n_folds))
             n_samples_lost = n_samples - n_folds * len_fold
-            logging.info(f"Lost {n_samples_lost} samples due to {n_folds}-fold split.")
+            logging.info(f"Lost {n_samples_lost} samples ({samples[-n_samples_lost:]}) due to {n_folds}-fold split.")
 
             fold_sampleses = []
             for i in range(n_folds):
@@ -177,7 +163,6 @@ class AdaptiveLoader:
 
         elif use_split_file:         
             # Use 'loader-split.csv' to determine training/testing split.
-            assert use_grouping is False
 
             train_samples = []
             test_samples = []
@@ -251,7 +236,6 @@ class AdaptiveLoader:
             for set_i, group_id in train_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
-                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                 train_samples += samples
 
             # Expand validation samples.
@@ -260,7 +244,6 @@ class AdaptiveLoader:
             for set_i, group_id in val_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
-                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                 val_samples += samples
 
             # Expand test samples.
@@ -269,7 +252,6 @@ class AdaptiveLoader:
             for set_i, group_id in test_samples_tmp:
                 samples = sets[set_i].list_samples(group_id=group_id)
                 samples = [(set_i, sample_id) for sample_id in samples]
-                samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                 test_samples += samples
 
             # Expand test sub-samples.
@@ -278,7 +260,6 @@ class AdaptiveLoader:
                 test_subsamples = []
                 for set_i, group_id in test_subsamples_tmp:
                     samples = sets[set_i].list_samples(group_id=group_id)
-                    samples = samples[-1:]  # Only select last group samples (mid-treatment scan) for adaptive loader.
                     test_subsamples += samples
 
         # Take subset of train samples.
@@ -288,35 +269,9 @@ class AdaptiveLoader:
                raise ValueError(f"'n_train={n_train}' requested larger number than training samples '{len(train_samples)}'.") 
             train_samples = train_samples[:n_train]
 
-        # Filter out patients without one of the requested 'region/s'.
-        if load_all_samples:
-            # Filter training samples.
-            train_samples_tmp = train_samples.copy()
-            train_samples = []
-            for set_i, sample_id in train_samples_tmp:
-                sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
-                    train_samples.append((set_i, sample_id))
-                    
-            # Filter validation samples.
-            val_samples_tmp = val_samples.copy()
-            val_samples = []
-            for set_i, sample_id in val_samples_tmp:
-                sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
-                    val_samples.append((set_i, sample_id))
-
-            # Filter test samples.
-            test_samples_tmp = test_samples.copy() 
-            test_samples = []
-            for set_i, sample_id in test_samples_tmp:
-                sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
-                    test_samples.append((set_i, sample_id))
-
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
+        train_ds = TrainingSet(datasets, train_samples, include_background=include_background, load_data=load_data, random_seed=random_seed, spacing=spacing, transform=transform_train, use_frequency_weighting=True)
         if shuffle_train:
             shuffle = None
             train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
@@ -326,14 +281,7 @@ class AdaptiveLoader:
         train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, sampler=train_sampler, shuffle=shuffle)
 
         # Create validation loader.
-        if include_background:
-            # Give all classes equal weight.
-            class_weights = np.ones(len(regions) + 1) / (len(regions) + 1)
-        else:
-            # Give all foreground classes equal weight.
-            class_weights = np.ones(len(regions) + 1) / len(regions)
-            class_weights[0] = 0
-        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, val_samples, include_background=include_background, load_data=load_data, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -359,28 +307,22 @@ class TrainingSet(Dataset):
     def __init__(
         self,
         datasets: List[str],
-        regions: List[PatientRegion],
         samples: List[Tuple[int, int]],
-        class_weights: Optional[np.ndarray] = None,
-        data_hook: Optional[Callable] = None,
         include_background: bool = False,
         load_data: bool = True,
         random_seed: float = 0,
         spacing: Optional[ImageSpacing3D] = None,
-        transform: torchio.transforms.Transform = None):
-        self.__class_weights = class_weights
-        self.__data_hook = data_hook
-        self.__include_background = include_background
+        transform: torchio.transforms.Transform = None,
+        use_frequency_weighting: bool = True):
+        if transform is not None:
+            assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
         self.__load_data = load_data
         self.__random_seed = random_seed
-        self.__regions = regions
         self.__spacing = spacing
         self.__transform = transform
-        if transform:
-            assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
         
         # Load datasets.
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__sets = [TrainingAdaptiveDataset(d) for d in datasets]
 
         # Record number of samples.
         self.__n_samples = len(samples)
@@ -388,46 +330,40 @@ class TrainingSet(Dataset):
         # Map loader indices to dataset indices.
         self.__sample_map = dict(((i, sample) for i, sample in enumerate(samples)))
 
-        # Create map from regions to input/output channels.
-        self.__n_input_channels = len(self.__regions) + 2
-        self.__region_input_channel_map = dict((region, i + 2) for i, region in enumerate(self.__regions))
-        self.__n_output_channels = len(self.__regions) + 1
-        self.__region_output_channel_map = { 'background': 0 }
-        for i, region in enumerate(self.__regions):
-            self.__region_output_channel_map[region] = i + 1
+        # Assumes a single dataset.
+        regions = self.__sets[0].list_regions()
 
-        if class_weights is None:
-            # Calculate weights based on training data.
-            region_counts = np.zeros(self.__n_output_channels, dtype=int)
+        if use_frequency_weighting:
+            # Get region counts.
+            counts = np.zeros(len(regions), dtype=np.float32)
             for ds_i, s_i in samples:
-                regions = self.__sets[ds_i].sample(s_i).list_regions()
-                regions = [r for r in regions if r in self.__regions]
-                for region in regions:
-                    region_counts[self.__region_output_channel_map[region]] += 1
+                sample_regions = self.__sets[ds_i].sample(s_i).list_regions(only=regions)
+                samples_counts = np.array([1 if r in sample_regions else 0 for r in regions], dtype=np.float32)
+                counts += samples_counts
+            logging.info(f"Region counts: {counts}.")
 
-                # If all regions are present, we can train background class.
-                if self.__include_background:
-                    if len(regions) == len(self.__regions):
-                        region_counts[0] += 1
-
-            logging.info(f"Calculated region counts '{region_counts}'.")
-
-            # If class has no labels, set weight=0.
-            class_weights = []
-            for i in range(len(region_counts)):
-                if region_counts[i] == 0:
-                    class_weights.append(0)
+            # Calculate frequencies.
+            inv_counts = counts.copy()
+            for i in range(len(inv_counts)):
+                if inv_counts[i] == 0:
+                    inv_counts[i] = 0
                 else:
-                    class_weights.append(1 / region_counts[i])
+                    inv_counts[i] = 1 / inv_counts[i]
+            logging.info(f"Inverse region counts: {inv_counts}.")
 
-            # Normalise weight values.
-            class_weights = class_weights / np.sum(class_weights)
+            # Normalise inverse counts.
+            self.__class_weights = inv_counts / inv_counts.sum()
+        else:
+            # Load first label.
+            ds_i, s_i = samples[0]
+            label = self.__sets[ds_i].sample(s_i).label 
+            weights = np.ones(label.shape[0], dtype=np.float32)
+            self.__class_weights = weights / weights.sum()
 
-        logging.info(f"Using class weights '{class_weights}'.")
-        self.__class_weights = class_weights
+        # Add background weight.
+        self.__class_weights = np.insert(self.__class_weights, 0, 0)
 
-        # Count iterations for reproducibility.
-        self.__n_iter = 0
+        logging.info(f"Using weights '{self.__class_weights}'.")
 
     def __len__(self):
         return self.__n_samples
@@ -435,8 +371,6 @@ class TrainingSet(Dataset):
     def __getitem__(
         self,
         index: int) -> Tuple[np.ndarray, np.ndarray]:
-        logging.info(f"Loading sample {self.__sample_map[index]}")
-
         # Get description.
         ds_i, s_i = self.__sample_map[index]
         set = self.__sets[ds_i]
@@ -444,47 +378,12 @@ class TrainingSet(Dataset):
         if not self.__load_data:
             return desc
 
-        # Load mid-treatment sample.
-        sample_mt = set.sample(s_i)
-        regions_mt = sample_mt.list_regions()
-        regions_mt = [r for r in regions_mt if r in self.__regions]
-        input_mt, labels_mt = sample_mt.pair(region=regions_mt)
+        # Load input/label data.
+        sample = set.sample(s_i)
+        input, label = sample.pair
 
-        # Load pre-treatment_sample.
-        sample_pt = set.sample(s_i - 1)
-        regions_pt = sample_pt.list_regions()
-        regions_pt = [r for r in regions_pt if r in self.__regions]
-        input_pt, labels_pt = sample_pt.pair(region=regions_pt)
-
-        # Apply data hook.
-        if self.__data_hook is not None:
-            input_mt, labels_mt = self.__data_hook(input_mt, labels_mt, spacing=self.__spacing)
-            input_pt, labels_pt = self.__data_hook(input_pt, labels_pt, spacing=self.__spacing)
-
-        # Create input - pre/mid-treatment CT plus pre-treatment labels.
-        # Don't add background class.
-        if input_pt.shape != input_mt.shape:
-            raise ValueError(f"Pre- and mid-treatment input shapes must be equal. Got '{input_pt.shape}' and '{input_mt.shape}'.")
-        input = np.zeros((self.__n_input_channels, *input_mt.shape), dtype=float)
-        input[0] = input_mt
-        input[1] = input_pt
-        for region in self.__regions:
-            if region in regions_pt:
-                logging.info(f"{s_i}: Adding region '{region}' ({labels_pt[region].sum()}) to channel '{self.__region_input_channel_map[region]}'.")
-                input[self.__region_input_channel_map[region]] = labels_pt[region].astype(float)
-
-        # Create mask and label - using mid-treatment data.
-        mask = np.zeros(self.__n_output_channels, dtype=bool)
-        label = np.zeros((self.__n_output_channels, *input_mt.shape), dtype=bool)
-        for region in regions_mt:
-            mask[self.__region_output_channel_map[region]] = True
-            label[self.__region_output_channel_map[region]] = labels_mt[region]
-
-        # Add background class.
-        # When all foreground regions are present, we can train using background class also.
-        if self.__include_background and len(regions_mt) == len(self.__regions):
-            mask[0] = True
-            label[0] = np.invert(label.any(axis=0))
+        # Create mask from label.
+        mask = label.sum(axis=(1, 2, 3)).astype(np.bool_)
 
         # Perform transform.
         if self.__transform:
@@ -514,9 +413,6 @@ class TrainingSet(Dataset):
             input = input.numpy()
             label = label.numpy().astype(bool)
 
-        # Increment counter.
-        self.__n_iter += 1
-
         return desc, input, label, mask, self.__class_weights
     
 class TestSet(Dataset):
@@ -525,7 +421,7 @@ class TestSet(Dataset):
         datasets: List[str],
         samples: List[Tuple[int, int]],
         load_origin: bool = True):
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__sets = [TrainingAdaptiveDataset(d) for d in datasets]
         self.__load_origin = load_origin
 
         # Record number of samples.

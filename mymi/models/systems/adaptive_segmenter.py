@@ -44,17 +44,17 @@ class AdaptiveSegmenter(pl.LightningModule):
         loss: nn.Module = DiceWithFocalLoss(),
         lr_find: bool = False,
         lr_init: float = 1e-3,
+        lr_milestones: List[int] = None,
         metrics: List[str] = [],
         model_name: str = 'model-name',
+        random_seed: float = 0,
         region: PatientRegions = None,
+        run_name: str = 'run-name',
         use_complexity_weights: bool = False,
         use_cvg_weighting: bool = False,
         use_dilation: bool = False,
         use_lr_scheduler: bool = False,
         use_weights: bool = False,
-        lr_milestones: List[int] = None,
-        random_seed: float = 0,
-        run_name: str = 'run-name',
         val_image_interval: int = 50,
         val_image_samples: Optional[List[PatientID]] = None,
         val_max_image_batches: Optional[int] = None,
@@ -228,7 +228,7 @@ class AdaptiveSegmenter(pl.LightningModule):
             if self.__cyclic_min is None or self.__cyclic_max is None:
                 raise ValueError(f"Both 'cyclic_min', and 'cyclic_max' must be specified when using cyclic LR.")
 
-            opt['lr_scheduler'] = CyclicLR(self.__optimiser, self.__cyclic_min, self.__cyclic_max)
+            opt['lr_scheduler'] = CyclicLR(self.__optimiser, self.__cyclic_min, self.__cyclic_max, cycle_momentum=False)
             # opt['lr_scheduler'] = MultiStepLR(self.__optimiser, self.__lr_milestones, gamma=0.1)
             # opt['lr_scheduler'] = ReduceLROnPlateau(self.__optimiser, factor=0.5, patience=200, verbose=True)
 

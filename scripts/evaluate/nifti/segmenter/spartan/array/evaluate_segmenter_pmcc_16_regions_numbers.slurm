@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
-##SBATCH --partition gpu-a100-short
-##SBATCH --gres gpu:1
+##SBATCH --partition cascade
+#SBATCH --partition gpu-a100-short
+#SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 64G
-#SBATCH --time 0-06:00:00
+#SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -29,7 +29,7 @@ MODEL_NAME="segmenter-pmcc-numbers-v2"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 RANDOM_SEED=42
-RUN_NAME="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-ivw-0.5-schedule-150"
+RUN_NAME="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-ivw-0.5-schedule-200"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False

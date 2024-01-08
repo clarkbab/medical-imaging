@@ -12,12 +12,11 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi.loaders import MultiLoader
 from mymi.loaders.augmentation import get_transforms
-from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter, Segmenter
-from mymi.regions import RegionList
+from mymi.regions import RegionList, region_to_list
 from mymi.reporting.loaders import get_multi_loader_manifest
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
@@ -48,6 +47,7 @@ def train_multi_segmenter(
     include_background: bool = False,
     lam: float = 0.5,
     load_all_samples: bool = False,
+    loader_shuffle_samples: bool = True,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
     lr_find_iter: int = 10,
@@ -82,6 +82,7 @@ def train_multi_segmenter(
     use_cvg_weighting: bool = False,
     use_dilation: bool = False,
     use_elastic: bool = False,
+    use_loader_grouping: bool = False,
     use_loader_split_file: bool = False,
     use_logger: bool = False,
     use_lr_scheduler: bool = False,
@@ -94,7 +95,7 @@ def train_multi_segmenter(
     weights_iv_factor: Optional[Union[float, List[float]]] = None,
     weights_schedule: Optional[List[float]] = None) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
-    regions = arg_to_list(region, str)
+    regions = region_to_list(region)
 
     # Ensure model parameter initialisation is deterministic.
     seed_everything(random_seed, workers=True)
@@ -135,6 +136,16 @@ def train_multi_segmenter(
             all_inv_volumes = RegionList.MICCAI_INVERSE_VOLUMES
             region_idxs = [all_regions.index(r) for r in regions]
             inv_volumes = [all_inv_volumes[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN-EYES' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN_EYES
+            all_inv_volumes = RegionList.PMCC_REPLAN_EYES_INVERSE_VOLUMES
+            region_idxs = [all_regions.index(r) for r in regions]
+            inv_volumes = [all_inv_volumes[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN
+            all_inv_volumes = RegionList.PMCC_REPLAN_INVERSE_VOLUMES
+            region_idxs = [all_regions.index(r) for r in regions]
+            inv_volumes = [all_inv_volumes[i] for i in region_idxs]
         elif 'PMCC' in first_dataset:
             all_regions = RegionList.PMCC
             all_inv_volumes = RegionList.PMCC_INVERSE_VOLUMES
@@ -172,7 +183,7 @@ def train_multi_segmenter(
         epoch = 0
 
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=naive_crop, epoch=epoch, include_background=include_background, load_all_samples=load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, include_background=include_background, load_all_samples=load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
 
     # Infer convergence thresholds from dataset name.
     # We need these even when 'use_cvg_weighting=False' as it allows us to track
@@ -182,6 +193,16 @@ def train_multi_segmenter(
         if 'MICCAI-2015' in first_dataset:
             all_regions = RegionList.MICCAI
             all_thresholds = RegionList.MICCAI_CVG_THRESHOLDS
+            region_idxs = [all_regions.index(r) for r in regions]
+            cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN-EYES' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN_EYES
+            all_thresholds = RegionList.PMCC_REPLAN_EYES_CVG_THRESHOLDS
+            region_idxs = [all_regions.index(r) for r in regions]
+            cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN
+            all_thresholds = RegionList.PMCC_REPLAN_CVG_THRESHOLDS
             region_idxs = [all_regions.index(r) for r in regions]
             cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
         elif 'PMCC' in first_dataset:
@@ -288,7 +309,7 @@ def train_multi_segmenter(
         return
 
     # Save training information.
-    man_df = get_multi_loader_manifest(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file)
+    man_df = get_multi_loader_manifest(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')

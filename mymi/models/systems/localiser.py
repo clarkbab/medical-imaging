@@ -41,8 +41,8 @@ class Localiser(pl.LightningModule):
         self._metrics = metrics
         self._name = None
         pretrained_model = pretrained.network if pretrained else None
-        # self._network = UNet3D(pretrained_model=pretrained_model)
-        self._network = MultiUNet3D(2, n_ckpts=22, halve_channels=False)
+        self._network = UNet3D(pretrained_model=pretrained_model)
+        # self._network = MultiUNet3D(2, n_ckpts=22, halve_channels=False)
         self._predict_logits = predict_logits
         self._spacing = spacing
         self.save_hyperparameters(ignore=['loss'])

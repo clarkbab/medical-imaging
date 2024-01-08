@@ -68,20 +68,8 @@ class TrainingDataset(Dataset):
         filepath = os.path.join(self.__path, 'params.csv')
         df = pd.read_csv(filepath)
         params = df.iloc[0].to_dict()
-        
-        # Replace special columns.
-        old_cols = ['size', 'spacing']
-        cols = ['output-size', 'output-spacing']
-        for col, old_col in zip(cols, old_cols):
-            if col in params:
-                if not (isinstance(params[col], float) and np.isnan(params[col])):
-                    params[col] = eval(params[col])
-            else:
-                if params[old_col] is not np.nan:
-                    params[col] = eval(params[old_col])
-                else:
-                    params[col] = params[old_col]
-                del(params[old_col])
+        params['regions'] = eval(params['regions'])
+        params['spacing'] = eval(params['spacing'])
         return params
 
     @property
@@ -95,7 +83,8 @@ class TrainingDataset(Dataset):
     def list_groups(
         self,
         include_empty: bool = False,
-        region: Optional[PatientRegions] = None) -> List[int]:
+        region: Optional[PatientRegions] = None,
+        sort_by_sample_id: bool = False) -> List[int]:
         if not self.has_grouping:
             raise ValueError(f"{self} has no grouping.")
 
@@ -110,7 +99,10 @@ class TrainingDataset(Dataset):
             index = index[index['region'].isin(regions)]
 
         # Get sample IDs.
-        group_ids = list(sorted(index['group-id'].unique()))
+        if sort_by_sample_id:
+            group_ids = list(index.sort_values('sample-id')['group-id'].unique())
+        else:
+            group_ids = list(sorted(index['group-id'].unique()))
         group_ids = [int(i) for i in group_ids]
 
         return group_ids

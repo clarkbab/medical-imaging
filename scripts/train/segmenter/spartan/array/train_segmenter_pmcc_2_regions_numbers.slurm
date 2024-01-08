@@ -28,7 +28,7 @@ REGIONS=(
     "['Lens_L','Lens_R']"                       # 4
     "['OpticNerve_L','OpticNerve_R']"           # 5
     "['Parotid_L','Parotid_R']"                 # 6
-    "['SpinalCord','Mandible']"                 # 7
+    "['SpinalCord','BrainStem']"                # 7
     "['Submandibular_L','Submandibular_R']"     # 8
 )
 SHORT_REGIONS=(
@@ -48,9 +48,9 @@ MODEL_NAME="segmenter-pmcc-numbers-v2"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-$RESOLUTION','PMCC-HN-TRAIN-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
-RESUME=True
+RESUME=False
 LR_INIT=1e-3
-RANDOM_SEED=43
+RANDOM_SEED=42
 RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-$LR_INIT"
 BATCH_SIZE=1
