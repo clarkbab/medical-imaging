@@ -46,6 +46,7 @@ USE_LOADER_SPLIT_FILE=False
 
 # Other settings.
 CHECK_EPOCHS=True
+CROP_MM="(330,380,500)"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 N_EPOCHS=1000
 REGION='RL:PMCC_REPLAN'
@@ -56,6 +57,7 @@ python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --region $REGION \
     --model $MODEL \
     --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --loader_shuffle_samples $LOADER_SHUFFLE_SAMPLES \
     --n_epochs $N_EPOCHS \

@@ -106,7 +106,7 @@ class MultiLoader:
         for i, dataset in enumerate(datasets):
             set = TrainingDataset(dataset, check_processed=check_processed)
             sets.append(set)
-            spacing = set.params['spacing']
+            spacing = set.params['spacing'] if 'spacing' in set.params else set.params['output-spacing']
             if prev_spacing is not None and spacing != prev_spacing:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing

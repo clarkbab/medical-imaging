@@ -31,18 +31,24 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-replan-eyes"
 RESOLUTION="112"
 DATASET="PMCC-HN-REPLAN-EYES-$RESOLUTION"
+WEIGHTS=None
+WEIGHTS_IV_FACTOR_0=0.5
+WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
+SCHEDULE_EPOCHS=200
 RESUME=False
 LR_INIT=1e-4
+USE_WEIGHTS=True
 
 # Get run name.
 RANDOM_SEED=42
-RUN_NAME_BASE="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+if [ "$USE_WEIGHTS" = True ]; then
+    RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 if [ "$LR_INIT" = 1e-4 ]; then
-    RUN_NAME="$RUN_NAME_BASE-lr-$LR_INIT"
-else
-    RUN_NAME="$RUN_NAME_BASE"
+    RUN_NAME="$RUN_NAME-lr-$LR_INIT"
 fi
 
+# Other params.
 BATCH_SIZE=1
 CKPT_MODEL=True
 N_EPOCHS=1000
@@ -56,6 +62,7 @@ LOAD_ALL_SAMPLES=True
 N_FOLDS=5
 TEST_FOLD=0
 USE_LOGGER=True
+WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -80,4 +87,8 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --slurm_job_id $SLURM_JOB_ID \
     --test_fold $TEST_FOLD \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
-    --use_logger $USE_LOGGER
+    --use_logger $USE_LOGGER \
+    --use_weights $USE_WEIGHTS \
+    --weights $WEIGHTS \
+    --weights_iv_factor $WEIGHTS_IV_FACTOR \
+    --weights_schedule $WEIGHTS_SCHEDULE

@@ -429,14 +429,16 @@ def create_multi_segmenter_evaluation(
     region: PatientRegions,
     model: ModelName,
     load_all_samples: bool = False,
+    loader_shuffle_samples: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
+    use_loader_grouping: bool = False,
     use_loader_split_file: bool = False) -> None:
     datasets = arg_to_list(dataset, str)
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
-    regions = arg_to_list(region, str)
     model = replace_ckpt_alias(model)
+    regions = region_to_list(region)
     logging.arg_log('Evaluating multi-segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
     # Create dataframe.
@@ -451,7 +453,7 @@ def create_multi_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
 
     # Add evaluations to dataframe.
     test_loader = list(iter(test_loader))

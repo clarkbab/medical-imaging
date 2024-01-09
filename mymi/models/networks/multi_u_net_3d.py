@@ -240,7 +240,8 @@ class MultiUNet3D(nn.Module):
         n_ckpts: int = 22,
         n_input_channels: int = 1,
         n_gpus: int = 1,
-        n_split_channels: int = 2) -> None:
+        n_split_channels: int = 2,
+        **kwargs) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
         assert not ((double_groups and halve_channels) or (double_groups and n_split_channels > 1))

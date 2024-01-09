@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
@@ -29,7 +29,7 @@ SHORT_REGIONS=(
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-pmcc-resolution-v3"
-RESOLUTION="222"
+RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
 USE_CVG_WEIGHTING=False
@@ -40,9 +40,9 @@ CW_FACTOR="[$CW_FACTOR_0,0]"
 WEIGHTS=None
 WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=False
+RESUME=True
 LR_INIT=1e-3
-USE_WEIGHTS=False
+USE_WEIGHTS=True
 SCHEDULE_EPOCHS=200
 
 # Get run name.

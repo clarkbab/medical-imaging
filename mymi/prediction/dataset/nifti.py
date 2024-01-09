@@ -16,7 +16,7 @@ from mymi.models.systems import AdaptiveSegmenter, Localiser, MultiSegmenter, Se
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, region_to_list, truncate_spine
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D, crop_3D, pad_4D
-from mymi.types import Crop3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base, get_localiser_prediction_at_training_resolution as get_localiser_prediction_at_training_resolution_base
@@ -513,7 +513,7 @@ def get_adaptive_segmenter_prediction(
     model: Union[ModelName, Model],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
-    crop_mm: Optional[Crop3D] = None,
+    crop_mm: Optional[Box3D] = None,
     crop_type: str = 'brain',
     device: torch.device = torch.device('cpu'),
     **kwargs) -> np.ndarray:
@@ -595,9 +595,9 @@ def get_adaptive_segmenter_prediction(
     pred = largest_cc_4D(pred)
 
     # Reverse the 'naive' or 'brain' cropping.
-    if use_crop == 'naive':
+    if crop_type == 'naive':
         pred = centre_crop_or_pad_4D(pred, input_size_before_crop)
-    elif use_crop == 'brain':
+    elif crop_type == 'brain':
         pad_min = tuple(-np.array(crop[0]))
         pad_max = tuple(np.array(pad_min) + np.array(input_size_before_crop))
         pad = (pad_min, pad_max)
@@ -619,14 +619,16 @@ def get_multi_segmenter_prediction(
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu'),
-    use_crop: str = 'brain') -> np.ndarray:
+    crop_mm: Optional[Box3D] = None,
+    crop_type: str = 'brain',
+    **kwargs) -> np.ndarray:
     model_regions = arg_to_list(model_region, str)
 
     # Load model.
     if type(model) == tuple:
-        model = MultiSegmenter.load(*model)
-    model.eval()
-    model.to(device)
+        model = MultiSegmenter.load(*model, **kwargs)
+        model.eval()
+        model.to(device)
 
     # Load patient CT data and spacing.
     set = NIFTIDataset(dataset)
@@ -640,13 +642,15 @@ def get_multi_segmenter_prediction(
     input_size_before_crop = input.shape
 
     # Apply 'naive' cropping.
-    if use_crop == 'naive':
-        crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
+    if crop_type == 'naive':
+        assert crop_mm is not None
+        # crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
         crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
         input = centre_crop_or_pad_3D(input, crop)
-    elif use_crop == 'brain':
+    elif crop_type == 'brain':
+        assert crop_mm is not None
         # Convert to voxel crop.
-        crop_mm = (300, 400, 500)
+        # crop_mm = (300, 400, 500)
         crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
 
         # Get brain extent.
@@ -674,7 +678,7 @@ def get_multi_segmenter_prediction(
         # Crop input.
         input = crop_3D(input, crop)
     else:
-        raise ValueError(f"Unknown 'use_crop' value '{use_crop}'.")
+        raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
 
     # Pass image to model.
     input = torch.Tensor(input)
@@ -696,9 +700,9 @@ def get_multi_segmenter_prediction(
     pred = largest_cc_4D(pred)
 
     # Reverse the 'naive' or 'brain' cropping.
-    if use_crop == 'naive':
+    if crop_type == 'naive':
         pred = centre_crop_or_pad_4D(pred, input_size_before_crop)
-    elif use_crop == 'brain':
+    elif crop_type == 'brain':
         pad_min = tuple(-np.array(crop[0]))
         pad_max = tuple(np.array(pad_min) + np.array(input_size_before_crop))
         pad = (pad_min, pad_max)
@@ -827,10 +831,11 @@ def create_multi_segmenter_prediction(
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
+    model_name = model if isinstance(model, tuple) else model.name
+    logging.arg_log('Creating multi-segmenter prediction', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'device', 'savepath'), (dataset, pat_id, model_name, model_region, model_spacing, device, savepath))
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
     assert len(datasets) == len(pat_ids)
-    print(kwargs)
 
     # Load gpu if available.
     if device is None:
@@ -851,14 +856,12 @@ def create_multi_segmenter_prediction(
         set = NIFTIDataset(dataset)
         pat = set.patient(pat_id)
 
-        logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
-
         # Make prediction.
-        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device)
+        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, **kwargs)
 
         # Save segmentation.
         if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model.name, 'pred.npz')
+            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, 'pred.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 

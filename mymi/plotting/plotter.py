@@ -20,7 +20,7 @@ from mymi import logging
 from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size, is_region
 from mymi.regions import truncate_spine as truncate
-from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, crop_box, register_image
+from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, register_image
 from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, Point3D
 from mymi.utils import arg_to_list
 
@@ -209,15 +209,20 @@ def __plot_box_slice(
     elif view == 2:
         dims = (0, 1)
     min, max = box
-    min = np.array(min)[[*dims]]
-    max = np.array(max)[[*dims]]
+    min = tuple(np.array(min)[[*dims]])
+    max = tuple(np.array(max)[[*dims]])
     box_2D = (min, max)
 
     # Apply crop.
     if crop:
-        print(f"crop={crop}")
-        box_2D = crop_box(box_2D, crop)
-        print(f"box_2D={box_2D}")
+        box_2D = crop_or_pad_box(box_2D, crop)
+
+        # Reduce resulting box max by 1 to avoid plotting box outside of image.
+        # This results from our treatment of box max as being 'exclusive', in line
+        # with other python objects such as ranges.
+        min, max = box_2D
+        max = tuple(np.array(max) - 1)
+        box_2D = (min, max)
 
     # Draw bounding box.
     min, max = box_2D

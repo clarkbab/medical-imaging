@@ -309,73 +309,27 @@ def crop_or_pad_point(
 
     return point
 
-def crop_box(
-    box: Union[Box2D, Box3D],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
-    box = np.array(box, dtype=int)
-    crop = np.array(crop, dtype=int)
-
-    # Get decision variables.
-    # First 2 checks: do crop and box (both Box2D/3D) have some overlap?
-    # Last 2 checks: are the min/max of the crop below/above min/max of the box?
-    decisions = np.stack((crop[0] <= box[1], crop[1] > box[0], crop[0] <= box[0], crop[1] > box[1]), axis=0)
-
-    # Check that box is contained in crop.
-    if np.all(decisions[0:2]):
-        new_box = np.zeros_like(box, dtype=int)
-
-        # Add viable box values.
-        idx = np.nonzero(decisions[2:4])
-        new_box[idx] = box[idx]
-
-        # Project outside points to crop boundaries.
-        idx = np.nonzero(~decisions[2:4])
-        new_box[idx] = crop[idx]
-
-        # Crop points.
-        new_box[0] = crop_point(tuple(new_box[0]), crop)
-        print('here')
-        print(new_box)
-        print(new_box[1])
-        print(tuple(new_box[1]))
-        print(crop_point(tuple(new_box[1]), crop))
-        new_box[1] = crop_point(tuple(new_box[1]), crop)
-
-        # Convert to tuple.
-        new_box = tuple(tuple(p) for p in new_box)
-    else:
-        new_box = None
-
-    return new_box
-
 def crop_or_pad_box(
     box: Union[Box2D, Box3D],
     crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
-    box = np.array(box, dtype=int)
-    crop = np.array(crop, dtype=int)
+    __assert_is_box(box)
+    __assert_is_box(crop)
 
-    # Get decision variables.
-    decisions = np.stack((crop[0] <= box[1], crop[1] > box[0], crop[0] <= box[0], crop[1] > box[1]), axis=0)
+    # Return 'None' if no overlap between box and crop.
+    box_min, box_max = box
+    crop_min, crop_max = crop
+    if not (np.all(np.array(crop_min) < box_max) and np.all(np.array(crop_max) > box_min)):
+        return None
 
-    # Check that box is contained in crop.
-    if np.all(decisions[0:2]):
-        new_box = np.zeros_like(box, dtype=int)
+    # Otherwise use following rules to determine new box.
+    box_min = tuple(np.maximum(np.array(box_min) - crop_min, 0))
+    box_max = tuple(np.minimum(np.array(box_max) - crop_min, np.array(crop_max) - crop_min))
+    box = (box_min, box_max)
 
-        # Add viable box values.
-        idx = np.nonzero(decisions[2:4])
-        new_box[idx] = box[idx]
+    return box
 
-        # Project outside points to crop boundaries.
-        idx = np.nonzero(~decisions[2:4])
-        new_box[idx] = crop[idx]
-
-        # Crop points.
-        new_box[0] = crop_or_pad_point(tuple(new_box[0]), crop)
-        new_box[1] = crop_or_pad_point(tuple(new_box[1]), crop)
-
-        # Convert to tuple.
-        new_box = tuple(tuple(p) for p in new_box)
-    else:
-        new_box = None
-
-    return new_box
+def __assert_is_box(box: Union[Box2D, Box3D]) -> None:
+    min, max = box
+    if not np.all(list(mx >= mn for mn, mx in zip(min, max))):
+        raise ValueError(f"Invalid box '{box}'.")
+    

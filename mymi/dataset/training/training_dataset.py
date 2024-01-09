@@ -69,7 +69,10 @@ class TrainingDataset(Dataset):
         df = pd.read_csv(filepath)
         params = df.iloc[0].to_dict()
         params['regions'] = eval(params['regions'])
-        params['spacing'] = eval(params['spacing'])
+        if 'spacing' in params:
+            params['spacing'] = eval(params['spacing'])
+        elif 'output-spacing' in params:
+            params['output-spacing'] = eval(params['output-spacing'])
         return params
 
     @property

@@ -37,6 +37,7 @@ RANDOM_SEED=43
 RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True
+CROP_MM="(300,400,500)"
 N_EPOCHS=1000
 N_FOLDS=5
 N_SPLIT_CHANNELS=2
@@ -50,6 +51,7 @@ python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --region $REGION \
     --model $MODEL \
     --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \

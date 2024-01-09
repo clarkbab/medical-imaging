@@ -45,11 +45,12 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-pmcc-numbers-v3"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
-RANDOM_SEED=48
-#RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+RANDOM_SEED=42
+RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+#RUN_NAME="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True
+CROP_MM="(300,400,500)"
 N_EPOCHS=1000
 N_FOLDS=5
 N_SPLIT_CHANNELS=2
@@ -63,6 +64,7 @@ python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --region $REGION \
     --model $MODEL \
     --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \

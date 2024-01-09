@@ -66,6 +66,7 @@ RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 #RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True
+CROP_MM="(300,400,500)"
 N_EPOCHS=1000
 N_FOLDS=5
 N_SPLIT_CHANNELS=2
@@ -76,7 +77,13 @@ LOAD_ALL_SAMPLES=True
 
 python $SCRIPT_DIR/predict/nifti/segmenter/predict_multi.py \
     --dataset $DATASET \
-    --pat_id $PAT_ID \
+    --region $REGION \
     --model $MODEL \
-    --model_region $MODEL_REGION \
-    --model_spacing $MODEL_SPACING
+    --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
+    --load_all_samples $LOAD_ALL_SAMPLES \
+    --n_epochs $N_EPOCHS \
+    --n_folds $N_FOLDS \
+    --n_split_channels $N_SPLIT_CHANNELS \
+    --test_fold $TEST_FOLD \
+    --use_loader_split_file $USE_LOADER_SPLIT_FILE
