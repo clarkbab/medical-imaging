@@ -12,6 +12,7 @@ from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.geometry import get_centre
 from mymi import logging
+from mymi.regions import region_to_list
 from torchio.transforms import Transform
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
@@ -83,6 +84,7 @@ class AdaptiveLoader:
         n_workers: int = 1,
         p_val: float = .2,
         random_seed: int = 0,
+        region: Optional[PatientRegions] = None,
         shuffle_samples: bool = True,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
@@ -93,6 +95,7 @@ class AdaptiveLoader:
         use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         logging.arg_log('Building adaptive loaders', ('n_folds', 'n_subfolds', 'n_train', 'p_val', 'random_seed', 'shuffle_samples', 'shuffle_train', 'test_fold', 'test_subfold', 'use_grouping', 'use_split_file'), (n_folds, n_subfolds, n_train, p_val, random_seed, shuffle_samples, shuffle_train, test_fold, test_subfold, use_grouping, use_split_file))
         datasets = arg_to_list(dataset, str)
+        regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 
@@ -107,6 +110,14 @@ class AdaptiveLoader:
                 raise ValueError(f"Spacing must be consistent across all loader datasets. Got '{prev_spacing}' and '{spacing}'.")
             prev_spacing = spacing
 
+        # Get regions if 'None'.
+        if regions is None:
+            regions = []
+            for set in sets:
+                set_regions = set.list_regions()
+                regions += set_regions
+            regions = list(sorted(np.unique(regions)))
+
         # Load all samples/groups.
         samples = []
         for i, set in enumerate(sets):
@@ -115,9 +126,15 @@ class AdaptiveLoader:
             if use_grouping:
                 # Loading all samples is required to ensure consistent train/test split per region
                 # when passing different 'regions'.
-                set_samples = set.list_groups(sort_by_sample_id=True)
+                if load_all_samples:
+                    set_samples = set.list_groups(sort_by_sample_id=True)
+                else:
+                    set_samples = set.list_groups(region=regions, sort_by_sample_id=True)
             else:
-                set_samples = set.list_samples()
+                if load_all_samples:
+                    set_samples = set.list_samples()
+                else:
+                    set_samples = set.list_samples(region=regions)
 
             for sample_id in set_samples:
                 samples.append((i, sample_id))

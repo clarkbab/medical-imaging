@@ -19,8 +19,8 @@ echo $version
 
 # Get model name.
 RESOLUTION="222"
-DATASET="PMCC-HN-REPLAN-POP-$RESOLUTION"
-MODEL_NAME="segmenter-replan-pop-$RESOLUTION"
+DATASET="PMCC-HN-REPLAN-ADPTM-$RESOLUTION"
+MODEL_NAME="segmenter-replan-adptm-$RESOLUTION"
 
 # Set up region weighting.
 USE_WEIGHTS=True
@@ -45,16 +45,14 @@ USE_LOADER_GROUPING=True
 USE_LOADER_SPLIT_FILE=False
 
 # Other settings.
-EXCLUDE_LIKE="'-0'"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_evaluation.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
-    --exclude_like $EXCLUDE_LIKE \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --loader_shuffle_samples $LOADER_SHUFFLE_SAMPLES \
     --n_folds $N_FOLDS \

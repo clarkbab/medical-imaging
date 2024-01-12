@@ -217,6 +217,10 @@ def __plot_box_slice(
     if crop:
         box_2D = crop_or_pad_box(box_2D, crop)
 
+        if box_2D is None:
+            # Box has been cropped off screen.
+            return
+
         # Reduce resulting box max by 1 to avoid plotting box outside of image.
         # This results from our treatment of box max as being 'exclusive', in line
         # with other python objects such as ranges.
@@ -1428,11 +1432,11 @@ def plot_dataframe_v2(
     stats_paired: bool = True,
     stats_bar_alg_use_lowest_level: bool = True,
     stats_bar_alpha: float = 0.5,
-    stats_bar_data_offset: float = 0.05,
-    stats_bar_grid_offset: float = 0.05,
-    stats_bar_height: float = 0.05,
+    stats_bar_data_offset: float = 0.03,
+    stats_bar_grid_offset: float = 0.01,
+    stats_bar_height: float = 0.01,
     stats_bar_offset: float = 0.05,
-    stats_bar_text_offset: float = 0.05,
+    stats_bar_text_offset: float = 0.01,
     stats_bar_show_direction: bool = False,
     stats_two_sided: bool = False,
     style: Optional[Literal['box', 'violin']] = 'box',

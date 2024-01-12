@@ -9,14 +9,15 @@ from typing import Dict, List, Literal, Optional, Union
 from mymi import config
 from mymi.dataset import NIFTIDataset
 from mymi.geometry import get_box, get_extent_centre
-from mymi.loaders import Loader, MultiLoader
+from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
+from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
-from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
+from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.types import ModelName, PatientRegions
+from mymi.types import ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_localiser_evaluation(
@@ -240,6 +241,138 @@ def load_localiser_evaluation(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
+def get_adaptive_segmenter_evaluation(
+    dataset: str,
+    region: PatientRegions,
+    pat_id: str,
+    model: ModelName) -> List[Dict[str, float]]:
+    regions = arg_to_list(region, str)
+
+    # Load predictions.
+    set = NIFTIDataset(dataset)
+    pat = set.patient(pat_id)
+    spacing = pat.ct_spacing
+    region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
+ 
+    region_metrics = []
+    for region, pred in region_preds.items():
+        # Patient ground truth may not have all the predicted regions.
+        if not pat.has_region(region):
+            region_metrics.append({})
+            continue
+        
+        # Load label.
+        label = pat.region_data(region=region)[region]
+
+        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+        if region == 'SpinalCord':
+            z_min_pred = np.nonzero(pred)[2].min()
+            z_min_label = np.nonzero(label)[2].min()
+            z_min = np.max([z_min_label, z_min_pred])
+
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min), label.shape)
+            pred = crop_foreground_3D(pred, crop)
+            label = crop_foreground_3D(label, crop)
+
+        # Dice.
+        metrics = {}
+        metrics['dice'] = dice(pred, label)
+
+        # Distances.
+        if pred.sum() == 0 or label.sum() == 0:
+            metrics['apl'] = np.nan
+            metrics['hd'] = np.nan
+            metrics['hd-95'] = np.nan
+            metrics['msd'] = np.nan
+            metrics['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[metric] = value
+
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[f'dm-{metric}'] = value
+
+        region_metrics.append(metrics)
+
+    return region_metrics
+
+def get_multi_segmenter_heatmap_evaluation(
+    dataset: str,
+    pat_id: str,
+    model: ModelName,
+    target_region: PatientRegions,
+    layer: Union[str, List[str]],
+    aux_region: PatientRegions) -> List[List[List[Dict[str, float]]]]:
+
+    # Load region data.
+    set = NIFTIDataset(dataset)
+    pat = set.patient(pat_id)
+    region_data = pat.region_data(region=aux_region, region_ignore_missing=True)
+
+    # Process each target region.
+    target_regions = region_to_list(target_region)
+    target_region_metrics = []
+    for target_region in target_regions:
+        # Load heatmap.
+        heatmaps_full = load_multi_segmenter_heatmap(dataset, pat_id, model, target_region, layer)
+        layers = arg_to_list(layer, str)
+        if len(layers) == 1:
+            heatmaps_full = [heatmaps_full]
+
+        # Process each layer.
+        layer_region_metrics = []
+        for layer, heatmap_full in zip(layers, heatmaps_full):
+            # Remove '-1' values - added to ensure heatmap is same size as CT but shoudln't be used for metric calculation.
+            heatmap = heatmap_full[heatmap_full >= 0]
+
+            # Store max activation for normalisation.
+            max_act = heatmap.max()
+
+            # Process each auxiliary region.
+            aux_regions = region_to_list(aux_region)
+            aux_region_metrics = []
+            for aux_region in aux_regions:
+                if aux_region not in region_data:
+                    continue
+                
+                # Load label - only evaluate label where heatmap != -1.
+                label = region_data[aux_region]
+                label = label[heatmap_full >= 0]
+                dist = heatmap[label]
+
+                metrics = {}
+
+                # Calculate metrics.
+                metric_names = [
+                    'mean',
+                    'max',
+                    'mean-norm',
+                    'max-norm'
+                ]
+                metric_values = [
+                    dist.mean(),
+                    dist.max(),
+                    dist.mean() / max_act,
+                    dist.max() / max_act
+                ]
+                for name, value in zip(metric_names, metric_values):
+                    metrics[name] = value
+
+                aux_region_metrics.append(metrics)
+            layer_region_metrics.append(aux_region_metrics)
+        target_region_metrics.append(layer_region_metrics)
+
+    return target_region_metrics
+
 def get_multi_segmenter_evaluation(
     dataset: str,
     region: PatientRegions,
@@ -424,10 +557,162 @@ def get_segmenter_evaluation(
 
     return data
     
+def create_adaptive_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    load_all_samples: bool = False,
+    loader_shuffle_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_grouping: bool = False,
+    use_loader_split_file: bool = False) -> None:
+    datasets = arg_to_list(dataset, str)
+    # 'regions' is used to determine which patients are loaded (those that have at least one of
+    # the listed regions).
+    model = replace_ckpt_alias(model)
+    regions = region_to_list(region)
+    logging.arg_log('Evaluating adaptive segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Build test loader.
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+
+    # Add evaluations to dataframe.
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            # Skip pre-treatment patients.
+            if '-0' in pat_id:
+                logging.info(f"Skipping '{dataset}:{pat_id}'.")
+                continue
+
+            # Get metrics per region.
+            region_metrics = get_adaptive_segmenter_evaluation(dataset, regions, pat_id, model)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold if test_fold is not None else np.nan,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
+def create_multi_segmenter_heatmap_evaluation(
+    dataset: Union[str, List[str]],
+    model: ModelName,
+    model_region: PatientRegions,
+    target_region: PatientRegions,
+    layer: Union[str, List[str]],
+    aux_region: PatientRegions,
+    exclude_like: Optional[str] = None,
+    load_all_samples: bool = False,
+    loader_shuffle_samples: bool = True,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_grouping: bool = False,
+    use_loader_split_file: bool = False) -> None:
+    datasets = arg_to_list(dataset, str)
+    logging.arg_log('Evaluating multi-segmenter heatmaps for NIFTI dataset', ('dataset', 'model', 'model_region', 'target_region', 'layer', 'aux_region'), (dataset, model, model_region, target_region, layer, aux_region))
+    model = replace_ckpt_alias(model)
+    target_regions = region_to_list(target_region)
+    layers = arg_to_list(layer, str)
+    aux_regions = region_to_list(aux_region)
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'target-region': str,
+        'layer': str,
+        'aux-region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Build test loader.
+    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=model_region, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+
+    # Add evaluations to dataframe.
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            if exclude_like is not None:
+                if exclude_like in pat_id:
+                    logging.info(f"Skipping '{dataset}:{pat_id}', matched 'exclude_like={exclude_like}'.")
+                    continue
+
+            # Get metrics per region.
+            target_region_metrics = get_multi_segmenter_heatmap_evaluation(dataset, pat_id, model, target_regions, layers, aux_regions)
+
+            # Filter out aux_regions if patient doesn't have them.
+            pat = NIFTIDataset(dataset).patient(pat_id)
+            aux_regions_pat = pat.list_regions(only=aux_regions)
+
+            for target_region, layer_metrics in zip(target_regions, target_region_metrics):
+                for layer, aux_region_metrics in zip(layers, layer_metrics):
+                    for aux_region, metrics in zip(aux_regions_pat, aux_region_metrics):
+                        for metric, value in metrics.items():
+                            data = {
+                                'fold': test_fold if test_fold is not None else np.nan,
+                                'dataset': dataset,
+                                'patient-id': pat_id,
+                                'target-region': target_region,
+                                'layer': layer,
+                                'aux-region': aux_region,
+                                'metric': metric,
+                                'value': value
+                            }
+                            df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'heatmaps', *model, encode(datasets), encode(target_regions), encode(layers), encode(aux_regions), filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
 def create_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
+    exclude_like: Optional[str] = None,
     load_all_samples: bool = False,
     loader_shuffle_samples: bool = False,
     n_folds: Optional[int] = None,
@@ -463,6 +748,11 @@ def create_multi_segmenter_evaluation(
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
             logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            if exclude_like is not None:
+                if exclude_like in pat_id:
+                    logging.info(f"Skipping '{dataset}:{pat_id}', matched 'exclude_like={exclude_like}'.")
+                    continue
 
             # Get metrics per region.
             region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model)
@@ -662,17 +952,79 @@ def create_segmenter_evaluation(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
+def load_adaptive_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    exists_only: bool = False,
+    load_all_samples: bool = False,
+    loader_shuffle_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_grouping: bool = False,
+    use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    model = replace_ckpt_alias(model)
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), filename)
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Adaptive segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+    
+def load_multi_segmenter_heatmap_evaluation(
+    dataset: Union[str, List[str]],
+    model: ModelName,
+    target_region: PatientRegions,
+    layer: Union[str, List[str]],
+    aux_region: PatientRegions,
+    exists_only: bool = False,
+    load_all_samples: bool = False,
+    loader_shuffle_samples: bool = False,
+    n_folds: Optional[int] = None,
+    test_fold: Optional[int] = None,
+    use_loader_split_file: bool = False,
+    use_loader_grouping: bool = False) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    model = replace_ckpt_alias(model)
+    target_regions = region_to_list(target_region)
+    layers = arg_to_list(layer, str)
+    aux_regions = region_to_list(aux_region)
+    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
+    filepath = os.path.join(config.directories.evaluations, 'heatmaps', *model, encode(datasets), encode(target_regions), encode(layers), encode(aux_regions), filename)
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+
 def load_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
     exists_only: bool = False,
     load_all_samples: bool = False,
+    loader_shuffle_samples: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
+    use_loader_split_file: bool = False,
+    use_loader_grouping: bool = False) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
-    regions = arg_to_list(region, str)
+    regions = region_to_list(region)
     model = replace_ckpt_alias(model)
     filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)

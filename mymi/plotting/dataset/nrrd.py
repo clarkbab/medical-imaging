@@ -3,7 +3,7 @@ import re
 from typing import Dict, List, Literal, Optional, Union
 
 from mymi.dataset import NRRDDataset
-from mymi.gradcam.dataset.nrrd import load_heatmap
+from mymi.gradcam.dataset.nrrd import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
@@ -493,7 +493,7 @@ def plot_heatmap(
     spacing = pat.ct_spacing
 
     # Load heatmap.
-    heatmap = load_heatmap(dataset, pat_id, model, region, layer)
+    heatmap = load_multi_segmenter_heatmap(dataset, pat_id, model, region, layer)
 
     if centre_of is not None:
         centre_of = pat.region_data(region=centre_of)[centre_of]

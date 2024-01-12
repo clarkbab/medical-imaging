@@ -74,7 +74,7 @@ def get_heatmap(
     # Call base method.
     return get_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
 
-def load_heatmap(
+def load_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: ModelName,

@@ -19,8 +19,8 @@ echo $version
 
 # Get model name.
 RESOLUTION="222"
-DATASET="PMCC-HN-REPLAN-POP-$RESOLUTION"
-MODEL_NAME="segmenter-replan-pop-$RESOLUTION"
+DATASET="PMCC-HN-REPLAN-ADPT-$RESOLUTION"
+MODEL_NAME="segmenter-replan-adpt-$RESOLUTION"
 
 # Set up region weighting.
 USE_WEIGHTS=True
@@ -28,7 +28,7 @@ WEIGHTS_IV_FACTOR_0=0.5
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=42
+RANDOM_SEED=43
 TEST_FOLD=$SLURM_ARRAY_TASK_ID
 RUN_NAME_BASE="17-regions-fold-$TEST_FOLD"
 if [ "$USE_WEIGHTS" = True ]; then
@@ -41,20 +41,18 @@ fi
 LOAD_ALL_SAMPLES=True
 LOADER_SHUFFLE_SAMPLES=False
 N_FOLDS=5
-USE_LOADER_GROUPING=True
+USE_LOADER_GROUPING=False
 USE_LOADER_SPLIT_FILE=False
 
 # Other settings.
-EXCLUDE_LIKE="'-0'"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_evaluation.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
-    --exclude_like $EXCLUDE_LIKE \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --loader_shuffle_samples $LOADER_SHUFFLE_SAMPLES \
     --n_folds $N_FOLDS \

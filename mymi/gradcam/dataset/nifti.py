@@ -15,21 +15,21 @@ from mymi.regions import region_to_list
 from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..gradcam import get_heatmap as get_heatmap_base
+from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
 
-def create_heatmap(
+def create_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
-    region: str,
+    target_region: str,
     layer: Union[str, List[str]],
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     device: torch.device = torch.device('cpu'),
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
     model_name = model if isinstance(model, tuple) else model.name
-    logging.arg_log('Creating heatmap', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'region', 'layer', 'layer_spacing'), (dataset, pat_id, model_name, model_region, model_spacing, region, layer, layer_spacing))
+    logging.arg_log('Creating heatmap', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'target_region', 'layer', 'layer_spacing'), (dataset, pat_id, model_name, model_region, model_spacing, target_region, layer, layer_spacing))
     pat_ids = arg_to_list(pat_id, (int, str), out_type=str)
     datasets = arg_broadcast(dataset, pat_ids, str)
 
@@ -51,7 +51,7 @@ def create_heatmap(
 
     # Get heatmaps.
     for dataset, pat_id in zip(datasets, pat_ids):
-        heatmap = get_heatmap(dataset, pat_id, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
+        heatmap = get_multi_segmenter_heatmap(dataset, pat_id, model, model_region, model_spacing, target_region, layer, layer_spacing, device=device, **kwargs)
 
         # Save heatmaps.
         layers = arg_to_list(layer, str)
@@ -59,17 +59,17 @@ def create_heatmap(
         logging.info(f"got {len(heatmap)} heatmaps")
         for layer, heatmap in zip(layers, heatmaps):
             logging.info(f"saving heatmap for layer {layer}")
-            filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model_name, f'{region}-layer-{layer}.npz')
+            filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model_name, f'{target_region}-layer-{layer}.npz')
             logging.info(f"filepath: {filepath}")
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             np.savez_compressed(filepath, data=heatmap)
 
-def create_heatmaps(
+def create_multi_segmenter_heatmaps(
     dataset: Union[str, List[str]],
     model: Union[Model, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
-    region: PatientRegion,
+    target_region: PatientRegion,
     layer: Union[str, List[str]],
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     load_all_samples: bool = False,
@@ -77,7 +77,7 @@ def create_heatmaps(
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,
     **kwargs: Dict[str, Any]) -> None:
-    logging.arg_log('Creating heatmaps', ('dataset', 'model', 'model_region', 'model_spacing', 'region', 'layer', 'layer_spacing'), (dataset, model, model_region, model_spacing, region, layer, layer_spacing))
+    logging.arg_log('Creating heatmaps', ('dataset', 'model', 'model_region', 'model_spacing', 'target_region', 'layer', 'layer_spacing'), (dataset, model, model_region, model_spacing, target_region, layer, layer_spacing))
 
     # Load gpu if available.
     if torch.cuda.is_available():
@@ -103,15 +103,15 @@ def create_heatmaps(
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
-            create_heatmap(dataset, pat_id, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
+            create_multi_segmenter_heatmap(dataset, pat_id, model, model_region, model_spacing, target_region, layer, layer_spacing, device=device, **kwargs)
 
-def get_heatmap(
+def get_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
-    region: str,
+    target_region: str,
     layer: Union[str, List[str]],
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     device: torch.device = torch.device('cpu'),
@@ -130,7 +130,7 @@ def get_heatmap(
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing
-    label = patient.region_data(region=region)[region]
+    label = patient.region_data(region=target_region)[target_region]
 
     # Get brain label if required.
     if use_crop == 'brain':
@@ -140,19 +140,22 @@ def get_heatmap(
         brain_label = None
 
     # Call base method.
-    return get_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, region, layer, layer_spacing, brain_label=brain_label, device=device, **kwargs)
+    id = f'{dataset}:{pat_id}'
+    return get_multi_segmenter_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, target_region, layer, layer_spacing, brain_label=brain_label, device=device, id=id, **kwargs)
 
-def load_heatmap(
+def load_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: ModelName,
-    region: str,
+    target_region: str,
     layer: Union[str, List[str]]) -> Union[np.array, List[np.ndarray]]:
     model = replace_ckpt_alias(model)
     layers = arg_to_list(layer, str)
     heatmaps = []
     for layer in layers:
-        filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model, f'{region}-layer-{layer}.npz')
+        filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model, f'{target_region}-layer-{layer}.npz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Heatmap not found for dataset '{dataset}', patient '{pat_id}', model '{model}', target_region '{target_region}', layer '{layer}'. Filepath: {filepath}")
         heatmap = np.load(filepath)['data']
         heatmaps.append(heatmap)
 

@@ -54,6 +54,7 @@ N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=16
+REGION="RL:PMCC_REPLAN"
 RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
@@ -61,6 +62,7 @@ USE_LOGGER=True
 
 python $SCRIPT_DIR/train/segmenter/train_adaptive_segmenter.py \
     --dataset $DATASET \
+    --region $REGION \
     --model_name $MODEL_NAME \
     --run_name $RUN_NAME \
     --loader_load_all_samples $LOADER_LOAD_ALL_SAMPLES \

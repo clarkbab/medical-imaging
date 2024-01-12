@@ -28,7 +28,7 @@ WEIGHTS_IV_FACTOR_0=0.5
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=42
+RANDOM_SEED=43
 TEST_FOLD=$SLURM_ARRAY_TASK_ID
 RUN_NAME_BASE="17-regions-fold-$TEST_FOLD"
 if [ "$USE_WEIGHTS" = True ]; then
@@ -41,8 +41,7 @@ fi
 LOAD_ALL_SAMPLES=True
 LOADER_SHUFFLE_SAMPLES=False
 N_FOLDS=5
-USE_LOADER_GROUPING=True
-USE_LOADER_SPLIT_FILE=False
+USE_LOADER_GROUPING=False
 
 # Other settings.
 CHECK_EPOCHS=True
@@ -52,7 +51,7 @@ N_EPOCHS=1000
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/predict/nifti/segmenter/predict_adaptive_segmenter.py \
+python $SCRIPT_DIR/predict/nifti/segmenter/create_adaptive_segmenter_predictions.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
@@ -63,5 +62,4 @@ python $SCRIPT_DIR/predict/nifti/segmenter/predict_adaptive_segmenter.py \
     --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
     --test_fold $TEST_FOLD \
-    --use_loader_grouping $USE_LOADER_GROUPING \
-    --use_loader_split_file $USE_LOADER_SPLIT_FILE
+    --use_loader_grouping $USE_LOADER_GROUPING

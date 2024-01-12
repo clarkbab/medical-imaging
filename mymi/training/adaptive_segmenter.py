@@ -17,7 +17,7 @@ from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import AdaptiveSegmenter
-from mymi.regions import RegionList
+from mymi.regions import RegionList, region_to_list
 from mymi.reporting.loaders import get_adaptive_loader_manifest
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
@@ -26,6 +26,7 @@ DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
 
 def train_adaptive_segmenter(
     dataset: Union[str, List[str]],
+    region: PatientRegions,
     model_name: str,
     run_name: str,
     batch_size: int = 1,
@@ -94,6 +95,7 @@ def train_adaptive_segmenter(
     weights_iv_factor: Optional[Union[float, List[float]]] = None,
     weights_schedule: Optional[List[float]] = None) -> None:
     logging.arg_log('Training model', ('dataset', 'model_name', 'run_name'), (dataset, model_name, run_name))
+    regions = region_to_list(region)
 
     # Ensure model parameter initialisation is deterministic.
     seed_everything(random_seed, workers=True)
@@ -173,7 +175,7 @@ def train_adaptive_segmenter(
         epoch = 0
 
     # Create data loaders.
-    train_loader, val_loader, _ = AdaptiveLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, load_all_samples=loader_load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = AdaptiveLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, load_all_samples=loader_load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
 
     # Infer convergence thresholds from dataset name.
     # We need these even when 'use_cvg_weighting=False' as it allows us to track
@@ -196,17 +198,6 @@ def train_adaptive_segmenter(
             raise ValueError(f"Couldn't infer 'cw_cvg_thresholds' from dataset name '{first_dataset}'.")
     else:
         cw_cvg_thresholds = None
-
-    # Get regions.
-    first_dataset = arg_to_list(dataset, str)[0]
-    if 'MICCAI-2015' in first_dataset:
-        regions = RegionList.MICCAI
-    elif 'PMCC-HN-REPLAN' in first_dataset:
-        regions = RegionList.PMCC_REPLAN
-    elif 'PMCC' in first_dataset:
-        regions = RegionList.PMCC
-    else:
-        raise ValueError(f"Couldn't infer 'regions' from dataset name '{first_dataset}'.")
 
     # Create model.
     model = AdaptiveSegmenter(

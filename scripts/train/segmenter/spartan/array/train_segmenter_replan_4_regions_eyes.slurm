@@ -6,7 +6,6 @@
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
-##SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
 #SBATCH --time 7-00:00:00
@@ -32,7 +31,7 @@ MODEL_NAME="segmenter-replan-eyes"
 RESOLUTION="112"
 DATASET="PMCC-HN-REPLAN-EYES-$RESOLUTION"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.5
+WEIGHTS_IV_FACTOR_0=0.9
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 SCHEDULE_EPOCHS=200
 RESUME=False
@@ -44,6 +43,7 @@ RANDOM_SEED=42
 RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+fi
 if [ "$LR_INIT" = 1e-4 ]; then
     RUN_NAME="$RUN_NAME-lr-$LR_INIT"
 fi

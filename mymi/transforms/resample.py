@@ -6,9 +6,20 @@ from typing import Any, Dict, Optional, Tuple, Union
 from mymi import logging
 from mymi import types
 
+def resample_list(
+    data: np.ndarray,
+    **kwargs: Dict[str, Any]) -> np.ndarray:
+    ds = []
+    for d in data:
+        d = resample(d, **kwargs)
+        ds.append(d)
+    output = np.stack(ds, axis=0)
+    return output
+
 def resample_4D(
     data: np.ndarray,
     **kwargs: Dict[str, Any]) -> np.ndarray:
+    assert len(data.shape) == 4, "Data must be 4D."
     ds = []
     for d in data:
         d = resample_3D(d, **kwargs)
@@ -24,8 +35,9 @@ def resample_3D_zoom(
     data = zoom(data, scaling, order=1)
     return data
 
-def resample_3D_v2(
+def resample(
     data: np.ndarray,
+    fill: float = 'min',
     origin: Optional[types.PhysPoint3D] = None,
     output_origin: Optional[types.PhysPoint3D] = None,
     output_size: Optional[types.ImageSize3D] = None,
@@ -75,9 +87,20 @@ def resample_3D_v2(
     if spacing is not None:
         image.SetSpacing(spacing)
 
+    # Get default pixel value.
+    if isinstance(fill, str):
+        if fill == 'min':
+            fill = float(data.min())
+        elif fill == 'max':
+            fill = float(data.max())
+        else:
+            raise ValueError(f"Unknown fill value '{fill}'.")
+    else:
+        fill = float(fill)
+
     # Create resample filter.
     resample = sitk.ResampleImageFilter()
-    resample.SetDefaultPixelValue(float(data.min()))
+    resample.SetDefaultPixelValue(fill)
     if boolean:
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
     if output_origin is not None:
@@ -131,6 +154,8 @@ def resample_3D(
         - if None, will take on value of 'spacing'.
         - if specified, will change the spatial resolution of the image.
     """
+    assert len(data.shape) == 3, "Data must be 3D."
+
     # Convert to SimpleITK ordering (z, y, x).
     if origin is not None:
         origin = tuple(reversed(origin))
