@@ -445,7 +445,8 @@ def plot_region(
     slice_idx: Optional[int] = None,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
-    view: Axis = 0) -> None:
+    view: Axis = 0,
+    **kwargs) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
     assert view in (0, 1, 2)
 

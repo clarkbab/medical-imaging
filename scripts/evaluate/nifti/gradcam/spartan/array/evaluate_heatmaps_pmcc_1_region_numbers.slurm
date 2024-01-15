@@ -67,8 +67,8 @@ DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 # Define model.
 MODEL_NAME="segmenter-pmcc-numbers-v3"
 RANDOM_SEED=42
-RUN_NAME="1-region-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-#RUN_NAME="1-region-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+#RUN_NAME="1-region-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+RUN_NAME="1-region-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 MODEL_SPACING="(1,1,2)"
 
@@ -96,6 +96,5 @@ python $SCRIPT_DIR/evaluate/nifti/gradcam/create_multi_segmenter_heatmap_evaluat
     --layer $LAYER \
     --aux_region $AUX_REGION \
     --load_all_samples $LOAD_ALL_SAMPLES \
-    --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
     --test_fold $TEST_FOLD

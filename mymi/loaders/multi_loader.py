@@ -145,8 +145,6 @@ class MultiLoader:
             np.random.seed(random_seed)
             np.random.shuffle(samples)
 
-        print(samples[:5])
-
         # Split into training/testing samples.
         if n_folds is not None:     
             # Split samples into equally-sized folds for training/testing.

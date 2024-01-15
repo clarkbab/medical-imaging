@@ -1,0 +1,10 @@
+patient-id,region,processing
+5-0,Cavity_Oral,outlier
+5-0,Parotid_L,outlier
+5-1,Cavity_Oral,outlier
+26-1,SpinalCord,outlier
+52-1,Lens_R,outlier
+59-1,Lens_R,interpolate-z
+68-1,Cavity_Oral,outlier
+83-1,Parotid_R,outlier
+96-1,Parotid_R,interpolate-z

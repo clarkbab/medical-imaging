@@ -63,9 +63,7 @@ def plot_region(
     pat_id: str,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, Crop2D]] = None,
-    labels: Literal['included', 'excluded', 'all'] = 'included',
     region: Optional[PatientRegions] = None,
-    region_ignore_missing: bool = False,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     **kwargs) -> None:
@@ -74,7 +72,7 @@ def plot_region(
     set = NIFTIDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
-    region_data = pat.region_data(labels=labels, region=region, region_ignore_missing=region_ignore_missing) if region is not None else None
+    region_data = pat.region_data(region=region, **kwargs) if region is not None else None
     spacing = pat.ct_spacing
     dose_data = pat.dose_data if show_dose else None
 

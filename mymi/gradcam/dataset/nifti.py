@@ -148,16 +148,25 @@ def load_multi_segmenter_heatmap(
     pat_id: str,
     model: ModelName,
     target_region: str,
-    layer: Union[str, List[str]]) -> Union[np.array, List[np.ndarray]]:
+    layer: Union[str, List[str]],
+    exists_only: bool = False) -> Union[np.array, List[np.ndarray]]:
     model = replace_ckpt_alias(model)
     layers = arg_to_list(layer, str)
     heatmaps = []
     for layer in layers:
         filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model, f'{target_region}-layer-{layer}.npz')
         if not os.path.exists(filepath):
-            raise ValueError(f"Heatmap not found for dataset '{dataset}', patient '{pat_id}', model '{model}', target_region '{target_region}', layer '{layer}'. Filepath: {filepath}")
-        heatmap = np.load(filepath)['data']
-        heatmaps.append(heatmap)
+            if exists_only:
+                return False
+            else:
+                raise ValueError(f"Heatmap not found for dataset '{dataset}', patient '{pat_id}', model '{model}', target_region '{target_region}', layer '{layer}'. Filepath: {filepath}")
+
+        if not exists_only:
+            heatmap = np.load(filepath)['data']
+            heatmaps.append(heatmap)
+
+    if exists_only:
+        return True
 
     if len(heatmaps) == 1:
         return heatmaps[0]

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -42,7 +42,7 @@ CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
 WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=False
+RESUME=True
 LR_INIT=1e-3
 USE_WEIGHTS=False
 SCHEDULE_EPOCHS=200

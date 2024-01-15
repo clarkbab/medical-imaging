@@ -714,7 +714,8 @@ def create_multi_segmenter_evaluation(
     model: ModelName,
     exclude_like: Optional[str] = None,
     load_all_samples: bool = False,
-    loader_shuffle_samples: bool = False,
+    loader_shuffle_samples: bool = True,
+    loader_shuffle_train: bool = True,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_grouping: bool = False,
@@ -738,7 +739,7 @@ def create_multi_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, shuffle_train=loader_shuffle_train, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
 
     # Add evaluations to dataframe.
     test_loader = list(iter(test_loader))

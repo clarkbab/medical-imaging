@@ -30,11 +30,13 @@ class NIFTIDataset(Dataset):
         self.__global_id = f"NIFTI: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"NIFTI: {self.__name}"
 
         self.__anon_index = None                # Lazy-loaded.
-        self.__excluded_labels = None          # Lazy-loaded.
+        self.__excluded_labels = None           # Lazy-loaded.
         self.__group_index = None               # Lazy-loaded.
+        self.__processed_labels = None          # Lazy-loaded.
         self.__loaded_anon_index = False
         self.__loaded_excluded_labels = False
         self.__loaded_group_index = False
+        self.__loaded_processed_labels = False
 
     @property
     def anon_index(self) -> Optional[DataFrame]:
@@ -72,6 +74,13 @@ class NIFTIDataset(Dataset):
     @property
     def path(self) -> str:
         return self.__path
+
+    @property
+    def processed_labels(self) -> Optional[DataFrame]:
+        if not self.__loaded_processed_labels:
+            self.__load_processed_labels()
+            self.__loaded_processed_labels = True
+        return self.__processed_labels
 
     @property
     def type(self) -> DatasetType:
@@ -122,7 +131,14 @@ class NIFTIDataset(Dataset):
     def patient(
         self,
         id: Union[int, str]) -> NIFTIPatient:
-        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=self.excluded_labels)
+        # Filter 'excluded-labels' and 'processed-labels' for the patient.
+        exc_df = self.excluded_labels
+        if exc_df is not None:
+            exc_df = exc_df[exc_df['patient-id'] == id]
+        proc_df = self.processed_labels
+        if proc_df is not None:
+            proc_df = proc_df[proc_df['patient-id'] == id]
+        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, processed_labels=proc_df)
     
     def __load_anon_index(self) -> None:
         filepath = os.path.join(self.__path, 'anon-index.csv')
@@ -168,6 +184,21 @@ class NIFTIDataset(Dataset):
                 return False
             else:
                 raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
+    
+    def __load_processed_labels(self) -> None:
+        filepath = os.path.join(self.__path, 'processed-labels.csv')
+        if os.path.exists(filepath):
+            self.__processed_labels = read_csv(filepath).astype({ 'patient-id': str })
+            self.__processed_labels = self.__processed_labels.sort_values(['patient-id', 'region'])
+
+            # Drop duplicates.
+            dup_cols = ['patient-id', 'region']
+            dup_df = self.__processed_labels[self.__processed_labels[dup_cols].duplicated()]
+            if len(dup_df) > 0:
+                logging.warning(f"Found {len(dup_df)} duplicate entries in 'processed-labels.csv', removing.")
+                self.__processed_labels = self.__processed_labels[~self.__processed_labels[dup_cols].duplicated()]
+        else:
+            self.__processed_labels = None
 
     def __str__(self) -> str:
         return self.__global_id

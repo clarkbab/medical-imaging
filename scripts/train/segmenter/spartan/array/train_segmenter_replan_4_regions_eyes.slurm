@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
@@ -31,7 +31,7 @@ MODEL_NAME="segmenter-replan-eyes"
 RESOLUTION="112"
 DATASET="PMCC-HN-REPLAN-EYES-$RESOLUTION"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.9
+WEIGHTS_IV_FACTOR_0=0.7
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 SCHEDULE_EPOCHS=200
 RESUME=False
@@ -39,7 +39,7 @@ LR_INIT=1e-4
 USE_WEIGHTS=True
 
 # Get run name.
-RANDOM_SEED=42
+RANDOM_SEED=44
 RUN_NAME="4-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"

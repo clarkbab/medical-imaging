@@ -4,8 +4,9 @@ import os
 import pandas as pd
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
-from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
+from mymi.postprocessing import interpolate_z, largest_cc_3D
 from mymi.regions import region_to_list
+from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
 class NIFTIPatient:
@@ -14,12 +15,14 @@ class NIFTIPatient:
         dataset: 'NIFTIDataset',
         id: PatientID,
         ct_from: Optional['NIFTIDataset'] = None,
-        excluded_labels: Optional[pd.DataFrame] = None):
+        excluded_labels: Optional[pd.DataFrame] = None,
+        processed_labels: Optional[pd.DataFrame] = None) -> None:
         self.__dataset = dataset
         self.__ct_from = ct_from
         self.__id = str(id)
-        self.__excluded_labels = excluded_labels[excluded_labels['patient-id'] == self.__id] if excluded_labels is not None else None
+        self.__excluded_labels = excluded_labels
         self.__global_id = f'{dataset} - {self.__id}'
+        self.__processed_labels = processed_labels
 
         # Check that patient ID exists.
         if ct_from is not None:
@@ -143,7 +146,9 @@ class NIFTIPatient:
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
         region: PatientRegions = 'all',
-        region_ignore_missing: bool = False) -> OrderedDict:
+        region_ignore_missing: bool = False,
+        process: bool = True,
+        **kwargs) -> OrderedDict:
         regions = region_to_list(region, literals={ 'all': self.list_regions(labels=labels) })
 
         data = {}
@@ -155,8 +160,22 @@ class NIFTIPatient:
                     raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
             path = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nii.gz')
             img = nib.load(path)
-            rdata = img.get_fdata()
-            data[region] = rdata.astype(bool)
+            rdata = img.get_fdata().astype(bool)
+
+            # Apply processing.
+            if process and self.__processed_labels is not None:
+                proc_df = self.__processed_labels
+                proc_df = proc_df[proc_df['region'] == region]
+                if len(proc_df) > 0: 
+                    proc = proc_df['processing'].iloc[0]
+                    if proc == 'interpolate-z':
+                        rdata = interpolate_z(rdata)
+                    elif proc == 'outlier':
+                        rdata = largest_cc_3D(rdata)
+                    else:
+                        raise ValueError(f"Unknown processing type '{proc}' for patient '{self}'.")
+
+            data[region] = rdata
         return data
 
     def __str__(self) -> str:
