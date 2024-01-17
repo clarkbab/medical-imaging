@@ -52,6 +52,10 @@ class Directories:
             os.makedirs(filepath)
         return filepath
 
+    @predictions.setter
+    def predictions(self, value):
+        self.__predictions = value
+
     @property
     def registrations(self):
         filepath = os.path.join(self.root, 'registrations')

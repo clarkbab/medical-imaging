@@ -130,7 +130,6 @@ def get_multi_segmenter_heatmap(
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing
-    label = patient.region_data(region=target_region)[target_region]
 
     # Get brain label if required.
     if use_crop == 'brain':
@@ -141,7 +140,7 @@ def get_multi_segmenter_heatmap(
 
     # Call base method.
     id = f'{dataset}:{pat_id}'
-    return get_multi_segmenter_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, target_region, layer, layer_spacing, brain_label=brain_label, device=device, id=id, **kwargs)
+    return get_multi_segmenter_heatmap_base(input, input_spacing, model, model_region, model_spacing, target_region, layer, layer_spacing, brain_label=brain_label, device=device, id=id, **kwargs)
 
 def load_multi_segmenter_heatmap(
     dataset: str,

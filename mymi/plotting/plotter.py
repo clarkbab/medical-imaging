@@ -21,7 +21,7 @@ from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size, is_region
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, register_image
-from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, Point3D
+from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, PatientID, Point3D
 from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 8
@@ -281,6 +281,7 @@ def __assert_view(view: int):
     assert view in (0, 1, 2)
 
 def plot_heatmap(
+    id: str,
     heatmap: np.ndarray,
     spacing: ImageSpacing3D,
     alpha_heatmap: float = 0.5,
@@ -622,7 +623,7 @@ def plot_region(
         if title is None:
             # Set default title.
             n_slices = size[view]
-            title = f"patient: {id}, slice: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
+            title = f"patient: {pat_id}, slice: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
 
         # Escape text if using latex.
         if latex:

@@ -9,7 +9,7 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction
 from mymi.regions import region_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientRegions
+from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientID, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotter import plot_heatmap as plot_heatmap_base
@@ -56,7 +56,7 @@ def plot_heatmap(
                 crop = pat.region_data(region=crop)[crop]
     
     # Plot.
-    plot_heatmap_base(heatmap, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_heatmap_base(pat_id, heatmap, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_region(
     dataset: str,

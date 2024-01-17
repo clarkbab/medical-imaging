@@ -64,12 +64,13 @@ CROP_MM="(300,400,500)"
 N_EPOCHS=1000
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/gradcam/nifti/create_heatmaps.py \
+python $SCRIPT_DIR/gradcam/nifti/create_multi_segmenter_heatmaps.py \
     --dataset $DATASET \
     --model $MODEL \
     --model_region $MODEL_REGION \
     --model_spacing $MODEL_SPACING \
     --region $REGION \
+    --target_region $TARGET_REGION \
     --layer $LAYER \
     --layer_spacing $LAYER_SPACING \
     --check_epochs $CHECK_EPOCHS \

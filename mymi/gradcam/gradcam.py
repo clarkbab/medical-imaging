@@ -17,7 +17,6 @@ from mymi.utils import arg_to_list
 def get_multi_segmenter_heatmap(
     input: np.ndarray,
     input_spacing: ImageSpacing3D,
-    label: np.ndarray,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
@@ -69,7 +68,6 @@ def get_multi_segmenter_heatmap(
     logging.info('resampling input')
     input_size = input.shape
     input = resample(input, spacing=input_spacing, output_spacing=model_spacing) 
-    label = resample(label, spacing=input_spacing, output_spacing=model_spacing) 
     input_size_after_resample = input.shape
 
     if use_crop == 'naive':
@@ -79,7 +77,6 @@ def get_multi_segmenter_heatmap(
         crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
         crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
         input = centre_crop_3D(input, crop)
-        label = centre_crop_3D(label, crop)
     elif use_crop == 'brain':
         assert brain_label is not None
         # Convert to voxel crop.
@@ -130,22 +127,17 @@ def get_multi_segmenter_heatmap(
 
     # Sum all foreground voxels for OAR of interest.
     pred_region = pred[target_channel]
-    use_pred_foreground = True
-    if use_pred_foreground:
-        # Apply thresholding.
-        pred_bin = pred.argmax(dim=0)
-        pred_bin = one_hot(pred_bin, num_classes=len(model_regions) + 1)
-        pred_bin = pred_bin.moveaxis(-1, 0)
-        pred_bin = pred_bin.type(torch.bool)
-        pred_region_bin = pred_bin[target_channel]
+    pred_bin = pred.argmax(dim=0)
+    pred_bin = one_hot(pred_bin, num_classes=len(model_regions) + 1)
+    pred_bin = pred_bin.moveaxis(-1, 0)
+    pred_bin = pred_bin.type(torch.bool)
+    pred_region_bin = pred_bin[target_channel]
 
-        # TODO: remove.
-        if save_tmp_files:
-            filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{model.name[1]}-{kwargs["id"]}-{target_region}-pred-region-bin.npz')
-            np.savez_compressed(filepath, data=pred_region_bin.detach().cpu().numpy())
-        y = pred_region[pred_region_bin].sum()
-    else:
-        y = pred_region[label].sum()
+    # TODO: remove.
+    if save_tmp_files:
+        filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{model.name[1]}-{kwargs["id"]}-{target_region}-pred-region-bin.npz')
+        np.savez_compressed(filepath, data=pred_region_bin.detach().cpu().numpy())
+    y = pred_region[pred_region_bin].sum()
 
     # Perform backward pass.
     logging.info('backward pass')

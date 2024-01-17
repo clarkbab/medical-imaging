@@ -85,8 +85,9 @@ def load_ct_summary(
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
-def get_patient_regions(
+def get_patient_regions_report(
     dataset: str,
+    use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> pd.DataFrame:
     # List patients.
     set = DICOMDataset(dataset)
@@ -97,26 +98,55 @@ def get_patient_regions(
         'patient-id': str,
         'region': str
     }
+    if not use_default_rtstruct:
+        cols['study-id'] = str
+        cols['series-id'] = str
     df = pd.DataFrame(columns=cols.keys())
 
     # Add rows.
     for pat_id in tqdm(pat_ids):
-        pat_regions = set.patient(pat_id).list_regions(use_mapping=use_mapping)
-        for pat_region in pat_regions:
-            data = {
-                'patient-id': pat_id,
-                'region': pat_region
-            }
-            df = append_row(df, data)
+        pat = set.patient(pat_id)
+        if use_default_rtstruct:
+            pat_regions = pat.list_regions(use_mapping=use_mapping)
+
+            for pat_region in pat_regions:
+                data = {
+                    'patient-id': pat_id,
+                    'region': pat_region
+                }
+                df = append_row(df, data)
+        else:
+            study_ids = pat.list_studies()
+            for study_id in study_ids:
+                study = pat.study(study_id)
+                series_ids = study.list_series('RTSTRUCT')
+                for series_id in series_ids:
+                    series = study.series(series_id, 'RTSTRUCT')
+                    pat_regions = series.list_regions(use_mapping=use_mapping)
+
+                    for pat_region in pat_regions:
+                        data = {
+                            'patient-id': pat_id,
+                            'study-id': study_id,
+                            'series-id': series_id,
+                            'region': pat_region
+                        }
+                        df = append_row(df, data)
 
     return df
 
 def create_patient_regions_report(
     dataset: str,
+    use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> None:
-    pr_df = get_patient_regions(dataset, use_mapping=use_mapping)
+    pr_df = get_patient_regions_report(dataset, use_default_rtstruct=use_default_rtstruct, use_mapping=use_mapping)
     set = DICOMDataset(dataset)
-    filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+    filename = 'region-count'
+    if use_default_rtstruct:
+        filename = f'{filename}-default'
+    if use_mapping:
+        filename = f'{filename}-mapped'
+    filename = f'{filename}.csv'
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pr_df.to_csv(filepath, index=False)
@@ -124,9 +154,15 @@ def create_patient_regions_report(
 def load_patient_regions_report(
     dataset: str,
     exists_only: bool = False,
+    use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> Union[DataFrame, bool]:
     set = DICOMDataset(dataset)
-    filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
+    filename = 'region-count'
+    if use_default_rtstruct:
+        filename = f'{filename}-default'
+    if use_mapping:
+        filename = f'{filename}-mapped'
+    filename = f'{filename}.csv'
     filepath = os.path.join(set.path, 'reports', filename)
     if os.path.exists(filepath):
         if exists_only:

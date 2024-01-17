@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -42,13 +42,13 @@ CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
 WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=True
+RESUME=False
 LR_INIT=1e-3
 USE_WEIGHTS=False
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=50
+RANDOM_SEED=57
 RUN_NAME_BASE="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
