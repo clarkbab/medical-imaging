@@ -101,6 +101,7 @@ def get_patient_regions_report(
     if not use_default_rtstruct:
         cols['study-id'] = str
         cols['series-id'] = str
+        cols['rtstruct-id'] = str
     df = pd.DataFrame(columns=cols.keys())
 
     # Add rows.
@@ -122,16 +123,20 @@ def get_patient_regions_report(
                 series_ids = study.list_series('RTSTRUCT')
                 for series_id in series_ids:
                     series = study.series(series_id, 'RTSTRUCT')
-                    pat_regions = series.list_regions(use_mapping=use_mapping)
+                    rtstruct_ids = series.list_rtstructs()
+                    for rtstruct_id in rtstruct_ids:
+                        rtstruct = series.rtstruct(rtstruct_id) 
+                        pat_regions = rtstruct.list_regions(use_mapping=use_mapping)
 
-                    for pat_region in pat_regions:
-                        data = {
-                            'patient-id': pat_id,
-                            'study-id': study_id,
-                            'series-id': series_id,
-                            'region': pat_region
-                        }
-                        df = append_row(df, data)
+                        for pat_region in pat_regions:
+                            data = {
+                                'patient-id': pat_id,
+                                'study-id': study_id,
+                                'series-id': series_id,
+                                'rtstruct-id': rtstruct_id,
+                                'region': pat_region
+                            }
+                            df = append_row(df, data)
 
     return df
 
