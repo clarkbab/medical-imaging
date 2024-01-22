@@ -71,6 +71,9 @@ class RTSTRUCTSeries(DICOMSeries):
     def list_rtstructs(self) -> List[SOPInstanceUID]:
         return list(sorted(self.__index.index))
 
+    def region_data(self, *args, **kwargs):
+        return self.default_rtstruct.region_data(*args, **kwargs)
+
     def rtstruct(
         self,
         id: SOPInstanceUID) -> RTSTRUCT:

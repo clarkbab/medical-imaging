@@ -42,7 +42,7 @@ SHORT_REGIONS=(
 )
 MODEL_REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-#TARGET_REGION=<set by --export=ALL,REGION=...>
+#TARGET_REGION=<set by --export=ALL,TARGET_REGION=...>
 
 # Dataset.
 RESOLUTION="112"
@@ -50,11 +50,16 @@ DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 
 # Define model.
 MODEL_NAME="segmenter-pmcc-numbers-v3"
-#RANDOM_SEED=42
-if [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
-    RUN_NAME="2-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+if [[ $SLURM_ARRAY_TASK_ID -eq 3 ]]; then
+    RANDOM_SEED=45
+elif [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
+    RANDOM_SEED=48
 else
-    RUN_NAME="2-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+    RANDOM_SEED=42
+fi
+RUN_NAME="2-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+if [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
+    RUN_NAME="$RUN_NAME-lr-1e-4"
 fi
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 MODEL_SPACING="(1,1,2)"
@@ -66,12 +71,12 @@ TEST_FOLD=0
 USE_LOADER_SPLIT_FILE=False
 
 # Define layers.
-#LAYER="['5','12','19','26','33','40','47','54','61']"
-#LAYER_SPACING="[(1,1,2),(2,2,4),(4,4,8),(8,8,16),(16,16,32),(8,8,16),(4,4,8),(2,2,4),(1,1,2)]"
+LAYER="['5','12','19','26','33','40','47','54','61']"
+LAYER_SPACING="[(1,1,2),(2,2,4),(4,4,8),(8,8,16),(16,16,32),(8,8,16),(4,4,8),(2,2,4),(1,1,2)]"
 #LAYER="['5','12','19','26','33']"
 #LAYER_SPACING="[(1,1,2),(2,2,4),(4,4,8),(8,8,16),(16,16,32)]"
-LAYER="['33']"
-LAYER_SPACING="[(16,16,32)]"
+#LAYER="['33']"
+#LAYER_SPACING="[(16,16,32)]"
 
 # Other params.
 CHECK_EPOCHS=True

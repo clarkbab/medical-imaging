@@ -74,6 +74,7 @@ def create_multi_segmenter_heatmaps(
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     load_all_samples: bool = False,
     n_folds: Optional[int] = None,
+    n_pats: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,
     **kwargs: Dict[str, Any]) -> None:
@@ -98,12 +99,16 @@ def create_multi_segmenter_heatmaps(
     _, _, test_loader = MultiLoader.build_loaders(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=model_region, test_fold=test_fold, use_split_file=use_loader_split_file) 
 
     # Make predictions.
+    n_pat_count = 0
     for pat_desc_b in tqdm(iter(test_loader)):
         if type(pat_desc_b) == torch.Tensor:
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
             dataset, pat_id = pat_desc.split(':')
             create_multi_segmenter_heatmap(dataset, pat_id, model, model_region, model_spacing, target_region, layer, layer_spacing, device=device, **kwargs)
+            n_pat_count += 1
+            if n_pats is not None and n_pat_count >= n_pats:
+                return
 
 def get_multi_segmenter_heatmap(
     dataset: str,

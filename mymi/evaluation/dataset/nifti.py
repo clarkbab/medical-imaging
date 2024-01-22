@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import torch
 from tqdm import tqdm
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi.dataset import NIFTIDataset
@@ -311,7 +311,8 @@ def get_multi_segmenter_heatmap_evaluation(
     model: ModelName,
     target_region: PatientRegions,
     layer: Union[str, List[str]],
-    aux_region: PatientRegions) -> List[List[List[Dict[str, float]]]]:
+    aux_region: PatientRegions) -> List[List[Tuple[Dict[str, float], List[Dict[str, float]]]]]:
+    aux_regions = region_to_list(aux_region)
 
     # Load region data.
     set = NIFTIDataset(dataset)
@@ -329,16 +330,17 @@ def get_multi_segmenter_heatmap_evaluation(
             heatmaps_full = [heatmaps_full]
 
         # Process each layer.
-        layer_region_metrics = []
+        layer_metrics = []
         for layer, heatmap_full in zip(layers, heatmaps_full):
             # Remove '-1' values - added to ensure heatmap is same size as CT but shoudln't be used for metric calculation.
             heatmap = heatmap_full[heatmap_full >= 0]
 
-            # Store max activation for normalisation.
-            max_act = heatmap.max()
+            # Calculate sum/max activation.
+            layer_metrics_global = {}
+            layer_metrics_global['max-act'] = heatmap.max()
+            layer_metrics_global['sum-act'] = heatmap.sum()
 
             # Process each auxiliary region.
-            aux_regions = region_to_list(aux_region)
             aux_region_metrics = []
             for aux_region in aux_regions:
                 if aux_region not in region_data:
@@ -349,27 +351,28 @@ def get_multi_segmenter_heatmap_evaluation(
                 label = label[heatmap_full >= 0]
                 dist = heatmap[label]
 
-                metrics = {}
-
                 # Calculate metrics.
                 metric_names = [
-                    'mean',
-                    'max',
-                    'mean-norm',
-                    'max-norm'
+                    'max-act',
+                    'n-voxels',
+                    'sum-act'
                 ]
                 metric_values = [
-                    dist.mean(),
                     dist.max(),
-                    dist.mean() / max_act,
-                    dist.max() / max_act
+                    int(label.sum()),
+                    dist.sum()
                 ]
+                metrics = {}
                 for name, value in zip(metric_names, metric_values):
                     metrics[name] = value
 
                 aux_region_metrics.append(metrics)
-            layer_region_metrics.append(aux_region_metrics)
-        target_region_metrics.append(layer_region_metrics)
+
+            # Combine layer global metrics (e.g. max activation across entire heatmap) with
+            # auxiliary region metrics (e.g. max activation in a specific region).
+            combined_metrics = (layer_metrics_global, aux_region_metrics)
+            layer_metrics.append(combined_metrics)
+        target_region_metrics.append(layer_metrics)
 
     return target_region_metrics
 
@@ -684,7 +687,21 @@ def create_multi_segmenter_heatmap_evaluation(
             aux_regions_pat = pat.list_regions(only=aux_regions)
 
             for target_region, layer_metrics in zip(target_regions, target_region_metrics):
-                for layer, aux_region_metrics in zip(layers, layer_metrics):
+                for layer, (layer_global_metrics, aux_region_metrics) in zip(layers, layer_metrics):
+                    # Add global metrics (e.g. max activation across entire heatmap).
+                    for metric, value in layer_global_metrics.items():
+                        data = {
+                            'fold': test_fold if test_fold is not None else np.nan,
+                            'dataset': dataset,
+                            'patient-id': pat_id,
+                            'target-region': target_region,
+                            'layer': layer,
+                            'aux-region': None,
+                            'metric': metric,
+                            'value': value
+                        }
+                        df = append_row(df, data)
+
                     for aux_region, metrics in zip(aux_regions_pat, aux_region_metrics):
                         for metric, value in metrics.items():
                             data = {
@@ -1036,7 +1053,7 @@ def load_multi_segmenter_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+            raise ValueError(f"Multi-segmenter evaluation not found for model '{model}', dataset '{dataset}' and region '{region}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df

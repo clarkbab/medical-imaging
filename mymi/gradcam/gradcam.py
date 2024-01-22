@@ -59,10 +59,14 @@ def get_multi_segmenter_heatmap(
             gradients[layer] = output.detach().cpu().numpy()
         return hook
 
+    activation_handles = []
+    gradient_handles = []
     for layer_name in layers:
         layer = model.network.layers._modules[layer_name].layer
-        layer.register_forward_hook(get_activations(layer_name))
-        layer.register_full_backward_hook(get_gradients(layer_name))
+        handle = layer.register_forward_hook(get_activations(layer_name))
+        activation_handles.append(handle)
+        handle = layer.register_full_backward_hook(get_gradients(layer_name))
+        gradient_handles.append(handle)
 
     # Resample input to model spacing.
     logging.info('resampling input')
@@ -207,6 +211,16 @@ def get_multi_segmenter_heatmap(
             np.savez_compressed(filepath, data=heatmap)
 
         heatmaps.append(heatmap)
+
+        
+    # Remove hooks - otherwise calling this function multiple times with the same model
+    # will cause the hooks to be registered multiple times. Each hook contains a reference
+    # to 'activations' and 'gradients' so these will not be garbage collected, and memory
+    # will grow...
+    for handle in activation_handles:
+        handle.remove()
+    for handle in gradient_handles:
+        handle.remove()
 
     if len(heatmaps) == 0:
         return heatmaps[0]

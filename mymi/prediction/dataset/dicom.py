@@ -26,6 +26,7 @@ def create_all_multi_segmenter_predictions(
     region: PatientRegions,
     model: Union[ModelName, Model],
     model_spacing: ImageSpacing3D,
+    restart_pat_id: Optional[PatientID] = None,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model', 'model_spacing'), (dataset, region, model, model_spacing))
@@ -60,6 +61,10 @@ def create_all_multi_segmenter_predictions(
     for dataset in tqdm(datasets):
         set = DICOMDataset(dataset)
         pat_ids = set.list_patients()
+
+        if restart_pat_id is not None:
+            idx = pat_ids.index(str(restart_pat_id))
+            pat_ids = pat_ids[idx:]
         
         for pat_id in tqdm(pat_ids, leave=False):
             logging.info(f"Predicting '{dataset}:{pat_id}'.")
@@ -150,17 +155,17 @@ def get_multi_segmenter_prediction(
 
     # Apply 'brain' cropping.
     assert crop_mm is not None
+    if crop_mm is None:
+        raise ValueError(f"'crop_mm' must be passed for 'Brain' cropping.")
+
     # Convert to voxel crop.
-    # crop_mm = (300, 400, 500)
     crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
 
     # Get brain extent.
     localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-    check_epochs = True
-    n_epochs = 150
     brain_pred_exists = load_localiser_prediction(dataset, pat_id, localiser, exists_only=True)
     if not brain_pred_exists:
-        create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
+        create_localiser_prediction(dataset, pat_id, localiser, check_epochs=False, device=device)
     brain_label = load_localiser_prediction(dataset, pat_id, localiser)
     brain_label = resample(brain_label, spacing=input_spacing, output_spacing=model_spacing)
     brain_extent = get_extent(brain_label)
@@ -206,6 +211,29 @@ def get_multi_segmenter_prediction(
 
     # Resample to original spacing/size.
     pred = resample_list(pred, output_size=input_size, output_spacing=input_spacing, spacing=model_spacing)
+
+    return pred
+
+def load_multi_segmenter_prediction(
+    dataset: str,
+    pat_id: PatientID,
+    model: ModelName,
+    exists_only: bool = False,
+    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
+    pat_id = str(pat_id)
+    model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'pred.npz')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
+    pred = np.load(filepath)['data']
 
     return pred
 

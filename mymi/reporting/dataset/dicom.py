@@ -9,14 +9,14 @@ from typing import List, Union
 from mymi.dataset.dicom import DICOMDataset
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
-from mymi import types
+from mymi.types import Model, PatientRegions
 from mymi.utils import append_row, encode
 
 def create_evaluation_report(
     name: str,
     dataset: str,
-    localiser: types.Model,
-    segmenter: types.Model,
+    localiser: Model,
+    segmenter: Model,
     region: str) -> None:
     # Save report.
     eval_df = evaluate_model(dataset, localiser, segmenter, region)
@@ -28,7 +28,7 @@ def create_evaluation_report(
 
 def get_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> pd.DataFrame:
+    regions: PatientRegions = 'all') -> pd.DataFrame:
     # Get patients.
     set = DICOMDataset(dataset)
     pats = set.list_patients(regions=regions)
@@ -68,7 +68,7 @@ def get_ct_summary(
 
 def create_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     # Get summary.
     df = get_ct_summary(dataset, regions=regions)
 
@@ -80,7 +80,7 @@ def create_ct_summary(
 
 def load_ct_summary(
     dataset: str,
-    regions: types.PatientRegions = 'all') -> None:
+    regions: PatientRegions = 'all') -> None:
     set = DICOMDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
@@ -204,7 +204,7 @@ def get_mapped_duplicates(dataset: str) -> DataFrame:
 def region_overlap(
     dataset: str,
     clear_cache: bool = True,
-    regions: types.PatientRegions = 'all') -> int:
+    regions: PatientRegions = 'all') -> int:
     # List regions.
     set = DICOMDataset(dataset)
     regions_df = set.list_regions(clear_cache=clear_cache) 
@@ -228,14 +228,11 @@ def region_overlap(
     regions_df = regions_df[regions_df.apply(filter_fn, axis=1)]
     return len(regions_df) 
 
-def region_summary(
+def get_region_summary(
     dataset: str,
-    regions: List[str]) -> pd.DataFrame:
-    """
-    returns: stats on region shapes.
-    """
+    region: PatientRegions) -> pd.DataFrame:
     set = DICOMDataset(dataset)
-    pats = set.list_patients(regions=regions)
+    pat_ids = set.list_patients(region=region)
 
     cols = {
         'patient': str,
@@ -255,9 +252,10 @@ def region_summary(
         for axis in axes:
             data[region][axis] = []
 
-    for pat in tqdm(pats):
+    for pat_id in tqdm(pat_ids):
         # Get spacing.
-        spacing = set.patient(pat).ct_spacing()
+        pat = set.patient(pat_id)
+        spacing = pat.ct_spacing()
 
         # Get region data.
         pat_regions = set.patient(pat).list_regions(whitelist=regions)

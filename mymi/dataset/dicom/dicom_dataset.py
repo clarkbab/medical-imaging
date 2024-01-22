@@ -31,7 +31,7 @@ class DICOMDataset(Dataset):
         self.__name = name
         self.__path = os.path.join(config.directories.datasets, 'dicom', self.__name)
         if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset 'DICOM: {self.__name}' not found.")
+            raise ValueError(f"Dataset 'DICOM: {self.__name}' not found. Filepath: {self.__path}.")
         ct_from_name = None
         for f in os.listdir(self.__path):
             match = re.match(CT_FROM_REGEXP, f)

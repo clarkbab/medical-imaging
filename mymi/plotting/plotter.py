@@ -284,7 +284,8 @@ def plot_heatmap(
     id: str,
     heatmap: np.ndarray,
     spacing: ImageSpacing3D,
-    alpha_heatmap: float = 0.5,
+    alpha_heatmap: float = 0.7,
+    alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
@@ -298,11 +299,14 @@ def plot_heatmap(
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    linestyle_region: bool = 'solid',
+    linestyle_pred: str = 'solid',
+    linestyle_region: str = 'solid',
+    pred_data: Optional[Dict[str, np.ndarray]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
     show_legend: bool = True,
+    show_pred_boundary: bool = True,
     show_region_extent: bool = True,
     slice_idx: Optional[int] = None,
     view: Axis = 0, 
@@ -313,6 +317,8 @@ def plot_heatmap(
     if ax is None:
         plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
+    else:
+        show = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -336,7 +342,7 @@ def plot_heatmap(
         slice_idx = extent[extent_end][view]
 
     # Plot patient regions.
-    size = ct_data.shape
+    size = heatmap.shape
     plot_region(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
@@ -362,22 +368,33 @@ def plot_heatmap(
     # Plot heatmap
     ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_origin(view))
 
-    # # Plot prediction.
-    # if pred_slice_data.sum() != 0: 
-    #     cmap = ListedColormap(((1, 1, 1, 0), colour))
-    #     ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
-    #     ax.plot(0, 0, c=colour, label=model_name)
-    #     if show_pred_contour:
-    #         ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+    # Plot predictions.
+    if pred_data is not None:
+        for pred_label, pred in pred_data.items():
+            if pred.sum() != 0:
+                # Get slice data.
+                pred_slice_data = __get_slice_data(pred, slice_idx, view)
 
-    # # Plot prediction extent.
-    # if pred.sum() != 0 and show_pred_extent:
-    #     # Get prediction extent.
-    #     pred_extent = get_extent(pred)
+                # Crop the image.
+                if crop:
+                    pred_slice_data = crop_2D(pred_slice_data, __reverse_box_coords_2D(crop))
 
-    #     # Plot if extent box is in view.
-    #     label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
-    #     __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+                # Plot prediction.
+                if pred_slice_data.sum() != 0: 
+                    cmap = ListedColormap(((1, 1, 1, 0), colour))
+                    ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+                    ax.plot(0, 0, c=colour, label=pred_label)
+                    if show_pred_boundary:
+                        ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+
+            # Plot prediction extent.
+            if pred.sum() != 0 and show_pred_extent:
+                # Get prediction extent.
+                pred_extent = get_extent(pred)
+
+                # Plot if extent box is in view.
+                label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
+                __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
 
     # Show legend.
     if show_legend:
@@ -439,6 +456,8 @@ def plot_region(
     show_extent: bool = False,
     show_legend: bool = True,
     show_title: bool = True,
+    show_title_slice: bool = True,
+    show_title_view: bool = True,
     show_x_label: bool = True,
     show_x_ticks: bool = True,
     show_y_label: bool = True,
@@ -623,7 +642,11 @@ def plot_region(
         if title is None:
             # Set default title.
             n_slices = size[view]
-            title = f"patient: {pat_id}, slice: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
+            title = f"patient: {id}"
+            if show_title_slice:
+                title = f"{title}, slice: {slice_idx}/{n_slices - 1}"
+            if show_title_view:
+                title = f"{title} ({__view_to_text(view)} view)"
 
         # Escape text if using latex.
         if latex:
@@ -680,7 +703,7 @@ def plot_localiser_prediction(
     show_label_extent: bool = True,
     show_legend: bool = True,
     show_pred_centre: bool = True,
-    show_pred_contour: bool = True,
+    show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
     show_pred: bool = True,
     show_seg_patch: bool = True,
@@ -769,7 +792,7 @@ def plot_localiser_prediction(
         cmap = ListedColormap(colours)
         plt.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         plt.plot(0, 0, c=pred_colour, label='Loc. Prediction')
-        if show_pred_contour:
+        if show_pred_boundary:
             plt.contour(pred_slice_data, colors=[pred_colour], levels=[.5], linestyles=linestyle_pred)
 
     # Plot prediction extent.
@@ -915,7 +938,6 @@ def plot_multi_segmenter_prediction(
     alpha_region: float = 0.5,
     aspect: float = None,
     ax: Optional[Axes] = None,
-
     centre_of: Optional[str] = None,
     colour: Optional[Union[str, List[str]]] = None,
     colour_match: bool = False,
@@ -935,7 +957,7 @@ def plot_multi_segmenter_prediction(
     show: bool = True,
     show_legend: bool = True,
     show_pred: bool = True,
-    show_pred_contour: bool = True,
+    show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
     show_region_extent: bool = True,
     slice_idx: Optional[int] = None,
@@ -1033,7 +1055,7 @@ Prediction: {model_name}""")
                 cmap = ListedColormap(((1, 1, 1, 0), colour))
                 ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
                 ax.plot(0, 0, c=colour, label=model_name)
-                if show_pred_contour:
+                if show_pred_boundary:
                     ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
 
         # Plot prediction extent.
@@ -1098,7 +1120,7 @@ def plot_segmenter_prediction(
     show_legend: bool = True,
     show_loc_centre: bool = True,
     show_pred: bool = True,
-    show_pred_contour: bool = True,
+    show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
     show_pred_patch: bool = False,
     show_region_extent: bool = True,
@@ -1201,7 +1223,7 @@ Prediction: {model_name}""")
                 cmap = ListedColormap(((1, 1, 1, 0), colour))
                 ax.imshow(pred_slice_data, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
                 ax.plot(0, 0, c=colour, label=model_name)
-                if show_pred_contour:
+                if show_pred_boundary:
                     ax.contour(pred_slice_data, colors=[colour], levels=[.5], linestyles=linestyle_pred)
 
         # Plot prediction extent.
@@ -1727,6 +1749,8 @@ def plot_dataframe_v2(
                     if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
                         vals_a = x_pivot_df[y][hue_l]
                         vals_b = x_pivot_df[y][hue_r]
+                        if np.any(vals_a.isna()) or np.any(vals_b.isna()):
+                            raise ValueError(f"Unpaired data for x ({x}={x_val}) and hues ({hue}=({hue_l},{hue_r})).")
                         if not stats_paired:
                             vals_a = vals_a[~vals_a.isna()]
                             vals_b = vals_b[~vals_b.isna()]

@@ -38,15 +38,27 @@ CW_FACTOR_0=2
 CW_FACTOR="[$CW_FACTOR_0,0]"
 CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.7
+WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-RESUME=False
+RESUME=True
+RESUME_CKPT='loss=-0.025112-epoch=319-step=0'   # BL,seed=43
+RESUME_CKPT='loss=-0.024804-epoch=260-step=0'   # SC,seed=44
+RESUME_CKPT='loss=-0.025247-epoch=270-step=0'   # SC,seed=46
+RESUME_CKPT='loss=-0.022958-epoch=209-step=0'   # SC,seed=48
+RESUME_CKPT='loss=-0.021604-epoch=208-step=0'   # SC,seed=49
+RESUME_CKPT='loss=-0.020665-epoch=207-step=0'   # SC,seed=50
+RESUME_CKPT='loss=-0.023530-epoch=102-step=0'   # SC,seed=51
+RESUME_CKPT='loss=-0.021203-epoch=93-step=0'    # SC,seed=52
+RESUME_CKPT='loss=-0.022631-epoch=99-step=0'    # SC,seed=53
+RESUME_CKPT='loss=-0.022896-epoch=95-step=0'    # SC,seed=54
+RESUME_CKPT='loss=-0.018279-epoch=87-step=0'    # SC,seed=55
+RESUME_CKPT='loss=-0.016548-epoch=65-step=0'    # SC,seed=57
 LR_INIT=1e-3
 USE_WEIGHTS=True
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=44
+RANDOM_SEED=55
 RUN_NAME_BASE="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
@@ -61,7 +73,6 @@ N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False
 LOAD_ALL_SAMPLES=True

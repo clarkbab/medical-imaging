@@ -34,7 +34,7 @@ SHORT_REGIONS=(
 )
 MODEL_REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-#REGION=<set by --export=ALL,REGION=...>
+#TARGET_REGION=<set by --export=ALL,TARGET_REGION=...>
 
 # Dataset.
 RESOLUTION="112"
@@ -42,9 +42,15 @@ DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 
 # Define model.
 MODEL_NAME="segmenter-pmcc-numbers-v3"
-RANDOM_SEED=42
+if [[ $SLURM_ARRAY_TASK_ID -eq 2 ]]; then
+    RANDOM_SEED=50
+else
+    RANDOM_SEED=42
+fi
 RUN_NAME="4-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-#RUN_NAME="4-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+if [[ $SLURM_ARRAY_TASK_ID -eq 2 ]]; then
+    RUN_NAME="$RUN_NAME-lr-1e-4"
+fi
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 MODEL_SPACING="(1,1,2)"
 
@@ -55,8 +61,8 @@ TEST_FOLD=0
 USE_LOADER_SPLIT_FILE=False
 
 # Define layers.
-LAYER="['5','12','19','26','33']"
-LAYER_SPACING="[(1,1,2),(2,2,4),(4,4,8),(8,8,16),(16,16,32)]"
+LAYER="['5','12','19','26','33','40','47','54','61']"
+LAYER_SPACING="[(1,1,2),(2,2,4),(4,4,8),(8,8,16),(16,16,32),(8,8,16),(4,4,8),(2,2,4),(1,1,2)]"
 
 # Other params.
 CHECK_EPOCHS=True
@@ -69,7 +75,6 @@ python $SCRIPT_DIR/gradcam/nifti/create_multi_segmenter_heatmaps.py \
     --model $MODEL \
     --model_region $MODEL_REGION \
     --model_spacing $MODEL_SPACING \
-    --region $REGION \
     --target_region $TARGET_REGION \
     --layer $LAYER \
     --layer_spacing $LAYER_SPACING \

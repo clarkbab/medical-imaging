@@ -1311,7 +1311,7 @@ def load_multi_segmenter_prediction_dict(
     model: ModelName,
     model_region: PatientRegions,
     **kwargs) -> Union[Dict[str, np.ndarray], bool]:
-    model_regions = arg_to_list(model_region, str)
+    model_regions = region_to_list(model_region)
 
     # Load prediction.
     pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
@@ -1321,7 +1321,7 @@ def load_multi_segmenter_prediction_dict(
 
     # Convert to dict.
     data = {}
-    for i, region in enumerate(model_region):
+    for i, region in enumerate(model_regions):
         region_pred = pred[i + 1]
         data[region] = region_pred
 

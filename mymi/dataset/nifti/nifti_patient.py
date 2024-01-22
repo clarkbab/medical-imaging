@@ -116,6 +116,8 @@ class NIFTIPatient:
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
         only: Optional[PatientRegions] = None) -> List[str]:
+        only = region_to_list(only)
+
         # Find regions by file names.
         dirpath = os.path.join(self.__dataset.path, 'data', 'regions')
         folders = os.listdir(dirpath)
@@ -134,7 +136,6 @@ class NIFTIPatient:
 
         # Filter on 'only'.
         if only is not None:
-            only = arg_to_list(only, str)
             regions = [r for r in regions if r in only]
 
         # Sort regions.
