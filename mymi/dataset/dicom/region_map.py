@@ -24,14 +24,15 @@ class RegionMap:
             for col in cols:
                 if col in df.columns:
                     def split_fn(e: Union[float, int, str]) -> List[str]:
-                        if type(e) is float and np.isnan(e):
-                            return []
-                        elif type(e) is str:
+                        if isinstance(e, float):
+                            if np.isnan(e):         # Handle empty cells.
+                                return []
+                            else:                   # Handle patient IDs parsed as floats by pandas.
+                                return [str(int(e))]
+                        elif isinstance(e, str):   # Split comma-separated patient IDs.
                             return e.split(',')
-                        elif type(e) is int:
-                            return [str(e)]
                         else:
-                            assert False
+                            raise ValueError(f"Can't split unrecognised type '{type(e)}'.")
                     df[col] = df[col].apply(split_fn)
                 else:
                     df[col] = [[]] * len(df)
@@ -58,13 +59,12 @@ class RegionMap:
         match = None
         priority = -np.inf
         for _, row in self.__data.iterrows():
-            # Check 'only'/'except' to see if rule applies to this patient.
-            # Check if the rule applies to this specific patient.
+            # Check only/except rules that map regions to specific patients.
             excpt = row['except']
             if pat_id in excpt:
                 continue
             only = row['only']
-            if len(only) > 0 and pat_id not in only:
+            if len(only) > 0 and pat_id not in only: 
                 continue
 
             # Add case sensitivity to regexp match args.
