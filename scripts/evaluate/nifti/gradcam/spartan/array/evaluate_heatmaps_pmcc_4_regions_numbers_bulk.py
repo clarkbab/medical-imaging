@@ -3,10 +3,8 @@ import subprocess
 dry_run = False
 
 model_idxs = list(range(5))
-model_idxs = [0, 1, 2]
 target_region_idxs = list(range(4))
-# target_region_idxs = [0, 1]
-script = 'scripts/gradcam/nifti/spartan/array/heatmaps_pmcc_4_regions_numbers.slurm'
+script = 'scripts/evaluate/nifti/gradcam/spartan/array/evaluate_heatmaps_pmcc_4_regions_numbers.slurm'
 
 # Bash doesn't support nested arrays so we have to do this here.
 TARGET_REGIONS = [

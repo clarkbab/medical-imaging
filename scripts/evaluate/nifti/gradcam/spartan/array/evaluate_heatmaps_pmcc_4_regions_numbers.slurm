@@ -1,12 +1,13 @@
 #!/bin/bash
 #SBATCH --account punim1413
+#SBATCH --partition cascade
 ##SBATCH --qos feit
 ##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 120G
-#SBATCH --gres gpu:1
+##SBATCH --gres gpu:1
 #SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
@@ -19,30 +20,22 @@ echo $version
 
 # Set regions.
 REGIONS=(
-    "['BrachialPlexus_L','BrachialPlexus_R']"   # 0
-    "['Brain','OralCavity']"                    # 1
-    "['BrainStem','Mandible']"                  # 2
-    "['Cochlea_L','Cochlea_R']"                 # 3
-    "['Lens_L','Lens_R']"                       # 4
-    "['OpticNerve_L','OpticNerve_R']"           # 5
-    "['Parotid_L','Parotid_R']"                 # 6
-    "['SpinalCord','BrainStem']"                # 7
-    "['Submandibular_L','Submandibular_R']"     # 8
+    "['BrachialPlexus_L','BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"     # 0
+    "['Brain','OralCavity','BrainStem','Mandible']"                             # 1
+    "['Cochlea_L','Cochlea_R','Lens_L','Lens_R']"                               # 2
+    "['Parotid_L','Parotid_R','Submandibular_L','Submandibular_R']"             # 3
+    "['SpinalCord','BrainStem','Parotid_L','Parotid_R']"                        # 4
 )
 SHORT_REGIONS=(
-    "BL_BR"
-    "B_OC"  
-    "BS_M"
-    "CL_CR"
-    "LL_LR"
-    "OL_OR"
-    "PL_PR"
-    "SC"
-    "SL_SR"
+    'BL_BR_OL_OR'
+    'B_OC_BS_M'  
+    'CL_CR_LL_LR'
+    'PL_PR_SL_SR'
+    'SC'
 )
 MODEL_REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-#TARGET_REGION=<set by --export=ALL,REGION=...>
+#TARGET_REGION=<set by --export=ALL,TARGET_REGION=...>
 
 # Dataset.
 RESOLUTION="112"
@@ -50,15 +43,13 @@ DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 
 # Define model.
 MODEL_NAME="segmenter-pmcc-numbers-v3"
-if [[ $SLURM_ARRAY_TASK_ID -eq 3 ]]; then
-    RANDOM_SEED=45
-elif [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
-    RANDOM_SEED=48
+if [[ $SLURM_ARRAY_TASK_ID -eq 2 ]]; then
+    RANDOM_SEED=50
 else
     RANDOM_SEED=42
 fi
-RUN_NAME="2-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-if [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
+RUN_NAME="4-regions-$MODEL_SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
+if [[ $SLURM_ARRAY_TASK_ID -eq 2 ]]; then
     RUN_NAME="$RUN_NAME-lr-1e-4"
 fi
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"

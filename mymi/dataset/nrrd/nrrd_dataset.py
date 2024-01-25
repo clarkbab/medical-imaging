@@ -15,10 +15,10 @@ class NRRDDataset(Dataset):
         self,
         name: str):
         self.__global_id = f"NRRD: {name}"
-        self.__anon_index = None                # Lazy-loaded.
+        self.__origin_index = None                # Lazy-loaded.
         self.__excluded_labels = None          # Lazy-loaded.
         self.__group_index = None               # Lazy-loaded.
-        self.__loaded_anon_index = False
+        self.__loaded_origin_index = False
         self.__loaded_excluded_labels = False
         self.__loaded_group_index = False
         self.__name = name
@@ -27,11 +27,11 @@ class NRRDDataset(Dataset):
             raise ValueError(f"Dataset '{self}' not found.")
 
     @property
-    def anon_index(self) -> Optional[pd.DataFrame]:
-        if not self.__loaded_anon_index:
-            self.__load_anon_index()
-            self.__loaded_anon_index = True
-        return self.__anon_index
+    def origin_index(self) -> Optional[pd.DataFrame]:
+        if not self.__loaded_origin_index:
+            self.__load_origin_index()
+            self.__loaded_origin_index = True
+        return self.__origin_index
     
     @property
     def description(self) -> str:
@@ -93,12 +93,12 @@ class NRRDDataset(Dataset):
         id: Union[int, str]) -> NRRDPatient:
         return NRRDPatient(self, id, excluded_labels=self.excluded_labels)
     
-    def __load_anon_index(self) -> None:
-        filepath = os.path.join(self.__path, 'anon-index.csv')
+    def __load_origin_index(self) -> None:
+        filepath = os.path.join(self.__path, 'index.csv.csv')
         if os.path.exists(filepath):
-            self.__anon_index = pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
+            self.__origin_index = pd.read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
         else:
-            self.__anon_index = None
+            self.__origin_index = None
     
     def __load_excluded_labels(self) -> None:
         filepath = os.path.join(self.__path, 'excluded-labels.csv')

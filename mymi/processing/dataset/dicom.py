@@ -56,7 +56,7 @@ def convert_to_nifti(
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
-        df = DataFrame(pat_ids, columns=['patient-id']).reset_index().rename(columns={ 'index': 'anon-id' })
+        df = DataFrame(pat_ids, columns=['patient-id']).reset_index().rename(columns={ 'index': 'id' })
 
         # Save map.
         filepath = os.path.join(dicom_set.path, 'anon-nifti-map.csv')
@@ -125,7 +125,7 @@ def convert_to_nifti(
     filepath = os.path.join(nifti_set.path, f'__CONVERSION_TIME_MINS_{mins}__')
     Path(filepath).touch()
 
-def convert_to_nifti_multiple_studies(
+def convert_to_nifti_replan(
     dataset: str,
     dicom_dataset: Optional[str] = None,
     region: PatientRegions = 'all',
@@ -134,7 +134,7 @@ def convert_to_nifti_multiple_studies(
 
     # Create NIFTI dataset.
     nifti_set = recreate_nifti(dataset)
-    logging.arg_log('Converting dataset to NIFTI', ('dataset', 'regions', 'anonymise'), (dataset, regions, anonymise))
+    logging.arg_log('Converting replan dataset to NIFTI', ('dataset', 'regions', 'anonymise'), (dataset, regions, anonymise))
 
     # Get all patients.
     dicom_dataset = dataset if dicom_dataset is None else dicom_dataset
@@ -215,7 +215,7 @@ def convert_to_nifti_multiple_studies(
                 nib.save(img, filepath)
 
     if anonymise:
-        filepath = os.path.join(nifti_set.path, 'anon-index.csv') 
+        filepath = os.path.join(nifti_set.path, 'index.csv') 
         df.to_csv(filepath, index=False)
 
     # Indicate success.

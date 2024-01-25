@@ -52,6 +52,8 @@ def plot_heatmap(
     # Load predictions.
     if pred_region is not None:
         # Load segmenter prediction.
+        if model_region is None:
+            raise ValueError(f"'model_region' is required to load prediction for 'pred_region={pred_region}'.")
         pred_data = load_multi_segmenter_prediction_dict(dataset, pat_id, model, model_region)
         pred_data = dict((f'pred:{r}', p_data) for r, p_data in pred_data.items())
     else:
@@ -59,7 +61,21 @@ def plot_heatmap(
 
     if centre_of is not None:
         if isinstance(centre_of, str):
-            if region_data is None or centre_of not in region_data:
+            match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)
+            if match is not None:
+                assert match.group(2) is None
+                region_centre_of = match.group(3)
+                centre_of_tmp = centre_of
+                if pred_data is None:
+                    if model_region is None:
+                        raise ValueError(f"'model_region' is required to load prediction for 'centre_of={centre_of}'.")
+                    pred_data_centre_of = load_multi_segmenter_prediction_dict(dataset, pat_id, model, model_region) 
+                else:
+                    pred_data_centre_of = pred_data
+                centre_of = pred_data_centre_of[region_centre_of]
+                if centre_of.sum() == 0:
+                    raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'slice_idx' instead.")
+            elif region_data is None or centre_of not in region_data:
                 centre_of = pat.region_data(region=centre_of)[centre_of]
 
     if crop is not None:

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
-##SBATCH --partition gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
+#SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
@@ -42,8 +42,9 @@ WEIGHTS_IV_FACTOR_0=0.5
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 RESUME=True
 RESUME_CKPT='loss=-0.023075-epoch=715-step=0'   # 112,seed=42
+RESUME_CKPT='loss=-0.019919-epoch=574-step=0'   # 112,seed=42,weights=False
 LR_INIT=1e-3
-USE_WEIGHTS=True
+USE_WEIGHTS=False
 SCHEDULE_EPOCHS=200
 
 # Get run name.
