@@ -66,6 +66,10 @@ class RTSTRUCT(DICOMFile):
     @property
     def region_policy(self) -> pd.DataFrame:
         return self.__region_policy
+    
+    @property
+    def series(self) -> 'RTSTRUCTSeries':
+        return self.__series
 
     def get_rtstruct(self) -> dcm.dataset.FileDataset:
         return dcm.read_file(self.__path)
@@ -86,8 +90,9 @@ class RTSTRUCT(DICOMFile):
         # Map to internal names.
         if use_mapping and self.__region_map:
             pat_id = self.__series.study.patient.id
+            study_id = self.__series.study.id
             def map_name(info):
-                info['name'], _ = self.__region_map.to_internal(info['name'], pat_id=pat_id)
+                info['name'], _ = self.__region_map.to_internal(info['name'], pat_id=pat_id, study_id=study_id)
                 return info
             roi_info = dict((id, map_name(info)) for id, info in roi_info.items())
 
@@ -119,10 +124,11 @@ class RTSTRUCT(DICOMFile):
         # Map regions using 'region-map.csv'.
         if use_mapping:
             pat_id = self.__series.study.patient.id
+            study_id = self.__series.study.id
             # Store as ('unmapped region', 'mapped region', 'priority').
             mapped_regions = []
             for unmapped_region in unmapped_regions:
-                mapped_region, priority = self.__region_map.to_internal(unmapped_region, pat_id=pat_id)
+                mapped_region, priority = self.__region_map.to_internal(unmapped_region, pat_id=pat_id, study_id=study_id)
                 # Don't map regions that would map to an existing region name.
                 if mapped_region != unmapped_region and mapped_region in unmapped_regions:
                     logging.warning(f"Mapped region '{mapped_region}' (mapped from '{unmapped_region}') already found in unmapped regions for '{self}'. Skipping.")

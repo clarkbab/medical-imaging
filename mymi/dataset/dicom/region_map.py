@@ -5,7 +5,7 @@ import re
 from typing import List, Optional, Tuple, Union
 
 from mymi.regions import is_region
-from mymi.types import PatientID
+from mymi.types import PatientID, StudyID
 
 class RegionMap:
     def __init__(
@@ -19,8 +19,8 @@ class RegionMap:
             # Load file.
             df = pd.read_csv(filepath)
 
-            # Convert patient ID only/except to array.
-            cols = ['except', 'only']
+            # Convert special columns to lists.
+            cols = ['except', 'only', 'only-study']
             for col in cols:
                 if col in df.columns:
                     def split_fn(e: Union[float, int, str]) -> List[str]:
@@ -53,19 +53,26 @@ class RegionMap:
     def to_internal(
         self,
         region: str,
-        pat_id: Optional[PatientID] = None) -> Tuple[str, int]:
+        pat_id: Optional[PatientID] = None,
+        study_id: Optional[StudyID] = None) -> Tuple[str, int]:
+        pat_id = str(pat_id)
 
         # Iterate over map rows.
         match = None
         priority = -np.inf
         for _, row in self.__data.iterrows():
-            # Check only/except rules that map regions to specific patients.
-            excpt = row['except']
-            if pat_id in excpt:
-                continue
-            only = row['only']
-            if len(only) > 0 and pat_id not in only: 
-                continue
+            # Check except/only/only-study rules that map regions to specific patients.
+            if pat_id is not None:
+                excpt = row['except']
+                if pat_id in excpt:
+                    continue
+                only = row['only']
+                if len(only) > 0 and pat_id not in only: 
+                    continue
+                if study_id is not None:
+                    only_study = row['only-study']
+                    if len(only_study) > 0 and study_id not in only_study: 
+                        continue
 
             # Add case sensitivity to regexp match args.
             args = []

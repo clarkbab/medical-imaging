@@ -25,5 +25,6 @@ Point2D = Tuple[int, int]
 Point3D = Tuple[int, int, int]
 Box2D = Tuple[Point2D, Point2D]
 Box3D = Tuple[Point3D, Point3D]
+StudyID = str
 TrainingPartition = Literal['train', 'validation', 'test']
 TrainInterval = Union[int, str]
