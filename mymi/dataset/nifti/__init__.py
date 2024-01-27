@@ -13,7 +13,7 @@ def list() -> List[str]:
     else:
         return []
 
-def create(name: str) -> None:
+def create(name: str) -> NIFTIDataset:
     ds_path = os.path.join(config.directories.datasets, 'nifti', name)
     os.makedirs(ds_path)
     return NIFTIDataset(name)
@@ -23,6 +23,6 @@ def destroy(name: str) -> None:
     if os.path.exists(ds_path):
         shutil.rmtree(ds_path)
 
-def recreate(name: str) -> None:
+def recreate(name: str) -> NIFTIDataset:
     destroy(name)
     return create(name)

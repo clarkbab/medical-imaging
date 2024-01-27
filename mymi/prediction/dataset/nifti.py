@@ -647,9 +647,9 @@ def get_multi_segmenter_prediction(
 
     # Load patient CT data and spacing.
     set = NIFTIDataset(dataset)
-    patient = set.patient(pat_id)
-    input = patient.ct_data
-    input_spacing = patient.ct_spacing
+    pat = set.patient(pat_id)
+    input = pat.ct_data
+    input_spacing = pat.ct_spacing
 
     # Resample input to model spacing.
     input_size = input.shape
@@ -692,6 +692,76 @@ def get_multi_segmenter_prediction(
 
         # Crop input.
         input = crop_3D(input, crop)
+        
+    elif crop_type == 'lens-low':
+        # Convert to voxel crop.
+        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
+
+        # Get brain extent.
+        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+        if model_spacing is not None:
+            brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
+        brain_extent = get_extent(brain_label)
+        
+        # Find lowest point containing eye/lens.
+        min_z = np.inf
+        min_region = None
+        regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+        for region in regions:
+            if pat.has_region(region):
+                region_data = pat.region_data(region=region)[region]
+                region_extent = get_extent(region_data)
+                if region_extent[0][2] < min_z:
+                    min_z = region_extent[0][2]
+                    min_region = region
+
+        # Use brain extent for x/y and eye/lens extent for z.
+        crop_margin = 20 if 'Eye' in min_region else 30
+        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, min_z - crop_margin)
+
+        # Crop input.
+        crop = (
+            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
+            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
+        )
+        input = crop_3D(input, crop)
+
+    elif crop_type == 'lens-uniform':
+        # Convert to voxel crop.
+        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
+
+        # Get brain extent.
+        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+        if model_spacing is not None:
+            brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
+        brain_extent = get_extent(brain_label)
+
+        # Get extent centre of first available region.
+        centre_z = None
+        regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+        for region in regions:
+            if pat.has_region(region):
+                rdata = pat.region_data(region=region)[region]
+                extent_centre = get_extent_centre(rdata)
+                centre_z = extent_centre[2]
+                break
+
+        # Draw z from uniform distribution around 'centre_z'.
+        width_z = 30
+        min_z = centre_z - width_z / 2
+        max_z = centre_z + width_z / 2
+        crop_origin_z = np.random.uniform(min_z, max_z)
+        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, crop_origin_z)
+
+        # Crop input.
+        crop = (
+            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
+            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
+        )
+        input = crop_3D(input, crop)
+
     else:
         raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
 
@@ -843,11 +913,12 @@ def create_multi_segmenter_prediction(
     model: Union[ModelName, Model],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
+    crop_type: str = 'brain',
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
     model_name = model if isinstance(model, tuple) else model.name
-    logging.arg_log('Creating multi-segmenter prediction', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'device', 'savepath'), (dataset, pat_id, model_name, model_region, model_spacing, device, savepath))
+    logging.arg_log('Creating multi-segmenter prediction', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'crop_type', 'device', 'savepath'), (dataset, pat_id, model_name, model_region, model_spacing, crop_type, device, savepath))
     datasets = arg_to_list(dataset, str)
     pat_ids = arg_to_list(pat_id, str)
     assert len(datasets) == len(pat_ids)
@@ -872,11 +943,12 @@ def create_multi_segmenter_prediction(
         pat = set.patient(pat_id)
 
         # Make prediction.
-        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, **kwargs)
+        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, crop_type=crop_type, device=device, **kwargs)
 
         # Save segmentation.
         if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, 'pred.npz')
+            crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
+            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
@@ -1264,13 +1336,16 @@ def load_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     model: ModelName,
+    crop_type: str = 'brain',
     exists_only: bool = False,
-    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
+    use_model_manifest: bool = False,
+    **kwargs) -> Union[np.ndarray, bool]:
     pat_id = str(pat_id)
     model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
 
     # Load prediction.
-    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, 'pred.npz')
+    crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
+    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, f'pred{crop_type_str}.npz')
     if os.path.exists(filepath):
         if exists_only:
             return True

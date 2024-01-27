@@ -380,14 +380,15 @@ def get_multi_segmenter_evaluation(
     dataset: str,
     region: PatientRegions,
     pat_id: str,
-    model: ModelName) -> List[Dict[str, float]]:
+    model: ModelName,
+    **kwargs) -> List[Dict[str, float]]:
     regions = arg_to_list(region, str)
 
     # Load predictions.
     set = NIFTIDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, regions)
+    region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, regions, **kwargs)
  
     region_metrics = []
     for region, pred in region_preds.items():
@@ -730,13 +731,7 @@ def create_multi_segmenter_evaluation(
     region: PatientRegions,
     model: ModelName,
     exclude_like: Optional[str] = None,
-    load_all_samples: bool = False,
-    loader_shuffle_samples: bool = True,
-    loader_shuffle_train: bool = True,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_grouping: bool = False,
-    use_loader_split_file: bool = False) -> None:
+    **kwargs) -> None:
     datasets = arg_to_list(dataset, str)
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
@@ -756,7 +751,7 @@ def create_multi_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, shuffle_train=loader_shuffle_train, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, region=regions, **kwargs) 
 
     # Add evaluations to dataframe.
     test_loader = list(iter(test_loader))
@@ -773,11 +768,11 @@ def create_multi_segmenter_evaluation(
                     continue
 
             # Get metrics per region.
-            region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model)
+            region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model, **kwargs)
             for region, metrics in zip(regions, region_metrics):
                 for metric, value in metrics.items():
                     data = {
-                        'fold': test_fold if test_fold is not None else np.nan,
+                        'fold': kwargs['test_fold'] if 'test_fold' in kwargs else np.nan,
                         'dataset': dataset,
                         'patient-id': pat_id,
                         'region': region,
@@ -790,8 +785,14 @@ def create_multi_segmenter_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
+    params = {
+        'crop-type': kwargs['crop_type'] if 'crop_type' in kwargs else 'brain',
+        'load-all-samples': kwargs['load_all_samples'] if 'load_all_samples' in kwargs else False,
+        'n-folds': kwargs['n_folds'] if 'n_folds' in kwargs else None,
+        'test-fold': kwargs['test_fold'] if 'test_fold' in kwargs else None,
+        'use-split-file': kwargs['use_split_file'] if 'use_split_file' in kwargs else False,
+    }
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -1034,18 +1035,23 @@ def load_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
+    crop_type: str = 'brain',
     exists_only: bool = False,
     load_all_samples: bool = False,
-    loader_shuffle_samples: bool = False,
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
-    use_loader_split_file: bool = False,
-    use_loader_grouping: bool = False) -> Union[np.ndarray, bool]:
+    use_split_file: bool = False) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
     model = replace_ckpt_alias(model)
-    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), filename)
+    params = {
+        'crop-type': crop_type,
+        'load-all-samples': load_all_samples,
+        'n-folds': n_folds,
+        'test-fold': test_fold,
+        'use-split-file': use_split_file
+    }
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True

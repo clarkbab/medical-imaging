@@ -94,7 +94,8 @@ class MultiLoader:
         transform_train: Transform = None,
         transform_val: Transform = None,
         use_grouping: bool = False,
-        use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
+        use_split_file: bool = False,
+        **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
         regions = region_to_list(region)
         if n_folds is not None and test_fold is None:

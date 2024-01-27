@@ -20,7 +20,7 @@ class RegionMap:
             df = pd.read_csv(filepath)
 
             # Convert special columns to lists.
-            cols = ['except', 'only', 'only-study']
+            cols = ['except', 'except-study', 'only', 'only-study']
             for col in cols:
                 if col in df.columns:
                     def split_fn(e: Union[float, int, str]) -> List[str]:
@@ -66,6 +66,10 @@ class RegionMap:
                 excpt = row['except']
                 if pat_id in excpt:
                     continue
+                if study_id is not None:
+                    except_study = row['except-study']
+                    if study_id in except_study:
+                        continue
                 only = row['only']
                 if len(only) > 0 and pat_id not in only: 
                     continue
