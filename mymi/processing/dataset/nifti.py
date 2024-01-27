@@ -9,7 +9,7 @@ from scipy.ndimage import binary_dilation
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import List, Optional, Union
+from typing import Literal, List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
@@ -22,7 +22,7 @@ from mymi.dataset.training import recreate as recreate_training
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset, exists as exists_training_adaptive
 from mymi.dataset.training_adaptive import create as create_training_adaptive
 from mymi.dataset.training_adaptive import recreate as recreate_training_adaptive
-from mymi.geometry import get_extent
+from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -625,6 +625,243 @@ def convert_population_brain_crop_to_training(
                 )
 
                 # Crop input.
+                input = crop_3D(input, crop)
+
+            # Save input.
+            __create_training_input(set_t, i, input)
+
+            for region in regions:
+                # Skip if patient doesn't have region.
+                if not set.patient(pat_id).has_region(region):
+                    continue
+
+                # Skip if region in 'excluded-labels.csv'.
+                if exc_df is not None:
+                    pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
+                    if len(pr_df) == 1:
+                        continue
+
+                # Load label data.
+                label = region_data[region]
+
+                # Resample label.
+                if spacing is not None:
+                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+
+                # Crop/pad.
+                if crop_mm is not None:
+                    label = crop_3D(label, crop)
+
+                # Round data after resampling to save on disk space.
+                if round_dp is not None:
+                    input = np.around(input, decimals=round_dp)
+
+                # Dilate the labels if requested.
+                if region in dilate_regions:
+                    label = binary_dilation(label, iterations=dilate_iter)
+
+                # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
+                if label.sum() != 0:
+                    empty = False
+                    __create_training_label(set_t, i, label, region=region)
+                else:
+                    empty = True
+
+                # Add index entry.
+                if group_df is not None:
+                    tdf = group_df[group_df['patient-id'] == pat_id]
+                    if len(tdf) == 0:
+                        group_id = np.nan
+                    else:
+                        assert len(tdf) == 1
+                        group_id = tdf.iloc[0]['group-id']
+                else:
+                    group_id = np.nan
+                data = {
+                    'dataset': set_t.name,
+                    'sample-id': i,
+                    'group-id': group_id,
+                    'origin-dataset': set.name,
+                    'origin-patient-id': pat_id,
+                    'region': region,
+                    'empty': empty
+                }
+                index = append_row(index, data)
+
+    end = time()
+
+    # Write index.
+    index = index.astype(cols)
+    filepath = os.path.join(set_t.path, 'index.csv')
+    index.to_csv(filepath, index=False)
+
+    # Indicate success.
+    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    hours = int(np.ceil((end - start) / 3600))
+    __print_time(set_t, hours)
+
+def convert_population_lens_crop_to_training(
+    dataset: str,
+    create_data: bool = True,
+    crop: Optional[ImageSize3D] = None,
+    crop_method: Literal['low', 'uniform'] = 'low',
+    crop_mm: Optional[ImageSizeMM3D] = None,
+    dest_dataset: Optional[str] = None,
+    dilate_iter: int = 3,
+    dilate_regions: List[str] = [],
+    log_warnings: bool = False,
+    recreate_dataset: bool = True,
+    region: Optional[PatientRegions] = None,
+    round_dp: Optional[int] = None,
+    spacing: Optional[ImageSpacing3D] = None) -> None:
+    logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
+    regions = region_to_list(region)
+
+    # Use all regions if region is 'None'.
+    set = NIFTIDataset(dataset)
+    if regions is None:
+        regions = set.list_regions()
+
+    # Create the dataset.
+    dest_dataset = dataset if dest_dataset is None else dest_dataset
+    if exists_training(dest_dataset):
+        if recreate_dataset:
+            created = True
+            set_t = recreate_training(dest_dataset)
+        else:
+            created = False
+            set_t = TrainingDataset(dest_dataset)
+            __destroy_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+
+            # Delete old labels.
+            for region in regions:
+                filepath = os.path.join(set_t.path, 'data', 'labels', region)
+                shutil.rmtree(filepath)
+    else:
+        created = True
+        set_t = create_training(dest_dataset)
+    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+
+    # Write params.
+    if created:
+        filepath = os.path.join(set_t.path, 'params.csv')
+        params_df = pd.DataFrame({
+            'crop': [str(crop)] if crop is not None else ['None'],
+            'crop-mm': [str(crop_mm)] if crop_mm is not None else ['None'],
+            'dilate-iter': [str(dilate_iter)],
+            'dilate-regions': [str(dilate_regions)],
+            'regions': [str(regions)],
+            'spacing': [str(spacing)] if spacing is not None else ['None'],
+        })
+        params_df.to_csv(filepath, index=False)
+    else:
+        for region in regions:
+            filepath = os.path.join(set_t.path, f'params-{region}.csv')
+            params_df = pd.DataFrame({
+                'crop': [str(crop)] if crop is not None else ['None'],
+                'crop-mm': [str(crop_mm)] if crop_mm is not None else ['None'],
+                'dilate-iter': [str(dilate_iter)],
+                'dilate-regions': [str(dilate_regions)],
+                'spacing': [str(spacing)] if spacing is not None else ['None'],
+                'regions': [str(regions)],
+            })
+            params_df.to_csv(filepath, index=False)
+
+    # Load patients.
+    pat_ids = set.list_patients(region=regions)
+
+    # Get exclusions.
+    exc_df = set.excluded_labels
+
+    # Create index.
+    cols = {
+        'dataset': str,
+        'sample-id': int,
+        'group-id': float,
+        'origin-dataset': str,
+        'origin-patient-id': str,
+        'region': str,
+        'empty': bool
+    }
+    index = pd.DataFrame(columns=cols.keys())
+    index = index.astype(cols)
+
+    # Load patient grouping if present.
+    group_df = set.group_index
+
+    # Write each patient to dataset.
+    start = time()
+    if create_data:
+        for i, pat_id in enumerate(tqdm(pat_ids)):
+            # Load input data.
+            pat = set.patient(pat_id)
+            if '-0' in pat_id:
+                # Load registered data for pre-treatment scan.
+                pat_id_mt = pat_id.replace('-0', '-1')
+                input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, region_ignore_missing=True)
+                input_spacing = set.patient(pat_id_mt).ct_spacing
+            else:
+                pat_id_mt = pat_id
+                input = pat.ct_data
+                input_spacing = pat.ct_spacing
+                region_data = pat.region_data(region=regions, region_ignore_missing=True) 
+
+            # Resample input.
+            if spacing is not None:
+                input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+
+            # Crop input.
+            if crop_mm is not None:
+                # Convert to voxel crop.
+                crop_voxels = tuple((np.array(crop_mm) / np.array(spacing)).astype(np.int32))
+
+                # Get brain extent.
+                localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+                brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+                if spacing is not None:
+                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                brain_extent = get_extent(brain_label)
+                
+                if crop_method == 'low':
+                    # Find lowest point containing eye/lens.
+                    min_z = np.inf
+                    min_region = None
+                    regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+                    for region in regions:
+                        if pat.has_region(region):
+                            region_data = pat.region_data(region=region)[region]
+                            region_extent = get_extent(region_data)
+                            if region_extent[0][2] < min_z:
+                                min_z = region_extent[0][2]
+                                min_region = region
+
+                    # Use brain extent for x/y and eye/lens extent for z.
+                    crop_margin = 20 if 'Eye' in min_region else 30
+                    crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, min_z - crop_margin)
+
+                elif crop_method == 'uniform':
+                    # Get extent centre of first available region.
+                    centre_z = None
+                    regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+                    for region in regions:
+                        if pat.has_region(region):
+                            rdata = pat.region_data(region=region)[region]
+                            extent_centre = get_extent_centre(rdata)
+                            centre_z = extent_centre[2]
+                            break
+
+                    # Draw z from uniform distribution around 'centre_z'.
+                    width_z = 30
+                    min_z = centre_z - width_z / 2
+                    max_z = centre_z + width_z / 2
+                    crop_origin_z = np.random.uniform(min_z, max_z)
+                    crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, crop_origin_z)
+
+                # Crop input.
+                crop = (
+                    (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
+                    (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
+                )
                 input = crop_3D(input, crop)
 
             # Save input.

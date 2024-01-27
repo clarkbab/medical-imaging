@@ -453,7 +453,7 @@ def plot_region(
     savepath: Optional[str] = None,
     show: bool = True,
     show_axis: bool = True,
-    show_extent: bool = False,
+    show_extent: bool = True,
     show_legend: bool = True,
     show_title: bool = True,
     show_title_slice: bool = True,
@@ -515,11 +515,11 @@ def plot_region(
         extent_voxel = get_extent_voxel(label, eo_axis, eo_end, view)
         slice_idx = extent[eo_end][axis]
 
+    # Convert 'crop' to 'Box2D' type.
     if crop is not None:
-        # Convert 'crop' to 'Box2D' type.
-        if type(crop) == str:
+        if isinstance(crop, str):
             crop = __get_region_crop(region_data[crop], crop_margin, spacing, view)     # Crop was 'region_data' key.
-        elif type(crop) == np.ndarray:
+        elif isinstance(crop, np.ndarray):
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
             crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
@@ -532,8 +532,8 @@ def plot_region(
         crop = ((view_size[0] // 2 - crop_centre[0] // 2, view_size[1] // 2 - crop_centre[1] // 2), (view_size[0] // 2 + crop_centre[0] // 2, view_size[1] // 2 + crop_centre[1] // 2))
         logging.info(f"crop={crop}")
 
+    # Apply postprocessing.
     if region_data is not None:
-        # Apply postprocessing.
         if postproc:
             region_data = dict(((r, postproc(d)) for r, d in region_data.items()))
 
@@ -550,9 +550,10 @@ def plot_region(
         # Load empty slice.
         ct_slice_data = __get_slice_data(np.zeros(shape=size), slice_idx, view)
 
+    # Perform crop on CT data or placeholder.
     if crop is not None:
-        # Perform crop on CT data or placeholder.
         ct_slice_data = crop_2D(ct_slice_data, __reverse_box_coords_2D(crop))
+
         if dose_data is not None:
             dose_slice_data = crop_2D(dose_slice_data, __reverse_box_coords_2D(crop))
 
@@ -892,6 +893,10 @@ def __get_region_crop(
     min, max = extent
     min = tuple(np.array(min) - crop_margin_vox)
     max = tuple(np.array(max) + crop_margin_vox)
+
+    # Don't pad original image.
+    min = tuple(np.clip(min, a_min=0, a_max=None))
+    max = tuple(np.clip(max, a_min=None, a_max=data.shape))
 
     # Select 2D component.
     if view == 0:
