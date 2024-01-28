@@ -16,14 +16,14 @@ class NIFTIPatient:
         id: PatientID,
         ct_from: Optional['NIFTIDataset'] = None,
         excluded_labels: Optional[pd.DataFrame] = None,
-        origin_index: Optional[pd.DataFrame] = None,
+        index: Optional[pd.DataFrame] = None,
         processed_labels: Optional[pd.DataFrame] = None) -> None:
         self.__dataset = dataset
         self.__ct_from = ct_from
         self.__id = str(id)
         self.__excluded_labels = excluded_labels
         self.__global_id = f'{dataset} - {self.__id}'
-        self.__origin_index = origin_index
+        self.__index = index
         self.__processed_labels = processed_labels
 
         # Check that patient ID exists.
@@ -77,9 +77,9 @@ class NIFTIPatient:
 
     @property
     def origin(self) -> Tuple[str, str]:
-        df = self.__origin_index
+        df = self.__index
         if df is None:
-            raise ValueError(f"No 'origin-index.csv' provided for dataset '{self.__dataset}'.")
+            raise ValueError(f"No 'index.csv' provided for dataset '{self.__dataset}'.")
         row = df[df['anon-id'] == self.__id].iloc[0]
         dataset = row['dicom-dataset']
         pat_id = row['patient-id']

@@ -2,19 +2,21 @@ from torchio import Transform
 from torchio.transforms import Clamp, Compose, RandomAffine, RandomElasticDeformation, ZNormalization
 from typing import Optional, Tuple
 
+from mymi import logging
 from mymi.transforms import Standardise
 
 def get_transforms(
+    rotation: Tuple[float, float] = (-5, 5),
+    scale: Tuple[float, float] = (0.8, 1.2),
     thresh_high: Optional[float] = None,
     thresh_low: Optional[float] = None,
+    translation: Tuple[float, float] = (-50, 50),
     use_elastic: bool = False,
     use_stand: bool = False,
     use_thresh: bool = False) -> Tuple[Transform, Transform]:
+    logging.info(f"Using augmentation: rotation={rotation}, scale={scale}, translation={translation}.")
 
     # Create transforms.
-    rotation = (-5, 5)
-    translation = (-50, 50)
-    scale = (0.8, 1.2)
     transform_train = RandomAffine(
         degrees=rotation,
         scales=scale,

@@ -29,21 +29,21 @@ class NIFTIDataset(Dataset):
         self.__ct_from = NIFTIDataset(ct_from_name) if ct_from_name is not None else None
         self.__global_id = f"NIFTI: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"NIFTI: {self.__name}"
 
-        self.__origin_index = None                # Lazy-loaded.
+        self.__index = None                # Lazy-loaded.
         self.__excluded_labels = None           # Lazy-loaded.
         self.__group_index = None               # Lazy-loaded.
         self.__processed_labels = None          # Lazy-loaded.
-        self.__loaded_origin_index = False
+        self.__loaded_index = False
         self.__loaded_excluded_labels = False
         self.__loaded_group_index = False
         self.__loaded_processed_labels = False
 
     @property
-    def origin_index(self) -> Optional[DataFrame]:
-        if not self.__loaded_origin_index:
-            self.__load_origin_index()
-            self.__loaded_origin_index = True
-        return self.__origin_index
+    def index(self) -> Optional[DataFrame]:
+        if not self.__loaded_index:
+            self.__load_index()
+            self.__loaded_index = True
+        return self.__index
 
     @property
     def ct_from(self) -> Optional[Dataset]:
@@ -140,16 +140,16 @@ class NIFTIDataset(Dataset):
             proc_df = proc_df[proc_df['patient-id'] == id]
 
         # Filter indexes.
-        origin_index = self.origin_index[self.origin_index['patient-id'] == self.__id].iloc[0] if self.origin_index is not None else None
+        index = self.index[self.index['patient-id'] == self.__id].iloc[0] if self.index is not None else None
 
-        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, origin_index=origin_index, processed_labels=proc_df)
+        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, index=index, processed_labels=proc_df)
     
-    def __load_origin_index(self) -> None:
-        filepath = os.path.join(self.__path, 'index.csv.csv')
+    def __load_index(self) -> None:
+        filepath = os.path.join(self.__path, 'index.csv')
         if os.path.exists(filepath):
-            self.__origin_index = read_csv(filepath).astype({ 'anon-id': str, 'origin-patient-id': str })
+            self.__index = read_csv(filepath).astype({ 'patient-id': str, 'origin-patient-id': str })
         else:
-            self.__origin_index = None
+            self.__index = None
     
     def __load_excluded_labels(self) -> None:
         filepath = os.path.join(self.__path, 'excluded-labels.csv')

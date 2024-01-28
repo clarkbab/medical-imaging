@@ -68,9 +68,10 @@ def __plot_region_data(
         # Plot extent.
         if show_extent:
             extent = get_extent(data[region])
-            label = f'{region} extent' if __box_in_plane(extent, view, slice_idx) else f'{region} extent (offscreen)'
-            __plot_box_slice(extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
-            show_legend = True
+            if extent is not None:
+                label = f'{region} extent' if __box_in_plane(extent, view, slice_idx) else f'{region} extent (offscreen)'
+                __plot_box_slice(extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+                show_legend = True
 
         # Plot connected extent.
         if connected_extent:
@@ -186,6 +187,7 @@ def __box_in_plane(
     view: Axis,
     slice_idx: int) -> bool:
     # Get view bounding box.
+    print(box)
     min, max = box
     min = min[view]
     max = max[view]

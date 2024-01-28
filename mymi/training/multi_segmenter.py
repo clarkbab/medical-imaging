@@ -93,7 +93,8 @@ def train_multi_segmenter(
     weight_decay: float = 0,
     weights: Optional[List[float]] = None,
     weights_iv_factor: Optional[Union[float, List[float]]] = None,
-    weights_schedule: Optional[List[float]] = None) -> None:
+    weights_schedule: Optional[List[float]] = None,
+    **kwargs) -> None:
     logging.arg_log('Training model', ('dataset', 'region', 'model_name', 'run_name'), (dataset, region, model_name, run_name))
     regions = region_to_list(region)
 
@@ -102,7 +103,7 @@ def train_multi_segmenter(
 
     # Get augmentation transforms.
     if use_augmentation:
-        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh)
+        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh, **kwargs)
     else:
         transform_train = None
         transform_val = None
