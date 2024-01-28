@@ -495,7 +495,7 @@ def plot_region(
         if postproc:
             label = postproc(label)
         if label.sum() == 0:
-            raise ValueError(f"'centre_of' (np.ndarray/region) is empty.")
+            raise ValueError(f"'centre_of={centre_of}' was selected, but region '{centre_of}' has no foreground voxels.")
         extent_centre = get_extent_centre(label)
         slice_idx = extent_centre[view]
 

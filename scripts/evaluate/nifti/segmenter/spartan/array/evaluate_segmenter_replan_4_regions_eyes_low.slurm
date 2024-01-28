@@ -17,7 +17,7 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-# Get region/short region.
+# Get region names.
 REGIONS=(
     "['Eye_L','Eye_R','Lens_L','Lens_R']"     # 0
 )
@@ -29,10 +29,7 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 
 # Get model name.
 RESOLUTION="112"
-DATASET="PMCC-HN-REPLAN-EYES-$RESOLUTION"
 MODEL_NAME="segmenter-replan-eyes"
-
-# Get run name.
 LR_INIT=1e-4
 RANDOM_SEED=43
 SCHEDULE_EPOCHS=200
@@ -46,23 +43,12 @@ if [ "$LR_INIT" = 1e-4 ]; then
     RUN_NAME="$RUN_NAME-lr-$LR_INIT"
 fi
 
-# Loader settings.
-LOAD_ALL_SAMPLES=True
-N_FOLDS=5
-TEST_FOLD=0
-USE_LOADER_SPLIT_FILE=False
-
 # Other settings.
-CROP_TYPE="lens-low"
+DATASET="PMCC-HN-REPLAN-EYES-LOW"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_all_multi.py \
     --dataset $DATASET \
     --region $REGION \
-    --model $MODEL \
-    --crop_type $CROP_TYPE \
-    --load_all_samples $LOAD_ALL_SAMPLES \
-    --n_folds $N_FOLDS \
-    --test_fold $TEST_FOLD \
-    --use_loader_split_file $USE_LOADER_SPLIT_FILE
+    --model $MODEL

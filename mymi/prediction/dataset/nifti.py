@@ -679,6 +679,10 @@ def get_multi_segmenter_prediction(
         brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
         brain_extent = get_extent(brain_label)
 
+        # Use image extent if brain isn't present.
+        if brain_extent is None:
+            brain_extent = ((0, 0, 0), input.shape)
+
         # Get crop coordinates.
         # Crop origin is centre-of-extent in x/y, and max-extent in z.
         # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
@@ -691,75 +695,6 @@ def get_multi_segmenter_prediction(
         )
 
         # Crop input.
-        input = crop_3D(input, crop)
-        
-    elif crop_type == 'lens-low':
-        # Convert to voxel crop.
-        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
-
-        # Get brain extent.
-        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-        if model_spacing is not None:
-            brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
-        
-        # Find lowest point containing eye/lens.
-        min_z = np.inf
-        min_region = None
-        regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
-        for region in regions:
-            if pat.has_region(region):
-                region_data = pat.region_data(region=region)[region]
-                region_extent = get_extent(region_data)
-                if region_extent[0][2] < min_z:
-                    min_z = region_extent[0][2]
-                    min_region = region
-
-        # Use brain extent for x/y and eye/lens extent for z.
-        crop_margin = 20 if 'Eye' in min_region else 30
-        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, min_z - crop_margin)
-
-        # Crop input.
-        crop = (
-            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
-            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
-        )
-        input = crop_3D(input, crop)
-
-    elif crop_type == 'lens-uniform':
-        # Convert to voxel crop.
-        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
-
-        # Get brain extent.
-        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-        if model_spacing is not None:
-            brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
-
-        # Get extent centre of first available region.
-        centre_z = None
-        regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
-        for region in regions:
-            if pat.has_region(region):
-                rdata = pat.region_data(region=region)[region]
-                extent_centre = get_extent_centre(rdata)
-                centre_z = extent_centre[2]
-                break
-
-        # Draw z from uniform distribution around 'centre_z'.
-        width_z = 30
-        min_z = centre_z - width_z / 2
-        max_z = centre_z + width_z / 2
-        crop_origin_z = np.random.uniform(min_z, max_z)
-        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, crop_origin_z)
-
-        # Crop input.
-        crop = (
-            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
-            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
-        )
         input = crop_3D(input, crop)
 
     else:
@@ -1082,6 +1017,60 @@ def create_adaptive_segmenter_predictions(
     if use_timing:
         model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
         filepath = os.path.join(config.directories.predictions, 'timing', 'adaptive-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}-device-{device.type}-timing.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
+
+def create_all_multi_segmenter_predictions(
+    dataset: Union[str, List[str]],
+    model: ModelName,
+    model_region: PatientRegions,
+    model_spacing: ImageSpacing3D,
+    timing: bool = True,
+    **kwargs) -> None:
+    logging.arg_log('Making multi-segmenter predictions', ('dataset', 'localiser'), (dataset, model))
+    datasets = arg_to_list(dataset, str)
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Load model.
+    model = MultiSegmenter.load(model, map_location=device, **kwargs)
+
+    # Create timing table.
+    if timing:
+        cols = {
+            'dataset': str,
+            'patient-id': str,
+            'model': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Load patients.
+    for dataset in datasets:
+        set = NIFTIDataset(dataset)
+        pat_ids = set.list_patients()
+
+        for pat_id in tqdm(pat_ids):
+            # Timing table data.
+            data = {
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'model': str(model),
+                'device': device.type
+            }
+
+            with timer.record(data, enabled=timing):
+                create_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, **kwargs)
+
+    # Save timing data.
+    if timing:
+        filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), *model.name, f'timing-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 

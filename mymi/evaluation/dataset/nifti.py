@@ -2,6 +2,7 @@ from mymi.transforms.crop import crop_foreground_3D
 import numpy as np
 import os
 import pandas as pd
+from pandas import DataFrame
 import torch
 from tqdm import tqdm
 from typing import Dict, List, Literal, Optional, Tuple, Union
@@ -725,6 +726,53 @@ def create_multi_segmenter_heatmap_evaluation(
     filepath = os.path.join(config.directories.evaluations, 'heatmaps', *model, encode(datasets), encode(target_regions), encode(layers), encode(aux_regions), filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def create_all_multi_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    **kwargs) -> None:
+    logging.arg_log('Creating multi-segmenter evaluation', ('dataset', 'region', 'model'), (dataset, region, model))
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    model = replace_ckpt_alias(model)
+
+    # Create dataframe.
+    cols = {
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Load patients.
+    for dataset in datasets:
+        set = NIFTIDataset(dataset)
+        pat_ids = set.list_patients()
+
+        for pat_id in tqdm(pat_ids):
+            # Get metrics per region.
+            region_metrics = get_multi_segmenter_evaluation(dataset, regions, pat_id, model, **kwargs)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
     
 def create_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
@@ -1027,6 +1075,28 @@ def load_multi_segmenter_heatmap_evaluation(
             return False
         else:
             raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+
+def load_all_multi_segmenter_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    exists_only: bool = False,
+    **kwargs) -> DataFrame:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    model = replace_ckpt_alias(model)
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Multi-segmenter (all) evaluation not found for model '{model}', dataset '{dataset}' and region '{region}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df

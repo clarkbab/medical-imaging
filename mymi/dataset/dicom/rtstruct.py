@@ -4,8 +4,8 @@ import pydicom as dcm
 from typing import Dict, List, Optional, OrderedDict, Tuple, Union
 
 from mymi import logging
+from mymi.regions import region_to_list
 from mymi.types import PatientRegion, PatientRegions
-from mymi.utils import arg_to_list
 
 from .ct_series import CTSeries
 from .dicom_file import DICOMFile, SOPInstanceUID
@@ -158,7 +158,7 @@ class RTSTRUCT(DICOMFile):
         # Filter on 'only'. If region mapping is used (i.e. mapped_regions != None),
         # this will try to match mapped names, otherwise it will map unmapped names.
         if only is not None:
-            only = arg_to_list(only, str)
+            only = region_to_list(only)
 
             if use_mapping:
                 mapped_regions = [r for r in mapped_regions if r[1] in only]
@@ -203,12 +203,13 @@ class RTSTRUCT(DICOMFile):
         only: Optional[PatientRegions] = None,
         region: Optional[PatientRegions] = None,    # Request specific region/s, otherwise get all region data. Specific regions must exist.
         use_mapping: bool = True) -> OrderedDict:
+        regions = region_to_list(region)
+
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
             use_mapping = False
 
         # Check that requested regions exist.
-        regions = arg_to_list(region, str)
         if regions is not None:
             pat_regions = self.list_regions(only=regions, use_mapping=use_mapping)
             for region in regions:

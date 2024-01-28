@@ -9,7 +9,7 @@ from scipy.ndimage import binary_dilation
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import Literal, List, Optional, Union
+from typing import Literal, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
@@ -31,7 +31,7 @@ from mymi.regions import RegionColours, RegionNames, region_to_list, to_255
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
-from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientRegion, PatientRegions
+from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_adaptive_brain_crop_to_training_adaptive(
@@ -941,34 +941,107 @@ def convert_replan_to_lens_crop(
     dataset: str,
     pat_ids: List[PatientID],
     dest_dataset: str,
-    crop: str,
-    create_data: bool = True) -> None:
-    logging.arg_log('Converting NIFTI dataset to NIFTI (lens crop)', ('dataset', 'pat_ids', 'dest_dataset', 'crop'), (dataset, pat_ids, dest_dataset, crop))
+    crop_method: str,
+    crop_mm: Tuple[float],
+    region: Optional[PatientRegions] = None) -> None:
+    logging.arg_log('Converting NIFTI dataset to NIFTI (lens crop)', ('dataset', 'pat_ids', 'dest_dataset', 'crop_method', 'crop_mm'), (dataset, pat_ids, dest_dataset, crop_method, crop_mm))
+    regions = region_to_list(region)
 
     # Create the dataset.
     dset = recreate_nifti(dest_dataset)
     __write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
 
-    # Copy 'params.csv'.
+    # Copy files.
     oset = NIFTIDataset(dataset)
-    filepath = os.path.join(oset.path, 'params.csv')
-    params_df = pd.read_csv(filepath)
-    filepath = os.path.join(dset.path, 'params.csv')
-    params_df.to_csv(filepath, index=False)
-
-    # Load patients.
-    all_pat_ids = oset.list_patients()
-
-    # Filter on list.
-    pat_ids = [p for p in all_pat_ids if p in pat_ids]
+    files = ['excluded-labels.csv', 'processed-labels.csv']
+    for filename in files:
+        filepath = os.path.join(oset.path, filename)
+        if os.path.islink(filepath):
+            src = os.readlink(filepath)
+            filepath = os.path.join(dset.path, filename)
+            os.symlink(src, filepath)
+        else:
+            df = pd.read_csv(filepath)
+            filepath = os.path.join(dset.path, filename)
+            df.to_csv(filepath, index=False)
 
     # Write each patient to dataset.
     start = time()
     for pat_id in tqdm(pat_ids):
-        # Create CT NIFTI for study.
+        # Load CT data.
         pat = oset.patient(pat_id)
         data = pat.ct_data
         spacing = pat.ct_spacing
+
+        # Crop using chosen method.
+        if crop_method == 'lens-low':
+            crop_voxels = tuple((np.array(crop_mm) / np.array(spacing)).astype(np.int32))
+
+            # Get brain extent.
+            localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+            brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+            brain_extent = get_extent(brain_label)
+            
+            # Find lowest point containing eye/lens.
+            min_z = np.inf
+            min_region = None
+            eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+            for eye_region in eye_regions:
+                if pat.has_region(eye_region):
+                    region_data = pat.region_data(region=eye_region)[eye_region]
+                    region_extent = get_extent(region_data)
+                    if region_extent[0][2] < min_z:
+                        min_z = region_extent[0][2]
+                        min_region = eye_region
+
+            # Use brain extent for x/y and eye/lens extent for z.
+            crop_margin = 20 if 'Eye' in min_region else 30
+            crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, min_z - crop_margin)
+
+            # Crop input.
+            crop = (
+                (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
+                (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
+            )
+            data = crop_3D(data, crop)
+        
+        elif crop_method == 'lens-uniform':
+            # Convert to voxel crop.
+            crop_voxels = tuple((np.array(crop_mm) / np.array(spacing)).astype(np.int32))
+
+            # Get brain extent.
+            localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+            brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+            brain_extent = get_extent(brain_label)
+
+            # Get extent centre of first available region.
+            centre_z = None
+            eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
+            for eye_region in eye_regions:
+                if pat.has_region(eye_region):
+                    rdata = pat.region_data(region=eye_region)[eye_region]
+                    extent_centre = get_extent_centre(rdata)
+                    centre_z = extent_centre[2]
+                    break
+
+            # Draw z from uniform distribution around 'centre_z'.
+            width_z = 30
+            min_z = centre_z - width_z / 2
+            max_z = centre_z + width_z / 2
+            crop_origin_z = np.random.uniform(min_z, max_z)
+            crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, crop_origin_z)
+
+            # Crop input.
+            crop = (
+                (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - crop_voxels[2])),
+                (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2]))
+            )
+            data = crop_3D(data, crop)
+        
+        else:
+            raise ValueError(f"Unrecognised crop method '{crop_method}'.")
+
+        # Create NIFTI CT image.
         offset = pat.ct_offset
         affine = np.array([
             [spacing[0], 0, 0, offset[0]],
@@ -976,16 +1049,22 @@ def convert_replan_to_lens_crop(
             [0, 0, spacing[2], offset[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(data, affine)
-        filename = f'{pat_id}.nii.gz'
-        filepath = os.path.join(dset.path, 'data', 'ct', filename)
+        filepath = os.path.join(dset.path, 'data', 'ct', f'{pat_id}.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         nib.save(img, filepath)
 
         # Create region NIFTIs.
         region_data = pat.region_data()
-        for r, data in region_data.items():
+        for region, data in region_data.items():
+            if region not in regions:
+                continue
+
+            # Crop data.
+            data = crop_3D(data, crop)
+            
+            # Save NIFTI label.
             img = Nifti1Image(data.astype(np.int32), affine)
-            filepath = os.path.join(dset.path, 'data', 'regions', r, filename)
+            filepath = os.path.join(dset.path, 'data', 'regions', region, f'{pat_id}.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             nib.save(img, filepath)
 

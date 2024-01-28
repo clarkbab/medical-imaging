@@ -44,21 +44,11 @@ if [ "$LR_INIT" = 1e-4 ]; then
 fi
 
 # Other settings.
-CHECK_EPOCHS=True
-CROP_MM="(330,380,500)"
-DATASET="PMCC-HN-REPLAN-EYES-LOW"
+DATASET="PMCC-HN-REPLAN-EYES-UNIFORM"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
-MODEL_REGION="['Eye_L','Eye_R','Lens_L','Lens_R']"
-MODEL_SPACING="(1,1,2)"
-N_EPOCHS=1000
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/predict/nifti/segmenter/predict_all_multi.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_all_multi.py \
     --dataset $DATASET \
-    --model $MODEL \
-    --model_region $MODEL_REGION \
-    --model_spacing $MODEL_SPACING \
-    --check_epochs $CHECK_EPOCHS \
-    --crop_mm $CROP_MM \
-    --n_epochs $N_EPOCHS \
-    --region $REGION
+    --region $REGION \
+    --model $MODEL
