@@ -34,7 +34,7 @@ from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3
 from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
-def convert_adaptive_brain_crop_to_training_adaptive(
+def convert_replan_adaptive_to_training(
     dataset: str,
     create_data: bool = True,
     crop: Optional[ImageSize3D] = None,
@@ -259,7 +259,7 @@ def convert_adaptive_brain_crop_to_training_adaptive(
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
-def convert_adaptive_mirror_brain_crop_to_training_adaptive(
+def convert_replan_adaptive_mirror_to_training(
     dataset: str,
     create_data: bool = True,
     crop: Optional[ImageSize3D] = None,
@@ -491,7 +491,7 @@ def convert_adaptive_mirror_brain_crop_to_training_adaptive(
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
-def convert_population_brain_crop_to_training(
+def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
     crop: Optional[ImageSize3D] = None,

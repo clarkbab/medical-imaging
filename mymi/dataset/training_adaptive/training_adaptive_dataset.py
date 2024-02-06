@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
+from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
@@ -97,8 +98,8 @@ class TrainingAdaptiveDataset(Dataset):
 
         # Filter by regions.
         if region is not None:
-            regions = arg_to_list(region, str)
-            index = index[index['region'].isin(regions)]
+            regions = region_to_list(region)
+            index = index[index['regions'].apply(lambda r: len(set(eval(r)).intersection(regions)) > 0)]
 
         # Get sample IDs.
         if sort_by_sample_id:
@@ -126,7 +127,7 @@ class TrainingAdaptiveDataset(Dataset):
 
         # Filter by regions.
         if region is not None:
-            regions = arg_to_list(region, str)
+            regions = region_to_list(region)
             index = index[index['region'].isin(regions)]
 
         # Filter by groups.

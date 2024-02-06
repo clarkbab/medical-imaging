@@ -11,7 +11,6 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
 from mymi.prediction.dataset.nifti import load_localiser_prediction
-from mymi.regions import region_to_list
 from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 

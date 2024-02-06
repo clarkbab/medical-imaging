@@ -5,7 +5,7 @@ from typing import List, Literal, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi import types
+from mymi.types import PatientRegions
 
 from ..dataset import Dataset, DatasetType
 from .nrrd_patient import NRRDPatient
@@ -66,7 +66,7 @@ class NRRDDataset(Dataset):
     def list_patients(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: types.PatientRegions = 'all') -> List[str]:
+        region: Optional[PatientRegions] = None) -> List[str]:
 
         # Load patients.
         ct_path = os.path.join(self.__path, 'data', 'ct')
@@ -74,7 +74,8 @@ class NRRDDataset(Dataset):
         pat_ids = [f.replace('.nrrd', '') for f in files]
 
         # Filter by 'region'.
-        pat_ids = list(filter(lambda pat_id: self.patient(pat_id).has_region(region, labels=labels), pat_ids))
+        if region is not None:
+            pat_ids = list(filter(lambda pat_id: self.patient(pat_id).has_region(region, labels=labels), pat_ids))
         return pat_ids
 
     def list_regions(self) -> List[str]:

@@ -50,9 +50,9 @@ def train_multi_segmenter(
     loader_shuffle_samples: bool = True,
     loss_fn: str = 'dice_with_focal',
     lr_find: bool = False,
-    lr_find_iter: int = 10,
     lr_find_min_lr: float = 1e-6,
     lr_find_max_lr: float = 1,
+    lr_find_n_iter: int = 10,
     lr_init: float = 1e-3,
     lr_milestones: List[int] = [],
     n_epochs: int = 100,
@@ -137,6 +137,11 @@ def train_multi_segmenter(
             all_inv_volumes = RegionList.MICCAI_INVERSE_VOLUMES
             region_idxs = [all_regions.index(r) for r in regions]
             inv_volumes = [all_inv_volumes[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN-ALL' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN_ALL
+            all_inv_volumes = RegionList.PMCC_REPLAN_ALL_INVERSE_VOLUMES
+            region_idxs = [all_regions.index(r) for r in regions]
+            inv_volumes = [all_inv_volumes[i] for i in region_idxs]
         elif 'PMCC-HN-REPLAN-EYES' in first_dataset:
             all_regions = RegionList.PMCC_REPLAN_EYES
             all_inv_volumes = RegionList.PMCC_REPLAN_EYES_INVERSE_VOLUMES
@@ -201,6 +206,11 @@ def train_multi_segmenter(
             all_thresholds = RegionList.PMCC_REPLAN_EYES_CVG_THRESHOLDS
             region_idxs = [all_regions.index(r) for r in regions]
             cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
+        elif 'PMCC-HN-REPLAN-ALL' in first_dataset:
+            all_regions = RegionList.PMCC_REPLAN_ALL
+            all_thresholds = RegionList.PMCC_REPLAN_ALL_CVG_THRESHOLDS
+            region_idxs = [all_regions.index(r) for r in regions]
+            cw_cvg_thresholds = [all_thresholds[i] for i in region_idxs]
         elif 'PMCC-HN-REPLAN' in first_dataset:
             all_regions = RegionList.PMCC_REPLAN
             all_thresholds = RegionList.PMCC_REPLAN_CVG_THRESHOLDS
@@ -254,7 +264,7 @@ def train_multi_segmenter(
         weight_decay=weight_decay)
 
     # Create logger.
-    if use_logger:
+    if use_logger and not lr_find:
         logging.info(f"Creating Wandb logger.")
 
         logger = WandbLogger(
@@ -299,7 +309,7 @@ def train_multi_segmenter(
 
     if lr_find:
         tuner = Tuner(trainer)
-        lr = tuner.lr_find(model, train_loader, val_loader, early_stop_threshold=None, min_lr=lr_find_min_lr, max_lr=lr_find_max_lr, num_training=lr_find_iter)
+        lr = tuner.lr_find(model, train_loader, val_loader, early_stop_threshold=None, min_lr=lr_find_min_lr, max_lr=lr_find_max_lr, num_training=lr_find_n_iter)
         logging.info(lr.results)
         filepath = os.path.join(config.directories.models, model_name, run_name, 'lr-finder.json')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)

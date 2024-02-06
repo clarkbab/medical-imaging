@@ -241,6 +241,7 @@ class MultiUNet3D(nn.Module):
         n_input_channels: int = 1,
         n_gpus: int = 1,
         n_split_channels: int = 2,
+        use_softmax: bool = True,
         **kwargs) -> None:
         super().__init__()
         self.__n_gpus = n_gpus
@@ -367,15 +368,18 @@ class MultiUNet3D(nn.Module):
         in_channels = n_features
         out_channels = n_output_channels
         self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1))
-        self.__layers.append(nn.Softmax(dim=1))
+        if use_softmax:
+            self.__layers.append(nn.Softmax(dim=1))
 
         # Wrap each layer in a print layer to test.
         self.__layers = nn.ParameterList([LayerWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
 
         # Get checkpoint locations.
+        n_required_layers = 63
+        if use_softmax:
+            n_required_layers += 1
         n_layers = len(self.__layers)
-        assert n_layers == 64
-        # assert n_layers == 46
+        assert n_layers == n_required_layers
         if ckpt_mode == '':
             ckpts = get_checkpoints(n_layers, n_ckpts)
         elif ckpt_mode == '-level':

@@ -14,12 +14,14 @@ def create_patient_registration(
     dataset: str,
     fixed_pat_id: PatientID,
     moving_pat_id: PatientID) -> None:
+    logging.info(f"Registering patient '{moving_pat_id}' CT to patient '{fixed_pat_id}' CT.")
 
     # Load CT data.
     set = NIFTIDataset(dataset)
     fixed_pat = set.patient(fixed_pat_id)
     fixed_ct = fixed_pat.ct_data
     fixed_spacing = fixed_pat.ct_spacing
+    fixed_offset = fixed_pat.ct_offset
     moving_pat = set.patient(moving_pat_id)
     moving_ct = moving_pat.ct_data
     moving_spacing = moving_pat.ct_spacing
@@ -28,30 +30,9 @@ def create_patient_registration(
     moving_ct = resample_3D(moving_ct, spacing=moving_spacing, output_spacing=fixed_spacing)
 
     # Perform CT registration.
-    logging.info(f"Registering patient '{moving_pat_id}' CT to patient '{fixed_pat_id}' CT.")
     reg_ct, reg_transform = register_image(fixed_ct, moving_ct, fixed_spacing, fixed_spacing, return_transform=True)
 
-        # patient = set.patient(pat)
-        # data = patient.ct_data()
-        # spacing = patient.ct_spacing()
-        # offset = patient.ct_offset()
-        # affine = np.array([
-        #     [spacing[0], 0, 0, offset[0]],
-        #     [0, spacing[1], 0, offset[1]],
-        #     [0, 0, spacing[2], offset[2]],
-        #     [0, 0, 0, 1]])
-        # img = Nifti1Image(data, affine)
-        # filepath = os.path.join(nifti_ds.path, 'ct', f'{pat}.nii.gz')
-        # os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        # nib.save(img, filepath)
-
     # Save registered CT.
-    affine = np.array([
-        [fixed_spacing[0], 0, 0, offset[0]],
-        [0, fixed_spacing[1], 0, offset[1]],
-        [0, 0, fixed_spacing[2], offset[2]],
-        [0, 0, 0, 1]])
-    image = Nifti1Image(reg_ct, affine)
     filepath = os.path.join(set.path, 'data', 'registrations', 'ct', f'{moving_pat_id}-{fixed_pat_id}.nii.gz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))

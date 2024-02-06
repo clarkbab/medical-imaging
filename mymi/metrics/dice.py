@@ -1,6 +1,5 @@
 import numpy as np
 import SimpleITK as sitk
-import torch
 
 def dice(
     a: np.ndarray,

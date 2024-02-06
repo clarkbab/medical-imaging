@@ -237,7 +237,7 @@ def train_adaptive_segmenter(
         weight_decay=weight_decay)
 
     # Create logger.
-    if use_logger:
+    if use_logger and not lr_find:
         logging.info(f"Creating Wandb logger.")
 
         logger = WandbLogger(

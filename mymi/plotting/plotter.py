@@ -4,6 +4,7 @@ from matplotlib.colors import ListedColormap, rgb2hex
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from numpy import ndarray
 import os
@@ -368,7 +369,12 @@ def plot_heatmap(
         heatmap_slice = crop_2D(heatmap_slice, __reverse_box_coords_2D(crop))
 
     # Plot heatmap
-    ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_origin(view))
+    image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_origin(view))
+    # create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.02)
+    plt.colorbar(image, cax=cax)
 
     # Plot predictions.
     if pred_data is not None:
@@ -1451,7 +1457,7 @@ def plot_dataframe_v2(
     show_boxes: bool = True,
     show_hue_connections: bool = False,
     show_hue_connections_inliers: bool = False,
-    show_legend: bool = True,
+    show_legend: Union[bool, List[bool]] = True,
     show_points: bool = True,
     show_stats: bool = False,
     show_x_tick_labels: bool = True,
@@ -1580,9 +1586,18 @@ def plot_dataframe_v2(
         if hue_labels is not None:
             if len(hue_labels) != len(hue_order):
                 raise ValueError(f"Length of 'hue_labels' ({hue_labels}) should match hues ({hue_order}).")
+    
+    # Expand 'show_legend' to match number of rows.
+    if isinstance(show_legend, bool):
+        show_legends = [show_legend] * n_rows
+    else: 
+        if len(show_legend) != n_rows:
+            raise ValueError(f"Lenght of 'show_legend' ({len(show_legend)}) should match number of rows ({n_rows}).")
+        else:
+            show_legends = show_legend
 
     # Plot rows.
-    for i in range(n_rows):
+    for i, show_legend in zip(range(n_rows), show_legends):
         # Split data.
         row_x_order = x_order[i * n_cols:(i + 1) * n_cols]
         row_x_tick_labels = x_tick_labels[i * n_cols:(i + 1) * n_cols]

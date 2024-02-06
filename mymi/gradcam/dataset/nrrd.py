@@ -10,7 +10,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.types import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..gradcam import get_heatmap as get_heatmap_base
+from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
 
 def create_heatmap(
     dataset: str,
@@ -72,7 +72,7 @@ def get_heatmap(
     label = patient.region_data(region=region)[region]
 
     # Call base method.
-    return get_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
+    return get_multi_segmenter_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
 
 def load_multi_segmenter_heatmap(
     dataset: str,

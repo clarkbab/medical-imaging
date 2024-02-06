@@ -47,6 +47,60 @@ class TrainingAdaptiveSample:
         return self.__index
 
     @property
+    def fixed_input(self) -> np.ndarray:
+        filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}-1.npz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"'fixed_input' not found for sample '{self}'. Filepath: '{filepath}'.")
+        input = np.load(filepath)['data']
+        return input
+
+    @property
+    def moving_input(self) -> np.ndarray:
+        filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}-0.npz')
+        if not os.path.exists(filepath):
+            raise ValueError(f"'moving_input' not found for sample '{self}'. Filepath: '{filepath}'.")
+        input = np.load(filepath)['data']
+        return input
+
+    @property
+    def fixed_label(self) -> np.ndarray:
+        label = None
+        n_channels = len(self.__dataset.list_regions()) + 1
+        for i, region in enumerate(self.__dataset.list_regions()):
+            if not self.has_region(region):
+                continue
+
+            # Load the label data.
+            filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
+            if not os.path.exists(filepath):
+                raise ValueError(f"Label (region={region}) not found for sample '{self}'. Filepath: '{filepath}'.")
+            region_label = np.load(filepath)['data']
+            if label is None:
+                label = np.zeros((n_channels, *region_label.shape), dtype=np.bool_)
+            label[i + 1] = region_label
+
+        return label
+
+    @property
+    def moving_label(self) -> np.ndarray:
+        label = None
+        n_channels = len(self.__dataset.list_regions()) + 1
+        for i, region in enumerate(self.__dataset.list_regions()):
+            if not self.has_input_region(region):
+                continue
+
+            # Load the label data.
+            filepath = os.path.join(self.__dataset.path, 'data', 'inputs', region, f'{self.__id}.npz')
+            if not os.path.exists(filepath):
+                raise ValueError(f"Label (region={region}) not found for sample '{self}'. Filepath: '{filepath}'.")
+            region_label = np.load(filepath)['data']
+            if label is None:
+                label = np.zeros((n_channels, *region_label.shape), dtype=np.bool_)
+            label[i + 1] = region_label
+
+        return label
+
+    @property
     def input(self) -> np.ndarray:
         # Load first 2 channels.
         filepath = os.path.join(self.__dataset.path, 'data', 'inputs', f'{self.__id}-0.npz')

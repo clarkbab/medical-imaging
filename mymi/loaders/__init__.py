@@ -4,6 +4,7 @@ from .adaptive_loader import AdaptiveLoader
 from .loader import Loader
 from .multi_loader import MultiLoader
 from .multi_loader_v2 import MultiLoaderV2
+from .reg_seg_loader import RegSegLoader
 
 def get_n_train_max(
     datasets: Union[str, List[str]],

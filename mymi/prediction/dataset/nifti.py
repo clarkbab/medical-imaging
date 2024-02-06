@@ -1374,8 +1374,10 @@ def load_multi_segmenter_prediction_dict(
     pat_id: PatientID,
     model: ModelName,
     model_region: PatientRegions,
+    region: Optional[PatientRegions] = None,
     **kwargs) -> Union[Dict[str, np.ndarray], bool]:
     model_regions = region_to_list(model_region)
+    regions = region_to_list(region)
 
     # Load prediction.
     pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
@@ -1385,9 +1387,13 @@ def load_multi_segmenter_prediction_dict(
 
     # Convert to dict.
     data = {}
-    for i, region in enumerate(model_regions):
+    for i, r in enumerate(model_regions):
+        # Filter based on 'region'.
+        if regions is not None and r not in regions:
+            continue
         region_pred = pred[i + 1]
-        data[region] = region_pred
+        data[r] = region_pred
+
 
     return data
 

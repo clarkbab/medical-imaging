@@ -1129,7 +1129,7 @@ def load_multi_segmenter_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Multi-segmenter evaluation not found for model '{model}', dataset '{dataset}' and region '{region}'. Filepath: {filepath}.")
+            raise ValueError(f"Multi-segmenter evaluation not found for model '{model}', dataset '{dataset}' and regions '{regions}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df
