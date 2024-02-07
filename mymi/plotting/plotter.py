@@ -1442,7 +1442,7 @@ def plot_dataframe(
     hue_label: Optional[Union[str, List[str]]] = None,
     hue_order: Optional[List[str]] = None,
     include_x: Optional[Union[str, List[str]]] = None,
-    legend_bbox_to_anchor: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+    legend_bbox: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     legend_loc: str = 'upper right',
     linecolour: str = 'black',
     linewidth: float = 0.5,
@@ -1595,13 +1595,13 @@ def plot_dataframe(
             raise ValueError(f"Length of 'show_legend' ({len(show_legend)}) should match number of rows ({n_rows}).")
         else:
             show_legends = show_legend
-    if isinstance(legend_bbox_to_anchor, tuple):
-        legend_bboxs = [legend_bbox_to_anchor] * n_rows
+    if isinstance(legend_bbox, tuple):
+        legend_bboxs = [legend_bbox] * n_rows
     else: 
-        if len(legend_bbox_to_anchor) != n_rows:
-            raise ValueError(f"Length of 'legend_bbox_to_anchor' ({len(legend_bbox_to_anchor)}) should match number of rows ({n_rows}).")
+        if len(legend_bbox) != n_rows:
+            raise ValueError(f"Length of 'legend_bbox' ({len(legend_bbox)}) should match number of rows ({n_rows}).")
         else:
-            legend_bboxs = legend_bbox_to_anchor
+            legend_bboxs = legend_bbox
 
     # Plot rows.
     for i, show_legend, legend_bbox in zip(range(n_rows), show_legends, legend_bboxs):
@@ -1746,7 +1746,7 @@ def plot_dataframe(
                 labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels if h in hue_artists]))
 
                 # Show legend.
-                legend = axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=legend_loc)
+                legend = axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=legend_loc)
                 frame = legend.get_frame()
                 frame.set_boxstyle('square')
                 frame.set_edgecolor('black')

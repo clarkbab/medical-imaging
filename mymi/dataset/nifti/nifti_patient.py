@@ -1,7 +1,7 @@
 import nibabel as nib
 import numpy as np
 import os
-import pandas as pd
+from pandas import DataFrame
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.postprocessing import interpolate_z, largest_cc_3D
@@ -15,9 +15,9 @@ class NIFTIPatient:
         dataset: 'NIFTIDataset',
         id: PatientID,
         ct_from: Optional['NIFTIDataset'] = None,
-        excluded_labels: Optional[pd.DataFrame] = None,
-        index: Optional[pd.DataFrame] = None,
-        processed_labels: Optional[pd.DataFrame] = None) -> None:
+        excluded_labels: Optional[DataFrame] = None,
+        index: Optional[DataFrame] = None,
+        processed_labels: Optional[DataFrame] = None) -> None:
         self.__dataset = dataset
         self.__ct_from = ct_from
         self.__id = str(id)
@@ -74,6 +74,10 @@ class NIFTIPatient:
     @property
     def id(self) -> str:
         return self.__id
+
+    @property
+    def index(self) -> DataFrame:
+        return self.__index
 
     @property
     def origin(self) -> Tuple[str, str]:
