@@ -2,7 +2,7 @@
 #SBATCH --account punim1413
 ##SBATCH --qos feit
 ##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -44,7 +44,7 @@ RESUME=True
 RESUME_CKPT='last'
 #RESUME_CKPT='loss=-0.023704-epoch=284-step=0'
 LR_INIT=1e-3
-USE_WEIGHTS=False
+USE_WEIGHTS=True
 SCHEDULE_EPOCHS=200
 
 # Get run name.

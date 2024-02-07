@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --gres gpu:1
 #SBATCH --nodes 1
@@ -36,7 +36,7 @@ WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
 N_FOLDS=5
 TEST_FOLD=$SLURM_ARRAY_TASK_ID
 RUN_NAME="n-folds-$N_FOLDS-fold-$TEST_FOLD"
-RANDOM_SEED=43
+RANDOM_SEED=44
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi

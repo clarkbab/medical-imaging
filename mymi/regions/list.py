@@ -60,7 +60,7 @@ class RegionList(list, Enum):
         'Parotid_R',
         'SpinalCord'
     ]
-    PMCC_REPLAN_ALL_CVG_THRESHOLDS = []
+    PMCC_REPLAN_ALL_CVG_THRESHOLDS = [0.05] * len(PMCC_REPLAN_ALL)
     PMCC_REPLAN_ALL_INVERSE_VOLUMES = [
         1.2937933022269647e-05,
         0.00011431883233820832,

@@ -3,7 +3,6 @@ import subprocess
 dry_run = False
 
 model_idxs = list(range(5))
-model_idxs = [0, 1]
 model_idxs = [2]
 target_region_idxs = list(range(8))
 target_region_idxs = [0]

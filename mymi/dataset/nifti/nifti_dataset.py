@@ -131,16 +131,10 @@ class NIFTIDataset(Dataset):
     def patient(
         self,
         id: Union[int, str]) -> NIFTIPatient:
-        # Filter 'excluded-labels' and 'processed-labels' for the patient.
-        exc_df = self.excluded_labels
-        if exc_df is not None:
-            exc_df = exc_df[exc_df['patient-id'] == id]
-        proc_df = self.processed_labels
-        if proc_df is not None:
-            proc_df = proc_df[proc_df['patient-id'] == id]
-
         # Filter indexes.
-        index = self.index[self.index['patient-id'] == self.__id].iloc[0] if self.index is not None else None
+        index = self.index[self.index['patient-id'] == str(id)].iloc[0] if self.index is not None else None
+        exc_df = self.excluded_labels[self.excluded_labels['patient-id'] == str(id)] if self.excluded_labels is not None else None
+        proc_df = self.processed_labels[self.processed_labels['patient-id'] == str(id)] if self.processed_labels is not None else None
 
         return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, index=index, processed_labels=proc_df)
     

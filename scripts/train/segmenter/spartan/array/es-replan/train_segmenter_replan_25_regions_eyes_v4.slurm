@@ -7,7 +7,7 @@
 #SBATCH --nodes 1
 #SBATCH --mem 120G
 #SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 8
+#SBATCH --cpus-per-gpu 16
 #SBATCH --time 7-00:00:00
 ##SBATCH --time 0-04:00:00
 ##SBATCH --test-only
@@ -19,20 +19,17 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-REGIONS=(
-    "['Bone_Mandible','BrachialPlex_L','BrachialPlex_R','Brain','Brainstem','Cavity_Oral','Cochlea_L','Cochlea_R','Esophagus_S','Eye_L','Eye_R','GTVp','Glnd_Submand_L','Glnd_Submand_R','Glottis','Larynx','Lens_L','Lens_R','Musc_Constrict','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R','SpinalCord']"
-)
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
+REGION="RL:PMCC_REPLAN_ALL"
 MODEL_NAME="segmenter-replan-eyes-v4"
 RESOLUTION="222"
 DATASET="PMCC-HN-REPLAN-ALL-$RESOLUTION"
 WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.5
+WEIGHTS_IV_FACTOR_0=1.1
 WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
 SCHEDULE_EPOCHS=200
 RESUME=False
 LR_INIT=1e-3
-USE_WEIGHTS=False
+USE_WEIGHTS=True
 
 # Get run name.
 RANDOM_SEED=42
