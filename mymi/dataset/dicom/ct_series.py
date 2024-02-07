@@ -1,7 +1,8 @@
 from datetime import datetime
 import numpy as np
 import pandas as pd
-import pydicom as dcm
+from pydicom import read_file
+from pydicom.dataset import FileDataset
 from typing import List
 
 from mymi import types
@@ -83,11 +84,17 @@ class CTSeries(DICOMSeries):
         dt_str = self.get_cts()[0].StudyDate
         return datetime.strptime(dt_str, STUDY_DATE_FMT)
     
-    def get_cts(self) -> List[dcm.dataset.FileDataset]:
+    def get_cts(self) -> List[FileDataset]:
         ct_paths = list(self.__index['filepath'])
-        cts = [dcm.read_file(f) for f in ct_paths]
+        cts = [read_file(f) for f in ct_paths]
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
+
+    @property
+    def first_ct(self) -> FileDataset:
+        filepath = list(self.__index['filepath'])[0]
+        ct = read_file(filepath)
+        return ct
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:

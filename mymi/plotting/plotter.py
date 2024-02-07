@@ -1422,7 +1422,7 @@ Diff: {diff_name}""")
             'text.usetex': rc_params['text.usetex']
         })
 
-def plot_dataframe_v2(
+def plot_dataframe(
     ax: Optional[Axes] = None,
     data: Optional[pd.DataFrame] = None,
     x: Optional[str] = None,
@@ -1442,7 +1442,7 @@ def plot_dataframe_v2(
     hue_label: Optional[Union[str, List[str]]] = None,
     hue_order: Optional[List[str]] = None,
     include_x: Optional[Union[str, List[str]]] = None,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
+    legend_bbox_to_anchor: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     legend_loc: str = 'upper right',
     linecolour: str = 'black',
     linewidth: float = 0.5,
@@ -1587,17 +1587,24 @@ def plot_dataframe_v2(
             if len(hue_labels) != len(hue_order):
                 raise ValueError(f"Length of 'hue_labels' ({hue_labels}) should match hues ({hue_order}).")
     
-    # Expand 'show_legend' to match number of rows.
+    # Expand args to match number of rows.
     if isinstance(show_legend, bool):
         show_legends = [show_legend] * n_rows
     else: 
         if len(show_legend) != n_rows:
-            raise ValueError(f"Lenght of 'show_legend' ({len(show_legend)}) should match number of rows ({n_rows}).")
+            raise ValueError(f"Length of 'show_legend' ({len(show_legend)}) should match number of rows ({n_rows}).")
         else:
             show_legends = show_legend
+    if isinstance(legend_bbox_to_anchor, tuple):
+        legend_bboxs = [legend_bbox_to_anchor] * n_rows
+    else: 
+        if len(legend_bbox_to_anchor) != n_rows:
+            raise ValueError(f"Length of 'legend_bbox_to_anchor' ({len(legend_bbox_to_anchor)}) should match number of rows ({n_rows}).")
+        else:
+            legend_bboxs = legend_bbox_to_anchor
 
     # Plot rows.
-    for i, show_legend in zip(range(n_rows), show_legends):
+    for i, show_legend, legend_bbox in zip(range(n_rows), show_legends, legend_bboxs):
         # Split data.
         row_x_order = x_order[i * n_cols:(i + 1) * n_cols]
         row_x_tick_labels = x_tick_labels[i * n_cols:(i + 1) * n_cols]
@@ -1726,7 +1733,7 @@ def plot_dataframe_v2(
                     main_legend = axs[i].get_legend()
 
                     # Show outlier legend.
-                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=outlier_legend_loc)
+                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=outlier_legend_loc)
 
                     # Re-add main legend.
                     axs[i].add_artist(main_legend)
@@ -1918,495 +1925,6 @@ def plot_dataframe_v2(
         if not share_y:
             min_y = row_df[y].min()
             max_y = row_df[y].max()
-        y_lim_row = list(y_lim)
-        if y_lim_row[0] is None:
-            if y_lim_row[1] is None:
-                width = max_y - min_y
-                y_lim_row[0] = min_y - y_margin * width
-                y_lim_row[1] = max_y + y_margin * width
-            else:
-                width = y_lim_row[1] - min_y
-                y_lim_row[0] = min_y - y_margin * width
-        else:
-            if y_lim_row[1] is None:
-                width = max_y - y_lim_row[0]
-                y_lim_row[1] = max_y + y_margin * width
-        axs[i].set_ylim(*y_lim_row)
-
-        # Set y axis major ticks.
-        if major_tick_freq is not None:
-            major_tick_min = y_lim[0]
-            if major_tick_min is None:
-                major_tick_min = axs[i].get_ylim()[0]
-            major_tick_max = y_lim[1]
-            if major_tick_max is None:
-                major_tick_max = axs[i].get_ylim()[1]
-            
-            # Round range to nearest multiple of 'major_tick_freq'.
-            major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
-            major_tick_max = np.floor(major_tick_max / major_tick_freq) * major_tick_freq
-            n_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
-            major_ticks = np.linspace(major_tick_min, major_tick_max, n_major_ticks)
-            major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
-            axs[i].set_yticks(major_ticks)
-            axs[i].set_yticklabels(major_tick_labels)
-
-        # Set y axis minor ticks.
-        if minor_tick_freq is not None:
-            minor_tick_min = y_lim[0]
-            if minor_tick_min is None:
-                minor_tick_min = axs[i].get_ylim()[0]
-            minor_tick_max = y_lim[1]
-            if minor_tick_max is None:
-                minor_tick_max = axs[i].get_ylim()[1]
-            
-            # Round range to nearest multiple of 'minor_tick_freq'.
-            minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
-            minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
-            n_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
-            minor_ticks = np.linspace(minor_tick_min, minor_tick_max, n_minor_ticks)
-            axs[i].set_yticks(minor_ticks, minor=True)
-
-        # Set y grid lines.
-        axs[i].grid(axis='y', linestyle='dashed', linewidth=linewidth)
-        axs[i].set_axisbelow(True)
-
-        # Set axis spine/tick linewidths and tick lengths.
-        spines = ['top', 'bottom','left','right']
-        for spine in spines:
-            axs[i].spines[spine].set_linewidth(linewidth)
-        axs[i].tick_params(which='both', length=ticklength, width=linewidth)
-
-    # Set title.
-    title_kwargs = {
-        'fontsize': fontsize_title,
-        'style': 'italic'
-    }
-    if title_x is not None:
-        title_kwargs['x'] = title_x
-    if title_y is not None:
-        title_kwargs['y'] = title_y
-    plt.title(title, **title_kwargs)
-
-    # Save plot to disk.
-    if savepath is not None:
-        dirpath = os.path.dirname(savepath)
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=0.03)
-        logging.info(f"Saved plot to '{savepath}'.")
-
-def plot_dataframe(
-    ax: Optional[Axes] = None,
-    data: Optional[pd.DataFrame] = None,
-    x: Optional[str] = None,
-    y: Optional[str] = None,
-    hue: Optional[str] = None,
-    dpi: float = 1000,
-    exclude_x: Optional[Union[str, List[str]]] = None,
-    figsize: Tuple[float, float] = (16, 6),
-    fontsize: float = DEFAULT_FONT_SIZE,
-    fontsize_label: Optional[float] = None,
-    fontsize_legend: Optional[float] = None,
-    fontsize_stats: Optional[float] = None,
-    fontsize_tick_label: Optional[float] = None,
-    fontsize_title: Optional[float] = None,
-    hue_connections_index: Optional[Union[str, List[str]]] = None,
-    hue_hatch: Optional[Union[str, List[str]]] = None,
-    hue_label: Optional[Union[str, List[str]]] = None,
-    hue_order: Optional[List[str]] = None,
-    include_x: Optional[Union[str, List[str]]] = None,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
-    legend_loc: str = 'upper right',
-    linecolour: str = 'black',
-    linewidth: float = 0.5,
-    major_tick_freq: Optional[float] = None,
-    minor_tick_freq: Optional[float] = None,
-    n_cols: Optional[int] = None,
-    outlier_legend_loc: str = 'upper left',
-    palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
-    pointsize: float = 10,
-    savepath: Optional[str] = None,
-    share_y: bool = False,
-    show_boxes: bool = True,
-    show_hue_connections: bool = False,
-    show_hue_connections_inliers: bool = False,
-    show_legend: bool = True,
-    show_points: bool = True,
-    show_stats: bool = False,
-    show_x_tick_labels: bool = True,
-    show_x_tick_label_counts: bool = True,
-    stats_exclude: List[str] = [],
-    stats_exclude_left: List[str] = [],
-    stats_exclude_right: List[str] = [],
-    stats_index: Optional[Union[str, List[str]]] = None,
-    stats_paired: bool = True,
-    stats_text_offset: Optional[float] = None,
-    stats_two_sided: bool = False,
-    style: Optional[Literal['box', 'violin']] = 'box',
-    ticklength: float = 0.5,
-    title: Optional[str] = None,
-    title_x: Optional[float] = None,
-    title_y: Optional[float] = None,
-    x_label: Optional[str] = None,
-    x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
-    x_order: Optional[List[str]] = None,
-    x_width: float = 0.8,
-    x_tick_label: Optional[List[str]] = None,
-    x_tick_label_rot: float = 0,
-    y_label: Optional[str] = None,
-    y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
-    hue_hatches = arg_to_list(hue_hatch, str)
-    hue_labels = arg_to_list(hue_label, str)
-    include_xs = arg_to_list(include_x, str)
-    exclude_xs = arg_to_list(exclude_x, str)
-    if show_hue_connections and hue_connections_index is None:
-        raise ValueError(f"Please set 'hue_connections_index' to allow matching points between hues.")
-    if show_stats and stats_index is None:
-        raise ValueError(f"Please set 'stats_index' to determine sample pairing for Wilcoxon test.")
-    x_tick_labels = arg_to_list(x_tick_label, str)
-
-    # Set default fontsizes.
-    if fontsize_label is None:
-        fontsize_label = fontsize
-    if fontsize_legend is None:
-        fontsize_legend = fontsize
-    if fontsize_stats is None:
-        fontsize_stats = fontsize
-    if fontsize_tick_label is None:
-        fontsize_tick_label = fontsize
-    if fontsize_title is None:
-        fontsize_title = fontsize
-        
-    # Include/exclude.
-    if include_xs is not None:
-        data = data[data[x].isin(include_xs)]
-    if exclude_xs is not None:
-        data = data[~data[x].isin(exclude_xs)]
-
-    # Add outlier data.
-    data = __add_outlier_info(data, x, y, hue)
-
-    # Get min/max values for y-lim.
-    if share_y:
-        min_y = data[y].min()
-        max_y = data[y].max()
-
-    # Get x values.
-    if x_order is None:
-        x_order = list(sorted(data[x].unique()))
-
-    # Determine x labels.
-    groupby = x if hue is None else [x, hue]
-    count_map = data.groupby(groupby)[y].count()
-    if x_tick_labels is None:
-        x_tick_labels = []
-        for x_val in x_order:
-            count = count_map.loc[x_val]
-            if hue is not None:
-                ns = count.values
-                # Use a single number, e.g. (n=99) if all hues have the same number of points.
-                if len(np.unique(ns)) == 1:
-                    ns = ns[:1]
-            else:
-                ns = [count]
-            label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
-            x_tick_labels.append(label)
-
-    # Create subplots if required.
-    if n_cols is None:
-        n_cols = len(x_order)
-    n_rows = int(np.ceil(len(x_order) / n_cols))
-    if ax is not None:
-        assert n_rows == 1
-        axs = [ax]
-        # Figsize will have been handled externally.
-    else:
-        if n_rows > 1:
-            _, axs = plt.subplots(n_rows, 1, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
-        else:
-            plt.figure(dpi=dpi, figsize=figsize)
-            axs = [plt.gca()]
-
-    # Get x-axis limits.
-    x_lim = list(x_lim)
-    if x_lim[0] is None:
-        x_lim[0] = -0.5
-    if x_lim[1] is None:
-        x_lim[1] = n_cols - 0.5
-
-    # Get hue order/colour/labels.
-    if hue is not None:
-        if hue_order is None:
-            hue_order = list(sorted(data[hue].unique()))
-
-        # Calculate x width for each hue.
-        hue_width = x_width / len(hue_order) 
-
-        # Check there are enough colours in palette.
-        if len(hue_order) > len(palette):
-            raise ValueError(f"'palette' doesn't have enough colours for hues '{hue_order}', needs '{len(hue_order)}'.")
-
-        # Create map from hue to colour.
-        hue_colours = dict((h, palette[i]) for i, h in enumerate(hue_order))
-
-        if hue_labels is not None:
-            if len(hue_labels) != len(hue_order):
-                raise ValueError(f"Length of 'hue_labels' ({hue_labels}) should match hues ({hue_order}).")
-
-    # Plot rows.
-    for i in range(n_rows):
-        # Split data.
-        row_x_order = x_order[i * n_cols:(i + 1) * n_cols]
-        row_x_tick_labels = x_tick_labels[i * n_cols:(i + 1) * n_cols]
-
-        # Get x colours.
-        if hue is None:
-            # Check there are enough colors in palette.
-            if len(row_x_order) > len(palette):
-                raise ValueError(f"'palette' doesn't have enough colours for x values '{row_x_order}', needs '{len(row_x_order)}'.")
-            x_colours = dict((x, palette[i]) for i, x in enumerate(row_x_order))
-
-        # Get row data.
-        row_data = data[data[x].isin(row_x_order)].copy()
-
-        # Keep track of legend items.
-        hue_artists = {}
-
-        for j, x_val in enumerate(row_x_order):
-            # Add x positions.
-            if hue is not None:
-                for k, hue_name in enumerate(hue_order):
-                    x_pos = j - 0.5 * x_width + (k + 0.5) * hue_width
-                    row_data.loc[(row_data[x] == x_val) & (row_data[hue] == hue_name), 'x_pos'] = x_pos
-            else:
-                x_pos = j
-                row_data.loc[row_data[x] == x_val, 'x_pos'] = x_pos
-                
-            # Plot boxes.
-            if show_boxes:
-                if hue is not None:
-                    for k, hue_name in enumerate(hue_order):
-                        # Get hue data and pos.
-                        hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
-                        if len(hue_data) == 0:
-                            continue
-                        hue_pos = hue_data.iloc[0]['x_pos']
-
-                        # Get hue 'label' - allows us to use names more display-friendly than the data values.
-                        hue_label = hue_name if hue_labels is None else hue_labels[k]
-
-                        hatch = hue_hatches[k] if hue_hatches is not None else None
-                        if style == 'box':
-                            # Plot box.
-                            res = axs[i].boxplot(hue_data[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
-                            if hatch is not None:
-                                mpl.rcParams['hatch.linewidth'] = linewidth
-                                res['boxes'][0].set_hatch(hatch)
-                                # res['boxes'][0].set(hatch=hatch)
-                                # res['boxes'][0].set_edgecolor('white')
-                                # res['boxes'][0].set(facecolor='white')
-
-                            # Save reference to plot for legend.
-                            if not hue_label in hue_artists:
-                                hue_artists[hue_label] = res['boxes'][0]
-                        elif style == 'violin':
-                            # Plot violin.
-                            res = axs[i].violinplot(hue_data[y], positions=[hue_pos], widths=hue_width)
-
-                            # Save reference to plot for legend.
-                            if not hue_label in hue_artists:
-                                hue_artists[hue_label] = res['boxes'][0]
-                else:
-                    # Plot box.
-                    x_df = row_data[row_data[x] == x_val]
-                    if len(x_df) == 0:
-                        continue
-                    x_pos = x_df.iloc[0]['x_pos']
-                    if style == 'box':
-                        axs[i].boxplot(x_df[y], boxprops=dict(color=linecolour, facecolor=x_colours[x_val], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
-                    elif style == 'violin':
-                        axs[i].violinplot(x_df[y], positions=[x_pos])
-
-            # Plot points.
-            if show_points:
-                if hue is not None:
-                    for j, hue_name in enumerate(hue_order):
-                        hue_data = row_data[(row_data[x] == x_val) & (row_data[hue] == hue_name)]
-                        if len(hue_data) == 0:
-                            continue
-                        res = axs[i].scatter(hue_data['x_pos'], hue_data[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
-                        if not hue_label in hue_artists:
-                            hue_artists[hue_label] = res
-                else:
-                    x_df = row_data[row_data[x] == x_val]
-                    axs[i].scatter(x_df['x_pos'], x_df[y], color=x_colours[x_val], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
-
-            # Identify connections between hues.
-            if hue is not None and show_hue_connections:
-                # Get column/value pairs to group across hue levels.
-                # line_ids = row_data[(row_data[x] == x_val) & row_data['outlier']][outlier_cols]
-                x_df = row_data[(row_data[x] == x_val)]
-                if not show_hue_connections_inliers:
-                    line_ids = x_df[x_df['outlier']][hue_connections_index]
-                else:
-                    line_ids = x_df[hue_connections_index]
-
-                # Drop duplicates.
-                line_ids = line_ids.drop_duplicates()
-
-                # Get palette.
-                line_palette = sns.color_palette('husl', n_colors=len(line_ids))
-
-                # Plot lines.
-                artists = []
-                labels = []
-                for j, (_, line_id) in enumerate(line_ids.iterrows()):
-                    # Get line data.
-                    line_data = row_data[(row_data[x] == x_val)]
-                    for k, v in zip(line_ids.columns, line_id):
-                        line_data = line_data[line_data[k] == v]
-                    line_data = line_data.sort_values('x_pos')
-                    x_pos = line_data['x_pos'].tolist()
-                    y_data = line_data[y].tolist()
-
-                    # Plot line.
-                    lines = axs[i].plot(x_pos, y_data, color=line_palette[j])
-
-                    # Save line/label for legend.
-                    artists.append(lines[0])
-                    label = ':'.join(line_id.tolist())
-                    labels.append(label)
-
-                # Annotate outlier legend.
-                if show_legend:
-                    # Save main legend.
-                    main_legend = axs[i].get_legend()
-
-                    # Show outlier legend.
-                    axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=outlier_legend_loc)
-
-                    # Re-add main legend.
-                    axs[i].add_artist(main_legend)
-
-        if hue is not None:
-            if show_legend:
-                # Filter 'hue_labels' based on hue 'artists'. Some hues may not be present in this row,
-                # and 'hue_labels' is a global (across all rows) tracker.
-                hue_labels = hue_order if hue_labels is None else hue_labels
-                labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels if h in hue_artists]))
-
-                # Show legend.
-                legend = axs[i].legend(artists, labels, bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize_legend, loc=legend_loc)
-                frame = legend.get_frame()
-                frame.set_boxstyle('square')
-                frame.set_edgecolor('black')
-                frame.set_linewidth(linewidth)
-
-        # Plot statistical significance.
-        if hue is not None and show_stats:
-            # Create pairs for stats annotation.
-            pairs = []
-            for x_val in row_x_order:
-                pair = []
-                for j, hue_val in enumerate(hue_order):
-                    for hue_val_two in hue_order[j + 1:]:
-                        pair = ((x_val, hue_val), (x_val, hue_val_two))
-                        pairs.append(pair)
-
-            # Calculate p-values.
-            pairs_tmp = pairs.copy()
-            pairs = []  # Some pairs may be removed if there is not data.
-            p_vals = []
-            for (x_a, hue_a), (x_b, hue_b) in pairs_tmp:
-                assert x_a == x_b
-                x_val = x_a
-                x_df = row_data[row_data[x] == x_val]
-                if x_val == 'Mandible':
-                    x_df.to_csv('x.csv')
-                x_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
-                if x_val == 'Mandible':
-                    x_df.to_csv('xp.csv')
-                if (y, hue_a) in x_df.columns and (y, hue_b) in x_df.columns:
-                    vals_a = x_df[y][hue_a]
-                    vals_b = x_df[y][hue_b]
-                    if not stats_paired:
-                        vals_a = vals_a[~vals_a.isna()]
-                        vals_b = vals_b[~vals_b.isna()]
-                    pair = ((x_a, hue_a), (x_b, hue_b))
-                    if stats_two_sided:
-                        # Perform two-sided 'Wilcoxon signed rank test'.
-                        if stats_paired:
-                            _, p_val = wilcoxon(vals_a, vals_b, alternative='two-sided')
-                        else:
-                            _, p_val = mannwhitneyu(vals_a, vals_b, alternative='two-sided')
-                        if p_val <= 0.05:
-                            p_vals.append((p_val, ''))
-                            pairs.append(pair)
-                    else:
-                        # Perform one-sided 'Wilcoxon signed rank test'.
-                        if stats_paired:
-                            _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
-                        else:
-                            _, p_val = mannwhitneyu(vals_a, vals_b, alternative='greater')
-                        if p_val <= 0.05:
-                            p_vals.append((p_val, '>'))
-                            pairs.append(pair)
-                        else:
-                            if stats_paired:
-                                _, p_val = wilcoxon(vals_a, vals_b, alternative='less')
-                            else:
-                                _, p_val = mannwhitneyu(vals_a, vals_b, alternative='less')
-                            if p_val <= 0.05:
-                                p_vals.append((p_val, '<'))
-                                pairs.append(pair)
-
-            # Exclude pairs.
-            pairs_tmp = pairs.copy()
-            p_vals_tmp = p_vals.copy()
-            pairs = []
-            p_vals = []
-            for pair, p_val in zip(pairs_tmp, p_vals_tmp):
-                (x_a, hue_a), (x_b, hue_b) = pair    
-                if (hue_a in stats_exclude or hue_b in stats_exclude) or (hue_a in stats_exclude_left) or (hue_b in stats_exclude_right):
-                    continue
-                pairs.append(pair)
-                p_vals.append(p_val)
-
-            # Format p-values.
-            p_vals = __format_p_values(p_vals) 
-
-            # Annotate figure.
-            if len(pairs) > 0:
-                annotator = Annotator(axs[i], pairs, data=row_data, x=x, y=y, order=row_x_order, hue=hue, hue_order=hue_order, verbose=False)
-                conf_kwargs = { 'fontsize': fontsize_stats, 'line_width': linewidth }
-                if stats_text_offset is not None:
-                    conf_kwargs['text_offset'] = stats_text_offset
-                annotator.configure(**conf_kwargs)
-                annotator.set_custom_annotations(p_vals)
-                annotator.annotate()
-          
-        # Set axis labels.
-        x_label = x_label if x_label is not None else ''
-        y_label = y_label if y_label is not None else ''
-        axs[i].set_xlabel(x_label, fontsize=fontsize_label)
-        axs[i].set_ylabel(y_label, fontsize=fontsize_label)
-                
-        # Set axis tick labels.
-        axs[i].set_xticks(list(range(len(row_x_tick_labels))))
-        if show_x_tick_labels:
-            axs[i].set_xticklabels(row_x_tick_labels, fontsize=fontsize_tick_label, rotation=x_tick_label_rot)
-        else:
-            axs[i].set_xticklabels([])
-
-        axs[i].tick_params(axis='y', which='major', labelsize=fontsize_tick_label)
-
-        # Set axis limits.
-        axs[i].set_xlim(*x_lim)
-        y_margin = 0.05
-        if not share_y:
-            min_y = row_data[y].min()
-            max_y = row_data[y].max()
         y_lim_row = list(y_lim)
         if y_lim_row[0] is None:
             if y_lim_row[1] is None:

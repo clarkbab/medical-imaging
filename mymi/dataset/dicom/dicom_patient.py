@@ -181,6 +181,10 @@ class DICOMPatient:
     def ct_summary(self, *args, **kwargs):
         return self.default_rtstruct.ref_ct.summary(*args, **kwargs)
 
+    @property
+    def first_ct(self):
+        return self.default_rtstruct.ref_ct.first_ct
+
     def get_rtdose(self, *args, **kwargs):
         return self.__default_rtdose_series.get_rtdose(*args, **kwargs)
 
