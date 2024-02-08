@@ -1780,11 +1780,15 @@ def plot_dataframe(
                     if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
                         vals_a = x_pivot_df[y][hue_l]
                         vals_b = x_pivot_df[y][hue_r]
-                        if np.any(vals_a.isna()) or np.any(vals_b.isna()):
-                            raise ValueError(f"Unpaired data for x ({x}={x_val}) and hues ({hue}=({hue_l},{hue_r})).")
-                        if not stats_paired:
+
+                        # Handle 'nan' values. 
+                        if stats_paired:
+                            if np.any(vals_a.isna()) or np.any(vals_b.isna()):
+                                raise ValueError(f"Unpaired data for x ({x}={x_val}) and hues ({hue}=({hue_l},{hue_r})).")
+                        else:
                             vals_a = vals_a[~vals_a.isna()]
                             vals_b = vals_b[~vals_b.isna()]
+
                         pair = (hue_l, hue_r)
                         if stats_two_sided:
                             # Perform two-sided 'Wilcoxon signed rank test'.
