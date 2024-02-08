@@ -1783,13 +1783,22 @@ def plot_dataframe(
                         vals_a = x_pivot_df[y][hue_l]
                         vals_b = x_pivot_df[y][hue_r]
 
-                        # Handle 'nan' values. 
                         if stats_paired:
+                            # Check if all data is paired.
                             if np.any(vals_a.isna()) or np.any(vals_b.isna()):
                                 raise ValueError(f"Unpaired data for x ({x}={x_val}) and hues ({hue}=({hue_l},{hue_r})).")
+
+                            # Can't calculate paired test if all differences are zero - no difference to be found.
+                            if np.all(vals_a - vals_b == 0):
+                                continue
                         else:
+                            # Remove 'nan' values.
                             vals_a = vals_a[~vals_a.isna()]
                             vals_b = vals_b[~vals_b.isna()]
+
+                        # Check for empty data - no difference to be found.
+                        if len(vals_a) == 0 or len(vals_b) == 0:
+                            continue
 
                         pair = (hue_l, hue_r)
                         if stats_two_sided:
@@ -1804,10 +1813,6 @@ def plot_dataframe(
                         else:
                             # Perform one-sided 'Wilcoxon signed rank test'.
                             if stats_paired:
-                                # Can't calculate 'wilcoxon' if all differences are zero - and
-                                # there's no difference to show anyway.
-                                if np.all(vals_a - vals_b == 0):
-                                    continue
                                 _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
                             else:
                                 _, p_val = mannwhitneyu(vals_a, vals_b, alternative='greater')
