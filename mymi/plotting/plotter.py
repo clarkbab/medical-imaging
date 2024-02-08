@@ -1441,6 +1441,7 @@ def plot_dataframe(
     hue_hatch: Optional[Union[str, List[str]]] = None,
     hue_label: Optional[Union[str, List[str]]] = None,
     hue_order: Optional[List[str]] = None,
+    hspace: Optional[float] = None,
     include_x: Optional[Union[str, List[str]]] = None,
     legend_bbox: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
     legend_loc: str = 'upper right',
@@ -1556,7 +1557,8 @@ def plot_dataframe(
         # Figsize will have been handled externally.
     else:
         if n_rows > 1:
-            _, axs = plt.subplots(n_rows, 1, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), sharey=share_y)
+            gridspec_kw = { 'hspace': hspace }
+            _, axs = plt.subplots(n_rows, 1, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw=gridspec_kw, sharey=share_y)
         else:
             plt.figure(dpi=dpi, figsize=figsize)
             axs = [plt.gca()]
