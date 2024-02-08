@@ -478,11 +478,6 @@ def plot_multi_segmenter_prediction(
         model = models[i]
         model_regions = model_regionses[i]
         model_label = model_labels[i]
-        
-        print(model)
-        print(model_regions)
-        print(model_label)
-        print(pred_regions)
 
         # Load segmenter prediction.
         pred = None

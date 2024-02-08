@@ -950,17 +950,12 @@ def create_adaptive_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: Union[ModelName, Model],
-    load_all_samples: bool = False,
-    loader_shuffle_samples: bool = False,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_grouping: bool = False,
-    use_loader_split_file: bool = False,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Creating adaptive segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
     model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
     # Load gpu if available.
@@ -983,7 +978,7 @@ def create_adaptive_segmenter_predictions(
         timer = Timer(cols)
 
     # Create test loader.
-    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
 
     # Load PyTorch model.
     if type(model) == tuple:
@@ -1016,7 +1011,15 @@ def create_adaptive_segmenter_predictions(
     # Save timing data.
     if use_timing:
         model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        filepath = os.path.join(config.directories.predictions, 'timing', 'adaptive-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}-device-{device.type}-timing.csv')
+        params = {
+            'device': device.type,
+            'load_all_samples': kwargs.get('load_all_samples', False),
+            'n_folds': kwargs.get('n_folds', None),
+            'shuffle_samples': kwargs.get('shuffle_samples', True),
+            'use_grouping': kwargs.get('use_grouping', False),
+            'use_split_file': kwargs.get('use_split_file', False),
+        }
+        filepath = os.path.join(config.directories.predictions, 'timing', 'adaptive-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -1079,18 +1082,12 @@ def create_multi_segmenter_predictions(
     region: PatientRegions,
     model: Union[ModelName, Model],
     exclude_like: Optional[str] = None,
-    load_all_samples: bool = False,
-    loader_shuffle_samples: bool = True,
-    loader_shuffle_train: bool = True,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_grouping: bool = False,
-    use_loader_split_file: bool = False,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
     model_spacing = TrainingDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
     # Load gpu if available.
@@ -1113,7 +1110,7 @@ def create_multi_segmenter_predictions(
         timer = Timer(cols)
 
     # Create test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, shuffle_train=loader_shuffle_train, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+    _, _, test_loader = MultiLoader.build_loaders(datasets, region=regions, **kwargs) 
 
     # Load PyTorch model.
     if type(model) == tuple:
@@ -1148,7 +1145,15 @@ def create_multi_segmenter_predictions(
     # Save timing data.
     if use_timing:
         model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}-device-{device.type}-timing.csv')
+        params = {
+            'device': device.type,
+            'load_all_samples': kwargs.get('load_all_samples', False),
+            'n_folds': kwargs.get('n_folds', None),
+            'shuffle_samples': kwargs.get('shuffle_samples', True),
+            'use_grouping': kwargs.get('use_grouping', False),
+            'use_split_file': kwargs.get('use_split_file', False),
+        }
+        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 

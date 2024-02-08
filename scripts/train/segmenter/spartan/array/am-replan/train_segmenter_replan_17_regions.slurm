@@ -75,6 +75,8 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
+    --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
+    --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
     --test_fold $TEST_FOLD \
     --use_loader_grouping $USE_LOADER_GROUPING \

@@ -566,17 +566,13 @@ def create_adaptive_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
-    load_all_samples: bool = False,
-    loader_shuffle_samples: bool = False,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_grouping: bool = False,
-    use_loader_split_file: bool = False) -> None:
+    **kwargs) -> None:
     datasets = arg_to_list(dataset, str)
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
     model = replace_ckpt_alias(model)
     regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
     logging.arg_log('Evaluating adaptive segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
     # Create dataframe.
@@ -591,7 +587,7 @@ def create_adaptive_segmenter_evaluation(
     df = pd.DataFrame(columns=cols.keys())
 
     # Build test loader.
-    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file) 
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
 
     # Add evaluations to dataframe.
     test_loader = list(iter(test_loader))
@@ -625,8 +621,14 @@ def create_adaptive_segmenter_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), filename)
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -785,6 +787,7 @@ def create_multi_segmenter_evaluation(
     # the listed regions).
     model = replace_ckpt_alias(model)
     regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
     logging.arg_log('Evaluating multi-segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
     # Create dataframe.
@@ -820,7 +823,7 @@ def create_multi_segmenter_evaluation(
             for region, metrics in zip(regions, region_metrics):
                 for metric, value in metrics.items():
                     data = {
-                        'fold': kwargs['test_fold'] if 'test_fold' in kwargs else np.nan,
+                        'fold': test_fold if test_fold is not None else np.nan,
                         'dataset': dataset,
                         'patient-id': pat_id,
                         'region': region,
@@ -834,11 +837,11 @@ def create_multi_segmenter_evaluation(
 
     # Save evaluation.
     params = {
-        'crop-type': kwargs['crop_type'] if 'crop_type' in kwargs else 'brain',
-        'load-all-samples': kwargs['load_all_samples'] if 'load_all_samples' in kwargs else False,
-        'n-folds': kwargs['n_folds'] if 'n_folds' in kwargs else None,
-        'test-fold': kwargs['test_fold'] if 'test_fold' in kwargs else None,
-        'use-split-file': kwargs['use_split_file'] if 'use_split_file' in kwargs else False,
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
     }
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -1024,17 +1027,18 @@ def load_adaptive_segmenter_evaluation(
     region: PatientRegions,
     model: ModelName,
     exists_only: bool = False,
-    load_all_samples: bool = False,
-    loader_shuffle_samples: bool = False,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_grouping: bool = False,
-    use_loader_split_file: bool = False) -> Union[np.ndarray, bool]:
+    **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
     model = replace_ckpt_alias(model)
-    filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
-    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), filename)
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True
@@ -1074,7 +1078,7 @@ def load_multi_segmenter_heatmap_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Multi-segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+            raise ValueError(f"Multi-segmenter heatmap evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df
@@ -1105,21 +1109,17 @@ def load_multi_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: ModelName,
-    crop_type: str = 'brain',
     exists_only: bool = False,
-    load_all_samples: bool = False,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_split_file: bool = False) -> Union[np.ndarray, bool]:
+    **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
     model = replace_ckpt_alias(model)
     params = {
-        'crop-type': crop_type,
-        'load-all-samples': load_all_samples,
-        'n-folds': n_folds,
-        'test-fold': test_fold,
-        'use-split-file': use_split_file
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
     }
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     if os.path.exists(filepath):

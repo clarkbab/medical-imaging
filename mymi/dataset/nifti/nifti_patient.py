@@ -81,13 +81,11 @@ class NIFTIPatient:
 
     @property
     def origin(self) -> Tuple[str, str]:
-        df = self.__index
-        if df is None:
+        index = self.__index
+        if index is None:
             raise ValueError(f"No 'index.csv' provided for dataset '{self.__dataset}'.")
-        row = df[df['anon-id'] == self.__id].iloc[0]
-        dataset = row['dicom-dataset']
-        pat_id = row['patient-id']
-        return (dataset, pat_id)
+        origin_info = tuple(index[['origin-dataset', 'origin-patient-id', 'origin-study-id']])
+        return origin_info
 
     @property
     def patient_id(self) -> Optional[str]:

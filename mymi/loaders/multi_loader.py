@@ -100,6 +100,7 @@ class MultiLoader:
         regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
+        logging.arg_log('Building multi-loader', ('dataset', 'regions', 'load_all_samples', 'shuffle_samples', 'use_grouping', 'use_split_file'), (dataset, regions, load_all_samples, shuffle_samples, use_grouping, use_split_file))
 
         # Get dataset spacing.
         sets = []

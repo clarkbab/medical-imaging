@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
@@ -48,7 +48,7 @@ USE_WEIGHTS=True
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=46
+RANDOM_SEED=43
 RUN_NAME_BASE="16-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --partition gpu-a100-short
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1
@@ -30,7 +30,13 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-pmcc-numbers-v3"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
-RANDOM_SEED=54
+if [[ $SHORT_REGION == BL_BR_OL_OR_CL_CR_LL_LR ]]; then
+    RANDOM_SEED=54
+elif [[ $SHORT_REGION == SC ]]; then
+    RANDOM_SEED=43
+else
+    RANDOM_SEED=42
+fi
 RUN_NAME="8-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"

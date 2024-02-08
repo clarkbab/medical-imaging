@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --partition gpu-a100-short
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1
@@ -60,7 +60,9 @@ RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 RANDOM_SEED=42
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+if [[ $SHORT_REGION == LL ]] || [[ $SHORT_REGION == LR ]]; then
+    RUN_NAME="$RUN_NAME-lr-1e-4"
+fi
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 USE_LOADER_SPLIT_FILE=False

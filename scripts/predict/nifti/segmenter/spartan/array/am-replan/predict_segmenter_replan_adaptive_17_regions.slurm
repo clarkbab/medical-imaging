@@ -19,8 +19,8 @@ echo $version
 
 # Get model name.
 RESOLUTION="222"
-DATASET="PMCC-HN-REPLAN-POP-$RESOLUTION"
-MODEL_NAME="segmenter-replan-pop-$RESOLUTION"
+DATASET="PMCC-HN-REPLAN-ADPTM-$RESOLUTION"
+MODEL_NAME="segmenter-replan-adptm-$RESOLUTION"
 
 # Set up region weighting.
 USE_WEIGHTS=True
@@ -28,36 +28,42 @@ WEIGHTS_IV_FACTOR_0=0.5
 SCHEDULE_EPOCHS=200
 
 # Get run name.
-RANDOM_SEED=42
+N_FOLDS=5
 TEST_FOLD=$SLURM_ARRAY_TASK_ID
-RUN_NAME_BASE="17-regions-fold-$TEST_FOLD"
-if [ "$USE_WEIGHTS" = True ]; then
-    RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS-seed-$RANDOM_SEED"
-else
-    RUN_NAME="$RUN_NAME_BASE-seed-$RANDOM_SEED"
+RUN_NAME="n-folds-$N_FOLDS-fold-$TEST_FOLD"
+if [[ $USE_WEIGHTS == True ]]; then
+    RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi
+if [[ $TEST_FOLD -eq 2 ]]; then
+    RANDOM_SEED=43
+else
+    RANDOM_SEED=42
+fi
+RUN_NAME="$RUN_NAME-seed-$RANDOM_SEED"
 
 # Loader settings.
 LOAD_ALL_SAMPLES=True
-LOADER_SHUFFLE_SAMPLES=False
 N_FOLDS=5
-USE_LOADER_GROUPING=True
-USE_LOADER_SPLIT_FILE=False
+SHUFFLE_SAMPLES=False
+USE_GROUPING=True
 
 # Other settings.
-EXCLUDE_LIKE="'-0'"
+CHECK_EPOCHS=True
+CROP_MM="(330,380,500)"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
+N_EPOCHS=1000
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
+python $SCRIPT_DIR/predict/nifti/segmenter/create_adaptive_segmenter_predictions.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
-    --exclude_like $EXCLUDE_LIKE \
+    --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
     --load_all_samples $LOAD_ALL_SAMPLES \
-    --loader_shuffle_samples $LOADER_SHUFFLE_SAMPLES \
+    --shuffle_samples $SHUFFLE_SAMPLES \
+    --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
     --test_fold $TEST_FOLD \
-    --use_loader_grouping $USE_LOADER_GROUPING \
-    --use_loader_split_file $USE_LOADER_SPLIT_FILE
+    --use_grouping $USE_GROUPING

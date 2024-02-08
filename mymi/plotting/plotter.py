@@ -188,7 +188,6 @@ def __box_in_plane(
     view: Axis,
     slice_idx: int) -> bool:
     # Get view bounding box.
-    print(box)
     min, max = box
     min = min[view]
     max = max[view]
@@ -308,6 +307,7 @@ def plot_heatmap(
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
+    show_colorbar: bool = True,
     show_legend: bool = True,
     show_pred_boundary: bool = True,
     show_region_extent: bool = True,
@@ -370,11 +370,12 @@ def plot_heatmap(
 
     # Plot heatmap
     image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_origin(view))
-    # create an axes on the right side of ax. The width of cax will be 5%
-    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.02)
-    plt.colorbar(image, cax=cax)
+    if show_colorbar:
+        # create an axes on the right side of ax. The width of cax will be 5%
+        # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.02)
+        plt.colorbar(image, cax=cax)
 
     # Plot predictions.
     if pred_data is not None:
@@ -1599,7 +1600,7 @@ def plot_dataframe(
             raise ValueError(f"Length of 'show_legend' ({len(show_legend)}) should match number of rows ({n_rows}).")
         else:
             show_legends = show_legend
-    if isinstance(legend_bbox, tuple):
+    if legend_bbox is None or isinstance(legend_bbox, tuple):
         legend_bboxs = [legend_bbox] * n_rows
     else: 
         if len(legend_bbox) != n_rows:
