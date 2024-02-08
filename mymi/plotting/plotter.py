@@ -1450,6 +1450,7 @@ def plot_dataframe(
     major_tick_freq: Optional[float] = None,
     minor_tick_freq: Optional[float] = None,
     n_cols: Optional[int] = None,
+    n_rows: Optional[int] = None,
     outlier_legend_loc: str = 'upper left',
     palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
     pointsize: float = 10,
@@ -1550,7 +1551,8 @@ def plot_dataframe(
     # Create subplots if required.
     if n_cols is None:
         n_cols = len(x_order)
-    n_rows = int(np.ceil(len(x_order) / n_cols))
+    if n_rows is None:
+        n_rows = int(np.ceil(len(x_order) / n_cols))
     if ax is not None:
         assert n_rows == 1
         axs = [ax]
