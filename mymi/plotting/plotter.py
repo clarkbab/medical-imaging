@@ -1798,6 +1798,10 @@ def plot_dataframe(
                         else:
                             # Perform one-sided 'Wilcoxon signed rank test'.
                             if stats_paired:
+                                # Can't calculate 'wilcoxon' if all differences are zero - and
+                                # there's no difference to show anyway.
+                                if np.all(vals_a - vals_b == 0):
+                                    continue
                                 _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
                             else:
                                 _, p_val = mannwhitneyu(vals_a, vals_b, alternative='greater')
