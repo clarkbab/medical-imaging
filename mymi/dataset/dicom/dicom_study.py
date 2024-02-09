@@ -1,4 +1,4 @@
-import os
+from datetime import datetime
 import pandas as pd
 from typing import Dict, List, Optional
 
@@ -51,6 +51,10 @@ class DICOMStudy:
     @property
     def ct_size(self):
         return self.default_rtstruct.ref_ct.size
+
+    @property
+    def date(self) -> datetime:
+        return self.default_rtstruct.ref_ct.study_date
 
     @property
     def ct_spacing(self):

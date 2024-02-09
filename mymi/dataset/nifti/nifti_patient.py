@@ -80,7 +80,7 @@ class NIFTIPatient:
         return self.__index
 
     @property
-    def origin(self) -> Tuple[str, str]:
+    def origin(self) -> Tuple[str, str, str]:
         index = self.__index
         if index is None:
             raise ValueError(f"No 'index.csv' provided for dataset '{self.__dataset}'.")
