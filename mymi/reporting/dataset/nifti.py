@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi.dataset.nifti import NIFTIDataset
+from mymi.dataset import DICOMDataset, NIFTIDataset
 from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
@@ -395,6 +395,74 @@ def load_region_count_report(
     df = df.pivot(index='dataset', columns='region', values='count').fillna(0).astype(int)
     return df
 
+def get_ct_info_summary(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get patients.
+    set = NIFTIDataset(dataset)
+    pat_ids = set.list_patients(region=region)
+
+    cols = {
+        'dataset': str,
+        'patient-id': str,
+        'metric': str,          # e.g. 'manufacturer', 'study-date'
+        'value': str
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    for pat_id in tqdm(pat_ids):
+        pat = set.patient(pat_id)
+        origin_dataset, origin_pat_id, origin_study_id = pat.origin
+        study = DICOMDataset(origin_dataset).patient(origin_pat_id).study(origin_study_id)
+
+        # Add contrast details.
+        ct = study.first_ct
+        data = {
+            'dataset': dataset,
+            'patient-id': pat_id,
+            'metric': 'contrast',
+            'value': getattr(ct, 'ContrastBolusAgent', '')
+        }
+        df = append_row(df, data)
+
+        # Add 'kVp', 'mA'.
+        metrics = ['kvp', 'ma', 'exposure-ms']
+        attrs = ['KVP', 'XRayTubeCurrent', 'ExposureTime']
+        for metric, attr in zip(metrics, attrs):
+            data = {
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'metric': metric,
+                'value': getattr(ct, attr, '')
+            }
+            df = append_row(df, data)
+
+        # Add manufacturer details.
+        metrics = ['manufacturer-make', 'manufacturer-model']
+        attrs = ['Manufacturer', 'ManufacturerModelName']
+        for metric, attr in zip(metrics, attrs):
+            data = {
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'metric': metric,
+                'value': getattr(ct, attr, '')
+            }
+            df = append_row(df, data)
+
+        # Add study date.
+        data = {
+            'dataset': dataset,
+            'patient-id': pat_id,
+            'metric': 'study-date',
+            'value': study.date
+        }
+        df = append_row(df, data)
+
+    # Set column types as 'append' crushes them.
+    df = df.astype(cols)
+
+    return df
+
 def get_ct_summary(
     dataset: str,
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
@@ -436,6 +504,21 @@ def get_ct_summary(
     df = df.astype(cols)
 
     return df
+    
+def create_ct_info_summary_report(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> None:
+    # Get regions.
+    set = NIFTIDataset(dataset)
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
+
+    # Get summary.
+    df = get_ct_info_summary(dataset, region=regions)
+
+    # Save summary.
+    filepath = os.path.join(set.path, 'reports', 'ct-info-summary', encode(regions), 'ct-summary.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def create_ct_summary_report(
     dataset: str,
@@ -451,6 +534,18 @@ def create_ct_summary_report(
     filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def load_ct_info_summary_report(
+    dataset: str,
+    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    # Get regions.
+    set = NIFTIDataset(dataset)
+    regions = arg_to_list(region, str) if region is None else set.list_regions()
+
+    filepath = os.path.join(set.path, 'reports', 'ct-info-summary', encode(regions), 'ct-summary.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"CT info summary report doesn't exist for dataset '{dataset}'.")
+    return pd.read_csv(filepath)
 
 def load_ct_summary_report(
     dataset: str,
