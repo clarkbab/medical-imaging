@@ -107,6 +107,10 @@ class DICOMStudy:
         return self.default_rtdose.spacing
 
     @property
+    def first_ct(self):
+        return self.default_rtstruct.ref_ct.first_ct
+
+    @property
     def id(self) -> str:
         return self.__id
 
