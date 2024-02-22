@@ -1,9 +1,9 @@
 from ast import literal_eval
-from .types import ImageSize3D, ImageSpacing3D
+from .types import Size3D, Spacing3D
 
-def parse_size_3D(s: str) -> ImageSize3D:
+def parse_size_3D(s: str) -> Size3D:
     """
-    returns: a ImageSize3D object.
+    returns: a Size3D object.
     args:
         s: the string to parse.
     """
@@ -11,26 +11,26 @@ def parse_size_3D(s: str) -> ImageSize3D:
     try:
         s = literal_eval(s)
     except SyntaxError:
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSize3D}', got syntax error.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Size3D}', got syntax error.")
 
     # Check type.
     if not isinstance(s, tuple):
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSize3D}', got type '{type(s)}', expected tuple.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Size3D}', got type '{type(s)}', expected tuple.")
 
     # Check length.
     if not len(s) == 3:
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSize3D}', got length '{len(s)}', expected 3.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Size3D}', got length '{len(s)}', expected 3.")
 
     # Check elements.
     for i in s:
         if not isinstance(i, int):
-            raise TypeError(f"Couldn't parse '{s}' into type '{ImageSize3D}', got element '{i}' of type '{type(i)}', expected int.")
+            raise TypeError(f"Couldn't parse '{s}' into type '{Size3D}', got element '{i}' of type '{type(i)}', expected int.")
 
     return s
 
-def parse_spacing_3D(s: str) -> ImageSpacing3D:
+def parse_spacing_3D(s: str) -> Spacing3D:
     """
-    returns: a ImageSpacing3D object.
+    returns: a Spacing3D object.
     args:
         s: the string to parse.
     """
@@ -38,19 +38,19 @@ def parse_spacing_3D(s: str) -> ImageSpacing3D:
     try:
         s = literal_eval(s)
     except SyntaxError:
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSpacing3D}', got syntax error.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Spacing3D}', got syntax error.")
 
     # Check type.
     if not isinstance(s, tuple):
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSpacing3D}', got type '{type(s)}', expected tuple.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Spacing3D}', got type '{type(s)}', expected tuple.")
 
     # Check length.
     if not len(s) == 3:
-        raise TypeError(f"Couldn't parse '{s}' into type '{ImageSpacing3D}', got length '{len(s)}', expected 3.")
+        raise TypeError(f"Couldn't parse '{s}' into type '{Spacing3D}', got length '{len(s)}', expected 3.")
 
     # Check elements.
     for i in s:
         if not isinstance(i, (int, float)):
-            raise TypeError(f"Couldn't parse '{s}' into type '{ImageSpacing3D}', got element '{i}' of type '{type(i)}', expected int or float.")
+            raise TypeError(f"Couldn't parse '{s}' into type '{Spacing3D}', got element '{i}' of type '{type(i)}', expected int or float.")
 
     return s

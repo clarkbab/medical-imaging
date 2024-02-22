@@ -1,13 +1,12 @@
 #!/bin/bash
+#SBATCH --account punim1413
+#SBATCH --partition sapphire
 #SBATCH --nodes 1
-#SBATCH --partition physical
-#SBATCH --mem 32G
-#SBATCH --time 0-2:00:00
-#SBATCH -A punim1413
+#SBATCH --mem 64G
+#SBATCH --time 0-6:00:00
 
-module load gcccore/10.2.0
-module load python/3.8.6
-module load web_proxy
+module load GCCcore/11.3.0
+module load Python/3.10.4
 source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)

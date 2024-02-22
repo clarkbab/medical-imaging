@@ -6,9 +6,10 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
+from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
+from mymi.types import Spacing3D, PatientRegion, PatientRegions
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.geometry import get_centre
 from mymi import logging
@@ -83,6 +84,7 @@ class AdaptiveLoader:
         n_train: Optional[int] = None,
         n_workers: int = 1,
         p_val: float = .2,
+        preload_data: bool = False,
         random_seed: int = 0,
         region: Optional[PatientRegions] = None,
         shuffle_samples: bool = True,
@@ -92,8 +94,9 @@ class AdaptiveLoader:
         transform_train: Transform = None,
         transform_val: Transform = None,
         use_grouping: bool = False,
-        use_split_file: bool = False) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
-        logging.arg_log('Building adaptive loaders', ('n_folds', 'n_subfolds', 'n_train', 'p_val', 'random_seed', 'shuffle_samples', 'shuffle_train', 'test_fold', 'test_subfold', 'use_grouping', 'use_split_file'), (n_folds, n_subfolds, n_train, p_val, random_seed, shuffle_samples, shuffle_train, test_fold, test_subfold, use_grouping, use_split_file))
+        use_split_file: bool = False,
+        **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
+        logging.arg_log('Building adaptive loaders', ('dataset', 'region', 'load_all_samples', 'n_folds', 'shuffle_samples', 'test_fold', 'use_grouping', 'use_split_file'), (dataset, region, load_all_samples, n_folds, shuffle_samples, test_fold, use_grouping, use_split_file))
         datasets = arg_to_list(dataset, str)
         regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
@@ -286,7 +289,7 @@ class AdaptiveLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, train_samples, include_background=include_background, load_data=load_data, random_seed=random_seed, spacing=spacing, transform=transform_train, use_frequency_weighting=True)
+        train_ds = TrainingSet(datasets, train_samples, include_background=include_background, load_data=load_data, preload_data=preload_data, random_seed=random_seed, spacing=spacing, transform=transform_train, use_frequency_weighting=True)
         if shuffle_train:
             shuffle = None
             train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
@@ -296,7 +299,7 @@ class AdaptiveLoader:
         train_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=train_ds, num_workers=n_workers, sampler=train_sampler, shuffle=shuffle)
 
         # Create validation loader.
-        val_ds = TrainingSet(datasets, val_samples, include_background=include_background, load_data=load_data, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, val_samples, include_background=include_background, load_data=load_data, preload_data=preload_data, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -325,13 +328,15 @@ class TrainingSet(Dataset):
         samples: List[Tuple[int, int]],
         include_background: bool = False,
         load_data: bool = True,
+        preload_data: bool = False,
         random_seed: float = 0,
-        spacing: Optional[ImageSpacing3D] = None,
+        spacing: Optional[Spacing3D] = None,
         transform: torchio.transforms.Transform = None,
         use_frequency_weighting: bool = True):
         if transform is not None:
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
         self.__load_data = load_data
+        self.__preload_data = preload_data
         self.__random_seed = random_seed
         self.__spacing = spacing
         self.__transform = transform
@@ -380,6 +385,20 @@ class TrainingSet(Dataset):
 
         logging.info(f"Using weights '{self.__class_weights}'.")
 
+        # Preload data.
+        if preload_data:
+            logging.info(f"Preloading data for {self.__n_samples} samples.")
+            self.__data = []
+            for i in tqdm(range(self.__n_samples)):
+                # Get dataset sample.
+                ds_i, s_i = self.__sample_map[i]
+                set = self.__sets[ds_i]
+
+                # Load region data.
+                sample = set.sample(s_i)
+                input, label = sample.pair
+                self.__data.append((input, label))
+
     def __len__(self):
         return self.__n_samples
 
@@ -395,7 +414,10 @@ class TrainingSet(Dataset):
 
         # Load input/label data.
         sample = set.sample(s_i)
-        input, label = sample.pair
+        if self.__preload_data:
+            input, label = self.__data[index]
+        else:
+            input, label = sample.pair
 
         # Create mask from label.
         mask = label.sum(axis=(1, 2, 3)).astype(np.bool_)

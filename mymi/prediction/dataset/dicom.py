@@ -16,7 +16,7 @@ from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import to_255, RegionColours, region_to_list
 from mymi.transforms import crop_3D, pad_4D, resample, resample_list
-from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions
+from mymi.types import Box3D, Size3D, Spacing3D, Model, ModelName, PatientID, PatientRegions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -25,7 +25,7 @@ def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: Union[ModelName, Model],
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     restart_pat_id: Optional[PatientID] = None,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
@@ -91,7 +91,7 @@ def create_multi_segmenter_prediction(
     pat_id: Union[str, List[str]],
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
@@ -130,7 +130,7 @@ def get_multi_segmenter_prediction(
     pat_id: PatientID,
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: torch.device = torch.device('cpu'),
     crop_mm: Optional[Box3D] = None,
     **kwargs) -> np.ndarray:
@@ -304,8 +304,8 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: Model,
-    loc_size: ImageSize3D = (128, 128, 150),
-    loc_spacing: ImageSpacing3D = (4, 4, 4),
+    loc_size: Size3D = (128, 128, 150),
+    loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = DICOMDataset(dataset)

@@ -34,7 +34,9 @@ RUN_NAME="n-folds-$N_FOLDS-fold-$TEST_FOLD"
 if [[ $USE_WEIGHTS == True ]]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi
-if [[ $TEST_FOLD -eq 0 ]] || [[ $TEST_FOLD -eq 4 ]]; then
+if [[ $TEST_FOLD -eq 2 ]]; then
+    RANDOM_SEED=45
+elif [[ $TEST_FOLD -eq 0 ]] || [[ $TEST_FOLD -eq 4 ]]; then
     RANDOM_SEED=43
 else
     RANDOM_SEED=42

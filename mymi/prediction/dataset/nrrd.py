@@ -17,7 +17,7 @@ from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
 from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
-from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.types import Size3D, Spacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -26,8 +26,8 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: Model,
-    loc_size: ImageSize3D = (128, 128, 150),
-    loc_spacing: ImageSpacing3D = (4, 4, 4),
+    loc_size: Size3D = (128, 128, 150),
+    loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = NRRDDataset(dataset)
@@ -46,8 +46,10 @@ def create_localiser_prediction(
     localiser: Union[ModelName, Model],
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None) -> None:
+    localiser_str = localiser if isinstance(localiser, tuple) else localiser.name
+    logging.arg_log('Creating NRRD localiser prediction', ('dataset', 'pat_id', 'localiser'), (dataset, pat_id, localiser_str))
     datasets = arg_to_list(dataset, str)
-    pat_ids = arg_to_list(pat_id, [int, str], out_type=str)
+    pat_ids = arg_to_list(pat_id, str)
     datasets = arg_broadcast(datasets, pat_ids)
     assert len(datasets) == len(pat_ids)
 
@@ -161,6 +163,51 @@ def create_localiser_predictions(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
+def create_all_localiser_predictions(
+    dataset: Union[str, List[str]],
+    localiser: ModelName,
+    check_epochs: bool = True,
+    n_epochs: int = np.inf,
+    timing: bool = True) -> None:
+    logging.arg_log('Making localiser predictions', ('dataset', 'localiser'), (dataset, localiser))
+    datasets = arg_to_list(dataset, str)
+    localiser = Localiser.load(*localiser, check_epochs=check_epochs, n_epochs=n_epochs)
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if timing:
+        cols = {
+            'dataset': str,
+            'patient-id': str,
+            'localiser': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Load patients.
+    for dataset in datasets:
+        set = NRRDDataset(dataset)
+        pat_ids = set.list_patients()
+
+        for pat_id in tqdm(pat_ids):
+            # Timing table data.
+            data = {
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'localiser': str(localiser),
+                'device': device.type
+            }
+
+            with timer.record(data, enabled=timing):
+                create_localiser_prediction(dataset, pat_id, localiser, device=device)
+
 def load_localiser_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -224,7 +271,7 @@ def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, Model],
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -286,7 +333,7 @@ def get_segmenter_prediction(
     loc_centre: Point3D,
     segmenter: Union[Model, ModelName],
     probs: bool = False,
-    seg_spacing: ImageSpacing3D = (1, 1, 2),
+    seg_spacing: Spacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -347,7 +394,7 @@ def create_multi_segmenter_prediction(
     pat_id: Union[str, List[str]],
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:

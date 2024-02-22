@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --partition gpu-a100-short
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1

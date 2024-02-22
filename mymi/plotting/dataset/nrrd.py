@@ -7,7 +7,7 @@ from mymi.gradcam.dataset.nrrd import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
-from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientRegions
+from mymi.types import Box2D, Spacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotter import plot_heatmap as plot_heatmap_base
@@ -24,7 +24,7 @@ def plot_region(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: Optional[PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
@@ -68,7 +68,7 @@ def plot_localiser_prediction(
     pat_id: str,
     localiser: ModelName,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_prediction: bool = True,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,
@@ -124,14 +124,14 @@ def plot_multi_segmenter_prediction(
     model_region: PatientRegions,
     centre_of: Optional[str] = None,
     check_epochs: bool = True,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
-    model_spacing: Optional[ImageSpacing3D] = None,
+    model_spacing: Optional[Spacing3D] = None,
     model_region_visible: Optional[PatientRegions] = None,
     pred_label: Union[str, List[str]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
-    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
@@ -249,14 +249,14 @@ def plot_segmenter_prediction(
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
     pred_label: Union[str, List[str]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
     show_ct: bool = True,
-    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     **kwargs) -> None:
     localisers = arg_to_list(localiser, tuple)
     segmenters = arg_to_list(segmenter, tuple)
@@ -371,7 +371,7 @@ def plot_segmenter_prediction_diff(
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
     diff_label: Union[str, List[str]] = None,
@@ -483,7 +483,7 @@ def plot_heatmap(
     region: str,
     layer: int,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     **kwargs) -> None:
     # Load data.
     set = NRRDDataset(dataset)

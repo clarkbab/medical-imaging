@@ -14,14 +14,15 @@ from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
+from mymi.plotting.dataset.training import plot_region
+from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
-def create_ct_figures(
+def create_ct_figures_report(
     dataset: str,
-    regions: PatientRegions = 'all') -> None:
-    # Get dataset.
-    set = TrainingDataset(dataset)
+    region: Optional[PatientRegions] = None) -> None:
+    logging.arg_log('Creating CT figures (TrainingDataset)', ('dataset', 'region'), (dataset, region))
 
     # Set PDF margins.
     img_t_margin = 30
@@ -52,51 +53,37 @@ def create_ct_figures(
         )
     ) 
 
-    logging.info(f"Creating CT figures for dataset '{dataset}', regions '{regions}'...")
-    partitions = ['train', 'validation', 'test']
-    for partition in tqdm(partitions):
-        # Get patients.
-        part = set.partition(partition)
-        samples = part.list_samples(regions=regions)
-        if len(samples) == 0:
-            continue
+    # Get patients.
+    set = TrainingDataset(dataset)
+    sample_ids = set.list_samples(region=region)
 
-        # Start partition section.
+    for sample_id in sample_ids:
+        # Load input.
+        input = set.sample(sample_id).input
+
+        # Show images.
         pdf.add_page()
-        pdf.start_section(f'Partition: {partition}')
+        pdf.start_section(f'Sample: {sample_id}')
 
-        for s in tqdm(samples, leave=False):
-            # Load sample.
-            sample = part.sample(s)
-            input = sample.input()
+        # Save images.
+        axes = list(range(3))
+        img_coords = (
+            (img_l_margin, img_t_margin),
+            (img_l_margin + img_width, img_t_margin),
+            (img_l_margin, img_t_margin + img_height)
+        )
+        for axis, page_coord in zip(axes, img_coords):
+            # Save figure.
+            slice_idx = input.shape[axis] // 2
+            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            plot_region(dataset, sample_id, savepath=filepath, slice_idx=slice_idx, view=axis)
+            plt.close()
 
-            # Show images.
-            pdf.add_page()
-            pdf.start_section(f'Sample: {s}', level=1)
+            # Add image to report.
+            pdf.image(filepath, *page_coord, w=img_width, h=img_height)
 
-            # Save images.
-            axes = [2, 1, 0]
-            views = ['axial', 'coronal', 'sagittal']
-            img_coords = (
-                (img_l_margin, img_t_margin),
-                (img_l_margin + img_width, img_t_margin),
-                (img_l_margin, img_t_margin + img_height)
-            )
-            for axis, view, page_coord in zip(axes, views, img_coords):
-                # Set figure.
-                slice_idx = int(input.shape[axis] / 2)
-                plot_sample_regions(dataset, partition, s, regions=None, slice_idx=slice_idx, view=view, window=(3000, 500))
-
-                # Save temp file.
-                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plt.savefig(filepath)
-                plt.close()
-
-                # Add image to report.
-                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
-
-                # Delete temp file.
-                os.remove(filepath)
+            # Delete temp file.
+            os.remove(filepath)
 
     # Save PDF.
     filepath = os.path.join(set.path, 'reports', 'ct-figures.pdf') 

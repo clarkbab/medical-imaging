@@ -17,7 +17,7 @@ from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, region_to_list, truncate_spine
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample, resample_list, resample_3D, resample_4D, crop_3D, crop_4D, pad_4D
-from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.types import Box3D, Size3D, Spacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base, get_localiser_prediction_at_training_resolution as get_localiser_prediction_at_training_resolution_base
@@ -26,8 +26,8 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: Model,
-    loc_size: ImageSize3D = (128, 128, 150),
-    loc_spacing: ImageSpacing3D = (4, 4, 4),
+    loc_size: Size3D = (128, 128, 150),
+    loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = NIFTIDataset(dataset)
@@ -44,8 +44,8 @@ def get_localiser_prediction_at_training_resolution(
     dataset: str,
     pat_id: str,
     localiser: Model,
-    loc_size: ImageSize3D = (128, 128, 150),
-    loc_spacing: ImageSpacing3D = (4, 4, 4),
+    loc_size: Size3D = (128, 128, 150),
+    loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = NIFTIDataset(dataset)
@@ -513,7 +513,7 @@ def get_adaptive_segmenter_prediction(
     pat_id: PatientID,
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     crop_mm: Optional[Box3D] = None,
     crop_type: str = 'brain',
     device: torch.device = torch.device('cpu'),
@@ -632,7 +632,7 @@ def get_multi_segmenter_prediction(
     pat_id: PatientID,
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: torch.device = torch.device('cpu'),
     crop_mm: Optional[Box3D] = None,
     crop_type: str = 'brain',
@@ -743,7 +743,7 @@ def get_segmenter_prediction(
     loc_centre: Point3D,
     segmenter: Union[Model, ModelName],
     probs: bool = False,
-    seg_spacing: ImageSpacing3D = (1, 1, 2),
+    seg_spacing: Spacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -804,7 +804,7 @@ def create_adaptive_segmenter_prediction(
     pat_id: Union[str, List[str]],
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:
@@ -847,7 +847,7 @@ def create_multi_segmenter_prediction(
     pat_id: Union[str, List[str]],
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     crop_type: str = 'brain',
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
@@ -1027,7 +1027,7 @@ def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     model: ModelName,
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     timing: bool = True,
     **kwargs) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'localiser'), (dataset, model))

@@ -3,13 +3,13 @@ import SimpleITK as sitk
 from typing import Tuple, Union
 
 from mymi import logging
-from mymi.types import ImageSize3D, ImageSpacing3D
+from mymi.types import Size3D, Spacing3D
 
 def register_image(
     fixed_image: np.ndarray,
     moving_image: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
-    moving_spacing: ImageSpacing3D,
+    fixed_spacing: Spacing3D,
+    moving_spacing: Spacing3D,
     return_transform: bool = False,
     show_progress: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     # Convert to SimpleITK ordering (z, y, x).
@@ -77,9 +77,9 @@ def register_image(
 
 def register_label(
     moving_label: np.ndarray,
-    fixed_spacing: ImageSpacing3D, 
-    moving_spacing: ImageSpacing3D,
-    fixed_size: ImageSize3D,
+    fixed_spacing: Spacing3D, 
+    moving_spacing: Spacing3D,
+    fixed_size: Size3D,
     transform: sitk.Transform) -> np.ndarray:
     # Convert to SimpleITK ordering (z, y, x).
     fixed_spacing = tuple(reversed(fixed_spacing))

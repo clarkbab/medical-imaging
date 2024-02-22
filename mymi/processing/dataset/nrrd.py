@@ -21,13 +21,20 @@ from mymi.dataset.training import recreate as recreate_training
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_segmenter_prediction
+from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
+from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionNames, to_255
 from mymi.regions import region_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import resample_3D, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
+
+def convert_brain_crop_to_training(
+    dataset: str,
+    **kwargs) -> None:
+    set = NRRDDataset(dataset)
+    convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
 
 def convert_to_training(
     dataset: str,
@@ -36,8 +43,8 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    output_size: Optional[types.Size3D] = None,
+    output_spacing: Optional[types.Spacing3D] = None,
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
     training_dataset: Optional[str] = None) -> None:

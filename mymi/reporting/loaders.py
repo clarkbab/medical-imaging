@@ -12,7 +12,6 @@ from mymi.dataset.training import TrainingDataset
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.loaders import AdaptiveLoader, Loader, MultiLoader, MultiLoaderV2, RegSegLoader
 from mymi.loaders.augmentation import get_transforms
-from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.plotting import plot_region
 from mymi.types import PatientID, PatientRegions
@@ -297,6 +296,7 @@ def get_multi_loader_manifest(
         'loader-batch': int,
         'dataset': str,
         'sample-id': int,
+        'input-shape': str,
         'group-id': float,      # Can contain 'nan' values.
         'origin-dataset': str,
         'origin-patient-id': str,
@@ -431,7 +431,7 @@ def create_multi_loader_figures(
         val_transform = None
 
     # Create loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=1, data_hook=naive_crop, n_folds=n_folds, region=regions, shuffle_train=False, test_fold=test_fold, transform_train=train_transform, transform_val=val_transform, use_split_file=use_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(datasets, batch_size=1, n_folds=n_folds, region=regions, shuffle_train=False, test_fold=test_fold, transform_train=train_transform, transform_val=val_transform, use_split_file=use_split_file)
 
     # loaders = (train_loader, val_loader, test_loader)
     loaders = (train_loader, val_loader)

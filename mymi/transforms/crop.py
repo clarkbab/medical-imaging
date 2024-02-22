@@ -2,7 +2,7 @@ import numpy as np
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from mymi.geometry import get_box
-from mymi.types import Box2D, Box3D, ImageSize3D, Point2D, Point3D
+from mymi.types import Box2D, Box3D, Size3D, Point2D, Point3D
 
 def crop_or_pad_2D(
     data: np.ndarray,
@@ -77,7 +77,7 @@ def crop_or_pad_3D(
 
 def centre_pad_4D(
     data: np.ndarray,
-    size: ImageSize3D) -> np.ndarray:
+    size: Size3D) -> np.ndarray:
     ds = []
     for d in data:
         d = centre_pad_3D(d, size)
@@ -87,7 +87,7 @@ def centre_pad_4D(
 
 def centre_pad_3D(
     data: np.ndarray,
-    size: ImageSize3D) -> np.ndarray:
+    size: Size3D) -> np.ndarray:
     # Determine padding amounts.
     to_pad = np.array(size) - data.shape
     box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
@@ -101,7 +101,7 @@ def centre_pad_3D(
 
 def centre_crop_3D(
     data: np.ndarray,
-    size: ImageSize3D) -> np.ndarray:
+    size: Size3D) -> np.ndarray:
     # Determine cropping/padding amounts.
     to_crop = data.shape - np.array(size)
     box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
@@ -190,7 +190,7 @@ def crop_3D(
 
 def crop_4D(
     data: np.ndarray,
-    size: ImageSize3D,
+    size: Size3D,
     **kwargs: Dict[str, Any]) -> np.ndarray:
     ds = []
     for d in data:
@@ -209,7 +209,7 @@ def crop_foreground_3D(
 
 def centre_crop_or_pad_3D(
     data: np.ndarray,
-    size: ImageSize3D,
+    size: Size3D,
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Determine cropping/padding amounts.
     to_crop = data.shape - np.array(size)
@@ -224,7 +224,7 @@ def centre_crop_or_pad_3D(
 
 def centre_crop_or_pad_4D(
     data: np.ndarray,
-    size: ImageSize3D,
+    size: Size3D,
     **kwargs: Dict[str, Any]) -> np.ndarray:
     ds = []
     for d in data:
@@ -235,7 +235,7 @@ def centre_crop_or_pad_4D(
 
 def top_crop_or_pad_3D(
     data: np.ndarray,
-    size: ImageSize3D,
+    size: Size3D,
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Centre crop x/y axes.
     to_crop = data.shape[:2] - np.array(size[:2])
@@ -254,7 +254,7 @@ def top_crop_or_pad_3D(
 
 def point_crop_or_pad_3D(
     data: np.ndarray,
-    size: ImageSize3D,
+    size: Size3D,
     point: Point3D,
     fill: Union[float, Literal['min']] = 'min',
     return_box: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, Box3D]]:

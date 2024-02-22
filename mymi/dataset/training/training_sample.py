@@ -1,12 +1,12 @@
 from numpy.lib.arraysetops import intersect1d
-from mymi.types import ImageSize3D, ImageSpacing3D, PatientRegions
+from mymi.types import Size3D, Spacing3D, PatientRegions
 import numpy as np
 import os
 import pandas as pd
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from mymi.regions import region_to_list
-from mymi import types
+from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
 class TrainingSample:
@@ -62,21 +62,29 @@ class TrainingSample:
         return (record['origin-dataset'], record['origin-patient-id'])
 
     @property
-    def size(self) -> ImageSize3D:
+    def size(self) -> Size3D:
         return self.input.shape
 
     @property
-    def spacing(self) -> ImageSpacing3D:
+    def spacing(self) -> Spacing3D:
         return self.__spacing
 
     def list_regions(
         self,
-        include_empty: bool = False) -> List[str]:
-        # Don't list 'empty' regions.
+        include_empty: bool = False,
+        only: Optional[PatientRegions] = None) -> List[str]:
+        # Filter empty region.
         df = self.index
         if 'empty' in df and not include_empty:
             df = df[~df['empty']]
-        return list(sorted(df.region))
+        regions = list(sorted(df['region']))
+
+        # Filter on 'only'.
+        only = region_to_list(only)
+        if only is not None:
+            regions = [r for r in regions if r in only]
+
+        return regions
 
     def has_region(
         self,

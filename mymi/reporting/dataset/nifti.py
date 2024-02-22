@@ -244,6 +244,12 @@ def load_patient_regions_report(
         else:
             raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
+def load_plan_labels_report(dataset: str) -> None:
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'plan-labels.csv')
+    df = pd.read_csv(filepath)
+    return df
+
 def _get_outlier_cols_func(
     lim_df: DataFrame) -> Callable[[pd.Series], Dict]:
     # Create function to operate on row of 'region summary' table.
@@ -333,7 +339,7 @@ def load_region_summary_report(
     region: Optional[PatientRegions] = None,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
-    regions = arg_to_list(region, str)
+    regions = region_to_list(region)
 
     # Load summary.
     dfs = []
@@ -631,6 +637,25 @@ def create_multi_segmenter_heatmap_figures(
     filepath = os.path.join(config.directories.reports, 'prediction-figures', 'segmenter', encode(datasets), region, encode(localiser), encode(segmenter), f'figures-fold-{test_fold}.pdf') 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
+
+def create_plan_labels_report(dataset: str) -> None:
+    logging.arg_log('Creating plan labels report', ('dataset',), (dataset,))
+
+    nifti_set = NIFTIDataset(dataset)
+    index = nifti_set.index
+    dicom_set = DICOMDataset(dataset)
+    def get_rtplan_label(row: pd.Series):
+        study = dicom_set.patient(row['origin-patient-id']).study(row['origin-study-id'])
+        rtplan = study.default_rtplan
+        if rtplan is None:
+            return ''
+        plan_label = rtplan.get_rtplan().RTPlanLabel
+        return plan_label
+    tqdm.pandas()   # Enable 'progress_apply' method.
+    index['rtplan-label'] = index.progress_apply(get_rtplan_label, axis=1)
+
+    filepath = os.path.join(nifti_set.path, 'reports', 'plan-labels.csv')
+    index.to_csv(filepath, index=False)
 
 def create_segmenter_prediction_figures(
     dataset: Union[str, List[str]],

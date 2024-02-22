@@ -11,6 +11,7 @@ import os
 import pandas as pd
 from scipy.stats import wilcoxon, mannwhitneyu
 import seaborn as sns
+from seaborn.palettes import _ColorPalette
 from statannotations.Annotator import Annotator
 import torchio
 from typing import Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -22,7 +23,7 @@ from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size, is_region
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, register_image
-from mymi.types import Axis, Box2D, Box3D, Crop2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, PatientID, Point3D
+from mymi.types import Axis, Box2D, Box3D, Box2D, Extrema, Spacing2D, Size2D, Size3D, Spacing3D, PatientID, Point3D
 from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 8
@@ -71,7 +72,7 @@ def __plot_region_data(
             extent = get_extent(data[region])
             if extent is not None:
                 label = f'{region} extent' if __box_in_plane(extent, view, slice_idx) else f'{region} extent (offscreen)'
-                __plot_box_slice(extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+                __plot_box_slice(extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
                 show_legend = True
 
         # Plot connected extent.
@@ -170,7 +171,7 @@ def __get_slice_data(
 
 def __get_aspect_ratio(
     view: Axis,
-    spacing: ImageSpacing3D) -> float:
+    spacing: Spacing3D) -> float:
     if view == 0:
         aspect = spacing[2] / spacing[1]
     elif view == 1:
@@ -199,10 +200,14 @@ def __box_in_plane(
 def __plot_box_slice(
     box: Box3D,
     view: Axis,
+    ax: Optional[Axes] = None,
     colour: str = 'r',
     crop: Box2D = None,
     label: str = 'box',
     linestyle: str = 'solid') -> None:
+    if ax is None:
+        ax = plt.gca()
+
     # Compress box to 2D.
     if view == 0:
         dims = (1, 2)
@@ -236,9 +241,8 @@ def __plot_box_slice(
     max = np.array(max) + .5
     width = np.array(max) - min
     rect = Rectangle(min, *width, linewidth=1, edgecolor=colour, facecolor='none', linestyle=linestyle)
-    ax = plt.gca()
     ax.add_patch(rect)
-    plt.plot(0, 0, c=colour, label=label, linestyle=linestyle)
+    ax.plot(0, 0, c=colour, label=label, linestyle=linestyle)
 
 def __escape_latex(text: str) -> str:
     """
@@ -285,14 +289,14 @@ def __assert_view(view: int):
 def plot_heatmap(
     id: str,
     heatmap: np.ndarray,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     alpha_heatmap: float = 0.7,
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[str] = None,
@@ -355,7 +359,7 @@ def plot_heatmap(
         elif type(crop) == np.ndarray:
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
 
     # Get aspect ratio.
     if not aspect:
@@ -431,19 +435,18 @@ def plot_heatmap(
 
 def plot_region(
     id: str,
-    size: ImageSize3D,
-    spacing: ImageSpacing3D,
+    size: Size3D,
+    spacing: Spacing3D,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
     cca: bool = False,
     centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'region_data' if 'str', else uses 'np.ndarray'.
     colour: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_centre_mm: Optional[Tuple[float, float]] = None,
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     ct_data: Optional[np.ndarray] = None,
-    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     dose_alpha: float = 0.3,
     dose_data: Optional[np.ndarray] = None,
     dose_legend_size: float = 0.03,
@@ -475,6 +478,7 @@ def plot_region(
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
     view: Axis = 0,
+    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     **kwargs) -> None:
     __assert_slice_idx(centre_of, extent_of, slice_idx)
     assert view in (0, 1, 2)
@@ -531,7 +535,7 @@ def plot_region(
         elif isinstance(crop, np.ndarray):
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
 
     if crop_centre_mm is not None:
         view_size = __get_view_size(view, size)
@@ -634,6 +638,38 @@ def plot_region(
             for l in plt_legend.get_lines():
                 l.set_linewidth(8)
 
+    # Set axis limits if cropped.
+    if crop is not None:
+        # Get new x ticks/labels.
+        x_diff = int(np.diff(ax.get_xticks())[0])
+        x_tick_label_max = int(np.floor(crop[1][0] / x_diff) * x_diff)
+        x_tick_labels = list(range(crop[0][0], x_tick_label_max, x_diff))
+        x_ticks = list((i * x_diff for i in range(len(x_tick_labels))))
+
+        # Round up to nearest 'x_diff'.
+        x_tick_labels_tmp = x_tick_labels.copy()
+        x_tick_labels = [int(np.ceil(x / x_diff) * x_diff) for x in x_tick_labels_tmp]
+        x_tick_diff = list(np.array(x_tick_labels) - np.array(x_tick_labels_tmp))
+        x_ticks = list(np.array(x_ticks) + np.array(x_tick_diff))
+
+        # Set x ticks.
+        ax.set_xticks(x_ticks, labels=x_tick_labels)
+
+        # Get new y ticks/labels.
+        y_diff = int(np.diff(ax.get_yticks())[0])
+        y_tick_label_max = int(np.floor(crop[1][1] / y_diff) * y_diff)
+        y_tick_labels = list(range(crop[0][1], y_tick_label_max, y_diff))
+        y_ticks = list((i * y_diff for i in range(len(y_tick_labels))))
+
+        # Round up to nearest 'y_diff'.
+        y_tick_labels_tmp = y_tick_labels.copy()
+        y_tick_labels = [int(np.ceil(y / y_diff) * y_diff) for y in y_tick_labels_tmp]
+        y_tick_diff = list(np.array(y_tick_labels) - np.array(y_tick_labels_tmp))
+        y_ticks = list(np.array(y_ticks) + np.array(y_tick_diff))
+
+        # Set y ticks.
+        ax.set_yticks(y_ticks, labels=y_tick_labels)
+
     # Plot dose data.
     if dose_data is not None:
         axim = ax.imshow(dose_slice_data, alpha=dose_alpha, aspect=aspect, origin=__get_origin(view))
@@ -687,7 +723,7 @@ def plot_region(
 
 def plot_localiser_prediction(
     id: str,
-    spacing: ImageSpacing3D, 
+    spacing: Spacing3D, 
     pred_data: np.ndarray,
     pred_region: str,
     aspect: float = None,
@@ -782,7 +818,7 @@ def plot_localiser_prediction(
         elif type(crop) == np.ndarray:
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
 
     # Plot prediction.
     if show_pred and not empty_pred:
@@ -892,7 +928,7 @@ def plot_localiser_prediction(
 def __get_region_crop(
     data: np.ndarray,
     crop_margin: float,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     view: Axis) -> Box2D:
     # Get 3D crop box.
     extent = get_extent(data)
@@ -946,7 +982,7 @@ def plot_distribution(
 
 def plot_multi_segmenter_prediction(
     id: str,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     pred_data: Dict[str, np.ndarray],
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
@@ -962,7 +998,7 @@ def plot_multi_segmenter_prediction(
     figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
+    legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
     linestyle_region: str = 'solid',
@@ -986,6 +1022,8 @@ def plot_multi_segmenter_prediction(
     if ax is None:
         plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
+    else:
+        show = False
 
     # Get unique colours.
     if colour is None:
@@ -1044,7 +1082,7 @@ Prediction: {model_name}""")
         elif type(crop) == np.ndarray:
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
 
     # Plot predictions.
     for i in range(n_models):
@@ -1079,11 +1117,11 @@ Prediction: {model_name}""")
 
             # Plot if extent box is in view.
             label = f'{model_name} extent' if __box_in_plane(pred_extent, view, slice_idx) else f'{model_name} extent (offscreen)'
-            __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+            __plot_box_slice(pred_extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
 
     # Show legend.
     if show_legend:
-        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -1107,7 +1145,7 @@ Prediction: {model_name}""")
 
 def plot_segmenter_prediction(
     id: str,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     pred_data: Dict[str, np.ndarray],
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
@@ -1123,7 +1161,7 @@ def plot_segmenter_prediction(
     figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     latex: bool = False,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
+    legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
     linestyle_region: str = 'solid',
@@ -1211,7 +1249,7 @@ Prediction: {model_name}""")
         elif type(crop) == np.ndarray:
             crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
         else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
 
     # Plot predictions.
     for i in range(n_models):
@@ -1286,7 +1324,7 @@ Prediction: {model_name}""")
 
     # Show legend.
     if show_legend:
-        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
+        plt_legend = ax.legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -1310,7 +1348,7 @@ Prediction: {model_name}""")
 
 def plot_segmenter_prediction_diff(
     id: str,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     diff_data: Dict[str, np.ndarray],
     alpha_diff: float = 1.0,
     aspect: float = None,
@@ -1372,7 +1410,7 @@ Diff: {diff_name}""")
     plot_region(id, size, spacing, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, show=False, show_legend=False, slice_idx=slice_idx, view=view, **kwargs)
 
     if crop is not None:
-        crop = tuple(zip(*crop))    # Convert from 'Crop2D' to 'Box2D'.
+        crop = tuple(zip(*crop))    # Convert from 'Box2D' to 'Box2D'.
 
     # Plot diffs.
     for i in range(n_diffs):
@@ -1429,7 +1467,7 @@ def plot_dataframe(
     x: Optional[str] = None,
     y: Optional[str] = None,
     hue: Optional[str] = None,
-    dpi: float = 1000,
+    dpi: float = 300,
     exclude_x: Optional[Union[str, List[str]]] = None,
     figsize: Tuple[float, float] = (16, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
@@ -1453,7 +1491,7 @@ def plot_dataframe(
     n_cols: Optional[int] = None,
     n_rows: Optional[int] = None,
     outlier_legend_loc: str = 'upper left',
-    palette: Optional[sns.palettes._ColorPalette] = sns.color_palette('colorblind'),
+    palette: Optional[_ColorPalette] = None,
     pointsize: float = 10,
     savepath: Optional[str] = None,
     share_y: bool = False,
@@ -1582,6 +1620,8 @@ def plot_dataframe(
         hue_width = x_width / len(hue_order) 
 
         # Check there are enough colours in palette.
+        if palette is None:
+            palette = sns.color_palette('colorblind', len(hue_order))
         if len(hue_order) > len(palette):
             raise ValueError(f"'palette' doesn't have enough colours for hues '{hue_order}', needs '{len(hue_order)}'.")
 
@@ -1617,6 +1657,8 @@ def plot_dataframe(
         # Get x colours.
         if hue is None:
             # Check there are enough colors in palette.
+            if palette is None:
+                palette = sns.color_palette('colorblind', len(row_x_order))
             if len(row_x_order) > len(palette):
                 raise ValueError(f"'palette' doesn't have enough colours for x values '{row_x_order}', needs '{len(row_x_order)}'.")
             x_colours = dict((x, palette[i]) for i, x in enumerate(row_x_order))
@@ -2018,17 +2060,17 @@ def plot_dataframe(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=0.03)
+        plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=0)
         logging.info(f"Saved plot to '{savepath}'.")
 
 def plot_registration(
     fixed_id: str,
     moving_id: str,
-    fixed_size: ImageSize3D,
-    moving_size: ImageSize3D,
+    fixed_size: Size3D,
+    moving_size: Size3D,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
-    axs: Optional[Axes] = None,
+    ax: Optional[Axes] = None,
     cca: bool = False,
     colour: Optional[Union[str, List[str]]] = None,
     dose_alpha: float = 0.3,
@@ -2037,12 +2079,12 @@ def plot_registration(
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
     figsize: Tuple[int, int] = (12, 9),
     fixed_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
-    fixed_crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    fixed_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     fixed_crop_margin: float = 100,                                       # Applied if cropping to 'fixed_region_data' or 'np.ndarray'
     fixed_ct_data: Optional[np.ndarray] = None,
     fixed_region_data: Optional[np.ndarray] = None,
     fixed_slice_idx: Optional[int] = None,
-    fixed_spacing: ImageSpacing3D = None,
+    fixed_spacing: Spacing3D = None,
     fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
@@ -2050,17 +2092,17 @@ def plot_registration(
     legend_show_all_regions: bool = False,
     linestyle_region: bool = 'solid',
     moving_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
-    moving_crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    moving_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     moving_crop_margin: float = 100,                                       # Applied if cropping to 'moving_region_data' or 'np.ndarray'
     moving_ct_data: Optional[np.ndarray] = None,
     moving_region_data: Optional[np.ndarray] = None,
     moving_slice_idx: Optional[int] = None,
-    moving_spacing: ImageSpacing3D = None,
+    moving_spacing: Spacing3D = None,
     norm: Optional[Tuple[float, float]] = None,
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     registered_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'registered_region_data' if 'str', else uses 'np.ndarray'.
-    registered_crop: Optional[Union[str, np.ndarray, Crop2D]] = None,    # Uses 'registered_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    registered_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'registered_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     registered_crop_margin: float = 100,                                       # Applied if cropping to 'registered_region_data' or 'np.ndarray'
     registered_ct_data: Optional[np.ndarray] = None,
     registered_region_data: Optional[np.ndarray] = None,
@@ -2070,8 +2112,10 @@ def plot_registration(
     savepath: Optional[str] = None,
     show: bool = True,
     show_axis: bool = True,
-    show_extent: bool = False,
+    show_extent: bool = True,
+    show_fixed: bool = True,
     show_legend: bool = True,
+    show_moving: bool = True,
     show_title: bool = True,
     show_x_label: bool = True,
     show_x_ticks: bool = True,
@@ -2084,28 +2128,47 @@ def plot_registration(
     __assert_slice_idx(fixed_centre_of, extent_of, fixed_slice_idx)
     __assert_slice_idx(moving_centre_of, extent_of, moving_slice_idx)
     assert view in (0, 1, 2)
-    centres_of = (fixed_centre_of, registered_centre_of, moving_centre_of)
-    crops = (fixed_crop, registered_crop, moving_crop)
-    crop_margins = (fixed_crop_margin, registered_crop_margin, moving_crop_margin)
-    ct_data = (fixed_ct_data, registered_ct_data, moving_ct_data)
-    ct_sizes = (fixed_size, fixed_size, moving_size)
-    ids = (fixed_id, f'{moving_id} -> {fixed_id}', moving_id)
-    region_data = (fixed_region_data, registered_region_data, moving_region_data)
-    slice_idxs = (fixed_slice_idx, registered_slice_idx, moving_slice_idx)
-    spacings = (fixed_spacing, fixed_spacing, moving_spacing)
-    infos = ({}, { 'fixed': registered_use_fixed_slice }, {})
+    centres_of = [fixed_centre_of if show_fixed else 'SKIP', registered_centre_of, moving_centre_of if show_moving else 'SKIP']
+    centres_of = tuple([c for c in centres_of if not isinstance(c, str) or c != 'SKIP'])
+    crops = [fixed_crop if show_fixed else 'SKIP', registered_crop, moving_crop if show_moving else 'SKIP']
+    crops = tuple([c for c in crops if not isinstance(c, str) or c != 'SKIP'])
+    crop_margins = [fixed_crop_margin if show_fixed else 'SKIP', registered_crop_margin, moving_crop_margin if show_moving else 'SKIP']
+    crop_margins = tuple([c for c in crop_margins if not isinstance(c, str) or c != 'SKIP'])
+    ct_data = [fixed_ct_data if show_fixed else 'SKIP', registered_ct_data, moving_ct_data if show_moving else 'SKIP']
+    ct_data = tuple([c for c in ct_data if not isinstance(c, str) or c != 'SKIP'])
+    ct_sizes = [fixed_size if show_fixed else 'SKIP', fixed_size, moving_size if show_moving else 'SKIP']
+    ct_sizes = tuple([c for c in ct_sizes if not isinstance(c, str) or c != 'SKIP'])
+    registered_id = f'{moving_id} -> {fixed_id}'
+    ids = [fixed_id if show_fixed else 'SKIP', registered_id, moving_id if show_moving else 'SKIP']
+    ids = tuple([i for i in ids if not isinstance(i, str) or i != 'SKIP'])
+    region_data = [fixed_region_data if show_fixed else 'SKIP', registered_region_data, moving_region_data if show_moving else 'SKIP']
+    region_data = tuple([r for r in region_data if not isinstance(r, str) or r != 'SKIP'])
+    slice_idxs = [fixed_slice_idx if show_fixed else 'SKIP', registered_slice_idx, moving_slice_idx if show_moving else 'SKIP']
+    slice_idxs = tuple([s for s in slice_idxs if not isinstance(s, str) or s != 'SKIP'])
+    spacings = [fixed_spacing if show_fixed else 'SKIP', fixed_spacing, moving_spacing if show_moving else 'SKIP']
+    spacings = tuple([s for s in spacings if not isinstance(s, str) or s != 'SKIP'])
+    infos = [{} if show_fixed else 'SKIP', { 'fixed': registered_use_fixed_slice }, {} if show_moving else 'SKIP']
+    infos = tuple([i for i in infos if not isinstance(i, str) or i != 'SKIP'])
 
+    n_figs = show_fixed + 1 + show_moving
+    axs = arg_to_list(ax, Axes)
     if axs is None:
         # Create figure/axes.
         # fig, axs = plt.subplots(3, 1, figsize=figsize, layout='tight', gridspec_kw={'hspace': 0.1})
         # fig.subplots_adjust(hspace=0)
-        _, axs = plt.subplots(2, 2, figsize=figsize, gridspec_kw={ 'hspace': 0.3 })
-        axs[1][1].set_visible(False)
+        if n_figs == 3:
+            _, axs = plt.subplots(2, 2, figsize=figsize, gridspec_kw={ 'hspace': 0.3 })
+            axs[1][1].set_visible(False)
+        elif n_figs == 2:
+            n_rows, n_cols = 1, 2 
+            _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={ 'hspace': 0.3 })
+        elif n_figs == 1:
+            axs = np.array([plt.gca()])
+
         axs = axs.flatten()
         close_figure = True
     else:
-        # Assume that parent routine will call 'plt.show()' after all axes are plotted.
-        assert len(axs) == 3
+        assert len(axs) == n_figs
         close_figure = False
         show = False
 
@@ -2148,7 +2211,7 @@ def plot_registration(
             elif type(crop) == np.ndarray:
                 crop = __get_region_crop(crop, margin, spacing, view)                  # Crop was 'np.ndarray'.
             else:
-                crop = tuple(zip(*crop))                                                    # Crop was 'Crop2D' type.
+                crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
         crops_tmp.append(crop)
     crops = crops_tmp
 
@@ -2421,7 +2484,7 @@ def __get_styles(
 
 def __get_view_size(
     view: Axis,
-    size: ImageSize3D) -> ImageSize2D:
+    size: Size3D) -> Size2D:
     if view == 0:
         return (size[1], size[2])
     elif view == 1:
@@ -2431,7 +2494,7 @@ def __get_view_size(
 
 def __get_view_spacing(
     view: Axis,
-    spacing: ImageSpacing3D) -> ImageSpacing2D:
+    spacing: Spacing3D) -> Spacing2D:
     if view == 0:
         return (spacing[1], spacing[2])
     elif view == 1:

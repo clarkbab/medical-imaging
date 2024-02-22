@@ -13,7 +13,8 @@ def get_transforms(
     translation: Tuple[float, float] = (-50, 50),
     use_elastic: bool = False,
     use_stand: bool = False,
-    use_thresh: bool = False) -> Tuple[Transform, Transform]:
+    use_thresh: bool = False,
+    **kwargs) -> Tuple[Transform, Transform]:
     logging.info(f"Using augmentation: rotation={rotation}, scale={scale}, translation={translation}.")
 
     # Create transforms.

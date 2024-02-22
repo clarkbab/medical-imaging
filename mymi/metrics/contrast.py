@@ -9,7 +9,7 @@ from mymi import types
 def __contrast_boundary(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     d: float = 5) -> np.ndarray:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -34,7 +34,7 @@ def __contrast_boundary(
 def contrast(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     d: float = 5) -> Tuple[List[float], List[float]]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -54,7 +54,7 @@ def contrast(
 def plot_contrast(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     slice_idx: int,
     d: float = 5) -> None:
     if a.shape != b.shape:
@@ -74,7 +74,7 @@ def plot_contrast(
 def plot_contrast_hist(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     d: float = 5) -> None:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'contrast' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")

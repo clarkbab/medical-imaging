@@ -5,16 +5,11 @@
 ##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 128G
+#SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-## Timing guidelines:
-## 1-region-.*-444 model requires ~10 hours for 10k epochs. 12 hours with buffer.
-## 1-region-.*-222 model requires ~44 hours for 10k epochs. 2 days with buffer. 
-## 1-region-.*-112 model requires ~180 hours for 10k epochs. 8 days with buffer. 
-##SBATCH --time 1-06:00:00
-##SBATCH --time 4-00:00:00
-#SBATCH --time 2-00:00:00
+#SBATCH --time 7-00:00:00
+##SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -24,42 +19,29 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-REGIONS=(
-    "['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
-)
-SHORT_REGIONS=(
-    "ALL"
-)
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-miccai-resolution"
+REGION="['Bone_Mandible','Brainstem','Glnd_Submand_L','Glnd_Submand_R','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R']"
+SHORT_REGION="ALL"
+MODEL_NAME="segmenter-miccai-resolution-v2"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
 N_SPLIT_CHANNELS=2
 RANDOM_SEED=42
-SCHEDULE_EPOCHS=1000
-USE_CVG_WEIGHTING=True
-CW_CVG_DELAY_ABOVE=20
-CW_CVG_DELAY_BELOW=5
-CW_FACTOR_0=1
-CW_FACTOR="[$CW_FACTOR_0,0]"
-CW_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
-USE_WEIGHTS=True
-WEIGHTS=None
-WEIGHTS_IV_FACTOR_0=0.5
-WEIGHTS_IV_FACTOR="[$WEIGHTS_IV_FACTOR_0,0]"
-WEIGHTS_SCHEDULE="[0,$SCHEDULE_EPOCHS]"
-RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-cw-$CW_FACTOR_0-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
+RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED"
 BATCH_SIZE=1
 CKPT_MODEL=True
+CROP_FN="centre"
+CROP_MM="(250,400,500)"
 LR_INIT=1e-3
-N_EPOCHS=5000
+N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
 N_WORKERS=8
-RESUME=True
+PRELOAD_DATA=True
+PROFILER=None
+RESUME=False
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+USE_AUGMENTATION=True
 USE_LOADER_SPLIT_FILE=True
 USE_LOGGER=True
 USE_LR_SCHEDULER=False
@@ -71,27 +53,23 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --run_name $RUN_NAME \
     --batch_size $BATCH_SIZE \
     --ckpt_model $CKPT_MODEL \
-    --cw_cvg_delay_above $CW_CVG_DELAY_ABOVE \
-    --cw_cvg_delay_below $CW_CVG_DELAY_BELOW \
-    --cw_factor $CW_FACTOR \
-    --cw_schedule $CW_SCHEDULE \
+    --crop_fn $CROP_FN \
+    --crop_mm $CROP_MM \
     --lr_init $LR_INIT \
     --n_epochs $N_EPOCHS \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
     --n_split_channels $N_SPLIT_CHANNELS \
     --n_workers $N_WORKERS \
+    --preload_data $PRELOAD_DATA \
+    --profiler $PROFILER \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \
     --resume_ckpt $RESUME_CKPT \
     --slurm_array_job_id $SLURM_ARRAY_JOB_ID \
     --slurm_array_task_id $SLURM_ARRAY_TASK_ID \
     --slurm_job_id $SLURM_JOB_ID \
-    --use_cvg_weighting $USE_CVG_WEIGHTING \
+    --use_augmentation $USE_AUGMENTATION \
     --use_loader_split_file $USE_LOADER_SPLIT_FILE \
     --use_logger $USE_LOGGER \
-    --use_lr_scheduler $USE_LR_SCHEDULER \
-    --use_weights $USE_WEIGHTS \
-    --weights $WEIGHTS \
-    --weights_iv_factor $WEIGHTS_IV_FACTOR \
-    --weights_schedule $WEIGHTS_SCHEDULE
+    --use_lr_scheduler $USE_LR_SCHEDULER

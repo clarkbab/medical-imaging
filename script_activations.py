@@ -12,7 +12,6 @@ import wandb
 from mymi import config
 from mymi.loaders import MultiLoader
 from mymi.loaders.augmentation import get_transforms
-from mymi.loaders.hooks import naive_crop
 from mymi.models.systems import MultiSegmenter
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
@@ -23,7 +22,7 @@ transform_train, transform_val = get_transforms(thresh_high=None, thresh_low=Non
 resolution = '444'
 dataset = f'MICCAI-2015-{resolution}'
 regions = ['Bone_Mandible']
-train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, data_hook=naive_crop, region=regions, transform_train=transform_train, transform_val=transform_val, use_split_file=True)
+train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, region=regions, transform_train=transform_train, transform_val=transform_val, use_split_file=True)
 
 # Create model.
 model = MultiSegmenter(

@@ -12,7 +12,7 @@ def plot_region(
     dataset: str,
     sample_idx: str,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, types.Crop2D]] = None,
+    crop: Optional[Union[str, types.Box2D]] = None,
     region: Optional[types.PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     **kwargs) -> None:

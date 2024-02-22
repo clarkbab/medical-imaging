@@ -6,7 +6,7 @@ from typing import List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.postprocessing import interpolate_z, largest_cc_3D
 from mymi.regions import region_to_list
-from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
+from mymi.types import Spacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
 class NIFTIPatient:
@@ -52,7 +52,7 @@ class NIFTIPatient:
         return self.ct_data.shape
 
     @property
-    def ct_spacing(self) -> ImageSpacing3D:
+    def ct_spacing(self) -> Spacing3D:
         img = nib.load(self.__ct_path)
         affine = img.affine
         spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))

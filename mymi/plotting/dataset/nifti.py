@@ -9,7 +9,7 @@ from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.types import Crop2D, ImageSpacing3D, ModelName, PatientID, PatientRegions
+from mymi.types import Box2D, Spacing3D, ModelName, PatientID, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotter import plot_heatmap as plot_heatmap_base
@@ -30,7 +30,7 @@ def plot_heatmap(
     target_region: str,
     layer: Union[int, str],
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     model_region: Optional[PatientRegions] = None,
     pred_region: Optional[PatientRegions] = None,
     region: Optional[PatientRegions] = None,
@@ -91,7 +91,7 @@ def plot_region(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
@@ -135,7 +135,7 @@ def plot_registration(
     fixed_pat_id: str,
     moving_pat_id: str,
     centre_of: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[str, List[str], Crop2D]] = None,
+    crop: Optional[Union[str, List[str], Box2D]] = None,
     crop_margin: float = 100,
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: Optional[PatientRegions] = None,
@@ -244,7 +244,7 @@ def plot_localiser_prediction(
     pat_id: str,
     localiser: ModelName,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_prediction: bool = True,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,
@@ -299,15 +299,15 @@ def plot_adaptive_segmenter_prediction(
     model: Union[ModelName, List[ModelName]],
     model_region: PatientRegions,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
-    model_spacing: Optional[ImageSpacing3D] = None,
+    model_spacing: Optional[Spacing3D] = None,
     n_epochs: Optional[int] = None,
     pred_label: Union[str, List[str]] = None,
     pred_region: Optional[Union[str, List[str]]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
-    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
@@ -431,15 +431,15 @@ def plot_multi_segmenter_prediction(
     model: Union[ModelName, List[ModelName]],
     model_region: PatientRegions,
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
-    model_spacing: Optional[ImageSpacing3D] = None,
+    model_spacing: Optional[Spacing3D] = None,
     n_epochs: Optional[int] = None,
     model_label: Union[str, List[str]] = None,
     pred_region: Optional[PatientRegions] = None,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Union[str, List[str]]] = None,
-    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
@@ -568,14 +568,14 @@ def plot_segmenter_prediction(
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
     pred_label: Union[str, List[str]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
     show_ct: bool = True,
-    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     **kwargs) -> None:
     localisers = arg_to_list(localiser, tuple)
     segmenters = arg_to_list(segmenter, tuple)
@@ -690,7 +690,7 @@ def plot_segmenter_prediction_diff(
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
     centre_of: Optional[str] = None,
-    crop: Optional[Union[str, Crop2D]] = None,
+    crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
     diff_label: Union[str, List[str]] = None,

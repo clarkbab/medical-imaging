@@ -25,7 +25,7 @@ class SegmenterTest(pl.LightningModule):
         metrics: List[str] = [],
         predict_logits: bool = False,
         pretrained_model: Optional[pl.LightningModule] = None,
-        spacing: Optional[types.ImageSpacing3D] = None):
+        spacing: Optional[types.Spacing3D] = None):
         super().__init__()
         if 'distances' in metrics and spacing is None:
             raise ValueError(f"Localiser requires 'spacing' when calculating 'distances' metric.")

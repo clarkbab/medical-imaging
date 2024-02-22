@@ -6,9 +6,10 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 import torchio
 from torchio import LabelMap, ScalarImage, Subject
+from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
+from mymi.types import Spacing3D, PatientRegion, PatientRegions
 from mymi import dataset as ds
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
@@ -85,6 +86,7 @@ class MultiLoader:
         n_train: Optional[int] = None,
         n_workers: int = 1,
         p_val: float = .2,
+        preload_data: bool = False,
         random_seed: int = 0,
         region: Optional[PatientRegions] = None,
         shuffle_samples: bool = True,
@@ -94,13 +96,15 @@ class MultiLoader:
         transform_train: Transform = None,
         transform_val: Transform = None,
         use_grouping: bool = False,
+        use_pooling_hack: bool = False,
+        use_pooling_hack_single: bool = False,
         use_split_file: bool = False,
         **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
         regions = region_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
-        logging.arg_log('Building multi-loader', ('dataset', 'regions', 'load_all_samples', 'shuffle_samples', 'use_grouping', 'use_split_file'), (dataset, regions, load_all_samples, shuffle_samples, use_grouping, use_split_file))
+        logging.arg_log('Building multi-loaders', ('dataset', 'regions', 'load_all_samples', 'n_folds', 'shuffle_samples', 'test_fold', 'use_grouping', 'use_split_file'), (dataset, regions, load_all_samples, n_folds, shuffle_samples, test_fold, use_grouping, use_split_file))
 
         # Get dataset spacing.
         sets = []
@@ -286,6 +290,83 @@ class MultiLoader:
                     test_subsamples += samples
                 logging.info(f"Expanded grouped test subsamples to {len(test_subsamples)} samples.")
 
+        if use_pooling_hack:
+            n_train_before = len(train_samples)
+            n_val_before = len(val_samples)
+            n_test_before = len(test_samples)
+
+            # Get pre-treatment samples from 'test' dataset.
+            pt_test_samples = [s for i, s in enumerate(test_samples) if i % 2 == 0]
+
+            # Assert that all of these samples point to a pre-treatment scan.
+            for d, s in pt_test_samples:
+                sample = sets[d].sample(s)
+                pat_id = sample.origin[1]
+                if '-0' not in pat_id:
+                    raise ValueError(f"Pooling hack - extracted test sample {sample} was not pre-treatment scan.")
+
+            # How to add pre-treatment test scans to training dataset?
+            # 1. We shouldn't introduce pre-treatment test scans into the validation dataset as the model never "sees"
+            # these during training.
+            # 2. When we replace 22 (pre/mid-treatment) samples with 22 pre-treatment test samples, we introduce
+            # 22 new patients into the training dataset, and only remove 11 patients from the training dataset
+            # as we're removing both pre and mid-treatment scans - to try to balance patient numbers as best as possible.
+            # If we only removed pre-treatment scans from the training dataset, no patients would be removed as
+            # their mid-treatment scans would remain. So the adaptive-train model has an extra 11 patients in the 
+            # training dataset in comparison to the adaptive-input model, however it has a smaller number of mid-treatment
+            # scans. I would assume the difference between CT scans of separate patients to be larger than the difference
+            # between pre/mid-treatment scans of the same patients, so perhaps we've minimised the differences in 
+            # training datasets as best we can.
+            # 3. Another method would be to train a separate model test patient, just adding their pre-treatment test
+            # scan to the data pool. But this creates a looot of models.
+
+            # More thinking...
+            # We should take 22 samples (22 patients) from the pre-treatment test dataset and add them to the training
+            # dataset. However, we should only remove 21 samples (11 patients) from the training dataset. This means
+            # that the "pooling" model sees 1 more sample during training (176 samples), whilst the "adaptive" model
+            # sees 1 more sample during inference.
+
+            # Replace train samples with pre-treatment test samples.
+            n_test_samples = len(pt_test_samples)
+            n_remove = n_test_samples
+            if use_pooling_hack_single:
+                n_remove -= 1
+            logging.info(f"Pooling hack - replacing {n_remove} training samples with {n_test_samples} pre-treatment test samples.")
+            train_samples[:n_remove] = pt_test_samples
+            # for i, s in enumerate(pt_test_samples):
+            #     # Replace every second training sample - so that we're replacing pre-treatment scans only.
+            #     pt_i = i * 2
+            #     pt_d, pt_s = train_samples[pt_i]
+            #     sample = sets[pt_d].sample(pt_s)
+            #     pat_id = sample.origin[1]
+            #     if '-0' not in pat_id:
+            #         raise ValueError(f"Pooling hack - replaced training sample {sample} was not pre-treatment scan.")
+            #     train_samples[pt_i] = s
+
+            # # Add pre-treatment test samples to train/val set.
+            # logging.info(f"Pooling hack - adding {n_samples_to_train} pre-treatment test samples to train samples.")
+            # train_samples += pt_test_samples_to_train
+            # logging.info(f"Pooling hack - adding {n_samples_to_val} pre-treatment test samples to val samples.")
+            # val_samples += pt_test_samples_to_val
+
+            # # Add pre-treatment test samples to train set.
+            # logging.info(f"Pooling hack - adding {n_samples} pre-treatment test samples to train samples.")
+            # train_samples += pt_test_samples
+
+            # Check that train/val/test dataset sizes haven't changed.
+            # We should not take notice of pre-treatment test evaluation scores as they were included in training -
+            # but we never did anyway.
+            if use_pooling_hack_single:
+                assert len(train_samples) == n_train_before + 1
+            else:
+                assert len(train_samples) == n_train_before
+            assert len(val_samples) == n_val_before
+            assert len(test_samples) == n_test_before
+
+            logging.info(f"Pooling hack - train samples: {len(train_samples)}")
+            logging.info(f"Pooling hack - val samples: {len(val_samples)}")
+            logging.info(f"Pooling hack - test samples: {len(test_samples)}")
+
         # Take subset of train samples.
         if n_train is not None:
             assert not use_split_file
@@ -321,7 +402,7 @@ class MultiLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
+        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, preload_data=preload_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
         if shuffle_train:
             shuffle = None
             train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
@@ -338,7 +419,7 @@ class MultiLoader:
             # Give all foreground classes equal weight.
             class_weights = np.ones(len(regions) + 1) / len(regions)
             class_weights[0] = 0
-        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, preload_data=preload_data, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -370,13 +451,15 @@ class TrainingSet(Dataset):
         data_hook: Optional[Callable] = None,
         include_background: bool = False,
         load_data: bool = True,
+        preload_data: bool = False,
         random_seed: float = 0,
-        spacing: Optional[ImageSpacing3D] = None,
+        spacing: Optional[Spacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
         self.__data_hook = data_hook
         self.__include_background = include_background
         self.__load_data = load_data
+        self.__preload_data = preload_data
         self.__random_seed = random_seed
         self.__regions = regions
         self.__spacing = spacing
@@ -399,22 +482,22 @@ class TrainingSet(Dataset):
         for i, region in enumerate(self.__regions):
             self.__region_channel_map[region] = i + 1
 
+        # Calculate region counts.
+        region_counts = np.zeros(self.__n_channels, dtype=int)
+        for ds_i, s_i in samples:
+            regions = self.__sets[ds_i].sample(s_i).list_regions()
+            regions = [r for r in regions if r in self.__regions]
+            for region in regions:
+                region_counts[self.__region_channel_map[region]] += 1
+
+            # If all regions are present, we can train background class.
+            if self.__include_background:
+                if len(regions) == len(self.__regions):
+                    region_counts[0] += 1
+
+        logging.info(f"Calculated region counts '{region_counts}'.")
+
         if class_weights is None:
-            # Calculate weights based on training data.
-            region_counts = np.zeros(self.__n_channels, dtype=int)
-            for ds_i, s_i in samples:
-                regions = self.__sets[ds_i].sample(s_i).list_regions()
-                regions = [r for r in regions if r in self.__regions]
-                for region in regions:
-                    region_counts[self.__region_channel_map[region]] += 1
-
-                # If all regions are present, we can train background class.
-                if self.__include_background:
-                    if len(regions) == len(self.__regions):
-                        region_counts[0] += 1
-
-            logging.info(f"Calculated region counts '{region_counts}'.")
-
             # If class has no labels, set weight=0.
             class_weights = []
             for i in range(len(region_counts)):
@@ -432,6 +515,21 @@ class TrainingSet(Dataset):
         # Count iterations for reproducibility.
         self.__n_iter = 0
 
+        # Preload data.
+        if self.__preload_data:
+            logging.info(f"Preloading data for {self.__n_samples} samples.")
+            self.__data = []
+            for i in tqdm(range(self.__n_samples)):
+                # Get dataset sample.
+                ds_i, s_i = self.__sample_map[i]
+                set = self.__sets[ds_i]
+
+                # Load region data.
+                sample = set.sample(s_i)
+                regions = sample.list_regions(only=self.__regions)
+                input, labels = sample.pair(region=regions)
+                self.__data.append((input, labels))
+
     def __len__(self):
         return self.__n_samples
 
@@ -447,11 +545,15 @@ class TrainingSet(Dataset):
         if not self.__load_data:
             return desc
 
-        # Load region data.
+        # Get sample regions.
         sample = set.sample(s_i)
-        regions = sample.list_regions()
-        regions = [r for r in regions if r in self.__regions]
-        input, labels = sample.pair(region=regions)
+        regions = sample.list_regions(only=self.__regions)
+
+        # Load input/labels.
+        if self.__preload_data:
+            input, labels = self.__data[index]
+        else:
+            input, labels = sample.pair(region=regions)
 
         # Apply data hook.
         if self.__data_hook is not None:

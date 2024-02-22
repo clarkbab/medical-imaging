@@ -50,6 +50,8 @@ class AdaptiveSegmenter(pl.LightningModule):
         random_seed: float = 0,
         region: PatientRegions = None,
         run_name: str = 'run-name',
+        train_metric_interval_batch: int = 5,
+        train_metric_interval_epoch: int = 20,
         use_complexity_weights: bool = False,
         use_cvg_weighting: bool = False,
         use_dilation: bool = False,
@@ -58,6 +60,8 @@ class AdaptiveSegmenter(pl.LightningModule):
         val_image_interval: int = 50,
         val_image_samples: Optional[List[PatientID]] = None,
         val_max_image_batches: Optional[int] = None,
+        val_metric_interval_batch: int = 5,
+        val_metric_interval_epoch: int = 20,
         weight_decay: float = 0,
         weights: Optional[Union[List[float], List[List[float]]]] = None,
         weights_schedule: Optional[List[int]] = None,
@@ -94,6 +98,8 @@ class AdaptiveSegmenter(pl.LightningModule):
         self.__n_input_channels = len(self.__regions) + 2
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, n_input_channels=self.__n_input_channels, **kwargs)
+        self.__train_metric_interval_epoch = train_metric_interval_epoch
+        self.__train_metric_interval_batch = train_metric_interval_batch
         self.__use_complexity_weights = use_complexity_weights
         self.__use_cvg_weighting = use_cvg_weighting
         self.__use_dilation = use_dilation
@@ -103,6 +109,8 @@ class AdaptiveSegmenter(pl.LightningModule):
         self.__val_image_interval = val_image_interval
         self.__val_image_samples = val_image_samples
         self.__val_max_image_batches = val_max_image_batches
+        self.__val_metric_interval_epoch = val_metric_interval_epoch
+        self.__val_metric_interval_batch = val_metric_interval_batch
         self.__weights = weights
         self.__weights_schedule = weights_schedule
         self.__weight_decay = weight_decay
@@ -414,13 +422,13 @@ class AdaptiveSegmenter(pl.LightningModule):
             # if self.__lr_find:
             #     self.__write_loss('all', self.global_step, loss.item())
 
-        # Convert pred to binary mask.
-        y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
-        y_hat = y_hat.cpu().numpy().astype(bool)
-
         # Report metrics.
-        y = y.cpu().numpy()
-        if 'dice' in self.__metrics:
+        if self.logger is not None and 'dice' in self.__metrics and self.current_epoch % self.__train_metric_interval_epoch == 0 and batch_idx % self.__train_metric_interval_batch == 0:
+            # Convert pred to binary mask.
+            y = y.cpu().numpy()
+            y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
+            y_hat = y_hat.cpu().numpy().astype(bool)
+
             # Get mean dice score per-channel.
             for i in range(self.__n_output_channels):
                 region = self.__channel_region_map[i]
@@ -466,17 +474,17 @@ class AdaptiveSegmenter(pl.LightningModule):
 
         self.log('val/loss', loss, on_epoch=self.__log_on_epoch, on_step=self.__log_on_step)
 
-        # Convert pred to binary mask.
-        y = y.cpu().numpy()
-        y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
-        y_hat = y_hat.cpu().numpy().astype(bool)
-
         # Record gpu usage.
         for i, usage_mb in enumerate(gpu_usage_nvml()):
             self.log(f'gpu/{i}', usage_mb, on_epoch=self.__log_on_epoch, on_step=self.__log_on_step)
 
         # Record dice.
-        if 'dice' in self.__metrics:
+        if self.logger is not None and 'dice' in self.__metrics and self.current_epoch % self.__val_metric_interval_epoch == 0 and batch_idx % self.__val_metric_interval_batch == 0:
+            # Convert pred to binary mask.
+            y = y.cpu().numpy()
+            y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
+            y_hat = y_hat.cpu().numpy().astype(bool)
+        
             # Operate on each region separately.
             for i in range(self.__n_output_channels):
                 # Skip 'background' channel.
@@ -510,62 +518,67 @@ class AdaptiveSegmenter(pl.LightningModule):
                         self.__cw_batch_mean_dices[region] = [batch_mean_dice]
                         
         # Log prediction images.
-        if self.logger:
-            if self.current_epoch % self.__val_image_interval == 0 and (self.__val_max_image_batches is None or batch_idx < self.__val_max_image_batches):
-                class_labels = {
-                    1: 'foreground'
-                }
-                for i, desc in enumerate(descs):
-                    if self.__val_image_samples is not None:
-                        pat_id = desc.split(':')[1]
-                        if pat_id not in self.__val_image_samples:
-                            continue
+        if self.logger is not None and self.current_epoch % self.__val_image_interval == 0 and (self.__val_max_image_batches is None or batch_idx < self.__val_max_image_batches):
+            # Convert pred to binary mask - if not already performed during metric logging.
+            if y_hat.dtype != np.bool_:
+                y = y.cpu().numpy()
+                y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
+                y_hat = y_hat.cpu().numpy().astype(bool)
 
-                    # Plot for each channel.
-                    for j in range(y.shape[1]):
-                        # Skip channel if not present.
-                        if not mask[i, j]:
-                            continue
+            class_labels = {
+                1: 'foreground'
+            }
+            for i, desc in enumerate(descs):
+                if self.__val_image_samples is not None:
+                    pat_id = desc.split(':')[1]
+                    if pat_id not in self.__val_image_samples:
+                        continue
 
-                        # Get images.
-                        x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i, j], y_hat[i, j]
+                # Plot for each channel.
+                for j in range(y.shape[1]):
+                    # Skip channel if not present.
+                    if not mask[i, j]:
+                        continue
 
-                        # Get centre of extent of ground truth.
-                        centre = get_extent_centre(y_vol)
-                        if centre is None:
-                            # Presumably data augmentation has pushed the label out of view.
-                            continue
+                    # Get images.
+                    x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i, j], y_hat[i, j]
 
-                        for axis, centre_ax in enumerate(centre):
-                            # Get slices.
-                            slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
-                            x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+                    # Get centre of extent of ground truth.
+                    centre = get_extent_centre(y_vol)
+                    if centre is None:
+                        # Presumably data augmentation has pushed the label out of view.
+                        continue
 
-                            # Fix orientation.
-                            if axis == 0 or axis == 1:
-                                x_img = np.rot90(x_img)
-                                y_img = np.rot90(y_img)
-                                y_hat_img = np.rot90(y_hat_img)
-                            elif axis == 2:
-                                x_img = np.transpose(x_img)
-                                y_img = np.transpose(y_img) 
-                                y_hat_img = np.transpose(y_hat_img)
+                    for axis, centre_ax in enumerate(centre):
+                        # Get slices.
+                        slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
+                        x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
 
-                            # Send image.
-                            region = self.__channel_region_map[j]
-                            title = f'desc:{desc}:region:{region}:axis:{axis}'
-                            caption = desc,
-                            masks = {
-                                'ground_truth': {
-                                    'mask_data': y_img,
-                                    'class_labels': class_labels
-                                },
-                                'predictions': {
-                                    'mask_data': y_hat_img,
-                                    'class_labels': class_labels
-                                }
+                        # Fix orientation.
+                        if axis == 0 or axis == 1:
+                            x_img = np.rot90(x_img)
+                            y_img = np.rot90(y_img)
+                            y_hat_img = np.rot90(y_hat_img)
+                        elif axis == 2:
+                            x_img = np.transpose(x_img)
+                            y_img = np.transpose(y_img) 
+                            y_hat_img = np.transpose(y_hat_img)
+
+                        # Send image.
+                        region = self.__channel_region_map[j]
+                        title = f'desc:{desc}:region:{region}:axis:{axis}'
+                        caption = desc,
+                        masks = {
+                            'ground_truth': {
+                                'mask_data': y_img,
+                                'class_labels': class_labels
+                            },
+                            'predictions': {
+                                'mask_data': y_hat_img,
+                                'class_labels': class_labels
                             }
-                            self.logger.log_image(key=title, images=[x_img], caption=caption, masks=[masks], step=self.global_step)
+                        }
+                        self.logger.log_image(key=title, images=[x_img], caption=caption, masks=[masks], step=self.global_step)
 
     def on_validation_epoch_end(self):
         if self.__use_complexity_weights:

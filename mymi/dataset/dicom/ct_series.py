@@ -54,7 +54,7 @@ class CTSeries(DICOMSeries):
         return DICOMModality.CT
 
     @property
-    def offset(self) -> types.PhysPoint3D:
+    def offset(self) -> types.PointMM3D:
         if self.__offset is None:
             self.__load_ct_data()
         return self.__offset
@@ -64,13 +64,13 @@ class CTSeries(DICOMSeries):
         return self.__paths
 
     @property
-    def size(self) -> types.ImageSpacing3D:
+    def size(self) -> types.Spacing3D:
         if self.__size is None:
             self.__load_ct_data()
         return self.__size
 
     @property
-    def spacing(self) -> types.ImageSpacing3D:
+    def spacing(self) -> types.Spacing3D:
         if self.__spacing is None:
             self.__load_ct_data()
         return self.__spacing

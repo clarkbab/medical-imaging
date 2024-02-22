@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --partition gpu-a100-short
 ##SBATCH --gres gpu:1
 #SBATCH --mem 32G

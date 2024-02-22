@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account punim1413
 ##SBATCH --qos feit
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short

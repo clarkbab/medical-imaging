@@ -35,7 +35,7 @@ class Loader:
         n_workers: int = 1,
         random_seed: int = 0,
         shuffle_train: bool = True,
-        spacing: Optional[types.ImageSpacing3D] = None,
+        spacing: Optional[types.Spacing3D] = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
         use_seg_run: bool = False,
@@ -171,7 +171,7 @@ class TrainingDataset(Dataset):
         samples: List[Tuple[int, int]],
         extract_patch: bool = False,
         load_data: bool = True,
-        spacing: types.ImageSpacing3D = None,
+        spacing: types.Spacing3D = None,
         transform: torchio.transforms.Transform = None):
         self.__datasets = datasets
         self.__extract_patch = extract_patch

@@ -242,6 +242,74 @@ def load_localiser_evaluation(
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 
+def get_adaptive_segmenter_pt_evaluation(
+    dataset: str,
+    region: PatientRegions,
+    pat_id: str,
+    model: ModelName) -> List[Dict[str, float]]:
+    regions = arg_to_list(region, str)
+
+    # Load ground truth (registered pre-treatment) region data.
+    moving_pat_id = pat_id.replace('-1', '-0')
+    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, region=regions, region_ignore_missing=True)
+
+    # Load predictions.
+    set = NIFTIDataset(dataset)
+    pat = set.patient(pat_id)
+    spacing = pat.ct_spacing
+    region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
+ 
+    region_metrics = []
+    for region, pred in region_preds.items():
+        # Patient ground truth may not have all the predicted regions.
+        if not pat.has_region(region):
+            region_metrics.append({})
+            continue
+        
+        # Load label.
+        label = region_data[region]
+
+        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+        if region == 'SpinalCord':
+            z_min_pred = np.nonzero(pred)[2].min()
+            z_min_label = np.nonzero(label)[2].min()
+            z_min = np.max([z_min_label, z_min_pred])
+
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min), label.shape)
+            pred = crop_foreground_3D(pred, crop)
+            label = crop_foreground_3D(label, crop)
+
+        # Dice.
+        metrics = {}
+        metrics['dice'] = dice(pred, label)
+
+        # Distances.
+        if pred.sum() == 0 or label.sum() == 0:
+            metrics['apl'] = np.nan
+            metrics['hd'] = np.nan
+            metrics['hd-95'] = np.nan
+            metrics['msd'] = np.nan
+            metrics['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[metric] = value
+
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[f'dm-{metric}'] = value
+
+        region_metrics.append(metrics)
+
+    return region_metrics
+
 def get_adaptive_segmenter_evaluation(
     dataset: str,
     region: PatientRegions,
@@ -561,6 +629,76 @@ def get_segmenter_evaluation(
             data[f'dm-{metric}'] = value
 
     return data
+    
+def create_adaptive_segmenter_pt_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    **kwargs) -> None:
+    datasets = arg_to_list(dataset, str)
+    # 'regions' is used to determine which patients are loaded (those that have at least one of
+    # the listed regions).
+    model = replace_ckpt_alias(model)
+    regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
+    logging.arg_log('Evaluating adaptive segmenter predictions against PT ground truth for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Build test loader.
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
+
+    # Add evaluations to dataframe.
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            # Skip pre-treatment patients.
+            if '-0' in pat_id:
+                logging.info(f"Skipping '{dataset}:{pat_id}'.")
+                continue
+
+            # Get metrics per region.
+            region_metrics = get_adaptive_segmenter_evaluation(dataset, regions, pat_id, model)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold if test_fold is not None else np.nan,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter-pt', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
     
 def create_adaptive_segmenter_evaluation(
     dataset: Union[str, List[str]],
@@ -1022,6 +1160,35 @@ def create_segmenter_evaluation(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
+def load_adaptive_segmenter_pt_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    exists_only: bool = False,
+    **kwargs) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    model = replace_ckpt_alias(model)
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter-pt', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Adaptive segmenter evaluation for dataset '{dataset}', model '{model}' not found. Params: {params}. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+
 def load_adaptive_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
@@ -1046,7 +1213,7 @@ def load_adaptive_segmenter_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Adaptive segmenter evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+            raise ValueError(f"Adaptive segmenter evaluation for dataset '{dataset}', model '{model}' not found. Params: {params}. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df
@@ -1129,7 +1296,7 @@ def load_multi_segmenter_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Multi-segmenter evaluation not found for model '{model}', dataset '{dataset}' and regions '{regions}'. Filepath: {filepath}.")
+            raise ValueError(f"Multi-segmenter evaluation not found for model '{model}', dataset '{dataset}' and regions '{regions}'. Params: {params}. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df

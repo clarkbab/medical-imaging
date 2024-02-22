@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 ##SBATCH --qos feit
 ##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
@@ -8,7 +8,7 @@
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 120G
-#SBATCH --time 0-04:00:00
+#SBATCH --time 0-06:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -35,7 +35,9 @@ RUN_NAME="n-folds-$N_FOLDS-fold-$TEST_FOLD"
 if [[ $USE_WEIGHTS == True ]]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi
-if [[ $TEST_FOLD -eq 0 ]] || [[ $TEST_FOLD -eq 4 ]]; then
+if [[ $TEST_FOLD -eq 2 ]]; then
+    RANDOM_SEED=45
+elif [[ $TEST_FOLD -eq 0 ]] || [[ $TEST_FOLD -eq 4 ]]; then
     RANDOM_SEED=43
 else
     RANDOM_SEED=42

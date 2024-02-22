@@ -6,7 +6,7 @@ import pandas as pd
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.regions import is_region, region_to_list
-from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
+from mymi.types import Spacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
 class NRRDPatient:
@@ -44,7 +44,7 @@ class NRRDPatient:
         return size
 
     @property
-    def ct_spacing(self) -> ImageSpacing3D:
+    def ct_spacing(self) -> Spacing3D:
         _, header = nrrd.read(self.__path)
         # Assert that there are no off-diagonal entries.
         affine = header['space directions']

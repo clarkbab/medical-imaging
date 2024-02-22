@@ -1,8 +1,9 @@
 from functools import partial, reduce
 import numpy as np
 import torch
-import torch.nn as nn
+from torch.nn import Conv3d, ConvTranspose3d, InstanceNorm3d, MaxPool3d, Module, ParameterList, ReLU, Softmax
 from torch.nn.functional import pad, sigmoid, softmax
+from torch.nn.init import constant_, kaiming_normal_
 from torch.utils.checkpoint import checkpoint
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from typing import Dict, List, Literal, Optional
@@ -13,26 +14,26 @@ from mymi import logging
 CUDA_INT_MAX = 2 ** 31 - 1
 PRINT_ENABLED = False
 
-class Submodule(nn.Module):
+class Submodule(Module):
     def __init__(
         self,
         name: str,
-        layers: List[nn.Module],
+        layers: List[Module],
         residual_outputs: List[int] = [],
-        residual_output_layers: Dict[int, nn.Module] = {},
+        residual_output_layers: Dict[int, Module] = {},
         residual_inputs: List[int] = [],
-        residual_input_layers: Dict[int, nn.Module] = {},
+        residual_input_layers: Dict[int, Module] = {},
         print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
-        self.__layers = nn.ParameterList(layers)
+        self.__layers = ParameterList(layers)
         self.__name = name
         self.__print_enabled = print_enabled
         self.__residual_outputs = residual_outputs
         self.__residual_inputs = residual_inputs
         self.__residual_output_layer_keys = list(residual_output_layers.keys())
-        self.__residual_output_layer_values = nn.ParameterList(residual_output_layers.values())
+        self.__residual_output_layer_values = ParameterList(residual_output_layers.values())
         self.__residual_input_layer_keys = list(residual_input_layers.keys())
-        self.__residual_input_layer_values = nn.ParameterList(residual_input_layers.values())
+        self.__residual_input_layer_values = ParameterList(residual_input_layers.values())
 
     @property
     def name(self) -> str:
@@ -118,7 +119,7 @@ class Submodule(nn.Module):
 
         return x, *x_res
 
-class HybridOutput(nn.Module):
+class HybridOutput(Module):
     def __init__(
         self,
         sigmoid_channels: List[int] = [],
@@ -148,7 +149,7 @@ class HybridOutput(nn.Module):
 
         return x
 
-class SplitConv3D(nn.Module):
+class SplitConv3D(Module):
     def __init__(
         self,
         in_channels: int = 1,
@@ -170,9 +171,9 @@ class SplitConv3D(nn.Module):
         out_channels = out_channels // n_split_channels
         layers = []
         for _ in range(n_split_channels):
-            layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups)
+            layer = Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups)
             layers.append(layer)
-        self.__layers = nn.ParameterList(layers)
+        self.__layers = ParameterList(layers)
 
     def forward(self, x) -> torch.Tensor:
         # Split tensor along channel dimension.
@@ -188,10 +189,10 @@ class SplitConv3D(nn.Module):
 
         return x
 
-class LayerWrapper(nn.Module):
+class LayerWrapper(Module):
     def __init__(
         self,
-        layer: nn.Module,
+        layer: Module,
         name: str,
         print_enabled: bool = PRINT_ENABLED) -> None:
         super().__init__()
@@ -200,7 +201,7 @@ class LayerWrapper(nn.Module):
         self.__name = name
 
     @property
-    def layer(self) -> nn.Module:
+    def layer(self) -> Module:
         return self.__layer
 
     @property
@@ -229,7 +230,7 @@ class LayerWrapper(nn.Module):
 
         return x
     
-class MultiUNet3D(nn.Module):
+class MultiUNet3D(Module):
     def __init__(
         self,
         n_output_channels: int,
@@ -241,6 +242,8 @@ class MultiUNet3D(nn.Module):
         n_input_channels: int = 1,
         n_gpus: int = 1,
         n_split_channels: int = 2,
+        use_affine_norm: bool = False,
+        use_init: bool = False,
         use_softmax: bool = True,
         **kwargs) -> None:
         super().__init__()
@@ -279,7 +282,7 @@ class MultiUNet3D(nn.Module):
 
         # Define layers.
         n_features = 32
-        self.__layers = nn.ParameterList()
+        self.__layers = ParameterList()
         residuals = [
             [5, 56],
             [12, 49],
@@ -316,34 +319,34 @@ class MultiUNet3D(nn.Module):
         # Add first level.
         in_channels = n_input_channels
         out_channels = n_features
-        self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
-        self.__layers.append(nn.InstanceNorm3d(out_channels))
-        self.__layers.append(nn.ReLU())
-        self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
-        self.__layers.append(nn.InstanceNorm3d(out_channels))
-        self.__layers.append(nn.ReLU())
+        self.__layers.append(Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+        self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+        self.__layers.append(ReLU())
+        self.__layers.append(Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+        self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+        self.__layers.append(ReLU())
 
         # Add downsampling levels. 
         self.__n_down_levels = 4
         for i in range(self.__n_down_levels):
             in_channels = 2 ** i * n_features
             out_channels = 2 ** (i + 1) * n_features
-            self.__layers.append(nn.MaxPool3d(kernel_size=2))
-            self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
-            self.__layers.append(nn.InstanceNorm3d(out_channels))
-            self.__layers.append(nn.ReLU())
-            self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
-            self.__layers.append(nn.InstanceNorm3d(out_channels))
-            self.__layers.append(nn.ReLU())
+            self.__layers.append(MaxPool3d(kernel_size=2))
+            self.__layers.append(Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+            self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+            self.__layers.append(ReLU())
+            self.__layers.append(Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
+            self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+            self.__layers.append(ReLU())
 
         # Add upsampling levels.
         self.__n_up_levels = 4
         for i in range(self.__n_up_levels):
             in_channels = 2 ** (self.__n_up_levels - i) * n_features
             out_channels = 2 ** (self.__n_up_levels - i - 1) * n_features
-            self.__layers.append(nn.ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
+            self.__layers.append(ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
             # Perform some hacks  (largest features maps are too big for cuDNN 32-bit indexing).
-            module = nn.Conv3d
+            module = Conv3d
             groups = 1
             if i == 3:
                 if halve_channels:
@@ -358,21 +361,21 @@ class MultiUNet3D(nn.Module):
                     # Manually split 3D conv operation to reduce tensor size.
                     module = partial(SplitConv3D, n_split_channels=n_split_channels)
             self.__layers.append(module(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1, groups=groups).to(self.__device_2))
-            self.__layers.append(nn.InstanceNorm3d(out_channels))
-            self.__layers.append(nn.ReLU())
-            self.__layers.append(nn.Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_3))
-            self.__layers.append(nn.InstanceNorm3d(out_channels))
-            self.__layers.append(nn.ReLU())
+            self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+            self.__layers.append(ReLU())
+            self.__layers.append(Conv3d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_3))
+            self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
+            self.__layers.append(ReLU())
 
         # Add final layers.
         in_channels = n_features
         out_channels = n_output_channels
-        self.__layers.append(nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1))
+        self.__layers.append(Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=1))
         if use_softmax:
-            self.__layers.append(nn.Softmax(dim=1))
+            self.__layers.append(Softmax(dim=1))
 
         # Wrap each layer in a print layer to test.
-        self.__layers = nn.ParameterList([LayerWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
+        self.__layers = ParameterList([LayerWrapper(l, str(i)) for i, l in enumerate(self.__layers)])
 
         # Get checkpoint locations.
         n_required_layers = 63
@@ -408,7 +411,7 @@ class MultiUNet3D(nn.Module):
                         in_channels = self.__layers[out_layer].out_channels
                         out_layer -= 1
                     out_channels = in_channels // 2
-                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
+                    res_layer = Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
                     residual_output_layers[res_output - start_layer] = res_layer
                 if res_input is not None and res_input >= start_layer and res_input <= end_layer:
                     out_layer = res_output
@@ -417,7 +420,7 @@ class MultiUNet3D(nn.Module):
                         in_channels = self.__layers[out_layer].out_channels
                         out_layer -= 1
                     out_channels = in_channels // 2
-                    res_layer = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
+                    res_layer = Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0)
                     residual_input_layers[res_input - start_layer] = res_layer
 
             layers = self.__layers[start_layer:end_layer + 1]
@@ -426,12 +429,25 @@ class MultiUNet3D(nn.Module):
                 module = checkpoint_wrapper(module, offload_to_cpu=self.__use_fairscale_cpu_offload)
             self.__submodules.append(module)
 
+        # Apply fancy initialisation.
+        if use_init:
+            logging.info(f"Applying custom parameter initialisation.")
+            for m in self.modules():
+                if isinstance(m, Conv3d):
+                    kaiming_normal_(m.weight)
+                elif isinstance(m, InstanceNorm3d):
+                    if use_affine_norm:
+                        constant_(m.weight, 1)
+                        constant_(m.bias, 0)
+                elif isinstance(m, ConvTranspose3d):
+                    kaiming_normal_(m.weight)
+
     @property
-    def layers(self) -> List[nn.Module]:
+    def layers(self) -> List[Module]:
         return self.__layers
 
     @property
-    def submodules(self) -> List[nn.Module]:
+    def submodules(self) -> List[Module]:
         return self.__submodules
 
     def forward(self, x):

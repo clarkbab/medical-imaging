@@ -29,8 +29,8 @@ def resample_4D(
 
 def resample_3D_zoom(
     data: np.ndarray,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
-    spacing: Optional[types.ImageSpacing3D] = None) -> np.ndarray:
+    output_spacing: Optional[types.Spacing3D] = None,
+    spacing: Optional[types.Spacing3D] = None) -> np.ndarray:
     scaling = np.array(output_spacing) / spacing
     data = zoom(data, scaling, order=1)
     return data
@@ -38,12 +38,12 @@ def resample_3D_zoom(
 def resample(
     data: np.ndarray,
     fill: float = 'min',
-    origin: Optional[types.PhysPoint3D] = None,
-    output_origin: Optional[types.PhysPoint3D] = None,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    origin: Optional[types.PointMM3D] = None,
+    output_origin: Optional[types.PointMM3D] = None,
+    output_size: Optional[types.Size3D] = None,
+    output_spacing: Optional[types.Spacing3D] = None,
     return_transform: bool = False,
-    spacing: Optional[types.ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    spacing: Optional[types.Spacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
     output_origin: 
         - if None, will take on value of 'origin'.
@@ -135,12 +135,12 @@ def resample(
 
 def resample_3D(
     data: np.ndarray,
-    origin: Optional[types.PhysPoint3D] = None,
-    output_origin: Optional[types.PhysPoint3D] = None,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    origin: Optional[types.PointMM3D] = None,
+    output_origin: Optional[types.PointMM3D] = None,
+    output_size: Optional[types.Size3D] = None,
+    output_spacing: Optional[types.Spacing3D] = None,
     return_transform: bool = False,
-    spacing: Optional[types.ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    spacing: Optional[types.Spacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
     output_origin: 
         - if None, will take on value of 'origin'.
@@ -225,8 +225,8 @@ def resample_3D(
 
 def resample_box_3D(
     bounding_box: types.Box3D,
-    spacing: types.ImageSpacing3D,
-    new_spacing: types.ImageSpacing3D) -> types.Box3D:
+    spacing: types.Spacing3D,
+    new_spacing: types.Spacing3D) -> types.Box3D:
     """
     returns: a bounding box in resampled coordinates.
     args:

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition cascade
+#SBATCH --partition sapphire
 #SBATCH --nodes 1
 #SBATCH --mem 64G
 #SBATCH --time 0-6:00:00

@@ -23,7 +23,7 @@ class PatchLoader:
         n_workers: int = 1,
         p_foreground: float = 1,
         shuffle: bool = True,
-        spacing: types.ImageSpacing3D = None,
+        spacing: types.Spacing3D = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         if type(partitions) == TrainingPartition:
@@ -43,7 +43,7 @@ class LoaderDataset(Dataset):
         half_precision: bool = True,
         n_samples: Optional[int] = None,
         p_foreground: float = 1,
-        spacing: types.ImageSpacing3D = None,
+        spacing: types.Spacing3D = None,
         transform: torchio.transforms.Transform = None):
         self._half_precision = half_precision
         self._p_foreground = p_foreground

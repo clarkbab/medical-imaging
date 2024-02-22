@@ -44,7 +44,7 @@ RESUME=True
 RESUME_CKPT='last'
 #RESUME_CKPT='loss=-0.023704-epoch=284-step=0'
 LR_INIT=1e-3
-USE_WEIGHTS=True
+USE_WEIGHTS=False
 SCHEDULE_EPOCHS=200
 
 # Get run name.

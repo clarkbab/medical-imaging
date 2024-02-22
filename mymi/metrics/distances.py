@@ -10,7 +10,7 @@ from mymi.utils import arg_to_list
 def distances_deepmind(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -33,7 +33,7 @@ def distances_deepmind(
 
 def apl(
     surf_dists: Tuple[np.ndarray, np.array],
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     tol: float,
     unit: Literal['mm', 'voxels'] = 'mm') -> float:
     b_to_a_surf_dists = surf_dists[1]   # Only look at dists from 'GT' back to 'pred'. 
@@ -63,7 +63,7 @@ def surface_dice(
 def all_distances(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -92,7 +92,7 @@ def all_distances(
 def surface_distances(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> Dict[str, float]:
+    spacing: types.Spacing3D) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:
@@ -129,7 +129,7 @@ def surface_distances(
 def batch_mean_all_distances(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: types.Spacing3D,
     tol: Union[int, float, List[float]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'batch_mean_all_distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -150,7 +150,7 @@ def batch_mean_all_distances(
 def extent_centre_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> Tuple[float, float, float]:
+    spacing: types.Spacing3D) -> Tuple[float, float, float]:
     """
     returns: the maximum distance between extent centres for each axis.
     args:
@@ -177,7 +177,7 @@ def extent_centre_distance(
 def extent_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> Tuple[float, float, float]:
+    spacing: types.Spacing3D) -> Tuple[float, float, float]:
     """
     returns: the maximum distance between extent boundaries for each axis.
     args:
@@ -234,7 +234,7 @@ def get_encaps_dist_vox(
 def get_encaps_dist_mm(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: types.ImageSpacing3D) -> Tuple[int, int, int]:
+    spacing: types.Spacing3D) -> Tuple[int, int, int]:
     """
     returns: an asymmetric distance measuring the encapsulation of b by a along each axis.
         A negative distance implies encapsulation.

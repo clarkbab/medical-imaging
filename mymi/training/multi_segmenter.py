@@ -3,15 +3,16 @@ import json
 import numpy as np
 import os
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import DeviceStatsMonitor, EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.tuner import Tuner
 import torch
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi.loaders import MultiLoader
 from mymi.loaders.augmentation import get_transforms
+from mymi.loaders.hooks import centre_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
@@ -32,6 +33,8 @@ def train_multi_segmenter(
     ckpt_model: bool = True,
     complexity_weights_factor: float = 1,
     complexity_weights_window: int = 5,
+    crop_fn: Optional[str] = None,
+    crop_mm: Optional[Tuple[float, float, float]] = None,
     cw_cvg_calculate: bool = True,
     cw_cvg_delay_above: int = 20,
     cw_cvg_delay_below: int = 5,
@@ -55,6 +58,7 @@ def train_multi_segmenter(
     lr_find_n_iter: int = 10,
     lr_init: float = 1e-3,
     lr_milestones: List[int] = [],
+    monitor_devices: bool = False,
     n_epochs: int = 100,
     n_folds: Optional[int] = None,
     n_gpus: int = 1,
@@ -63,6 +67,7 @@ def train_multi_segmenter(
     n_split_channels: int = 2,
     p_val: float = 0.2,
     precision: Union[str, int] = 'bf16',
+    profiler: Optional[str] = None,
     random_seed: float = 0,
     resume: bool = False,
     resume_model: Optional[str] = None,
@@ -100,15 +105,6 @@ def train_multi_segmenter(
 
     # Ensure model parameter initialisation is deterministic.
     seed_everything(random_seed, workers=True)
-
-    # Get augmentation transforms.
-    if use_augmentation:
-        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh, **kwargs)
-    else:
-        transform_train = None
-        transform_val = None
-    logging.info(f"Training transform: {transform_train}")
-    logging.info(f"Validation transform: {transform_val}")
 
     # Define loss function.
     if loss_fn == 'dice':
@@ -188,8 +184,24 @@ def train_multi_segmenter(
     else:
         epoch = 0
 
+    # Get cropping hook.
+    if crop_fn is not None:
+        crop_fn = centre_crop(crop_mm)
+    else:
+        crop_fn = None
+
+    # Get augmentation transforms.
+    if use_augmentation:
+        logging.info(f"Applying data augmentation.")
+        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh, **kwargs)
+    else:
+        transform_train = None
+        transform_val = None
+    logging.info(f"Training transform: {transform_train}")
+    logging.info(f"Validation transform: {transform_val}")
+
     # Create data loaders.
-    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, include_background=include_background, load_all_samples=load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = MultiLoader.build_loaders(dataset, batch_size=batch_size, data_hook=crop_fn, epoch=epoch, include_background=include_background, load_all_samples=load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file, **kwargs)
 
     # Infer convergence thresholds from dataset name.
     # We need these even when 'use_cvg_weighting=False' as it allows us to track
@@ -261,7 +273,8 @@ def train_multi_segmenter(
         val_image_interval=val_image_interval,
         weights=weights,
         weights_schedule=weights_schedule,
-        weight_decay=weight_decay)
+        weight_decay=weight_decay,
+        **kwargs)
 
     # Create logger.
     if use_logger and not lr_find:
@@ -283,6 +296,8 @@ def train_multi_segmenter(
         #     monitor='val/loss',
         #     patience=5),
     ]
+    if monitor_devices:
+        callbacks.append(DeviceStatsMonitor())
     if ckpt_model:
         callbacks.append(ModelCheckpoint(
             auto_insert_metric_name=False,
@@ -305,7 +320,8 @@ def train_multi_segmenter(
         max_epochs=n_epochs,
         num_nodes=n_nodes,
         num_sanity_val_steps=0,
-        precision=precision)
+        precision=precision,
+        profiler=profiler)
 
     if lr_find:
         tuner = Tuner(trainer)
@@ -320,7 +336,7 @@ def train_multi_segmenter(
         return
 
     # Save training information.
-    man_df = get_multi_loader_manifest(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
+    man_df = get_multi_loader_manifest(dataset, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file, **kwargs)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'multi-loader-manifest.csv')

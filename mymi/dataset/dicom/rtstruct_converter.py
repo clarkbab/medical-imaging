@@ -130,9 +130,9 @@ class RTSTRUCTConverter:
     def _get_mask_slice(
         cls,
         points: np.ndarray,
-        size: types.ImageSize2D,
-        spacing: types.ImageSpacing2D,
-        offset: types.PhysPoint2D) -> np.ndarray:
+        size: types.Size2D,
+        spacing: types.Spacing2D,
+        offset: types.PointMM2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:

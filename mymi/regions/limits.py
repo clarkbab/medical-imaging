@@ -11,7 +11,7 @@ class RegionLimits:
 
 def truncate_spine(
     pred: np.ndarray,
-    spacing: types.ImageSpacing3D) -> np.ndarray:
+    spacing: types.Spacing3D) -> np.ndarray:
     ext_width = get_extent_width_mm(pred, spacing)
     if ext_width is not None and ext_width[2] > RegionLimits.SpinalCord[2]:
         # Crop caudal end of spine.

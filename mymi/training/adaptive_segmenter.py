@@ -12,7 +12,6 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi.loaders import AdaptiveLoader
 from mymi.loaders.augmentation import get_transforms
-from mymi.loaders.hooks import naive_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
@@ -93,7 +92,8 @@ def train_adaptive_segmenter(
     weight_decay: float = 0,
     weights: Optional[List[float]] = None,
     weights_iv_factor: Optional[Union[float, List[float]]] = None,
-    weights_schedule: Optional[List[float]] = None) -> None:
+    weights_schedule: Optional[List[float]] = None,
+    **kwargs) -> None:
     logging.arg_log('Training model', ('dataset', 'model_name', 'run_name'), (dataset, model_name, run_name))
     regions = region_to_list(region)
 
@@ -102,7 +102,7 @@ def train_adaptive_segmenter(
 
     # Get augmentation transforms.
     if use_augmentation:
-        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh)
+        transform_train, transform_val = get_transforms(thresh_high=thresh_high, thresh_low=thresh_low, use_elastic=use_elastic, use_stand=use_stand, use_thresh=use_thresh, **kwargs)
     else:
         transform_train = None
         transform_val = None
@@ -175,7 +175,7 @@ def train_adaptive_segmenter(
         epoch = 0
 
     # Create data loaders.
-    train_loader, val_loader, _ = AdaptiveLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, load_all_samples=loader_load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
+    train_loader, val_loader, _ = AdaptiveLoader.build_loaders(dataset, batch_size=batch_size, epoch=epoch, load_all_samples=loader_load_all_samples, n_folds=n_folds, n_workers=n_workers, p_val=p_val, random_seed=random_seed, region=regions, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, transform_train=transform_train, transform_val=transform_val, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file, **kwargs)
 
     # Infer convergence thresholds from dataset name.
     # We need these even when 'use_cvg_weighting=False' as it allows us to track
@@ -234,7 +234,8 @@ def train_adaptive_segmenter(
         val_image_interval=val_image_interval,
         weights=weights,
         weights_schedule=weights_schedule,
-        weight_decay=weight_decay)
+        weight_decay=weight_decay,
+        **kwargs)
 
     # Create logger.
     if use_logger and not lr_find:
@@ -294,7 +295,7 @@ def train_adaptive_segmenter(
         return
 
     # Save training information.
-    man_df = get_adaptive_loader_manifest(dataset, load_all_samples=loader_load_all_samples, n_folds=n_folds, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file)
+    man_df = get_adaptive_loader_manifest(dataset, load_all_samples=loader_load_all_samples, n_folds=n_folds, shuffle_samples=loader_shuffle_samples, test_fold=test_fold, use_grouping=use_loader_grouping, use_split_file=use_loader_split_file, **kwargs)
     folderpath = os.path.join(config.directories.runs, model_name, run_name, datetime.now().strftime(DATETIME_FORMAT))
     os.makedirs(folderpath, exist_ok=True)
     filepath = os.path.join(folderpath, 'adaptive-loader-manifest.csv')

@@ -11,7 +11,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
 from mymi.prediction.dataset.nifti import load_localiser_prediction
-from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegion, PatientRegions
+from mymi.types import Spacing3D, Model, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
@@ -21,10 +21,10 @@ def create_multi_segmenter_heatmap(
     pat_id: str,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     target_region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    layer_spacing: Union[Spacing3D, List[Spacing3D]],
     device: torch.device = torch.device('cpu'),
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
     model_name = model if isinstance(model, tuple) else model.name
@@ -67,10 +67,10 @@ def create_multi_segmenter_heatmaps(
     dataset: Union[str, List[str]],
     model: Union[Model, ModelName],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     target_region: PatientRegion,
     layer: Union[str, List[str]],
-    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    layer_spacing: Union[Spacing3D, List[Spacing3D]],
     load_all_samples: bool = False,
     n_folds: Optional[int] = None,
     n_pats: Optional[int] = None,
@@ -114,10 +114,10 @@ def get_multi_segmenter_heatmap(
     pat_id: str,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     target_region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    layer_spacing: Union[Spacing3D, List[Spacing3D]],
     device: torch.device = torch.device('cpu'),
     use_crop: str = 'brain',
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:

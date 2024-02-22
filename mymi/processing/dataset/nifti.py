@@ -13,9 +13,7 @@ from typing import Literal, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
-from mymi.dataset.nifti import NIFTIDataset
-from mymi.dataset.nifti import recreate as recreate_nifti
+from mymi.dataset import NIFTIDataset
 from mymi.dataset.training import TrainingDataset, exists as exists_training
 from mymi.dataset.training import create as create_training
 from mymi.dataset.training import recreate as recreate_training
@@ -27,18 +25,19 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
+from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionNames, region_to_list, to_255
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
-from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
+from mymi.types import SizeMM3D, Size3D, Spacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_replan_adaptive_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
-    crop_mm: Optional[ImageSizeMM3D] = None,
+    crop: Optional[Size3D] = None,
+    crop_mm: Optional[SizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -46,7 +45,7 @@ def convert_replan_adaptive_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to adaptive brain crop TRAINING_ADAPTIVE', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -160,7 +159,7 @@ def convert_replan_adaptive_to_training(
                 # Get brain extent.
                 # Use mid-treatment brain for both mid/pre-treatment scans as this should align with registered pre-treatment brain.
                 localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-                brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
+                brain_label = load_localiser_prediction_nifti(dataset, pat_id_mt, localiser)
                 if spacing is not None:
                     brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
                 brain_extent = get_extent(brain_label)
@@ -262,8 +261,8 @@ def convert_replan_adaptive_to_training(
 def convert_replan_adaptive_mirror_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
-    crop_mm: Optional[ImageSizeMM3D] = None,
+    crop: Optional[Size3D] = None,
+    crop_mm: Optional[SizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -271,7 +270,7 @@ def convert_replan_adaptive_mirror_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to adaptive mirror brain crop TRAINING ADAPTIVE', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -494,8 +493,8 @@ def convert_replan_adaptive_mirror_to_training(
 def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
-    crop_mm: Optional[ImageSizeMM3D] = None,
+    crop: Optional[Size3D] = None,
+    crop_mm: Optional[SizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -503,7 +502,7 @@ def convert_replan_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -703,9 +702,9 @@ def convert_replan_to_training(
 def convert_population_lens_crop_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
+    crop: Optional[Size3D] = None,
     crop_method: Literal['low', 'uniform'] = 'low',
-    crop_mm: Optional[ImageSizeMM3D] = None,
+    crop_mm: Optional[SizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -713,7 +712,7 @@ def convert_population_lens_crop_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -1077,203 +1076,9 @@ def convert_replan_to_lens_crop(
 
 def convert_brain_crop_to_training(
     dataset: str,
-    create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
-    crop_mm: Optional[ImageSizeMM3D] = None,
-    dest_dataset: Optional[str] = None,
-    dilate_iter: int = 3,
-    dilate_regions: List[str] = [],
-    log_warnings: bool = False,
-    recreate_dataset: bool = True,
-    region: Optional[PatientRegions] = None,
-    round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
-    logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
-    regions = region_to_list(region)
-
-    # Use all regions if region is 'None'.
+    **kwargs) -> None:
     set = NIFTIDataset(dataset)
-    if regions is None:
-        regions = set.list_regions()
-
-    # Create the dataset.
-    dest_dataset = dataset if dest_dataset is None else dest_dataset
-    if exists_training(dest_dataset):
-        if recreate_dataset:
-            created = True
-            set_t = recreate_training(dest_dataset)
-        else:
-            created = False
-            set_t = TrainingDataset(dest_dataset)
-            __destroy_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
-
-            # Delete old labels.
-            for region in regions:
-                filepath = os.path.join(set_t.path, 'data', 'labels', region)
-                shutil.rmtree(filepath)
-    else:
-        created = True
-        set_t = create_training(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
-
-    # Write params.
-    if created:
-        filepath = os.path.join(set_t.path, 'params.csv')
-        params_df = pd.DataFrame({
-            'crop': [str(crop)] if crop is not None else ['None'],
-            'crop-mm': [str(crop_mm)] if crop_mm is not None else ['None'],
-            'dilate-iter': [str(dilate_iter)],
-            'dilate-regions': [str(dilate_regions)],
-            'regions': [str(regions)],
-            'spacing': [str(spacing)] if spacing is not None else ['None'],
-        })
-        params_df.to_csv(filepath, index=False)
-    else:
-        for region in regions:
-            filepath = os.path.join(set_t.path, f'params-{region}.csv')
-            params_df = pd.DataFrame({
-                'crop': [str(crop)] if crop is not None else ['None'],
-                'crop-mm': [str(crop_mm)] if crop_mm is not None else ['None'],
-                'dilate-iter': [str(dilate_iter)],
-                'dilate-regions': [str(dilate_regions)],
-                'spacing': [str(spacing)] if spacing is not None else ['None'],
-                'regions': [str(regions)],
-            })
-            params_df.to_csv(filepath, index=False)
-
-    # Load patients.
-    pat_ids = set.list_patients(region=regions)
-
-    # Get exclusions.
-    exc_df = set.excluded_labels
-
-    # Create index.
-    cols = {
-        'dataset': str,
-        'sample-id': int,
-        'group-id': float,
-        'origin-dataset': str,
-        'origin-patient-id': str,
-        'region': str,
-        'empty': bool
-    }
-    index = pd.DataFrame(columns=cols.keys())
-    index = index.astype(cols)
-
-    # Load patient grouping if present.
-    group_df = set.group_index
-
-    # Write each patient to dataset.
-    start = time()
-    if create_data:
-        for i, pat_id in enumerate(tqdm(pat_ids)):
-            # Load input data.
-            patient = set.patient(pat_id)
-            input_spacing = patient.ct_spacing
-            input = patient.ct_data
-
-            # Resample input.
-            if spacing is not None:
-                input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
-
-            # Crop input.
-            if crop_mm is not None:
-                # Convert to voxel crop.
-                crop_voxels = tuple((np.array(crop_mm) / np.array(spacing)).astype(np.int32))
-                
-                # Get brain extent.
-                localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-                brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-                if spacing is not None:
-                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
-                brain_extent = get_extent(brain_label)
-
-                # Get crop coordinates.
-                # Crop origin is centre-of-extent in x/y, and max-extent in z.
-                # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
-                # in - direction for z.
-                p_above_brain = 0.04
-                crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
-                crop = (
-                    (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
-                    (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
-                )
-
-                # Crop input.
-                input = crop_3D(input, crop)
-
-            # Save input.
-            __create_training_input(set_t, i, input)
-
-            for region in regions:
-                # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
-                    continue
-
-                # Skip if region in 'excluded-labels.csv'.
-                if exc_df is not None:
-                    pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
-                    if len(pr_df) == 1:
-                        continue
-
-                # Load label data.
-                label = patient.region_data(region=region)[region]
-
-                # Resample data.
-                if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
-
-                # Crop/pad.
-                if crop_mm is not None:
-                    label = crop_3D(label, crop)
-
-                # Round data after resampling to save on disk space.
-                if round_dp is not None:
-                    input = np.around(input, decimals=round_dp)
-
-                # Dilate the labels if requested.
-                if region in dilate_regions:
-                    label = binary_dilation(label, iterations=dilate_iter)
-
-                # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
-                if label.sum() != 0:
-                    empty = False
-                    __create_training_label(set_t, i, label, region=region)
-                else:
-                    empty = True
-
-                # Add index entry.
-                if group_df is not None:
-                    tdf = group_df[group_df['patient-id'] == pat_id]
-                    if len(tdf) == 0:
-                        group_id = np.nan
-                    else:
-                        assert len(tdf) == 1
-                        group_id = tdf.iloc[0]['group-id']
-                else:
-                    group_id = np.nan
-                data = {
-                    'dataset': set_t.name,
-                    'sample-id': i,
-                    'group-id': group_id,
-                    'origin-dataset': set.name,
-                    'origin-patient-id': pat_id,
-                    'region': region,
-                    'empty': empty
-                }
-                index = append_row(index, data)
-
-    end = time()
-
-    # Write index.
-    index = index.astype(cols)
-    filepath = os.path.join(set_t.path, 'index.csv')
-    index.to_csv(filepath, index=False)
-
-    # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
-    hours = int(np.ceil((end - start) / 3600))
-    __print_time(set_t, hours)
+    convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
 
 def convert_to_training(
     dataset: str,
@@ -1282,8 +1087,8 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
-    output_size: Optional[ImageSize3D] = None,
-    output_spacing: Optional[ImageSpacing3D] = None,
+    output_size: Optional[Size3D] = None,
+    output_spacing: Optional[Spacing3D] = None,
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None) -> None:

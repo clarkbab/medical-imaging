@@ -8,3 +8,4 @@ patient-id,region,processing
 68-1,Cavity_Oral,outlier
 83-1,Parotid_R,outlier
 96-1,Parotid_R,interpolate-z
+105-1,Bone_Mandible,outlier
