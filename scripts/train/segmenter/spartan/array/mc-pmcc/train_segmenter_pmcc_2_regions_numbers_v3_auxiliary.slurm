@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 128G
@@ -21,20 +21,62 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['BrainStem','OralCavity']"                    # 0
-    "['OralCavity','Mandible']"                     # 1
-    "['Mandible','SpinalCord']"                     # 2
-    "['OralCavity','SpinalCord']"                   # 3
-    "['SpinalCord','Submandibular_L']"              # 4
-    "['SpinalCord','Submandibular_R']"              # 5
+    "['BrainStem','OralCavity']"                            # 0
+    "['OralCavity','Mandible']"                             # 1
+
+    "['Mandible','SpinalCord']"                             # 2
+    "['OralCavity','SpinalCord']"                           # 3
+    "['SpinalCord','Submandibular_L']"                      # 4
+    "['SpinalCord','Submandibular_R']"                      # 5
+
+    "['BrachialPlexus_L','Cochlea_L']"                      # 6
+    "['BrachialPlexus_L','Cochlea_R']"                      # 7
+    "['BrachialPlexus_L','Lens_L']"                         # 8
+    "['BrachialPlexus_L','Lens_R']"                         # 9
+    "['BrachialPlexus_L','OpticNerve_L']"                   # 10
+    "['BrachialPlexus_L','OpticNerve_R']"                   # 11
+    "['BrachialPlexus_L','Cochlea_L','Cochlea_R']"          # 12
+    "['BrachialPlexus_L','Lens_L','Lens_R']"                # 13
+    "['BrachialPlexus_L','OpticNerve_L','OpticNerve_R']"    # 14
+
+    "['BrachialPlexus_R','Cochlea_L']"                      # 15
+    "['BrachialPlexus_R','Cochlea_R']"                      # 16
+    "['BrachialPlexus_R','Lens_L']"                         # 17
+    "['BrachialPlexus_R','Lens_R']"                         # 18
+    "['BrachialPlexus_R','OpticNerve_L']"                   # 19
+    "['BrachialPlexus_R','OpticNerve_R']"                   # 20
+    "['BrachialPlexus_R','Cochlea_L','Cochlea_R']"          # 21
+    "['BrachialPlexus_R','Lens_L','Lens_R']"                # 22
+    "['BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"    # 23
 )
 SHORT_REGIONS=(
     'BS_OC'
     'OC_M'  
+
     'M_SC'  
-    'OC_SC'  
+    'OC_S'  
     'SC_SL'  
     'SC_SR'  
+
+    'BL_CL'
+    'BL_CR'
+    'BL_LL'
+    'BL_LR'
+    'BL_OL'
+    'BL_OR'
+    'BL_CL_CR'
+    'BL_LL_LR'
+    'BL_OL_OR'
+
+    'BR_CL'
+    'BR_CR'
+    'BR_LL'
+    'BR_LR'
+    'BR_OL'
+    'BR_OR'
+    'BR_CL_CR'
+    'BR_LL_LR'
+    'BR_OL_OR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
@@ -46,7 +88,7 @@ RESUME=False
 LR_INIT=1e-3
 
 # Get run name.
-RANDOM_SEED=42
+RANDOM_SEED=43
 RUN_NAME_BASE="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"

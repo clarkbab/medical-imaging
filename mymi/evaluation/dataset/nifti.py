@@ -15,7 +15,7 @@ from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
-from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
+from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_adaptive_segmenter_no_oars_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import ModelName, PatientRegion, PatientRegions
@@ -271,6 +271,71 @@ def get_adaptive_segmenter_pt_evaluation(
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
+            z_min_pred = np.nonzero(pred)[2].min()
+            z_min_label = np.nonzero(label)[2].min()
+            z_min = np.max([z_min_label, z_min_pred])
+
+            # Crop pred/label foreground voxels.
+            crop = ((0, 0, z_min), label.shape)
+            pred = crop_foreground_3D(pred, crop)
+            label = crop_foreground_3D(label, crop)
+
+        # Dice.
+        metrics = {}
+        metrics['dice'] = dice(pred, label)
+
+        # Distances.
+        if pred.sum() == 0 or label.sum() == 0:
+            metrics['apl'] = np.nan
+            metrics['hd'] = np.nan
+            metrics['hd-95'] = np.nan
+            metrics['msd'] = np.nan
+            metrics['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[metric] = value
+
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                metrics[f'dm-{metric}'] = value
+
+        region_metrics.append(metrics)
+
+    return region_metrics
+
+def get_adaptive_segmenter_no_oars_evaluation(
+    dataset: str,
+    region: PatientRegions,
+    pat_id: str,
+    model: ModelName,
+    **kwargs) -> List[Dict[str, float]]:
+    regions = arg_to_list(region, str)
+
+    # Load predictions.
+    set = NIFTIDataset(dataset)
+    pat = set.patient(pat_id)
+    spacing = pat.ct_spacing
+    region_preds = load_adaptive_segmenter_no_oars_prediction_dict(dataset, pat_id, model, regions, **kwargs)
+ 
+    region_metrics = []
+    for region, pred in region_preds.items():
+        # Patient ground truth may not have all the predicted regions.
+        if not pat.has_region(region):
+            region_metrics.append({})
+            continue
+        
+        # Load label.
+        label = pat.region_data(region=region)[region]
+
+        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
+        if region == 'SpinalCord' and pred.sum() != 0:
             z_min_pred = np.nonzero(pred)[2].min()
             z_min_label = np.nonzero(label)[2].min()
             z_min = np.max([z_min_label, z_min_pred])
@@ -700,6 +765,77 @@ def create_adaptive_segmenter_pt_evaluation(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
+def create_adaptive_segmenter_no_oars_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    include_ct: bool = True,
+    **kwargs) -> None:
+    datasets = arg_to_list(dataset, str)
+    # 'regions' is used to determine which patients are loaded (those that have at least one of
+    # the listed regions).
+    model = replace_ckpt_alias(model)
+    regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
+    logging.arg_log(f"Evaluating adaptive segmenter predictions for NIFTI dataset (no prior OARs{ '' if include_ct else ' or CT' })", ('dataset', 'region', 'model'), (dataset, region, model))
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Build test loader.
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
+
+    # Add evaluations to dataframe.
+    test_loader = list(iter(test_loader))
+    for pat_desc_b in tqdm(test_loader):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            # Skip pre-treatment patients.
+            if '-0' in pat_id:
+                logging.info(f"Skipping '{dataset}:{pat_id}'.")
+                continue
+
+            # Get metrics per region.
+            region_metrics = get_adaptive_segmenter_no_oars_evaluation(dataset, regions, pat_id, model, include_ct=include_ct, **kwargs)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold if test_fold is not None else np.nan,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
 def create_adaptive_segmenter_evaluation(
     dataset: Union[str, List[str]],
     region: PatientRegions,
@@ -911,6 +1047,65 @@ def create_all_multi_segmenter_evaluation(
 
     # Save evaluation.
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
+    
+def create_replan_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    **kwargs) -> None:
+    datasets = arg_to_list(dataset, str)
+    # 'regions' is used to determine which patients are loaded (those that have at least one of
+    # the listed regions).
+    regions = region_to_list(region)
+    logging.arg_log('Evaluating mid-treatment against pre-treatment labels for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
+
+    # Create dataframe.
+    cols = {
+        'fold': float,
+        'dataset': str,
+        'patient-id': str,
+        'region': str,
+        'metric': str,
+        'value': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+
+    # Load patients.
+    for dataset in tqdm(datasets):
+        set = NIFTIDataset(dataset)
+        pat_ids = set.list_patients()
+
+        for pat_id in tqdm(pat_ids, leave=False):
+            logging.info(f"Evaluating '{dataset}:{pat_id}'.")
+
+            # Get metrics per region.
+            region_metrics = get_replan_evaluation(dataset, regions, pat_id, model, **kwargs)
+            for region, metrics in zip(regions, region_metrics):
+                for metric, value in metrics.items():
+                    data = {
+                        'fold': test_fold if test_fold is not None else np.nan,
+                        'dataset': dataset,
+                        'patient-id': pat_id,
+                        'region': region,
+                        'metric': metric,
+                        'value': value
+                    }
+                    df = append_row(df, data)
+
+    # Set column types.
+    df = df.astype(cols)
+
+    # Save evaluation.
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter-replan', encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -1177,6 +1372,36 @@ def load_adaptive_segmenter_pt_evaluation(
         'use_split_file': kwargs.get('use_split_file', False),
     }
     filepath = os.path.join(config.directories.evaluations, 'adaptive-segmenter-pt', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Adaptive segmenter evaluation for dataset '{dataset}', model '{model}' not found. Params: {params}. Filepath: {filepath}.")
+    df = pd.read_csv(filepath, dtype={'patient-id': str})
+    df[['model-name', 'model-run', 'model-ckpt']] = model
+    return df
+
+def load_adaptive_segmenter_no_oars_evaluation(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    exists_only: bool = False,
+    include_ct: bool = True,
+    **kwargs) -> Union[np.ndarray, bool]:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    model = replace_ckpt_alias(model)
+    params = {
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.evaluations, f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True

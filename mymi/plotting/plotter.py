@@ -1512,8 +1512,8 @@ def plot_dataframe(
     stats_bar_alpha: float = 0.5,
     stats_bar_data_offset: float = 0.03,
     stats_bar_grid_offset: float = 0.01,
+    stats_bar_grid_spacing: float = 0.05,
     stats_bar_height: float = 0.01,
-    stats_bar_offset: float = 0.05,
     stats_bar_text_offset: float = 0.01,
     stats_bar_show_direction: bool = False,
     stats_two_sided: bool = False,
@@ -1882,7 +1882,7 @@ def plot_dataframe(
                     pairs.append((hue_l, hue_r))
                     p_vals.append(p_val)
 
-                # Calculate grid offset.
+                # Calculate grid offset from data.
                 y_grid_offset = np.inf
                 min_skip = None
                 for hue_l, hue_r in pairs:
@@ -1924,7 +1924,7 @@ def plot_dataframe(
                         y_max = hue_mid_df[y].max()
                         y_maxes.append(y_max)
                     y_max = max(y_maxes) + stats_bar_data_offset
-                    y_i_data = int(np.ceil((y_max - y_grid_offset) / stats_bar_offset))
+                    y_i_data = int(np.ceil((y_max - y_grid_offset) / stats_bar_grid_spacing))
 
                     # Get possible y grid index based on existing bar positions.
                     ## Get existing bar positions for all 'middle' hues.
@@ -1945,7 +1945,7 @@ def plot_dataframe(
                             break
 
                     # Plot bar.
-                    y_min = y_grid_offset + y_i * stats_bar_offset
+                    y_min = y_grid_offset + y_i * stats_bar_grid_spacing
                     y_max = y_min + stats_bar_height
                     axs[i].plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=linewidth)    
 
@@ -2358,9 +2358,10 @@ def plot_registration(
     # Add title.
     if show_title:
         for ax, id, slice_idx, ct_size, info in zip(axs, ids, slice_idxs, ct_sizes, infos):
-            n_slices = ct_size[view]
-            slice_info = ' (fixed)' if 'fixed' in info and info['fixed'] else ''
-            title = f"patient: {id}, slice{slice_info}: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
+            if title is None:
+                n_slices = ct_size[view]
+                slice_info = ' (fixed)' if 'fixed' in info and info['fixed'] else ''
+                title = f"patient: {id}, slice{slice_info}: {slice_idx}/{n_slices - 1} ({__view_to_text(view)} view)"
 
             # Escape text if using latex.
             if latex:

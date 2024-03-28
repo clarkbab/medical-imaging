@@ -8,7 +8,7 @@
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 120G
-#SBATCH --time 0-04:00:00
+#SBATCH --time 0-06:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -50,14 +50,16 @@ USE_GROUPING=True
 USE_SPLIT_FILE=False
 
 # Other settings.
+INCLUDE_CT=False
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_evaluation.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_no_oars_evaluation.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
+    --include_ct $INCLUDE_CT \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --shuffle_samples $SHUFFLE_SAMPLES \
     --n_folds $N_FOLDS \

@@ -1,8 +1,9 @@
 import os
 import pandas as pd
+from pandas import DataFrame
 from re import match
 import torch
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 from tqdm import tqdm
 
 from mymi import config
@@ -22,6 +23,13 @@ from .segmenter import train_segmenter
 from .segmenter_test import train_segmenter_test
 from .segmenter_parallel import train_segmenter_parallel
 from .memory_test import train_memory_test
+
+def load_run_manifest(model: Tuple[str, str]) -> DataFrame:
+    filepath = os.path.join(config.directories.runs, *model)
+    latest_run = list(sorted(os.listdir(filepath)))[-1]
+    filepath = os.path.join(filepath, latest_run, 'multi-loader-manifest.csv')
+    df = pd.read_csv(filepath)
+    return df
 
 def get_n_epochs(
     model: Union[ModelName, List[ModelName]],

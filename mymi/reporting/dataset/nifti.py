@@ -18,7 +18,7 @@ from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_registration, plot_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_registration, plot_segmenter_prediction, plot_multi_segmenter_prediction, plot_adaptive_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import region_to_list as region_to_list
 from mymi.types import Axis, ModelName, PatientRegions
@@ -346,6 +346,7 @@ def load_region_summary_report(
     for dataset in datasets:
         # Get regions if 'None'.
         set = NIFTIDataset(dataset)
+        exc_df = set.excluded_labels
         if regions is None:
             regions = set.list_regions()
 
@@ -361,6 +362,20 @@ def load_region_summary_report(
             # Add CSV.
             df = pd.read_csv(filepath, dtype={ 'patient-id': str })
             df.insert(1, 'region', region)
+
+            # Filter by 'excluded-labels.csv'.
+            rexc_df = None if exc_df is None else exc_df[exc_df['region'] == region] 
+            if labels != 'all':
+                if rexc_df is None:
+                    raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
+            if labels == 'included':
+                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
+                df = df[df._merge == 'left_only'].drop(columns='_merge')
+            elif labels == 'excluded':
+                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
+                df = df[df._merge == 'both'].drop(columns='_merge')
+
+            # Add region summary.
             dfs.append(df)
 
     # Concatenate loaded files.
@@ -368,18 +383,6 @@ def load_region_summary_report(
         return None
     df = pd.concat(dfs, axis=0)
     df = df.reset_index(drop=True)
-
-    # Filter by 'excluded-labels.csv'.
-    exc_df = set.excluded_labels
-    if labels != 'all':
-        if exc_df is None:
-            raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
-    if labels == 'included':
-        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
-        df = df[df._merge == 'left_only'].drop(columns='_merge')
-    elif labels == 'excluded':
-        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
-        df = df[df._merge == 'both'].drop(columns='_merge')
 
     return df
 
@@ -474,7 +477,7 @@ def get_ct_summary(
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get patients.
     set = NIFTIDataset(dataset)
-    pats = set.list_patients(region=region)
+    pat_ids = set.list_patients(region=region)
 
     cols = {
         'dataset': str,
@@ -486,9 +489,9 @@ def get_ct_summary(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats):
+    for pat_id in tqdm(pat_ids):
         # Load values.
-        patient = set.patient(pat)
+        patient = set.patient(pat_id)
         size = patient.ct_size
         spacing = patient.ct_spacing
 
@@ -498,7 +501,7 @@ def get_ct_summary(
         for axis in range(len(size)):
             data = {
                 'dataset': dataset,
-                'patient-id': pat,
+                'patient-id': pat_id,
                 'axis': axis,
                 'size': size[axis],
                 'spacing': spacing[axis],
@@ -554,16 +557,26 @@ def load_ct_info_summary_report(
     return pd.read_csv(filepath)
 
 def load_ct_summary_report(
-    dataset: str,
+    dataset: Union[str, List[str]],
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
-    # Get regions.
-    set = NIFTIDataset(dataset)
-    regions = arg_to_list(region, str) if region is None else set.list_regions()
+    datasets = arg_to_list(dataset, str)
 
-    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
-    if not os.path.exists(filepath):
-        raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
-    return pd.read_csv(filepath)
+    dfs = []
+    for dataset in datasets:
+        # Get regions.
+        set = NIFTIDataset(dataset)
+        regions = arg_to_list(region, str) if region is None else set.list_regions()
+
+        filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
+        df = pd.read_csv(filepath)
+        dfs.append(df)
+
+    df = pd.concat(dfs, axis=0)
+    df = df.astype({ 'patient-id': str })
+
+    return df
 
 def create_multi_segmenter_heatmap_figures(
     dataset: Union[str, List[str]],
@@ -656,6 +669,81 @@ def create_plan_labels_report(dataset: str) -> None:
 
     filepath = os.path.join(nifti_set.path, 'reports', 'plan-labels.csv')
     index.to_csv(filepath, index=False)
+
+def create_multi_segmenter_prediction_figures(
+    dataset: str,
+    region: str,
+    model: Union[ModelName, List[ModelName]],
+    model_region: PatientRegions,
+    n_folds: Optional[int] = 5,
+    test_fold: Optional[int] = None,
+    view: Union[Axis, List[Axis]] = list(range(3)),
+    **kwargs) -> None:
+    views = arg_to_list(view, str)
+    logging.info(f"Creating multi-segmenter prediction figures for dataset '{dataset}', region '{region}', test fold '{test_fold}', model '{model}' and view '{view}'.")
+
+    # Create test loader.
+    _, _, test_loader = Loader.build_loaders(dataset, region, n_folds=n_folds, test_fold=test_fold, **kwargs)
+
+    # Set PDF margins.
+    img_t_margin = 35
+    img_l_margin = 5
+    img_width = 150
+    img_height = 200
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    # Make predictions.
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+
+            # Add patient.
+            pdf.add_page()
+            pdf.start_section(f'{dataset} - {pat_id}')
+
+            # Create images.
+            img_coords = (
+                (img_l_margin, img_t_margin),
+                (img_l_margin + img_width, img_t_margin),
+                (img_l_margin, img_t_margin + img_height)
+            )
+            for view, page_coord in zip(views, img_coords):
+                # Add image to report.
+                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                plot_multi_segmenter_prediction(dataset, pat_id, model, model_region, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view, **kwargs)
+                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+                os.remove(filepath)
+
+    # Save PDF.
+    # We have to 'encode' localisers/segmenters because they could be a list of models.
+    set = NIFTIDataset(dataset)
+    filepath = os.path.join(NIFTIDataset(set).path, 'reports', 'prediction-figures', 'multi-segmenter', *model, f'figures-fold-{test_fold}.pdf')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
 
 def create_segmenter_prediction_figures(
     dataset: Union[str, List[str]],

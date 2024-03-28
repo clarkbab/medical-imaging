@@ -1,11 +1,10 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition sapphire
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
-##SBATCH --gres gpu:1
+#SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 120G
 #SBATCH --time 0-04:00:00
@@ -47,20 +46,26 @@ LOAD_ALL_SAMPLES=True
 N_FOLDS=5
 SHUFFLE_SAMPLES=False
 USE_GROUPING=True
-USE_SPLIT_FILE=False
 
 # Other settings.
+CHECK_EPOCHS=True
+CROP_MM="(330,380,500)"
+INCLUDE_CT=False
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
-REGION='RL:PMCC_REPLAN'
+N_EPOCHS=1000
+REGION="RL:PMCC_REPLAN"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_evaluation.py \
+python $SCRIPT_DIR/predict/nifti/segmenter/create_adaptive_segmenter_no_oars_predictions.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
+    --check_epochs $CHECK_EPOCHS \
+    --crop_mm $CROP_MM \
+    --include_ct $INCLUDE_CT \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --shuffle_samples $SHUFFLE_SAMPLES \
+    --n_epochs $N_EPOCHS \
     --n_folds $N_FOLDS \
     --test_fold $TEST_FOLD \
-    --use_grouping $USE_GROUPING \
-    --use_split_file $USE_SPLIT_FILE
+    --use_grouping $USE_GROUPING

@@ -352,10 +352,16 @@ def plot_adaptive_segmenter_prediction(
         if load_pred:
             pred_exists = load_adaptive_segmenter_prediction(dataset, pat_id, model, exists_only=True)
             if not pred_exists:
-                if model_spacing is None:
-                    raise ValueError(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
-                if n_epochs is None:
-                    raise ValueError(f"Model prediction doesn't exist, so 'n_epochs' is required to make prediction.")
+                if model_spacing is None or n_epochs is None:
+                    # Raise error on purpose to get full message.
+                    try:
+                        load_adaptive_segmenter_prediction(dataset, pat_id, model, exists_only=False)
+                    except ValueError as e:
+                        if model_spacing is None:
+                            logging.error(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
+                        if n_epochs is None:
+                            logging.error(f"Model prediction doesn't exist, so 'n_epochs' is required to make prediction.")
+                        raise e
                 logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
                 create_adaptive_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, n_epochs=n_epochs)
 
@@ -436,6 +442,7 @@ def plot_multi_segmenter_prediction(
     model_spacing: Optional[Spacing3D] = None,
     n_epochs: Optional[int] = None,
     model_label: Union[str, List[str]] = None,
+    pred_label: Union[str, List[str]] = None,
     pred_region: Optional[PatientRegions] = None,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Union[str, List[str]]] = None,
@@ -457,6 +464,10 @@ def plot_multi_segmenter_prediction(
         model_labels = arg_to_list(model_label, str)
     else:
         model_labels = list(f'model:{i}' for i in range(n_models))
+    if pred_label is not None:
+        pred_labels = arg_to_list(pred_label, str)
+    else:
+        pred_labels = list(f'model:{i}' for i in range(n_models))
     pred_regions = region_to_list(pred_region)
 
     # Infer 'pred_regions' from localiser model names.
@@ -478,31 +489,38 @@ def plot_multi_segmenter_prediction(
         model = models[i]
         model_regions = model_regionses[i]
         model_label = model_labels[i]
+        pred_label = pred_labels[i]
 
         # Load segmenter prediction.
         pred = None
         if load_pred:
             pred_exists = load_multi_segmenter_prediction(dataset, pat_id, model, exists_only=True)
             if not pred_exists:
-                if model_spacing is None:
-                    raise ValueError(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
-                if n_epochs is None:
-                    raise ValueError(f"Model prediction doesn't exist, so 'n_epochs' is required to make prediction.")
+                if model_spacing is None or n_epochs is None:
+                    # Raise error on purpose to get full message.
+                    try:
+                        load_multi_segmenter_prediction(dataset, pat_id, model, exists_only=False)
+                    except ValueError as e:
+                        if model_spacing is None:
+                            logging.error(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
+                        if n_epochs is None:
+                            logging.error(f"Model prediction doesn't exist, so 'n_epochs' is required to make prediction.")
+                        raise e
                 logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
                 create_multi_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, n_epochs=n_epochs)
 
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
             pred = load_multi_segmenter_prediction(dataset, pat_id, model)
 
-        # Assign model labels.
+        # Assign a different 'pred_label' to each region.
         n_regions = len(model_regions)
         if pred.shape[0] != n_regions + 1:
             raise ValueError(f"With 'model_regions={model_regions}', expected {n_regions + 1} channels in prediction for dataset '{dataset}', patient '{pat_id}', model '{model}', got {pred.shape[0]}.")
-        for r, data in zip(model_regions, pred[1:]):
+        for r, p_data in zip(model_regions, pred[1:]):
             if pred_regions is not None and r not in pred_regions:
                 continue
-            label = f'{model_label}:{r}'
-            pred_data[label] = data
+            p_label = f'{pred_label}:{r}'
+            pred_data[p_label] = p_data
 
     if centre_of is not None:
         match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)

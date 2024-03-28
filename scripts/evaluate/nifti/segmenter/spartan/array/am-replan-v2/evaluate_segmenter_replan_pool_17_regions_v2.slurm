@@ -8,7 +8,7 @@
 ##SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 120G
-#SBATCH --time 0-04:00:00
+#SBATCH --time 0-06:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -20,7 +20,7 @@ echo $version
 
 # Get model name.
 RESOLUTION="112"
-DATASET="PMCC-HN-REPLAN-ADPTM-$RESOLUTION"
+DATASET="PMCC-HN-REPLAN-$RESOLUTION"
 MODEL_NAME="segmenter-replan-$RESOLUTION"
 
 # Set up region weighting.
@@ -31,11 +31,11 @@ SCHEDULE_EPOCHS=200
 # Get run name.
 N_FOLDS=5
 TEST_FOLD=$SLURM_ARRAY_TASK_ID
-RUN_NAME="adaptive-n-folds-$N_FOLDS-fold-$TEST_FOLD"
+RUN_NAME="pool-train-v2-n-folds-$N_FOLDS-fold-$TEST_FOLD"
 if [[ $USE_WEIGHTS == True ]]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi
-if [[ $TEST_FOLD -eq 4 ]]; then
+if [[ $TEST_FOLD -eq 0 ]]; then
     RANDOM_SEED=43
 else
     RANDOM_SEED=42
@@ -50,14 +50,16 @@ USE_GROUPING=True
 USE_SPLIT_FILE=False
 
 # Other settings.
+EXCLUDE_LIKE="'-0'"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 REGION='RL:PMCC_REPLAN'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/evaluate/nifti/segmenter/create_adaptive_segmenter_evaluation.py \
+python $SCRIPT_DIR/evaluate/nifti/segmenter/evaluate_multi.py \
     --dataset $DATASET \
     --region $REGION \
     --model $MODEL \
+    --exclude_like $EXCLUDE_LIKE \
     --load_all_samples $LOAD_ALL_SAMPLES \
     --shuffle_samples $SHUFFLE_SAMPLES \
     --n_folds $N_FOLDS \

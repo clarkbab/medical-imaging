@@ -508,6 +508,121 @@ def load_localiser_centre(
 
     return ext_centre
 
+def get_adaptive_segmenter_no_oars_prediction(
+    dataset: str,
+    pat_id: PatientID,
+    model: Union[ModelName, Model],
+    model_region: PatientRegions,
+    model_spacing: Spacing3D,
+    crop_mm: Optional[Box3D] = None,
+    crop_type: str = 'brain',
+    device: torch.device = torch.device('cpu'),
+    include_ct: bool = True,
+    **kwargs) -> np.ndarray:
+    model_regions = region_to_list(model_region)
+    pat_id, token = pat_id.split('-')
+    assert token == '1', f"Adaptive segmenter predicts on mid-treatment patient only."
+    pat_id_pt = f"{pat_id}-0"
+    pat_id_mt = f"{pat_id}-1"
+
+    # Load model.
+    if isinstance(model, tuple):
+        model = MultiSegmenter.load(*model, **kwargs)
+        model.eval()
+        model.to(device)
+
+    # Load patient CT data and spacing.
+    set = NIFTIDataset(dataset)
+    pat_mt = set.patient(pat_id_mt)
+    ct_data_mt = pat_mt.ct_data
+    spacing = pat_mt.ct_spacing
+
+    # Load registered pre-treatment data.
+    ct_data_pt, _ = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, region_ignore_missing=True)
+    
+    # Create input holder.
+    n_channels = len(model_regions) + 2
+    input = np.zeros((n_channels, *ct_data_mt.shape), dtype=np.float32)
+    input[0] = ct_data_mt
+    if include_ct:
+        input[1] = ct_data_pt
+    input_spatial_size = ct_data_mt.shape
+
+    # Resample input to model spacing.
+    input = resample_list(input, spacing=spacing, output_spacing=model_spacing) 
+    input_spatial_size_before_crop = input.shape[1:]
+
+    # Apply 'naive' cropping.
+    if crop_type == 'naive':
+        assert crop_mm is not None
+        # crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
+        crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
+        input = centre_crop_or_pad_3D(input, crop)
+    elif crop_type == 'brain':
+        assert crop_mm is not None
+        # Convert to voxel crop.
+        # crop_mm = (300, 400, 500)
+        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
+
+        # Get brain extent.
+        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+        check_epochs = True
+        n_epochs = 150
+        brain_pred_exists = load_localiser_prediction(dataset, pat_id_mt, localiser, exists_only=True)
+        if not brain_pred_exists:
+            create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
+        brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
+        brain_label = resample(brain_label, spacing=spacing, output_spacing=model_spacing)
+        brain_extent = get_extent(brain_label)
+
+        # Get crop coordinates.
+        # Crop origin is centre-of-extent in x/y, and max-extent in z.
+        # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
+        # in - direction for z.
+        p_above_brain = 0.04
+        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
+        crop = (
+            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
+            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
+        )
+
+        # Crop input.
+        input = crop_4D(input, crop)
+    else:
+        raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
+
+    # Pass image to model.
+    input = torch.Tensor(input)
+    input = input.unsqueeze(0)      # Add 'batch' dimension.
+    input = input.float()
+    input = input.to(device)
+    with torch.no_grad():
+        pred = model(input)
+    pred = pred.squeeze(0)          # Remove 'batch' dimension.
+
+    # Apply thresholding/one-hot-encoding.
+    pred = pred.argmax(dim=0)
+    pred = one_hot(pred, num_classes=len(model_regions) + 1)
+    pred = pred.moveaxis(-1, 0)
+    pred = pred.cpu().numpy().astype(np.bool_)
+    
+    # Apply postprocessing.
+    pred = largest_cc_4D(pred)
+
+    # Reverse the 'naive' or 'brain' cropping.
+    if crop_type == 'naive':
+        pred = centre_crop_or_pad_4D(pred, input_spatial_size_before_crop)
+    elif crop_type == 'brain':
+        pad_min = tuple(-np.array(crop[0]))
+        pad_max = tuple(np.array(pad_min) + np.array(input_spatial_size_before_crop))
+        pad = (pad_min, pad_max)
+        pred = pad_4D(pred, pad)
+
+    # Resample to original spacing with original size.
+    pred = resample_list(pred, spacing=model_spacing, output_size=input_spatial_size, output_spacing=spacing)
+
+    return pred
+
 def get_adaptive_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -799,6 +914,50 @@ def get_segmenter_prediction(
 
     return pred
 
+def create_adaptive_segmenter_no_oars_prediction(
+    dataset: Union[str, List[str]],
+    pat_id: Union[str, List[str]],
+    model: Union[ModelName, Model],
+    model_region: PatientRegions,
+    model_spacing: Spacing3D,
+    device: Optional[torch.device] = None,
+    include_ct: bool = True,
+    savepath: Optional[str] = None,
+    **kwargs: Dict[str, Any]) -> None:
+    datasets = arg_to_list(dataset, str)
+    pat_ids = arg_to_list(pat_id, str)
+    assert len(datasets) == len(pat_ids)
+
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = AdaptiveSegmenter.load(model, map_location=device, n_gpus=n_gpus, region=model_region, **kwargs)
+
+    for dataset, pat_id in zip(datasets, pat_ids):
+        # Load dataset.
+        set = NIFTIDataset(dataset)
+        pat = set.patient(pat_id)
+
+        logging.info(f"Creating adaptive segmenter prediction (no prior OARs{ '' if include_ct else ' or CT' }) for patient '{pat}', model '{model.name}'.")
+
+        # Make prediction.
+        pred = get_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, include_ct=include_ct, **kwargs)
+
+        # Save segmentation.
+        if savepath is None:
+            savepath = os.path.join(config.directories.predictions, 'data', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", dataset, pat_id, *model.name, 'pred.npz')
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        np.savez_compressed(savepath, data=pred)
+
 def create_adaptive_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
@@ -945,6 +1104,84 @@ def create_segmenter_prediction(
             savepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, pat_id, *localiser, *segmenter.name, filename)
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
+
+def create_adaptive_segmenter_no_oars_predictions(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: Union[ModelName, Model],
+    include_ct: bool = True,
+    use_timing: bool = True,
+    **kwargs: Dict[str, Any]) -> None:
+    logging.arg_log(f"Creating adaptive segmenter predictions (no prior OARs{ '' if include_ct else ' or CT' })", ('dataset', 'region', 'model'), (dataset, region, model))
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
+    model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if use_timing:
+        cols = {
+            'fold': float,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Create test loader.
+    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = AdaptiveSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
+
+    # Make predictions.
+    for pat_desc_b in tqdm(iter(test_loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+
+            # Skip pre-treatment patients.
+            if '-0' in pat_id:
+                continue
+
+            # Timing table data.
+            data = {
+                'fold': test_fold if test_fold is not None else np.nan,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': str(regions),
+                'device': device.type
+            }
+
+            with timer.record(data, enabled=use_timing):
+                create_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, regions, model_spacing, device=device, include_ct=include_ct, **kwargs)
+
+    # Save timing data.
+    if use_timing:
+        model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
+        params = {
+            'device': device.type,
+            'load_all_samples': kwargs.get('load_all_samples', False),
+            'n_folds': kwargs.get('n_folds', None),
+            'shuffle_samples': kwargs.get('shuffle_samples', True),
+            'use_grouping': kwargs.get('use_grouping', False),
+            'use_split_file': kwargs.get('use_split_file', False),
+        }
+        filepath = os.path.join(config.directories.predictions, 'timing', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
 
 def create_adaptive_segmenter_predictions(
     dataset: Union[str, List[str]],
@@ -1303,6 +1540,31 @@ def create_segmenter_predictions(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
+def load_adaptive_segmenter_no_oars_prediction(
+    dataset: str,
+    pat_id: PatientID,
+    model: ModelName,
+    exists_only: bool = False,
+    include_ct: bool = True,
+    use_model_manifest: bool = False,
+    **kwargs) -> Union[np.ndarray, bool]:
+    pat_id = str(pat_id)
+    model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
+
+    # Load prediction.
+    filepath = os.path.join(config.directories.predictions, 'data', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct'}", dataset, pat_id, *model, 'pred.npz')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
+    pred = np.load(filepath)['data']
+
+    return pred
+
 def load_adaptive_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -1351,6 +1613,28 @@ def load_multi_segmenter_prediction(
     pred = np.load(filepath)['data']
 
     return pred
+
+def load_adaptive_segmenter_no_oars_prediction_dict(
+    dataset: str,
+    pat_id: PatientID,
+    model: ModelName,
+    model_region: PatientRegions,
+    **kwargs) -> Union[Dict[str, np.ndarray], bool]:
+    model_regions = arg_to_list(model_region, str)
+
+    # Load prediction.
+    pred = load_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, **kwargs)
+    if pred.shape[0] != len(model_regions) + 1:
+        logging.error(f"Error when processing patient '{dataset}:{pat_id}'.")
+        raise ValueError(f"Number of channels in prediction ({pred.shape[0]}) should be one more than number of 'model_regions' ({len(model_regions)}).")
+
+    # Convert to dict.
+    data = {}
+    for i, region in enumerate(model_region):
+        region_pred = pred[i + 1]
+        data[region] = region_pred
+
+    return data
 
 def load_adaptive_segmenter_prediction_dict(
     dataset: str,

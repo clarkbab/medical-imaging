@@ -275,46 +275,52 @@ def load_region_overlap_summary(
     return df
 
 def load_region_summary_report(
-    dataset: str,
+    dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: PatientRegions = 'all',
     raise_error: bool = True) -> Optional[pd.DataFrame]:
+    datasets = arg_to_list(dataset, str)
     regions = region_to_list(region)
 
     # Load summary.
     dfs = []
-    set = NRRDDataset(dataset)
-    for region in regions:
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        if not os.path.exists(filepath):
-            if raise_error:
-                raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
-            else:
-                # Skip this region.
-                continue
+    for dataset in datasets:
+        set = NRRDDataset(dataset)
+        exc_df = set.excluded_labels
 
-        # Add CSV.
-        df = pd.read_csv(filepath, dtype={ 'patient-id': str })
-        df.insert(1, 'region', region)
-        dfs.append(df)
+        for region in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+            if not os.path.exists(filepath):
+                if raise_error:
+                    raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+                else:
+                    # Skip this region.
+                    continue
+
+            # Add CSV.
+            df = pd.read_csv(filepath, dtype={ 'patient-id': str })
+            df.insert(1, 'region', region)
+
+            # Filter by 'excluded-labels.csv'.
+            rexc_df = None if exc_df is None else exc_df[exc_df['region'] == region]
+            if labels != 'all':
+                if rexc_df is None:
+                    raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
+            if labels == 'included':
+                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
+                df = df[df._merge == 'left_only'].drop(columns='_merge')
+            elif labels == 'excluded':
+                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
+                df = df[df._merge == 'both'].drop(columns='_merge')
+
+            # Append dataframe.
+            dfs.append(df)
 
     # Concatenate loaded files.
     if len(dfs) == 0:
         return None
     df = pd.concat(dfs, axis=0)
     df = df.reset_index(drop=True)
-
-    # Filter by 'excluded-labels.csv'.
-    exc_df = set.excluded_labels
-    if labels != 'all':
-        if exc_df is None:
-            raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
-    if labels == 'included':
-        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
-        df = df[df._merge == 'left_only'].drop(columns='_merge')
-    elif labels == 'excluded':
-        df = df.merge(exc_df, on=['patient-id', 'region'], how='left', indicator=True)
-        df = df[df._merge == 'both'].drop(columns='_merge')
 
     return df
 
@@ -401,7 +407,7 @@ def load_ct_summary_report(
 
     filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
     if not os.path.exists(filepath):
-        raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
+        raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'. Filepath: {filepath}.")
     return pd.read_csv(filepath)
 
 def create_segmenter_prediction_figures(
@@ -555,7 +561,6 @@ def create_region_figures(
         table_l_margin = 12
         table_line_height = 2 * pdf.font_size
         table_col_widths = (15, 35, 30, 45, 45)
-        print(pat_id)
         pat_info = df[df['patient-id'] == pat_id].iloc[0]
         table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
         for axis in ['x', 'y', 'z']:

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes 1
-#SBATCH --partition physical
+#SBATCH --partition sapphire
 #SBATCH --mem 32G
 #SBATCH --time 0-00:30:00
 #SBATCH -A punim1413

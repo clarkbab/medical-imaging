@@ -18,10 +18,18 @@ echo $version
 REGIONS=(
     "['BrainStem','OralCavity']"                    # 0
     "['OralCavity','Mandible']"                     # 1
+    "['Mandible','SpinalCord']"                     # 2
+    "['OralCavity','SpinalCord']"                   # 3
+    "['SpinalCord','Submandibular_L']"              # 4
+    "['SpinalCord','Submandibular_R']"              # 5
 )
 SHORT_REGIONS=(
     'BS_OC'
-    'OC_M'  
+    'OC_M'
+    'M_SC'
+    'OC_S'
+    'SC_SL'
+    'SC_SR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
