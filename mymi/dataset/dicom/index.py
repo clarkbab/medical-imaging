@@ -102,7 +102,7 @@ def build_index(
     # Create index.
     if ct_from is None:
         # Create index from scratch.
-        modalities = ('CT', 'RTSTRUCT', 'RTPLAN', 'RTDOSE')
+        modalities = ('CT', 'MRI', 'RTSTRUCT', 'RTPLAN', 'RTDOSE')
         index_index = pd.Index(data=[], name=INDEX_INDEX_COL)
         index = pd.DataFrame(columns=INDEX_COLS.keys(), index=index_index)
     else:
@@ -110,7 +110,7 @@ def build_index(
         logging.info(f"Using CT index from '{ct_from}'.")
         modalities = ('RTSTRUCT', 'RTPLAN', 'RTDOSE')
 
-        # Load 'ct_from' index - can't use DICOMDataset API as it creates circular dependencies.
+        # Load 'ct_from' index - can't use DicomDataset API as it creates circular dependencies.
         filepath = os.path.join(config.directories.datasets, 'dicom', ct_from, 'index.csv')
         if not os.path.exists(filepath):
             raise ValueError(f"Index for 'ct_from={ct_from}' dataset doesn't exist. Filepath: '{filepath}'.")
@@ -144,6 +144,7 @@ def build_index(
 
                 # Get modality.
                 modality = dicom.Modality
+                print(modality)
                 if not modality in modalities:
                     continue
 

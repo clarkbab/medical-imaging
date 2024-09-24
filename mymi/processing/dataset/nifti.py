@@ -1,3 +1,4 @@
+import json
 import nibabel as nib
 from nibabel.nifti1 import Nifti1Image
 import numpy as np
@@ -13,7 +14,7 @@ from typing import Literal, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi.dataset.training import TrainingDataset, exists as exists_training
 from mymi.dataset.training import create as create_training
 from mymi.dataset.training import recreate as recreate_training
@@ -26,7 +27,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
 from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
-from mymi.regions import RegionColours, RegionNames, region_to_list, to_255
+from mymi.regions import RegionColours, RegionList, RegionNames, region_to_list, to_255
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
@@ -50,7 +51,7 @@ def convert_replan_adaptive_to_training(
     regions = region_to_list(region)
 
     # Use all regions if region is 'None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -275,7 +276,7 @@ def convert_replan_adaptive_mirror_to_training(
     regions = region_to_list(region)
 
     # Use all regions if region is 'None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -490,6 +491,181 @@ def convert_replan_adaptive_mirror_to_training(
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
+def convert_replan_to_nnunet_ref_model(
+    create_data: bool = True,
+    crop: Optional[Size3D] = None,
+    crop_mm: Optional[SizeMM3D] = None,
+    dest_dataset: Optional[str] = None,
+    dilate_iter: int = 3,
+    dilate_regions: List[str] = [],
+    log_warnings: bool = False,
+    recreate_dataset: bool = True,
+    region: Optional[PatientRegions] = None,
+    round_dp: Optional[int] = None,
+    test_fold: int = 0) -> None:
+    dataset = 'PMCC-HN-REPLAN'
+    crop_mm = (330, 380, 500)
+    region = RegionList.PMCC_REPLAN
+    spacing = (1, 1, 2)
+    logging.arg_log('Converting NIFTI dataset to NNUNET (REF MODEL)', ('dataset', 'region'), (dataset, region))
+
+    # Use all regions if region is 'None'.
+    set = NiftiDataset(dataset)
+    exc_df = set.excluded_labels
+    regions = region_to_list(region)
+    if regions is None:
+        regions = set.list_regions()
+
+    # Create the dataset.
+    filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
+    dataset_id = 11 + test_fold
+    dest_dataset = f"Dataset{dataset_id:03}_REF_MODEL_FOLD_{test_fold}"
+    datapath = os.path.join(filepath, dest_dataset)
+    if os.path.exists(datapath):
+        shutil.rmtree(datapath)
+    os.makedirs(datapath)
+    jsonpath = os.path.join(datapath, 'dataset.json')
+    trainpath = os.path.join(datapath, 'imagesTr')
+    testpath = os.path.join(datapath, 'imagesTs')
+    trainpathlabels = os.path.join(datapath, 'labelsTr')
+    testpathlabels = os.path.join(datapath, 'labelsTs')
+
+    # Get reference model split.
+    filepath = f"/data/gpfs/projects/punim1413/mymi/runs/segmenter-replan-112/n-folds-5-fold-{test_fold}-ivw-0.5-schedule-200-seed-42/2024_02_15_10_31_15/multi-loader-manifest.csv"
+    filepath = f"/data/gpfs/projects/punim1413/mymi/runs/segmenter-replan-112"
+    files = os.listdir(filepath)
+    files = [f for f in files if f.startswith(f'n-folds-5-fold-{test_fold}')]
+    assert len(files) == 1
+    filepath = os.path.join(filepath, files[0])
+    files = list(sorted(os.listdir(filepath)))
+    file = files[-1]
+    filepath = os.path.join(filepath, file, 'multi-loader-manifest.csv')
+    df = pd.read_csv(filepath)
+    train_pat_ids = list(df[df['loader'].isin(['train', 'validate'])]['origin-patient-id'])
+    test_pat_ids = list(df[df['loader'] == 'test']['origin-patient-id'])
+    # train_pat_ids = train_pat_ids[:1]
+    # test_pat_ids = test_pat_ids[:1]
+
+    # Create 'dataset.json'.
+    dataset_json = {
+        "channel_names": {
+           "0": "CT"
+        },
+        "labels": {
+           "background": 0
+        },
+        "numTraining": len(train_pat_ids),
+        "file_ending": ".nii.gz"
+    }
+    for i, region in enumerate(regions):
+        dataset_json["labels"][region] = i + 1
+    filepath = os.path.join(datapath, 'dataset.json')
+    with open(filepath, 'w') as f:
+        json.dump(dataset_json, f)
+
+    # Write training/test patients.
+    pat_ids = [train_pat_ids, test_pat_ids]
+    paths = [trainpath, testpath]
+    labelpaths = [trainpathlabels, testpathlabels]
+    for pat_ids, path, labelspath in zip(pat_ids, paths, labelpaths):
+        for i, pat_id in enumerate(tqdm(pat_ids)):
+            # Load input data.
+            pat = set.patient(pat_id)
+            if '-0' in pat_id:
+                # Load registered data for pre-treatment scan.
+                pat_id_mt = pat_id.replace('-0', '-1')
+                input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, region_ignore_missing=True)
+                input_spacing = set.patient(pat_id_mt).ct_spacing
+            else:
+                pat_id_mt = pat_id
+                input = pat.ct_data
+                input_spacing = pat.ct_spacing
+                region_data = pat.region_data(region=regions, region_ignore_missing=True) 
+
+            # Resample input.
+            if spacing is not None:
+                input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+
+            # Crop input.
+            if crop_mm is not None:
+                # Convert to voxel crop.
+                crop_voxels = tuple((np.array(crop_mm) / np.array(spacing)).astype(np.int32))
+                
+                # Get brain extent.
+                # Use mid-treatment brain for both mid/pre-treatment scans as this should align with registered pre-treatment brain.
+                localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+                brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
+                if spacing is not None:
+                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                brain_extent = get_extent(brain_label)
+
+                # Get crop coordinates.
+                # Crop origin is centre-of-extent in x/y, and max-extent in z.
+                # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
+                # in - direction for z.
+                p_above_brain = 0.04
+                crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
+                crop = (
+                    (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
+                    (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
+                )
+
+                # Crop input.
+                input = crop_3D(input, crop)
+
+            # Save data.
+            filepath = os.path.join(path, f'{pat_id}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            affine = np.array([
+                [spacing[0], 0, 0, 0],
+                [0, spacing[1], 0, 0],
+                [0, 0, spacing[2], 0],
+                [0, 0, 0, 1]])
+            img = Nifti1Image(input, affine)
+            nib.save(img, filepath)
+
+            final = np.zeros_like(input, dtype=np.int32)
+            for j, region in enumerate(regions):
+                region_channel = j + 1
+
+                # Skip if patient doesn't have region.
+                if not set.patient(pat_id).has_region(region):
+                    continue
+
+                # Skip if region in 'excluded-labels.csv'.
+                if exc_df is not None:
+                    pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
+                    if len(pr_df) == 1:
+                        continue
+
+                # Load label data.
+                label = region_data[region]
+
+                # Resample label.
+                if spacing is not None:
+                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+
+                # Crop/pad.
+                if crop_mm is not None:
+                    label = crop_3D(label, crop)
+
+                # Round data after resampling to save on disk space.
+                if round_dp is not None:
+                    input = np.around(input, decimals=round_dp)
+
+                # Dilate the labels if requested.
+                if region in dilate_regions:
+                    label = binary_dilation(label, iterations=dilate_iter)
+
+                # Add label to final label.
+                final[label] = region_channel
+
+            # Save data.
+            filepath = os.path.join(labelspath, f'{pat_id}.nii.gz')   # '0000' indicates a single channel (CT only).
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            img = Nifti1Image(final, affine)
+            nib.save(img, filepath)
+
 def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
@@ -507,7 +683,7 @@ def convert_replan_to_training(
     regions = region_to_list(region)
 
     # Use all regions if region is 'None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -717,7 +893,7 @@ def convert_population_lens_crop_to_training(
     regions = region_to_list(region)
 
     # Use all regions if region is 'None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -951,7 +1127,7 @@ def convert_replan_to_lens_crop(
     __write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
 
     # Copy files.
-    oset = NIFTIDataset(dataset)
+    oset = NiftiDataset(dataset)
     files = ['excluded-labels.csv', 'processed-labels.csv']
     for filename in files:
         filepath = os.path.join(oset.path, filename)
@@ -1077,7 +1253,7 @@ def convert_replan_to_lens_crop(
 def convert_brain_crop_to_training(
     dataset: str,
     **kwargs) -> None:
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
 
 def convert_to_training(
@@ -1096,7 +1272,7 @@ def convert_to_training(
     regions = arg_to_list(region, str)
 
     # Use all regions if region is 'None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -1272,7 +1448,7 @@ def create_excluded_brainstem(
     dataset: str,
     dest_dataset: str) -> None:
     # Copy dataset to destination.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     dest_set = recreate_nifti(dest_dataset)
     os.rmdir(dest_set.path)
     shutil.copytree(set.path, dest_set.path)
@@ -1344,9 +1520,9 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
 
     for i, (dataset, pat_id) in tqdm(df.iterrows()):
         # Get ROI ID from DICOM dataset.
-        nifti_set = NIFTIDataset(dataset)
+        nifti_set = NiftiDataset(dataset)
         pat_id_dicom = nifti_set.patient(pat_id).patient_id
-        set_dicom = DICOMDataset(dataset)
+        set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
         info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
@@ -1454,9 +1630,9 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     # Create prediction RTSTRUCTs.
     for dataset, pat_id_nifti in tqdm(samples):
         # Get ROI ID from DICOM dataset.
-        nifti_set = NIFTIDataset(dataset)
+        nifti_set = NiftiDataset(dataset)
         pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
-        set_dicom = DICOMDataset(dataset)
+        set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
         info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)

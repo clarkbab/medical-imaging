@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -59,7 +59,7 @@ def create_all_multi_segmenter_predictions(
 
     # Load all patients.
     for dataset in tqdm(datasets):
-        set = DICOMDataset(dataset)
+        set = DicomDataset(dataset)
         pat_ids = set.list_patients()
 
         if restart_pat_id is not None:
@@ -143,7 +143,7 @@ def get_multi_segmenter_prediction(
         model.to(device)
 
     # Load patient CT data and spacing.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing
@@ -286,7 +286,7 @@ def create_localiser_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = DICOMDataset(dataset)
+        set = DicomDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser.name}'.")
@@ -308,7 +308,7 @@ def get_localiser_prediction(
     loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -380,7 +380,7 @@ def create_dataset(
     output_dataset: Optional[str] = None,
     use_gpu: bool = True) -> None:
     """
-    effect: generates a DICOMDataset of predictions.
+    effect: generates a DicomDataset of predictions.
     args:
         dataset: the dataset to create predictions from.
     kwargs:

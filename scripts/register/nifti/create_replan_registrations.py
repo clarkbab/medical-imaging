@@ -7,11 +7,11 @@ sys.path.append(root_dir)
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi.registration.dataset.nifti import create_patient_registration
 
 dataset = 'PMCC-HN-REPLAN'
-set = NIFTIDataset(dataset)
+set = NiftiDataset(dataset)
 pat_ids = set.list_patients()
 n_pats = len(pat_ids) // 2
 

@@ -14,7 +14,7 @@ from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
-from mymi.plotting.dataset.training import plot_region
+from mymi.plotting.dataset.training import plot_patient
 from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
@@ -74,9 +74,9 @@ def create_ct_figures_report(
         )
         for axis, page_coord in zip(axes, img_coords):
             # Save figure.
-            slice_idx = input.shape[axis] // 2
+            z = input.shape[axis] // 2
             filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, sample_id, savepath=filepath, slice_idx=slice_idx, view=axis)
+            plot_patient(dataset, sample_id, savepath=filepath, z=z, view=axis)
             plt.close()
 
             # Add image to report.

@@ -1,9 +1,9 @@
 from typing import List, Optional
 
 from .dataset import Dataset, DatasetType, to_type
-from .dicom import DICOMDataset
+from .dicom import DicomDataset
 from .dicom import list as list_dicom
-from .nifti import NIFTIDataset
+from .nifti import NiftiDataset
 from .nifti import list as list_nifti
 from .nrrd import NRRDDataset
 from .nrrd import list as list_nrrd
@@ -41,9 +41,9 @@ def get(
     
         # Create dataset.
         if type == DatasetType.DICOM:
-            return DICOMDataset(name, **kwargs)
+            return DicomDataset(name, **kwargs)
         elif type == DatasetType.NIFTI:
-            return NIFTIDataset(name, **kwargs)
+            return NiftiDataset(name, **kwargs)
         elif type == DatasetType.NRRD:
             return NRRDDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
@@ -68,7 +68,7 @@ def get(
         # Preference 2a: NIFTI.
         nifti_ds = list_nifti()
         if name in nifti_ds:
-            return NIFTIDataset(name, **kwargs)
+            return NiftiDataset(name, **kwargs)
 
         # Preference 2b: NRRD.
         nrrd_ds = list_nrrd()
@@ -78,7 +78,7 @@ def get(
         # Preference 3: DICOM.
         dicom_ds = list_dicom()
         if name in dicom_ds:
-            return DICOMDataset(name, **kwargs)
+            return DicomDataset(name, **kwargs)
 
         # Preference : OTHER.
         other_ds = list_other()
@@ -130,7 +130,7 @@ def active() -> Optional[str]:
     else:
         return None
 
-# DICOMDataset API.
+# DicomDataset API.
 
 def list_patients(*args, **kwargs):
     return ds.list_patients(*args, **kwargs)

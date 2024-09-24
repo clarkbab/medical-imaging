@@ -581,6 +581,7 @@ def megaplot(
     hspace_plot_xlabel: float = 0.5,
     legend_loc: Optional[Union[str, List[str]]] = None,
     model_label: Optional[Union[str, List[str]]] = None,
+    region_label: Optional[Union[str, List[str]]] = None,
     savepath: Optional[str] = None,
     secondary_stat: Optional[Union[str, List[str], np.ndarray]] = None,
     wspace: float = 0.25,
@@ -588,9 +589,14 @@ def megaplot(
     **kwargs: Dict[str, Any]) -> None:
     datasets = arg_to_list(dataset, str)
     regions = arg_to_list(region, str)
-    n_regions = len(regions)
+    region_labels = arg_to_list(region_label, str)
+    if region_labels is not None:
+        if len(region_labels) != len(regions):
+            raise ValueError(f"Expected 'region_label' (length {len(region_labels)}, {region_labels}) to have same length as 'region' (length {len(regions)}, {regions}).")
     if height_ratios is not None:
-        assert len(height_ratios) == n_regions
+        if len(height_ratios) != len(regions):
+            raise ValueError(f"Expected 'height_ratio' (length {len(height_ratios)}, {height_ratios}) to have same length as 'region' (length {len(regions)}, {regions}).")
+    n_regions = len(regions)
     if type(metric) is str:
         metrics = np.repeat([[metric]], n_regions, axis=0)
     elif type(metric) is list:
@@ -625,6 +631,7 @@ def megaplot(
     fig = plt.figure(constrained_layout=False, figsize=figsize)
     gs = GridSpec(n_regions, metrics.shape[1], figure=fig, height_ratios=height_ratios, hspace=hspace_grid, wspace=wspace)
     for i, region in enumerate(regions):
+        region_label = region_labels[i] if region_labels is not None else region
         for j in range(n_metrics):
             metric = metrics[i, j]
             stat = stats[j]
@@ -632,7 +639,7 @@ def megaplot(
             x_label = 'num. institutional samples (n)' if i == len(regions) - 1 else None
             y_lim = DEFAULT_METRIC_Y_LIMS[metric] if y_lim else (None, None)
             legend_loc = legend_locs[j] if legend_locs is not None else DEFAULT_METRIC_LEGEND_LOCS[metric]
-            plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, fontsize_tick_label=fontsize_tick_label, hspace=hspace_plot, hspace_xlabel=hspace_plot_xlabel, legend_loc=legend_loc, model_labels=model_labels, outer_gs=gs[i, j], secondary_stat=sec_stat, split=True, x_label=x_label, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
+            plot_bootstrap_fit(datasets, region, models, metric, stat, fontsize=fontsize, fontsize_tick_label=fontsize_tick_label, hspace=hspace_plot, hspace_xlabel=hspace_plot_xlabel, legend_loc=legend_loc, model_labels=model_labels, outer_gs=gs[i, j], secondary_stat=sec_stat, split=True, title=region_label, x_label=x_label, x_scale='log', y_label=DEFAULT_METRIC_LABELS[metric], y_lim=y_lim, **kwargs)
 
     if savepath is not None:
         os.makedirs(os.path.dirname(savepath), exist_ok=True)

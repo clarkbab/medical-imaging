@@ -13,7 +13,7 @@ from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.loaders import AdaptiveLoader, Loader, MultiLoader, MultiLoaderV2, RegSegLoader
 from mymi.loaders.augmentation import get_transforms
 from mymi import logging
-from mymi.plotting import plot_region
+from mymi.plotting import plot_patient
 from mymi.types import PatientID, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
 
@@ -514,7 +514,7 @@ def create_multi_loader_figures(
                 for view, page_coord in zip(views, img_coords):
                     # Set figure.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                    plot_region(desc_b[0], size, spacing, centre_of=region, ct_data=x_b[0, 0].numpy(), region_data=region_data, savepath=filepath, show=False, show_extent=True, view=view)
+                    plot_patient(desc_b[0], size, spacing, centre_of=region, ct_data=x_b[0, 0].numpy(), region_data=region_data, savepath=filepath, show=False, show_extent=True, view=view)
 
                     # Add image to report.
                     pdf.image(filepath, *page_coord, w=img_width, h=img_height)

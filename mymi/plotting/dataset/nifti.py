@@ -3,7 +3,7 @@ import re
 from typing import Dict, List, Literal, Optional, Union
 
 from mymi import dataset as ds
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
@@ -17,7 +17,7 @@ from ..plotter import plot_localiser_prediction as plot_localiser_prediction_bas
 from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
-from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_patient as plot_patient_base
 from ..plotter import plot_registration as plot_registration_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
@@ -39,7 +39,7 @@ def plot_heatmap(
     layer = str(layer)
 
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=region) if region is not None else None
@@ -74,7 +74,7 @@ def plot_heatmap(
                     pred_data_centre_of = pred_data
                 centre_of = pred_data_centre_of[region_centre_of]
                 if centre_of.sum() == 0:
-                    raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'slice_idx' instead.")
+                    raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
             elif region_data is None or centre_of not in region_data:
                 centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -87,7 +87,7 @@ def plot_heatmap(
     plot_id = f"{dataset}:{pat_id}"
     plot_heatmap_base(plot_id, heatmap, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, pred_data=pred_data, region_data=region_data, **kwargs)
 
-def plot_region(
+def plot_patient(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
@@ -98,7 +98,7 @@ def plot_region(
     **kwargs) -> None:
 
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
     region_data = pat.region_data(region=region, **kwargs) if region is not None else None
@@ -128,7 +128,7 @@ def plot_region(
 
     # Plot.
     plot_id = f"{dataset}:{pat_id}"
-    plot_region_base(plot_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_patient_base(plot_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_registration(
     dataset: str,
@@ -139,9 +139,10 @@ def plot_registration(
     crop_margin: float = 100,
     labels: Literal['included', 'excluded', 'all'] = 'all',
     region: Optional[PatientRegions] = None,
+    region_label: Optional[Dict[str, str]] = None,
     **kwargs) -> None:
     # Find first shared 'centre_of' and 'crop'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     centres_of = arg_to_list(centre_of, str)
     if centres_of is not None:
         for i, c in enumerate(centres_of):
@@ -172,64 +173,86 @@ def plot_registration(
         pat = set.patient(pat_id)
         ct_data.append(pat.ct_data)
         pat_region_data = pat.region_data(labels=labels, region=region, region_ignore_missing=True) if region is not None else None
-        region_data.append(pat_region_data)
         sizes.append(pat.ct_size)
         spacings.append(pat.ct_spacing)
 
         # Load 'centre_of' data if not already in 'region_data'.
+        pat_centre_of = None
         if centre_of is not None:
             if type(centre_of) == str:
                 if pat_region_data is None or centre_of not in pat_region_data:
                     pat_centre_of = pat.region_data(region=centre_of)[centre_of]
-                    centres_of.append(pat_centre_of)
                 else:
-                    centres_of.append(centre_of)
+                    pat_centre_of = centre_of
             else:
                 raise ValueError('Case not handled.')
-        else:
-            centres_of.append(None)
 
         # Load 'crop' data if not already in 'region_data'.
+        pat_crop = None
         if crop is not None:
             if type(crop) == str:
                 if pat_region_data is None or crop not in pat_region_data:
                     pat_crop = pat.region_data(region=crop)[crop]
-                    crops.append(pat_crop)
                 else:
-                    crops.append(crop)
+                    pat_crop = crop
             else:
-                raise ValueError('Case not handled.')
-        else:
-            crops.append(None)
+                pat_crop = crop
+
+        if region_label is not None:
+            # Rename regions.
+            for old, new in region_label.items():
+                pat_region_data[new] = pat_region_data.pop(old)
+
+            # Rename 'centre_of' and 'crop' keys.
+            if type(pat_centre_of) == str and pat_centre_of in region_label:
+                pat_centre_of = region_label[pat_centre_of] 
+            if type(pat_crop) == str and pat_crop in region_label:
+                pat_crop = region_label[pat_crop]
+        
+        region_data.append(pat_region_data)
+        centres_of.append(pat_centre_of)
+        crops.append(pat_crop)
 
     # Load registered data.
     reg_ct_data, reg_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, region_ignore_missing=True)
 
     # Load 'centre_of' data if not already in 'reg_region_data'.
+    pat_reg_centre_of = None
     if centre_of is not None:
         if type(centre_of) == str:
             if reg_region_data is None or centre_of not in reg_region_data:
                 _, centre_of_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=centre_of)
-                centres_of.append(centre_of_region_data[centre_of])
+                pat_reg_centre_of = centre_of_region_data[centre_of]
             else:
-                centres_of.append(centre_of)
+                pat_reg_centre_of = centre_of
         else:
             raise ValueError('Case not handled.')
-    else:
-        centres_of.append(None)
 
     # Load 'crop' data if not already in 'reg_region_data'.
+    pat_reg_crop = None
     if crop is not None:
         if type(crop) == str:
             if reg_region_data is None or crop not in reg_region_data:
                 _, crop_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=crop)
-                crops.append(crop_region_data[crop])
+                pat_reg_crop = crop_region_data[crop]
             else:
-                crops.append(crop)
+                pat_reg_crop = crop
         else:
-            raise ValueError('Case not handled.')
-    else:
-        crops.append(None)
+            pat_reg_crop = crop
+
+    if region_label is not None:
+        # Rename regions.
+        for old, new in region_label.items():
+            reg_region_data[new] = reg_region_data.pop(old)
+
+        # Rename 'centre_of' and 'crop' keys.
+        if type(pat_reg_centre_of) == str and pat_reg_centre_of in region_label:
+            pat_reg_centre_of = region_label[pat_reg_centre_of] 
+        if type(pat_reg_crop) == str and pat_reg_crop in region_label:
+            pat_reg_crop = region_label[pat_reg_crop]
+
+    centres_of.append(pat_reg_centre_of)
+    crops.append(pat_reg_crop)
 
     # Plot.
     fixed_centre_of, moving_centre_of, reg_centre_of = centres_of
@@ -254,7 +277,7 @@ def plot_localiser_prediction(
     region_labels = arg_to_list(region_label, str)
     
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -301,6 +324,7 @@ def plot_adaptive_segmenter_prediction(
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
+    model_label: Union[str, List[str]] = None,
     model_spacing: Optional[Spacing3D] = None,
     n_epochs: Optional[int] = None,
     pred_label: Union[str, List[str]] = None,
@@ -320,12 +344,16 @@ def plot_adaptive_segmenter_prediction(
         model_regionses = model_region
     regions = region_to_list(region)
     region_labels = arg_to_list(region_label, str)
+    if region_labels is not None:
+        assert len(regions) == len(region_labels)
+        region_label_map = dict(zip(regions, region_labels))
+    else:
+        region_label_map = None
     pred_regions = region_to_list(pred_region)
     n_models = len(models)
-    if pred_label is not None:
-        pred_labels = arg_to_list(pred_label, str)
-    else:
-        pred_labels = list(f'model:{i}' for i in range(n_models))
+    model_labels = arg_to_list(model_label, str)
+    if model_labels is None:
+        model_labels = list(f'model:{i}' for i in range(n_models))
 
     # Infer 'pred_regions' from localiser model names.
     if type(seg_spacings) == tuple:
@@ -334,7 +362,7 @@ def plot_adaptive_segmenter_prediction(
         assert len(seg_spacings) == n_models
     
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -345,7 +373,7 @@ def plot_adaptive_segmenter_prediction(
     for i in range(n_models):
         model = models[i]
         model_regions = model_regionses[i]
-        pred_label = pred_labels[i]
+        model_label = model_labels[i]
 
         # Load segmenter prediction.
         pred = None
@@ -368,15 +396,14 @@ def plot_adaptive_segmenter_prediction(
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
             pred = load_adaptive_segmenter_prediction(dataset, pat_id, model)
 
-        # Assign a different 'pred_label' to each region.
+        # Split multi-channel prediction by region.
         n_regions = len(model_regions)
         if pred.shape[0] != n_regions + 1:
             raise ValueError(f"With 'model_regions={model_regions}', expected {n_regions + 1} channels in prediction for dataset '{dataset}', patient '{pat_id}', model '{model}', got {pred.shape[0]}.")
         for r, p_data in zip(model_regions, pred[1:]):
             if pred_regions is not None and r not in pred_regions:
                 continue
-            p_label = f'{pred_label}:{r}'
-            pred_data[p_label] = p_data
+            pred_data[f'{model_label}:{r}'] = p_data
 
     if centre_of is not None:
         match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)
@@ -392,7 +419,7 @@ def plot_adaptive_segmenter_prediction(
             centre_of_tmp = centre_of
             centre_of = pred_data[p_label]
             if centre_of.sum() == 0:
-                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'slice_idx' instead.")
+                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
         elif region_data is None or centre_of not in region_data:
             centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -414,9 +441,8 @@ def plot_adaptive_segmenter_prediction(
         elif region_data is None or crop not in region_data:
             crop = pat.region_data(region=crop)[crop]
 
-    if region_labels is not None:
-        for old, new in zip(regions, region_labels):
-            # Rename 'region_data' keys.
+    if region_label_map is not None:
+        for old, new in region_label_map.items():
             region_data[new] = region_data.pop(old)
 
             # Rename 'centre_of' and 'crop' keys.
@@ -425,8 +451,9 @@ def plot_adaptive_segmenter_prediction(
             if type(crop) == str and crop == old:
                 crop = new
 
-        # Rename 'regions'.
-        regions = region_labels
+            for i in range(n_models):
+                model_label = model_labels[i]
+                pred_data[f'{new} ({model_label})'] = pred_data.pop(f'model:{i}:{old}')
     
     # Plot.
     plot_multi_segmenter_prediction_base(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
@@ -437,12 +464,12 @@ def plot_multi_segmenter_prediction(
     model: Union[ModelName, List[ModelName]],
     model_region: PatientRegions,
     centre_of: Optional[str] = None,
+    check_epochs: bool = True,
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
+    model_label: Union[str, List[str]] = None,
     model_spacing: Optional[Spacing3D] = None,
     n_epochs: Optional[int] = None,
-    model_label: Union[str, List[str]] = None,
-    pred_label: Union[str, List[str]] = None,
     pred_region: Optional[PatientRegions] = None,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Union[str, List[str]]] = None,
@@ -458,16 +485,16 @@ def plot_multi_segmenter_prediction(
     else:
         model_regionses = model_region
     regions = region_to_list(region)
-    region_labels = arg_to_list(region_label, str) if region_label is not None else None
+    region_labels = arg_to_list(region_label, str)
+    if region_labels is not None:
+        assert len(regions) == len(region_labels)
+        region_label_map = dict(zip(regions, region_labels))
+    else:
+        region_label_map = None
     n_models = len(models)
-    if model_label is not None:
-        model_labels = arg_to_list(model_label, str)
-    else:
+    model_labels = arg_to_list(model_label, str)
+    if model_labels is None:
         model_labels = list(f'model:{i}' for i in range(n_models))
-    if pred_label is not None:
-        pred_labels = arg_to_list(pred_label, str)
-    else:
-        pred_labels = list(f'model:{i}' for i in range(n_models))
     pred_regions = region_to_list(pred_region)
 
     # Infer 'pred_regions' from localiser model names.
@@ -477,7 +504,7 @@ def plot_multi_segmenter_prediction(
         assert len(seg_spacings) == n_models
     
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -489,38 +516,36 @@ def plot_multi_segmenter_prediction(
         model = models[i]
         model_regions = model_regionses[i]
         model_label = model_labels[i]
-        pred_label = pred_labels[i]
 
         # Load segmenter prediction.
         pred = None
         if load_pred:
             pred_exists = load_multi_segmenter_prediction(dataset, pat_id, model, exists_only=True)
             if not pred_exists:
-                if model_spacing is None or n_epochs is None:
-                    # Raise error on purpose to get full message.
+                if model_spacing is None or (check_epochs and n_epochs is None):
                     try:
+                        # Call method again to get full error message.
                         load_multi_segmenter_prediction(dataset, pat_id, model, exists_only=False)
                     except ValueError as e:
                         if model_spacing is None:
-                            logging.error(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
-                        if n_epochs is None:
-                            logging.error(f"Model prediction doesn't exist, so 'n_epochs' is required to make prediction.")
+                            logging.error(f"Making model prediction - must pass 'model_spacing'.")
+                        if check_epochs and n_epochs is None:
+                            logging.error(f"Making model prediction with 'check_epochs=True' - must pass 'n_epochs'.")
                         raise e
                 logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
-                create_multi_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, n_epochs=n_epochs)
+                create_multi_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, check_epochs=check_epochs, n_epochs=n_epochs, **kwargs)
 
             logging.info(f"Loading prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
             pred = load_multi_segmenter_prediction(dataset, pat_id, model)
 
-        # Assign a different 'pred_label' to each region.
+        # Split the prediction into regions by channel.
         n_regions = len(model_regions)
         if pred.shape[0] != n_regions + 1:
             raise ValueError(f"With 'model_regions={model_regions}', expected {n_regions + 1} channels in prediction for dataset '{dataset}', patient '{pat_id}', model '{model}', got {pred.shape[0]}.")
         for r, p_data in zip(model_regions, pred[1:]):
             if pred_regions is not None and r not in pred_regions:
                 continue
-            p_label = f'{pred_label}:{r}'
-            pred_data[p_label] = p_data
+            pred_data[f'{model_label}:{r}'] = p_data
 
     if centre_of is not None:
         match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)
@@ -539,7 +564,7 @@ def plot_multi_segmenter_prediction(
                 raise ValueError(f"Requested 'centre_of={centre_of_tmp}' not found in prediction data.")
             centre_of = pred_data[label]
             if centre_of.sum() == 0:
-                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'slice_idx' instead.")
+                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
         elif region_data is None or centre_of not in region_data:
             centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -552,6 +577,7 @@ def plot_multi_segmenter_prediction(
             else:
                 model_i = int(match.group(2))
                 assert model_i < n_models
+            region = match.group(3)
             model_label = model_labels[model_i]
             label = f'{model_label}:{region}'
             crop_tmp = crop
@@ -574,8 +600,9 @@ def plot_multi_segmenter_prediction(
             if type(crop) == str and crop == old:
                 crop = new
 
-        # Rename 'regions'.
-        regions = region_labels
+            for i in range(n_models):
+                model_label = model_labels[i]
+                pred_data[f'{new} ({model_label})'] = pred_data.pop(f'{model_label}:{old}')
     
     # Plot.
     plot_multi_segmenter_prediction_base(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
@@ -613,7 +640,7 @@ def plot_segmenter_prediction(
         assert len(seg_spacings) == n_models
     
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -724,7 +751,7 @@ def plot_segmenter_prediction_diff(
     diff_regions = [l[0].split('-')[1] for l in localisers]
     
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     spacing = pat.ct_spacing

@@ -4,7 +4,7 @@ import os
 from typing import Dict, Optional, Union
 
 from mymi import config
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi import logging
 from mymi.transforms import register_image, register_label, resample_3D
 from mymi.types import PatientID, PatientRegions
@@ -17,7 +17,7 @@ def create_patient_registration(
     logging.info(f"Registering patient '{moving_pat_id}' CT to patient '{fixed_pat_id}' CT.")
 
     # Load CT data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     fixed_pat = set.patient(fixed_pat_id)
     fixed_ct = fixed_pat.ct_data
     fixed_spacing = fixed_pat.ct_spacing
@@ -65,7 +65,7 @@ def load_patient_registration(
     ct_data = np.load(filepath)['data']
 
     # Load region registrations.
-    moving_pat = NIFTIDataset(dataset).patient(moving_pat_id)
+    moving_pat = NiftiDataset(dataset).patient(moving_pat_id)
     regions = arg_to_list(region, str, literals={ 'all': moving_pat.list_regions() })
     region_data = {}
     if regions is not None: 

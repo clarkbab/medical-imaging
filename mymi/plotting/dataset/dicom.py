@@ -1,13 +1,13 @@
 from typing import Dict, List, Optional, Union
 
-from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_patient as plot_patient_base
 from ..plotter import plot_segmenter_prediction
-from mymi.dataset.dicom import DICOMDataset
+from mymi.dataset.dicom import DicomDataset
 from mymi.prediction.dataset.dicom import load_segmenter_predictions
 from mymi import types
 from mymi.utils import arg_to_list
 
-def plot_region(
+def plot_patient(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
@@ -21,7 +21,7 @@ def plot_region(
     region_labels = arg_to_list(region_label, str)
 
     # Deal with 'regions' arg.
-    patient = DICOMDataset(dataset).patient(pat_id)
+    patient = DicomDataset(dataset).patient(pat_id)
     if region == 'all':
         regions = patient.list_regions()
     else:
@@ -59,7 +59,7 @@ def plot_region(
             crop = region_labels[crop]
 
     # Plot.
-    plot_region_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_patient_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_model_prediction(
     dataset: str,
@@ -72,7 +72,7 @@ def plot_model_prediction(
         models = [models]
     
     # Load data.
-    patient = DICOMDataset(dataset).patient(pat_id)
+    patient = DicomDataset(dataset).patient(pat_id)
     ct_data = patient.ct_data
     region_data = patient.region_data(region=region)[region]
     spacing = patient.ct_spacing

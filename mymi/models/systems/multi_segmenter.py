@@ -20,6 +20,7 @@ from mymi.losses import DiceWithFocalLoss
 from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.models.networks import MultiUNet3D
+from mymi.regions import region_to_list
 from mymi.types import ModelName, PatientID, PatientRegions
 from mymi.utils import arg_to_list, gpu_usage_nvml
 
@@ -53,6 +54,7 @@ class MultiSegmenter(pl.LightningModule):
         use_cvg_weighting: bool = False,
         use_dilation: bool = False,
         use_lr_scheduler: bool = False,
+        use_rmsprop: bool = False,
         use_weights: bool = False,
         lr_milestones: List[int] = None,
         random_seed: float = 0,
@@ -93,7 +95,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__model_name = model_name
         self.__name = None
         self.__random_seed = random_seed
-        self.__regions = arg_to_list(region, str)
+        self.__regions = region_to_list(region)
         self.__run_name = run_name
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
@@ -103,6 +105,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__use_cvg_weighting = use_cvg_weighting
         self.__use_dilation = use_dilation
         self.__use_lr_scheduler = use_lr_scheduler
+        self.__use_rmsprop = use_rmsprop
         self.__use_weights = use_weights
         self.__lr_milestones = lr_milestones
         self.__val_image_interval = val_image_interval
@@ -226,7 +229,14 @@ class MultiSegmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        self.__optimiser = Adam(self.parameters(), lr=self.lr, weight_decay=self.__weight_decay) 
+        # Determine optimiser.
+        if self.__use_rmsprop:
+            self.__optimiser = RMSprop(self.parameters(), lr=self.lr)
+        else:
+            self.__optimiser = Adam(self.parameters(), lr=self.lr, weight_decay=self.__weight_decay) 
+
+        logging.info(f"Using optimiser '{self.__optimiser}'.")
+
         opt = {
             'optimizer': self.__optimiser,
             'monitor': 'val/loss'

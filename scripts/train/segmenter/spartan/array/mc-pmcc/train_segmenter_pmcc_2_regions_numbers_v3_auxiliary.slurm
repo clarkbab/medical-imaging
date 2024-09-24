@@ -21,43 +21,84 @@ version=$(python --version)
 echo $version
 
 REGIONS=(
-    "['BrainStem','OralCavity']"                            # 0
-    "['OralCavity','Mandible']"                             # 1
+    "['OralCavity']"                                        # 0
+    "['Brain','OralCavity']"                                # 1
+    "['BrainStem','OralCavity']"                            # 2
+    "['OralCavity','Mandible']"                             # 3
+    "['Brain','OralCavity','BrainStem','Mandible']"         # 4
 
-    "['Mandible','SpinalCord']"                             # 2
-    "['OralCavity','SpinalCord']"                           # 3
-    "['SpinalCord','Submandibular_L']"                      # 4
-    "['SpinalCord','Submandibular_R']"                      # 5
+    "['SpinalCord']"                                        # 5
+    "['SpinalCord','BrainStem']"                            # 6
+    "['Mandible','SpinalCord']"                             # 7
+    "['OralCavity','SpinalCord']"                           # 8
+    "['SpinalCord','Submandibular_L']"                      # 9
+    "['SpinalCord','Submandibular_R']"                      # 10
+    "['SpinalCord','BrainStem','Parotid_L','Parotid_R']"    # 11
+    "['SpinalCord','Mandible','BrainStem','OralCavity','Parotid_L','Parotid_R','Submandibular_L','Submandibular_R']"    # 12
 
-    "['BrachialPlexus_L','Cochlea_L']"                      # 6
-    "['BrachialPlexus_L','Cochlea_R']"                      # 7
-    "['BrachialPlexus_L','Lens_L']"                         # 8
-    "['BrachialPlexus_L','Lens_R']"                         # 9
-    "['BrachialPlexus_L','OpticNerve_L']"                   # 10
-    "['BrachialPlexus_L','OpticNerve_R']"                   # 11
-    "['BrachialPlexus_L','Cochlea_L','Cochlea_R']"          # 12
-    "['BrachialPlexus_L','Lens_L','Lens_R']"                # 13
-    "['BrachialPlexus_L','OpticNerve_L','OpticNerve_R']"    # 14
+    "['BrachialPlexus_L']"                                  # 13
+    "['BrachialPlexus_L','BrachialPlexus_R']"               # 14
+    "['BrachialPlexus_L','Cochlea_L']"                      # 15
+    "['BrachialPlexus_L','Cochlea_R']"                      # 16
+    "['BrachialPlexus_L','Lens_L']"                         # 17
+    "['BrachialPlexus_L','Lens_R']"                         # 18
+    "['BrachialPlexus_L','OpticNerve_L']"                   # 19
+    "['BrachialPlexus_L','OpticNerve_R']"                   # 20
+    "['BrachialPlexus_L','Cochlea_L','Cochlea_R']"          # 21
+    "['BrachialPlexus_L','Lens_L','Lens_R']"                # 22
+    "['BrachialPlexus_L','OpticNerve_L','OpticNerve_R']"    # 23
+    "['BrachialPlexus_L','BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"    # 24
 
-    "['BrachialPlexus_R','Cochlea_L']"                      # 15
-    "['BrachialPlexus_R','Cochlea_R']"                      # 16
-    "['BrachialPlexus_R','Lens_L']"                         # 17
-    "['BrachialPlexus_R','Lens_R']"                         # 18
-    "['BrachialPlexus_R','OpticNerve_L']"                   # 19
-    "['BrachialPlexus_R','OpticNerve_R']"                   # 20
-    "['BrachialPlexus_R','Cochlea_L','Cochlea_R']"          # 21
-    "['BrachialPlexus_R','Lens_L','Lens_R']"                # 22
-    "['BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"    # 23
+    "['BrachialPlexus_R']"                                  # 25
+    "['BrachialPlexus_R','Cochlea_L']"                      # 26
+    "['BrachialPlexus_R','Cochlea_R']"                      # 27
+    "['BrachialPlexus_R','Lens_L']"                         # 28
+    "['BrachialPlexus_R','Lens_R']"                         # 29
+    "['BrachialPlexus_R','OpticNerve_L']"                   # 30
+    "['BrachialPlexus_R','OpticNerve_R']"                   # 31
+    "['BrachialPlexus_R','Cochlea_L','Cochlea_R']"          # 32
+    "['BrachialPlexus_R','Lens_L','Lens_R']"                # 33
+    "['BrachialPlexus_R','OpticNerve_L','OpticNerve_R']"    # 34
+    
+    "['Cochlea_L']"                                         # 35
+    "['Cochlea_L','Lens_L']"                                # 36
+    "['Cochlea_L','Lens_R']"                                # 37
+    "['Cochlea_L','Cochlea_R','Lens_L','Lens_R']"           # 38
+
+    "['Cochlea_R']"                                         # 39
+    "['Cochlea_R','Lens_L']"                                # 40
+    "['Cochlea_R','Lens_R']"                                # 41
+    
+    "['Lens_L']"                                            # 42
+
+    "['Lens_R']"                                            # 43
+
+    # Does the mandible help everything?
+    "['Mandible','BrachialPlexus_L']"                       # 44
+    "['Mandible','BrachialPlexus_R']"                       # 45
+    "['Mandible','Cochlea_L']"                              # 46
+    "['Mandible','Cochlea_R']"                              # 47
+    "['Mandible','Lens_L']"                                 # 48
+    "['Mandible','Lens_R']"                                 # 49
 )
 SHORT_REGIONS=(
+    'OC'
+    'B_OC'
     'BS_OC'
     'OC_M'  
+    'B_OC_BS_M'
 
+    'SC'
+    'SC_BS'
     'M_SC'  
     'OC_S'  
     'SC_SL'  
     'SC_SR'  
+    'SC_4'
+    'SC_8'
 
+    'BL'
+    'BL_BR'
     'BL_CL'
     'BL_CR'
     'BL_LL'
@@ -67,7 +108,9 @@ SHORT_REGIONS=(
     'BL_CL_CR'
     'BL_LL_LR'
     'BL_OL_OR'
+    'BL_BR_OL_OR'
 
+    'BR'
     'BR_CL'
     'BR_CR'
     'BR_LL'
@@ -77,6 +120,26 @@ SHORT_REGIONS=(
     'BR_CL_CR'
     'BR_LL_LR'
     'BR_OL_OR'
+
+    'CL'
+    'CL_LL'
+    'CL_LR'
+    'CL_CR_LL_LR'
+
+    'CR'
+    'CR_LL'
+    'CR_LR'
+
+    'LL'
+
+    'LR'
+
+    'M_BL'
+    'M_BR'
+    'M_CL'
+    'M_CR'
+    'M_LL'
+    'M_LR'
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
@@ -88,11 +151,11 @@ RESUME=False
 LR_INIT=1e-3
 
 # Get run name.
-RANDOM_SEED=43
+RANDOM_SEED=45
 RUN_NAME_BASE="2-regions-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
-elif [ "$SHORT_REGION" = "LL_LR" ]; then
+elif [ "$SHORT_REGION" = "LL_LR" ] || [ "$SHORT_REGION" = "CL_LL" ] || [ "$SHORT_REGION" = "CL_LR" ] || [ "$SHORT_REGION" = "CR_LL" ] || [ "$SHORT_REGION" = "CR_LR" ]; then
     LR_INIT=1e-4
     RUN_NAME="$RUN_NAME_BASE-lr-$LR_INIT"
 else

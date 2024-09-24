@@ -1,14 +1,14 @@
 from typing import Dict, Optional, Tuple, Union
 
-from mymi import dataset as ds
+from mymi.dataset import TrainingDataset
 from mymi.prediction.dataset.training import get_sample_localiser_prediction
 from mymi import types
 from mymi.utils import arg_to_list
 
 from ..plotter import plot_distribution, plot_localiser_prediction
-from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_patient as plot_patient_base
 
-def plot_region(
+def plot_patient(
     dataset: str,
     sample_idx: str,
     centre_of: Optional[str] = None,
@@ -20,7 +20,8 @@ def plot_region(
     region_labels = arg_to_list(region_label, str)
 
     # Load data.
-    sample = ds.get(dataset, 'training').sample(sample_idx)
+    set = TrainingDataset(dataset, **kwargs)
+    sample = set.sample(sample_idx)
     ct_data = sample.input
     region_data = sample.label(region=regions) if regions is not None else None
     spacing = sample.spacing
@@ -48,7 +49,7 @@ def plot_region(
             crop = region_labels[crop]
 
     # Plot.
-    plot_region_base(sample_idx, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_patient_base(sample_idx, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_sample_localiser_prediction(
     dataset: str,
@@ -57,7 +58,8 @@ def plot_sample_localiser_prediction(
     localiser: types.ModelName,
     **kwargs) -> None:
     # Load data.
-    sample = ds.get(dataset, 'training').sample(sample_idx)
+    set = TrainingDataset(dataset, **kwargs)
+    samples = set.sample(sample_idx)
     input = sample.input
     label = sample.label(region=region)[region]
     spacing = sample.spacing
@@ -78,7 +80,9 @@ def plot_sample_distribution(
     range: Optional[Tuple[float, float]] = None,
     resolution: float = 10) -> None:
     # Load data.
-    input = ds.get(dataset, 'training').sample(sample_idx).input
+    set = TrainingDataset(dataset)
+    sample = set.sample(sample_idx)
+    input = sample.input
     
     # Plot distribution.
     plot_distribution(input, figsize=figsize, range=range, resolution=resolution)

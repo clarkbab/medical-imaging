@@ -14,7 +14,7 @@ from .rtstruct_series import RTSTRUCTSeries
 class DICOMPatient:
     def __init__(
         self,
-        dataset: 'DICOMDataset',
+        dataset: 'DicomDataset',
         id: types.PatientID,
         ct_from: Optional['DICOMPatient'] = None,
         region_dups: Optional[pd.DataFrame] = None,

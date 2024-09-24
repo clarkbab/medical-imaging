@@ -12,7 +12,7 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import DICOMDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
 from mymi.dataset.nrrd import NRRDDataset
 from mymi.dataset.nrrd import recreate as recreate_nrrd
 from mymi.dataset.training import TrainingDataset, exists
@@ -23,10 +23,10 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
 from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
-from mymi.regions import RegionColours, RegionNames, to_255
+from mymi.regions import RegionColours, RegionList, RegionNames, to_255
 from mymi.regions import region_to_list
 from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import resample_3D, top_crop_or_pad_3D
+from mymi.transforms import crop_3D, resample_3D, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
@@ -36,6 +36,120 @@ def convert_brain_crop_to_training(
     set = NRRDDataset(dataset)
     convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
 
+def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None:
+    dataset = 'MICCAI-2015'
+    dest_dataset = f'MICCAI-2015-MC-{crop_margin}'
+    regions = list(RegionList.MICCAI)
+    spacing = (1, 1, 2)
+    logging.info(f'Converting NRRD:{dataset} dataset to TRAINING. Regions: {regions}')
+
+    # Create the dataset.
+    if exists(dest_dataset):
+        set_t = recreate_training(dest_dataset)
+    else:
+        set_t = create_training(dest_dataset)
+    __write_flag(set_t, f'__CONVERT_FROM_NRRD_START__')
+
+    # Write params.
+    filepath = os.path.join(set_t.path, 'params.csv')
+    params_df = pd.DataFrame({
+        'regions': [str(regions)],
+        'spacing': [str(spacing)],
+    })
+    params_df.to_csv(filepath, index=False)
+
+    # Load patients.
+    set = NRRDDataset(dataset)
+    pat_ids = set.list_patients()
+
+    # Load crop file.
+    crop_df = load_csv('adaptive-models', 'data', f'extrema-MICCAI-2015.csv')
+    crop_df = crop_df.pivot(index='patient-id', columns='axis', values=['min-voxel', 'max-voxel'])
+
+    # Create index.
+    cols = {
+        'dataset': str,
+        'sample-id': int,
+        'origin-dataset': str,
+        'origin-patient-id': str,
+        'region': str,
+        'empty': bool
+    }
+    index = pd.DataFrame(columns=cols.keys())
+    index = index.astype(cols)
+
+    # Write each patient to dataset.
+    start = time()
+    for i, pat_id in enumerate(tqdm(pat_ids)):
+        # Load input data.
+        patient = set.patient(pat_id)
+        input_spacing = patient.ct_spacing
+        input = patient.ct_data
+
+        # Crop input.
+        # Perform before resampling as AnatomyNet crop values use the original spacing.
+        pat_crop = crop_df.loc[pat_id]
+        pat_crop_margin_voxel = crop_margin / np.array(input_spacing)
+        crop = (
+            tuple((pat_crop['min-voxel'] - pat_crop_margin_voxel).astype(int)),
+            tuple((pat_crop['max-voxel'] + pat_crop_margin_voxel).astype(int)),
+        )
+        logging.info(pat_id)
+        logging.info(crop)
+        input = crop_3D(input, crop)
+
+        # Resample input.
+        if spacing is not None:
+            input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+
+        # Save input.
+        __create_training_input(set_t, i, input)
+
+        for region in regions:
+            # Skip if patient doesn't have region.
+            if not set.patient(pat_id).has_region(region):
+                continue
+
+            # Load label data.
+            label = patient.region_data(region=region)[region]
+
+            # Crop label.
+            # Perform before resampling as AnatomyNet crop values use the original spacing.
+            label = crop_3D(label, crop)
+
+            # Resample data.
+            label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+
+            # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
+            if label.sum() != 0:
+                empty = False
+                __create_training_label(set_t, i, region, label)
+            else:
+                empty = True
+
+            # Add index entry.
+            data = {
+                'dataset': set_t.name,
+                'sample-id': i,
+                'origin-dataset': set.name,
+                'origin-patient-id': pat_id,
+                'region': region,
+                'empty': empty
+            }
+            index = append_row(index, data)
+
+    end = time()
+
+    # Write index.
+    index = index.astype(cols)
+    filepath = os.path.join(set_t.path, 'index.csv')
+    index.to_csv(filepath, index=False)
+
+    # Indicate success.
+    __write_flag(set_t, f'__CONVERT_FROM_{set.type.name}_END__')
+    hours = int(np.ceil((end - start) / 3600))
+    __print_time(set_t, hours)
+    
 def convert_to_training(
     dataset: str,
     region: types.PatientRegions,
@@ -60,7 +174,7 @@ def convert_to_training(
         else:
             created = False
             set_t = TrainingDataset(dest_dataset)
-            _destroy_flag(set_t, '__CONVERT_FROM_NRRD_END__')
+            __destroy_flag(set_t, '__CONVERT_FROM_NRRD_END__')
 
             # Delete old labels.
             for region in regions:
@@ -69,7 +183,7 @@ def convert_to_training(
     else:
         created = True
         set_t = create_training(dest_dataset)
-    _write_flag(set_t, '__CONVERT_FROM_NRRD_START__')
+    __write_flag(set_t, '__CONVERT_FROM_NRRD_START__')
 
     # Write params.
     if created:
@@ -215,9 +329,9 @@ def convert_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    _write_flag(set_t, '__CONVERT_FROM_NRRD_END__')
+    __write_flag(set_t, '__CONVERT_FROM_NRRD_END__')
     hours = int(np.ceil((end - start) / 3600))
-    _print_time(set_t, hours)
+    __print_time(set_t, hours)
 
 def create_excluded_brainstem(
     dataset: str,
@@ -273,19 +387,19 @@ def create_excluded_brainstem(
     filepath = os.path.join(dest_set.path, 'excl-index.csv')
     df.to_csv(filepath, index=False)
 
-def _destroy_flag(
+def __destroy_flag(
     dataset: 'Dataset',
     flag: str) -> None:
     path = os.path.join(dataset.path, flag)
     os.remove(path)
 
-def _write_flag(
+def __write_flag(
     dataset: 'Dataset',
     flag: str) -> None:
     path = os.path.join(dataset.path, flag)
     Path(path).touch()
 
-def _print_time(
+def __print_time(
     dataset: 'Dataset',
     hours: int) -> None:
     path = os.path.join(dataset.path, f'__CONVERT_FROM_NRRD_TIME_HOURS_{hours}__')
@@ -340,7 +454,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
         # Get ROI ID from DICOM dataset.
         nrrd_set = NRRDDataset(dataset)
         pat_id_dicom = nrrd_set.patient(pat_id).patient_id
-        set_dicom = DICOMDataset(dataset)
+        set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
         info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
@@ -450,7 +564,7 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         # Get ROI ID from DICOM dataset.
         nrrd_set = NRRDDataset(dataset)
         pat_id_dicom = nrrd_set.patient(pat_id_nrrd).patient_id
-        set_dicom = DICOMDataset(dataset)
+        set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
         info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)

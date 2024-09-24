@@ -32,7 +32,10 @@ class TrainingSample:
     @property
     def group_id(self) -> str:
         if self.__group_id is None:
-            self.__group_id = self.index.iloc[0]['group-id']
+            if 'group-id' in self.index.columns:
+                self.__group_id = self.index.iloc[0]['group-id']
+            else:
+                self.__group_id = None
         return self.__group_id
 
     @property

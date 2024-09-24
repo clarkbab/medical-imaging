@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 ##SBATCH --mem 128G
 #SBATCH --mem 64G
@@ -46,7 +46,11 @@ SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
 MODEL_NAME="segmenter-miccai-numbers"
 RESOLUTION="112"
 DATASET="MICCAI-2015-$RESOLUTION"
-RANDOM_SEED=43
+if [[ $SLURM_ARRAY_TASK_ID -eq 4 ]]; then
+    RANDOM_SEED=43
+else
+    RANDOM_SEED=42
+fi
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True

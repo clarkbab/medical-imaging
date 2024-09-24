@@ -14,7 +14,7 @@ TARGET_REGIONS = [
     ['Brain','OralCavity','BrainStem','Mandible'],                             # 1
     ['Cochlea_L','Cochlea_R','Lens_L','Lens_R'],                               # 2
     ['Parotid_L','Parotid_R','Submandibular_L','Submandibular_R'],             # 3
-    ['SpinalCord','BrainStem','Parotid_L','Parotid_R']                         # 4
+    ['SpinalCord']                                                             # 4
 ]
 
 for model_idx in model_idxs:

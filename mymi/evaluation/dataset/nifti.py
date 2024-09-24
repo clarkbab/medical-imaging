@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi.geometry import get_box, get_extent_centre
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
@@ -28,7 +28,7 @@ def get_localiser_evaluation(
     localiser: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
@@ -254,7 +254,7 @@ def get_adaptive_segmenter_pt_evaluation(
     _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, region=regions, region_ignore_missing=True)
 
     # Load predictions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
@@ -319,7 +319,7 @@ def get_adaptive_segmenter_no_oars_evaluation(
     regions = arg_to_list(region, str)
 
     # Load predictions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     region_preds = load_adaptive_segmenter_no_oars_prediction_dict(dataset, pat_id, model, regions, **kwargs)
@@ -383,7 +383,7 @@ def get_adaptive_segmenter_evaluation(
     regions = arg_to_list(region, str)
 
     # Load predictions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
@@ -449,7 +449,7 @@ def get_multi_segmenter_heatmap_evaluation(
     aux_regions = region_to_list(aux_region)
 
     # Load region data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     region_data = pat.region_data(region=aux_region, region_ignore_missing=True)
 
@@ -519,7 +519,7 @@ def get_multi_segmenter_evaluation(
     regions = arg_to_list(region, str)
 
     # Load predictions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, regions, **kwargs)
@@ -582,7 +582,7 @@ def get_registration_evaluation(
 
     # Load ground truth (fixed) region data.
     fixed_pat_id = f'{pat_id}-1'
-    fixed_pat = NIFTIDataset(dataset).patient(fixed_pat_id)
+    fixed_pat = NiftiDataset(dataset).patient(fixed_pat_id)
     fixed_spacing = fixed_pat.ct_spacing
     region_data_gt = fixed_pat.region_data(region=region, region_ignore_missing=True)
 
@@ -654,7 +654,7 @@ def get_segmenter_evaluation(
     segmenter: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
@@ -961,7 +961,7 @@ def create_multi_segmenter_heatmap_evaluation(
             target_region_metrics = get_multi_segmenter_heatmap_evaluation(dataset, pat_id, model, target_regions, layers, aux_regions)
 
             # Filter out aux_regions if patient doesn't have them.
-            pat = NIFTIDataset(dataset).patient(pat_id)
+            pat = NiftiDataset(dataset).patient(pat_id)
             aux_regions_pat = pat.list_regions(only=aux_regions)
 
             for target_region, layer_metrics in zip(target_regions, target_region_metrics):
@@ -1025,7 +1025,7 @@ def create_all_multi_segmenter_evaluation(
 
     # Load patients.
     for dataset in datasets:
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids):
@@ -1074,7 +1074,7 @@ def create_replan_evaluation(
 
     # Load patients.
     for dataset in tqdm(datasets):
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids, leave=False):
@@ -1470,7 +1470,7 @@ def load_multi_segmenter_heatmap_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Multi-segmenter heatmap evaluation for dataset '{dataset}', model '{model}' not found. Filepath: {filepath}.")
+            raise ValueError(f"Multi-segmenter heatmap evaluation for dataset '{dataset}', model '{model}', target_region '{target_region}' not found. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
     return df

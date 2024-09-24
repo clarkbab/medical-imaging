@@ -14,7 +14,8 @@ class TrainingDataset(Dataset):
     def __init__(
         self,
         name: str,
-        check_processed: bool = True):
+        check_processed: bool = True,
+        **kwargs):
         self.__index = None     # Lazy-loaded.
         self.__name = name
         self.__global_id = f"TRAINING: {self.__name}"

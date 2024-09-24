@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.nifti import NIFTIDataset
+from mymi.dataset.nifti import NiftiDataset
 from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_box, get_extent_centre
 from mymi import logging
@@ -219,7 +219,7 @@ class TrainingDataset(Dataset):
 
                 # Load data.
                 orig_dataset, orig_pat_id = dataset.sample(s_i).origin
-                orig_pat = NIFTIDataset(orig_dataset).patient(orig_pat_id)
+                orig_pat = NiftiDataset(orig_dataset).patient(orig_pat_id)
                 orig_spacing = orig_pat.ct_spacing
                 input = orig_pat.ct_data 
                 label = orig_pat.region_data(region=self.__region)[self.__region]

@@ -244,6 +244,7 @@ class MultiUNet3D(Module):
         n_split_channels: int = 2,
         use_affine_norm: bool = False,
         use_init: bool = False,
+        use_single_downsample: bool = False,
         use_softmax: bool = True,
         **kwargs) -> None:
         super().__init__()
@@ -331,7 +332,8 @@ class MultiUNet3D(Module):
         for i in range(self.__n_down_levels):
             in_channels = 2 ** i * n_features
             out_channels = 2 ** (i + 1) * n_features
-            self.__layers.append(MaxPool3d(kernel_size=2))
+            if not use_single_downsample or i == 0:
+                self.__layers.append(MaxPool3d(kernel_size=2))
             self.__layers.append(Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1).to(self.__device_0))
             self.__layers.append(InstanceNorm3d(out_channels, affine=use_affine_norm))
             self.__layers.append(ReLU())
@@ -344,7 +346,8 @@ class MultiUNet3D(Module):
         for i in range(self.__n_up_levels):
             in_channels = 2 ** (self.__n_up_levels - i) * n_features
             out_channels = 2 ** (self.__n_up_levels - i - 1) * n_features
-            self.__layers.append(ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
+            if not use_single_downsample or i == 0:
+                self.__layers.append(ConvTranspose3d(in_channels=in_channels, out_channels=out_channels, kernel_size=2, stride=2).to(self.__device_1))
             # Perform some hacks  (largest features maps are too big for cuDNN 32-bit indexing).
             module = Conv3d
             groups = 1

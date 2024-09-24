@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 from tqdm import tqdm
 
 from mymi import config
-from mymi.dataset import NIFTIDataset
+from mymi.dataset import NiftiDataset
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -130,7 +130,7 @@ def get_multi_segmenter_heatmap(
         model.to(device)
 
     # Load patient CT data and spacing.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing

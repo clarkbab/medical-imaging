@@ -3,6 +3,8 @@ from torch.nn.functional import grid_sample
 
 # Remember that the DVF actually displaces the output space
 # (i.e. the resampling grid), not the input space.
+# That is, the DVF gives us a mapping from the fixed coordinate system to the 
+# moving coordinate system.
 def apply_dvf(
     image: torch.Tensor,
     dvf: torch.Tensor) -> torch.Tensor:

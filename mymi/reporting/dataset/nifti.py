@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from pandas import DataFrame
+from scipy.ndimage import binary_dilation, binary_erosion
 from scipy.ndimage.measurements import label as label_objects
 import torch
 from tqdm import tqdm
@@ -12,23 +13,24 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi.dataset import DICOMDataset, NIFTIDataset
+from mymi.dataset import DicomDataset, NiftiDataset
 from mymi.evaluation.dataset.nifti import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
+from mymi.metrics import mean_intensity, snr
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_region, plot_registration, plot_segmenter_prediction, plot_multi_segmenter_prediction, plot_adaptive_segmenter_prediction
+from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_patient, plot_registration, plot_segmenter_prediction, plot_multi_segmenter_prediction, plot_adaptive_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import region_to_list as region_to_list
-from mymi.types import Axis, ModelName, PatientRegions
+from mymi.types import Axis, ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_overlap_summary(
     dataset: str,
     region: str) -> DataFrame:
     # List patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients(labels='all', region=region)
 
     cols = {
@@ -71,7 +73,7 @@ def get_region_summary(
     region: str,
     labels: Literal['included', 'excluded', 'all'] = 'included') -> DataFrame:
     # List patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients(labels=labels, region=region)
 
     cols = {
@@ -83,8 +85,10 @@ def get_region_summary(
     df = DataFrame(columns=cols.keys())
 
     for pat_id in tqdm(pat_ids):
-        spacing = set.patient(pat_id).ct_spacing
-        label = set.patient(pat_id).region_data(labels=labels, region=region)[region]
+        pat = set.patient(pat_id)
+        ct_data = pat.ct_data
+        spacing = pat.ct_spacing
+        label = pat.region_data(labels=labels, region=region)[region]
 
         data = {
             'dataset': dataset,
@@ -105,12 +109,22 @@ def get_region_summary(
             df = append_row(df, data)
 
         # Add 'connected' metrics.
-        lcc_label = largest_cc_3D(label)
         data['metric'] = 'connected'
+        lcc_label = largest_cc_3D(label)
         data['value'] = 1 if lcc_label.sum() == label.sum() else 0
         df = append_row(df, data)
         data['metric'] = 'connected-largest-p'
         data['value'] = lcc_label.sum() / label.sum()
+        df = append_row(df, data)
+
+        # Add intensity metrics.
+        if pat.has_region('Brain'):
+            data['metric'] = 'snr-brain'
+            brain_label = pat.region_data(region='Brain')['Brain']
+            data['value'] = snr(ct_data, label, brain_label, spacing)
+            df = append_row(df, data)
+        data['metric'] = 'mean-intensity'
+        data['value'] = mean_intensity(ct_data, label)
         df = append_row(df, data)
 
         # Add OAR extent.
@@ -158,10 +172,85 @@ def get_region_summary(
 
 def create_patient_regions_report(dataset: str) -> None:
     pr_df = get_patient_regions(dataset)
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pr_df.to_csv(filepath, index=False)
+
+def create_region_contrast_report(
+    dataset: str,
+    region: PatientRegion,
+    noise_region: PatientRegion = 'Brain') -> None:
+    logging.arg_log('Creating region contrast report', ('dataset', 'region', 'noise_region'), (dataset, region, noise_region))
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'hu-oar': float,
+        'hu-margin': float,
+        'contrast': float,
+        'noise': float,
+        f'noise-{noise_region.lower()}': float,
+        'cnr': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Load data.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients(region=region)
+
+    for pat_id in tqdm(pat_ids):
+        # Load CT and region data.
+        pat = set.patient(pat_id)
+        if not pat.has_region(region):
+            continue
+        ct_data = pat.ct_data
+        region_data = pat.region_data(region=region)[region]
+
+        # Get OAR label and margin label.
+        region_data_margin = np.logical_xor(binary_dilation(region_data, iterations=3), region_data)
+
+        # Get OAR and margin HU values.
+        hu_oar = ct_data[np.nonzero(region_data)]
+        hu_oar_mean = hu_oar.mean()
+        hu_margin = ct_data[np.nonzero(region_data_margin)]
+        hu_margin_mean = hu_margin.mean()
+
+        # Calculate contrast-to-noise (CNR) ratio.
+        contrast = hu_oar_mean - hu_margin_mean
+        background_noise = hu_oar.std()
+        cnr = contrast / background_noise
+
+        # Calculate region noise.
+        if pat.has_region(noise_region):
+            noise_data = pat.region_data(region=noise_region)[noise_region]
+            noise_data_eroded = binary_erosion(noise_data, iterations=3)
+            if noise_data_eroded.sum() == 0:
+                raise ValueError(f"Eroded noise data for region '{noise_region}' is empty, choose a larger region.")
+            hu_noise = ct_data[np.nonzero(noise_data_eroded)]
+            region_noise = hu_noise.std()
+        else:
+            region_noise = np.nan
+
+        # Add data.
+        data = {
+            'patient-id': pat_id,
+            'region': region,
+            'hu-oar': hu_oar_mean,
+            'hu-margin': hu_margin_mean,
+            'contrast': contrast,
+            'noise': background_noise,
+            f'noise-{noise_region.lower()}': region_noise,
+            'cnr': cnr
+        }
+        df = append_row(df, data)
+            
+    # Save report.
+    df = df.astype(cols)
+    filepath = os.path.join(set.path, 'reports', 'region-contrast', f'{region}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def create_region_overlap_summary(
     dataset: str,
@@ -172,7 +261,7 @@ def create_region_overlap_summary(
     df = get_region_overlap_summary(dataset, region)
 
     # Save report.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -184,7 +273,7 @@ def create_region_summary_report(
     regions = arg_to_list(region, str)
 
     # Use all regions if 'regions=None'.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     if regions is None:
         regions = set.list_regions()
 
@@ -206,7 +295,7 @@ def create_region_summary_report(
 
 def get_patient_regions(dataset: str) -> DataFrame:
     # List patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients()
 
     # Create dataframe.
@@ -231,7 +320,7 @@ def get_patient_regions(dataset: str) -> DataFrame:
 def load_patient_regions_report(
     dataset: str,
     exists_only: bool = False) -> Union[DataFrame, bool]:
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
     if os.path.exists(filepath):
         if exists_only:
@@ -245,7 +334,7 @@ def load_patient_regions_report(
             raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
 def load_plan_labels_report(dataset: str) -> None:
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'plan-labels.csv')
     df = pd.read_csv(filepath)
     return df
@@ -310,7 +399,7 @@ def load_region_overlap_summary(
     raise_error: bool = True) -> Optional[pd.DataFrame]:
 
     # Load summary.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
     if not os.path.exists(filepath):
         if raise_error:
@@ -345,7 +434,7 @@ def load_region_summary_report(
     dfs = []
     for dataset in datasets:
         # Get regions if 'None'.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         exc_df = set.excluded_labels
         if regions is None:
             regions = set.list_regions()
@@ -386,6 +475,28 @@ def load_region_summary_report(
 
     return df
 
+def load_region_contrast_report(
+    dataset: Union[str, List[str]],
+    region: PatientRegions) -> pd.DataFrame:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+            
+    # Load reports.
+    dfs = []
+    for dataset in datasets:
+        set = NiftiDataset(dataset)
+
+        for region in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-contrast', f'{region}.csv')
+            df = pd.read_csv(filepath)
+            df.insert(0, 'dataset', dataset)
+            dfs.append(df)
+
+    # Concatenate reports.
+    df = pd.concat(dfs, axis=0)
+
+    return df
+
 def load_region_count_report(
         dataset: Union[str, List[str]],
         labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
@@ -408,7 +519,7 @@ def get_ct_info_summary(
     dataset: str,
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients(region=region)
 
     cols = {
@@ -422,7 +533,7 @@ def get_ct_info_summary(
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
         origin_dataset, origin_pat_id, origin_study_id = pat.origin
-        study = DICOMDataset(origin_dataset).patient(origin_pat_id).study(origin_study_id)
+        study = DicomDataset(origin_dataset).patient(origin_pat_id).study(origin_study_id)
 
         # Add contrast details.
         ct = study.first_ct
@@ -476,7 +587,7 @@ def get_ct_summary(
     dataset: str,
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients(region=region)
 
     cols = {
@@ -518,7 +629,7 @@ def create_ct_info_summary_report(
     dataset: str,
     region: Optional[PatientRegions] = None) -> None:
     # Get regions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     # Get summary.
@@ -533,7 +644,7 @@ def create_ct_summary_report(
     dataset: str,
     region: Optional[PatientRegions] = None) -> None:
     # Get regions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     # Get summary.
@@ -548,7 +659,7 @@ def load_ct_info_summary_report(
     dataset: str,
     region: Optional[PatientRegions] = None) -> pd.DataFrame:
     # Get regions.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     filepath = os.path.join(set.path, 'reports', 'ct-info-summary', encode(regions), 'ct-summary.csv')
@@ -564,7 +675,7 @@ def load_ct_summary_report(
     dfs = []
     for dataset in datasets:
         # Get regions.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         regions = arg_to_list(region, str) if region is None else set.list_regions()
 
         filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
@@ -654,9 +765,9 @@ def create_multi_segmenter_heatmap_figures(
 def create_plan_labels_report(dataset: str) -> None:
     logging.arg_log('Creating plan labels report', ('dataset',), (dataset,))
 
-    nifti_set = NIFTIDataset(dataset)
+    nifti_set = NiftiDataset(dataset)
     index = nifti_set.index
-    dicom_set = DICOMDataset(dataset)
+    dicom_set = DicomDataset(dataset)
     def get_rtplan_label(row: pd.Series):
         study = dicom_set.patient(row['origin-patient-id']).study(row['origin-study-id'])
         rtplan = study.default_rtplan
@@ -740,8 +851,8 @@ def create_multi_segmenter_prediction_figures(
 
     # Save PDF.
     # We have to 'encode' localisers/segmenters because they could be a list of models.
-    set = NIFTIDataset(dataset)
-    filepath = os.path.join(NIFTIDataset(set).path, 'reports', 'prediction-figures', 'multi-segmenter', *model, f'figures-fold-{test_fold}.pdf')
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(NiftiDataset(set).path, 'reports', 'prediction-figures', 'multi-segmenter', *model, f'figures-fold-{test_fold}.pdf')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
 
@@ -828,7 +939,7 @@ def create_region_figures(
     logging.arg_log('Creating region figures', ('dataset', 'region', 'labels', 'subregions'), (dataset, region, labels, subregions))
 
     # Get patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients(labels=labels, region=region)
 
     # Get excluded regions.
@@ -971,7 +1082,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_patient(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -994,7 +1105,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
+                    plot_patient(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -1048,7 +1159,7 @@ def create_registration_figures_report(
     ) 
 
     # Get patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_ids = set.list_patients()
     n_pats = len(pat_ids) // 2
 
@@ -1087,7 +1198,7 @@ def get_object_summary(
     pat_id: str,
     region: str) -> pd.DataFrame:
     # Get objects.
-    pat = NIFTIDataset(dataset).patient(pat_id)
+    pat = NiftiDataset(dataset).patient(pat_id)
 
     spacing = pat.ct_spacing
     label = pat.region_data(region=region)[region]
@@ -1140,7 +1251,7 @@ def create_localiser_figures(
     logging.info(f"Creating localiser figures for dataset '{dataset}', region '{region}' and localiser '{localiser}'.")
 
     # Get patients.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pats = set.list_patients(region=region)
 
     # Exit if region not present.

@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --account punim1413
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
+##SBATCH --partition gpu-a100
+##SBATCH --partition gpu-a100-short
+#SBATCH --nodes 1
+#SBATCH --mem 128G
+##SBATCH --mem 120G
+#SBATCH --gres gpu:1
+##SBATCH --cpus-per-gpu 8
+#SBATCH --time 0-01:00:00
+##SBATCH --time 0-04:00:00
+##SBATCH --test-only
+
+module load GCCcore/11.3.0
+module load Python/3.10.4
+source ~/venvs/medical-imaging/bin/activate
+
+version=$(python --version)
+echo $version
+
+DATASET="L2R-LUNG-CT-CROP-TEST"
+MODEL="L2R_LUNG_CT_CROP/1500.pt"
+LABELS_ONLY=False
+REGION="Lung"
+
+command="python $MYMI_CODE/scripts/predict/nifti/voxelmorph/predict.py \
+    --dataset $DATASET \
+    --model $MODEL \
+    --labels_only $LABELS_ONLY \
+    --region $REGION"
+echo $command
+eval $command

@@ -202,7 +202,7 @@ def crop_4D(
 def crop_foreground_3D(
     data: np.ndarray,
     crop: Box3D) -> np.ndarray:
-    cropped = np.zeros_like(data).astype(bool)
+    cropped = np.zeros_like(data)
     slices = tuple(slice(min, max) for min, max in zip(*crop))
     cropped[slices] = data[slices]
     return cropped

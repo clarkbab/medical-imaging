@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.ndimage import center_of_mass
 from typing import Optional, Union
 
 from .extent import get_extent
@@ -11,9 +10,6 @@ def get_centre(a: np.ndarray) -> Optional[Union[Point2D, Point3D]]:
 
 def get_centre_from_size(s: Union[Size2D, Size3D]) -> Optional[Union[Point2D, Point3D]]:
     return tuple([int(np.floor(si / 2)) - 1 for si in s])
-
-def get_centre_of_mass(a: np.ndarray) -> Optional[Union[Point2D, Point3D]]:
-    return center_of_mass(a)
 
 def get_extent_centre(a: np.ndarray) -> Optional[Union[Point2D, Point3D]]:
     if a.dtype != np.bool_:

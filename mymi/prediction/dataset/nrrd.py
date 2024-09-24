@@ -414,7 +414,7 @@ def create_multi_segmenter_prediction(
     # Load PyTorch model.
     if type(model) == tuple:
         n_gpus = 0 if device.type == 'cpu' else 1
-        model = MultiSegmenter.load(*model, n_gpus=n_gpus, region=model_region, **kwargs)
+        model = MultiSegmenter.load(model, n_gpus=n_gpus, region=model_region, **kwargs)
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.

@@ -15,12 +15,12 @@ from ..plotter import plot_localiser_prediction as plot_localiser_prediction_bas
 from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
-from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_patient as plot_patient_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
 
-def plot_region(
+def plot_patient(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
@@ -61,7 +61,7 @@ def plot_region(
             crop = region_label[crop]
 
     # Plot.
-    plot_region_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_patient_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_localiser_prediction(
     dataset: str,
@@ -129,7 +129,7 @@ def plot_multi_segmenter_prediction(
     model_spacing: Optional[Spacing3D] = None,
     model_region_visible: Optional[PatientRegions] = None,
     pred_label: Union[str, List[str]] = None,
-    region: Optional[Union[str, List[str]]] = None,
+    region: Optional[PatientRegions] = None,
     region_label: Optional[Union[str, List[str]]] = None,
     seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
@@ -139,11 +139,11 @@ def plot_multi_segmenter_prediction(
     # If multiple models, list of lists must be specified, e.g. 'model_region=[['Brain'], ['Brainstem']]'.
     #   Flat list not supported, e.g. 'model_region=['Brain', 'Brainstem']'.
     if len(models) == 1:
-        model_regionses = [arg_to_list(model_region, str)]
+        model_regionses = [region_to_list(model_region)]
     else:
         model_regionses = model_region
-    regions = arg_to_list(region, str) if region is not None else None
-    region_labels = arg_to_list(region_label, str) if region_label is not None else None
+    regions = region_to_list(region)
+    region_labels = arg_to_list(region_label, str)
     model_regions_visible = arg_to_list(model_region_visible, str)
     n_models = len(models)
     if pred_label is not None:
@@ -185,7 +185,7 @@ def plot_multi_segmenter_prediction(
             if model_spacing is None:
                 raise ValueError(f"Model prediction doesn't exist, so 'model_spacing' is required to make prediction.")
             logging.info(f"Making prediction for dataset '{dataset}', patient '{pat_id}', model '{model}'.")
-            create_multi_segmenter_prediction(dataset, pat_id, model, model_spacing, check_epochs=check_epochs)
+            create_multi_segmenter_prediction(dataset, pat_id, model, model_regions, model_spacing, check_epochs=check_epochs)
             region_preds = load_multi_segmenter_prediction_dict(dataset, pat_id, model, model_regions)
 
         # Filter regions based on visibility.

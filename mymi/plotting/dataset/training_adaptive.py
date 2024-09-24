@@ -8,9 +8,9 @@ from mymi import types
 from mymi.utils import arg_to_list
 
 from ..plotter import plot_distribution, plot_localiser_prediction
-from ..plotter import plot_region as plot_region_base
+from ..plotter import plot_patient as plot_patient_base
 
-def plot_region(
+def plot_patient(
     dataset: str,
     sample_idx: str,
     centre_of: Optional[str] = None,
@@ -74,8 +74,8 @@ def plot_region(
             region_data_1[r] = ct_data[i + 2].astype(np.bool_)
     else:
         region_data_1 = None
-    plot_region_base(sample_idx, ct_data_1.shape, spacing, ax=axs[0], centre_of=centre_of, crop=crop, ct_data=ct_data_1, region_data=region_data_1, **kwargs)
-    plot_region_base(sample_idx, ct_data_0.shape, spacing, ax=axs[1], centre_of=centre_of, crop=crop, ct_data=ct_data_0, region_data=region_data, **kwargs)
+    plot_patient_base(sample_idx, ct_data_1.shape, spacing, ax=axs[0], centre_of=centre_of, crop=crop, ct_data=ct_data_1, region_data=region_data_1, **kwargs)
+    plot_patient_base(sample_idx, ct_data_0.shape, spacing, ax=axs[1], centre_of=centre_of, crop=crop, ct_data=ct_data_0, region_data=region_data, **kwargs)
 
 def plot_sample_localiser_prediction(
     dataset: str,

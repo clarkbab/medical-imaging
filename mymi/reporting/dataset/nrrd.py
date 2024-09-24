@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from scipy.ndimage import binary_dilation, binary_erosion
 from scipy.ndimage.measurements import label as label_objects
 import torch
 from tqdm import tqdm
@@ -16,11 +17,12 @@ from mymi.evaluation.dataset.nrrd import load_localiser_evaluation, load_segment
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
+from mymi.metrics import mean_intensity, snr
 from mymi.models.systems import Localiser
-from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_region, plot_segmenter_prediction
+from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_patient, plot_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import region_to_list as region_to_list
-from mymi.types import Axis, ModelName, PatientRegions
+from mymi.types import Axis, ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_overlap_summary(
@@ -67,10 +69,11 @@ def get_region_overlap_summary(
 
 def get_region_summary(
     dataset: str,
-    region: str) -> pd.DataFrame:
+    region: str,
+    labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
     # List patients.
     set = NRRDDataset(dataset)
-    pats = set.list_patients(labels='all', region=region)
+    pat_ids = set.list_patients(labels='all', region=region)
 
     cols = {
         'dataset': str,
@@ -80,9 +83,11 @@ def get_region_summary(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats):
-        spacing = set.patient(pat).ct_spacing
-        label = set.patient(pat).region_data(labels='all', region=region)[region]
+    for pat_id in tqdm(pat_ids):
+        pat = set.patient(pat_id)
+        ct_data = pat.ct_data
+        spacing = pat.ct_spacing
+        label = pat.region_data(labels=labels, region=region)[region]
 
         data = {
             'dataset': dataset,
@@ -103,12 +108,22 @@ def get_region_summary(
             df = append_row(df, data)
 
         # Add 'connected' metrics.
-        lcc_label = largest_cc_3D(label)
         data['metric'] = 'connected'
+        lcc_label = largest_cc_3D(label)
         data['value'] = 1 if lcc_label.sum() == label.sum() else 0
         df = append_row(df, data)
         data['metric'] = 'connected-largest-p'
         data['value'] = lcc_label.sum() / label.sum()
+        df = append_row(df, data)
+
+        # Add intensity metrics.
+        if pat.has_region('Brain'):
+            data['metric'] = 'snr-brain'
+            brain_label = pat.region_data(region='Brain')['Brain']
+            data['value'] = snr(ct_data, label, brain_label, spacing)
+            df = append_row(df, data)
+        data['metric'] = 'mean-intensity'
+        data['value'] = mean_intensity(ct_data, label)
         df = append_row(df, data)
 
         # Add OAR extent.
@@ -153,6 +168,81 @@ def get_region_summary(
     df = df.astype(cols)
 
     return df
+
+def create_region_contrast_report(
+    dataset: str,
+    region: PatientRegion,
+    noise_region: PatientRegion = 'Parotid_L') -> None:
+    logging.arg_log('Creating region contrast report', ('dataset', 'region', 'noise_region'), (dataset, region, noise_region))
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str,
+        'hu-oar': float,
+        'hu-margin': float,
+        'contrast': float,
+        'noise': float,
+        f'noise-{noise_region.lower()}': float,
+        'cnr': float
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Load data.
+    set = NRRDDataset(dataset)
+    pat_ids = set.list_patients(region=region)
+
+    for pat_id in tqdm(pat_ids):
+        # Load CT and region data.
+        pat = set.patient(pat_id)
+        if not pat.has_region(region):
+            continue
+        ct_data = pat.ct_data
+        region_data = pat.region_data(region=region)[region]
+
+        # Get OAR label and margin label.
+        region_data_margin = np.logical_xor(binary_dilation(region_data, iterations=3), region_data)
+
+        # Get OAR and margin HU values.
+        hu_oar = ct_data[np.nonzero(region_data)]
+        hu_oar_mean = hu_oar.mean()
+        hu_margin = ct_data[np.nonzero(region_data_margin)]
+        hu_margin_mean = hu_margin.mean()
+
+        # Calculate contrast-to-noise (CNR) ratio.
+        contrast = hu_oar_mean - hu_margin_mean
+        background_noise = hu_oar.std()
+        cnr = contrast / background_noise
+
+        # Calculate region noise.
+        if pat.has_region(noise_region):
+            noise_data = pat.region_data(region=noise_region)[noise_region]
+            noise_data_eroded = binary_erosion(noise_data, iterations=3)
+            if noise_data_eroded.sum() == 0:
+                raise ValueError(f"Eroded noise data for region '{noise_region}' is empty, choose a larger region.")
+            hu_noise = ct_data[np.nonzero(noise_data_eroded)]
+            region_noise = hu_noise.std()
+        else:
+            region_noise = np.nan
+
+        # Add data.
+        data = {
+            'patient-id': pat_id,
+            'region': region,
+            'hu-oar': hu_oar_mean,
+            'hu-margin': hu_margin_mean,
+            'contrast': contrast,
+            'noise': background_noise,
+            f'noise-{noise_region.lower()}': region_noise,
+            'cnr': cnr
+        }
+        df = append_row(df, data)
+            
+    # Save report.
+    df = df.astype(cols)
+    filepath = os.path.join(set.path, 'reports', 'region-contrast', f'{region}.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    df.to_csv(filepath, index=False)
 
 def create_region_overlap_summary(
     dataset: str,
@@ -242,6 +332,28 @@ def add_region_summary_outliers(
     func = _get_outlier_cols_func(lim_df)
     out_df = df.apply(func, axis=1, result_type='expand')
     df = pd.concat([df, out_df], axis=1)
+    return df
+
+def load_region_contrast_report(
+    dataset: Union[str, List[str]],
+    region: PatientRegions) -> pd.DataFrame:
+    datasets = arg_to_list(dataset, str)
+    regions = region_to_list(region)
+            
+    # Load reports.
+    dfs = []
+    for dataset in datasets:
+        set = NRRDDataset(dataset)
+
+        for region in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-contrast', f'{region}.csv')
+            df = pd.read_csv(filepath)
+            df.insert(0, 'dataset', dataset)
+            dfs.append(df)
+
+    # Concatenate reports.
+    df = pd.concat(dfs, axis=0)
+
     return df
 
 def load_region_overlap_summary(
@@ -634,7 +746,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_region(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_patient(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -657,7 +769,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_region(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
+                    plot_patient(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

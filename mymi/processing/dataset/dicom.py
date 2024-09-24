@@ -10,7 +10,7 @@ from typing import Optional
 from tqdm import tqdm
 
 from mymi.dataset.shared import CT_FROM_REGEXP
-from mymi.dataset.dicom import DICOMDataset
+from mymi.dataset.dicom import DicomDataset
 from mymi.dataset.nifti import recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import region_to_list
@@ -33,10 +33,10 @@ def convert_to_nifti(
     anonymise: bool = False,
     show_list_patients_progress: bool = True) -> None:
     start = time()
-    logging.info(f"Converting DICOMDataset '{dataset}' to NIFTIDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
+    logging.info(f"Converting DicomDataset '{dataset}' to NiftiDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
 
     # Create NIFTI dataset.
-    dicom_set = DICOMDataset(dataset)
+    dicom_set = DicomDataset(dataset)
     nifti_set = recreate_nifti(dataset)
 
     # Check '__ct_from_' for DICOM dataset.
@@ -138,7 +138,7 @@ def convert_to_nifti_replan(
 
     # Get all patients.
     dicom_dataset = dataset if dicom_dataset is None else dicom_dataset
-    set = DICOMDataset(dicom_dataset)
+    set = DicomDataset(dicom_dataset)
     filepath = os.path.join(set.path, 'patient-studies.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"File '<dataset>/patient-studies.csv' not found.")

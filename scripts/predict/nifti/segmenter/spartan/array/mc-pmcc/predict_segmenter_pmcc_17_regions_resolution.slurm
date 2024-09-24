@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 64G
 #SBATCH --gres gpu:1
@@ -18,18 +18,20 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-REGIONS=(
-    "['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"           # 0
-)
-SHORT_REGIONS=(
-    'ALL'
-)
-REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
-SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
+REGION="['BrachialPlexus_L','BrachialPlexus_R','Brain','BrainStem','Cochlea_L','Cochlea_R','Lens_L','Lens_R','Mandible','OpticNerve_L','OpticNerve_R','OralCavity','Parotid_L','Parotid_R','SpinalCord','Submandibular_L','Submandibular_R']"           # 0
+SHORT_REGION='ALL'
 MODEL_NAME="segmenter-pmcc-resolution-v3"
-RESOLUTION="112"
-DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
+
+# RESOLUTION="112"
+# RANDOM_SEED=42
+
+# RESOLUTION="222"
+# RANDOM_SEED=44
+
+RESOLUTION="444"
 RANDOM_SEED=42
+
+DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 RUN_NAME="$RESOLUTION-seed-$RANDOM_SEED-ivw-0.5-schedule-200"
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True

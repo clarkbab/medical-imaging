@@ -12,7 +12,7 @@ from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
 from .nifti_patient import NIFTIPatient
 
-class NIFTIDataset(Dataset):
+class NiftiDataset(Dataset):
     def __init__(
         self,
         name: str):
@@ -26,7 +26,7 @@ class NIFTIDataset(Dataset):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from_name = match.group(1)
-        self.__ct_from = NIFTIDataset(ct_from_name) if ct_from_name is not None else None
+        self.__ct_from = NiftiDataset(ct_from_name) if ct_from_name is not None else None
         self.__global_id = f"NIFTI: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"NIFTI: {self.__name}"
 
         self.__index = None                # Lazy-loaded.

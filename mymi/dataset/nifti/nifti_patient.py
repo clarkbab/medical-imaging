@@ -12,9 +12,9 @@ from mymi.utils import arg_to_list
 class NIFTIPatient:
     def __init__(
         self,
-        dataset: 'NIFTIDataset',
+        dataset: 'NiftiDataset',
         id: PatientID,
-        ct_from: Optional['NIFTIDataset'] = None,
+        ct_from: Optional['NiftiDataset'] = None,
         excluded_labels: Optional[DataFrame] = None,
         index: Optional[DataFrame] = None,
         processed_labels: Optional[DataFrame] = None) -> None:
@@ -29,8 +29,10 @@ class NIFTIPatient:
         # Check that patient ID exists.
         if ct_from is not None:
             self.__ct_path = os.path.join(self.__ct_from.path, 'data', 'ct', f'{self.__id}.nii.gz')
+            self.__regions_path = os.path.join(self.__ct_from.path, 'data', 'regions')
         else:
             self.__ct_path = os.path.join(dataset.path, 'data', 'ct', f'{self.__id}.nii.gz')
+            self.__regions_path = os.path.join(dataset.path, 'data', 'regions')
         if not os.path.exists(self.__ct_path):
             raise ValueError(f"Patient '{self}' not found. Filepath: '{self.__ct_path}'.")
 
@@ -105,6 +107,10 @@ class NIFTIPatient:
     @property
     def ct_path(self) -> str:
         return self.__ct_path
+
+    @property
+    def regions_path(self) -> str:
+        return self.__regions_path
 
     def has_region(
         self,

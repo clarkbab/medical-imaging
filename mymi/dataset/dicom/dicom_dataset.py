@@ -23,7 +23,7 @@ from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
 Z_SPACING_ROUND_DP = 2
 
-class DICOMDataset(Dataset):
+class DicomDataset(Dataset):
     def __init__(
         self,
         name: str):
@@ -37,7 +37,7 @@ class DICOMDataset(Dataset):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from_name = match.group(1)
-        self.__ct_from = DICOMDataset(ct_from_name) if ct_from_name is not None else None
+        self.__ct_from = DicomDataset(ct_from_name) if ct_from_name is not None else None
         self.__global_id = f"DICOM: {self.__name} (CT from - {self.__ct_from})" if self.__ct_from is not None else f"DICOM: {self.__name}"
 
         self.__index = None             # Lazy-loaded.
@@ -50,7 +50,7 @@ class DICOMDataset(Dataset):
         self.__region_policy = None     # Lazy-loaded.
 
     @property
-    def ct_from(self) -> Optional['DICOMDataset']:
+    def ct_from(self) -> Optional['DicomDataset']:
         return self.__ct_from
 
     @property

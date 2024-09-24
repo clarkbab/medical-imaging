@@ -6,7 +6,7 @@ from pandas import DataFrame
 from tqdm import tqdm
 from typing import List, Union
 
-from mymi.dataset.dicom import DICOMDataset
+from mymi.dataset.dicom import DicomDataset
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
 from mymi.types import Model, PatientRegions
@@ -20,7 +20,7 @@ def create_evaluation_report(
     region: str) -> None:
     # Save report.
     eval_df = evaluate_model(dataset, localiser, segmenter, region)
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filename = f"{name}.csv"
     filepath = os.path.join(set.path, 'reports', 'evaluation', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -30,7 +30,7 @@ def get_ct_summary(
     dataset: str,
     regions: PatientRegions = 'all') -> pd.DataFrame:
     # Get patients.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     pats = set.list_patients(regions=regions)
 
     cols = {
@@ -73,7 +73,7 @@ def create_ct_summary(
     df = get_ct_summary(dataset, regions=regions)
 
     # Save summary.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -81,7 +81,7 @@ def create_ct_summary(
 def load_ct_summary(
     dataset: str,
     regions: PatientRegions = 'all') -> None:
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
 
@@ -90,7 +90,7 @@ def get_patient_regions_report(
     use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> pd.DataFrame:
     # List patients.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     pat_ids = set.list_patients()
 
     # Create dataframe.
@@ -145,7 +145,7 @@ def create_patient_regions_report(
     use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> None:
     pr_df = get_patient_regions_report(dataset, use_default_rtstruct=use_default_rtstruct, use_mapping=use_mapping)
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filename = 'region-count'
     if use_default_rtstruct:
         filename = f'{filename}-default'
@@ -161,7 +161,7 @@ def load_patient_regions_report(
     exists_only: bool = False,
     use_default_rtstruct: bool = True,
     use_mapping: bool = True) -> Union[DataFrame, bool]:
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filename = 'region-count'
     if use_default_rtstruct:
         filename = f'{filename}-default'
@@ -197,7 +197,7 @@ def get_regions_containing(
 def get_mapped_duplicates(dataset: str) -> DataFrame:
     # Allows us to check 'region-map.csv' mapping for duplicates rather than running 
     # 'create_patient_regions_report(..., use_mapping=True)' which will break on each duplicate.
-    region_map = DICOMDataset(dataset).region_map
+    region_map = DicomDataset(dataset).region_map
     df = load_patient_regions_report(dataset, use_mapping=False)
     df['mapped'] = df[['patient-id', 'region']].apply(lambda row: region_map.to_internal(row['region'], pat_id=row['patient-id'])[0], axis=1)
     df = df.groupby('patient-id')['mapped'].apply(list).reset_index()
@@ -211,7 +211,7 @@ def region_overlap(
     clear_cache: bool = True,
     regions: PatientRegions = 'all') -> int:
     # List regions.
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     regions_df = set.list_regions(clear_cache=clear_cache) 
     regions_df = regions_df.drop_duplicates()
     regions_df['count'] = 1
@@ -236,7 +236,7 @@ def region_overlap(
 def get_region_summary(
     dataset: str,
     region: PatientRegions) -> pd.DataFrame:
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     pat_ids = set.list_patients(region=region)
 
     cols = {
@@ -295,7 +295,7 @@ def create_region_summary_report(
 
     # Save report.
     filename = 'region-summary.csv'
-    set = DICOMDataset(dataset)
+    set = DicomDataset(dataset)
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)

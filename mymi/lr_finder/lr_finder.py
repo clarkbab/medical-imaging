@@ -15,6 +15,8 @@ from mymi.regions import region_to_list
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
+DEFAULT_FONT_SIZE = 8
+
 def load_data(
     model_name: str,
     run_name: str) -> Dict[str, np.ndarray]:
@@ -63,13 +65,19 @@ def plot(
     run_name: Union[str, List[Union[str, List[str]]]],
     ax: Optional[Axes] = None,
     figsize: Tuple[float, float] = (12, 12),
+    fontsize: float = DEFAULT_FONT_SIZE,
+    fontsize_label: Optional[float] = None,
+    fontsize_tick_label: Optional[float] = None,
+    fontsize_legend: Optional[float] = None,
+    fontsize_title: Optional[float] = None,
     label: Optional[Union[str, List[str]]] = None,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
+    legend_bbox: Optional[Tuple[float, float]] = (1, 1),
     region: Optional[PatientRegions] = 'all',
     savepath: Optional[str] = None,
     show: bool = True,
     show_legend: bool = True,
     show_sugg_lr: bool = True,
+    show_title: bool = True,
     skip_end: int = 0,
     skip_start: int = 0,
     smooth: bool = False,
@@ -77,12 +85,21 @@ def plot(
     sugg_skip_end: int = 0,
     sugg_skip_start: int = 0,
     vline: Optional[Union[float, List[float]]] = None,
+    x_lim: Tuple[Optional[float], Optional[float]] = (None, None),
     y_lim: Tuple[Optional[float], Optional[float]] = (None, None)) -> None:
     regions = region_to_list(region)
     run_names = arg_to_list(run_name, str)
     labels = arg_to_list(label, str)
     if labels is not None and len(labels) != len(run_names):
         raise ValueError(f"Must pass same number of labels ({len(labels)}) as run_names ({len(run_names)}).")
+    if fontsize_label is None:
+        fontsize_label = fontsize
+    if fontsize_tick_label is None:
+        fontsize_tick_label = fontsize
+    if fontsize_legend is None:
+        fontsize_legend = fontsize
+    if fontsize_title is None:
+        fontsize_title = fontsize
 
     if ax is None:
         # Create figure/axes.
@@ -166,14 +183,20 @@ def plot(
         if vline is not None:
             vlines = arg_to_list(vline, float)
             for vline in vlines:
-                ax.axvline(vline, linestyle='--', color='red')
+                ax.axvline(vline, label='Selected LR', linestyle='--', color='red')
 
-    ax.set_xlabel('learning rate')
-    ax.set_ylabel('loss')
+    ax.set_xlabel('Learning rate (LR)', fontsize=fontsize_label)
+    ax.set_ylabel('Loss', fontsize=fontsize_label)
     ax.set_xscale('log')
-    ax.set_title('LR Find')
+
+    # Set tick label properties.
+    ax.tick_params(axis='both', labelsize=fontsize_tick_label)
+
+    if show_title:
+        ax.set_title('LR Find', fontsize=fontsize_title)
     if show_legend:
-        ax.legend(bbox_to_anchor=legend_bbox_to_anchor)
+        ax.legend(bbox_to_anchor=legend_bbox, fontsize=fontsize_legend)
+    ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
     min_exp = int(np.floor(np.log10(np.min(lrs)))) - 1
     max_exp = int(np.ceil(np.log10(np.max(lrs)))) + 1

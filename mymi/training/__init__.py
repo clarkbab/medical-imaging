@@ -16,6 +16,7 @@ from .adaptive_segmenter import train_adaptive_segmenter
 from .localiser import train_localiser
 # from .segmenter_2d import train_segmenter_2d
 from .multi_segmenter import train_multi_segmenter
+from .multi_segmenter_convergence import train_multi_segmenter_convergence
 from .multi_segmenter_pytorch import train_multi_segmenter_pytorch
 from .localiser_replan import train_localiser_replan
 from .reg_seg_model import train_reg_seg_model

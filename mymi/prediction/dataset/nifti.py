@@ -7,7 +7,7 @@ from tqdm import tqdm
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from mymi import config
-from mymi.dataset import NIFTIDataset, TrainingAdaptiveDataset, TrainingDataset
+from mymi.dataset import NiftiDataset, TrainingAdaptiveDataset, TrainingDataset
 from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
 from mymi import logging
@@ -30,7 +30,7 @@ def get_localiser_prediction(
     loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -48,7 +48,7 @@ def get_localiser_prediction_at_training_resolution(
     loc_spacing: Spacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -85,7 +85,7 @@ def create_localiser_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser.name}'.")
@@ -126,7 +126,7 @@ def create_localiser_prediction_at_training_resolution(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser.name}'.")
@@ -257,7 +257,7 @@ def create_all_localiser_predictions(
 
     # Load patients.
     for dataset in datasets:
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids):
@@ -308,7 +308,7 @@ def create_all_localiser_predictions_at_training_resolution(
 
     # Load patients.
     for dataset in datasets:
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids):
@@ -457,7 +457,7 @@ def load_localiser_prediction(
     localiser = replace_ckpt_alias(localiser)
 
     # Load prediction.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(config.directories.predictions, 'data', 'localiser', dataset, str(pat_id), *localiser, 'pred.npz')
     if os.path.exists(filepath):
         if exists_only:
@@ -492,7 +492,7 @@ def load_localiser_centre(
     dataset: str,
     pat_id: PatientID,
     localiser: ModelName) -> Point3D:
-    spacing = NIFTIDataset(dataset).patient(pat_id).ct_spacing
+    spacing = NiftiDataset(dataset).patient(pat_id).ct_spacing
 
     # Get localiser prediction.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
@@ -532,7 +532,7 @@ def get_adaptive_segmenter_no_oars_prediction(
         model.to(device)
 
     # Load patient CT data and spacing.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_mt = set.patient(pat_id_mt)
     ct_data_mt = pat_mt.ct_data
     spacing = pat_mt.ct_spacing
@@ -646,7 +646,7 @@ def get_adaptive_segmenter_prediction(
         model.to(device)
 
     # Load patient CT data and spacing.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat_mt = set.patient(pat_id_mt)
     ct_data_mt = pat_mt.ct_data
     spacing = pat_mt.ct_spacing
@@ -761,7 +761,7 @@ def get_multi_segmenter_prediction(
         model.to(device)
 
     # Load patient CT data and spacing.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     input = pat.ct_data
     input_spacing = pat.ct_spacing
@@ -773,14 +773,13 @@ def get_multi_segmenter_prediction(
 
     # Apply 'naive' cropping.
     if crop_type == 'naive':
-        assert crop_mm is not None
-        # crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
+        if crop_mm is None:
+            raise ValueError(f"Must provide 'crop_mm' for 'naive' cropping.")
         crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
         input = centre_crop_or_pad_3D(input, crop)
     elif crop_type == 'brain':
-        assert crop_mm is not None
-        # Convert to voxel crop.
-        # crop_mm = (300, 400, 500)
+        if crop_mm is None:
+            raise ValueError(f"Must provide 'crop_mm' for 'brain' cropping.")
         crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
 
         # Get brain extent.
@@ -868,7 +867,7 @@ def get_segmenter_prediction(
     segmenter.to(device)
 
     # Load patient CT data and spacing.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -944,7 +943,7 @@ def create_adaptive_segmenter_no_oars_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating adaptive segmenter prediction (no prior OARs{ '' if include_ct else ' or CT' }) for patient '{pat}', model '{model.name}'.")
@@ -987,7 +986,7 @@ def create_adaptive_segmenter_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
@@ -1033,7 +1032,7 @@ def create_multi_segmenter_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         # Make prediction.
@@ -1048,7 +1047,7 @@ def create_multi_segmenter_prediction(
 
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
-    pat_id: Union[str, List[str]],
+    pat_id: Union[PatientID, List[PatientID]],
     localiser: ModelName,
     segmenter: Union[Model, ModelName],
     device: Optional[torch.device] = None,
@@ -1056,7 +1055,7 @@ def create_segmenter_prediction(
     raise_error: bool = False,
     savepath: Optional[str] = None) -> None:
     datasets = arg_to_list(dataset, str)
-    pat_ids = arg_to_list(pat_id, str)
+    pat_ids = arg_to_list(pat_id, (int, str), out_type=str)
     datasets = arg_broadcast(dataset, pat_ids, arg_type=str)
     localiser = replace_ckpt_alias(localiser)
     assert len(datasets) == len(pat_ids)
@@ -1076,7 +1075,7 @@ def create_segmenter_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser}', segmenter '{segmenter.name}'.")
@@ -1293,7 +1292,7 @@ def create_all_multi_segmenter_predictions(
 
     # Load patients.
     for dataset in datasets:
-        set = NIFTIDataset(dataset)
+        set = NiftiDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids):
@@ -1686,6 +1685,31 @@ def load_multi_segmenter_prediction_dict(
 
     return data
 
+def load_multi_segmenter_prediction_timings(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: ModelName,
+    **kwargs) -> None:
+    datasets = arg_to_list(dataset, str)
+    regions = arg_to_list(region, str)
+    model = replace_ckpt_alias(model)
+
+    # Load prediction.
+    params = {
+        'device': kwargs.get('device', 'cuda'),
+        'load_all_samples': kwargs.get('load_all_samples', False),
+        'n_folds': kwargs.get('n_folds', None),
+        'shuffle_samples': kwargs.get('shuffle_samples', True),
+        'use_grouping': kwargs.get('use_grouping', False),
+        'use_split_file': kwargs.get('use_split_file', False),
+    }
+    filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model, encode(params), 'timing.csv')
+    if not os.path.exists(filepath):
+        raise ValueError(f"Multi-segmenter prediction timings not found for dataset '{dataset}', region '{region}', model '{model}'. Filepath: {filepath}.")
+    df = pd.read_csv(filepath)
+
+    return df
+
 def load_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -1739,7 +1763,7 @@ def save_patient_segmenter_prediction(
     segmenter = Segmenter.replace_ckpt_aliases(*segmenter)
 
     # Load segmentation.
-    set = NIFTIDataset(dataset)
+    set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     np.savez_compressed(filepath, data=data)
 

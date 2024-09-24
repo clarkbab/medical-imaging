@@ -7,7 +7,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
-from mymi.dataset import DICOMDataset
+from mymi.dataset import DicomDataset
 from mymi.dataset.dicom import ROIData, RTSTRUCTConverter
 from mymi import logging
 from mymi.prediction.dataset.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
@@ -43,7 +43,7 @@ default_rt_info = {
     'institution-name': 'PMCC-AI'
 }
 
-set = DICOMDataset(dataset)
+set = DicomDataset(dataset)
 pat_ids = set.list_patients()
 for pat_id in pat_ids:
     logging.info(f"Creating RTSTRUCT DICOM for patient {pat_id}.")

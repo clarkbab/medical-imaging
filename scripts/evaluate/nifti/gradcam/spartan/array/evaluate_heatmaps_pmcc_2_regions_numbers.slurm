@@ -72,8 +72,6 @@ TEST_FOLD=0
 
 # Define layers.
 LAYER="['5','12','19','26','33','40','47','54','61']"
-#LAYER="['5','12','19','26','33']"
-#LAYER="['33']"
 
 # Other params.
 AUX_REGION="RL:PMCC"

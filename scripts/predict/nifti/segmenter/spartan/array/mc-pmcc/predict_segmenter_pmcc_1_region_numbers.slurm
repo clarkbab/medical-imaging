@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --qos feit
-##SBATCH --partition feit-gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
+##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
 #SBATCH --mem 64G
 #SBATCH --gres gpu:1
@@ -63,7 +63,9 @@ RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 RANDOM_SEED=42
 RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
-#RUN_NAME="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED-lr-1e-4"
+if [[ $SLURM_ARRAY_TASK_ID -eq 6 || $SLURM_ARRAY_TASK_ID -eq 7 ]]; then
+    RUN_NAME="$RUN_NAME-lr-1e-4"
+fi
 MODEL="('$MODEL_NAME','$RUN_NAME','BEST')"
 CHECK_EPOCHS=True
 CROP_MM="(300,400,500)"
