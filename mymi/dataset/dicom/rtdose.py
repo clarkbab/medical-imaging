@@ -5,7 +5,7 @@ from pydicom.dataset import FileDataset
 
 from mymi import logging
 from mymi.transforms import resample_3D
-from mymi.types import Size3D, Spacing3D, PointMM3D
+from mymi.types import ImageSize3D, ImageSpacing3D, PointMM3D
 
 from .dicom_file import DICOMFile, SOPInstanceUID
 
@@ -63,11 +63,11 @@ class RTDOSE(DICOMFile):
         return self.__series
 
     @property
-    def size(self) -> Size3D:
+    def size(self) -> ImageSize3D:
         return self.data.shape
 
     @property
-    def spacing(self) -> Spacing3D:
+    def spacing(self) -> ImageSpacing3D:
         if not self.__loaded_data:
             self.__load_rtdose_data()
             self.__loaded_data = True

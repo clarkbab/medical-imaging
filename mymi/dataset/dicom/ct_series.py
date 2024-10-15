@@ -64,13 +64,13 @@ class CTSeries(DICOMSeries):
         return self.__paths
 
     @property
-    def size(self) -> types.Spacing3D:
+    def size(self) -> types.ImageSpacing3D:
         if self.__size is None:
             self.__load_ct_data()
         return self.__size
 
     @property
-    def spacing(self) -> types.Spacing3D:
+    def spacing(self) -> types.ImageSpacing3D:
         if self.__spacing is None:
             self.__load_ct_data()
         return self.__spacing

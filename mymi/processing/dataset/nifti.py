@@ -31,14 +31,14 @@ from mymi.regions import RegionColours, RegionList, RegionNames, region_to_list,
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
-from mymi.types import SizeMM3D, Size3D, Spacing3D, ModelName, PatientID, PatientRegion, PatientRegions
+from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_replan_adaptive_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[Size3D] = None,
-    crop_mm: Optional[SizeMM3D] = None,
+    crop: Optional[ImageSize3D] = None,
+    crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -46,7 +46,7 @@ def convert_replan_adaptive_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[Spacing3D] = None) -> None:
+    spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to adaptive brain crop TRAINING_ADAPTIVE', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -262,8 +262,8 @@ def convert_replan_adaptive_to_training(
 def convert_replan_adaptive_mirror_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[Size3D] = None,
-    crop_mm: Optional[SizeMM3D] = None,
+    crop: Optional[ImageSize3D] = None,
+    crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -271,7 +271,7 @@ def convert_replan_adaptive_mirror_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[Spacing3D] = None) -> None:
+    spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to adaptive mirror brain crop TRAINING ADAPTIVE', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -493,8 +493,8 @@ def convert_replan_adaptive_mirror_to_training(
 
 def convert_replan_to_nnunet_ref_model(
     create_data: bool = True,
-    crop: Optional[Size3D] = None,
-    crop_mm: Optional[SizeMM3D] = None,
+    crop: Optional[ImageSize3D] = None,
+    crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -507,7 +507,7 @@ def convert_replan_to_nnunet_ref_model(
     crop_mm = (330, 380, 500)
     region = RegionList.PMCC_REPLAN
     spacing = (1, 1, 2)
-    logging.arg_log('Converting NIFTI dataset to NNUNET (REF MODEL)', ('dataset', 'region'), (dataset, region))
+    logging.arg_log('Converting NIFTI dataset to NNUNET (REF MODEL)', ('dataset', 'region', 'test_fold'), (dataset, region, test_fold))
 
     # Use all regions if region is 'None'.
     set = NiftiDataset(dataset)
@@ -609,6 +609,11 @@ def convert_replan_to_nnunet_ref_model(
                     (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
                     (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
                 )
+                # Threshold crop values. 
+                min, max = crop
+                min = tuple((np.max((m, 0)) for m in min))
+                max = tuple((np.min((m, s)) for m, s in zip(max, input.shape)))
+                crop = (min, max)
 
                 # Crop input.
                 input = crop_3D(input, crop)
@@ -669,8 +674,8 @@ def convert_replan_to_nnunet_ref_model(
 def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[Size3D] = None,
-    crop_mm: Optional[SizeMM3D] = None,
+    crop: Optional[ImageSize3D] = None,
+    crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -678,7 +683,7 @@ def convert_replan_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[Spacing3D] = None) -> None:
+    spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -878,9 +883,9 @@ def convert_replan_to_training(
 def convert_population_lens_crop_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[Size3D] = None,
+    crop: Optional[ImageSize3D] = None,
     crop_method: Literal['low', 'uniform'] = 'low',
-    crop_mm: Optional[SizeMM3D] = None,
+    crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -888,7 +893,7 @@ def convert_population_lens_crop_to_training(
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[Spacing3D] = None) -> None:
+    spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = region_to_list(region)
 
@@ -1263,8 +1268,8 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
-    output_size: Optional[Size3D] = None,
-    output_spacing: Optional[Spacing3D] = None,
+    output_size: Optional[ImageSize3D] = None,
+    output_spacing: Optional[ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     region: Optional[PatientRegions] = None,
     round_dp: Optional[int] = None) -> None:

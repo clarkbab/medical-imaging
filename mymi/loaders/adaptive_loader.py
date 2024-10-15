@@ -9,7 +9,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.types import Spacing3D, PatientRegion, PatientRegions
+from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.geometry import get_centre
 from mymi import logging
@@ -330,7 +330,7 @@ class TrainingSet(Dataset):
         load_data: bool = True,
         preload_data: bool = False,
         random_seed: float = 0,
-        spacing: Optional[Spacing3D] = None,
+        spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None,
         use_frequency_weighting: bool = True):
         if transform is not None:

@@ -3,6 +3,12 @@ from enum import Enum
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
+EXPANDED_REGION_MAP = {
+    'Lungs': ['Lung_Lower_Lobe_L', 'Lung_Lower_Lobe_R', 'Lung_Middle_Lobe_R', 'Lung_Upper_Lobe_L', 'Lung_Upper_Lobe_R'],
+    'Ribs': ['Rib_L_1', 'Rib_L_2', 'Rib_L_3', 'Rib_L_4', 'Rib_L_5', 'Rib_L_6', 'Rib_L_7', 'Rib_L_8', 'Rib_L_9', 'Rib_L_10', 'Rib_L_11', 'Rib_L_12', 'Rib_R_1', 'Rib_R_2', 'Rib_R_3', 'Rib_R_4', 'Rib_R_5', 'Rib_R_6', 'Rib_R_7', 'Rib_R_8', 'Rib_R_9', 'Rib_R_10', 'Rib_R_11', 'Rib_R_12'],
+    'Vertebrae': ['Vertebrae_C1', 'Vertebrae_C2', 'Vertebrae_C3', 'Vertebrae_C4', 'Vertebrae_C5', 'Vertebrae_C6', 'Vertebrae_C7', 'Vertebrae_L1', 'Vertebrae_L2', 'Vertebrae_L3', 'Vertebrae_L4', 'Vertebrae_L5', 'Vertebrae_T1', 'Vertebrae_T2', 'Vertebrae_T3', 'Vertebrae_T4', 'Vertebrae_T5', 'Vertebrae_T6', 'Vertebrae_T7', 'Vertebrae_T8', 'Vertebrae_T9', 'Vertebrae_T10', 'Vertebrae_T11', 'Vertebrae_T12', 'Vertebrae_S1'],
+}
+
 class RegionList(list, Enum):
     # MICCAI 2015 dataset (PDDCA).
     MICCAI = ['Bone_Mandible', 'Brainstem', 'Glnd_Submand_L', 'Glnd_Submand_R', 'OpticChiasm', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R']
@@ -251,10 +257,23 @@ class RegionList(list, Enum):
 
 # Behaves like 'arg_to_list', but also handles special 'RL:<region list>' format.
 def region_to_list(region: PatientRegions, **kwargs) -> PatientRegions:
-    if not isinstance(region, str) or not region.startswith('RL:'):
-        return arg_to_list(region, str, **kwargs)
+    if region is None:
+        return None
 
-    # Get region list.
-    rl_name = region.split(':')[-1]
-    return list(getattr(RegionList, rl_name))
+    # Get regions from "region list".
+    if isinstance(region, str) and region.startswith('RL:'): 
+        rl_name = region.split(':')[-1]
+        regions = list(getattr(RegionList, rl_name))
+    else:
+        regions = arg_to_list(region, str, **kwargs)
+
+    # Expand any special region names.
+    expanded_regions = [] 
+    for r in regions:
+        if r in EXPANDED_REGION_MAP:
+            expanded_regions += EXPANDED_REGION_MAP[r]
+        else:
+            expanded_regions.append(r)
+
+    return expanded_regions
     

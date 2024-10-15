@@ -15,20 +15,23 @@
 
 module load GCCcore/11.3.0
 module load Python/3.10.4
+module load TensorFlow/2.13.0-CUDA-11.8.0
 source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
 echo $version
 
-DATASET="L2R-LUNG-CT-CROP-TEST"
-MODEL="L2R_LUNG_CT_CROP_SEG/1500.keras"
-LABELS_ONLY=False
+DATASET="L2R-LUNG-CT-CROP-NORM-TEST"
+MODEL="L2R_LUNG_CT_CROP_SEG/1500.h5"
+MODELNAME="VOXELMORPH-SEG"
+REGISTER_IMAGES=False
 REGION="Lung"
 
 command="python $MYMI_CODE/scripts/predict/nifti/voxelmorph/predict_tf.py \
     --dataset $DATASET \
     --model $MODEL \
-    --labels_only $LABELS_ONLY \
+    --modelname $MODELNAME \
+    --register_images $REGISTER_IMAGES \
     --region $REGION"
 echo $command
 eval $command

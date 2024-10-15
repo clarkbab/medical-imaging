@@ -17,7 +17,7 @@ from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
 from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
-from mymi.types import Size3D, Spacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -26,8 +26,8 @@ def get_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: Model,
-    loc_size: Size3D = (128, 128, 150),
-    loc_spacing: Spacing3D = (4, 4, 4),
+    loc_size: ImageSize3D = (128, 128, 150),
+    loc_spacing: ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
     set = NRRDDataset(dataset)
@@ -271,7 +271,7 @@ def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, Model],
-    model_spacing: Spacing3D,
+    model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -333,7 +333,7 @@ def get_segmenter_prediction(
     loc_centre: Point3D,
     segmenter: Union[Model, ModelName],
     probs: bool = False,
-    seg_spacing: Spacing3D = (1, 1, 2),
+    seg_spacing: ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
     # Load model.
@@ -394,7 +394,7 @@ def create_multi_segmenter_prediction(
     pat_id: Union[str, List[str]],
     model: Union[ModelName, Model],
     model_region: PatientRegions,
-    model_spacing: Spacing3D,
+    model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs: Dict[str, Any]) -> None:

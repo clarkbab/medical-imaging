@@ -5,8 +5,8 @@
 ##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 128G
-##SBATCH --mem 120G
+##SBATCH --mem 128G
+#SBATCH --mem 120G
 #SBATCH --gres gpu:1
 ##SBATCH --cpus-per-gpu 8
 #SBATCH --time 0-01:00:00
@@ -22,13 +22,15 @@ echo $version
 
 DATASET="L2R-LUNG-CT-CROP-TEST"
 MODEL="L2R_LUNG_CT_CROP/1500.pt"
-LABELS_ONLY=False
+MODELNAME="VOXELMORPH"
+REGISTER_IMAGES=True
 REGION="Lung"
 
 command="python $MYMI_CODE/scripts/predict/nifti/voxelmorph/predict.py \
     --dataset $DATASET \
     --model $MODEL \
-    --labels_only $LABELS_ONLY \
+    --modelname $MODELNAME \
+    --register_images $REGISTER_IMAGES \
     --region $REGION"
 echo $command
 eval $command

@@ -4,7 +4,7 @@ from mymi import types
 
 def get_box(
     centre: types.Point3D,
-    size: types.Size3D) -> types.Box3D:
+    size: types.ImageSize3D) -> types.Box3D:
     # Convert to box.
     size = np.array(size)
     lower_sub = np.ceil(size / 2).astype(int)

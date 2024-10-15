@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Literal, Optional, Tuple, Union
 
-from mymi.types import Axis, Box2D, Box3D, Size2D, Size3D, Point2D, Point3D
+from mymi.types import Axis, Box2D, Box3D, ImageSize2D, ImageSize3D, Point2D, Point3D
 
 def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
     if a.dtype != np.bool_:
@@ -41,7 +41,7 @@ def get_extent_voxel(
     max_voxel = tuple(axis_voxels[len(axis_voxels) // 2])
     return max_voxel
 
-def get_extent_width_vox(a: np.ndarray) -> Optional[Union[Size2D, Size3D]]:
+def get_extent_width_vox(a: np.ndarray) -> Optional[Union[ImageSize2D, ImageSize3D]]:
     if a.dtype != np.bool_:
         raise ValueError(f"'get_extent_width_vox' expected a boolean array, got '{a.dtype}'.")
 

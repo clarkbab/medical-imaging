@@ -3,7 +3,7 @@ import torch
 from .intensity import mean_intensity, snr
 from .dice import batch_mean_dice, dice
 from .distances import all_distances, apl, batch_mean_all_distances, extent_centre_distance, get_encaps_dist_mm, get_encaps_dist_vox, hausdorff_distance, mean_surface_distance, surface_dice, surface_distances, distances_deepmind
-from .registration import ncc
+from .registration import ncc, tre
 from .volume import volume
 
 # In which direction does the metric improve?

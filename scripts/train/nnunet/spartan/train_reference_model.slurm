@@ -5,7 +5,7 @@
 ##SBATCH --partition gpu-a100
 ##SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 512G
+#SBATCH --mem 128G
 ##SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
@@ -24,9 +24,8 @@ echo $version
 export nnUNet_raw="/data/projects/punim1413/mymi/datasets/nnunet/raw"
 export nnUNet_preprocessed="/data/projects/punim1413/mymi/datasets/nnunet/preprocessed"
 export nnUNet_results="/data/projects/punim1413/mymi/models/nnunet"
-export nnUNet_n_proc_DA=0
 
-DATASET_ID="011"
+DATASET_ID="015"
 MODEL="3d_fullres"
 FOLD="all"
 PLAN="nnUNetResEncUNetPlansXXL"

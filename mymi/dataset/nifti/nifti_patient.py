@@ -1,12 +1,12 @@
 import nibabel as nib
 import numpy as np
 import os
-from pandas import DataFrame
+import pandas as pd
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.postprocessing import interpolate_z, largest_cc_3D
 from mymi.regions import region_to_list
-from mymi.types import Spacing3D, PatientID, PatientRegions, Point3D
+from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
 class NIFTIPatient:
@@ -15,9 +15,9 @@ class NIFTIPatient:
         dataset: 'NiftiDataset',
         id: PatientID,
         ct_from: Optional['NiftiDataset'] = None,
-        excluded_labels: Optional[DataFrame] = None,
-        index: Optional[DataFrame] = None,
-        processed_labels: Optional[DataFrame] = None) -> None:
+        excluded_labels: Optional[pd.DataFrame] = None,
+        index: Optional[pd.DataFrame] = None,
+        processed_labels: Optional[pd.DataFrame] = None) -> None:
         self.__dataset = dataset
         self.__ct_from = ct_from
         self.__id = str(id)
@@ -43,6 +43,11 @@ class NIFTIPatient:
         return data
 
     @property
+    def ct_affine(self) -> np.ndarray:
+        img = nib.load(self.__ct_path)
+        return img.affine
+
+    @property
     def ct_offset(self) -> Point3D:
         img = nib.load(self.__ct_path)
         affine = img.affine
@@ -50,11 +55,15 @@ class NIFTIPatient:
         return offset
 
     @property
+    def ct_path(self) -> str:
+        return self.__ct_path
+
+    @property
     def ct_size(self) -> np.ndarray:
         return self.ct_data.shape
 
     @property
-    def ct_spacing(self) -> Spacing3D:
+    def ct_spacing(self) -> ImageSpacing3D:
         img = nib.load(self.__ct_path)
         affine = img.affine
         spacing = (abs(affine[0][0]), abs(affine[1][1]), abs(affine[2][2]))
@@ -74,12 +83,30 @@ class NIFTIPatient:
         return data
 
     @property
+    def has_dose(self) -> bool:
+        filepath = os.path.join(self.__dataset.path, 'data', 'dose', f'{self.__id}.nii.gz')
+        return os.path.exists(filepath)
+
+    @property
+    def has_landmarks(self) -> bool:
+        filepath = os.path.join(self.__dataset.path, 'data', 'landmarks', f'{self.__id}.csv')
+        return os.path.exists(filepath)
+
+    @property
     def id(self) -> str:
         return self.__id
 
     @property
-    def index(self) -> DataFrame:
+    def index(self) -> pd.DataFrame:
         return self.__index
+
+    @property
+    def landmarks(self) -> pd.DataFrame:
+        filepath = os.path.join(self.__dataset.path, 'data', 'landmarks', f'{self.__id}.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Landmarks not found for patient '{self}'.")
+        landmarks = pd.read_csv(filepath, header=None)
+        return landmarks.to_numpy()
 
     @property
     def origin(self) -> Tuple[str, str, str]:
@@ -103,10 +130,6 @@ class NIFTIPatient:
         pat_id = manifest.iloc[0]['patient-id']
 
         return pat_id
-
-    @property
-    def ct_path(self) -> str:
-        return self.__ct_path
 
     @property
     def regions_path(self) -> str:

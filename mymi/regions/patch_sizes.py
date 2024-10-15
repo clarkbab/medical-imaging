@@ -24,7 +24,7 @@ class RegionPatchSizes:
 
 def get_region_patch_size(
     region: str,
-    spacing: types.Spacing3D) -> types.Size3D:
+    spacing: types.ImageSpacing3D) -> types.ImageSize3D:
     size_mm = getattr(RegionPatchSizes, region)
     size = tuple(np.round(np.array(size_mm) / spacing).astype(int))
     return size

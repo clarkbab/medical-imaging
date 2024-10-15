@@ -8,8 +8,8 @@
 #SBATCH --mem 128G
 ##SBATCH --mem 120G
 #SBATCH --gres gpu:1
-#SBATCH --cpus-per-gpu 8
-#SBATCH --time 7-00:00:00
+##SBATCH --cpus-per-gpu 8
+#SBATCH --time 0-06:00:00
 ##SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
@@ -20,10 +20,9 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-IMGPATH="/data/gpfs/projects/punim1413/mymi/datasets/nifti/L2R-LUNG-CT-TRAIN-NORM/voxelmorph-index.csv"
-MODELPATH="/data/gpfs/projects/punim1413/mymi/models/voxelmorph/L2R_LUNG_CT_NORM"
-VMXPATH="/home/baclark/code/voxelmorph"
+DATASET="L2R-LUNG-CT-TRAIN"
 
-command="python $VMXPATH/scripts/torch/train.py --gpu 0 --img-list $IMGPATH --model-dir $MODELPATH"
+command="python $MYMI_CODE/scripts/predict/totalseg/predict.py \
+    --dataset $DATASET"
 echo $command
 eval $command

@@ -14,7 +14,7 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-DATASET="PMCC-HN-REPLAN"
+DATASET="PMCC-HN-REPLAN-112"
 REGION="['Bone_Mandible','BrachialPlex_L','BrachialPlex_R','Brain','Brainstem','Cavity_Oral','Cochlea_L','Cochlea_R','Esophagus_S','Eye_L','Eye_R','GTVp','Glnd_Submand_L','Glnd_Submand_R','Glottis','Larynx','Lens_L','Lens_R','Musc_Constrict','OpticChiasm','OpticNrv_L','OpticNrv_R','Parotid_L','Parotid_R','SpinalCord']"
 LOAD_ALL_SAMPLES=True
 N_FOLDS=5

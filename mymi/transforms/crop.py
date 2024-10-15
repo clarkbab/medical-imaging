@@ -2,7 +2,8 @@ import numpy as np
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from mymi.geometry import get_box
-from mymi.types import Box2D, Box3D, Size3D, Point2D, Point3D
+from mymi import logging
+from mymi.types import Box2D, Box3D, ImageSize3D, Point2D, Point3D
 
 def crop_or_pad_2D(
     data: np.ndarray,
@@ -39,12 +40,45 @@ def crop_or_pad_4D(
     data: np.ndarray,
     bounding_box: Box3D,
     **kwargs: Dict[str, Any]) -> np.ndarray:
+    # Iterate over channel dimension, and use 3D code.
     ds = []
     for d in data:
         d = crop_or_pad_3D(d, bounding_box, **kwargs)
         ds.append(d)
     output = np.stack(ds, axis=0)
     return output
+
+def crop_or_pad_vector_3D(
+    data: np.ndarray,   # (3, X, Y, Z)
+    bounding_box: Box3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    if fill == 'min':
+        fill = np.min(data)
+    assert len(data.shape) == 4, f"Input 'data' must have dimension 4."
+
+    min, max = bounding_box
+    for i in range(3):
+        width = max[i] - min[i]
+        if width <= 0:
+            raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
+
+    # Perform padding.
+    original_size_3D = np.array(data.shape[1:])
+    pad_min = (-np.array(min)).clip(0)
+    pad_max = (max - original_size_3D).clip(0)
+    padding = list(zip(pad_min, pad_max))
+    padding = tuple([(0, 0)] + padding)
+    data = np.pad(data, padding, constant_values=fill)
+
+    # Perform cropping.
+    padded_size_3D = data.shape[1:]    # Will have changed after padding.
+    crop_min = np.array(min).clip(0)
+    crop_max = (original_size_3D - max).clip(0)
+    slices = list(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, padded_size_3D))
+    slices = tuple([slice(None)] + slices)
+    data = data[slices]
+
+    return data
 
 def crop_or_pad_3D(
     data: np.ndarray,
@@ -77,7 +111,7 @@ def crop_or_pad_3D(
 
 def centre_pad_4D(
     data: np.ndarray,
-    size: Size3D) -> np.ndarray:
+    size: ImageSize3D) -> np.ndarray:
     ds = []
     for d in data:
         d = centre_pad_3D(d, size)
@@ -87,7 +121,7 @@ def centre_pad_4D(
 
 def centre_pad_3D(
     data: np.ndarray,
-    size: Size3D) -> np.ndarray:
+    size: ImageSize3D) -> np.ndarray:
     # Determine padding amounts.
     to_pad = np.array(size) - data.shape
     box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
@@ -101,7 +135,7 @@ def centre_pad_3D(
 
 def centre_crop_3D(
     data: np.ndarray,
-    size: Size3D) -> np.ndarray:
+    size: ImageSize3D) -> np.ndarray:
     # Determine cropping/padding amounts.
     to_crop = data.shape - np.array(size)
     box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
@@ -118,20 +152,15 @@ def pad_2D(
     bounding_box: Box2D,
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     assert len(data.shape) == 2, f"Input 'data' must have dimension 2."
-    fill = np.min(data) if fill == 'min' else fill
+    # Convert args to 3D.
+    data = np.expand_dims(data, axis=2)
+    bounding_box = tuple((x, y, z) for (x, y), z in zip(bounding_box, (0, 1)))
 
-    min, max = bounding_box
-    for i in range(2):
-        width = max[i] - min[i]
-        if width <= 0:
-            raise ValueError(f"Pad width must be positive, got '{bounding_box}'.")
+    # Use 3D code.
+    data = pad_3D(data, bounding_box)
 
-    # Perform padding.
-    size = np.array(data.shape)
-    pad_min = (-np.array(min)).clip(0)
-    pad_max = (max - size).clip(0)
-    padding = tuple(zip(pad_min, pad_max))
-    data = np.pad(data, padding, constant_values=fill)
+    # Remove final dimension.
+    data = np.squeeze(data, axis=2)
 
     return data
 
@@ -141,6 +170,15 @@ def pad_3D(
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
     fill = np.min(data) if fill == 'min' else fill
+
+    # Check box coordinates.
+    min, max = bounding_box
+    for m in min:
+        if m > 0:
+            raise ValueError(f"Pad box must have min coordinates <= 0. Got '{bounding_box}'.")
+    for m, d in zip(max, data.shape):
+        if m < d:
+            raise ValueError(f"Pad box must have max coordinates >= data shape. Got '{bounding_box}' for data shape '{data.shape}'.")
 
     min, max = bounding_box
     for i in range(3):
@@ -172,10 +210,34 @@ def crop_3D(
     data: np.ndarray,
     bounding_box: Box3D) -> np.ndarray:
     assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
+    assert len(bounding_box[0]) == 3, f"Input 'bounding_box' must have dimension 3."
+    assert len(bounding_box[1]) == 3, f"Input 'bounding_box' must have dimension 3."
 
+    # Replace 'None' values.
     min, max = bounding_box
+    min, max = list(min), list(max)
     for i in range(3):
-        width = max[i] - min[i]
+        if min[i] is None:
+            min[i] = 0
+        if max[i] is None:
+            max[i] = data.shape[i]
+    min, max = tuple(min), tuple(max)
+
+    # Check box coordinates.
+    for m, d in zip(min, data.shape):
+        if m < 0:
+            raise ValueError(f"Crop box must have min coordinates >= 0. Got '{bounding_box}'.")
+        if m >= d:
+            raise ValueError(f"Crop box must have min coordinates < data shape. Got '{bounding_box}' for data shape '{data.shape}'.")
+    for m, d in zip(max, data.shape):
+        if m <= 0:
+            raise ValueError(f"Crop box must have max coordinates > 0. Got '{bounding_box}'.")
+        if m > d:
+            raise ValueError(f"Crop box must have max coordinates <= data shape. Got '{bounding_box}' for data shape '{data.shape}'.")
+
+    # Check box width.
+    for min_i, max_i in zip(min, max):
+        width = max_i - min_i
         if width <= 0:
             raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
 
@@ -190,7 +252,7 @@ def crop_3D(
 
 def crop_4D(
     data: np.ndarray,
-    size: Size3D,
+    size: ImageSize3D,
     **kwargs: Dict[str, Any]) -> np.ndarray:
     ds = []
     for d in data:
@@ -201,15 +263,34 @@ def crop_4D(
 
 def crop_foreground_3D(
     data: np.ndarray,
-    crop: Box3D) -> np.ndarray:
-    cropped = np.zeros_like(data)
+    crop: Box3D,
+    background: Union[Literal['min'], float] = 'min') -> np.ndarray:
+    if background == 'min':
+        background = np.min(data)
+    cropped = np.ones_like(data) * background
     slices = tuple(slice(min, max) for min, max in zip(*crop))
     cropped[slices] = data[slices]
     return cropped
 
+def centre_crop_or_pad_vector_3D(
+    data: np.ndarray,   # (3, X, Y, Z)
+    size: ImageSize3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    # Determine cropping/padding amounts.
+    size_3D = data.shape[1:]
+    to_crop = size_3D - np.array(size)
+    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
+
+    # Perform crop or padding.
+    output = crop_or_pad_vector_3D(data, bounding_box, fill=fill)
+
+    return output
+
 def centre_crop_or_pad_3D(
     data: np.ndarray,
-    size: Size3D,
+    size: ImageSize3D,
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Determine cropping/padding amounts.
     to_crop = data.shape - np.array(size)
@@ -224,7 +305,7 @@ def centre_crop_or_pad_3D(
 
 def centre_crop_or_pad_4D(
     data: np.ndarray,
-    size: Size3D,
+    size: ImageSize3D,
     **kwargs: Dict[str, Any]) -> np.ndarray:
     ds = []
     for d in data:
@@ -235,7 +316,7 @@ def centre_crop_or_pad_4D(
 
 def top_crop_or_pad_3D(
     data: np.ndarray,
-    size: Size3D,
+    size: ImageSize3D,
     fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
     # Centre crop x/y axes.
     to_crop = data.shape[:2] - np.array(size[:2])
@@ -254,7 +335,7 @@ def top_crop_or_pad_3D(
 
 def point_crop_or_pad_3D(
     data: np.ndarray,
-    size: Size3D,
+    size: ImageSize3D,
     point: Point3D,
     fill: Union[float, Literal['min']] = 'min',
     return_box: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, Box3D]]:

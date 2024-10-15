@@ -11,18 +11,18 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
 from mymi.regions import region_to_list
 from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_3D, pad_3D, resample
-from mymi.types import Spacing3D, Model, ModelName, PatientRegions
+from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegions
 from mymi.utils import arg_to_list
 
 def get_multi_segmenter_heatmap(
     input: np.ndarray,
-    input_spacing: Spacing3D,
+    input_spacing: ImageSpacing3D,
     model: Union[Model, ModelName],
     model_region: PatientRegions,
-    model_spacing: Spacing3D,
+    model_spacing: ImageSpacing3D,
     target_region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[Spacing3D, List[Spacing3D]],
+    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     brain_label: Optional[np.ndarray] = None,
     device: torch.device = torch.device('cpu'),
     heatmap_fill: float = -1,

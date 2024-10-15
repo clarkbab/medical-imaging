@@ -21,11 +21,15 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-IMGPATH="/data/gpfs/projects/punim1413/mymi/datasets/nifti/L2R-LUNG-CT-CROP-TRAIN/voxelmorph-index-seg.csv"
-IMGPREFIX="/data/gpfs/projects/punim1413/mymi/datasets/nifti/L2R-LUNG-CT-CROP-TRAIN/data/ct/"
-SEGPREFIX="/data/gpfs/projects/punim1413/mymi/datasets/nifti/L2R-LUNG-CT-CROP-TRAIN/data/regions/Lung/"
-LABELPATH="/data/gpfs/projects/punim1413/mymi/datasets/nifti/L2R-LUNG-CT-CROP-TRAIN/voxelmorph-index-seg-labels.npy"
-MODELPATH="/data/gpfs/projects/punim1413/mymi/models/voxelmorph/L2R_LUNG_CT_CROP_SEG"
+DATASET="L2R-LUNG-CT-CROP-TRAIN"
+MODEL="L2R_LUNG_CT_CROP_SEG_LUNG"
+IMGPATH="/data/gpfs/projects/punim1413/mymi/datasets/nifti/$DATASET/voxelmorph-index-seg-lung.csv"
+IMGPREFIX="/data/gpfs/projects/punim1413/mymi/datasets/nifti/$DATASET/data/voxelmorph/ct/"
+IMGSUFFIX=".nii.gz"
+SEGPREFIX="/data/gpfs/projects/punim1413/mymi/datasets/nifti/$DATASET/data/regions/Lung/"
+SEGSUFFIX=".nii.gz"
+LABELPATH="/data/gpfs/projects/punim1413/mymi/datasets/nifti/$DATASET/voxelmorph-index-labels-seg-lung.npy"
+MODELPATH="/data/gpfs/projects/punim1413/mymi/models/voxelmorph/$MODEL"
 VMXPATH="/home/baclark/code/voxelmorph"
 
 command="python $VMXPATH/scripts/tf/train_semisupervised_seg.py \
@@ -34,8 +38,8 @@ command="python $VMXPATH/scripts/tf/train_semisupervised_seg.py \
     --img-list $IMGPATH \
     --img-prefix $IMGPREFIX \
     --seg-prefix $SEGPREFIX \
-    --img-suffix ".nii.gz" \
-    --seg-suffix ".nii.gz" \
+    --img-suffix $IMGSUFFIX \
+    --seg-suffix $SEGSUFFIX \
     --labels $LABELPATH \
     --model-dir $MODELPATH"
 echo $command

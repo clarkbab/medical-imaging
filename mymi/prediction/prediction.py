@@ -11,10 +11,10 @@ from mymi import types
 
 def get_localiser_prediction(
     input: np.ndarray,
-    spacing: types.Spacing3D,
+    spacing: types.ImageSpacing3D,
     localiser: types.Model,
-    loc_size: types.Size3D = (128, 128, 150),
-    loc_spacing: types.Spacing3D = (4, 4, 4),
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load gpu if available.
     if device is None:
@@ -69,10 +69,10 @@ def get_localiser_prediction(
 
 def get_localiser_prediction_at_training_resolution(
     input: np.ndarray,
-    spacing: types.Spacing3D,
+    spacing: types.ImageSpacing3D,
     localiser: types.Model,
-    loc_size: types.Size3D = (128, 128, 150),
-    loc_spacing: types.Spacing3D = (4, 4, 4),
+    loc_size: types.ImageSize3D = (128, 128, 150),
+    loc_spacing: types.ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load gpu if available.
     if device is None:

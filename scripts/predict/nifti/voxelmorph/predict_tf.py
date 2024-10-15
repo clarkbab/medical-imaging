@@ -26,9 +26,9 @@ VMXPATH="/home/baclark/code/voxelmorph"
 def predict(
     dataset: str,
     model: str,
-    labels_only: bool = False,
+    modelname: str,
+    register_images: bool = True,
     region: Optional[PatientRegions] = None) -> None:
-    modelname = model.split('/')[0]
     modelpath = os.path.join(config.directories.models, 'voxelmorph', model)
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'voxelmorph-index-paired.csv')
@@ -37,22 +37,24 @@ def predict(
     lines = [l.strip() for l in lines]
     lines = [l.split(' ') for l in lines]
 
-    if not labels_only:
+    if register_images:
         os.makedirs(os.path.join(set.path, 'predictions', modelname, 'ct'), exist_ok=True)
         logging.info('Making predictions...')
         for movingpath, fixedpath in tqdm(lines):
             movedpath = os.path.join(set.path, 'predictions', modelname, 'ct', os.path.basename(movingpath))
             warppath = os.path.join(set.path, 'predictions', modelname, 'ct', os.path.basename(movingpath).replace('.nii.gz', '_warp.nii.gz'))
             # Call voxelmorph script.
-            subprocess.run([
-                'python', os.path.join(VMXPATH, 'scripts', 'tf', 'register.py'),
+            command = [
+                'python', os.path.join(VMXPATH, 'scripts', 'tf', 'register_semisupervised_seg.py'),
                 '--moving', movingpath,
                 '--fixed', fixedpath,
                 '--moved', movedpath,
                 '--warp', warppath,
                 '--model', modelpath,  
                 '--gpu', '0'
-            ]) 
+            ] 
+            logging.info(command)
+            subprocess.run(command)
 
     # Apply warp to any segmentation labels.
     regions = region_to_list(region)
@@ -63,7 +65,7 @@ def predict(
         # Create warper layer.
         labelpath = os.path.join(set.path, 'data', 'regions', regions[0], os.path.basename(lines[0][0]))
         label = nib.load(labelpath).get_fdata()
-        warper = SpatialTransformer(interp_method='bilinear')
+        warper = SpatialTransformer(interp_method='linear')
 
         for movingpath, fixedpath in tqdm(lines):
             # Load the warp. Make it so.
@@ -73,9 +75,15 @@ def predict(
             # Load labels, apply warp and save. 
             for region in regions:
                 labelpath = os.path.join(set.path, 'data', 'regions', region, os.path.basename(movingpath))
+                logging.info(labelpath)
                 label = nib.load(labelpath).get_fdata()
-                warped = warper(tf.Tensor(label).unsqueeze(0).unsqueeze(0), tf.Tensor(warp).unsqueeze(0))
-                warped = warped.squeeze().squeeze().detach().numpy()
+                # Label requires channel dimension last - tensorflow default.
+                label = tf.expand_dims(tf.expand_dims(tf.convert_to_tensor(label), 0), -1)
+                warp = tf.expand_dims(tf.convert_to_tensor(warp), 0)
+                warped = warper([label, warp])
+                logging.info(warped.shape)
+                warped = tf.squeeze(tf.squeeze(warped, 0), -1).numpy()
+                logging.info(warped.shape)
                 warpedpath = os.path.join(set.path, 'predictions', modelname, 'regions', region, os.path.basename(movingpath))
                 os.makedirs(os.path.dirname(warpedpath), exist_ok=True)
                 nib.save(nib.Nifti1Image(warped, np.eye(4)), warpedpath)

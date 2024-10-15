@@ -4,7 +4,7 @@ from typing import Optional, Union
 from mymi import types
 
 def create_cylinder(
-    img_size: types.Size3D,
+    img_size: types.ImageSize3D,
     centre: Optional[types.PointMM3D] = None,
     height: Optional[float] = None,
     radius: Optional[float] = None) -> np.ndarray:
@@ -29,7 +29,7 @@ def create_cylinder(
     return img
 
 def create_n_sphere(
-    img_size: Union[types.Size2D, types.Size3D],
+    img_size: Union[types.ImageSize2D, types.ImageSize3D],
     centre: Optional[Union[types.PointMM2D, types.PointMM3D]] = None,
     radius: Optional[float] = None) -> np.ndarray:
     # Default to middle of image.

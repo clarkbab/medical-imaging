@@ -157,8 +157,8 @@ def convert_to_training(
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
-    output_size: Optional[types.Size3D] = None,
-    output_spacing: Optional[types.Spacing3D] = None,
+    output_size: Optional[types.ImageSize3D] = None,
+    output_spacing: Optional[types.ImageSpacing3D] = None,
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
     training_dataset: Optional[str] = None) -> None:

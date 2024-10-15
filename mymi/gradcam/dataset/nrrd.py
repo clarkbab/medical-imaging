@@ -7,7 +7,7 @@ from mymi import config
 from mymi.dataset import NRRDDataset
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.types import Spacing3D, ModelName, PatientIDs, PatientRegions
+from mymi.types import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
@@ -17,10 +17,10 @@ def create_heatmap(
     pat_id: str,
     model: ModelName,
     model_region: PatientRegions,
-    model_spacing: Spacing3D,
+    model_spacing: ImageSpacing3D,
     region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[Spacing3D, List[Spacing3D]],
+    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     device: torch.device = torch.device('cpu'),
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
     logging.arg_log('Creating heatmap', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'region', 'layer', 'layer_spacing'), (dataset, pat_id, model, model_region, model_spacing, region, layer, layer_spacing))
@@ -57,10 +57,10 @@ def get_heatmap(
     pat_id: str,
     model: ModelName,
     model_region: PatientRegions,
-    model_spacing: Spacing3D,
+    model_spacing: ImageSpacing3D,
     region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[Spacing3D, List[Spacing3D]],
+    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     device: torch.device = torch.device('cpu'),
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
 

@@ -6,12 +6,12 @@ from mymi import types
 
 def volume(
     a: np.ndarray,
-    spacing: types.Spacing3D) -> float:
+    spacing: types.ImageSpacing3D) -> float:
     if a.dtype != np.bool_:
         raise ValueError(f"Metric 'volume' expects boolean array. Got '{a.dtype}'.")
 
     # Calculate volume.
-    voxel_vol = np.product(spacing)
+    voxel_vol = np.prod(spacing)
     n_voxels = a.sum()
     vol = n_voxels * voxel_vol
 

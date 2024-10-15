@@ -2,7 +2,7 @@
 
 # module load tensorflow/2.6.0-python-3.8.6
 
-import tensorflow as tf
+# import tensorflow as tf
 
 input_shape = (1, 362, 370, 251, 64)
 x = tf.random.normal(input_shape)

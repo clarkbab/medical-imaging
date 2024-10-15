@@ -6,13 +6,14 @@ from mymi import dataset as ds
 from mymi.dataset import NiftiDataset
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi import logging
-from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
+from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_landmark_predictions, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import region_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.types import Box2D, Spacing3D, ModelName, PatientID, PatientRegions
+from mymi.types import Box2D, ImageSpacing3D, ModelName, PatientID, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotter import plot_heatmap as plot_heatmap_base
+from ..plotter import plot_landmarks as plot_landmarks_base
 from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
 from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
@@ -74,7 +75,7 @@ def plot_heatmap(
                     pred_data_centre_of = pred_data
                 centre_of = pred_data_centre_of[region_centre_of]
                 if centre_of.sum() == 0:
-                    raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
+                    raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'idx' instead.")
             elif region_data is None or centre_of not in region_data:
                 centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -87,12 +88,14 @@ def plot_heatmap(
     plot_id = f"{dataset}:{pat_id}"
     plot_heatmap_base(plot_id, heatmap, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, pred_data=pred_data, region_data=region_data, **kwargs)
 
-def plot_patient(
+def plot_landmarks(
     dataset: str,
     pat_id: str,
     centre_of: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
+    model: Optional[str] = None,
     region: Optional[PatientRegions] = None,
+    region_ignore_missing: bool = True,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     show_dose: bool = False,
     **kwargs) -> None:
@@ -101,7 +104,68 @@ def plot_patient(
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
-    region_data = pat.region_data(region=region, **kwargs) if region is not None else None
+    region_data = pat.region_data(region=region, region_ignore_missing=region_ignore_missing, **kwargs) if region is not None else None
+    spacing = pat.ct_spacing
+    dose_data = pat.dose_data if show_dose else None
+
+    # Load landmarks.
+    landmarks = pat.landmarks
+
+    # Load model landmarks.
+    if model is not None:
+        model_landmarks = load_landmark_predictions(dataset, pat_id, model)
+    else:
+        model_landmarks = None
+
+    if centre_of is not None:
+        if type(centre_of) == str:
+            if region_data is None or centre_of not in region_data:
+                centre_of = pat.region_data(region=centre_of)[centre_of]
+
+    if crop is not None:
+        if type(crop) == str:
+            if region_data is None or crop not in region_data:
+                crop = pat.region_data(region=crop)[crop]
+
+    if region_label is not None:
+        # Rename regions.
+        for old, new in region_label.items():
+            region_data[new] = region_data.pop(old)
+
+        # Rename 'centre_of' and 'crop' keys.
+        if type(centre_of) == str and centre_of in region_label:
+            centre_of = region_label[centre_of] 
+        if type(crop) == str and crop in region_label:
+            crop = region_label[crop]
+
+    # Plot.
+    plot_id = f"{dataset}:{pat_id}"
+    okwargs = dict(
+        centre_of=centre_of,
+        crop=crop,
+        ct_data=ct_data,
+        dose_data=dose_data,
+        model_landmarks=model_landmarks,
+        region_data=region_data
+    )
+    plot_landmarks_base(plot_id, ct_data.shape, spacing, landmarks, **okwargs, **kwargs)
+
+def plot_patient(
+    dataset: str,
+    pat_id: str,
+    centre_of: Optional[str] = None,
+    crop: Optional[Union[str, Box2D]] = None,
+    region: Optional[PatientRegions] = None,
+    region_ignore_missing: bool = True,
+    region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
+    show_dose: bool = False,
+    **kwargs) -> None:
+
+    # Load data.
+    set = NiftiDataset(dataset)
+    pat = set.patient(pat_id)
+    ct_data = pat.ct_data
+    region_data = pat.region_data(region=region, region_ignore_missing=region_ignore_missing, **kwargs) if region is not None else None
     spacing = pat.ct_spacing
     dose_data = pat.dose_data if show_dose else None
 
@@ -325,13 +389,13 @@ def plot_adaptive_segmenter_prediction(
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
     model_label: Union[str, List[str]] = None,
-    model_spacing: Optional[Spacing3D] = None,
+    model_spacing: Optional[ImageSpacing3D] = None,
     n_epochs: Optional[int] = None,
     pred_label: Union[str, List[str]] = None,
     pred_region: Optional[Union[str, List[str]]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
-    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
@@ -419,7 +483,7 @@ def plot_adaptive_segmenter_prediction(
             centre_of_tmp = centre_of
             centre_of = pred_data[p_label]
             if centre_of.sum() == 0:
-                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
+                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'idx' instead.")
         elif region_data is None or centre_of not in region_data:
             centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -468,12 +532,12 @@ def plot_multi_segmenter_prediction(
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
     model_label: Union[str, List[str]] = None,
-    model_spacing: Optional[Spacing3D] = None,
+    model_spacing: Optional[ImageSpacing3D] = None,
     n_epochs: Optional[int] = None,
     pred_region: Optional[PatientRegions] = None,
     region: Optional[PatientRegions] = None,
     region_label: Optional[Union[str, List[str]]] = None,
-    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
     show_ct: bool = True,
     **kwargs) -> None:
     models = arg_to_list(model, tuple)
@@ -564,7 +628,7 @@ def plot_multi_segmenter_prediction(
                 raise ValueError(f"Requested 'centre_of={centre_of_tmp}' not found in prediction data.")
             centre_of = pred_data[label]
             if centre_of.sum() == 0:
-                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'z' instead.")
+                raise ValueError(f"Got empty prediction for 'centre_of={centre_of_tmp}, please provide 'idx' instead.")
         elif region_data is None or centre_of not in region_data:
             centre_of = pat.region_data(region=centre_of)[centre_of]
 
@@ -620,7 +684,7 @@ def plot_segmenter_prediction(
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
     show_ct: bool = True,
-    seg_spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 2),
+    seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
     **kwargs) -> None:
     localisers = arg_to_list(localiser, tuple)
     segmenters = arg_to_list(segmenter, tuple)

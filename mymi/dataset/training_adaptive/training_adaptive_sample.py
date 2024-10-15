@@ -1,5 +1,5 @@
 from numpy.lib.arraysetops import intersect1d
-from mymi.types import Size3D, Spacing3D, PatientRegions
+from mymi.types import ImageSize3D, ImageSpacing3D, PatientRegions
 import numpy as np
 import os
 import pandas as pd
@@ -141,11 +141,11 @@ class TrainingAdaptiveSample:
         return (record['origin-dataset'], record['origin-patient-id'])
 
     @property
-    def size(self) -> Size3D:
+    def size(self) -> ImageSize3D:
         return self.input.shape
 
     @property
-    def spacing(self) -> Spacing3D:
+    def spacing(self) -> ImageSpacing3D:
         return self.__spacing
 
     def list_input_regions(

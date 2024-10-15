@@ -781,6 +781,95 @@ def create_plan_labels_report(dataset: str) -> None:
     filepath = os.path.join(nifti_set.path, 'reports', 'plan-labels.csv')
     index.to_csv(filepath, index=False)
 
+def create_totalseg_prediction_figures(dataset: str) -> None:
+    # We just saved totalseg predictions as regions in the NiFTi dataset because the names
+    # didn't overlap with nay existing regions.
+    logging.info(f"Creating totalseg prediction figures for dataset '{dataset}'.")
+
+    # Set PDF margins.
+    img_t_margin = 35
+    img_l_margin = 5
+    img_width = 180
+    img_height = 200
+
+    # Create PDF.
+    pdf = FPDF()
+    pdf.set_section_title_styles(
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=24,
+            color=0,
+            t_margin=3,
+            l_margin=12,
+            b_margin=0
+        ),
+        TitleStyle(
+            font_family='Times',
+            font_style='B',
+            font_size_pt=18,
+            color=0,
+            t_margin=16,
+            l_margin=12,
+            b_margin=0
+        )
+    ) 
+
+    # Load patients.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients()
+
+    centre_regions = [
+        'SpinalCord',
+        'Spinal_Cord'
+    ]
+
+    # Add images.
+    pat_ids = pat_ids[:1]
+    for pat_id in tqdm(pat_ids):
+        # Get centre region.
+        pat = set.patient(pat_id)
+        centre = None
+        for r in centre_regions:
+            if pat.has_region(r):
+                centre = r
+                break
+        if centre is None:
+            raise ValueError(f"Patient '{pat_id}' doesn't have one of the required regions: {centre_regions}. Please choose from: {pat.list_regions()}.")
+
+        # Add patient.
+        pdf.add_page()
+        pdf.start_section(f'{dataset} - {pat_id}')
+
+        # Create images.
+        # views = list(range(3))
+        views = [1]
+        img_coords = (
+            (img_l_margin, img_t_margin),
+            # (img_l_margin + img_width, img_t_margin),
+            # (img_l_margin, img_t_margin + img_height)
+        )
+        for view, page_coord in zip(views, img_coords):
+            # Add image to report.
+            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            kwargs = dict(
+                centre_of=centre,
+                region='all',
+                savepath=filepath,
+                show=False,
+                show_legend=True,
+                view=view,
+                window='bone'
+            )
+            plot_patient(dataset, pat_id, **kwargs)
+            pdf.image(filepath, *page_coord, w=img_width, h=img_height)
+            os.remove(filepath)
+
+    # Save PDF.
+    filepath = os.path.join(set.path, 'reports', 'region-figures', 'totalseg.pdf')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    pdf.output(filepath, 'F')
+
 def create_multi_segmenter_prediction_figures(
     dataset: str,
     region: str,

@@ -14,8 +14,8 @@ def get_sample_localiser_prediction(
     dataset: str,
     sample_idx: str,
     localiser: types.Model,
-    loc_size: types.Size3D,
-    loc_spacing: types.Spacing3D,
+    loc_size: types.ImageSize3D,
+    loc_spacing: types.ImageSpacing3D,
     device: Optional[torch.device] = None) -> None:
     # Load data.
     set = ds.get(dataset, 'training')
