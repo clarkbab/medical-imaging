@@ -9,7 +9,7 @@ from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_3D, pad_3D, resample
 from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegions
 from mymi.utils import arg_to_list
@@ -33,13 +33,13 @@ def get_multi_segmenter_heatmap(
     layer_spacings = arg_to_list(layer_spacing, tuple)
     if len(layers) != len(layer_spacings):
         raise ValueError(f"'layer' and 'layer_spacings' must have same number of elements. Got {len(layers)} and {len(layer_spacings)} respectively.")
-    model_regions = region_to_list(model_region)
+    model_regions = regions_to_list(model_region)
     target_channel = model_regions.index(target_region) + 1
 
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, **kwargs)
+        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 
@@ -103,6 +103,12 @@ def get_multi_segmenter_heatmap(
             (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
         )
 
+        # Threshold crop values.
+        min, max = crop
+        min = tuple((np.max((m, 0)) for m in min))
+        max = tuple((np.min((m, s)) for m, s in zip(max, input_size_after_resample)))
+        crop = (min, max)
+
         # Crop input.
         input = crop_3D(input, crop)
     else:
@@ -123,6 +129,12 @@ def get_multi_segmenter_heatmap(
     input = input.to(device)
     pred = model(input)
     pred = pred.squeeze(0)          # Remove 'batch' dimension.
+    
+    # Check that 'softmax' hasn't been applied. See Grad-CAM paper.
+    # Turn off for now...
+    # voxel_sum = pred[:, 0, 0, 0].sum()
+    # if voxel_sum == 1:
+    #     raise ValueError("Softmax has (most likely) been applied to model output, as voxel sums to 1. In the unlikely (?) event of this occurring when summing logits, comment me out.")
 
     # TODO: remove.
     if save_tmp_files:
@@ -141,10 +153,12 @@ def get_multi_segmenter_heatmap(
     if save_tmp_files:
         filepath = os.path.join('/data/gpfs/projects/punim1413/mymi/tmp/heatmaps', f'{model.name[1]}-{kwargs["id"]}-{target_region}-pred-region-bin.npz')
         np.savez_compressed(filepath, data=pred_region_bin.detach().cpu().numpy())
-    y = pred_region[pred_region_bin].sum()
 
     # Perform backward pass.
+    # Sum all foreground "logits" for the class of interest.
+    # Foreground was determined previously using thresholding.
     logging.info('backward pass')
+    y = pred_region[pred_region_bin].sum()
     y.backward()
 
     # Get heatmaps.

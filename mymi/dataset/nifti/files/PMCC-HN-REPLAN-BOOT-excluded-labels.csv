@@ -1,0 +1,41 @@
+patient-id,region,comment
+3-0,Bone_Mandible,"missing slices,not interpolable"
+1-0,Cavity_Oral,missing slices
+100-0,Cavity_Oral,missing region
+102-1,Cavity_Oral,added region
+105-0,Cavity_Oral,missing region
+105-1,Cavity_Oral,missing region
+11-0,Cavity_Oral,"missing region,added region"
+11-1,Cavity_Oral,"missing region,added region"
+12-0,Cavity_Oral,missing region
+12-1,Cavity_Oral,missing region
+13-0,Cavity_Oral,missing region
+13-1,Cavity_Oral,missing region
+24-0,Cavity_Oral,missing region
+24-1,Cavity_Oral,missing region
+27-0,Cavity_Oral,missing slices
+27-1,Cavity_Oral,missing slices
+28-0,Cavity_Oral,"missing region,added region"
+28-1,Cavity_Oral,"missing region,added region"
+30-0,Cavity_Oral,missing region
+30-1,Cavity_Oral,missing region
+34-1,Cavity_Oral,missing region
+35-1,Cavity_Oral,missing slices
+37-0,Cavity_Oral,missing region
+37-1,Cavity_Oral,missing region
+45-0,Cavity_Oral,missing slices
+45-1,Cavity_Oral,missing slices
+51-0,Cavity_Oral,missing slices
+51-1,Cavity_Oral,missing slices
+62-0,Cavity_Oral,missing slices
+62-1,Cavity_Oral,missing slices
+82-0,Cavity_Oral,missing region
+82-1,Cavity_Oral,missing region
+87-0,Cavity_Oral,missing region
+91-0,Cavity_Oral,added region
+91-1,Cavity_Oral,added region
+93-0,Cavity_Oral,missing region
+93-1,Cavity_Oral,missing region
+95-0,Cavity_Oral,missing slices
+99-0,Cavity_Oral,missing region
+99-1,Cavity_Oral,missing region

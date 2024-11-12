@@ -29,6 +29,12 @@ from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 8
 
+def plot_histogram(data: List[np.ndarray]) -> None:
+    data = [d.flatten() for d in data]
+    data = np.concatenate(data)
+    plt.hist(data, bins=100)
+    plt.show()
+
 def __plot_region_data(
     data: Dict[str, np.ndarray],
     idx: int,
@@ -39,7 +45,7 @@ def __plot_region_data(
     view: Axis,
     ax = None,
     cca: bool = False, connected_extent: bool = False,
-    colour: Optional[Union[str, List[str]]] = None,
+    colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Box2D] = None,
     linestyle: str = 'solid',
     legend_show_all_regions: bool = False,
@@ -47,10 +53,10 @@ def __plot_region_data(
     __assert_view(view)
 
     regions = list(data.keys()) 
-    if colour is None:
+    if colours is None:
         colours = sns.color_palette('colorblind', n_colors=len(regions))
     else:
-        colours = arg_to_list(colour, (str, tuple))
+        colours = arg_to_list(colours, (str, tuple))
 
     if not ax:
         ax = plt.gca()
@@ -269,11 +275,9 @@ def __escape_latex(text: str) -> str:
     regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(char_map.keys(), key = lambda item: - len(item))))
     return regex.sub(lambda match: char_map[match.group()], text)
 
-def __assert_data(
-    ct_data: Optional[np.ndarray],
-    region_data: Optional[Dict[str, np.ndarray]]):
-    if ct_data is None and region_data is None:
-        raise ValueError(f"Either 'ct_data' or 'region_data' must be set.")
+def __assert_dataframe(data: pd.DataFrame) -> None:
+    if len(data) == 0:
+        raise ValueError("Dataframe is empty.")
 
 def __assert_data_type(
     name: str,
@@ -288,13 +292,13 @@ def __assert_data_type(
                 raise ValueError(f"Data {name} must be of type '{dtype}', got '{value.dtype}' for key '{key}'.")
 
 def __assert_idx(
-    centre_of: Optional[int],
+    centre: Optional[int],
     extent_of: Optional[Tuple[str, bool]],
     idx: Optional[float]) -> None:
-    if centre_of is None and extent_of is None and idx is None:
-        raise ValueError(f"Either 'centre_of', 'extent_of' or 'idx' must be set.")
-    elif (centre_of is not None and extent_of is not None) or (centre_of is not None and idx is not None) or (extent_of is not None and idx is not None):
-        raise ValueError(f"Only one of 'centre_of', 'extent_of' or 'idx' can be set.")
+    if centre is None and extent_of is None and idx is None:
+        raise ValueError(f"Either 'centre', 'extent_of' or 'idx' must be set.")
+    elif (centre is not None and extent_of is not None) or (centre is not None and idx is not None) or (extent_of is not None and idx is not None):
+        raise ValueError(f"Only one of 'centre', 'extent_of' or 'idx' can be set.")
 
 def __assert_landmark(
     landmark_idx: Optional[Union[int, List[int]]],
@@ -316,7 +320,7 @@ def plot_heatmap(
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
@@ -335,11 +339,10 @@ def plot_heatmap(
     show_colorbar: bool = True,
     show_legend: bool = True,
     show_pred_boundary: bool = True,
-    show_region_extent: bool = True,
     idx: Optional[int] = None,
     view: Axis = 0, 
     **kwargs) -> None:
-    __assert_idx(centre_of, extent_of, z)
+    __assert_idx(centre, extent_of, idx)
 
     # Create plot figure/axis.
     if ax is None:
@@ -356,9 +359,9 @@ def plot_heatmap(
             'text.usetex': True
         })
 
-    if centre_of is not None:
+    if centre is not None:
         # Get 'idx' at centre of data.
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+        label = region_data[centre] if type(centre) == str else centre
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -371,7 +374,7 @@ def plot_heatmap(
 
     # Plot patient regions.
     size = heatmap.shape
-    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, idx=idx, view=view, **kwargs)
+    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -463,7 +466,7 @@ def plot_landmarks(
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
     cca: bool = False,
-    centre_of: Optional[Union[Union[str, List[str]], np.ndarray]] = None,             # Uses 'region_data' if 'str' (or 'List[str]'), else uses 'np.ndarray'.
+    centre: Optional[Union[Union[str, List[str]], np.ndarray]] = None,             # Uses 'region_data' if 'str' (or 'List[str]'), else uses 'np.ndarray'.
     colour: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_centre_mm: Optional[Tuple[float, float]] = None,
@@ -510,7 +513,7 @@ def plot_landmarks(
     view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
     **kwargs) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     __assert_landmark(landmark_idx, n_landmarks)
     __assert_view(view)
 
@@ -538,22 +541,22 @@ def plot_landmarks(
         idx = int(np.floor(idx * size[view]))
 
     # Get idx at centre of label.
-    if centre_of is not None:
-        # Choose the first available region for 'centre_of'.
-        if isinstance(centre_of, list):
-            centre_of_tmp = centre_of
-            centre_of = None
-            for c in centre_of_tmp:
+    if centre is not None:
+        # Choose the first available region for 'centre'.
+        if isinstance(centre, list):
+            centre_tmp = centre
+            centre = None
+            for c in centre_tmp:
                 if c in region_data:
-                    centre_of = c
+                    centre = c
                     break
-            if centre_of is None:
-                raise ValueError(f"None of the regions in 'centre_of' were found in 'region_data' ({list(region_data.keys())}).")
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+            if centre is None:
+                raise ValueError(f"None of the regions in 'centre' were found in 'region_data' ({list(region_data.keys())}).")
+        label = region_data[centre] if type(centre) == str else centre
         if postproc:
             label = postproc(label)
         if label.sum() == 0:
-            raise ValueError(f"'centre_of={centre_of}' was selected, but region '{centre_of}' has no foreground voxels.")
+            raise ValueError(f"'centre={centre}' was selected, but region '{centre}' has no foreground voxels.")
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -846,8 +849,8 @@ def plot_patient(
     aspect: Optional[float] = None,
     ax: Optional[Axes] = None,
     cca: bool = False,
-    centre_of: Optional[Union[Union[str, List[str]], np.ndarray]] = None,             # Uses 'region_data' if 'str' (or 'List[str]'), else uses 'np.ndarray'.
-    colour: Optional[Union[str, List[str]]] = None,
+    centre: Optional[Union[Union[str, List[str]], np.ndarray]] = None,             # Uses 'region_data' if 'str' (or 'List[str]'), else uses 'np.ndarray'.
+    colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_centre_mm: Optional[Tuple[float, float]] = None,
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
@@ -890,9 +893,9 @@ def plot_patient(
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
     view: Axis = 0,
-    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
+    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     **kwargs) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     assert view in (0, 1, 2)
 
     if ax is None:
@@ -919,22 +922,22 @@ def plot_patient(
         idx = int(np.floor(idx * size[view]))
 
     # Get idx at centre of label.
-    if centre_of is not None:
-        # Choose the first available region for 'centre_of'.
-        if isinstance(centre_of, list):
-            centre_of_tmp = centre_of
-            centre_of = None
-            for c in centre_of_tmp:
+    if centre is not None:
+        # Choose the first available region for 'centre'.
+        if isinstance(centre, list):
+            centre_tmp = centre
+            centre = None
+            for c in centre_tmp:
                 if c in region_data:
-                    centre_of = c
+                    centre = c
                     break
-            if centre_of is None:
-                raise ValueError(f"None of the regions in 'centre_of' were found in 'region_data' ({list(region_data.keys())}).")
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+            if centre is None:
+                raise ValueError(f"None of the regions in 'centre' were found in 'region_data' ({list(region_data.keys())}).")
+        label = region_data[centre] if type(centre) == str else centre
         if postproc:
             label = postproc(label)
         if label.sum() == 0:
-            raise ValueError(f"'centre_of={centre_of}' was selected, but region '{centre_of}' has no foreground voxels.")
+            raise ValueError(f"'centre={centre}' was selected, but region '{centre}' has no foreground voxels.")
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -1008,6 +1011,9 @@ def plot_patient(
             if type(window) == str:
                 if window == 'bone':
                     width, level = (1800, 400)
+                elif window == 'extent':
+                    width = ct_data.max() - ct_data.min()
+                    level = (ct_data.min() + ct_data.max()) / 2
                 elif window == 'lung':
                     width, level = (1500, -600)
                 elif window == 'tissue':
@@ -1058,7 +1064,7 @@ def plot_patient(
 
     if region_data is not None:
         # Plot regions.
-        should_show_legend = __plot_region_data(region_data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
+        should_show_legend = __plot_region_data(region_data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colours, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -1175,7 +1181,7 @@ def plot_localiser_prediction(
     pred_region: str,
     aspect: float = None,
     ax: Optional[Axes] = None,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Box2D = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
@@ -1204,7 +1210,7 @@ def plot_localiser_prediction(
     truncate_spine: bool = True,
     view: Axis = 0,
     **kwargs: dict) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     __assert_view(view)
 
     if ax is None:
@@ -1233,9 +1239,9 @@ def plot_localiser_prediction(
     else:
         empty_pred = False
 
-    if centre_of is not None:
+    if centre is not None:
         # Get 'slice' at centre of data.
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+        label = region_data[centre] if type(centre) == str else centre
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -1435,15 +1441,16 @@ def plot_multi_segmenter_prediction(
     alpha_region: float = 0.5,
     aspect: float = None,
     ax: Optional[Axes] = None,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     colour: Optional[Union[str, List[str]]] = None,
-    colour_match: bool = False,
+    colours_match: bool = False,
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
+    idx: Optional[int] = None,
     latex: bool = False,
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
@@ -1456,11 +1463,9 @@ def plot_multi_segmenter_prediction(
     show_pred: bool = True,
     show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
-    show_region_extent: bool = True,
-    idx: Optional[int] = None,
     view: Axis = 0,
     **kwargs: dict) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     __assert_data_type('pred_data', pred_data, np.bool_)
     model_names = tuple(pred_data.keys())
     n_models = len(model_names)
@@ -1475,7 +1480,7 @@ def plot_multi_segmenter_prediction(
 
     # Get unique colours.
     if colour is None:
-        if colour_match:
+        if colours_match:
             n_colours = np.max((n_regions, n_models))
         else:
             n_colours = n_regions + n_models
@@ -1500,14 +1505,9 @@ def plot_multi_segmenter_prediction(
         else:
             logging.info(f"{model_name}: empty.")
 
-    # Convert float idx to int.
-    size = pred_data[list(pred_data.keys())[0]].shape
-    if idx > 0 and idx < 1:
-        idx = int(np.floor(idx * size[view]))
-
     # Get idx at centre of label.
-    if centre_of is not None:
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+    if centre is not None:
+        label = region_data[centre] if type(centre) == str else centre
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -1518,10 +1518,15 @@ def plot_multi_segmenter_prediction(
         extent = get_extent(label)
         idx = extent[extent_end][view]
 
+    # Convert float idx to int.
+    size = pred_data[list(pred_data.keys())[0]].shape
+    if idx > 0 and idx < 1:
+        idx = int(np.floor(idx * size[view]))
+
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
     size = pred_data[list(pred_data.keys())[0]].shape
-    region_colours = colours if colour_match else colours[:n_regions]
-    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, idx=idx, view=view, **kwargs)
+    region_colours = colours if colours_match else colours[:n_regions]
+    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -1536,7 +1541,7 @@ def plot_multi_segmenter_prediction(
     for i in range(n_models):
         model_name = model_names[i]
         pred = pred_data[model_name]
-        colour = colours[i] if colour_match else colours[n_regions + i]
+        colour = colours[i] if colours_match else colours[n_regions + i]
 
         if pred.sum() != 0 and show_pred:
             # Get aspect ratio.
@@ -1599,9 +1604,9 @@ def plot_segmenter_prediction(
     alpha_region: float = 0.5,
     aspect: float = None,
     ax: Optional[Axes] = None,
-    centre_of: Optional[str] = None,
-    colour: Optional[Union[str, List[str]]] = None,
-    colour_match: bool = False,
+    centre: Optional[str] = None,
+    colours: Optional[Union[str, List[str]]] = None,
+    colours_match: bool = False,
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
@@ -1624,11 +1629,10 @@ def plot_segmenter_prediction(
     show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
     show_pred_patch: bool = False,
-    show_region_extent: bool = True,
     idx: Optional[int] = None,
     view: Axis = 0,
     **kwargs: dict) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     model_names = tuple(pred_data.keys())
     n_models = len(model_names)
     n_regions = len(region_data.keys()) if region_data is not None else 0
@@ -1640,16 +1644,18 @@ def plot_segmenter_prediction(
     if ax is None:
         plt.figure(figsize=figsize)
         ax = plt.axes(frameon=False)
+    else:
+        show = False
 
     # Get unique colours.
-    if colour is None:
-        if colour_match:
+    if colours is None:
+        if colours_match:
             n_colours = np.max((n_regions, n_models))
         else:
             n_colours = n_regions + n_models
         colours = sns.color_palette('colorblind', n_colours)
     else:
-        colours = arg_to_list(colour, [str, tuple])
+        colours = arg_to_list(colours, (str, tuple))
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -1673,9 +1679,9 @@ Prediction: {model_name}""")
             logging.info(f"""
     Empty""")
 
-    if centre_of is not None:
+    if centre is not None:
         # Get 'slice' at centre of data.
-        label = region_data[centre_of] if type(centre_of) == str else centre_of
+        label = region_data[centre] if type(centre) == str else centre
         extent_centre = get_extent_centre(label)
         idx = extent_centre[view]
 
@@ -1688,8 +1694,8 @@ Prediction: {model_name}""")
 
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot size as black background.
     size = ct_data.shape
-    region_colours = colours if colour_match else colours[:n_regions]
-    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_extent=show_region_extent, show_legend=False, idx=idx, view=view, **kwargs)
+    region_colours = colours if colours_match else colours[:n_regions]
+    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colours=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -1704,7 +1710,7 @@ Prediction: {model_name}""")
     for i in range(n_models):
         model_name = model_names[i]
         pred = pred_data[model_name]
-        colour = colours[i] if colour_match else colours[n_regions + i]
+        colour = colours[i] if colours_match else colours[n_regions + i]
         loc_centre = loc_centres[i]
 
         if pred.sum() != 0 and show_pred:
@@ -1734,7 +1740,7 @@ Prediction: {model_name}""")
 
             # Plot if extent box is in view.
             label = f'{model_name} extent' if __box_in_plane(pred_extent, view, idx) else f'{model_name} extent (offscreen)'
-            __plot_box_slice(pred_extent, view, colour=colour, crop=crop, label=label, linestyle='dashed')
+            __plot_box_slice(pred_extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
 
         # Plot localiser centre.
         if show_loc_centre:
@@ -1802,7 +1808,7 @@ def plot_segmenter_prediction_diff(
     alpha_diff: float = 1.0,
     aspect: float = None,
     ax: Optional[Axes] = None,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
@@ -1821,7 +1827,7 @@ def plot_segmenter_prediction_diff(
     idx: Optional[int] = None,
     view: Axis = 0,
     **kwargs: dict) -> None:
-    __assert_idx(centre_of, extent_of, idx)
+    __assert_idx(centre, extent_of, idx)
     __assert_view(view)
     diff_names = list(diff_data.keys())
     n_diffs = len(diff_names)
@@ -1918,7 +1924,7 @@ def plot_dataframe(
     hue: Optional[str] = None,
     dpi: float = 300,
     exclude_x: Optional[Union[str, List[str]]] = None,
-    figsize: Tuple[float, float] = (16, 6),
+    figsize_row: Tuple[float, float] = (12, 6),
     fontsize: float = DEFAULT_FONT_SIZE,
     fontsize_label: Optional[float] = None,
     fontsize_legend: Optional[float] = None,
@@ -1986,6 +1992,7 @@ def plot_dataframe(
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
     y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
+    __assert_dataframe(data)
     hue_hatches = arg_to_list(hue_hatch, str)
     hue_labels = arg_to_list(hue_label, str)
     include_xs = arg_to_list(include_x, str)
@@ -2055,9 +2062,9 @@ def plot_dataframe(
     else:
         if n_rows > 1:
             gridspec_kw = { 'hspace': hspace }
-            _, axs = plt.subplots(n_rows, 1, constrained_layout=True, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw=gridspec_kw, sharex=True, sharey=share_y)
+            _, axs = plt.subplots(n_rows, 1, constrained_layout=True, dpi=dpi, figsize=(figsize_row[0], n_rows * figsize_row[1]), gridspec_kw=gridspec_kw, sharex=True, sharey=share_y)
         else:
-            plt.figure(dpi=dpi, figsize=figsize)
+            plt.figure(dpi=dpi, figsize=figsize_row)
             axs = [plt.gca()]
 
     # Get hue order/colour/labels.
@@ -2576,8 +2583,8 @@ def plot_registration(
     dose_colourbar_size: float = 0.03,
     dose_data: Optional[np.ndarray] = None,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
-    figsize: Tuple[int, int] = (12, 9),
-    fixed_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
+    figsize_row: Tuple[float, float] = (12, 6),
+    fixed_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
     fixed_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     fixed_crop_margin: float = 100,                                       # Applied if cropping to 'fixed_region_data' or 'np.ndarray'
     fixed_ct_data: Optional[np.ndarray] = None,
@@ -2590,7 +2597,7 @@ def plot_registration(
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_show_all_regions: bool = False,
     linestyle_region: bool = 'solid',
-    moving_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
+    moving_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
     moving_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     moving_crop_margin: float = 100,                                       # Applied if cropping to 'moving_region_data' or 'np.ndarray'
     moving_ct_data: Optional[np.ndarray] = None,
@@ -2600,7 +2607,7 @@ def plot_registration(
     norm: Optional[Tuple[float, float]] = None,
     perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    registered_centre_of: Optional[Union[str, np.ndarray]] = None,             # Uses 'registered_region_data' if 'str', else uses 'np.ndarray'.
+    registered_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'registered_region_data' if 'str', else uses 'np.ndarray'.
     registered_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'registered_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     registered_crop_margin: float = 100,                                       # Applied if cropping to 'registered_region_data' or 'np.ndarray'
     registered_ct_data: Optional[np.ndarray] = None,
@@ -2621,12 +2628,14 @@ def plot_registration(
     show_y_label: bool = True,
     show_y_ticks: bool = True,
     transform: torchio.transforms.Transform = None,
+    title: Optional[str] = None,
     view: Axis = 0,
-    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None) -> None:
-    __assert_idx(fixed_centre_of, extent_of, fixed_idx)
-    __assert_idx(moving_centre_of, extent_of, moving_idx)
+    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
+    **kwargs) -> None:
+    __assert_idx(fixed_centre, extent_of, fixed_idx)
+    __assert_idx(moving_centre, extent_of, moving_idx)
     assert view in (0, 1, 2)
-    centres_of = [fixed_centre_of if show_fixed else 'SKIP', registered_centre_of, moving_centre_of if show_moving else 'SKIP']
+    centres_of = [fixed_centre if show_fixed else 'SKIP', registered_centre, moving_centre if show_moving else 'SKIP']
     centres_of = tuple([c for c in centres_of if not isinstance(c, str) or c != 'SKIP'])
     crops = [fixed_crop if show_fixed else 'SKIP', registered_crop, moving_crop if show_moving else 'SKIP']
     crops = tuple([c for c in crops if not isinstance(c, str) or c != 'SKIP'])
@@ -2680,15 +2689,15 @@ def plot_registration(
 
     # Get slice indexes.
     idxs_tmp = []
-    for i, (centre_of, idx, data) in enumerate(zip(centres_of, idxs, region_data)):
+    for i, (centre, idx, data) in enumerate(zip(centres_of, idxs, region_data)):
         if registered_use_fixed_idx and i == 1:
             idxs_tmp.append(idxs_tmp[0])
             continue
 
         if idx is None:
-            label = data[centre_of] if type(centre_of) == str else centre_of
+            label = data[centre] if type(centre) == str else centre
             if label.sum() == 0:
-                raise ValueError(f"'centre_of' array must not be empty.")
+                raise ValueError(f"'centre' array must not be empty.")
             extent_centre = get_extent_centre(label)
             idx = extent_centre[view]
             idxs_tmp.append(idx)
@@ -2857,9 +2866,10 @@ def plot_registration(
     if show_title:
         for ax, id, idx, ct_size, info in zip(axs, ids, idxs, ct_sizes, infos):
             # Get title.
-            n_voxels = ct_size[view]
-            slice_info = ' (fixed)' if 'fixed' in info and info['fixed'] else ''
-            title = f"patient: {id}, slice{slice_info}: {idx}/{n_voxels - 1} ({__view_to_text(view)} view)"
+            if title is None:
+                n_voxels = ct_size[view]
+                slice_info = ' (fixed)' if 'fixed' in info and info['fixed'] else ''
+                title = f"patient: {id}, slice{slice_info}: {idx}/{n_voxels - 1} ({__view_to_text(view)} view)"
 
             # Escape text if using latex.
             if latex:
@@ -2887,6 +2897,23 @@ def plot_registration(
 
     if close_figure:
         plt.close() 
+
+def apply_region_labels(
+    region_labels: Dict[str, str],
+    region_data: Optional[Dict[str, np.ndarray]],
+    centre: Optional[str],
+    crop: Optional[str]) -> Tuple[Dict[str, np.ndarray], Optional[str], Optional[str]]:
+
+    # Apply region labels to 'region_data' and 'centre/crop' keys.
+    if region_data is not None:
+        for old, new in region_labels.items():
+            region_data[new] = region_data.pop(old)
+    if centre is not None and type(centre) == str and centre in region_labels:
+        centre = region_labels[centre] 
+    if centre is not None and type(crop) == str and crop in region_labels:
+        crop = region_labels[crop]
+
+    return region_data, centre, crop
 
 def style_rows(
     series: pd.Series,

@@ -287,7 +287,7 @@ def get_region_summary(
 
     return df
 
-def create_region_summary_report(
+def create_region_summary(
     dataset: str,
     regions: List[str]) -> None:
     # Generate summary report.

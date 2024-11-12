@@ -15,7 +15,7 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
 from mymi.plotting.dataset.training import plot_patient
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
@@ -277,7 +277,7 @@ def create_region_figures(
                         # Set figure.
                         def postproc(a: np.ndarray):
                             return get_object(a, i)
-                        plot_sample_regions(dataset, partition, s, centre_of=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
+                        plot_sample_regions(dataset, partition, s, centre=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
 
                         # Save temp file.
                         filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

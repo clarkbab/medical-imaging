@@ -22,7 +22,7 @@ from mymi.metrics import mean_intensity, snr
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nifti import plot_localiser_prediction, plot_patient, plot_registration, plot_segmenter_prediction, plot_multi_segmenter_prediction, plot_adaptive_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
-from mymi.regions import region_to_list as region_to_list
+from mymi.regions import regions_to_list as regions_to_list
 from mymi.types import Axis, ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
@@ -74,7 +74,7 @@ def get_region_summary(
     labels: Literal['included', 'excluded', 'all'] = 'included') -> DataFrame:
     # List patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(labels=labels, region=region)
+    pat_ids = set.list_patients(labels=labels, regions=region)
 
     cols = {
         'dataset': str,
@@ -88,7 +88,7 @@ def get_region_summary(
         pat = set.patient(pat_id)
         ct_data = pat.ct_data
         spacing = pat.ct_spacing
-        label = pat.region_data(labels=labels, region=region)[region]
+        label = pat.region_data(labels=labels, regions=region)[region]
 
         data = {
             'dataset': dataset,
@@ -120,7 +120,7 @@ def get_region_summary(
         # Add intensity metrics.
         if pat.has_region('Brain'):
             data['metric'] = 'snr-brain'
-            brain_label = pat.region_data(region='Brain')['Brain']
+            brain_label = pat.region_data(regions='Brain')['Brain']
             data['value'] = snr(ct_data, label, brain_label, spacing)
             df = append_row(df, data)
         data['metric'] = 'mean-intensity'
@@ -170,8 +170,8 @@ def get_region_summary(
 
     return df
 
-def create_patient_regions_report(dataset: str) -> None:
-    pr_df = get_patient_regions(dataset)
+def create_region_counts(dataset: str) -> None:
+    pr_df = get_region_counts(dataset)
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -266,20 +266,18 @@ def create_region_overlap_summary(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def create_region_summary_report(
+def create_region_summary(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
-    logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
-    regions = arg_to_list(region, str)
-
-    # Use all regions if 'regions=None'.
+    regions: Optional[PatientRegions] = None) -> None:
+    logging.arg_log('Creating region summaries', ('dataset', 'regions'), (dataset, regions))
     set = NiftiDataset(dataset)
+    regions = regions_to_list(regions)
     if regions is None:
         regions = set.list_regions()
 
     for region in tqdm(regions):
         # Check if there are patients with this region.
-        n_pats = len(set.list_patients(labels='all', region=region))
+        n_pats = len(set.list_patients(labels='all', regions=region))
         if n_pats == 0:
             # Allows us to pass all regions from Spartan 'array' job.
             logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
@@ -293,7 +291,7 @@ def create_region_summary_report(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
-def get_patient_regions(dataset: str) -> DataFrame:
+def get_region_counts(dataset: str) -> DataFrame:
     # List patients.
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients()
@@ -317,8 +315,9 @@ def get_patient_regions(dataset: str) -> DataFrame:
 
     return df
 
-def load_patient_regions_report(
+def load_region_counts(
     dataset: str,
+    regions: Optional[PatientRegions] = None,
     exists_only: bool = False) -> Union[DataFrame, bool]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
@@ -326,7 +325,11 @@ def load_patient_regions_report(
         if exists_only:
             return True
         else:
-            return pd.read_csv(filepath)
+            df = pd.read_csv(filepath)
+            if regions is not None:
+                regions = regions_to_list(regions)
+                df = df[df['region'].isin(regions)]
+            return df
     else:
         if exists_only:
             return False
@@ -422,13 +425,14 @@ def load_region_overlap_summary(
 
     return df
 
-def load_region_summary_report(
+def load_region_summary(
     dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'included',
-    region: Optional[PatientRegions] = None,
+    regions: Optional[PatientRegions] = None,
+    pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(regions)
 
     # Load summary.
     dfs = []
@@ -437,9 +441,11 @@ def load_region_summary_report(
         set = NiftiDataset(dataset)
         exc_df = set.excluded_labels
         if regions is None:
-            regions = set.list_regions()
+            dataset_regions = set.list_regions()
+        else:
+            dataset_regions = regions
 
-        for region in regions:
+        for region in dataset_regions:
             filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
             if not os.path.exists(filepath):
                 if raise_error:
@@ -473,13 +479,18 @@ def load_region_summary_report(
     df = pd.concat(dfs, axis=0)
     df = df.reset_index(drop=True)
 
+    # If pivot.
+    if pivot:
+        df = df.pivot(index=['dataset', 'patient-id', 'region'], columns='metric', values='value')
+        df = df.reset_index()
+
     return df
 
 def load_region_contrast_report(
     dataset: Union[str, List[str]],
     region: PatientRegions) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
             
     # Load reports.
     dfs = []
@@ -505,7 +516,7 @@ def load_region_count_report(
     # Load/concat region counts.
     dfs = []
     for dataset in datasets:
-        df = load_region_summary_report(dataset, labels=labels)
+        df = load_region_summary(dataset, labels=labels)
         df = df.groupby('region').count()[['patient-id']].rename(columns={ 'patient-id': 'count' }).reset_index()
         df.insert(0, 'dataset', dataset)
         dfs.append(df)
@@ -583,12 +594,10 @@ def get_ct_info_summary(
 
     return df
 
-def get_ct_summary(
-    dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+def get_ct_summary(dataset: str) -> pd.DataFrame:
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(region=region)
+    pat_ids = set.list_patients()
 
     cols = {
         'dataset': str,
@@ -640,18 +649,15 @@ def create_ct_info_summary_report(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def create_ct_summary_report(
-    dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
+def create_ct_summary(dataset: str) -> None:
     # Get regions.
     set = NiftiDataset(dataset)
-    regions = arg_to_list(region, str) if region is None else set.list_regions()
 
     # Get summary.
-    df = get_ct_summary(dataset, region=regions)
+    df = get_ct_summary(dataset)
 
     # Save summary.
-    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
+    filepath = os.path.join(set.path, 'reports', 'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -667,18 +673,15 @@ def load_ct_info_summary_report(
         raise ValueError(f"CT info summary report doesn't exist for dataset '{dataset}'.")
     return pd.read_csv(filepath)
 
-def load_ct_summary_report(
-    dataset: Union[str, List[str]],
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
-    datasets = arg_to_list(dataset, str)
+def load_ct_summary(datasets: Union[str, List[str]]) -> pd.DataFrame:
+    datasets = arg_to_list(datasets, str)
 
     dfs = []
     for dataset in datasets:
         # Get regions.
         set = NiftiDataset(dataset)
-        regions = arg_to_list(region, str) if region is None else set.list_regions()
 
-        filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
+        filepath = os.path.join(set.path, 'reports', 'ct-summary.csv')
         if not os.path.exists(filepath):
             raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'.")
         df = pd.read_csv(filepath)
@@ -752,7 +755,7 @@ def create_multi_segmenter_heatmap_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -853,7 +856,7 @@ def create_totalseg_prediction_figures(dataset: str) -> None:
             # Add image to report.
             filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
             kwargs = dict(
-                centre_of=centre,
+                centre=centre,
                 region='all',
                 savepath=filepath,
                 show=False,
@@ -934,7 +937,7 @@ def create_multi_segmenter_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_multi_segmenter_prediction(dataset, pat_id, model, model_region, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view, **kwargs)
+                plot_multi_segmenter_prediction(dataset, pat_id, model, model_region, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view, **kwargs)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -1009,7 +1012,7 @@ def create_segmenter_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -1037,7 +1040,7 @@ def create_region_figures(
         raise ValueError("'excluded-labels.csv' must be present to split included from excluded regions.")
 
     # Keep regions with patients.
-    df = load_region_summary_report(dataset, labels=labels, region=region)
+    df = load_region_summary(dataset, labels=labels, region=region)
     df = df.pivot(index=['dataset', 'region', 'patient-id'], columns='metric', values='value').reset_index()
 
     # Add 'extent-mm' outlier info.
@@ -1171,7 +1174,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_patient(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_patient(dataset, pat_id, centre=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -1194,7 +1197,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_patient(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
+                    plot_patient(dataset, pat_id, centre=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -1452,7 +1455,7 @@ def create_localiser_figures(
         )
         for view, page_coord in zip(views, img_coords):
             # Set figure.
-            plot_localiser_prediction(dataset, pat, region, localiser, centre_of=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
+            plot_localiser_prediction(dataset, pat, region, localiser, centre=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
 
             # Save temp file.
             filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

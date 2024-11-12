@@ -14,7 +14,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
-from mymi.regions import to_255, RegionColours, region_to_list
+from mymi.regions import to_255, RegionColours, regions_to_list
 from mymi.transforms import crop_3D, pad_4D, resample, resample_list
 from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
@@ -31,7 +31,7 @@ def create_all_multi_segmenter_predictions(
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model', 'model_spacing'), (dataset, region, model, model_spacing))
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
 
     # Load gpu if available.
     if torch.cuda.is_available():

@@ -9,6 +9,7 @@ from re import match
 from time import time
 from tqdm import tqdm
 from typing import Any, Dict, Optional
+import yaml
 
 from mymi import config
 from mymi import logging
@@ -75,6 +76,7 @@ DEFAULT_POLICY = {
   
 def build_index(
     dataset: str,
+    force_dicom_read: bool = False,
     from_temp_index: bool = False) -> None:
     start = time()
     logging.arg_log('Building index', ('dataset',), (dataset,))
@@ -82,15 +84,24 @@ def build_index(
     # Load dataset path.
     dataset_path = os.path.join(config.directories.datasets, 'dicom', dataset) 
 
-    # Determine index policy.
-    policy_path = os.path.join(dataset_path, 'index-policy.json')
-    if os.path.exists(policy_path):
-        logging.info(f"Using custom policy at '{policy_path}'.")
-        with open(policy_path, 'r') as f:
-            policy = json.load(f)
-    else:
-        logging.info('Using default policy.')
-        policy = DEFAULT_POLICY
+    # Load custom policy.
+    custom_policy = None
+    json_path = os.path.join(dataset_path, 'index-policy.json')
+    yaml_path = os.path.join(dataset_path, 'index-policy.yaml')
+    if os.path.exists(json_path):
+        logging.info(f"Using custom policy at '{json_path}'.")
+        with open(json_path, 'r') as f:
+            custom_policy = json.load(f)
+    elif os.path.exists(yaml_path):
+        logging.info(f"Using custom policy at '{yaml_path}'.")
+        with open(yaml_path, 'r') as f:
+            custom_policy = yaml.safe_load(f)
+
+    # Merge with default policy.
+    policy = DEFAULT_POLICY | custom_policy if custom_policy is not None else DEFAULT_POLICY
+    policy_path = os.path.join(dataset_path, 'index-policy-applied.yaml')
+    with open(policy_path, 'w') as f:
+        yaml.dump(policy, f)
 
     # Check '__CT_FROM_<dataset>__' tag.
     ct_from = None
@@ -138,13 +149,12 @@ def build_index(
                 # Check if DICOM file.
                 filepath = os.path.join(root, f)
                 try:
-                    dicom = dcm.read_file(filepath, stop_before_pixels=True)
+                    dicom = dcm.read_file(filepath, force=force_dicom_read, stop_before_pixels=True)
                 except dcm.errors.InvalidDicomError:
                     continue
 
                 # Get modality.
                 modality = dicom.Modality
-                print(modality)
                 if not modality in modalities:
                     continue
 
@@ -390,11 +400,11 @@ def build_index(
     if not policy['study']['no-rtstruct']['allow']:
         logging.info(f"Removing series without RTSTRUCT DICOM.")
 
-        incl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' in s.unique())
-        nonincl = index[~incl_rows]
-        nonincl['error'] = 'STUDY-NO-RTSTRUCT'
-        error_index = append_dataframe(error_index, nonincl)
-        index = index[incl_rows]
+        excl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' not in s.unique())
+        excl_df = index[excl_rows]
+        excl_df['error'] = 'STUDY-NO-RTSTRUCT'
+        error_index = append_dataframe(error_index, excl_df)
+        index = index.drop(excl_df.index)
 
     # Save index.
     if len(index) > 0:

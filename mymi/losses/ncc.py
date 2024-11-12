@@ -1,9 +1,10 @@
-from monai.losses import LocalNormalizedCrossCorrelationLoss
 import torch
 from torch import nn
 
 class NCCLoss(nn.Module):
     def __init__(self) -> None:
+        # Delay tensorflow import.
+        from monai.losses import LocalNormalizedCrossCorrelationLoss
         super().__init__()
 
     def forward(

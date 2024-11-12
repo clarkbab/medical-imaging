@@ -15,7 +15,7 @@ from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
 from mymi import logging
 from torchio.transforms import Transform
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
@@ -101,7 +101,7 @@ class MultiLoaderConvergence:
         use_split_file: bool = False,
         **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
-        regions = region_to_list(region)
+        regions = regions_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
         logging.arg_log('Building multi-loaders', ('dataset', 'regions', 'load_all_samples', 'n_folds', 'shuffle_samples', 'test_fold', 'use_grouping', 'use_split_file'), (dataset, regions, load_all_samples, n_folds, shuffle_samples, test_fold, use_grouping, use_split_file))

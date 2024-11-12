@@ -5,17 +5,21 @@ import os
 from pandas import DataFrame, MultiIndex, read_csv
 from pathlib import Path
 import re
+import shutil
+import SimpleITK as sitk
+import struct
 from time import time
 from typing import Optional
 from tqdm import tqdm
 
 from mymi.dataset.shared import CT_FROM_REGEXP
 from mymi.dataset.dicom import DicomDataset
-from mymi.dataset.nifti import recreate as recreate_nifti
+from mymi.dataset.nifti import NiftiDataset, recreate as recreate_nifti
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
+from mymi.transforms import sitk_image_transform, sitk_point_transform
 from mymi.types import PatientRegions
-from mymi.utils import append_row, arg_to_list, save_csv
+from mymi.utils import append_row, arg_to_list, save_csv, save_nifti, to_sitk_image
 
 from .dataset import write_flag
 
@@ -29,15 +33,20 @@ ERROR_INDEX = [
 
 def convert_to_nifti(
     dataset: 'Dataset',
-    region: PatientRegions,
     anonymise: bool = False,
+    regions: Optional[PatientRegions] = 'all',
     show_list_patients_progress: bool = True) -> None:
+    logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise', 'regions'), (dataset, anonymise, regions))
     start = time()
-    logging.info(f"Converting DicomDataset '{dataset}' to NiftiDataset '{dataset}', with region '{region}' and anonymise '{anonymise}'.")
 
     # Create NIFTI dataset.
     dicom_set = DicomDataset(dataset)
     nifti_set = recreate_nifti(dataset)
+
+    if regions == 'all':
+        regions = dicom_set.list_regions()
+    else:
+        regions = regions_to_list(regions)
 
     # Check '__ct_from_' for DICOM dataset.
     ct_from = None
@@ -52,7 +61,7 @@ def convert_to_nifti(
         open(filepath, 'w').close()
 
     # Load all patients.
-    pat_ids = dicom_set.list_patients(region=region, show_progress=show_list_patients_progress)
+    pat_ids = dicom_set.list_patients(regions=regions, show_progress=show_list_patients_progress)
 
     if anonymise:
         # Create CT map. Index of map will be the anonymous ID.
@@ -92,7 +101,7 @@ def convert_to_nifti(
                 nib.save(img, filepath)
 
             # Create region NIFTIs.
-            region_data = pat.region_data(only=region)
+            region_data = pat.region_data(only=regions)
             for r, data in region_data.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'regions', r, filename)
@@ -130,7 +139,7 @@ def convert_to_nifti_replan(
     dicom_dataset: Optional[str] = None,
     region: PatientRegions = 'all',
     anonymise: bool = False) -> None:
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
 
     # Create NIFTI dataset.
     nifti_set = recreate_nifti(dataset)
@@ -220,3 +229,134 @@ def convert_to_nifti_replan(
 
     # Indicate success.
     write_flag(nifti_set, '__CONVERT_FROM_NIFTI_END__')
+
+def __convert_velocity_transform(filepath: str) -> None:
+    # Read ".bdf" file.
+    with open(filepath, "rb") as f:
+        data = f.read()
+        
+    # Read transform image size.
+    # Read data as "sliding windows" of bytes.
+    # Data format is 32-bit unsigned int (I), little-endian (<).
+    size = []
+    n_dims = 3
+    n_bytes_per_val = 4
+    n_bytes = n_dims * n_bytes_per_val
+    data_format = "<I"
+    for i in range(0, n_bytes, n_bytes_per_val):
+        size_i = struct.unpack(data_format, data[i:i + n_bytes_per_val])[0]
+        size.append(size_i)
+    size = tuple(size)
+
+    # Read transform image pixel spacing.
+    # Data format is 32-bit float (f).
+    spacing = []
+    data_format = "f"
+    start_byte = 12
+    n_dims = 3
+    n_bytes = n_dims * n_bytes_per_val
+    for i in range(start_byte, start_byte + n_bytes, n_bytes_per_val):
+        spacing_i = struct.unpack(data_format, data[i:i + n_bytes_per_val])[0]
+        spacing.append(spacing_i)
+    spacing = tuple(spacing)
+
+    # Sanity check number of bytes in file.
+    # Should be num. voxels * 3 * 4 (each voxel is a 3 dimensional, 32-bit float) + 24 bytes for image size and spacing header.
+    n_voxels = np.prod(size)
+    n_bytes = len(data)
+    n_bytes_expected = n_voxels * n_bytes_per_val * n_dims + 24
+    if n_bytes != n_bytes_expected:
+        raise ValueError(f"File '{filepath}' should contain '{n_bytes_expected}' bytes (num. voxels ({n_voxels}) * 4 bytes * 3 axes + 24 bytes header), got '{n_bytes}'.")
+
+    # Read vector image.
+    vector = []
+    image = []
+    start_byte = 24
+    n_bytes = n_voxels * n_dims * n_bytes_per_val
+    for i in range(start_byte, start_byte + n_bytes, n_bytes_per_val):
+        vector_i = struct.unpack(data_format, data[i:i + n_bytes_per_val])[0]
+        vector.append(vector_i)
+        if (i - (start_byte - n_bytes_per_val)) % n_dims * n_bytes_per_val == 0:
+            image.append(vector.copy())
+            vector = []
+            
+    if len(image) != n_voxels:
+        raise ValueError(f"Expected image to contain '{n_voxels}' voxels, got '{len(image)}'.")
+
+    # Create numpy array.
+    # What order is the data stored in with BDF?
+    # We'll just have to use this code I found, which seems to think its stored in z, y, x order.
+    logging.info(filepath)
+    image = np.array(image)
+    logging.info(image.shape)
+
+    # When performing numpy.reshape, data is taken from the flat array for the last dimension first.
+    # E.g. if reshaping to (3, 4), the first 4 elements of the flat array are taken for the first row,
+    # followed by another 4 elements for the second row, etc.
+    # Presumably Velocity stores data in the opposite order, e.g. the first 3 elements are taken for the
+    # first column, followed by the next 3 elements for the second column, etc.
+    # If we reverse the shape for numpy.reshape, e.g. (4, 3), then we're getting the correct behaviour
+    # as the first 3 elements will be taken for the first row, and then we move rows afterwards using numpy.moveaxis.
+    image = np.reshape(image, (*size[::-1], 3))
+    logging.info(image.shape)
+    image = np.moveaxis(np.moveaxis(image, 0, 2), 0, 1)
+    logging.info(image.shape)
+
+    # Create transform.
+    origin = (0, 0, 0)
+    image = to_sitk_image(image, spacing, origin, is_vector=True)
+    logging.info(image.GetSize())
+    logging.info(image.GetSpacing())
+    logging.info(image.GetOrigin())
+    transform = sitk.DisplacementFieldTransform(image)
+    transformpath = filepath.replace('.bdf', '.tfm')
+    sitk.WriteTransform(transform, transformpath)
+
+def convert_velocity_predictions_to_nifti() -> None:
+    dataset = 'LUNG-4DCT' 
+    transform_types = ['DMP', 'EDMP']
+    dicom_set = DicomDataset(dataset)
+    nifti_set = NiftiDataset(dataset)
+    pat_ids = dicom_set.list_patients()
+    pat_ids = [p.split('_')[-1] for p in pat_ids]
+    pat_ids = pat_ids[:1]
+    for p in tqdm(pat_ids):
+        # Load fixed/moving images.
+        fixed_pat = nifti_set.patient(f'{p}-1')
+        fixed_spacing = fixed_pat.ct_spacing
+        fixed_offset = fixed_pat.ct_offset
+        moving_pat = nifti_set.patient(f'{p}-0')
+        moving_spacing = moving_pat.ct_spacing
+        moving_offset = moving_pat.ct_offset
+
+        for t in transform_types:
+            # Convert Velocity transform to sitk.
+            transformpath = os.path.join(dicom_set.path, 'data', 'velocity', 'dvf', f'{p}_{t}.bdf')
+            if not os.path.exists(transformpath):
+                logging.info(f"Skipping prediction '{transformpath}' - not found.")
+                continue
+            __convert_velocity_transform(transformpath)
+
+            # Load sitk transform.
+            transformpath = transformpath.replace('.bdf', '.tfm')
+            warp = sitk.ReadTransform(transformpath)
+
+            # Apply transform to moving image.
+            moved = sitk_image_transform(fixed_pat.ct_data, moving_pat.ct_data, fixed_spacing, moving_pat.ct_spacing, fixed_offset, moving_pat.ct_offset, warp)
+                
+            # Save prediction.
+            modelname = f'VELOCITY-{t}'
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', modelname, 'ct', f'{p}-0.nii.gz')
+            save_nifti(moved, fixed_spacing, fixed_offset, filepath)
+
+            # Move transform.
+            filepath = filepath.replace('.nii.gz', '_warp.tfm')
+            shutil.copyfile(transformpath, filepath)
+
+            # Apply transform to *fixed* landmarks.
+            moved_lms = sitk_point_transform(fixed_pat.landmarks, fixed_spacing, moving_spacing, fixed_offset, moving_offset, warp)
+
+            # Save transformed points.
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', modelname, 'landmarks', f'{moving_pat.id}.csv')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            np.savetxt(filepath, moved_lms, delimiter=',', fmt='%.3f')

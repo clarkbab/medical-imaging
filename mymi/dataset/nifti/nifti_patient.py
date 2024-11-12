@@ -2,10 +2,10 @@ import nibabel as nib
 import numpy as np
 import os
 import pandas as pd
-from typing import List, Literal, Optional, OrderedDict, Tuple
+from typing import Dict, List, Literal, Optional, OrderedDict, Tuple
 
 from mymi.postprocessing import interpolate_z, largest_cc_3D
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
@@ -17,7 +17,8 @@ class NIFTIPatient:
         ct_from: Optional['NiftiDataset'] = None,
         excluded_labels: Optional[pd.DataFrame] = None,
         index: Optional[pd.DataFrame] = None,
-        processed_labels: Optional[pd.DataFrame] = None) -> None:
+        processed_labels: Optional[pd.DataFrame] = None,
+        region_map: Optional[Dict[str, str]] = None) -> None:
         self.__dataset = dataset
         self.__ct_from = ct_from
         self.__id = str(id)
@@ -25,6 +26,8 @@ class NIFTIPatient:
         self.__global_id = f'{dataset} - {self.__id}'
         self.__index = index
         self.__processed_labels = processed_labels
+        self.__region_map = region_map
+        self.__inverse_region_map  = {v: k for k, v in self.__region_map.items()} if self.__region_map is not None else None
 
         # Check that patient ID exists.
         if ct_from is not None:
@@ -137,10 +140,10 @@ class NIFTIPatient:
 
     def has_region(
         self,
-        region: PatientRegions,
+        regions: PatientRegions,
         labels: Literal['included', 'excluded', 'all'] = 'included') -> bool:
         # Return 'True' if patient has at least one of the requested regions.
-        regions = arg_to_list(region, str)
+        regions = regions_to_list(regions)
         pat_regions = self.list_regions(labels=labels)
         if len(np.intersect1d(regions, pat_regions)) != 0:
             return True
@@ -151,7 +154,7 @@ class NIFTIPatient:
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
         only: Optional[PatientRegions] = None) -> List[str]:
-        only = region_to_list(only)
+        only = regions_to_list(only)
 
         # Find regions by file names.
         dirpath = os.path.join(self.__dataset.path, 'data', 'regions')
@@ -169,6 +172,10 @@ class NIFTIPatient:
                         continue
                 regions.append(f)
 
+        # Apply region mapping.
+        if self.__region_map is not None:
+            regions = [self.__region_map[r] if r in self.__region_map else r for r in regions]
+
         # Filter on 'only'.
         if only is not None:
             regions = [r for r in regions if r in only]
@@ -181,20 +188,22 @@ class NIFTIPatient:
     def region_data(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: PatientRegions = 'all',
-        region_ignore_missing: bool = False,
+        regions: PatientRegions = 'all',
+        regions_ignore_missing: bool = False,
         process: bool = True,
         **kwargs) -> OrderedDict:
-        regions = region_to_list(region, literals={ 'all': self.list_regions(labels=labels) })
+        regions = regions_to_list(regions, literals={ 'all': self.list_regions(labels=labels) })
 
         data = {}
         for region in regions:
             if not self.has_region(region, labels=labels):
-                if region_ignore_missing:
+                if regions_ignore_missing:
                     continue    
                 else:
                     raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
-            path = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nii.gz')
+            
+            disk_region = self.__inverse_region_map[region] if self.__inverse_region_map is not None else region
+            path = os.path.join(self.__dataset.path, 'data', 'regions', disk_region, f'{self.__id}.nii.gz')
             img = nib.load(path)
             rdata = img.get_fdata().astype(bool)
 

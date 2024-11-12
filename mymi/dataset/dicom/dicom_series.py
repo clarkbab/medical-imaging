@@ -2,7 +2,7 @@ from enum import Enum
 
 SeriesInstanceUID = str
 
-class DICOMModality(str, Enum):
+class Modality(str, Enum):
     CT = 'CT'
     RTSTRUCT = 'RTSTRUCT'
     RTPLAN = 'RTPLAN'
@@ -11,7 +11,7 @@ class DICOMModality(str, Enum):
 # Abstract class.
 class DICOMSeries:
     @property
-    def modality(self) -> DICOMModality:
+    def modality(self) -> Modality:
         raise NotImplementedError("Child class must implement 'modality'.")
 
     @property

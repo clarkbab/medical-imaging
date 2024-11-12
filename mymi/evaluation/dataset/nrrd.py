@@ -15,7 +15,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, Segmenter
 from mymi import logging
 from mymi.prediction.dataset.nrrd import load_localiser_prediction, load_multi_segmenter_prediction_dict, load_segmenter_prediction
-from mymi.regions import get_region_patch_size, get_region_tolerance, region_to_list
+from mymi.regions import get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.types import ModelName, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 

@@ -1,3 +1,4 @@
+from itertools import chain
 import numpy as np
 import os
 import pandas as pd
@@ -14,7 +15,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import AdaptiveSegmenter, Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
-from mymi.regions import RegionNames, get_region_patch_size, region_to_list, truncate_spine
+from mymi.regions import RegionNames, get_region_patch_size, regions_to_list, truncate_spine
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample, resample_list, resample_3D, resample_4D, crop_3D, crop_4D, pad_4D
 from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
@@ -519,7 +520,7 @@ def get_adaptive_segmenter_no_oars_prediction(
     device: torch.device = torch.device('cpu'),
     include_ct: bool = True,
     **kwargs) -> np.ndarray:
-    model_regions = region_to_list(model_region)
+    model_regions = regions_to_list(model_region)
     pat_id, token = pat_id.split('-')
     assert token == '1', f"Adaptive segmenter predicts on mid-treatment patient only."
     pat_id_pt = f"{pat_id}-0"
@@ -538,7 +539,7 @@ def get_adaptive_segmenter_no_oars_prediction(
     spacing = pat_mt.ct_spacing
 
     # Load registered pre-treatment data.
-    ct_data_pt, _ = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, region_ignore_missing=True)
+    ct_data_pt, _ = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, regions_ignore_missing=True)
     
     # Create input holder.
     n_channels = len(model_regions) + 2
@@ -633,7 +634,7 @@ def get_adaptive_segmenter_prediction(
     crop_type: str = 'brain',
     device: torch.device = torch.device('cpu'),
     **kwargs) -> np.ndarray:
-    model_regions = region_to_list(model_region)
+    model_regions = regions_to_list(model_region)
     pat_id, token = pat_id.split('-')
     assert token == '1', f"Adaptive segmenter predicts on mid-treatment patient only."
     pat_id_pt = f"{pat_id}-0"
@@ -652,7 +653,7 @@ def get_adaptive_segmenter_prediction(
     spacing = pat_mt.ct_spacing
 
     # Load registered pre-treatment data.
-    ct_data_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, region_ignore_missing=True)
+    ct_data_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, regions_ignore_missing=True)
     
     # Create input holder.
     n_channels = len(model_regions) + 2
@@ -742,7 +743,7 @@ def get_adaptive_segmenter_prediction(
 
     return pred
 
-def get_multi_segmenter_prediction(
+def get_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, Model],
@@ -760,16 +761,19 @@ def get_multi_segmenter_prediction(
         model.eval()
         model.to(device)
 
-    # Load patient CT data and spacing.
+    # Load registered (!) patient CT data and spacing.
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
-    input = pat.ct_data
+    pat_id_pt = pat_id
+    pat_id_mt = pat_id.replace('-0', '-1')
+    input, _ = load_patient_registration(dataset, pat_id_mt, pat_id, region=model_regions, regions_ignore_missing=True)
+    # input = pat.ct_data
     input_spacing = pat.ct_spacing
 
     # Resample input to model spacing.
     input_size = input.shape
     input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
-    input_size_before_crop = input.shape
+    input_size_after_resample = input.shape
 
     # Apply 'naive' cropping.
     if crop_type == 'naive':
@@ -835,10 +839,125 @@ def get_multi_segmenter_prediction(
 
     # Reverse the 'naive' or 'brain' cropping.
     if crop_type == 'naive':
-        pred = centre_crop_or_pad_4D(pred, input_size_before_crop)
+        pred = centre_crop_or_pad_4D(pred, input_size_after_resample)
     elif crop_type == 'brain':
         pad_min = tuple(-np.array(crop[0]))
-        pad_max = tuple(np.array(pad_min) + np.array(input_size_before_crop))
+        pad_max = tuple(np.array(pad_min) + np.array(input_size_after_resample))
+        pad = (pad_min, pad_max)
+        pred = pad_4D(pred, pad)
+
+    # Resample to original spacing.
+    pred = resample_4D(pred, spacing=model_spacing, output_spacing=input_spacing)
+
+    # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
+    crop_box = ((0, 0, 0), input_size)
+    pred = crop_or_pad_4D(pred, crop_box)
+
+    return pred
+
+def get_multi_segmenter_prediction(
+    dataset: str,
+    pat_id: PatientID,
+    model: Union[ModelName, Model],
+    model_region: PatientRegions,
+    model_spacing: ImageSpacing3D,
+    device: torch.device = torch.device('cpu'),
+    crop_mm: Optional[Box3D] = None,
+    crop_type: str = 'brain',
+    **kwargs) -> np.ndarray:
+    model_regions = arg_to_list(model_region, str)
+
+    # Load model.
+    if type(model) == tuple:
+        model = MultiSegmenter.load(*model, **kwargs)
+        model.eval()
+        model.to(device)
+
+    # Load patient CT data and spacing.
+    set = NiftiDataset(dataset)
+    pat = set.patient(pat_id)
+    input = pat.ct_data
+    input_spacing = pat.ct_spacing
+
+    # Resample input to model spacing.
+    input_size = input.shape
+    input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
+    input_size_after_resample = input.shape
+
+    # Apply 'naive' cropping.
+    if crop_type == 'naive':
+        if crop_mm is None:
+            raise ValueError(f"Must provide 'crop_mm' for 'naive' cropping.")
+        crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
+        input = centre_crop_or_pad_3D(input, crop)
+    elif crop_type == 'brain':
+        if crop_mm is None:
+            raise ValueError(f"Must provide 'crop_mm' for 'brain' cropping.")
+        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
+
+        # Get brain extent.
+        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
+        check_epochs = True
+        n_epochs = 150
+        brain_pred_exists = load_localiser_prediction(dataset, pat_id, localiser, exists_only=True)
+        if not brain_pred_exists:
+            create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
+        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
+        brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=model_spacing)
+        brain_extent = get_extent(brain_label)
+
+        # Use image extent if brain isn't present.
+        if brain_extent is None:
+            brain_extent = ((0, 0, 0), input.shape)
+
+        # Get crop coordinates.
+        # Crop origin is centre-of-extent in x/y, and max-extent in z.
+        # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
+        # in - direction for z.
+        p_above_brain = 0.04
+        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
+        crop = (
+            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
+            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
+        )
+
+        # Threshold crop values.
+        min, max = crop
+        min = tuple((np.max((m, 0)) for m in min))
+        max = tuple((np.min((m, s)) for m, s in zip(max, input_size_after_resample)))
+        crop = (min, max)
+
+        # Crop input.
+        input = crop_3D(input, crop)
+
+    else:
+        raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
+
+    # Pass image to model.
+    input = torch.Tensor(input)
+    input = input.unsqueeze(0)      # Add 'batch' dimension.
+    input = input.unsqueeze(1)      # Add 'channel' dimension.
+    input = input.float()
+    input = input.to(device)
+    with torch.no_grad():
+        pred = model(input)
+    pred = pred.squeeze(0)          # Remove 'batch' dimension.
+
+    # Apply thresholding/one-hot-encoding.
+    pred = pred.argmax(dim=0)
+    pred = one_hot(pred, num_classes=len(model_regions) + 1)
+    pred = pred.moveaxis(-1, 0)
+    pred = pred.cpu().numpy().astype(np.bool_)
+    
+    # Apply postprocessing.
+    pred = largest_cc_4D(pred)
+
+    # Reverse the 'naive' or 'brain' cropping.
+    if crop_type == 'naive':
+        pred = centre_crop_or_pad_4D(pred, input_size_after_resample)
+    elif crop_type == 'brain':
+        pad_min = tuple(-np.array(crop[0]))
+        pad_max = tuple(np.array(pad_min) + np.array(input_size_after_resample))
         pad = (pad_min, pad_max)
         pred = pad_4D(pred, pad)
 
@@ -854,6 +973,7 @@ def get_multi_segmenter_prediction(
 def get_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
+    region: str,
     loc_centre: Point3D,
     segmenter: Union[Model, ModelName],
     probs: bool = False,
@@ -882,7 +1002,6 @@ def get_segmenter_prediction(
 
     # Extract segmentation patch.
     resampled_size = input.shape
-    region = segmenter.name[0].split('-')[1]        # Infer region from model name.
     patch_size = get_region_patch_size(region, seg_spacing)
     patch = get_box(loc_centre, patch_size)
     input = crop_or_pad_3D(input, patch, fill=input.min())
@@ -1000,6 +1119,51 @@ def create_adaptive_segmenter_prediction(
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
+def create_multi_segmenter_prediction_nnunet_bootstrap(
+    dataset: Union[str, List[str]],
+    pat_id: Union[str, List[str]],
+    model: Union[ModelName, Model],
+    model_region: PatientRegions,
+    model_spacing: ImageSpacing3D,
+    crop_type: str = 'brain',
+    device: Optional[torch.device] = None,
+    savepath: Optional[str] = None,
+    **kwargs: Dict[str, Any]) -> None:
+    model_name = model if isinstance(model, tuple) else model.name
+    logging.arg_log('Creating multi-segmenter prediction', ('dataset', 'pat_id', 'model', 'model_region', 'model_spacing', 'crop_type', 'device', 'savepath'), (dataset, pat_id, model_name, model_region, model_spacing, crop_type, device, savepath))
+    datasets = arg_to_list(dataset, str)
+    pat_ids = arg_to_list(pat_id, str)
+    assert len(datasets) == len(pat_ids)
+
+    # Load gpu if available.
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+            logging.info('Predicting on GPU...')
+        else:
+            device = torch.device('cpu')
+            logging.info('Predicting on CPU...')
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = MultiSegmenter.load(model, map_location=device, n_gpus=n_gpus, region=model_region, **kwargs)
+
+    for dataset, pat_id in zip(datasets, pat_ids):
+        # Load dataset.
+        set = NiftiDataset(dataset)
+        pat = set.patient(pat_id)
+
+        # Make prediction.
+        pred = get_multi_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, crop_type=crop_type, device=device, **kwargs)
+
+        # Save segmentation.
+        if savepath is None:
+            crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
+            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
+        os.makedirs(os.path.dirname(savepath), exist_ok=True)
+        np.savez_compressed(savepath, data=pred)
+
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
@@ -1048,6 +1212,7 @@ def create_multi_segmenter_prediction(
 def create_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[PatientID, List[PatientID]],
+    region: str,
     localiser: ModelName,
     segmenter: Union[Model, ModelName],
     device: Optional[torch.device] = None,
@@ -1092,7 +1257,7 @@ def create_segmenter_prediction(
                 ct_data = set.patient(pat_id).ct_data
                 pred = np.zeros_like(ct_data, dtype=bool) 
         else:
-            pred = get_segmenter_prediction(dataset, pat_id, loc_centre, segmenter, device=device)
+            pred = get_segmenter_prediction(dataset, pat_id, region, loc_centre, segmenter, device=device)
 
         # Save segmentation.
         if probs:
@@ -1113,7 +1278,7 @@ def create_adaptive_segmenter_no_oars_predictions(
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log(f"Creating adaptive segmenter predictions (no prior OARs{ '' if include_ct else ' or CT' })", ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
@@ -1190,7 +1355,7 @@ def create_adaptive_segmenter_predictions(
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Creating adaptive segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
@@ -1313,16 +1478,102 @@ def create_all_multi_segmenter_predictions(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
+def create_multi_segmenter_predictions_nnunet_bootstrap(
+    dataset: Union[str, List[str]],
+    region: PatientRegions,
+    model: Union[ModelName, Model],
+    exclude_like: Optional[str] = None,
+    use_timing: bool = True,
+    use_test_loader: bool = False,
+    **kwargs: Dict[str, Any]) -> None:
+    logging.arg_log('Making multi-segmenter predictions (nnU-Net bootstrap)', ('dataset', 'region', 'model'), (dataset, region, model))
+    datasets = arg_to_list(dataset, str)
+    regions = regions_to_list(region)
+    test_fold = kwargs.get('test_fold', None)
+    model_spacing = TrainingDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
+
+    # Load gpu if available.
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        logging.info('Predicting on GPU...')
+    else:
+        device = torch.device('cpu')
+        logging.info('Predicting on CPU...')
+
+    # Create timing table.
+    if use_timing:
+        cols = {
+            'fold': float,
+            'dataset': str,
+            'patient-id': str,
+            'region': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Create loaders.
+    train_loader, val_loader, test_loader = MultiLoader.build_loaders(datasets, load_data=False, load_train_origin=True, region=regions, **kwargs) 
+
+    # Load PyTorch model.
+    if type(model) == tuple:
+        n_gpus = 0 if device.type == 'cpu' else 1
+        model = MultiSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
+
+    # Make predictions.
+    loader = test_loader if use_test_loader else chain(train_loader, val_loader)
+    for pat_desc_b in tqdm(iter(loader)):
+        if type(pat_desc_b) == torch.Tensor:
+            pat_desc_b = pat_desc_b.tolist()
+        for pat_desc in pat_desc_b:
+            dataset, pat_id = pat_desc.split(':')
+            logging.info(f"Predicting '{dataset}:{pat_id}'.")
+
+            if exclude_like is not None:
+                if exclude_like in pat_id:
+                    logging.info(f"Skipping '{dataset}:{pat_id}', matched 'exclude_like={exclude_like}'.")
+                    continue
+
+            # Timing table data.
+            data = {
+                'fold': test_fold if test_fold is not None else np.nan,
+                'dataset': dataset,
+                'patient-id': pat_id,
+                'region': str(regions),
+                'device': device.type
+            }
+
+            with timer.record(data, enabled=use_timing):
+                if '-0' in pat_id:
+                    create_multi_segmenter_prediction_nnunet_bootstrap(dataset, pat_id, model, regions, model_spacing, device=device, **kwargs)
+                else:
+                    create_multi_segmenter_prediction(dataset, pat_id, model, regions, model_spacing, device=device, **kwargs)
+
+    # Save timing data.
+    if use_timing:
+        model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
+        params = {
+            'device': device.type,
+            'load_all_samples': kwargs.get('load_all_samples', False),
+            'n_folds': kwargs.get('n_folds', None),
+            'shuffle_samples': kwargs.get('shuffle_samples', True),
+            'use_grouping': kwargs.get('use_grouping', False),
+            'use_split_file': kwargs.get('use_split_file', False),
+        }
+        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        timer.save(filepath)
+
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
     model: Union[ModelName, Model],
     exclude_like: Optional[str] = None,
     use_timing: bool = True,
+    use_test_loader: bool = True,
     **kwargs: Dict[str, Any]) -> None:
     logging.arg_log('Making multi-segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     model_spacing = TrainingDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
 
@@ -1346,7 +1597,7 @@ def create_multi_segmenter_predictions(
         timer = Timer(cols)
 
     # Create test loader.
-    _, _, test_loader = MultiLoader.build_loaders(datasets, region=regions, **kwargs) 
+    train_loader, val_loader, test_loader = MultiLoader.build_loaders(datasets, region=regions, **kwargs) 
 
     # Load PyTorch model.
     if type(model) == tuple:
@@ -1354,7 +1605,8 @@ def create_multi_segmenter_predictions(
         model = MultiSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
 
     # Make predictions.
-    for pat_desc_b in tqdm(iter(test_loader)):
+    loader = test_loader if use_test_loader else chain(train_loader, val_loader)
+    for pat_desc_b in tqdm(iter(loader)):
         if type(pat_desc_b) == torch.Tensor:
             pat_desc_b = pat_desc_b.tolist()
         for pat_desc in pat_desc_b:
@@ -1592,7 +1844,7 @@ def load_landmark_predictions(
     pat_id: PatientID,
     model: str) -> pd.DataFrame:
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'predictions', model, 'landmarks', f'{pat_id}.csv')
+    filepath = os.path.join(set.path, 'data', 'predictions', model, 'landmarks', f'{pat_id}.csv')
     landmarks = pd.read_csv(filepath, header=None)
     return landmarks.to_numpy()
 
@@ -1673,8 +1925,8 @@ def load_multi_segmenter_prediction_dict(
     model_region: PatientRegions,
     region: Optional[PatientRegions] = None,
     **kwargs) -> Union[Dict[str, np.ndarray], bool]:
-    model_regions = region_to_list(model_region)
-    regions = region_to_list(region)
+    model_regions = regions_to_list(model_region)
+    regions = regions_to_list(region)
 
     # Load prediction.
     pred = load_multi_segmenter_prediction(dataset, pat_id, model, **kwargs)
@@ -1783,11 +2035,12 @@ def create_two_stage_predictions(
     segmenter: ModelName,
     n_folds: Optional[int] = 5,
     test_fold: Optional[Union[int, List[int], Literal['all']]] = None,
-    timing: bool = True) -> None:
+    timing: bool = True,
+    **kwargs) -> None:
     if type(datasets) == str:
         datasets = [datasets]
-    localiser = Localiser.load(*localiser)
-    segmenter = Segmenter.load(*segmenter)
+    localiser = Localiser.load(*localiser, **kwargs)
+    segmenter = Segmenter.load(*segmenter, **kwargs)
     if test_fold == 'all':
         test_folds = list(range(n_folds))
     elif type(test_fold) == int:
@@ -1835,11 +2088,11 @@ def create_two_stage_predictions(
                     'device': device.type
                 }
 
-                with loc_timer.record(timing, data):
+                with loc_timer.record(data, enabled=timing):
                     create_localiser_prediction(dataset, pat_id, localiser, device=device)
 
-                with seg_timer.record(timing, data):
-                    create_segmenter_prediction(dataset, pat_id, localiser.name, segmenter, device=device)
+                with seg_timer.record(data, enabled=timing):
+                    create_segmenter_prediction(dataset, pat_id, region, localiser.name, segmenter, device=device)
 
         # Save timing data.
         if timing:

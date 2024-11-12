@@ -13,7 +13,7 @@ from ..plotter import plot_patient as plot_patient_base
 def plot_patient(
     dataset: str,
     sample_idx: str,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
     figsize: Tuple[float, float] = (12, 6),
     region: Optional[types.PatientRegions] = None,
@@ -38,11 +38,11 @@ def plot_patient(
     else:
         region_data = None
 
-    if centre_of is not None:
-        if type(centre_of) == str:
-            if region_data is None or centre_of not in region_data:
-                region_idx = all_regions.index(centre_of) + 1
-                centre_of = label[region_idx]
+    if centre is not None:
+        if type(centre) == str:
+            if region_data is None or centre not in region_data:
+                region_idx = all_regions.index(centre) + 1
+                centre = label[region_idx]
 
     if crop is not None:
         if type(crop) == str:
@@ -56,9 +56,9 @@ def plot_patient(
         for old, new in region_labels.items():
             region_data[new] = region_data.pop(old)
 
-        # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_labels:
-            centre_of = region_labels[centre_of] 
+        # Rename 'centre' and 'crop' keys.
+        if type(centre) == str and centre in region_labels:
+            centre = region_labels[centre] 
         if type(crop) == str and crop in region_labels:
             crop = region_labels[crop]
 
@@ -74,8 +74,8 @@ def plot_patient(
             region_data_1[r] = ct_data[i + 2].astype(np.bool_)
     else:
         region_data_1 = None
-    plot_patient_base(sample_idx, ct_data_1.shape, spacing, ax=axs[0], centre_of=centre_of, crop=crop, ct_data=ct_data_1, region_data=region_data_1, **kwargs)
-    plot_patient_base(sample_idx, ct_data_0.shape, spacing, ax=axs[1], centre_of=centre_of, crop=crop, ct_data=ct_data_0, region_data=region_data, **kwargs)
+    plot_patient_base(sample_idx, ct_data_1.shape, spacing, ax=axs[0], centre=centre, crop=crop, ct_data=ct_data_1, region_data=region_data_1, **kwargs)
+    plot_patient_base(sample_idx, ct_data_0.shape, spacing, ax=axs[1], centre=centre, crop=crop, ct_data=ct_data_0, region_data=region_data, **kwargs)
 
 def plot_sample_localiser_prediction(
     dataset: str,

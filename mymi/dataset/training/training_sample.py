@@ -5,9 +5,8 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
-from mymi.utils import arg_to_list
 
 class TrainingSample:
     def __init__(
@@ -18,7 +17,7 @@ class TrainingSample:
         self.__id = int(id)
         self.__index = None         # Lazy-loaded.
         self.__global_id = f'{self.__dataset} - {self.__id}'
-        self.__group_id = None      # Lazy-loaded.
+        self.__group = None      # Lazy-loaded.
         self.__spacing = self.__dataset.params['spacing'] if 'spacing' in self.__dataset.params else self.__dataset.params['output-spacing']    
 
         # Load sample index.
@@ -30,13 +29,13 @@ class TrainingSample:
         return self.__global_id
 
     @property
-    def group_id(self) -> str:
-        if self.__group_id is None:
+    def group(self) -> str:
+        if self.__group is None:
             if 'group-id' in self.index.columns:
-                self.__group_id = self.index.iloc[0]['group-id']
+                self.__group = self.index.iloc[0]['group-id']
             else:
-                self.__group_id = None
-        return self.__group_id
+                self.__group = None
+        return self.__group
 
     @property
     def id(self) -> str:
@@ -83,7 +82,7 @@ class TrainingSample:
         regions = list(sorted(df['region']))
 
         # Filter on 'only'.
-        only = region_to_list(only)
+        only = regions_to_list(only)
         if only is not None:
             regions = [r for r in regions if r in only]
 
@@ -91,8 +90,8 @@ class TrainingSample:
 
     def has_region(
         self,
-        region: PatientRegions) -> bool:
-        regions = arg_to_list(region, str)
+        regions: PatientRegions) -> bool:
+        regions = regions_to_list(regions)
         pat_regions = self.list_regions()
         for region in regions:
             if region in pat_regions:
@@ -101,16 +100,16 @@ class TrainingSample:
 
     def label(
         self,
-        region: PatientRegions = 'all',
-        region_ignore_missing: bool = False) -> Dict[str, np.ndarray]:
-        regions = arg_to_list(region, str, literals={ 'all': self.list_regions() })
+        regions: PatientRegions = 'all',
+        regions_ignore_missing: bool = False) -> Dict[str, np.ndarray]:
+        regions = regions_to_list(regions, literals={ 'all': self.list_regions() })
 
         # Load the label data.
         data = {}
         for region in regions:
             filepath = os.path.join(self.__dataset.path, 'data', 'labels', region, f'{self.__id}.npz')
             if not os.path.exists(filepath):
-                if region_ignore_missing:
+                if regions_ignore_missing:
                     continue
                 else:
                     raise ValueError(f"Label '{region}' not found for sample '{self}'.")
@@ -121,8 +120,8 @@ class TrainingSample:
 
     def pair(
         self,
-        region: PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
-        return self.input, self.label(region=region)
+        regions: PatientRegions = 'all') -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        return self.input, self.label(regions=regions)
 
     def __load_index(self) -> None:
         index = self.__dataset.index

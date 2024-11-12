@@ -204,7 +204,7 @@ class RTSTRUCTConverter:
                 label: the RTSTRUCT 'StructureSetLabel' field.
         """
         # Create metadata.
-        metadata = cls._create_metadata()
+        metadata = cls.__create_metadata()
 
         # Create rtstruct.
         rtstruct = FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
@@ -215,21 +215,21 @@ class RTSTRUCTConverter:
         rtstruct.RTROIObservationsSequence = dcm.sequence.Sequence()
 
         # Add general info.
-        cls._add_general_info(rtstruct, info)
+        cls.__add_general_info(rtstruct, info)
 
         # Add patient info.
-        cls._add_patient_info(rtstruct, ref_cts[0])
+        cls.__add_patient_info(rtstruct, ref_cts[0])
 
         # Add study/series info.
-        cls._add_study_and_series_info(rtstruct, ref_cts[0], info)
+        cls.__add_study_and_series_info(rtstruct, ref_cts[0], info)
 
         # Add frame of reference.
-        cls._add_frames_of_reference(rtstruct, ref_cts)
+        cls.__add_frames_of_reference(rtstruct, ref_cts)
 
         return rtstruct
 
     @classmethod
-    def _create_metadata(cls) -> dcm.dataset.FileMetaDataset:
+    def __create_metadata(cls) -> dcm.dataset.FileMetaDataset:
         """
         returns: a dicom FileMetaDataset containing RTSTRUCT metadata.
         """
@@ -245,7 +245,7 @@ class RTSTRUCTConverter:
         return file_meta
 
     @classmethod
-    def _add_general_info(
+    def __add_general_info(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         info: Dict[str, str]) -> None:
@@ -285,7 +285,7 @@ class RTSTRUCTConverter:
         rtstruct.ApprovalStatus = 'UNAPPROVED'
 
     @classmethod
-    def _add_patient_info(
+    def __add_patient_info(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         ref_ct: dcm.dataset.FileDataset) -> None:
@@ -305,7 +305,7 @@ class RTSTRUCTConverter:
         rtstruct.PatientWeight = getattr(ref_ct, 'PatientWeight', '')
 
     @classmethod
-    def _add_study_and_series_info(
+    def __add_study_and_series_info(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         ref_ct: dcm.dataset.FileDataset,
@@ -334,7 +334,7 @@ class RTSTRUCTConverter:
         rtstruct.SeriesTime = dt.strftime(TIME_FORMAT)
 
     @classmethod
-    def _add_frames_of_reference(
+    def __add_frames_of_reference(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -349,14 +349,14 @@ class RTSTRUCTConverter:
         frame.FrameOfReferenceUID = generate_uid()
 
         # Add referenced study sequence.
-        cls._add_studies(frame, ref_cts)
+        cls.__add_studies(frame, ref_cts)
 
         # Add frame of reference to RTSTRUCT.
         rtstruct.ReferencedFrameOfReferenceSequence = dcm.sequence.Sequence()
         rtstruct.ReferencedFrameOfReferenceSequence.append(frame)
 
     @classmethod
-    def _add_studies(
+    def __add_studies(
         cls,
         frame: dcm.dataset.Dataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -372,14 +372,14 @@ class RTSTRUCTConverter:
         study.ReferencedSOPInstanceUID = ref_cts[0].StudyInstanceUID
 
         # Add contour image sequence.
-        cls._add_series(study, ref_cts)
+        cls.__add_series(study, ref_cts)
 
         # Add study to the frame of reference. 
         frame.RTReferencedStudySequence = dcm.sequence.Sequence()
         frame.RTReferencedStudySequence.append(study) 
 
     @classmethod
-    def _add_series(
+    def __add_series(
         cls,
         study: dcm.dataset.Dataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -394,14 +394,14 @@ class RTSTRUCTConverter:
         series.SeriesInstanceUID = ref_cts[0].SeriesInstanceUID
 
         # Add contour image sequence.
-        cls._add_contour_images(series, ref_cts)
+        cls.__add_contour_images(series, ref_cts)
 
         # Add series to the study.
         study.RTReferencedSeriesSequence = dcm.sequence.Sequence()
         study.RTReferencedSeriesSequence.append(series)
 
     @classmethod
-    def _add_contour_images(
+    def __add_contour_images(
         cls,
         series: dcm.dataset.Dataset,
         ref_cts: Sequence[dcm.dataset.FileDataset]) -> None:
@@ -445,16 +445,16 @@ class RTSTRUCTConverter:
             roi_data.number = len(rtstruct.StructureSetROISequence) + 1
 
         # Add ROI contours.
-        cls._add_roi_contours(rtstruct, roi_data, ref_cts)
+        cls.__add_roi_contours(rtstruct, roi_data, ref_cts)
 
         # Add structure set ROIs.
-        cls._add_structure_set_rois(rtstruct, roi_data)
+        cls.__add_structure_set_rois(rtstruct, roi_data)
 
         # Add RT ROI observations.
-        cls._add_rt_roi_observations(rtstruct, roi_data)
+        cls.__add_rt_roi_observations(rtstruct, roi_data)
 
     @classmethod
-    def _add_roi_contours(
+    def __add_roi_contours(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         roi_data: ROIData,
@@ -472,13 +472,13 @@ class RTSTRUCTConverter:
         roi_contour.ReferencedROINumber = str(roi_data.number)
 
         # Add contour sequence.
-        cls._add_contours(roi_contour, roi_data.data, ref_cts)
+        cls.__add_contours(roi_contour, roi_data.data, ref_cts)
 
         # Append ROI contour.
         rtstruct.ROIContourSequence.append(roi_contour)
 
     @classmethod
-    def _add_contours(
+    def __add_contours(
         cls,
         roi_contour: dcm.dataset.Dataset,
         data: np.ndarray,
@@ -502,10 +502,10 @@ class RTSTRUCTConverter:
                 continue
 
             # Add contour.
-            cls._add_slice_contours(roi_contour, slice_data, ct)
+            cls.__add_slice_contours(roi_contour, slice_data, ct)
 
     @classmethod
-    def _add_slice_contours(
+    def __add_slice_contours(
         cls,
         roi_contour: dcm.dataset.Dataset,
         slice_data: np.ndarray,
@@ -551,7 +551,7 @@ class RTSTRUCTConverter:
             contour.NumberOfContourPoints = len(contour_coords) / 3
 
             # Add contour images.
-            cls._add_roi_contour_images(contour, ref_ct)
+            cls.__add_roi_contour_images(contour, ref_ct)
 
             # Append contour to ROI contour.
             roi_contour.ContourSequence.append(contour)
@@ -580,7 +580,7 @@ class RTSTRUCTConverter:
         return coords 
 
     @classmethod
-    def _add_roi_contour_images(
+    def __add_roi_contour_images(
         cls,
         contour: dcm.dataset.Dataset,
         ref_ct: dcm.dataset.FileDataset) -> None:
@@ -600,7 +600,7 @@ class RTSTRUCTConverter:
         contour.ContourImageSequence.append(image)
 
     @classmethod
-    def _add_structure_set_rois(
+    def __add_structure_set_rois(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         roi_data: ROIData) -> None:
@@ -620,7 +620,7 @@ class RTSTRUCTConverter:
         rtstruct.StructureSetROISequence.append(structure_set_roi)
 
     @classmethod
-    def _add_rt_roi_observations(
+    def __add_rt_roi_observations(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         roi_data: ROIData) -> None:

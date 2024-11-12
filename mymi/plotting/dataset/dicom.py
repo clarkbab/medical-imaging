@@ -10,56 +10,54 @@ from mymi.utils import arg_to_list
 def plot_patient(
     dataset: str,
     pat_id: str,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
-    region: Optional[types.PatientRegions] = None,
-    region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
+    regions: Optional[types.PatientRegions] = None,
+    region_labels: Dict[str, str] = {},
     show_dose: bool = False,
     study_id: Optional[str] = None,
     use_mapping: bool = True,
     **kwargs) -> None:
-    region_labels = arg_to_list(region_label, str)
 
     # Deal with 'regions' arg.
     patient = DicomDataset(dataset).patient(pat_id)
-    if region == 'all':
+    if regions == 'all':
         regions = patient.list_regions()
     else:
-        regions = arg_to_list(region, str)
+        regions = arg_to_list(regions, str)
 
     if study_id is not None:
         study = patient.study(study_id)
     else:
         study = patient.default_study
     ct_data = study.ct_data
-    region_data = study.region_data(region=regions, use_mapping=use_mapping) if regions is not None else None
+    region_data = study.region_data(regions=regions, use_mapping=use_mapping) if regions is not None else None
     spacing = study.ct_spacing
     dose_data = study.dose_data if show_dose else None
 
-    if centre_of is not None:
-        if type(centre_of) == str:
-            if region_data is None or centre_of not in region_data:
-                centre_of = study.region_data(region=centre_of, use_mapping=use_mapping)[centre_of]
+    if centre is not None:
+        if type(centre) == str:
+            if region_data is None or centre not in region_data:
+                centre = study.region_data(regions=centre, use_mapping=use_mapping)[centre]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = study.region_data(region=crop, use_mapping=use_mapping)[crop]
+                crop = study.region_data(regions=crop, use_mapping=use_mapping)[crop]
 
-    if region_labels is not None:
         # Rename 'regions' and 'region_data' keys.
         regions = [region_labels[r] if r in region_labels else r for r in regions]
         for old, new in region_labels.items():
             region_data[new] = region_data.pop(old)
 
-        # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_labels:
-            centre_of = region_labels[centre_of] 
+        # Rename 'centre' and 'crop' keys.
+        if type(centre) == str and centre in region_labels:
+            centre = region_labels[centre] 
         if type(crop) == str and crop in region_labels:
             crop = region_labels[crop]
 
     # Plot.
-    plot_patient_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_patient_base(pat_id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_model_prediction(
     dataset: str,

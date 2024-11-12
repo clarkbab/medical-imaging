@@ -138,6 +138,7 @@ class Loader:
 
         # Take subset of train samples.
         if n_train is not None:
+            logging.info(n_train)
             if n_train > len(train_samples):
                raise ValueError(f"'n_train={n_train}' requested larger number than training samples '{len(train_samples)}'.") 
             train_samples = train_samples[:n_train]

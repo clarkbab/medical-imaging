@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH --account punim1413
-##SBATCH --partition sapphire
+#SBATCH --partition sapphire
 ##SBATCH --qos feit
 ##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-#SBATCH --partition gpu-a100-short
-#SBATCH --gres gpu:1
+##SBATCH --partition gpu-a100-short
+##SBATCH --gres gpu:1
 #SBATCH --nodes 1
 #SBATCH --mem 64G
-#SBATCH --cpus-per-gpu 8
+##SBATCH --cpus-per-gpu 8
 #SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 

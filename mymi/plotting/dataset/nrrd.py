@@ -6,11 +6,13 @@ from mymi.dataset import NRRDDataset
 from mymi.gradcam.dataset.nrrd import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import Box2D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
+from ..plotter import apply_region_labels
 from ..plotter import plot_heatmap as plot_heatmap_base
+from ..plotter import plot_histogram as plot_histogram_base
 from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
 from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
 from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
@@ -20,14 +22,23 @@ from ..plotter import plot_patient as plot_patient_base
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
 
+def plot_histogram(
+    dataset: str,
+    n_patients: int = 10) -> None:
+    set = NRRDDataset(dataset)
+    pat_ids = set.list_patients()
+    pat_ids = pat_ids[:n_patients]
+    ct_datas = [set.patient(pat_id).ct_data for pat_id in pat_ids]
+    plot_histogram_base(ct_datas)
+
 def plot_patient(
     dataset: str,
     pat_id: str,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     labels: Literal['included', 'excluded', 'all'] = 'all',
-    region: Optional[PatientRegions] = None,
-    region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
+    regions: Optional[PatientRegions] = None,
+    region_labels: Dict[str, str] = {},
     show_dose: bool = False,
     **kwargs) -> None:
 
@@ -35,39 +46,34 @@ def plot_patient(
     set = NRRDDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
-    region_data = pat.region_data(labels=labels, region=region) if region is not None else None
+    if regions is not None:
+        region_data = pat.region_data(labels=labels, regions=regions)
+    else:
+        region_data = None
     spacing = pat.ct_spacing
     dose_data = pat.dose_data if show_dose else None
 
-    if centre_of is not None:
-        if type(centre_of) == str:
-            if region_data is None or centre_of not in region_data:
-                centre_of = pat.region_data(region=centre_of)[centre_of]
+    if centre is not None:
+        if type(centre) == str:
+            if region_data is None or centre not in region_data:
+                centre = pat.region_data(regions=centre)[centre]
 
     if crop is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                crop = pat.region_data(region=crop)[crop]
-
-    if region_label is not None:
-        # Rename regions.
-        for old, new in region_label.items():
-            region_data[new] = region_data.pop(old)
-
-        # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_label:
-            centre_of = region_label[centre_of] 
-        if type(crop) == str and crop in region_label:
-            crop = region_label[crop]
+                crop = pat.region_data(regions=crop)[crop]
+    
+    # Apply region labels.
+    region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
 
     # Plot.
-    plot_patient_base(pat_id, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    plot_patient_base(pat_id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_localiser_prediction(
     dataset: str,
     pat_id: str,
     localiser: ModelName,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     load_prediction: bool = True,
     region: Optional[PatientRegions] = None,
@@ -91,10 +97,10 @@ def plot_localiser_prediction(
         # Make prediction.
         pred = get_localiser_prediction(dataset, pat_id, localiser)
 
-    if centre_of is not None:
+    if centre is not None:
         if type(crop) == str:
             if region_data is None or crop not in region_data:
-                centre_of = pat.region_data(region=centre_of)[centre_of]
+                centre = pat.region_data(region=centre)[centre]
 
     if crop is not None:
         if type(crop) == str:
@@ -107,22 +113,22 @@ def plot_localiser_prediction(
         for old, new in region_labels.items():
             region_data[new] = region_data.pop(old)
 
-        # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_labels:
-            centre_of = region_labels[centre_of] 
+        # Rename 'centre' and 'crop' keys.
+        if type(centre) == str and centre in region_labels:
+            centre = region_labels[centre] 
         if type(crop) == str and crop in region_labels:
             crop = region_labels[crop]
     
     # Plot.
     pred_region = localiser[0].split('-')[1]    # Infer pred region name from localiser model name.
-    plot_localiser_prediction_base(pat_id, spacing, pred, pred_region, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_localiser_prediction_base(pat_id, spacing, pred, pred_region, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_multi_segmenter_prediction(
     dataset: str,
     pat_id: str,
     model: Union[ModelName, List[ModelName]],
     model_region: PatientRegions,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     check_epochs: bool = True,
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
@@ -139,10 +145,10 @@ def plot_multi_segmenter_prediction(
     # If multiple models, list of lists must be specified, e.g. 'model_region=[['Brain'], ['Brainstem']]'.
     #   Flat list not supported, e.g. 'model_region=['Brain', 'Brainstem']'.
     if len(models) == 1:
-        model_regionses = [region_to_list(model_region)]
+        model_regionses = [regions_to_list(model_region)]
     else:
         model_regionses = model_region
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     region_labels = arg_to_list(region_label, str)
     model_regions_visible = arg_to_list(model_region_visible, str)
     n_models = len(models)
@@ -198,8 +204,8 @@ def plot_multi_segmenter_prediction(
             new_region_preds[region] = pred
         region_preds = new_region_preds
 
-    if centre_of is not None:
-        match = re.search(MODEL_SELECT_PATTERN_MULTI, centre_of)
+    if centre is not None:
+        match = re.search(MODEL_SELECT_PATTERN_MULTI, centre)
         if match is not None:
             if match.group(2) is None:
                 assert n_models == 1
@@ -209,9 +215,9 @@ def plot_multi_segmenter_prediction(
                 assert model_i < n_models
             region = match.group(3)
             label = f'model:{model_i}:{region}'
-            centre_of = region_preds[label]
-        elif region_data is None or centre_of not in region_data:
-            centre_of = pat.region_data(region=centre_of)[centre_of]
+            centre = region_preds[label]
+        elif region_data is None or centre not in region_data:
+            centre = pat.region_data(region=centre)[centre]
 
     if type(crop) == str:
         if crop == 'model':
@@ -231,9 +237,9 @@ def plot_multi_segmenter_prediction(
             # Rename 'region_data' keys.
             region_data[new] = region_data.pop(old)
 
-            # Rename 'centre_of' and 'crop' keys.
-            if type(centre_of) == str and centre_of == old:
-                centre_of = new
+            # Rename 'centre' and 'crop' keys.
+            if type(centre) == str and centre == old:
+                centre = new
             if type(crop) == str and crop == old:
                 crop = new
 
@@ -241,14 +247,14 @@ def plot_multi_segmenter_prediction(
         regions = region_labels
     
     # Plot.
-    plot_multi_segmenter_prediction_base(pat_id, spacing, region_preds, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_multi_segmenter_prediction_base(pat_id, spacing, region_preds, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_segmenter_prediction(
     dataset: str,
     pat_id: str,
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
@@ -322,18 +328,18 @@ def plot_segmenter_prediction(
         loc_centres.append(loc_centre)
         pred_data[pred_label] = pred
 
-    if centre_of is not None:
-        if centre_of == 'model':
+    if centre is not None:
+        if centre == 'model':
             assert n_models == 1
-            centre_of = pred_data[pred_labels[0]]
-        elif type(centre_of) == str:
-            match = re.search(MODEL_SELECT_PATTERN, centre_of)
+            centre = pred_data[pred_labels[0]]
+        elif type(centre) == str:
+            match = re.search(MODEL_SELECT_PATTERN, centre)
             if match is not None:
                 model_i = int(match.group(1))
                 assert model_i < n_models
-                centre_of = pred_data[pred_labels[model_i]]
-            elif region_data is None or centre_of not in region_data:
-                centre_of = pat.region_data(region=centre_of)[centre_of]
+                centre = pred_data[pred_labels[model_i]]
+            elif region_data is None or centre not in region_data:
+                centre = pat.region_data(region=centre)[centre]
 
     if type(crop) == str:
         if crop == 'model':
@@ -353,9 +359,9 @@ def plot_segmenter_prediction(
             # Rename 'region_data' keys.
             region_data[new] = region_data.pop(old)
 
-            # Rename 'centre_of' and 'crop' keys.
-            if type(centre_of) == str and centre_of == old:
-                centre_of = new
+            # Rename 'centre' and 'crop' keys.
+            if type(centre) == str and centre == old:
+                centre = new
             if type(crop) == str and crop == old:
                 crop = new
 
@@ -363,14 +369,14 @@ def plot_segmenter_prediction(
         regions = region_labels
     
     # Plot.
-    plot_segmenter_prediction_base(pat_id, spacing, pred_data, centre_of=centre_of, crop=crop, ct_data=ct_data, loc_centre=loc_centres, region_data=region_data, **kwargs)
+    plot_segmenter_prediction_base(pat_id, spacing, pred_data, centre=centre, crop=crop, ct_data=ct_data, loc_centre=loc_centres, region_data=region_data, **kwargs)
 
 def plot_segmenter_prediction_diff(
     dataset: str,
     pat_id: str,
     localiser: Union[ModelName, List[ModelName]],
     segmenter: Union[ModelName, List[ModelName]],
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     load_loc_pred: bool = True,
     load_seg_pred: bool = True,
@@ -456,7 +462,7 @@ def plot_segmenter_prediction_diff(
     }
     
     # Plot.
-    plot_segmenter_prediction_diff_base(pat_id, spacing, diff_data, centre_of=centre_of, crop=crop, ct_data=ct_data, **kwargs)
+    plot_segmenter_prediction_diff_base(pat_id, spacing, diff_data, centre=centre, crop=crop, ct_data=ct_data, **kwargs)
 
 def __reduce_region_diffs(diffs: List[int]) -> int:
     n_pos = 0
@@ -482,7 +488,7 @@ def plot_heatmap(
     model: ModelName,
     region: str,
     layer: int,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     **kwargs) -> None:
     # Load data.
@@ -495,11 +501,11 @@ def plot_heatmap(
     # Load heatmap.
     heatmap = load_multi_segmenter_heatmap(dataset, pat_id, model, region, layer)
 
-    if centre_of is not None:
-        centre_of = pat.region_data(region=centre_of)[centre_of]
+    if centre is not None:
+        centre = pat.region_data(region=centre)[centre]
 
     if type(crop) == str:
         crop = pat.region_data(region=crop)[crop]
     
     # Plot.
-    plot_heatmap_base(heatmap, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_heatmap_base(heatmap, spacing, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)

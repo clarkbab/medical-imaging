@@ -15,7 +15,7 @@ sys.path.append(root_dir)
 from mymi import config
 from mymi.dataset.nifti import NiftiDataset
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
 
 def predict(
@@ -50,7 +50,7 @@ def predict(
             ]) 
 
     # Apply warp to any segmentation labels.
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     if regions is not None:
         logging.info('Making label predictions...')
         for region in tqdm(regions):

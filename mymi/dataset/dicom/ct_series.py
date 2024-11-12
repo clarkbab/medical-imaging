@@ -1,13 +1,12 @@
 from datetime import datetime
 import numpy as np
 import pandas as pd
-from pydicom import read_file
-from pydicom.dataset import FileDataset
+import pydicom as dcm
 from typing import List
 
 from mymi import types
 
-from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
+from .dicom_series import Modality, DICOMSeries, SeriesInstanceUID
 
 CLOSENESS_ABS_TOL = 1e-10;
 STUDY_DATE_FMT = '%Y%m%d'
@@ -16,8 +15,10 @@ class CTSeries(DICOMSeries):
     def __init__(
         self,
         study: 'DICOMStudy',
-        id: SeriesInstanceUID):
+        id: SeriesInstanceUID,
+        force_dicom_read: bool = False) -> None:
         self.__data = None          # Lazy-loaded.
+        self.__force_dicom_read = force_dicom_read
         self.__global_id = f"{study} - {id}"
         self.__offset = None        # Lazy-loaded.
         self.__size = None   # Lazy-loaded.
@@ -34,7 +35,7 @@ class CTSeries(DICOMSeries):
     @property
     def data(self) -> np.ndarray:
         if self.__data is None:
-            self.__load_ct_data()
+            self.__load_data()
         return self.__data
 
     @property
@@ -50,13 +51,13 @@ class CTSeries(DICOMSeries):
         return self.__id
 
     @property
-    def modality(self) -> DICOMModality:
-        return DICOMModality.CT
+    def modality(self) -> Modality:
+        return Modality.CT
 
     @property
     def offset(self) -> types.PointMM3D:
         if self.__offset is None:
-            self.__load_ct_data()
+            self.__load_data()
         return self.__offset
 
     @property
@@ -66,13 +67,13 @@ class CTSeries(DICOMSeries):
     @property
     def size(self) -> types.ImageSpacing3D:
         if self.__size is None:
-            self.__load_ct_data()
+            self.__load_data()
         return self.__size
 
     @property
     def spacing(self) -> types.ImageSpacing3D:
         if self.__spacing is None:
-            self.__load_ct_data()
+            self.__load_data()
         return self.__spacing
 
     @property
@@ -84,23 +85,23 @@ class CTSeries(DICOMSeries):
         dt_str = self.get_cts()[0].StudyDate
         return datetime.strptime(dt_str, STUDY_DATE_FMT)
     
-    def get_cts(self) -> List[FileDataset]:
+    def get_cts(self) -> List[dcm.FileDataset]:
         ct_paths = list(self.__index['filepath'])
-        cts = [read_file(f) for f in ct_paths]
+        cts = [dcm.read_file(f, force=self.__force_dicom_read) for f in ct_paths]
         cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
         return cts
 
     @property
-    def first_ct(self) -> FileDataset:
+    def first_ct(self) -> dcm.FileDataset:
         filepath = list(self.__index['filepath'])[0]
-        ct = read_file(filepath)
+        ct = dcm.read_file(filepath, force=self.__force_dicom_read)
         return ct
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"CTSeries '{self}' not found in index for study '{self.__study}'.")
 
-    def __load_ct_data(self) -> None:
+    def __load_data(self) -> None:
         cts = self.get_cts()
 
         # Store offset.

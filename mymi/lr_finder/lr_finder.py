@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
@@ -87,7 +87,7 @@ def plot(
     vline: Optional[Union[float, List[float]]] = None,
     x_lim: Tuple[Optional[float], Optional[float]] = (None, None),
     y_lim: Tuple[Optional[float], Optional[float]] = (None, None)) -> None:
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     run_names = arg_to_list(run_name, str)
     labels = arg_to_list(label, str)
     if labels is not None and len(labels) != len(run_names):

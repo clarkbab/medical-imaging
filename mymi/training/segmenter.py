@@ -51,12 +51,12 @@ def train_segmenter(
     # Load datasets.
     if type(datasets) == str:
         datasets = [datasets]
-        spacing = ds.get(datasets[0], 'training').params['spacing']
+        spacing = ds.get(datasets[0], 'training').params['output-spacing']
     else:
-        spacing = ds.get(datasets[0], 'training').params['spacing']
+        spacing = ds.get(datasets[0], 'training').params['output-spacing']
         for dataset in datasets[1:]:
             # Check for consistent spacing.
-            new_spacing = ds.get(dataset, 'training').params['spacing']
+            new_spacing = ds.get(dataset, 'training').params['output-spacing']
             if new_spacing != spacing:
                 raise ValueError(f'Datasets must have consistent spacing.')
 

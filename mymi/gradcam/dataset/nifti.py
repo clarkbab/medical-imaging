@@ -44,7 +44,7 @@ def create_multi_segmenter_heatmap(
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, **kwargs)
+        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 
@@ -90,7 +90,7 @@ def create_multi_segmenter_heatmaps(
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, **kwargs)
+        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 

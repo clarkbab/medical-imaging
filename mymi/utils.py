@@ -3,10 +3,12 @@ from GPUtil import getGPUs
 import hashlib
 import json
 import matplotlib.pyplot as plt
+import nibabel as nib
 import numpy as np
 import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
+import SimpleITK as sitk
 from time import perf_counter, time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -14,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # from mymi.loaders import Loader
 # from mymi import logging
 from mymi import config
-from mymi.types import ModelName
+from mymi.types import ImageOffset3D, ImageSpacing3D, ModelName
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
     # Pandas doesn't preserve index name when names are different between concatenated dataframes,
@@ -238,6 +240,11 @@ def arg_to_list(
     if type(arg) in arg_types:
         if arg in literals:
             arg = literals[arg]
+            # If arg is a function, run it now. This means the function
+            # is not evaluated every time 'arg_to_list' is called, only when
+            # the arg matches the appropriate literal (e.g. 'all').
+            if callable(arg):
+                arg = arg()
         else:
             arg = [arg]
         
@@ -329,3 +336,48 @@ def benchmark(
         after()
 
     return np.mean(durations)
+
+def save_nifti(
+    data: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: ImageOffset3D,
+    filepath: str) -> None:
+    # Create coordinate transform.
+    affine = np.array([
+        [spacing[0], 0, 0, offset[0]],
+        [0, spacing[1], 0, offset[1]],
+        [0, 0, spacing[2], offset[2]],
+        [0, 0, 0, 1]])
+    
+    # Save NIFTI.
+    img = nib.nifti1.Nifti1Image(data, affine)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    nib.save(img, filepath)
+
+def from_sitk_image(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, ImageOffset3D]:
+    # Reverse data coordinates as sitk flips when converting to numpy arrays.
+    data = sitk.GetArrayFromImage(img)
+    data = np.moveaxis(np.moveaxis(data, 0, 2), 0, 1)
+    spacing = tuple(img.GetSpacing())
+    offset = tuple(img.GetOrigin())
+    return data, spacing, offset
+
+def to_sitk_image(
+    data: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: ImageOffset3D,
+    is_vector: bool = False) -> sitk.Image:
+    # Convert to sitk data types.
+    if data.dtype == bool:
+        data = data.astype('uint8')
+    spacing = tuple(float(s) for s in spacing)
+    offset = tuple(float(o) for o in offset)
+    
+    # Convert to SimpleITK image.
+    # Data coordinates must be reversed as sitk flips numpy arrays axis order. Who knows why?
+    data = np.moveaxis(np.moveaxis(data, 0, 2), 0, 1)
+    img = sitk.GetImageFromArray(data, isVector=is_vector)
+    img.SetSpacing(spacing)
+    img.SetOrigin(offset)
+
+    return img

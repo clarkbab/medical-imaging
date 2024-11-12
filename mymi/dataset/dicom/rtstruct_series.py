@@ -4,7 +4,7 @@ from typing import List, Optional
 from mymi.types.types import PatientRegion
 
 from .dicom_file import SOPInstanceUID
-from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
+from .dicom_series import Modality, DICOMSeries, SeriesInstanceUID
 from .region_map import RegionMap
 from .rtstruct import RTSTRUCT
 
@@ -24,7 +24,7 @@ class RTSTRUCTSeries(DICOMSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == DICOMModality.RTSTRUCT) & (index['series-id'] == self.__id)]
+        self.__index = index[(index.modality == Modality.RTSTRUCT) & (index['series-id'] == self.__id)]
         self.__verify_index()
 
         # Get policies.
@@ -54,8 +54,8 @@ class RTSTRUCTSeries(DICOMSeries):
         return self.__index_policy
 
     @property
-    def modality(self) -> DICOMModality:
-        return DICOMModality.RTSTRUCT
+    def modality(self) -> Modality:
+        return Modality.RTSTRUCT
 
     @property
     def region_policy(self) -> pd.DataFrame:

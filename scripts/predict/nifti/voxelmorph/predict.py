@@ -10,7 +10,7 @@ from typing import Optional
 
 VXMPATH="/home/baclark/code/voxelmorph"
 sys.path.append(VXMPATH)
-from voxelmorph.torch.layers import SpatialTransformer
+# from voxelmorph.torch.layers import SpatialTransformer
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
@@ -18,7 +18,7 @@ sys.path.append(root_dir)
 from mymi import config
 from mymi.dataset.nifti import NiftiDataset
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
 
 VMXPATH="/home/baclark/code/voxelmorph"
@@ -55,7 +55,7 @@ def predict(
             ]) 
 
     # Apply warp to any segmentation labels.
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     if regions is not None:
         logging.info('Warping labels...')
         os.makedirs(os.path.join(set.path, 'predictions', modelname, 'regions'), exist_ok=True)

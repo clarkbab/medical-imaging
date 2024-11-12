@@ -1,5 +1,9 @@
 from enum import Enum
+import os
+import yaml
 
+from mymi import config
+from mymi import logging
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
 
@@ -10,6 +14,72 @@ EXPANDED_REGION_MAP = {
 }
 
 class RegionList(list, Enum):
+    # HaN-Seg dataset.
+    HAN_SEG = [
+        'A_Carotid_L',
+        'A_Carotid_R',
+        'Arytenoid',
+        'Bone_Mandible',
+        'Brainstem',
+        'BuccalMucosa',
+        'Cavity_Oral',
+        'Cochlea_L',
+        'Cochlea_R',
+        'Cricopharyngeus',
+        'Esophagus_S',
+        'Eye_AL',
+        'Eye_AR',
+        'Eye_PL',
+        'Eye_PR',
+        'Glnd_Lacrimal_L',
+        'Glnd_Lacrimal_R',
+        'Glnd_Submand_L',
+        'Glnd_Submand_R',
+        'Glnd_Thyroid',
+        'Glottis',
+        'Larynx_SG',
+        'Lips',
+        'OpticChiasm',
+        'OpticNrv_L',
+        'OpticNrv_R',
+        'Parotid_L',
+        'Parotid_R',
+        'Pituitary',
+        'SpinalCord'
+    ]
+    HAN_SEG_SHORT = [
+        'Car_L',
+        'Car_R',
+        'Aryt',
+        'Mand',
+        'Brstem',
+        'BucMuc',
+        'OralC',
+        'Coch_L',
+        'Coch_R',
+        'Crico',
+        'Eso_S',
+        'Eye_AL',
+        'Eye_AR',
+        'Eye_PL',
+        'Eye_PR',
+        'Lacr_L',
+        'Lacr_R',
+        'Subm_L',
+        'Subm_R',
+        'Thyr',
+        'Glot',
+        'Laryn_SG',
+        'Lips',
+        'OptChi',
+        'OptNrv_L',
+        'OptNrv_R',
+        'Par_L',
+        'Par_R',
+        'Pit',
+        'SpinCord'
+    ]
+
     # MICCAI 2015 dataset (PDDCA).
     MICCAI = ['Bone_Mandible', 'Brainstem', 'Glnd_Submand_L', 'Glnd_Submand_R', 'OpticChiasm', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R']
     MICCAI_CVG_THRESHOLDS = [0.71, 0.66, 0.54, 0.54, 0.25, 0.40, 0.44, 0.63, 0.62]
@@ -256,18 +326,31 @@ class RegionList(list, Enum):
     assert len(PMCC) == len(PMCC_CVG_THRESHOLDS) == len(PMCC_INVERSE_VOLUMES) == len(PMCC_SHORT)
 
 # Behaves like 'arg_to_list', but also handles special 'RL:<region list>' format.
-def region_to_list(region: PatientRegions, **kwargs) -> PatientRegions:
-    if region is None:
+def regions_to_list(regions: PatientRegions, **kwargs) -> PatientRegions:
+    if regions is None:
         return None
 
     # Get regions from "region list".
-    if isinstance(region, str) and region.startswith('RL:'): 
-        rl_name = region.split(':')[-1]
-        regions = list(getattr(RegionList, rl_name))
-    else:
-        regions = arg_to_list(region, str, **kwargs)
+    if isinstance(regions, str) and regions.startswith('RL:'): 
+        rl_name = regions.split(':')[-1]
+        if hasattr(RegionList, rl_name):
+            regions = list(getattr(RegionList, rl_name))
+        else:
+            filepath = os.path.join(config.directories.config, 'region-lists', f'{rl_name}.txt')
+            if not os.path.exists(filepath):
+                raise ValueError(f"Region list '{rl_name}' not found.")
 
-    # Expand any special region names.
+            with open(filepath) as f:
+                try:
+                    regions = f.readlines()
+                    regions = [r.strip() for r in regions]
+                    regions = [r for r in regions if r != '']
+                except yaml.YAMLError as exc:
+                    logging.error(exc)
+    else:
+        regions = arg_to_list(regions, str, **kwargs)
+
+    # Expand any special region names. Allows for grouping of regions, e.g. ribs.
     expanded_regions = [] 
     for r in regions:
         if r in EXPANDED_REGION_MAP:

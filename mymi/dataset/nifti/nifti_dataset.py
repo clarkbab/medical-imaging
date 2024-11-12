@@ -2,10 +2,11 @@ import numpy as np
 import os
 from pandas import DataFrame, read_csv
 import re
-from typing import List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
 from mymi import logging
+from mymi.regions import regions_to_list
 from mymi.types import PatientID, PatientRegions
 
 from ..dataset import Dataset, DatasetType
@@ -33,10 +34,12 @@ class NiftiDataset(Dataset):
         self.__excluded_labels = None           # Lazy-loaded.
         self.__group_index = None               # Lazy-loaded.
         self.__processed_labels = None          # Lazy-loaded.
+        self.__region_map = None           # Lazy-loaded.
         self.__loaded_index = False
         self.__loaded_excluded_labels = False
         self.__loaded_group_index = False
         self.__loaded_processed_labels = False
+        self.__loaded_region_map = False
 
     @property
     def index(self) -> Optional[DataFrame]:
@@ -83,6 +86,13 @@ class NiftiDataset(Dataset):
         return self.__processed_labels
 
     @property
+    def region_map(self) -> Optional[Dict[str, str]]:
+        if not self.__loaded_region_map:
+            self.__load_region_map()
+            self.__loaded_region_map = True
+        return self.__region_map
+
+    @property
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
 
@@ -94,21 +104,22 @@ class NiftiDataset(Dataset):
     def list_patients(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: Optional[PatientRegions] = None) -> List[str]:
+        regions: Optional[PatientRegions] = None) -> List[str]:
+        regions = regions_to_list(regions)
 
         if self.__ct_from is not None:
             # Load patients from 'ct_from' dataset.
-            pat_ids = self.__ct_from.list_patients(labels=labels, region=None)
+            pat_ids = self.__ct_from.list_patients(labels=labels, regions=None)
         else:
             # Load patients from filenames.
             ct_path = os.path.join(self.__path, 'data', 'ct')
             files = list(sorted(os.listdir(ct_path)))
             pat_ids = [f.replace('.nii.gz', '') for f in files]
 
-        # Filter by 'region'.
-        if region is not None:
+        # Filter by 'regions'.
+        if regions is not None:
             def filter_fn(pat_id: PatientID) -> bool:
-                pat_regions = self.patient(pat_id).list_regions(labels=labels, only=region)
+                pat_regions = self.patient(pat_id).list_regions(labels=labels, only=regions)
                 if len(pat_regions) > 0:
                     return True
                 else:
@@ -136,7 +147,7 @@ class NiftiDataset(Dataset):
         exc_df = self.excluded_labels[self.excluded_labels['patient-id'] == str(id)] if self.excluded_labels is not None else None
         proc_df = self.processed_labels[self.processed_labels['patient-id'] == str(id)] if self.processed_labels is not None else None
 
-        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, index=index, processed_labels=proc_df)
+        return NIFTIPatient(self, id, ct_from=self.__ct_from, excluded_labels=exc_df, index=index, processed_labels=proc_df, region_map=self.region_map)
     
     def __load_index(self) -> None:
         filepath = os.path.join(self.__path, 'index.csv')
@@ -197,6 +208,21 @@ class NiftiDataset(Dataset):
                 self.__processed_labels = self.__processed_labels[~self.__processed_labels[dup_cols].duplicated()]
         else:
             self.__processed_labels = None
+    
+    def __load_region_map(self) -> None:
+        filepath = os.path.join(config.directories.config, 'region-mapping', f'NIFTI:{self.__name}.txt')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+                lines = [l.strip() for l in lines]
+                lines = [l for l in lines if l != '']
+                region_map = {}
+                for l in lines:
+                    k, v = l.split(':')
+                    region_map[k.strip()] = v.strip()
+                self.__region_map = region_map
+        else:
+            self.__region_map = None
 
     def __str__(self) -> str:
         return self.__global_id

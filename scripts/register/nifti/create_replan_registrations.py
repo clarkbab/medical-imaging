@@ -10,12 +10,16 @@ sys.path.append(root_dir)
 from mymi.dataset import NiftiDataset
 from mymi.registration.dataset.nifti import create_patient_registration
 
-dataset = 'PMCC-HN-REPLAN'
+dataset = 'PMCC-HN-REPLAN-BOOT'
+reverse = True
 set = NiftiDataset(dataset)
 pat_ids = set.list_patients()
 n_pats = len(pat_ids) // 2
 
-for i in tqdm(range(n_pats)):
+iter = range(n_pats)
+if reverse:
+    iter = reversed(iter)
+for i in tqdm(iter):
     fixed_pat_id = f'{i}-1'
     moving_pat_id = f'{i}-0'
     create_patient_registration(dataset, fixed_pat_id, moving_pat_id)

@@ -11,7 +11,7 @@ from ..plotter import plot_patient as plot_patient_base
 def plot_patient(
     dataset: str,
     sample_idx: str,
-    centre_of: Optional[str] = None,
+    centre: Optional[str] = None,
     crop: Optional[Union[str, types.Box2D]] = None,
     region: Optional[types.PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
@@ -26,10 +26,10 @@ def plot_patient(
     region_data = sample.label(region=regions) if regions is not None else None
     spacing = sample.spacing
 
-    if centre_of is not None:
-        if type(centre_of) == str:
-            if region_data is None or centre_of not in region_data:
-                centre_of = sample.label(region=centre_of)[centre_of]
+    if centre is not None:
+        if type(centre) == str:
+            if region_data is None or centre not in region_data:
+                centre = sample.label(region=centre)[centre]
 
     if crop is not None:
         if type(crop) == str:
@@ -42,14 +42,14 @@ def plot_patient(
         for old, new in region_labels.items():
             region_data[new] = region_data.pop(old)
 
-        # Rename 'centre_of' and 'crop' keys.
-        if type(centre_of) == str and centre_of in region_labels:
-            centre_of = region_labels[centre_of] 
+        # Rename 'centre' and 'crop' keys.
+        if type(centre) == str and centre in region_labels:
+            centre = region_labels[centre] 
         if type(crop) == str and crop in region_labels:
             crop = region_labels[crop]
 
     # Plot.
-    plot_patient_base(sample_idx, ct_data.shape, spacing, centre_of=centre_of, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_patient_base(sample_idx, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
 
 def plot_sample_localiser_prediction(
     dataset: str,

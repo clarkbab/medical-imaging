@@ -15,7 +15,7 @@ from mymi.dataset.training import TrainingDataset
 from mymi.geometry import get_centre
 from mymi import logging
 from torchio.transforms import Transform
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
 
@@ -81,6 +81,7 @@ class MultiLoader:
         load_all_samples: bool = False,
         load_data: bool = True,
         load_test_origin: bool = True,
+        load_train_origin: bool = False,
         n_folds: Optional[int] = None, 
         n_subfolds: Optional[int] = None,
         n_train: Optional[int] = None,
@@ -101,7 +102,7 @@ class MultiLoader:
         use_split_file: bool = False,
         **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         datasets = arg_to_list(dataset, str)
-        regions = region_to_list(region)
+        regions = regions_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
         logging.arg_log('Building multi-loaders', ('dataset', 'regions', 'load_all_samples', 'n_folds', 'shuffle_samples', 'test_fold', 'use_grouping', 'use_split_file'), (dataset, regions, load_all_samples, n_folds, shuffle_samples, test_fold, use_grouping, use_split_file))
@@ -402,7 +403,7 @@ class MultiLoader:
 
         # Create train loader.
         col_fn = collate_fn if batch_size > 1 else None
-        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, preload_data=preload_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
+        train_ds = TrainingSet(datasets, regions, train_samples, data_hook=data_hook, include_background=include_background, load_data=load_data, load_origin=load_train_origin, preload_data=preload_data, random_seed=random_seed, spacing=spacing, transform=transform_train)
         if shuffle_train:
             shuffle = None
             train_sampler = RandomSampler(train_ds, epoch=epoch, random_seed=random_seed)
@@ -419,7 +420,7 @@ class MultiLoader:
             # Give all foreground classes equal weight.
             class_weights = np.ones(len(regions) + 1) / len(regions)
             class_weights[0] = 0
-        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, preload_data=preload_data, spacing=spacing, transform=transform_val)
+        val_ds = TrainingSet(datasets, regions, val_samples, class_weights=class_weights, data_hook=data_hook, include_background=include_background, load_data=load_data, load_origin=load_train_origin, preload_data=preload_data, spacing=spacing, transform=transform_val)
         val_loader = DataLoader(batch_size=batch_size, collate_fn=col_fn, dataset=val_ds, num_workers=n_workers, shuffle=False)
 
         # Create test loader.
@@ -451,6 +452,7 @@ class TrainingSet(Dataset):
         data_hook: Optional[Callable] = None,
         include_background: bool = False,
         load_data: bool = True,
+        load_origin: bool = False,
         preload_data: bool = False,
         random_seed: float = 0,
         spacing: Optional[ImageSpacing3D] = None,
@@ -459,6 +461,7 @@ class TrainingSet(Dataset):
         self.__data_hook = data_hook
         self.__include_background = include_background
         self.__load_data = load_data
+        self.__load_origin = load_origin
         self.__preload_data = preload_data
         self.__random_seed = random_seed
         self.__regions = regions
@@ -543,6 +546,8 @@ class TrainingSet(Dataset):
         # Get description.
         desc = f'{set.name}:{s_i}'
         if not self.__load_data:
+            if self.__load_origin:
+                desc = ':'.join((str(el) for el in set.sample(s_i).origin))
             return desc
 
         # Get sample regions.

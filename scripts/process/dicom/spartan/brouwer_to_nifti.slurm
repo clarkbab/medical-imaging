@@ -2,8 +2,8 @@
 #SBATCH --account punim1413
 #SBATCH --partition sapphire
 #SBATCH --nodes 1
-#SBATCH --mem 64G
-#SBATCH --time 0-06:00:00
+#SBATCH --mem 120G
+#SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -13,9 +13,8 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-nnUNetv2_plan_and_preprocess \
-    -d $DATASET_ID \
-    -gpu_memory_target 80 \
-    -overwrite_plans_name nnUNetResEncUNetPlansXXL \
-    -pl nnUNetPlannerResEncXL \
-    --verify_dataset_integrity \
+SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
+DATASET="BROUWER"
+
+python $SCRIPT_DIR/process/dicom/convert_to_nifti.py \
+    --dataset $DATASET

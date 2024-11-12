@@ -2,7 +2,7 @@ import pandas as pd
 from typing import List, Optional
 
 from .dicom_file import SOPInstanceUID
-from .dicom_series import DICOMModality, DICOMSeries, SeriesInstanceUID
+from .dicom_series import Modality, DICOMSeries, SeriesInstanceUID
 from .region_map import RegionMap
 from .rtplan import RTPLAN
 
@@ -17,7 +17,7 @@ class RTPLANSeries(DICOMSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == DICOMModality.RTPLAN) & (index['series-id'] == self.__id)]
+        self.__index = index[(index.modality == Modality.RTPLAN) & (index['series-id'] == self.__id)]
         self.__verify_index()
 
     @property
@@ -35,8 +35,8 @@ class RTPLANSeries(DICOMSeries):
         return self.__id
 
     @property
-    def modality(self) -> DICOMModality:
-        return DICOMModality.RTPLAN
+    def modality(self) -> Modality:
+        return Modality.RTPLAN
 
     @property
     def study(self) -> str:

@@ -18,7 +18,16 @@ source ~/venvs/medical-imaging/bin/activate
 
 version=$(python --version)
 echo $version
+
+# Set other parameters.
+DATASET="BROUWER"
+SPACING="(1,1,2)"
+DEST_DATASET="BROUWER-AUG0"
+REGION="RL:BROUWER"
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/process/nifti/convert_replan_to_nnunet_ref_model.py \
-    --test_fold $TEST_FOLD
+python $SCRIPT_DIR/process/nifti/convert_to_training.py \
+    --dataset $DATASET \
+    --regions $REGIONS \
+    --dest_dataset $DEST_DATASET \
+    --spacing $SPACING

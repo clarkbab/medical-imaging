@@ -126,7 +126,8 @@ class Segmenter(pl.LightningModule):
 
     def training_step(self, batch, _):
         # Forward pass.
-        _, x, y, _, _ = batch
+        # _, x, y, _, _ = batch
+        _, x, y = batch
         y_hat = self.__network(x)
         loss = self.__loss(y_hat, y)
 

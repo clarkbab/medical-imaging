@@ -16,8 +16,7 @@ from mymi.utils import arg_to_list
 from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
 from .dicom_patient import DICOMPatient
-from .index import INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index
-from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY
+from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY, INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index as build_index_fn
 from .region_map import RegionMap
 from .region_policy import DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
@@ -26,7 +25,8 @@ Z_SPACING_ROUND_DP = 2
 class DicomDataset(Dataset):
     def __init__(
         self,
-        name: str):
+        name: str,
+        build_index: bool = False) -> None:
         # Create 'global ID'.
         self.__name = name
         self.__path = os.path.join(config.directories.datasets, 'dicom', self.__name)
@@ -48,6 +48,9 @@ class DicomDataset(Dataset):
         self.__region_dups = None       # Lazy-loaded.
         self.__region_map = None        # Lazy-loaded.
         self.__region_policy = None     # Lazy-loaded.
+
+        if build_index:
+            self.build_index()
 
     @property
     def ct_from(self) -> Optional['DicomDataset']:
@@ -114,14 +117,14 @@ class DicomDataset(Dataset):
 
     def list_patients(
         self,
-        region: Optional[PatientRegions] = None,
+        regions: Optional[PatientRegions] = None,
         show_progress: bool = False,
         use_mapping: bool = True,
         use_patient_regions_report: bool = True) -> List[str]:
-        regions = arg_to_list(region, str)
+        regions = arg_to_list(regions, str)
 
         # Use patient regions report to accelerate 'list_patients' if filtering on regions.
-        if region is not None and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
+        if regions is not None and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
             logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
             df = self.__load_patient_regions_report(use_mapping=use_mapping)
             df = df[df['region'].isin(regions)]
@@ -131,10 +134,10 @@ class DicomDataset(Dataset):
         # Load patient IDs from index.
         pat_ids = list(sorted(self.index['patient-id'].unique()))
 
-        # Filter on 'region'.
-        if region is not None:
+        # Filter on 'regions'.
+        if regions is not None:
             def filter_fn(pat_id):
-                pat_regions = self.patient(pat_id).list_regions(only=region, use_mapping=use_mapping)
+                pat_regions = self.patient(pat_id).list_regions(only=regions, use_mapping=use_mapping)
                 if len(pat_regions) > 0:
                     return True
                 else:
@@ -177,8 +180,8 @@ class DicomDataset(Dataset):
 
         return list(np.unique(regions))
 
-    def rebuild_index(self) -> None:
-        build_index(self.__name)
+    def build_index(self) -> None:
+        build_index_fn(self.__name)
 
     def __filter_patient_by_pat_ids(
         self,

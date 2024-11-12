@@ -24,7 +24,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
 from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, to_255
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import crop_3D, resample_3D, top_crop_or_pad_3D
 from mymi import types
@@ -152,9 +152,9 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
     
 def convert_to_training(
     dataset: str,
-    region: types.PatientRegions,
+    regions: types.PatientRegions,
     create_data: bool = True,
-    dilate_iter: int = 3,
+    dilate_iter: int = 5,
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
     output_size: Optional[types.ImageSize3D] = None,
@@ -162,8 +162,14 @@ def convert_to_training(
     recreate_dataset: bool = True,
     round_dp: Optional[int] = None,
     training_dataset: Optional[str] = None) -> None:
-    logging.arg_log('Converting to training', ('dataset', 'region', 'training_dataset'), (dataset, region, training_dataset))
-    regions = region_to_list(region)
+    # Get regions.
+    set = NRRDDataset(dataset)
+    if regions is None:
+        regions = set.list_regions()
+    else:
+        regions = regions_to_list(regions)
+
+    logging.arg_log('Converting to training', ('dataset', 'regions', 'training_dataset'), (dataset, regions, training_dataset))
 
     # Create the dataset.
     dest_dataset = dataset if training_dataset is None else training_dataset
@@ -209,8 +215,7 @@ def convert_to_training(
             params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    set = NRRDDataset(dataset)
-    pat_ids = set.list_patients(region=regions)
+    pat_ids = set.list_patients(regions=regions)
 
     # Get exclusions.
     exc_df = set.excluded_labels
@@ -234,6 +239,7 @@ def convert_to_training(
     start = time()
     if create_data:
         for i, pat_id in enumerate(tqdm(pat_ids)):
+            logging.info(f"Processing patient '{pat_id}'.")
             # Load input data.
             patient = set.patient(pat_id)
             spacing = patient.ct_spacing
@@ -265,7 +271,7 @@ def convert_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
+                if not patient.has_region(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -275,7 +281,7 @@ def convert_to_training(
                         continue
 
                 # Load label data.
-                label = patient.region_data(region=region)[region]
+                label = patient.region_data(regions=region)[region]
 
                 # Resample data.
                 if output_spacing:

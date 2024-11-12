@@ -6,7 +6,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi import types
 from mymi.utils import arg_to_list
 

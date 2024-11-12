@@ -63,8 +63,8 @@ def mean_intensity(
     label: np.ndarray) -> float:
     if image.shape != label.shape:
         raise ValueError(f"Metric 'mean_intensity' expects images of equal shape. Got '{image.shape}' and '{label.shape}'.")
-    if (image.dtype != np.float32 and image.dtype != np.float64) or label.dtype != np.bool_:
-        raise ValueError(f"Metric 'mean_intensity' expects (float, boolean) images. Got '{image.dtype}' and '{label.dtype}'.")
+    if (image.dtype != np.int16 and image.dtype != np.int32 and image.dtype != np.int64 and image.dtype != np.float32 and image.dtype != np.float64) or label.dtype != np.bool_:
+        raise ValueError(f"Metric 'mean_intensity' expects (int/float, boolean) images. Got '{image.dtype}' and '{label.dtype}'.")
     if label.sum() == 0:
         raise ValueError(f"Metric 'mean_intensity' can't be calculated with an empty 'label'.")
 

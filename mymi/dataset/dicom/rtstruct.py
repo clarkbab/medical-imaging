@@ -4,12 +4,12 @@ import pydicom as dcm
 from typing import Dict, List, Optional, OrderedDict, Tuple, Union
 
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegion, PatientRegions
 
 from .ct_series import CTSeries
 from .dicom_file import DICOMFile, SOPInstanceUID
-from .dicom_series import DICOMModality
+from .dicom_series import Modality
 from .region_map import RegionMap
 from .rtstruct_converter import RTSTRUCTConverter
 
@@ -158,7 +158,7 @@ class RTSTRUCT(DICOMFile):
         # Filter on 'only'. If region mapping is used (i.e. mapped_regions != None),
         # this will try to match mapped names, otherwise it will map unmapped names.
         if only is not None:
-            only = region_to_list(only)
+            only = regions_to_list(only)
 
             if use_mapping:
                 mapped_regions = [r for r in mapped_regions if r[1] in only]
@@ -201,9 +201,9 @@ class RTSTRUCT(DICOMFile):
     def region_data(
         self,
         only: Optional[PatientRegions] = None,
-        region: Optional[PatientRegions] = None,    # Request specific region/s, otherwise get all region data. Specific regions must exist.
+        regions: Optional[PatientRegions] = None,    # Request specific region/s, otherwise get all region data. Specific regions must exist.
         use_mapping: bool = True) -> OrderedDict:
-        regions = region_to_list(region)
+        regions = regions_to_list(regions)
 
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
@@ -265,7 +265,7 @@ class RTSTRUCT(DICOMFile):
 
         elif self.__index_policy['no-ref-ct']['only'] == 'at-least-one-ct' or self.__index_policy['no-ref-ct']['only'] == 'single-ct':
             # Load first CT series in study.
-            ct_id = self.__series.study.list_series(DICOMModality.CT)[-1]
+            ct_id = self.__series.study.list_series(Modality.CT)[-1]
 
         self.__ref_ct = CTSeries(self.__series.study, ct_id)
 

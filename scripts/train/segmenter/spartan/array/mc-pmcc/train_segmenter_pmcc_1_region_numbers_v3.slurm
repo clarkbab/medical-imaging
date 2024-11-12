@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-##SBATCH --partition gpu-a100-short
+#SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 128G
-##SBATCH --mem 120G
+##SBATCH --mem 128G
+#SBATCH --mem 120G
 #SBATCH --gres gpu:1
 #SBATCH --cpus-per-gpu 8
-#SBATCH --time 7-00:00:00
-##SBATCH --time 0-04:00:00
+##SBATCH --time 7-00:00:00
+#SBATCH --time 0-04:00:00
 ##SBATCH --test-only
 
 module load GCCcore/11.3.0
@@ -60,7 +60,8 @@ SHORT_REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 SHORT_REGION=${SHORT_REGIONS[$SLURM_ARRAY_TASK_ID]}
-MODEL_NAME="segmenter-pmcc-numbers-v3"
+# MODEL_NAME="segmenter-pmcc-numbers-v3"
+MODEL_NAME="phd-completion-seminar"
 RESOLUTION="112"
 DATASET="('PMCC-HN-TEST-BC-$RESOLUTION','PMCC-HN-TRAIN-BC-$RESOLUTION')"
 N_SPLIT_CHANNELS=2
@@ -68,7 +69,7 @@ RESUME=False
 LR_INIT=1e-3
 
 # Get run name.
-RANDOM_SEED=44
+RANDOM_SEED=42
 RUN_NAME_BASE="1-region-$SHORT_REGION-$RESOLUTION-seed-$RANDOM_SEED"
 if [ "$USE_WEIGHTS" = True ]; then
     RUN_NAME="$RUN_NAME_BASE-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
@@ -84,6 +85,7 @@ CKPT_MODEL=True
 N_EPOCHS=1000
 N_GPUS=1
 N_NODES=1
+N_TRAIN=20
 N_WORKERS=8
 RESUME_CKPT='last'
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
@@ -91,7 +93,7 @@ USE_LOADER_SPLIT_FILE=False
 LOAD_ALL_SAMPLES=True
 N_FOLDS=5
 TEST_FOLD=0
-USE_LOGGER=True
+USE_LOGGER=False
 
 python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --dataset $DATASET \
@@ -107,6 +109,7 @@ python $SCRIPT_DIR/train/segmenter/train_multi_segmenter.py \
     --n_gpus $N_GPUS \
     --n_nodes $N_NODES \
     --n_split_channels $N_SPLIT_CHANNELS \
+    --n_train $N_TRAIN \
     --n_workers $N_WORKERS \
     --random_seed $RANDOM_SEED \
     --resume $RESUME \

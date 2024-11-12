@@ -4,13 +4,13 @@ import numpy as np
 import os
 import subprocess
 import sys
-import tensorflow as tf
+# import tensorflow as tf
 from tqdm import tqdm
 from typing import Optional
 
 VXMPATH="/home/baclark/code/voxelmorph"
 sys.path.append(VXMPATH)
-from voxelmorph.tf.layers import SpatialTransformer
+# from voxelmorph.tf.layers import SpatialTransformer
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
@@ -18,7 +18,7 @@ sys.path.append(root_dir)
 from mymi import config
 from mymi.dataset.nifti import NiftiDataset
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import PatientRegions
 
 VMXPATH="/home/baclark/code/voxelmorph"
@@ -57,7 +57,7 @@ def predict(
             subprocess.run(command)
 
     # Apply warp to any segmentation labels.
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     if regions is not None:
         logging.info('Warping labels...')
         os.makedirs(os.path.join(set.path, 'predictions', modelname, 'regions'), exist_ok=True)
@@ -87,5 +87,37 @@ def predict(
                 warpedpath = os.path.join(set.path, 'predictions', modelname, 'regions', region, os.path.basename(movingpath))
                 os.makedirs(os.path.dirname(warpedpath), exist_ok=True)
                 nib.save(nib.Nifti1Image(warped, np.eye(4)), warpedpath)
+
+    # Transform any fixed landmarks back to moving space.
+    logging.info('Transforming landmarks...')
+    for movingpath, fixedpath in tqdm(lines):
+        fixed_pat_id = os.path.basename(fixedpath).split('.')[0]
+        fixed_pat = set.patient(fixed_pat_id)
+        moving_pat_id = os.path.basename(movingpath).split('.')[0]
+        moving_pat = set.patient(moving_pat_id)
+        if not fixed_pat.has_landmarks:
+            logging.info(f'No landmarks found for patient {fixed_pat_id}. Skipping...')
+            continue
+        fixed_lms = fixed_pat.landmarks
+        moving_pat_id = os.path.basename(movingpath).split('.')[0]
+
+        # Load transform.
+        # Warp has same shape as the fixed image and also is in voxel coordinates, not normalised
+        # voxel coordinates as required by Torch's "grid_resample".
+        warppath = os.path.join(set.path, 'predictions', modelname, 'ct', os.path.basename(movingpath).replace('.nii.gz', '_warp.nii.gz'))
+        warp = nib.load(warppath).get_fdata()
+
+        # Transform points.
+        points_t = []
+        for point in fixed_lms:
+            idx = tuple([slice(None)] + list(point))
+            point_t = point + warp[idx]
+            points_t.append(point_t)
+        points_t = np.vstack(points_t)
+
+        # Save transformed points.
+        filepath = os.path.join(set.path, 'predictions', modelname, 'landmarks', f'{moving_pat_id}.csv')
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        np.savetxt(filepath, points_t, delimiter=',', fmt='%.3f')
  
 fire.Fire(predict)

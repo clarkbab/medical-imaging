@@ -21,9 +21,11 @@ from mymi.metrics import mean_intensity, snr
 from mymi.models.systems import Localiser
 from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_patient, plot_segmenter_prediction
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
-from mymi.regions import region_to_list as region_to_list
+from mymi.regions import regions_to_list as regions_to_list
 from mymi.types import Axis, ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
+
+from ..reporting import get_ct_stats, get_region_stats
 
 def get_region_overlap_summary(
     dataset: str,
@@ -258,26 +260,54 @@ def create_region_overlap_summary(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def create_region_summary_report(
+def create_region_summary(
     dataset: str,
-    region: PatientRegions = 'all') -> None:
-    logging.arg_log('Creating region summary', ('dataset', 'region'), (dataset, region))
-    regions = region_to_list(region)
-
+    regions: Optional[PatientRegions] = None) -> None:
+    # Load regions.
     set = NRRDDataset(dataset)
-    for region in tqdm(regions):
-        # Check if there are patients with this region.
-        n_pats = len(set.list_patients(labels='all', region=region))
-        if n_pats == 0:
-            # Allows us to pass all regions from Spartan 'array' job.
-            logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
-            return
+    if regions is None:
+        regions = set.list_regions()
+    else:
+        regions = regions_to_list(regions)
 
-        # Generate counts report.
-        df = get_region_summary(dataset, region)
+    for region in tqdm(regions):
+        cols = {
+            'dataset': str,
+            'patient-id': str,
+            'metric': str,
+            'value': float
+        }
+        df = pd.DataFrame(columns=cols.keys())
+
+        # Get patient stats.
+        pat_ids = set.list_patients(regions=region)
+        for pat_id in tqdm(pat_ids, leave=False):
+            # Load data.
+            pat = set.patient(pat_id)
+            ct_data = pat.ct_data
+            spacing = pat.ct_spacing
+            region_data = pat.region_data(regions=region)[region]
+            if pat.has_region('Brain'):
+                brain_data = pat.region_data(regions='Brain')['Brain']
+            else:
+                brain_data = None
+
+            # Get stats.
+            stats = get_region_stats(ct_data, region_data, spacing, brain_data)
+            for stat in stats:
+                data = {
+                    'dataset': dataset,
+                    'patient-id': pat_id,
+                    'metric': stat['metric'],
+                    'value': stat['value']
+                }
+                df = append_row(df, data)
+
+        # Set column types as 'append' crushes them.
+        df = df.astype(cols)
 
         # Save report.
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        filepath = os.path.join(set.path, 'reports', 'region-summary', f'{region}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
 
@@ -338,7 +368,7 @@ def load_region_contrast_report(
     dataset: Union[str, List[str]],
     region: PatientRegions) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
             
     # Load reports.
     dfs = []
@@ -386,22 +416,25 @@ def load_region_overlap_summary(
 
     return df
 
-def load_region_summary_report(
+def load_region_summary(
     dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'all',
-    region: PatientRegions = 'all',
+    regions: Optional[PatientRegions] = None,
+    pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(regions)
 
     # Load summary.
     dfs = []
     for dataset in datasets:
         set = NRRDDataset(dataset)
         exc_df = set.excluded_labels
+        if regions is None:
+            regions = set.list_regions()
 
         for region in regions:
-            filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+            filepath = os.path.join(set.path, 'reports', 'region-summary', f'{region}.csv')
             if not os.path.exists(filepath):
                 if raise_error:
                     raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
@@ -434,6 +467,11 @@ def load_region_summary_report(
     df = pd.concat(dfs, axis=0)
     df = df.reset_index(drop=True)
 
+    # Pivot table.
+    if pivot:
+        df = df.pivot(index=['dataset', 'patient-id', 'region'], columns='metric', values='value')
+        df = df.reset_index()
+
     return df
 
 def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
@@ -453,13 +491,8 @@ def load_region_count(datasets: Union[str, List[str]]) -> pd.DataFrame:
     df = df.pivot(index='dataset', columns='region', values='count').fillna(0).astype(int)
     return df
 
-def get_ct_summary(
-    dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
-    # Get patients.
-    set = NRRDDataset(dataset)
-    pats = set.list_patients(region=region)
-
+def create_ct_summary(dataset: str) -> None:
+    # Create dataframe.
     cols = {
         'dataset': str,
         'patient-id': str,
@@ -470,54 +503,36 @@ def get_ct_summary(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    for pat in tqdm(pats):
-        # Load values.
-        patient = set.patient(pat)
-        size = patient.ct_size
-        spacing = patient.ct_spacing
-
-        # Calculate FOV.
-        fov = np.array(size) * spacing
-
-        for axis in range(len(size)):
+    # Add patient CT image stats.
+    set = NRRDDataset(dataset)
+    pat_ids = set.list_patients()
+    for pat_id in tqdm(pat_ids):
+        # Load CT image.
+        pat = set.patient(pat_id)
+        ct_data = set.patient(pat_id).ct_data
+        spacing = pat.ct_spacing
+        stats = get_ct_stats(ct_data, spacing)
+        
+        # Add stats.
+        for s in stats:
             data = {
                 'dataset': dataset,
-                'patient-id': pat,
-                'axis': axis,
-                'size': size[axis],
-                'spacing': spacing[axis],
-                'fov': fov[axis]
+                'patient-id': pat_id,
+                'axis': s['axis'],
+                'size': s['size'],
+                'spacing': s['spacing'],
+                'fov': s['fov']
             }
             df = append_row(df, data)
 
-    # Set column types as 'append' crushes them.
-    df = df.astype(cols)
-
-    return df
-
-def create_ct_summary_report(
-    dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
-    # Get regions.
-    set = NRRDDataset(dataset)
-    regions = arg_to_list(region, str) if region is None else set.list_regions()
-
-    # Get summary.
-    df = get_ct_summary(dataset, region=regions)
-
     # Save summary.
-    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
+    filepath = os.path.join(set.path, 'reports', 'ct-summary.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def load_ct_summary_report(
-    dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
-    # Get regions.
+def load_ct_summary(dataset: str) -> pd.DataFrame:
     set = NRRDDataset(dataset)
-    regions = arg_to_list(region, str) if region is None else set.list_regions()
-
-    filepath = os.path.join(set.path, 'reports', 'ct-summary', encode(regions), 'ct-summary.csv')
+    filepath = os.path.join(set.path, 'reports', 'ct-summary.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'. Filepath: {filepath}.")
     return pd.read_csv(filepath)
@@ -586,7 +601,7 @@ def create_segmenter_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre_of=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -600,13 +615,14 @@ def create_region_figures(
     dataset: str,
     region: str,
     labels: Literal['included', 'excluded', 'all'] = 'all',
+    show_info: bool = True,
     subregions: bool = False,
     **kwargs) -> None:
     logging.arg_log('Creating region figures', ('dataset', 'region', 'labels', 'subregions'), (dataset, region, labels, subregions))
 
     # Get patients.
     set = NRRDDataset(dataset)
-    pat_ids = set.list_patients(labels=labels, region=region)
+    pat_ids = set.list_patients(labels=labels, regions=region)
 
     # Get excluded regions.
     exc_df = set.excluded_labels
@@ -614,7 +630,7 @@ def create_region_figures(
         raise ValueError("'excluded-labels.csv' must be present to split included from excluded regions.")
 
     # Keep regions with patients.
-    df = load_region_summary(dataset, region=region)
+    df = load_region_summary(dataset, regions=region)
     df = df.pivot(index=['dataset', 'region', 'patient-id'], columns='metric', values='value').reset_index()
 
     # Add 'extent-mm' outlier info.
@@ -666,71 +682,72 @@ def create_region_figures(
         pdf.start_section(pat_id)
 
         # Add region info.
-        pdf.start_section('Region Info', level=1)
+        if show_info:
+            pdf.start_section('Region Info', level=1)
 
-        # Create table.
-        table_t_margin = 50
-        table_l_margin = 12
-        table_line_height = 2 * pdf.font_size
-        table_col_widths = (15, 35, 30, 45, 45)
-        pat_info = df[df['patient-id'] == pat_id].iloc[0]
-        table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
-        for axis in ['x', 'y', 'z']:
-            colnames = {
-                'extent': f'extent-mm-{axis}',
-                'extent-out': f'extent-mm-{axis}-out',
-                'extent-out-dir': f'extent-mm-{axis}-out-dir',
-                'extent-out-num-iqr': f'extent-mm-{axis}-out-num-iqr'
-            }
-            n_iqr = pat_info[colnames['extent-out-num-iqr']]
-            format = '.2f' if n_iqr and n_iqr != np.nan else ''
-            table_data.append((
-                axis,
-                f"{pat_info[colnames['extent']]:.2f}",
-                str(pat_info[colnames['extent-out']]),
-                pat_info[colnames['extent-out-dir']],
-                f"{pat_info[colnames['extent-out-num-iqr']]:{format}}",
-            ))
+            # Create table.
+            table_t_margin = 50
+            table_l_margin = 12
+            table_line_height = 2 * pdf.font_size
+            table_col_widths = (15, 35, 30, 45, 45)
+            pat_info = df[df['patient-id'] == pat_id].iloc[0]
+            table_data = [('Axis', 'Extent [mm]', 'Outlier', 'Outlier Direction', 'Outlier Num. IQR')]
+            for axis in ['x', 'y', 'z']:
+                colnames = {
+                    'extent': f'extent-mm-{axis}',
+                    'extent-out': f'extent-mm-{axis}-out',
+                    'extent-out-dir': f'extent-mm-{axis}-out-dir',
+                    'extent-out-num-iqr': f'extent-mm-{axis}-out-num-iqr'
+                }
+                n_iqr = pat_info[colnames['extent-out-num-iqr']]
+                format = '.2f' if n_iqr and n_iqr != np.nan else ''
+                table_data.append((
+                    axis,
+                    f"{pat_info[colnames['extent']]:.2f}",
+                    str(pat_info[colnames['extent-out']]),
+                    pat_info[colnames['extent-out-dir']],
+                    f"{pat_info[colnames['extent-out-num-iqr']]:{format}}",
+                ))
 
-        for i, row in enumerate(table_data):
-            if i == 0:
-                pdf.set_font('Helvetica', 'B', 12)
-            else:
-                pdf.set_font('Helvetica', '', 12)
-            pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
-            for j, value in enumerate(row):
-                pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+            for i, row in enumerate(table_data):
+                if i == 0:
+                    pdf.set_font('Helvetica', 'B', 12)
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                for j, value in enumerate(row):
+                    pdf.cell(table_col_widths[j], table_line_height, value, border=1)
 
-        # Add subregion info.
-        if subregions:
-            # Get object info.
-            obj_df = get_object_summary(dataset, pat_id, region)
+            # Add subregion info.
+            if subregions:
+                # Get object info.
+                obj_df = get_object_summary(dataset, pat_id, region)
 
-            if len(obj_df) > 1:
-                pdf.start_section('Subregion Info', level=1)
+                if len(obj_df) > 1:
+                    pdf.start_section('Subregion Info', level=1)
 
-                # Create table.
-                table_t_margin = 105
-                table_l_margin = 12
-                table_line_height = 2 * pdf.font_size
-                table_col_widths = (15, 35, 30, 45, 45)
-                table_data = [('ID', 'Volume [mm^3]', 'Volume [prop.]', 'Extent Centre [vox]', 'Extent Width [mm]')]
-                for i, row in obj_df.iterrows():
-                    table_data.append((
-                        str(i),
-                        f"{row['volume-mm3']:.2f}",
-                        f"{row['volume-p-total']:.2f}",
-                        row['extent-centre-vox'],
-                        str(tuple([round(e, 2) for e in eval(row['extent-mm'])]))
-                    ))
-                for i, row in enumerate(table_data):
-                    if i == 0:
-                        pdf.set_font('Helvetica', 'B', 12)
-                    else:
-                        pdf.set_font('Helvetica', '', 12)
-                    pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
-                    for j, value in enumerate(row):
-                        pdf.cell(table_col_widths[j], table_line_height, value, border=1)
+                    # Create table.
+                    table_t_margin = 105
+                    table_l_margin = 12
+                    table_line_height = 2 * pdf.font_size
+                    table_col_widths = (15, 35, 30, 45, 45)
+                    table_data = [('ID', 'Volume [mm^3]', 'Volume [prop.]', 'Extent Centre [vox]', 'Extent Width [mm]')]
+                    for i, row in obj_df.iterrows():
+                        table_data.append((
+                            str(i),
+                            f"{row['volume-mm3']:.2f}",
+                            f"{row['volume-p-total']:.2f}",
+                            row['extent-centre-vox'],
+                            str(tuple([round(e, 2) for e in eval(row['extent-mm'])]))
+                        ))
+                    for i, row in enumerate(table_data):
+                        if i == 0:
+                            pdf.set_font('Helvetica', 'B', 12)
+                        else:
+                            pdf.set_font('Helvetica', '', 12)
+                        pdf.set_xy(table_l_margin, table_t_margin + i * table_line_height)
+                        for j, value in enumerate(row):
+                            pdf.cell(table_col_widths[j], table_line_height, value, border=1)
 
         # Add region images.
         pdf.add_page()
@@ -746,7 +763,7 @@ def create_region_figures(
         for view, page_coord in zip(views, img_coords):
             # Set figure.
             savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-            plot_patient(dataset, pat_id, centre_of=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
+            plot_patient(dataset, pat_id, centre=region, colour=['y'], crop=region, labels=labels, regions=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
             pdf.image(savepath, *page_coord, w=img_width, h=img_height)
@@ -769,7 +786,7 @@ def create_region_figures(
                     # Set figure.
                     def postproc(a: np.ndarray):
                         return get_object(a, i)
-                    plot_patient(dataset, pat_id, centre_of=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
+                    plot_patient(dataset, pat_id, centre=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
@@ -958,7 +975,7 @@ def create_localiser_figures(
         )
         for view, page_coord in zip(views, img_coords):
             # Set figure.
-            plot_localiser_prediction(dataset, pat, region, localiser, centre_of=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
+            plot_localiser_prediction(dataset, pat, region, localiser, centre=region, show_extent=True, show_patch=True, view=view, window=(3000, 500))
 
             # Save temp file.
             filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')

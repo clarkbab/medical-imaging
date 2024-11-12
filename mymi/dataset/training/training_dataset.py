@@ -4,7 +4,8 @@ import pandas as pd
 from typing import Callable, List, Optional, Union
 
 from mymi import config
-from mymi.types import PatientRegions
+from mymi.regions import regions_to_list
+from mymi.types import GroupIDs, PatientRegions
 from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
@@ -87,7 +88,7 @@ class TrainingDataset(Dataset):
     def list_groups(
         self,
         include_empty: bool = False,
-        region: Optional[PatientRegions] = None,
+        regions: Optional[PatientRegions] = None,
         sort_by_sample_id: bool = False) -> List[int]:
         if not self.has_grouping:
             raise ValueError(f"{self} has no grouping.")
@@ -98,8 +99,8 @@ class TrainingDataset(Dataset):
             index = index[~index['empty']]
 
         # Filter by regions.
-        if region is not None:
-            regions = arg_to_list(region, str)
+        regions = regions_to_list(regions)
+        if regions is not None:
             index = index[index['region'].isin(regions)]
 
         # Get sample IDs.
@@ -107,19 +108,21 @@ class TrainingDataset(Dataset):
             group_ids = list(index.sort_values('sample-id')['group-id'].unique())
         else:
             group_ids = list(sorted(index['group-id'].unique()))
-        group_ids = [int(i) for i in group_ids]
 
         return group_ids
 
     def list_regions(self) -> List[str]:
-        return list(sorted(self.index['region'].unique())) 
+        if 'region' in self.index.columns:
+            return list(sorted(self.index['region'].unique())) 
+        else:
+            return []
 
     def list_samples(
         self,
-        group_id: Optional[Union[int, List[int]]] = None,
+        group_ids: Optional[GroupIDs] = None,
         include_empty: bool = False,
-        region: Optional[PatientRegions] = None) -> List[int]:
-        group_ids = arg_to_list(group_id, int)
+        regions: Optional[PatientRegions] = None) -> List[int]:
+        group_ids = arg_to_list(group_ids, (int, float, str))
 
         # Filter out 'empty' labels.
         index = self.index
@@ -127,12 +130,12 @@ class TrainingDataset(Dataset):
             index = index[~index['empty']]
 
         # Filter by regions.
-        if region is not None:
-            regions = arg_to_list(region, str)
+        regions = regions_to_list(regions)
+        if regions is not None:
             index = index[index['region'].isin(regions)]
 
         # Filter by groups.
-        if group_id is not None:
+        if group_ids is not None:
             index = index[index['group-id'].isin(group_ids)] 
 
         # Get sample IDs.

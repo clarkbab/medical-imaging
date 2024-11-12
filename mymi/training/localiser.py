@@ -64,7 +64,11 @@ def train_localiser(
         default_pad_value='minimum')
 
     # Create data loaders.
-    train_loader, val_loader, _ = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform, use_seg_run=use_loader_seg_run)
+    loaders = Loader.build_loaders(datasets, region, n_folds=n_folds, n_train=n_train, n_workers=n_workers, p_val=p_val, spacing=spacing, test_fold=test_fold, transform=transform, use_seg_run=use_loader_seg_run)
+    if n_folds is None:
+        train_loader, val_loader = loaders
+    else:
+        train_loader, val_loader, _ = loaders
 
     # Get loss function.
     if loss == 'dice':

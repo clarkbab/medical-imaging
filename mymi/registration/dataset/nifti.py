@@ -6,9 +6,9 @@ from typing import Dict, Optional, Union
 from mymi import config
 from mymi.dataset import NiftiDataset
 from mymi import logging
+from mymi.regions import regions_to_list
 from mymi.transforms import register_image, register_label, resample_3D
 from mymi.types import PatientID, PatientRegions
-from mymi.utils import arg_to_list
 
 def create_patient_registration(
     dataset: str,
@@ -58,20 +58,20 @@ def load_patient_registration(
     dataset: str,
     fixed_pat_id: PatientID,
     moving_pat_id: PatientID,
-    region: Optional[PatientRegions] = 'all',
-    region_ignore_missing: bool = False) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+    regions: Optional[PatientRegions] = 'all',
+    regions_ignore_missing: bool = False) -> Union[np.ndarray, Dict[str, np.ndarray]]:
     # Load CT registration.
     filepath = os.path.join(config.directories.registrations, 'data', dataset, f'{moving_pat_id}-{fixed_pat_id}', 'ct.npz') 
     ct_data = np.load(filepath)['data']
 
     # Load region registrations.
     moving_pat = NiftiDataset(dataset).patient(moving_pat_id)
-    regions = arg_to_list(region, str, literals={ 'all': moving_pat.list_regions() })
+    regions = regions_to_list(regions, literals={ 'all': moving_pat.list_regions })
     region_data = {}
     if regions is not None: 
         for region in regions:
             if not moving_pat.has_region(region):
-                if region_ignore_missing:
+                if regions_ignore_missing:
                     continue
                 else:
                     raise ValueError(f"Requested region '{region}' not found for patient '{moving_pat_id}', dataset '{dataset}'.")

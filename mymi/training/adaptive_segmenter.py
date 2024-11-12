@@ -16,7 +16,7 @@ from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import AdaptiveSegmenter
-from mymi.regions import RegionList, region_to_list
+from mymi.regions import RegionList, regions_to_list
 from mymi.reporting.loaders import get_adaptive_loader_manifest
 from mymi.types import PatientRegions
 from mymi.utils import arg_to_list
@@ -95,7 +95,7 @@ def train_adaptive_segmenter(
     weights_schedule: Optional[List[float]] = None,
     **kwargs) -> None:
     logging.arg_log('Training model', ('dataset', 'model_name', 'run_name'), (dataset, model_name, run_name))
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
 
     # Ensure model parameter initialisation is deterministic.
     seed_everything(random_seed, workers=True)

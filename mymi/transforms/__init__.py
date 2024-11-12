@@ -3,4 +3,5 @@ from .custom import Standardise
 from .dvf import apply_dvf
 from .registration import register_image, register_label
 from .resample import resample, resample_box_3D, resample_list, resample_3D, resample_3D_zoom, resample_4D
+from .sitk import sitk_image_transform, sitk_point_transform
 from .translate import translate

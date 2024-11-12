@@ -20,7 +20,7 @@ from mymi.losses import DiceWithFocalLoss
 from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.models.networks import MultiUNet3D
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.types import ModelName, PatientID, PatientRegions
 from mymi.utils import arg_to_list, gpu_usage_nvml
 
@@ -95,7 +95,7 @@ class MultiSegmenter(pl.LightningModule):
         self.__model_name = model_name
         self.__name = None
         self.__random_seed = random_seed
-        self.__regions = region_to_list(region)
+        self.__regions = regions_to_list(region)
         self.__run_name = run_name
         self.__n_output_channels = len(self.__regions) + 1
         self.__network = MultiUNet3D(self.__n_output_channels, **kwargs)
@@ -464,6 +464,9 @@ class MultiSegmenter(pl.LightningModule):
         return losses
 
     def validation_step(self, batch, batch_idx):
+        if batch_idx != 0:
+            return
+
         # Forward pass.
         descs, x, y, mask, weights = batch
         y_hat = self.forward(x)
@@ -525,6 +528,56 @@ class MultiSegmenter(pl.LightningModule):
                         self.__cw_batch_mean_dices[region] += [batch_mean_dice]
                     else:
                         self.__cw_batch_mean_dices[region] = [batch_mean_dice]
+
+        # Create images for presentation.
+        if batch_idx == 0:
+            i = 0 # First item in batch.
+            desc = descs[i]
+            j = 1 # Plot spinal cord.
+
+            if y_hat.dtype != np.bool_:
+                y = y.cpu().numpy()
+                y_hat = F.one_hot(y_hat.argmax(axis=1), num_classes=y.shape[1]).moveaxis(-1, 1)  # 'F.one_hot' adds new axis last, move to second place.
+                y_hat = y_hat.cpu().numpy().astype(bool)
+
+            # Get images.
+            x_vol, y_vol, y_hat_vol = x[i, 0].cpu().numpy(), y[i, j], y_hat[i, j]
+
+            # Get centre of extent of ground truth.
+            centre = get_extent_centre(y_vol)
+
+            if centre is None:
+                logging.info('Skipping image - no foreground GT labels found for position. Might be aggressive data augmenatation.')
+            else:
+                logging.info('Saving validation image.')
+
+                for axis, centre_ax in enumerate(centre):
+                    if axis != 0:
+                        continue
+
+                    # Get slices.
+                    slices = tuple([centre_ax if i == axis else slice(0, x_vol.shape[i]) for i in range(0, len(x_vol.shape))])
+                    x_img, y_img, y_hat_img = x_vol[slices], y_vol[slices], y_hat_vol[slices]
+
+                    # Fix orientation.
+                    if axis == 0 or axis == 1:
+                        x_img = np.rot90(x_img)
+                        y_img = np.rot90(y_img)
+                        y_hat_img = np.rot90(y_hat_img)
+                    elif axis == 2:
+                        x_img = np.transpose(x_img)
+                        y_img = np.transpose(y_img) 
+                        y_hat_img = np.transpose(y_hat_img)
+
+                    # Send image.
+                    region = self.__channel_region_map[j]
+                    suffixes = ['x', 'y', 'y_hat']
+                    data = [x_img, y_img, y_hat_img]
+                    for d, s in zip(data, suffixes):
+                        import datetime
+                        timestamp = datetime.datetime.now().strftime("%H%M%S")
+                        filepath = os.path.join(config.directories.files, 'phd-completion', 'images', 'training', f'{desc}_{region}_{axis}_{s}_{self.current_epoch}_{timestamp}.npy')
+                        np.save(filepath, d)
                         
         # Log prediction images.
         if self.logger is not None and self.current_epoch % self.__val_image_interval == 0 and (self.__val_max_image_batches is None or batch_idx < self.__val_max_image_batches):

@@ -14,7 +14,7 @@ from mymi.dataset.training import create as create_training
 from mymi.dataset.training import recreate as recreate_training
 from mymi.geometry import get_extent
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
 from mymi.types import BoxMM3D, ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
@@ -32,7 +32,7 @@ def convert_brain_crop_to_training(
     round_dp: Optional[int] = None,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log(f'Converting {set.type.name} dataset to TRAINING', ('dataset', 'region'), (set, region))
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
 
     # Use all regions if region is 'None'.
     if regions is None:

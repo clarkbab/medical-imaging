@@ -4,6 +4,13 @@ DATA_VAR = 'MYMI_DATA'
 
 class Directories:
     @property
+    def config(self):
+        filepath = os.path.join(self.root, 'config')
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        return filepath
+
+    @property
     def datasets(self):
         filepath = os.path.join(self.root, 'datasets')
         if not os.path.exists(filepath):

@@ -13,7 +13,7 @@ from mymi.types import ImageSpacing3D, PatientRegion, PatientRegions
 from mymi.dataset.training_adaptive import TrainingAdaptiveDataset
 from mymi.geometry import get_centre
 from mymi import logging
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from torchio.transforms import Transform
 from mymi.transforms import centre_crop_or_pad_3D
 from mymi.utils import arg_to_list
@@ -98,7 +98,7 @@ class AdaptiveLoader:
         **kwargs) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
         logging.arg_log('Building adaptive loaders', ('dataset', 'region', 'load_all_samples', 'n_folds', 'shuffle_samples', 'test_fold', 'use_grouping', 'use_split_file'), (dataset, region, load_all_samples, n_folds, shuffle_samples, test_fold, use_grouping, use_split_file))
         datasets = arg_to_list(dataset, str)
-        regions = region_to_list(region)
+        regions = regions_to_list(region)
         if n_folds is not None and test_fold is None:
             raise ValueError(f"'test_fold' must be specified when performing k-fold training.")
 

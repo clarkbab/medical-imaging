@@ -24,7 +24,7 @@ from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.losses import TverskyWithFocalLoss
 from mymi.models.networks import MultiUNet3D
-from mymi.regions import region_to_list
+from mymi.regions import regions_to_list
 from mymi.reporting.loaders import get_multi_loader_manifest
 from mymi import types
 from mymi.utils import append_row, arg_to_list, save_csv

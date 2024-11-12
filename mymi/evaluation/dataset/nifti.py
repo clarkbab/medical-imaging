@@ -17,7 +17,7 @@ from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_
 from mymi.models import replace_ckpt_alias
 from mymi import logging
 from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_adaptive_segmenter_no_oars_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
-from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, region_to_list
+from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
@@ -252,7 +252,7 @@ def get_adaptive_segmenter_pt_evaluation(
 
     # Load ground truth (registered pre-treatment) region data.
     moving_pat_id = pat_id.replace('-1', '-0')
-    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, region=regions, region_ignore_missing=True)
+    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, region=regions, regions_ignore_missing=True)
 
     # Load predictions.
     set = NiftiDataset(dataset)
@@ -447,15 +447,15 @@ def get_multi_segmenter_heatmap_evaluation(
     target_region: PatientRegions,
     layer: Union[str, List[str]],
     aux_region: PatientRegions) -> List[List[Tuple[Dict[str, float], List[Dict[str, float]]]]]:
-    aux_regions = region_to_list(aux_region)
+    aux_regions = regions_to_list(aux_region)
 
     # Load region data.
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
-    region_data = pat.region_data(region=aux_region, region_ignore_missing=True)
+    region_data = pat.region_data(region=aux_region, regions_ignore_missing=True)
 
     # Process each target region.
-    target_regions = region_to_list(target_region)
+    target_regions = regions_to_list(target_region)
     target_region_metrics = []
     for target_region in target_regions:
         # Load heatmap.
@@ -517,7 +517,7 @@ def get_nnunet_multi_segmenter_evaluation(
     region: PatientRegions,
     pat_id: str,
     **kwargs) -> List[Dict[str, float]]:
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
 
     # Load predictions.
     set = NiftiDataset(dataset)
@@ -654,11 +654,11 @@ def get_registration_evaluation(
     fixed_pat_id = f'{pat_id}-1'
     fixed_pat = NiftiDataset(dataset).patient(fixed_pat_id)
     fixed_spacing = fixed_pat.ct_spacing
-    region_data_gt = fixed_pat.region_data(region=region, region_ignore_missing=True)
+    region_data_gt = fixed_pat.region_data(region=region, regions_ignore_missing=True)
 
     # Load prediction (registered from moving) region data.
     moving_pat_id = f'{pat_id}-0'
-    _, region_data_pred = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, region_ignore_missing=True)
+    _, region_data_pred = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, regions_ignore_missing=True)
     
     # Get overlapping regions.
     shared_regions = list(np.intersect1d(list(region_data_gt.keys()), list(region_data_pred.keys())))
@@ -774,7 +774,7 @@ def create_adaptive_segmenter_pt_evaluation(
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
     model = replace_ckpt_alias(model)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     logging.arg_log('Evaluating adaptive segmenter predictions against PT ground truth for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
@@ -845,7 +845,7 @@ def create_adaptive_segmenter_no_oars_evaluation(
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
     model = replace_ckpt_alias(model)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     logging.arg_log(f"Evaluating adaptive segmenter predictions for NIFTI dataset (no prior OARs{ '' if include_ct else ' or CT' })", ('dataset', 'region', 'model'), (dataset, region, model))
 
@@ -915,7 +915,7 @@ def create_adaptive_segmenter_evaluation(
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
     model = replace_ckpt_alias(model)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     logging.arg_log('Evaluating adaptive segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
@@ -993,9 +993,9 @@ def create_multi_segmenter_heatmap_evaluation(
     datasets = arg_to_list(dataset, str)
     logging.arg_log('Evaluating multi-segmenter heatmaps for NIFTI dataset', ('dataset', 'model', 'model_region', 'target_region', 'layer', 'aux_region'), (dataset, model, model_region, target_region, layer, aux_region))
     model = replace_ckpt_alias(model)
-    target_regions = region_to_list(target_region)
+    target_regions = regions_to_list(target_region)
     layers = arg_to_list(layer, str)
-    aux_regions = region_to_list(aux_region)
+    aux_regions = regions_to_list(aux_region)
 
     # Create dataframe.
     cols = {
@@ -1080,7 +1080,7 @@ def create_all_multi_segmenter_evaluation(
     **kwargs) -> None:
     logging.arg_log('Creating multi-segmenter evaluation', ('dataset', 'region', 'model'), (dataset, region, model))
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
 
     # Create dataframe.
@@ -1127,7 +1127,7 @@ def create_replan_evaluation(
     datasets = arg_to_list(dataset, str)
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     logging.arg_log('Evaluating mid-treatment against pre-treatment labels for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
     # Create dataframe.
@@ -1248,7 +1248,7 @@ def create_multi_segmenter_evaluation(
     # 'regions' is used to determine which patients are loaded (those that have at least one of
     # the listed regions).
     model = replace_ckpt_alias(model)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     test_fold = kwargs.get('test_fold', None)
     logging.arg_log('Evaluating multi-segmenter predictions for NIFTI dataset', ('dataset', 'region', 'model'), (dataset, region, model))
 
@@ -1494,7 +1494,7 @@ def load_adaptive_segmenter_pt_evaluation(
     exists_only: bool = False,
     **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
     params = {
         'load_all_samples': kwargs.get('load_all_samples', False),
@@ -1524,7 +1524,7 @@ def load_adaptive_segmenter_no_oars_evaluation(
     include_ct: bool = True,
     **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
     params = {
         'load_all_samples': kwargs.get('load_all_samples', False),
@@ -1553,7 +1553,7 @@ def load_adaptive_segmenter_evaluation(
     exists_only: bool = False,
     **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
     params = {
         'load_all_samples': kwargs.get('load_all_samples', False),
@@ -1590,9 +1590,9 @@ def load_multi_segmenter_heatmap_evaluation(
     use_loader_grouping: bool = False) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
     model = replace_ckpt_alias(model)
-    target_regions = region_to_list(target_region)
+    target_regions = regions_to_list(target_region)
     layers = arg_to_list(layer, str)
-    aux_regions = region_to_list(aux_region)
+    aux_regions = regions_to_list(aux_region)
     filename = f'folds-{n_folds}-test-{test_fold}-use-loader-split-file-{use_loader_split_file}-load-all-samples-{load_all_samples}.csv'
     filepath = os.path.join(config.directories.evaluations, 'heatmaps', *model, encode(datasets), encode(target_regions), encode(layers), encode(aux_regions), filename)
     if os.path.exists(filepath):
@@ -1614,7 +1614,7 @@ def load_all_multi_segmenter_evaluation(
     exists_only: bool = False,
     **kwargs) -> DataFrame:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
     if os.path.exists(filepath):
@@ -1643,7 +1643,7 @@ def load_multi_segmenter_evaluation(
     exists_only: bool = False,
     **kwargs) -> Union[np.ndarray, bool]:
     datasets = arg_to_list(dataset, str)
-    regions = region_to_list(region)
+    regions = regions_to_list(region)
     model = replace_ckpt_alias(model)
     params = {
         'load_all_samples': kwargs.get('load_all_samples', False),
@@ -1716,7 +1716,7 @@ def create_two_stage_evaluation(
     region: str,
     localiser: ModelName,
     segmenter: ModelName,
-    n_folds: Optional[int] = None,
+    n_folds: Optional[int] = 5,
     test_folds: Optional[Union[int, List[int], Literal['all']]] = None) -> None:
     # Get unique name.
     localiser = replace_ckpt_alias(localiser)
@@ -1728,44 +1728,9 @@ def create_two_stage_evaluation(
         test_folds = list(range(n_folds))
     elif type(test_folds) == int:
         test_folds = [test_folds]
+    else:
+        raise ValueError(f"Invalid test_folds: {test_folds}, type ({type(test_folds)}).")
 
     for test_fold in tqdm(test_folds):
-        # Create dataframe.
-        cols = {
-            'fold': int,
-            'patient-id': str,
-            'region': str,
-            'metric': str,
-            'value': float
-        }
-        loc_df = pd.DataFrame(columns=cols.keys())
-        seg_df = pd.DataFrame(columns=cols.keys())
-
-        # Build test loader.
-        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
-
-        # Add evaluations to dataframe.
-        for pat_desc_b in tqdm(iter(test_loader)):
-            if type(pat_desc_b) == torch.Tensor:
-                pat_desc_b = pat_desc_b.tolist()
-            for pat_desc in pat_desc_b:
-                dataset, pat_id = pat_desc.split(':')
-                loc_df = create_localiser_evaluation(dataset, pat_id, region, localiser, df=loc_df)
-                seg_df = create_segmenter_evaluation(dataset, pat_id, region, localiser, segmenter, df=seg_df)
-
-        # Add fold.
-        loc_df['fold'] = test_fold
-        seg_df['fold'] = test_fold
-
-        # Set column types.
-        loc_df = loc_df.astype(cols)
-        seg_df = seg_df.astype(cols)
-
-        # Save evaluations.
-        filename = f'eval-folds-{n_folds}-test-{test_fold}'
-        loc_filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
-        seg_filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'{filename}.csv')
-        os.makedirs(os.path.dirname(loc_filepath), exist_ok=True)
-        os.makedirs(os.path.dirname(seg_filepath), exist_ok=True)
-        loc_df.to_csv(loc_filepath, index=False)
-        seg_df.to_csv(seg_filepath, index=False)
+        create_localiser_evaluation(datasets, region, localiser, test_fold=test_fold)
+        create_segmenter_evaluation(datasets, region, localiser, segmenter, test_fold=test_fold)

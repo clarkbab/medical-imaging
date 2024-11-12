@@ -1,5 +1,4 @@
 from datetime import datetime
-from monai.losses import DiceFocalLoss
 import os
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint

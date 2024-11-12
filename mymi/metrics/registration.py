@@ -24,12 +24,18 @@ def tre(
     if a.shape != b.shape:
         raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
-    # Calculate mean euclidean distance.
+    # Calculate euclidean distances.
     tres = []
     for ai, bi in zip(a, b):
         tre = np.linalg.norm((bi - ai) * spacing)
         tres.append(tre)
-        
-    mean_tre = np.mean(tres)
+
+    stats = {
+        'tre-mean': np.mean(tres),
+        'tre-min': np.min(tres),
+        'tre-max': np.max(tres),
+        'tre-median': np.median(tres),
+        'tre-95': np.quantile(tres, 0.95)
+    }
     
-    return mean_tre
+    return stats

@@ -4,7 +4,8 @@ import SimpleITK as sitk
 from typing import Any, Dict, Optional, Tuple, Union
 
 from mymi import logging
-from mymi import types
+from mymi.types import Box3D, PointMM3D, ImageOffset3D, ImageSize3D, ImageSpacing3D
+from mymi.utils import to_sitk_image
 
 def resample_list(
     data: np.ndarray,
@@ -29,21 +30,23 @@ def resample_4D(
 
 def resample_3D_zoom(
     data: np.ndarray,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
-    spacing: Optional[types.ImageSpacing3D] = None) -> np.ndarray:
+    output_spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[ImageSpacing3D] = None) -> np.ndarray:
     scaling = np.array(output_spacing) / spacing
     data = zoom(data, scaling, order=1)
     return data
 
+    moving_resampled = sitk.Resample(moving_image, fixed_image, registration_transform, sitk.sitkLinear, moving_min, moving_image.GetPixelID())
+
 def resample(
     data: np.ndarray,
     fill: float = 'min',
-    origin: Optional[types.PointMM3D] = None,
-    output_origin: Optional[types.PointMM3D] = None,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    origin: Optional[PointMM3D] = None,
+    output_origin: Optional[PointMM3D] = None,
+    output_size: Optional[ImageSize3D] = None,
+    output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,
-    spacing: Optional[types.ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    spacing: Optional[ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
     output_origin: 
         - if None, will take on value of 'origin'.
@@ -115,7 +118,9 @@ def resample(
         resample.SetSize(output_size)
     else:
         scaling = np.array(image.GetSpacing()) / resample.GetOutputSpacing()
-        size = tuple(int(s * d) for s, d in zip(scaling, image.GetSize()))
+
+        # Magic formula is: n_new = f * (n - 1) + 1
+        size = tuple(int(np.ceil(f * (n - 1) + 1)) for f, n in zip(scaling, image.GetSize()))
         resample.SetSize(size)
 
     # Perform resampling.
@@ -135,12 +140,12 @@ def resample(
 
 def resample_3D(
     data: np.ndarray,
-    origin: Optional[types.PointMM3D] = None,
-    output_origin: Optional[types.PointMM3D] = None,
-    output_size: Optional[types.ImageSize3D] = None,
-    output_spacing: Optional[types.ImageSpacing3D] = None,
+    origin: Optional[PointMM3D] = None,
+    output_origin: Optional[PointMM3D] = None,
+    output_size: Optional[ImageSize3D] = None,
+    output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,
-    spacing: Optional[types.ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    spacing: Optional[ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
     output_origin: 
         - if None, will take on value of 'origin'.
@@ -224,9 +229,9 @@ def resample_3D(
         return output
 
 def resample_box_3D(
-    bounding_box: types.Box3D,
-    spacing: types.ImageSpacing3D,
-    new_spacing: types.ImageSpacing3D) -> types.Box3D:
+    bounding_box: Box3D,
+    spacing: ImageSpacing3D,
+    new_spacing: ImageSpacing3D) -> Box3D:
     """
     returns: a bounding box in resampled coordinates.
     args:

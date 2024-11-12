@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --qos feit
-#SBATCH --partition feit-gpu-a100
+##SBATCH --qos feit
+##SBATCH --partition feit-gpu-a100
 ##SBATCH --partition gpu-a100
-##SBATCH --partition gpu-a100-short
+#SBATCH --partition gpu-a100-short
 #SBATCH --nodes 1
-#SBATCH --mem 128G
-##SBATCH --mem 120G
+##SBATCH --mem 128G
+#SBATCH --mem 120G
 #SBATCH --gres gpu:1
 ##SBATCH --cpus-per-gpu 8
 #SBATCH --time 0-01:00:00
@@ -23,13 +23,15 @@ echo $version
 DATASET="LUNG-4DCT"
 MODELNAME="UNIGRADICON"
 REGISTER_IMAGES=False
-REGION=None
+REGISTER_LABELS=False
+REGIONS=None
 
 command="python $MYMI_CODE/scripts/predict/nifti/unigradicon/predict.py \
     --dataset $DATASET \
     --model $MODEL \
     --modelname $MODELNAME \
     --register_images $REGISTER_IMAGES \
-    --region $REGION"
+    --register_labels $REGISTER_LABELS \
+    --regions $REGIONS"
 echo $command
 eval $command

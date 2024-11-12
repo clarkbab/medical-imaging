@@ -5,7 +5,8 @@ import os
 import pandas as pd
 from typing import List, Literal, Optional, OrderedDict, Tuple
 
-from mymi.regions import is_region, region_to_list
+from mymi import logging
+from mymi.regions import is_region, regions_to_list
 from mymi.types import ImageSpacing3D, PatientID, PatientRegions, Point3D
 from mymi.utils import arg_to_list
 
@@ -59,15 +60,16 @@ class NRRDPatient:
     @property
     def id(self) -> str:
         return self.__id
+
     @property
     def path(self) -> str:
         return self.__path
 
     def has_region(
         self,
-        region: PatientRegions,
+        regions: PatientRegions,
         labels: Literal['included', 'excluded', 'all'] = 'included') -> bool:
-        regions = region_to_list(region)
+        regions = regions_to_list(regions)
         pat_regions = self.list_regions(labels=labels)
         # Return 'True' if patient has at least one of the requested regions.
         if len(np.intersect1d(regions, pat_regions)) != 0:
@@ -83,8 +85,6 @@ class NRRDPatient:
         folders = os.listdir(dirpath)
         regions = []
         for f in folders:
-            if not is_region(f):
-                continue
             dirpath = os.path.join(self.__dataset.path, 'data', 'regions', f)
             if f'{self.__id}.nrrd' in os.listdir(dirpath):
                 # Apply exclusion criteria.
@@ -102,18 +102,17 @@ class NRRDPatient:
     def region_data(
         self,
         labels: Literal['included', 'excluded', 'all'] = 'included',
-        region: PatientRegions = 'all') -> OrderedDict:
-        regions = arg_to_list(region, str, literals={ 'all': self.list_regions(labels=labels)})
+        regions: PatientRegions = 'all') -> OrderedDict:
+        regions = regions_to_list(regions, literals={ 'all': self.list_regions(labels=labels)})
 
         data = {}
         for region in regions:
-            if not is_region(region):
-                raise ValueError(f"Requested region '{region}' not a valid internal region.")
             if not self.has_region(region, labels=labels):
                 raise ValueError(f"Requested region '{region}' not found for patient '{self.__id}', dataset '{self.__dataset}'.")
             path = os.path.join(self.__dataset.path, 'data', 'regions', region, f'{self.__id}.nrrd')
             rdata, _ = nrrd.read(path)
             data[region] = rdata.astype(bool)
+
         return data
 
     def __str__(self) -> str:
