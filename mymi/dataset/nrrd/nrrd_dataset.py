@@ -11,7 +11,7 @@ from mymi.types import PatientRegions
 from ..dataset import Dataset, DatasetType
 from .nrrd_patient import NRRDPatient
 
-class NRRDDataset(Dataset):
+class NrrdDataset(Dataset):
     def __init__(
         self,
         name: str):

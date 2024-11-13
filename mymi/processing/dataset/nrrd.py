@@ -13,7 +13,7 @@ from typing import List, Optional, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
-from mymi.dataset.nrrd import NRRDDataset
+from mymi.dataset.nrrd import NrrdDataset
 from mymi.dataset.nrrd import recreate as recreate_nrrd
 from mymi.dataset.training import TrainingDataset, exists
 from mymi.dataset.training import create as create_training
@@ -30,10 +30,12 @@ from mymi.transforms import crop_3D, resample_3D, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
+from ..process import convert_to_dicom as convert_to_dicom_base
+
 def convert_brain_crop_to_training(
     dataset: str,
     **kwargs) -> None:
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
 
 def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None:
@@ -59,7 +61,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
     params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients()
 
     # Load crop file.
@@ -149,6 +151,12 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
     __write_flag(set_t, f'__CONVERT_FROM_{set.type.name}_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
+
+def convert_to_dicom(
+    dataset: str,
+    dest_dataset: str,
+    **kwargs) -> None:
+    convert_to_dicom_base(NrrdDataset(dataset), dest_dataset, **kwargs)
     
 def convert_to_training(
     dataset: str,
@@ -163,7 +171,7 @@ def convert_to_training(
     round_dp: Optional[int] = None,
     training_dataset: Optional[str] = None) -> None:
     # Get regions.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     if regions is None:
         regions = set.list_regions()
     else:
@@ -343,7 +351,7 @@ def create_excluded_brainstem(
     dataset: str,
     dest_dataset: str) -> None:
     # Copy dataset to destination.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     dest_set = recreate_nrrd(dest_dataset)
     os.rmdir(dest_set.path)
     shutil.copytree(set.path, dest_set.path)
@@ -458,7 +466,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
 
     for i, (dataset, pat_id) in tqdm(df.iterrows()):
         # Get ROI ID from DICOM dataset.
-        nrrd_set = NRRDDataset(dataset)
+        nrrd_set = NrrdDataset(dataset)
         pat_id_dicom = nrrd_set.patient(pat_id).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
@@ -568,7 +576,7 @@ def convert_segmenter_predictions_to_dicom_from_loader(
     # Create prediction RTSTRUCTs.
     for dataset, pat_id_nrrd in tqdm(samples):
         # Get ROI ID from DICOM dataset.
-        nrrd_set = NRRDDataset(dataset)
+        nrrd_set = NrrdDataset(dataset)
         pat_id_dicom = nrrd_set.patient(pat_id_nrrd).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)

@@ -1,3 +1,4 @@
+from enum import Enum
 import matplotlib as mpl
 from matplotlib.axes import Axes
 from matplotlib.colors import ListedColormap, rgb2hex, to_rgb
@@ -10,7 +11,7 @@ from numpy import ndarray
 import os
 import pandas as pd
 from pandas import DataFrame
-from scipy.stats import wilcoxon, mannwhitneyu
+import scipy
 import seaborn as sns
 from seaborn.palettes import _ColorPalette
 from statannotations.Annotator import Annotator
@@ -27,7 +28,12 @@ from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, register_image
 from mymi.types import Axis, Box2D, Box3D, Box2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, PatientID, Point3D
 from mymi.utils import arg_to_list
 
-DEFAULT_FONT_SIZE = 8
+DEFAULT_FONT_SIZE = 10
+
+class AltHyp(Enum):
+    LESSER = 0
+    GREATER = 1
+    TWO_SIDED = 2
 
 def plot_histogram(data: List[np.ndarray]) -> None:
     data = [d.flatten() for d in data]
@@ -1960,25 +1966,27 @@ def plot_dataframe(
     show_stats: bool = False,
     show_x_tick_labels: bool = True,
     show_x_tick_label_counts: bool = True,
+    stats_alt: AltHyp = AltHyp.TWO_SIDED,
+    stats_bar_alg_use_lowest_level: bool = True,
+    stats_bar_alpha: float = 0.5,
+    # Stats bars must sit at least this high above data points.
+    stats_bar_grid_offset: float = 0.015,           # Proportion of window height.
+    # This value is important! Without this number, the first grid line
+    # will only have one bar, which means our bars will be stacked much higher. This allows
+    # a little wiggle room.
+    stats_bar_grid_offset_wiggle: float = 0.01,     # Proportion of window height.
+    stats_bar_grid_spacing: float = 0.04,          # Proportion of window height.
+    stats_bar_height: float = 0.007,                # Proportion of window height.
+    stats_bar_show_direction: bool = False,
+    stats_bar_text_offset: float = 0.008,            # Proportion of window height.
+    stats_boot_df: Optional[DataFrame] = None,
+    stats_boot_df_cols: Optional[List[str]] = None,
     stats_exclude: List[str] = [],
     stats_exclude_left: List[str] = [],
     stats_exclude_right: List[str] = [],
     stats_index: Optional[Union[str, List[str]]] = None,
     stats_paired: bool = True,
-    stats_bar_alg_use_lowest_level: bool = True,
-    stats_bar_alpha: float = 0.5,
-    # Stats bars must be (at least) this much above the max value of the hue pair.
-    stats_bar_data_offset: float = 0.03,
-    # Without this value, the first stats bar grid line will only have one bar.
-    # Choosing an appropriate value for this can reduce the number of grid lines required to show all bars.
-    stats_bar_grid_offset: float = 0.01,
-    stats_bar_grid_spacing: float = 0.05,
-    stats_bar_height: float = 0.01,
-    stats_bar_text_offset: float = 0.01,
-    stats_bar_show_direction: bool = False,
-    stats_boot_df: Optional[DataFrame] = None,
-    stats_boot_df_cols: Optional[List[str]] = None,
-    stats_two_sided: bool = True,
+    stats_sig: List[float] = [0.05, 0.01, 0.001],
     style: Optional[Literal['box', 'violin']] = 'box',
     ticklength: float = 0.5,
     title: Optional[str] = None,
@@ -2024,10 +2032,10 @@ def plot_dataframe(
     # Add outlier data.
     data = __add_outlier_info(data, x, y, hue)
 
-    # Get min/max values for y-lim.
-    if share_y:
-        min_y = data[y].min()
-        max_y = data[y].max()
+    # Calculate global min/max values for when sharing y-limits across
+    # rows (share_y=True).
+    global_min_y = data[y].min()
+    global_max_y = data[y].max()
 
     # Get x values.
     if x_order is None:
@@ -2122,11 +2130,20 @@ def plot_dataframe(
         # Get row data.
         row_df = data[data[x].isin(row_x_order)].copy()
 
-        # Set x/y-axis limits.
+        # Get x-axis limits.
+        x_lim_row = list(x_lim)
+        n_cols_row = len(row_x_order)
+        if x_lim_row[0] is None:
+            x_lim_row[0] = -0.5
+        if x_lim_row[1] is None:
+            x_lim_row[1] = n_cols_row - 0.5
+
+        # Get y-axis limits.
         y_margin = 0.05
-        if not share_y:
-            min_y = row_df[y].min()
-            max_y = row_df[y].max()
+        row_min_y = row_df[y].min()
+        row_max_y = row_df[y].max()
+        min_y = global_min_y if share_y else row_min_y
+        max_y = global_max_y if share_y else row_max_y
         y_lim_row = list(y_lim)
         if y_lim_row[0] is None:
             if y_lim_row[1] is None:
@@ -2141,21 +2158,11 @@ def plot_dataframe(
                 width = max_y - y_lim_row[0]
                 y_lim_row[1] = max_y + y_margin * width
 
-        x_lim_row = list(x_lim)
-        n_cols_row = len(row_x_order)
-        if x_lim_row[0] is None:
-            x_lim_row[0] = -0.5
-        if x_lim_row[1] is None:
-            x_lim_row[1] = n_cols_row - 0.5
-        # We have to set limits twice - once here to ensure that parent axes are the correct size,
-        # and once after insetting to size the child axes correctly.
-        axs[i].set_xlim(*x_lim_row)
-        axs[i].set_ylim(*y_lim_row)
-        inset_bounds = [x_lim_row[0], y_lim_row[0], x_lim_row[1] - x_lim_row[0], y_lim_row[1] - y_lim_row[0]]
-        axs[i].axis('off')
-        axs[i] = axs[i].inset_axes([x_lim_row[0], y_lim_row[0], x_lim_row[1] - x_lim_row[0], y_lim_row[1] - y_lim_row[0]], transform=axs[i].transData)
-        axs[i].set_xlim(*x_lim_row)
-        axs[i].set_ylim(*y_lim_row)
+        # Set axis limits.
+        # This has to be done twice - once to set parent axes, and once to set child (inset) axes.
+        # I can't remember why we made inset axes...?
+        # Make this a function, as we need to call when stats bars exceed the y-axis limit.
+        inset_ax = __set_axes_limits(axs[i], x_lim_row, y_lim_row)
 
         # Keep track of legend items.
         hue_artists = {}
@@ -2186,7 +2193,7 @@ def plot_dataframe(
                         hatch = hue_hatches[k] if hue_hatches is not None else None
                         if style == 'box':
                             # Plot box.
-                            res = axs[i].boxplot(hue_df[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
+                            res = inset_ax.boxplot(hue_df[y].dropna(), boxprops=dict(color=linecolour, facecolor=hue_colours[hue_name], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[hue_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth), widths=hue_width)
                             if hatch is not None:
                                 mpl.rcParams['hatch.linewidth'] = linewidth
                                 res['boxes'][0].set_hatch(hatch)
@@ -2199,7 +2206,7 @@ def plot_dataframe(
                                 hue_artists[hue_label] = res['boxes'][0]
                         elif style == 'violin':
                             # Plot violin.
-                            res = axs[i].violinplot(hue_df[y], positions=[hue_pos], widths=hue_width)
+                            res = inset_ax.violinplot(hue_df[y], positions=[hue_pos], widths=hue_width)
 
                             # Save reference to plot for legend.
                             if not hue_label in hue_artists:
@@ -2211,9 +2218,9 @@ def plot_dataframe(
                         continue
                     x_pos = x_df.iloc[0]['x_pos']
                     if style == 'box':
-                        axs[i].boxplot(x_df[y], boxprops=dict(color=linecolour, facecolor=x_colours[x_val], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
+                        inset_ax.boxplot(x_df[y], boxprops=dict(color=linecolour, facecolor=x_colours[x_val], linewidth=linewidth), capprops=dict(color=linecolour, linewidth=linewidth), flierprops=dict(color=linecolour, linewidth=linewidth, marker='D', markeredgecolor=linecolour), medianprops=dict(color=linecolour, linewidth=linewidth), patch_artist=True, positions=[x_pos], showfliers=False, whiskerprops=dict(color=linecolour, linewidth=linewidth))
                     elif style == 'violin':
-                        axs[i].violinplot(x_df[y], positions=[x_pos])
+                        inset_ax.violinplot(x_df[y], positions=[x_pos])
 
             # Plot points.
             if show_points:
@@ -2222,12 +2229,12 @@ def plot_dataframe(
                         hue_df = row_df[(row_df[x] == x_val) & (row_df[hue] == hue_name)]
                         if len(hue_df) == 0:
                             continue
-                        res = axs[i].scatter(hue_df['x_pos'], hue_df[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
+                        res = inset_ax.scatter(hue_df['x_pos'], hue_df[y], color=hue_colours[hue_name], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
                         if not hue_label in hue_artists:
                             hue_artists[hue_label] = res
                 else:
                     x_df = row_df[row_df[x] == x_val]
-                    axs[i].scatter(x_df['x_pos'], x_df[y], color=x_colours[x_val], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
+                    inset_ax.scatter(x_df['x_pos'], x_df[y], color=x_colours[x_val], edgecolors=linecolour, linewidth=linewidth, s=pointsize, zorder=100)
 
             # Identify connections between hues.
             if hue is not None and show_hue_connections:
@@ -2258,7 +2265,7 @@ def plot_dataframe(
                     y_data = x_df[y].tolist()
 
                     # Plot line.
-                    lines = axs[i].plot(x_pos, y_data, color=line_palette[j])
+                    lines = inset_ax.plot(x_pos, y_data, color=line_palette[j])
 
                     # Save line/label for legend.
                     artists.append(lines[0])
@@ -2268,13 +2275,13 @@ def plot_dataframe(
                 # Annotate outlier legend.
                 if show_legend:
                     # Save main legend.
-                    main_legend = axs[i].get_legend()
+                    main_legend = inset_ax.get_legend()
 
                     # Show outlier legend.
-                    axs[i].legend(artists, labels, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=outlier_legend_loc)
+                    inset_ax.legend(artists, labels, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=outlier_legend_loc)
 
                     # Re-add main legend.
-                    axs[i].add_artist(main_legend)
+                    inset_ax.add_artist(main_legend)
 
         # Show legend.
         if hue is not None:
@@ -2285,234 +2292,382 @@ def plot_dataframe(
                 labels, artists = list(zip(*[(h, hue_artists[h]) for h in hue_labels if h in hue_artists]))
 
                 # Show legend.
-                legend = axs[i].legend(artists, labels, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=legend_loc)
+                legend = inset_ax.legend(artists, labels, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=legend_loc)
                 frame = legend.get_frame()
                 frame.set_boxstyle('square')
                 frame.set_edgecolor('black')
                 frame.set_linewidth(linewidth)
 
-        # Plot statistical significance.
-        if hue is not None and show_stats:
-            for x_val in row_x_order:
-                x_df = row_df[row_df[x] == x_val]
+        # Get pairs for stats tests.
+        if show_stats:
+            if hue is None:
+                # Create pairs of 'x' values.
+                if n_rows != 1:
+                    raise ValueError(f"Can't show stats between 'x' values with multiple rows - not handled.")
 
-                # Create pairs - start at lower numbers of skips as this will result in a 
-                # condensed plot.
                 pairs = []
-                max_skips = len(hue_order) - 1
+                max_skips = len(x_order) - 1
                 for skip in range(1, max_skips + 1):
-                    for j, hue_val in enumerate(hue_order):
-                        other_hue_index = j + skip
-                        if other_hue_index < len(hue_order):
-                            pair = (hue_val, hue_order[other_hue_index])
+                    for j, x_val in enumerate(x_order):
+                        other_x_idx = j + skip
+                        if other_x_idx < len(x_order):
+                            pair = (x_val, x_order[other_x_idx])
                             pairs.append(pair)
-
-                pairs_tmp = pairs.copy()
+            else:
+                # Create pairs of 'hue' values.
                 pairs = []
-                p_vals = []
-                if stats_boot_df is not None:
-                    # Load p-values from dataframe.
-                    # Need to set "pairs" and "p-values" based on the dataframe and values in x_df.
-                    for hue_l, hue_r in pairs_tmp:
-                        # Skip if no data present in main dataframe.
-                        x_pivot_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
-                        if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
-                            vals_a = x_pivot_df[y][hue_l]
-                            vals_b = x_pivot_df[y][hue_r]
+                for x_val in row_x_order:
+                    # Create pairs - start at lower numbers of skips as this will result in a 
+                    # condensed plot.
+                    hue_pairs = []
+                    max_skips = len(hue_order) - 1
+                    for skip in range(1, max_skips + 1):
+                        for j, hue_val in enumerate(hue_order):
+                            other_hue_index = j + skip
+                            if other_hue_index < len(hue_order):
+                                pair = (hue_val, hue_order[other_hue_index])
+                                hue_pairs.append(pair)
+                    pairs.append(hue_pairs)
 
-                            # Don't add stats pair if main data is empty.
-                            if len(vals_a) == 0 or len(vals_b) == 0:
-                                continue
+        # Get p-values for each pair.
+        if show_stats:
+            nonsig_pairs = []
+            nonsig_p_vals = []
+            sig_pairs = []
+            sig_p_vals = []
+
+            if hue is None:
+                for x_l, x_r in pairs:
+                    row_pivot_df = row_df.pivot(index=stats_index, columns=x, values=y).reset_index()
+                    if x_l in row_pivot_df.columns and x_r in row_pivot_df.columns:
+                        vals_l = row_pivot_df[x_l]
+                        vals_r = row_pivot_df[x_r]
+
+                        p_val = __calculate_p_val(vals_l, vals_r, stats_alt, stats_paired, stats_sig)
+
+                        if p_val < stats_sig[0]:
+                            sig_pairs.append((x_l, x_r))
+                            sig_p_vals.append(p_val)
                         else:
-                            # Don't add stats pair if main data is empty.
-                            continue
-                        
-                        # Get ('*', '<direction>') from dataframe. We have 'x_val' which is our region.
-                        x_boot_df = stats_boot_df[stats_boot_df[x] == x_val]
-                        boot_hue_l, boot_hue_r, boot_p_val = stats_boot_df_cols
-                        x_pair_boot_df = x_boot_df[(x_boot_df[boot_hue_l] == hue_l) & (x_boot_df[boot_hue_r] == hue_r)]
-                        if len(x_pair_boot_df) == 0:
-                            raise ValueError(f"No matches found in 'stats_boot_df' for '{x}' ('{x_val}') '{boot_hue_l}' ('{hue_l}') and '{boot_hue_r}' ('{hue_r}').")
-                        if len(x_pair_boot_df) > 1:
-                            raise ValueError(f"Found multiple matches in 'stats_boot_df' for '{x}' ('{x_val}') '{boot_hue_l}' ('{hue_l}') and '{boot_hue_r}' ('{hue_r}').")
-                        p_val = x_pair_boot_df.iloc[0][boot_p_val]
+                            nonsig_pairs.append((x_l, x_r))
+                            nonsig_p_vals.append(p_val)
+            else:
+                for x_val, hue_pairs in zip(row_x_order, pairs):
+                    x_df = row_df[row_df[x] == x_val]
 
-                        if p_val != '':
-                            pairs.append((hue_l, hue_r))
-                            p_vals.append(p_val)
-                else:
-                    # Calculate p-values.
-                    # Remove pairs with no available data or no statistical significance.
-                    for hue_l, hue_r in pairs_tmp:
-                        x_pivot_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
-                        if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
-                            vals_a = x_pivot_df[y][hue_l]
-                            vals_b = x_pivot_df[y][hue_r]
+                    hue_nonsig_pairs = []
+                    hue_nonsig_p_vals = []
+                    hue_sig_pairs = []
+                    hue_sig_p_vals = []
+                    for hue_l, hue_r in hue_pairs:
+                        if stats_boot_df is not None:
+                            # Load p-values from 'stats_boot_df'.
+                            x_pivot_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
+                            if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
+                                vals_l = x_pivot_df[y][hue_l]
+                                vals_r = x_pivot_df[y][hue_r]
 
-                            if stats_paired:
-                                # Check if all data is paired.
-                                if np.any(vals_a.isna()) or np.any(vals_b.isna()):
-                                    raise ValueError(f"Unpaired data for x ({x}={x_val}) and hues ({hue}=({hue_l},{hue_r})).")
-
-                                # Can't calculate paired test if all differences are zero - no difference to be found.
-                                if np.all(vals_a - vals_b == 0):
+                                # Don't add stats pair if main data is empty.
+                                if len(vals_l) == 0 or len(vals_r) == 0:
                                     continue
                             else:
-                                # Remove 'nan' values.
-                                vals_a = vals_a[~vals_a.isna()]
-                                vals_b = vals_b[~vals_b.isna()]
-
-                            # Check for empty data - no difference to be found.
-                            if len(vals_a) == 0 or len(vals_b) == 0:
+                                # Don't add stats pair if main data is empty.
                                 continue
+                            
+                            # Get ('*', '<direction>') from dataframe. We have 'x_val' which is our region.
+                            x_boot_df = stats_boot_df[stats_boot_df[x] == x_val]
+                            boot_hue_l, boot_hue_r, boot_p_val = stats_boot_df_cols
+                            x_pair_boot_df = x_boot_df[(x_boot_df[boot_hue_l] == hue_l) & (x_boot_df[boot_hue_r] == hue_r)]
+                            if len(x_pair_boot_df) == 0:
+                                raise ValueError(f"No matches found in 'stats_boot_df' for '{x}' ('{x_val}') '{boot_hue_l}' ('{hue_l}') and '{boot_hue_r}' ('{hue_r}').")
+                            if len(x_pair_boot_df) > 1:
+                                raise ValueError(f"Found multiple matches in 'stats_boot_df' for '{x}' ('{x_val}') '{boot_hue_l}' ('{hue_l}') and '{boot_hue_r}' ('{hue_r}').")
+                            p_val = x_pair_boot_df.iloc[0][boot_p_val]
 
-                            pair = (hue_l, hue_r)
-                            if stats_two_sided:
-                                # Perform two-sided 'Wilcoxon signed rank test'.
-                                if stats_paired:
-                                    _, p_val = wilcoxon(vals_a, vals_b, alternative='two-sided')
-                                else:
-                                    _, p_val = mannwhitneyu(vals_a, vals_b, alternative='two-sided')
-                                if p_val <= 0.05:
-                                    p_vals.append((p_val, ''))
-                                    pairs.append(pair)
+                            if p_val != '':
+                                hue_sig_pairs.append((hue_l, hue_r))
+                                hue_sig_p_vals.append(p_val)
                             else:
-                                # Perform one-sided 'Wilcoxon signed rank test'.
-                                if stats_paired:
-                                    _, p_val = wilcoxon(vals_a, vals_b, alternative='greater')
-                                else:
-                                    _, p_val = mannwhitneyu(vals_a, vals_b, alternative='greater')
-                                if p_val <= 0.05:
-                                    p_vals.append((p_val, '>'))
-                                    pairs.append(pair)
-                                else:
-                                    if stats_paired:
-                                        _, p_val = wilcoxon(vals_a, vals_b, alternative='less')
-                                    else:
-                                        _, p_val = mannwhitneyu(vals_a, vals_b, alternative='less')
-                                    if p_val <= 0.05:
-                                        p_vals.append((p_val, '<'))
-                                        pairs.append(pair)
+                                hue_nonsig_pairs.append((hue_l, hue_r))
+                                hue_nonsig_p_vals.append(p_val)
+                    else:
+                        # Calculate p-values using stats tests.
+                        for hue_l, hue_r in hue_pairs:
+                            x_pivot_df = x_df.pivot(index=stats_index, columns=[hue], values=[y]).reset_index()
+                            if (y, hue_l) in x_pivot_df.columns and (y, hue_r) in x_pivot_df.columns:
+                                vals_l = x_pivot_df[y][hue_l]
+                                vals_r = x_pivot_df[y][hue_r]
 
-                    # Format p-values.
-                    p_vals = __format_p_values(p_vals, show_direction=stats_bar_show_direction) 
+                                p_val = __calculate_p_val(vals_l, vals_r, stats_alt, stats_paired, stats_sig)
 
-                # Exclude pairs.
-                pairs_tmp = pairs.copy()
-                p_vals_tmp = p_vals.copy()
-                pairs = []
-                p_vals = []
-                for (hue_l, hue_r), p_val in zip(pairs_tmp, p_vals_tmp):
-                    if (hue_l in stats_exclude or hue_r in stats_exclude) or (hue_l in stats_exclude_left) or (hue_r in stats_exclude_right):
+                                if p_val < stats_sig[0]:
+                                    hue_sig_pairs.append((hue_l, hue_r))
+                                    hue_sig_p_vals.append(p_val)
+                                else:
+                                    hue_nonsig_pairs.append((hue_l, hue_r))
+                                    hue_nonsig_p_vals.append(p_val)
+                
+                    nonsig_pairs.append(hue_nonsig_pairs)
+                    nonsig_p_vals.append(hue_nonsig_p_vals)
+                    sig_pairs.append(hue_sig_pairs)
+                    sig_p_vals.append(hue_sig_p_vals)
+
+        # Format p-values.
+        if show_stats:
+            if hue is None:
+                sig_p_vals = __format_p_vals(sig_p_vals, stats_sig)
+            else:
+                sig_p_vals = [__format_p_vals(p, stats_sig) for p in sig_p_vals]
+
+        # Remove 'excluded' pairs.
+        if show_stats:
+            filt_pairs = []
+            filt_p_vals = []
+            if hue is None:
+                for (x_l, x_r), p_val in zip(sig_pairs, sig_p_vals):
+                    if (x_l in stats_exclude or x_r in stats_exclude) or (x_l in stats_exclude_left) or (x_r in stats_exclude_right):
                         continue
-                    pairs.append((hue_l, hue_r))
-                    p_vals.append(p_val)
+                    filt_pairs.append((x_l, x_r))
+                    filt_p_vals.append(p_val)
+            else:
+                for ps, p_vals in zip(sig_pairs, sig_p_vals):
+                    hue_filt_pairs = []
+                    hue_filt_p_vals = []
+                    for (hue_l, hue_r), p_val in zip(ps, p_vals):
+                        if (hue_l in stats_exclude or hue_r in stats_exclude) or (hue_l in stats_exclude_left) or (hue_r in stats_exclude_right):
+                            continue
+                        hue_filt_pairs.append((hue_l, hue_r))
+                        hue_filt_p_vals.append(p_val)
+                    filt_pairs.append(hue_filt_pairs)
+                    filt_p_vals.append(hue_filt_p_vals)
 
-                # Calculate grid offset from data.
+        # Display stats bars.
+        # To display stats bars, we fit a vertical grid over the plot and place stats bars
+        # on the grid lines - so they look nice.
+        if show_stats:
+            # Calculate heights based on window height.
+            y_height = max_y - min_y
+            stats_bar_height = y_height * stats_bar_height
+            stats_bar_grid_spacing = y_height * stats_bar_grid_spacing
+            stats_bar_grid_offset = y_height * stats_bar_grid_offset
+            stats_bar_grid_offset_wiggle = y_height * stats_bar_grid_offset_wiggle
+            stats_bar_text_offset = y_height * stats_bar_text_offset
+                
+            if hue is None:
+                # Calculate 'y_grid_offset' - the bottom of the grid.
+                # For each pair, we calculate the max value of the data, as the bar should
+                # lie above this. Then we find the smallest of these max values across all pairs.
+                # 'stats_bar_grid_offset' is added to give spacing between the data and the bar.
                 y_grid_offset = np.inf
                 min_skip = None
-                # Find 'y_grid_offset' - the lowest of all max values for each hue pair + 
-                #   'stats_bar_data_offset' for spacing. This will be the starting point
-                # for the stats bar grid. 
-                for hue_l, hue_r in pairs:
+                for x_l, x_r in filt_pairs:
                     if stats_bar_alg_use_lowest_level:
-                        skip = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
+                        skip = x_order.index(x_r) - x_order.index(x_l) - 1
                         if min_skip is None:
                             min_skip = skip
                         elif skip > min_skip:
                             continue
 
-                    hue_l_df = x_df[x_df[hue] == hue_l]
-                    hue_r_df = x_df[x_df[hue] == hue_r]
-                    y_max = max(hue_l_df[y].max(), hue_r_df[y].max())
-                    y_max = y_max + stats_bar_data_offset
+                    x_l_df = row_df[row_df[x] == x_l]
+                    x_r_df = row_df[row_df[x] == x_r]
+                    y_max = max(x_l_df[y].max(), x_r_df[y].max())
+                    y_max = y_max + stats_bar_grid_offset
                     if y_max < y_grid_offset:
                         y_grid_offset = y_max
 
-                # Add grid offset.
-                y_grid_offset = y_grid_offset + stats_bar_grid_offset
+                # Add data offset.
+                y_grid_offset = y_grid_offset + stats_bar_grid_offset_wiggle
 
                 # Annotate figure.
-                bar_positions = {}
-                for (hue_l, hue_r), p_val in zip(pairs, p_vals):
-                    # Get x positions.
-                    hue_l_df = x_df[x_df[hue] == hue_l]
-                    hue_r_df = x_df[x_df[hue] == hue_r]
-                    x_left = hue_l_df['x_pos'].iloc[0]
-                    x_right = hue_r_df['x_pos'].iloc[0]
+                # We keep track of bars we've plotted using 'y_idxs'.
+                # This is a mapping from the hue to the grid positions that have already
+                # been used for either a left or right hand side of a bar.
+                y_idxs: Dict[str, List[int]] = {}
+                for (x_l, x_r), p_val in zip(filt_pairs, filt_p_vals):
+                    # Get plot 'x_pos' for each x value.
+                    x_l_df = row_df[row_df[x] == x_l]
+                    x_r_df = row_df[row_df[x] == x_r]
+                    x_left = x_l_df['x_pos'].iloc[0]
+                    x_right = x_r_df['x_pos'].iloc[0]
 
-                    # Get y grid index based on data.
-                    y_maxes = [hue_df[y].max() for hue_df in [hue_l_df, hue_r_df]]
-                    n_mid_hues = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
-                    for j in range(n_mid_hues):
-                        hue_mid = hue_order[hue_order.index(hue_l) + j + 1]
-                        hue_mid_df = x_df[x_df[hue] == hue_mid]
-                        y_max = hue_mid_df[y].max()
-                        y_maxes.append(y_max)
-                    y_max = max(y_maxes) + stats_bar_data_offset
-                    y_i_data = int(np.ceil((y_max - y_grid_offset) / stats_bar_grid_spacing))
+                    # Get 'y_idx_min' (e.g. 0, 1, 2,...) which tells us the lowest grid line
+                    # we can use based on our data points.
+                    # We calculate this by finding the max data value for the pair, and also
+                    # the max values for any hues between the pair values - as our bar should
+                    # not collide with these 'middle' hues. 
+                    y_data_maxes = [x_end_df[y].max() for x_end_df in [x_l_df, x_r_df]]
+                    n_mid_xs = x_order.index(x_r) - x_order.index(x_l) - 1
+                    for j in range(n_mid_xs):
+                        x_mid = x_order[x_order.index(x_l) + j + 1]
+                        x_mid_df = row_df[row_df[x] == x_mid]
+                        y_data_max = x_mid_df[y].max()
+                        y_data_maxes.append(y_data_max)
+                    y_data_max = max(y_data_maxes) + stats_bar_grid_offset
+                    y_idx_min = int(np.ceil((y_data_max - y_grid_offset) / stats_bar_grid_spacing))
 
-                    # Get possible y grid index based on existing bar positions.
-                    ## Get existing bar positions for all 'middle' hues.
-                    n_mid_hues = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
-                    mid_hues_bar_positions = []
-                    for j in range(n_mid_hues):
-                        hue_mid = hue_order[hue_order.index(hue_l) + j + 1]
-                        if hue_mid not in bar_positions:
-                            continue
-                        hue_mid_bar_positions = bar_positions[hue_mid]
-                        mid_hues_bar_positions.append(hue_mid_bar_positions)
+                    # We don't want our new stats bar to collide with any existing bars.
+                    # Get the y positions for all stats bar that have already been plotted
+                    # and that have their left or right end at one of the 'middle' hues for
+                    # our current pair.
+                    n_mid_xs = x_order.index(x_r) - x_order.index(x_l) - 1
+                    y_idxs_mid_xs = []
+                    for j in range(n_mid_xs):
+                        x_mid = x_order[x_order.index(x_l) + j + 1]
+                        if x_mid in y_idxs:
+                            y_idxs_mid_xs += y_idxs[x_mid]
 
-                    ## Find first free position greater than or equal to 'y_i_data'.
-                    y_i = y_i_data
-                    y_i_max = 100
-                    for y_i in range(y_i_data, y_i_max):
-                        if not any([y_i in p for p in mid_hues_bar_positions]):
+                    # Get the next free position that doesn't collide with any existing bars.
+                    y_idx_max = 100
+                    for y_idx in range(y_idx_min, y_idx_max):
+                        if y_idx not in y_idxs_mid_xs:
                             break
 
                     # Plot bar.
-                    y_min = y_grid_offset + y_i * stats_bar_grid_spacing
+                    y_min = y_grid_offset + y_idx * stats_bar_grid_spacing
                     y_max = y_min + stats_bar_height
-                    axs[i].plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=linewidth)    
+                    inset_ax.plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=linewidth)    
+
+                    # Adjust y-axis limits if bar would be plotted outside of window.
+                    # Unless y_lim is set manually.
+                    y_lim_top = y_max + 1.5 * stats_bar_grid_spacing
+                    if y_lim[1] is None and y_lim_top > y_lim_row[1]:
+                        y_lim_row[1] = y_lim_top
+                        inset_ax = __set_axes_limits(axs[i], x_lim_row, y_lim_row, inset_ax=inset_ax)
 
                     # Plot p-value.
                     x_text = (x_left + x_right) / 2
                     y_text = y_max + stats_bar_text_offset
-                    axs[i].text(x_text, y_text, p_val, alpha=stats_bar_alpha, fontsize=fontsize_stats, horizontalalignment='center', verticalalignment='center')
+                    inset_ax.text(x_text, y_text, p_val, alpha=stats_bar_alpha, fontsize=fontsize_stats, horizontalalignment='center', verticalalignment='center')
 
-                    # Track bar positions.
-                    if not hue_l in bar_positions:
-                        bar_positions[hue_l] = [y_i]
-                    elif y_i not in bar_positions[hue_l]:
-                        bar_positions[hue_l] = list(sorted(bar_positions[hue_l] + [y_i]))
-                    if not hue_r in bar_positions:
-                        bar_positions[hue_r] = [y_i]
-                    elif y_i not in bar_positions[hue_r]:
-                        bar_positions[hue_r] = list(sorted(bar_positions[hue_r] + [y_i]))
+                    # Save position of plotted stats bar.
+                    if not x_l in y_idxs:
+                        y_idxs[x_l] = [y_idx]
+                    elif y_idx not in y_idxs[x_l]:
+                        y_idxs[x_l] = list(sorted(y_idxs[x_l] + [y_idx]))
+                    if not x_r in y_idxs:
+                        y_idxs[x_r] = [y_idx]
+                    elif y_idx not in y_idxs[x_r]:
+                        y_idxs[x_r] = list(sorted(y_idxs[x_r] + [y_idx]))
+            else:
+                for hue_pairs, hue_p_vals in zip(filt_pairs, filt_p_vals):
+                    # Calculate 'y_grid_offset' - the bottom of the grid.
+                    # For each pair, we calculate the max value of the data, as the bar should
+                    # lie above this. Then we find the smallest of these max values across all pairs.
+                    # 'stats_bar_grid_offset' is added to give spacing between the data and the bar.
+                    y_grid_offset = np.inf
+                    min_skip = None
+                    for hue_l, hue_r in hue_pairs:
+                        if stats_bar_alg_use_lowest_level:
+                            skip = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
+                            if min_skip is None:
+                                min_skip = skip
+                            elif skip > min_skip:
+                                continue
+
+                        hue_l_df = x_df[x_df[hue] == hue_l]
+                        hue_r_df = x_df[x_df[hue] == hue_r]
+                        y_max = max(hue_l_df[y].max(), hue_r_df[y].max())
+                        y_max = y_max + stats_bar_grid_offset
+                        if y_max < y_grid_offset:
+                            y_grid_offset = y_max
+
+                    # Add data offset.
+                    y_grid_offset = y_grid_offset + stats_bar_grid_offset_wiggle
+
+                    # Annotate figure.
+                    # We keep track of bars we've plotted using 'y_idxs'.
+                    # This is a mapping from the hue to the grid positions that have already
+                    # been used for either a left or right hand side of a bar.
+                    y_idxs: Dict[str, List[int]] = {}
+                    for (hue_l, hue_r), p_val in zip(hue_pairs, hue_p_vals):
+                        # Get plot 'x_pos' for each hue.
+                        hue_l_df = x_df[x_df[hue] == hue_l]
+                        hue_r_df = x_df[x_df[hue] == hue_r]
+                        x_left = hue_l_df['x_pos'].iloc[0]
+                        x_right = hue_r_df['x_pos'].iloc[0]
+
+                        # Get 'y_idx_min' (e.g. 0, 1, 2,...) which tells us the lowest grid line
+                        # we can use based on our data points.
+                        # We calculate this by finding the max data value for the pair, and also
+                        # the max values for any hues between the pair values - as our bar should
+                        # not collide with these 'middle' hues. 
+                        y_data_maxes = [hue_df[y].max() for hue_df in [hue_l_df, hue_r_df]]
+                        n_mid_hues = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
+                        for j in range(n_mid_hues):
+                            hue_mid = hue_order[hue_order.index(hue_l) + j + 1]
+                            hue_mid_df = x_df[x_df[hue] == hue_mid]
+                            y_data_max = hue_mid_df[y].max()
+                            y_data_maxes.append(y_data_max)
+                        y_data_max = max(y_data_maxes) + stats_bar_grid_offset
+                        y_idx_min = int(np.ceil((y_data_max - y_grid_offset) / stats_bar_grid_spacing))
+
+                        # We don't want our new stats bar to collide with any existing bars.
+                        # Get the y positions for all stats bar that have already been plotted
+                        # and that have their left or right end at one of the 'middle' hues for
+                        # our current pair.
+                        n_mid_hues = hue_order.index(hue_r) - hue_order.index(hue_l) - 1
+                        y_idxs_mid_hues = []
+                        for j in range(n_mid_hues):
+                            hue_mid = hue_order[hue_order.index(hue_l) + j + 1]
+                            if hue_mid in y_idxs:
+                                y_idxs_mid_hues += y_idxs[hue_mid]
+
+                        # Get the next free position that doesn't collide with any existing bars.
+                        y_idx_max = 100
+                        for y_idx in range(y_idx_min, y_idx_max):
+                            if y_idx not in y_idxs_mid_hues:
+                                break
+
+                        # Plot bar.
+                        y_min = y_grid_offset + y_idx * stats_bar_grid_spacing
+                        y_max = y_min + stats_bar_height
+                        inset_ax.plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=linewidth)    
+
+                        # Adjust y-axis limits if bar would be plotted outside of window.
+                        # Unless y_lim is set manually.
+                        y_lim_top = y_max + 1.5 * stats_bar_grid_spacing
+                        if y_lim[1] is None and y_lim_top > y_lim_row[1]:
+                            y_lim_row[1] = y_lim_top
+                            inset_ax = __set_axes_limits(axs[i], x_lim_row, y_lim_row, inset_ax=inset_ax)
+
+                        # Plot p-value.
+                        x_text = (x_left + x_right) / 2
+                        y_text = y_max + stats_bar_text_offset
+                        inset_ax.text(x_text, y_text, p_val, alpha=stats_bar_alpha, fontsize=fontsize_stats, horizontalalignment='center', verticalalignment='center')
+
+                        # Save position of plotted stats bar.
+                        if not hue_l in y_idxs:
+                            y_idxs[hue_l] = [y_idx]
+                        elif y_idx not in y_idxs[hue_l]:
+                            y_idxs[hue_l] = list(sorted(y_idxs[hue_l] + [y_idx]))
+                        if not hue_r in y_idxs:
+                            y_idxs[hue_r] = [y_idx]
+                        elif y_idx not in y_idxs[hue_r]:
+                            y_idxs[hue_r] = list(sorted(y_idxs[hue_r] + [y_idx]))
           
         # Set axis labels.
         x_label = x_label if x_label is not None else ''
         y_label = y_label if y_label is not None else ''
-        axs[i].set_xlabel(x_label, fontsize=fontsize_label)
-        axs[i].set_ylabel(y_label, fontsize=fontsize_label)
+        inset_ax.set_xlabel(x_label, fontsize=fontsize_label)
+        inset_ax.set_ylabel(y_label, fontsize=fontsize_label)
                 
         # Set axis tick labels.
-        axs[i].set_xticks(list(range(len(row_x_tick_labels))))
+        inset_ax.set_xticks(list(range(len(row_x_tick_labels))))
         if show_x_tick_labels:
-            axs[i].set_xticklabels(row_x_tick_labels, fontsize=fontsize_tick_label, rotation=x_tick_label_rot)
+            inset_ax.set_xticklabels(row_x_tick_labels, fontsize=fontsize_tick_label, rotation=x_tick_label_rot)
         else:
-            axs[i].set_xticklabels([])
+            inset_ax.set_xticklabels([])
 
-        axs[i].tick_params(axis='y', which='major', labelsize=fontsize_tick_label)
+        inset_ax.tick_params(axis='y', which='major', labelsize=fontsize_tick_label)
 
         # Set y axis major ticks.
         if major_tick_freq is not None:
             major_tick_min = y_lim[0]
             if major_tick_min is None:
-                major_tick_min = axs[i].get_ylim()[0]
+                major_tick_min = inset_ax.get_ylim()[0]
             major_tick_max = y_lim[1]
             if major_tick_max is None:
-                major_tick_max = axs[i].get_ylim()[1]
+                major_tick_max = inset_ax.get_ylim()[1]
             
             # Round range to nearest multiple of 'major_tick_freq'.
             major_tick_min = np.ceil(major_tick_min / major_tick_freq) * major_tick_freq
@@ -2520,34 +2675,34 @@ def plot_dataframe(
             n_major_ticks = int((major_tick_max - major_tick_min) / major_tick_freq) + 1
             major_ticks = np.linspace(major_tick_min, major_tick_max, n_major_ticks)
             major_tick_labels = [str(round(t, 3)) for t in major_ticks]     # Some weird str() conversion without rounding.
-            axs[i].set_yticks(major_ticks)
-            axs[i].set_yticklabels(major_tick_labels)
+            inset_ax.set_yticks(major_ticks)
+            inset_ax.set_yticklabels(major_tick_labels)
 
         # Set y axis minor ticks.
         if minor_tick_freq is not None:
             minor_tick_min = y_lim[0]
             if minor_tick_min is None:
-                minor_tick_min = axs[i].get_ylim()[0]
+                minor_tick_min = inset_ax.get_ylim()[0]
             minor_tick_max = y_lim[1]
             if minor_tick_max is None:
-                minor_tick_max = axs[i].get_ylim()[1]
+                minor_tick_max = inset_ax.get_ylim()[1]
             
             # Round range to nearest multiple of 'minor_tick_freq'.
             minor_tick_min = np.ceil(minor_tick_min / minor_tick_freq) * minor_tick_freq
             minor_tick_max = np.floor(minor_tick_max / minor_tick_freq) * minor_tick_freq
             n_minor_ticks = int((minor_tick_max - minor_tick_min) / minor_tick_freq) + 1
             minor_ticks = np.linspace(minor_tick_min, minor_tick_max, n_minor_ticks)
-            axs[i].set_yticks(minor_ticks, minor=True)
+            inset_ax.set_yticks(minor_ticks, minor=True)
 
         # Set y grid lines.
-        axs[i].grid(axis='y', alpha=0.1, color='grey', linewidth=linewidth)
-        axs[i].set_axisbelow(True)
+        inset_ax.grid(axis='y', alpha=0.1, color='grey', linewidth=linewidth)
+        inset_ax.set_axisbelow(True)
 
         # Set axis spine/tick linewidths and tick lengths.
         spines = ['top', 'bottom','left','right']
         for spine in spines:
-            axs[i].spines[spine].set_linewidth(linewidth)
-        axs[i].tick_params(which='both', length=ticklength, width=linewidth)
+            inset_ax.spines[spine].set_linewidth(linewidth)
+        inset_ax.tick_params(which='both', length=ticklength, width=linewidth)
 
     # Set title.
     title_kwargs = {
@@ -2950,30 +3105,55 @@ def __add_outlier_info(df, x, y, hue):
     df = df.assign(outlier=(df[y] < df.outlier_lim_low) | (df[y] > df.outlier_lim_high))
     return df
 
-def __format_p_values(
+def __calculate_p_val(
+    a: List[float],
+    b: List[float],
+    stats_alt: AltHyp,
+    stats_paired: bool,
+    stats_sig: List[float]) -> float:
+
+    if stats_paired:
+        if np.any(a.isna()) or np.any(b.isna()):
+            raise ValueError(f"Unpaired data... add more info.")
+
+        # Can't calculate paired test without differences.
+        if np.all(b - a == 0):
+            raise ValueError(f"Paired data is identical ... add more info.")
+    else:
+        # Remove 'nan' values.
+        a = a[~a.isna()]
+        b = b[~b.isna()]
+
+    # Check for presence of data.
+    if len(a) == 0 or len(b) == 0:
+        raise ValueError(f"Empty data... add more info.")
+
+    # Calculate p-value.
+    alt_map = {
+        AltHyp.LESSER: 'less',
+        AltHyp.GREATER: 'greater',
+        AltHyp.TWO_SIDED: 'two-sided'
+    }
+    if stats_paired:
+        _, p_val = scipy.stats.wilcoxon(a, b, alternative=alt_map[stats_alt])
+    else:
+        _, p_val = scipy.stats.mannwhitneyu(a, b, alternative=alt_map[stats_alt])
+
+    return p_val
+
+def __format_p_vals(
     p_vals: List[float],
-    show_direction: bool = True) -> List[str]:
-    # Format p value for display.
-    p_vals_tmp = p_vals
-    p_vals = []
-    for p_val, direction in p_vals_tmp:
-        if p_val >= 0.05:
-            p_val = ''
-        elif p_val >= 0.01:
-            p_val = '*'
-        elif p_val >= 0.001:
-            p_val = '**'
-        elif p_val >= 0.0001:
-            p_val = '***'
-        else:
-            p_val = '****'
-
-        # Add direction if necessary.
-        if show_direction and direction != '':
-            p_val = f'{p_val} {direction}'
-        p_vals.append(p_val)
-
-    return p_vals
+    stats_sig: List[float]) -> List[str]:
+    p_vals_f = []
+    for p in p_vals:
+        p_f = ''
+        for s in stats_sig:
+            if p < s:
+                p_f += '*'
+            else:
+                break
+        p_vals_f.append(p_f)
+    return p_vals_f
 
 def __get_styles(
     series: pd.Series,
@@ -3027,6 +3207,26 @@ def __get_view_spacing(
         return (spacing[0], spacing[2])
     elif view == 2:
         return (spacing[0], spacing[1])
+
+def __set_axes_limits(
+    parent_ax: mpl.axes.Axes,
+    x_lim: Tuple[float, float],
+    y_lim: Tuple[float, float],
+    inset_ax: Optional[mpl.axes.Axes] = None) -> mpl.axes.Axes:
+    # Set parent axes limits.
+    parent_ax.set_xlim(*x_lim)
+    parent_ax.set_ylim(*y_lim)
+    parent_ax.axis('off')
+
+    # Create inset if not passed.
+    if inset_ax is None:
+        inset_ax = parent_ax.inset_axes([x_lim[0], y_lim[0], x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]], transform=parent_ax.transData)
+
+    # Set inset axis limits.
+    inset_ax.set_xlim(*x_lim)
+    inset_ax.set_ylim(*y_lim)
+
+    return inset_ax
 
 def __view_to_text(view: int) -> str:
     if view == 0:

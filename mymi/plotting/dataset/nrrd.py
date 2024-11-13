@@ -2,7 +2,7 @@ import numpy as np
 import re
 from typing import Dict, List, Literal, Optional, Union
 
-from mymi.dataset import NRRDDataset
+from mymi.dataset import NrrdDataset
 from mymi.gradcam.dataset.nrrd import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_multi_segmenter_prediction_dict
@@ -25,7 +25,7 @@ MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
 def plot_histogram(
     dataset: str,
     n_patients: int = 10) -> None:
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients()
     pat_ids = pat_ids[:n_patients]
     ct_datas = [set.patient(pat_id).ct_data for pat_id in pat_ids]
@@ -43,7 +43,7 @@ def plot_patient(
     **kwargs) -> None:
 
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
     if regions is not None:
@@ -84,7 +84,7 @@ def plot_localiser_prediction(
     region_labels = arg_to_list(region_label, str)
     
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -164,7 +164,7 @@ def plot_multi_segmenter_prediction(
         assert len(seg_spacings) == n_models
     
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -282,7 +282,7 @@ def plot_segmenter_prediction(
         assert len(seg_spacings) == n_models
     
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     region_data = pat.region_data(region=regions) if regions is not None else None
@@ -393,7 +393,7 @@ def plot_segmenter_prediction_diff(
     diff_regions = [l[0].split('-')[1] for l in localisers]
     
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data if show_ct else None
     spacing = pat.ct_spacing
@@ -492,7 +492,7 @@ def plot_heatmap(
     crop: Optional[Union[str, Box2D]] = None,
     **kwargs) -> None:
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
     region_data = pat.region_data(region=region)

@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi.dataset.nrrd import NRRDDataset
+from mymi.dataset.nrrd import NrrdDataset
 from mymi.evaluation.dataset.nrrd import load_localiser_evaluation, load_segmenter_evaluation
 from mymi.geometry import get_extent, get_extent_centre, get_extent_width_mm
 from mymi.loaders import Loader
@@ -31,7 +31,7 @@ def get_region_overlap_summary(
     dataset: str,
     region: str) -> pd.DataFrame:
     # List patients.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients(labels='all', region=region)
 
     cols = {
@@ -74,7 +74,7 @@ def get_region_summary(
     region: str,
     labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
     # List patients.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients(labels='all', region=region)
 
     cols = {
@@ -191,7 +191,7 @@ def create_region_contrast_report(
     df = pd.DataFrame(columns=cols.keys())
 
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients(region=region)
 
     for pat_id in tqdm(pat_ids):
@@ -255,7 +255,7 @@ def create_region_overlap_summary(
     df = get_region_overlap_summary(dataset, region)
 
     # Save report.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
@@ -264,7 +264,7 @@ def create_region_summary(
     dataset: str,
     regions: Optional[PatientRegions] = None) -> None:
     # Load regions.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     if regions is None:
         regions = set.list_regions()
     else:
@@ -373,7 +373,7 @@ def load_region_contrast_report(
     # Load reports.
     dfs = []
     for dataset in datasets:
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
 
         for region in regions:
             filepath = os.path.join(set.path, 'reports', 'region-contrast', f'{region}.csv')
@@ -393,7 +393,7 @@ def load_region_overlap_summary(
     raise_error: bool = True) -> Optional[pd.DataFrame]:
 
     # Load summary.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
     if not os.path.exists(filepath):
         if raise_error:
@@ -428,7 +428,7 @@ def load_region_summary(
     # Load summary.
     dfs = []
     for dataset in datasets:
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
         exc_df = set.excluded_labels
         if regions is None:
             regions = set.list_regions()
@@ -504,7 +504,7 @@ def create_ct_summary(dataset: str) -> None:
     df = pd.DataFrame(columns=cols.keys())
 
     # Add patient CT image stats.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients()
     for pat_id in tqdm(pat_ids):
         # Load CT image.
@@ -531,7 +531,7 @@ def create_ct_summary(dataset: str) -> None:
     df.to_csv(filepath, index=False)
 
 def load_ct_summary(dataset: str) -> pd.DataFrame:
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'ct-summary.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'. Filepath: {filepath}.")
@@ -621,7 +621,7 @@ def create_region_figures(
     logging.arg_log('Creating region figures', ('dataset', 'region', 'labels', 'subregions'), (dataset, region, labels, subregions))
 
     # Get patients.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat_ids = set.list_patients(labels=labels, regions=region)
 
     # Get excluded regions.
@@ -810,7 +810,7 @@ def get_object_summary(
     pat_id: str,
     region: str) -> pd.DataFrame:
     # Get objects.
-    pat = NRRDDataset(dataset).patient(pat_id)
+    pat = NrrdDataset(dataset).patient(pat_id)
 
     spacing = pat.ct_spacing
     label = pat.region_data(region=region)[region]
@@ -863,7 +863,7 @@ def create_localiser_figures(
     logging.info(f"Creating localiser figures for dataset '{dataset}', region '{region}' and localiser '{localiser}'.")
 
     # Get patients.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pats = set.list_patients(region=region)
 
     # Exit if region not present.

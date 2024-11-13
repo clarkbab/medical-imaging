@@ -5,7 +5,7 @@ from .dicom import DicomDataset
 from .dicom import list as list_dicom
 from .nifti import NiftiDataset
 from .nifti import list as list_nifti
-from .nrrd import NRRDDataset
+from .nrrd import NrrdDataset
 from .nrrd import list as list_nrrd
 from .training import TrainingDataset
 from .training import list as list_training
@@ -45,7 +45,7 @@ def get(
         elif type == DatasetType.NIFTI:
             return NiftiDataset(name, **kwargs)
         elif type == DatasetType.NRRD:
-            return NRRDDataset(name, **kwargs)
+            return NrrdDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
             return TrainingDataset(name, **kwargs)
         elif type == DatasetType.TRAINING_ADAPTIVE:
@@ -73,7 +73,7 @@ def get(
         # Preference 2b: NRRD.
         nrrd_ds = list_nrrd()
         if name in nrrd_ds:
-            return NRRDDataset(name, **kwargs)
+            return NrrdDataset(name, **kwargs)
 
         # Preference 3: DICOM.
         dicom_ds = list_dicom()
@@ -156,7 +156,7 @@ def region_summary(*args, **kwargs):
 def trimmed_errors(*args, **kwargs):
     return ds.trimmed_errors(*args, **kwargs)
 
-# NIFTI/NRRDDataset API.
+# NIFTI/NrrdDataset API.
 
 def list_patients(*args, **kwargs):
     return ds.list_patients(*args, **kwargs)

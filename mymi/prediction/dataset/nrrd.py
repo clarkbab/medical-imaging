@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
-from mymi.dataset import NRRDDataset, TrainingDataset
+from mymi.dataset import NrrdDataset, TrainingDataset
 from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
@@ -30,7 +30,7 @@ def get_localiser_prediction(
     loc_spacing: ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
     # Load data.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -68,7 +68,7 @@ def create_localiser_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser.name}'.")
@@ -193,7 +193,7 @@ def create_all_localiser_predictions(
 
     # Load patients.
     for dataset in datasets:
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
         pat_ids = set.list_patients()
 
         for pat_id in tqdm(pat_ids):
@@ -216,7 +216,7 @@ def load_localiser_prediction(
     localiser = replace_ckpt_alias(localiser)
 
     # Load prediction.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     filepath = os.path.join(config.directories.predictions, 'data', 'localiser', dataset, str(pat_id), *localiser, 'pred.npz')
     if os.path.exists(filepath):
         if exists_only:
@@ -251,7 +251,7 @@ def load_localiser_centre(
     dataset: str,
     pat_id: PatientID,
     localiser: ModelName) -> Point3D:
-    spacing = NRRDDataset(dataset).patient(pat_id).ct_spacing
+    spacing = NrrdDataset(dataset).patient(pat_id).ct_spacing
 
     # Get localiser prediction.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
@@ -281,7 +281,7 @@ def get_multi_segmenter_prediction(
     model.to(device)
 
     # Load patient CT data and spacing.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing
@@ -343,7 +343,7 @@ def get_segmenter_prediction(
     segmenter.to(device)
 
     # Load patient CT data and spacing.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     spacing = patient.ct_spacing
@@ -418,7 +418,7 @@ def create_multi_segmenter_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
@@ -462,7 +462,7 @@ def create_segmenter_prediction(
 
     for dataset, pat_id in zip(datasets, pat_ids):
         # Load dataset.
-        set = NRRDDataset(dataset)
+        set = NrrdDataset(dataset)
         pat = set.patient(pat_id)
 
         logging.info(f"Creating prediction for patient '{pat}', localiser '{localiser}', segmenter '{segmenter.name}'.")
@@ -735,7 +735,7 @@ def save_patient_segmenter_prediction(
     segmenter = Segmenter.replace_ckpt_aliases(*segmenter)
 
     # Load segmentation.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     filepath = os.path.join(set.path, 'predictions', 'segmenter', *localiser, *segmenter, f'{pat_id}.npz') 
     np.savez_compressed(filepath, data=data)
 

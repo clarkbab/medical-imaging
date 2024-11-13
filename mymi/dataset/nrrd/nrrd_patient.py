@@ -13,7 +13,7 @@ from mymi.utils import arg_to_list
 class NRRDPatient:
     def __init__(
         self,
-        dataset: 'NRRDDataset',
+        dataset: 'NrrdDataset',
         id: PatientID,
         excluded_labels: Optional[pd.DataFrame] = None):
         self.__dataset = dataset
@@ -64,6 +64,11 @@ class NRRDPatient:
     @property
     def path(self) -> str:
         return self.__path
+
+    @property
+    def has_landmarks(self) -> bool:
+        filepath = os.path.join(self.__dataset.path, 'data', 'landmarks', f'{self.__id}.csv')
+        return os.path.exists(filepath)
 
     def has_region(
         self,

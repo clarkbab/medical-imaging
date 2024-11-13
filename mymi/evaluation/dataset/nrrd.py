@@ -7,7 +7,7 @@ from tqdm import tqdm
 from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
-from mymi.dataset import NRRDDataset
+from mymi.dataset import NrrdDataset
 from mymi.geometry import get_box, get_extent_centre
 from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
@@ -26,7 +26,7 @@ def get_localiser_evaluation(
     localiser: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
@@ -184,7 +184,7 @@ def get_multi_segmenter_evaluation(
     regions = arg_to_list(region, str)
 
     # Load ground truth and prediction.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     labels = pat.region_data(region=regions)
@@ -243,7 +243,7 @@ def get_segmenter_evaluation(
     segmenter: ModelName) -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_segmenter_prediction(dataset, pat_id, localiser, segmenter)
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
 
     # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.

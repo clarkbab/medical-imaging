@@ -200,7 +200,7 @@ class RTSTRUCTConverter:
             ref_cts: the reference CT dicoms.
         kwargs:
             info: a dictionary of extra info to add to RTSTRUCT.
-                institution-name: the RTSTRUCT 'InstitutionName' field.
+                institution: the RTSTRUCT 'InstitutionName' field.
                 label: the RTSTRUCT 'StructureSetLabel' field.
         """
         # Create metadata.
@@ -273,8 +273,8 @@ class RTSTRUCTConverter:
         rtstruct.ContentTime = time
         rtstruct.InstanceCreationDate = date
         rtstruct.InstanceCreationTime = time
-        if 'institution-name' in info:
-            rtstruct.InstitutionName = info['institution-name']
+        if 'institution' in info:
+            rtstruct.InstitutionName = info['institution']
         rtstruct.Modality = 'RTSTRUCT'
         rtstruct.SpecificCharacterSet = 'ISO_IR 100'
         rtstruct.StructureSetLabel = info['label'] if 'label' in info else 'RTSTRUCT'

@@ -9,7 +9,7 @@ import shutil
 import SimpleITK as sitk
 import struct
 from time import time
-from typing import Optional
+from typing import List, Optional
 from tqdm import tqdm
 
 from mymi.dataset.shared import CT_FROM_REGEXP
@@ -283,43 +283,31 @@ def __convert_velocity_transform(filepath: str) -> None:
     if len(image) != n_voxels:
         raise ValueError(f"Expected image to contain '{n_voxels}' voxels, got '{len(image)}'.")
 
-    # Create numpy array.
-    # What order is the data stored in with BDF?
-    # We'll just have to use this code I found, which seems to think its stored in z, y, x order.
-    logging.info(filepath)
-    image = np.array(image)
-    logging.info(image.shape)
-
     # When performing numpy.reshape, data is taken from the flat array for the last dimension first.
     # E.g. if reshaping to (3, 4), the first 4 elements of the flat array are taken for the first row,
     # followed by another 4 elements for the second row, etc.
-    # Presumably Velocity stores data in the opposite order, e.g. the first 3 elements are taken for the
-    # first column, followed by the next 3 elements for the second column, etc.
-    # If we reverse the shape for numpy.reshape, e.g. (4, 3), then we're getting the correct behaviour
-    # as the first 3 elements will be taken for the first row, and then we move rows afterwards using numpy.moveaxis.
+    # Velocity stores data in the opposite order, e.g. the first 3 elements should be taken for the first
+    # column, followed by the next 3 elements for the second column, etc.
+    # To get this behaviour, we reverse the shape for numpy.reshape, e.g. (4, 3), and then move axes
+    # after reshaping.
+    image = np.array(image)
     image = np.reshape(image, (*size[::-1], 3))
-    logging.info(image.shape)
     image = np.moveaxis(np.moveaxis(image, 0, 2), 0, 1)
-    logging.info(image.shape)
 
     # Create transform.
     origin = (0, 0, 0)
     image = to_sitk_image(image, spacing, origin, is_vector=True)
-    logging.info(image.GetSize())
-    logging.info(image.GetSpacing())
-    logging.info(image.GetOrigin())
     transform = sitk.DisplacementFieldTransform(image)
     transformpath = filepath.replace('.bdf', '.tfm')
     sitk.WriteTransform(transform, transformpath)
 
-def convert_velocity_predictions_to_nifti() -> None:
-    dataset = 'LUNG-4DCT' 
-    transform_types = ['DMP', 'EDMP']
+def convert_velocity_predictions_to_nifti(
+    dataset: str,
+    transform_types: List[str] = ['DMP', 'EDMP']) -> None:
     dicom_set = DicomDataset(dataset)
     nifti_set = NiftiDataset(dataset)
     pat_ids = dicom_set.list_patients()
     pat_ids = [p.split('_')[-1] for p in pat_ids]
-    pat_ids = pat_ids[:1]
     for p in tqdm(pat_ids):
         # Load fixed/moving images.
         fixed_pat = nifti_set.patient(f'{p}-1')

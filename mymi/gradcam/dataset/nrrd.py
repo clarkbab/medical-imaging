@@ -4,7 +4,7 @@ import torch
 from typing import List, Union
 
 from mymi import config
-from mymi.dataset import NRRDDataset
+from mymi.dataset import NrrdDataset
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.types import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
@@ -65,7 +65,7 @@ def get_heatmap(
     **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
 
     # Load patient CT data and spacing.
-    set = NRRDDataset(dataset)
+    set = NrrdDataset(dataset)
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing

@@ -1,3 +1,5 @@
+from datetime import datetime
+import matplotlib
 import numpy as np
 import os
 import pandas as pd
@@ -7,17 +9,20 @@ from scipy.ndimage import binary_dilation
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from mymi.dataset.training import TrainingDataset, exists as exists_training
-from mymi.dataset.training import create as create_training
-from mymi.dataset.training import recreate as recreate_training
+from mymi.dataset import DicomDataset, TrainingDataset
+from mymi.dataset.dicom import ROIData, RTSTRUCTConverter, recreate as recreate_dicom
+from mymi.dataset.training import create as create_training, exists as exists_training, recreate as recreate_training
 from mymi.geometry import get_extent
 from mymi import logging
-from mymi.regions import regions_to_list
+from mymi.regions import regions_to_list, to_255
 from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
 from mymi.types import BoxMM3D, ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
+
+DICOM_DATE_FORMAT = '%Y%m%d'
+DICOM_TIME_FORMAT = '%H%M%S.%f'
 
 def convert_brain_crop_to_training(
     set: 'Dataset',
@@ -290,3 +295,186 @@ def __create_training_label(
         np.savez_compressed(filepath, data=data)
     else:
         np.save(filepath, data)
+
+def convert_to_dicom(
+    set: 'Dataset',
+    dest_dataset: str,
+    convert_landmarks: bool = True,
+    convert_regions: bool = True,
+    pat_id_map: Optional[Dict[PatientID, PatientID]] = None,
+    pat_prefix: Optional[str] = None,
+    regions: PatientRegions = 'all',
+    study_id_map: Optional[Dict[str, str]] = None) -> None:
+
+    # Create destination folder.
+    recreate_dicom(dest_dataset)
+    destset = DicomDataset(dest_dataset)
+    
+    # Load patients.
+    pat_ids = set.list_patients()
+    regions = regions_to_list(regions, literals={ 'all': set.list_regions })
+
+    for pat_id in tqdm(pat_ids):
+        # Convert to CT.
+        pat = set.patient(pat_id)
+
+        # Must set study_id from map before 'pat_id' is overwritten below.
+        if study_id_map is not None and pat_id in study_id_map:
+            study_id = study_id_map[pat_id]
+        else:
+            study_id = '0'
+        if pat_id_map is not None and pat_id in pat_id_map:
+            pat_id = pat_id_map[pat_id]
+        if pat_prefix is not None:
+            pat_id = f'{pat_prefix}_{pat_id}'
+        ct_data = pat.ct_data
+        size = ct_data.shape
+        spacing = pat.ct_spacing
+        offset = pat.ct_offset
+
+        # Data settings.
+        if ct_data.min() < -1024:
+            raise ValueError(f"Min CT value {ct_data.min()} is less than -1024. Cannot use unsigned 16-bit values for DICOM.")
+        rescale_intercept = -1024
+        rescale_slope = 1
+        n_bits_alloc = 16
+        n_bits_stored = 12
+        numpy_type = np.uint16  # Must match 'n_bits_alloc'.
+        ct_data_rescaled = (ct_data - rescale_intercept) / rescale_slope
+        ct_data_rescaled = ct_data_rescaled.astype(numpy_type)
+        scaled_ct_min, scaled_ct_max = ct_data_rescaled.min(), ct_data_rescaled.max()
+        if scaled_ct_min < 0 or scaled_ct_max > (2 ** n_bits_stored - 1):
+            raise ValueError(f"Scaled CT data out of bounds: min {scaled_ct_min}, max {scaled_ct_max}. Max allowed: {2 ** n_bits_stored - 1}.")
+
+        # Create study and series fields.
+        # StudyID and StudyInstanceUID are different fields.
+        # StudyID is a human-readable identifier, while StudyInstanceUID is a unique identifier.
+        study_uid = dcm.uid.generate_uid()
+        series_uid = dcm.uid.generate_uid()
+        frame_of_reference_uid = dcm.uid.generate_uid()
+        dt = datetime.now()
+        date = dt.strftime(DICOM_DATE_FORMAT)
+        time = dt.strftime(DICOM_TIME_FORMAT)
+
+        # Create a file for each slice.
+        n_slices = size[2]
+        ct_dicoms = []
+        for i in range(n_slices):
+            # Create metadata header.
+            metadata = dcm.dataset.FileMetaDataset()
+            metadata.FileMetaInformationGroupLength = 204
+            metadata.FileMetaInformationVersion = b'\x00\x01'
+            metadata.ImplementationClassUID = dcm.uid.PYDICOM_IMPLEMENTATION_UID
+            metadata.MediaStorageSOPClassUID = dcm.uid.CTImageStorage
+            metadata.MediaStorageSOPInstanceUID = dcm.uid.generate_uid()
+            metadata.TransferSyntaxUID = dcm.uid.ImplicitVRLittleEndian
+
+            # Create DICOM dataset.
+            ct_dicom = dcm.FileDataset('filename', {}, file_meta=metadata, preamble=b'\0' * 128)
+            ct_dicom.is_little_endian = True
+            ct_dicom.is_implicit_VR = True
+            ct_dicom.SOPClassUID = metadata.MediaStorageSOPClassUID
+            ct_dicom.SOPInstanceUID = metadata.MediaStorageSOPInstanceUID
+
+            # Set other required fields.
+            ct_dicom.ContentDate = date
+            ct_dicom.ContentTime = time
+            ct_dicom.InstanceCreationDate = date
+            ct_dicom.InstanceCreationTime = time
+            ct_dicom.InstitutionName = 'PMCC'
+            ct_dicom.Manufacturer = 'PMCC'
+            ct_dicom.Modality = 'CT'
+            ct_dicom.SpecificCharacterSet = 'ISO_IR 100'
+
+            # Add patient info.
+            ct_dicom.PatientID = pat_id
+            ct_dicom.PatientName = pat_id
+
+            # Add study info.
+            ct_dicom.StudyDate = date
+            ct_dicom.StudyDescription = study_id
+            ct_dicom.StudyInstanceUID = study_uid
+            ct_dicom.StudyID = study_id
+            ct_dicom.StudyTime = time
+
+            # Add series info.
+            ct_dicom.SeriesDate = date
+            # ct_dicom.SeriesDescription = f'CT ({pat_id} - {study_id})'
+            ct_dicom.SeriesDescription = 'CT'
+            ct_dicom.SeriesInstanceUID = series_uid
+            ct_dicom.SeriesNumber = 0
+            ct_dicom.SeriesTime = time
+
+            # Add data.
+            ct_dicom.BitsAllocated = n_bits_alloc
+            ct_dicom.BitsStored = n_bits_stored
+            ct_dicom.FrameOfReferenceUID = frame_of_reference_uid
+            ct_dicom.HighBit = 11
+            offset_z = offset[2] + i * spacing[2]
+            ct_dicom.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
+            ct_dicom.ImagePositionPatient = [offset[0], offset[1], offset_z]
+            ct_dicom.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
+            ct_dicom.InstanceNumber = i + 1
+            ct_dicom.PhotometricInterpretation = 'MONOCHROME2'
+            ct_dicom.PatientPosition = 'HFS'
+            ct_dicom.PixelData = np.transpose(ct_data_rescaled[:, :, i]).tobytes()
+            ct_dicom.PixelRepresentation = 0
+            ct_dicom.PixelSpacing = [abs(spacing[0]), abs(spacing[1])]
+            ct_dicom.RescaleIntercept = rescale_intercept
+            ct_dicom.RescaleSlope = rescale_slope
+            ct_dicom.Rows, ct_dicom.Columns = size[1], size[0]
+            ct_dicom.SamplesPerPixel = 1
+            ct_dicom.SliceThickness = abs(spacing[2])
+
+            filepath = os.path.join(destset.path, 'data', pat_id, study_id, 'ct', f'{i:03d}.dcm')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            ct_dicom.save_as(filepath)
+            ct_dicoms.append(ct_dicom)
+
+        # Convert regions to RTSTRUCT.
+        if convert_regions:
+            # Create RTSTRUCT info.
+            rt_info = {
+                'institution': 'PMCC',
+                'label': 'RTSTRUCT'
+            }
+
+            # Create RTSTRUCT dicom.
+            rtstruct = RTSTRUCTConverter.create_rtstruct(ct_dicoms, rt_info)
+
+            # Add 'ROI' data for each region.
+            palette = matplotlib.cm.tab20
+            for i, r in enumerate(regions):
+                if not pat.has_region(r):
+                    continue
+
+                # Add 'ROI' data.
+                region_data = pat.region_data(regions=r)[r]
+                roi_data = ROIData(
+                    colour=list(to_255(palette(i))),
+                    data=region_data,
+                    frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
+                    name=r
+                )
+                RTSTRUCTConverter.add_roi(rtstruct, roi_data, ct_dicoms)
+
+            filepath = os.path.join(destset.path, 'data', pat_id, study_id, 'regions.dcm')
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            rtstruct.save_as(filepath)
+
+        # Convert landmarks (voxel coordinates) to fCSV (used by Slicer).
+        if convert_landmarks and pat.has_landmarks:
+            lms_voxel = pat.landmarks
+            
+            # Convert to patient coordinates.
+            filepath = os.path.join(destset.path, 'data', pat_id, study_id, 'landmarks.fcsv') 
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'w') as f:
+                slicer_version = '5.0.2'
+                f.write(f'# Markups fiducial file version = {slicer_version}\n')
+                f.write(f'# CoordinateSystem = LPS\n')
+                f.write(f'# columns = id,x,y,z,ow,ox,oy,oz,vis,sel,lock,label,desc,associatedNodeID\n')
+
+                for i, lm_voxel in enumerate(lms_voxel):
+                    lm_patient = np.array(lm_voxel) * spacing + offset
+                    f.write(f'{i},{lm_patient[0]},{lm_patient[1]},{lm_patient[2]},0,0,0,1,1,1,0,{i},,\n')

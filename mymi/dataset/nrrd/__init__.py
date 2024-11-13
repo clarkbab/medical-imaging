@@ -4,7 +4,7 @@ from typing import List
 
 from mymi import config
 
-from .nrrd_dataset import NRRDDataset
+from .nrrd_dataset import NrrdDataset
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'nrrd')
@@ -16,7 +16,7 @@ def list() -> List[str]:
 def create(name: str) -> None:
     ds_path = os.path.join(config.directories.datasets, 'nrrd', name)
     os.makedirs(ds_path)
-    return NRRDDataset(name)
+    return NrrdDataset(name)
 
 def destroy(name: str) -> None:
     ds_path = os.path.join(config.directories.datasets, 'nrrd', name)
