@@ -110,6 +110,9 @@ class DicomDataset(Dataset):
     def type(self) -> DatasetType:
         return self._type
 
+    def build_index(self) -> None:
+        build_index_fn(self.__name)
+
     def has_patient(
         self,
         id: PatientID) -> bool:
@@ -180,9 +183,6 @@ class DicomDataset(Dataset):
 
         return list(np.unique(regions))
 
-    def build_index(self) -> None:
-        build_index_fn(self.__name)
-
     def __filter_patient_by_pat_ids(
         self,
         pat_ids: Union[str, List[str]]) -> Callable[[str], bool]:
@@ -220,7 +220,7 @@ class DicomDataset(Dataset):
         # Trigger index build if not present.
         filepath = os.path.join(self.__path, 'index.csv')
         if not os.path.exists(filepath):
-            build_index(self.__name)
+            self.build_index()
 
         # Load index.
         try:
