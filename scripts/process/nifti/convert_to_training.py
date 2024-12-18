@@ -5,6 +5,6 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.processing.dataset.nifti import convert_to_training
+from mymi.processing.dataset.nifti.nifti import convert_to_training
 
 fire.Fire(convert_to_training)

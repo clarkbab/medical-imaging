@@ -9,7 +9,7 @@ from mymi import config
 from mymi.metrics import batch_mean_dice, batch_mean_hausdorff_distance
 from mymi import plotting
 from mymi.postprocessing import batch_largest_connected_component
-from mymi import utils
+from mymi.utils import utils
 
 class ModelEvaluator:
     def __init__(self, run_name, test_loader, device=torch.device('cpu'), metrics=('dice', 'hausdorff'), mixed_precision=True, output_spacing=None,

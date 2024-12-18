@@ -332,7 +332,7 @@ class TrainingSet(Dataset):
             # Get region counts.
             counts = np.zeros(len(regions), dtype=np.float32)
             for ds_i, s_i in samples:
-                sample_regions = self.__sets[ds_i].sample(s_i).list_regions(only=regions)
+                sample_regions = self.__sets[ds_i].sample(s_i).list_regions(regions=regions)
                 samples_counts = np.array([1 if r in sample_regions else 0 for r in regions], dtype=np.float32)
                 counts += samples_counts
             logging.info(f"Region counts: {counts}.")

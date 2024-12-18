@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 from pandas import DataFrame
+import pytorch_lightning as pl
 import torch
 from torch.nn.functional import one_hot
 from tqdm import tqdm
@@ -16,8 +17,8 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
-from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample_3D, resample_4D
-from mymi.types import ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions, Point3D
+from mymi.transforms import centre_crop_3D, centre_pad_4D, crop_or_pad_3D, crop_or_pad_4D, resample, resample_multi_channel
+from mymi.types import ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -25,7 +26,7 @@ from ..prediction import get_localiser_prediction as get_localiser_prediction_ba
 def get_localiser_prediction(
     dataset: str,
     pat_id: str,
-    localiser: Model,
+    localiser: pl.LightningModule,
     loc_size: ImageSize3D = (128, 128, 150),
     loc_spacing: ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
@@ -43,7 +44,7 @@ def get_localiser_prediction(
 def create_localiser_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[Union[int, str], List[Union[int, str]]],
-    localiser: Union[ModelName, Model],
+    localiser: Union[ModelName, pl.LightningModule],
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None) -> None:
     localiser_str = localiser if isinstance(localiser, tuple) else localiser.name
@@ -270,7 +271,7 @@ def load_localiser_centre(
 def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu')) -> np.ndarray:
 
@@ -288,7 +289,7 @@ def get_multi_segmenter_prediction(
 
     # Resample input to model spacing.
     input_size = input.shape
-    input = resample_3D(input, spacing=input_spacing, output_spacing=model_spacing) 
+    input = resample(input, spacing=input_spacing, output_spacing=model_spacing) 
 
     # Apply 'naive' cropping.
     # crop_mm = (320, 520, 730)   # With 60 mm margin (30 mm either end) for each axis.
@@ -320,7 +321,7 @@ def get_multi_segmenter_prediction(
     pred = centre_pad_4D(pred, resampled_input_size)
 
     # Resample to original spacing.
-    pred = resample_4D(pred, spacing=model_spacing, output_spacing=input_spacing)
+    pred = resample_multi_channel(pred, spacing=model_spacing, output_spacing=input_spacing)
     # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad_4D(pred, crop_box)
@@ -331,7 +332,7 @@ def get_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     loc_centre: Point3D,
-    segmenter: Union[Model, ModelName],
+    segmenter: Union[pl.LightningModule, ModelName],
     probs: bool = False,
     seg_spacing: ImageSpacing3D = (1, 1, 2),
     device: torch.device = torch.device('cpu')) -> np.ndarray:
@@ -350,7 +351,7 @@ def get_segmenter_prediction(
 
     # Resample input to segmenter spacing.
     input_size = input.shape
-    input = resample_3D(input, spacing=spacing, output_spacing=seg_spacing) 
+    input = resample(input, spacing=spacing, output_spacing=seg_spacing) 
 
     # Get localiser centre on downsampled image.
     scaling = np.array(spacing) / seg_spacing
@@ -381,7 +382,7 @@ def get_segmenter_prediction(
     pred = crop_or_pad_3D(pred, rev_patch_box)
 
     # Resample to original spacing.
-    pred = resample_3D(pred, spacing=seg_spacing, output_spacing=spacing)
+    pred = resample(pred, spacing=seg_spacing, output_spacing=spacing)
 
     # Resampling will round up to the nearest number of voxels, so cropping may be necessary.
     crop_box = ((0, 0, 0), input_size)
@@ -392,7 +393,7 @@ def get_segmenter_prediction(
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
@@ -436,7 +437,7 @@ def create_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
     localiser: ModelName,
-    segmenter: Union[Model, ModelName],
+    segmenter: Union[pl.LightningModule, ModelName],
     device: Optional[torch.device] = None,
     probs: bool = False,
     raise_error: bool = False,
@@ -494,7 +495,7 @@ def create_segmenter_prediction(
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     n_folds: Optional[int] = None,
     test_fold: Optional[int] = None,
     use_loader_split_file: bool = False,

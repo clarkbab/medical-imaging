@@ -16,7 +16,7 @@ from mymi.geometry import get_box, get_extent_centre
 from mymi import logging
 from mymi.metrics import get_encaps_dist_vox
 from mymi.regions import get_region_patch_size
-from mymi.transforms import point_crop_or_pad_3D, resample_3D, top_crop_or_pad_3D
+from mymi.transforms import point_crop_or_pad_3D, resample, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row
 
@@ -230,8 +230,8 @@ class TrainingDataset(Dataset):
                 output_spacing = (4, 4, 4)
                 dilate_regions = ('BrachialPlexus_L', 'BrachialPlexus_R', 'Cochlea_L', 'Cochlea_R', 'Lens_L', 'Lens_R', 'OpticNerve_L', 'OpticNerve_R')
                 dilate_iter = 3
-                input = resample_3D(input, spacing=orig_spacing, output_spacing=output_spacing)
-                label = resample_3D(label, spacing=orig_spacing, output_spacing=output_spacing)
+                input = resample(input, spacing=orig_spacing, output_spacing=output_spacing)
+                label = resample(label, spacing=orig_spacing, output_spacing=output_spacing)
                 input = top_crop_or_pad_3D(input, output_size)
                 label = top_crop_or_pad_3D(label, output_size)
                 if self.__region in dilate_regions:

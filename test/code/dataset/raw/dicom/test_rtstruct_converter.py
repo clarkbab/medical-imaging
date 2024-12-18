@@ -9,25 +9,24 @@ from unittest import TestCase
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.dataset.raw.dicom import ROIData, RTSTRUCTConverter
+from mymi.dataset.raw.dicom import ROIData, RtstructConverter
 from mymi.regions import to_255, RegionColours
 
-class TestRTSTRUCTConverter(TestCase):
+class TestRtstructConverter(TestCase):
     def test_bidirectional_conversion(self):
         # Load data.
         cts = self._load_cts()
         before = self._load_label()
 
         # Perform bidirectional conversion.
-        rtstruct = RTSTRUCTConverter.create_rtstruct(cts)
+        rtstruct = RtstructConverter.create_rtstruct(cts)
         roi_data = ROIData(
             colour=list(to_255(RegionColours.Parotid_L)),
             data=before,
-            frame_of_reference_uid='UID',
             name='sample'
         )
-        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
-        after = RTSTRUCTConverter.get_roi_data(rtstruct, 'sample', cts)
+        RtstructConverter.add_roi_contour(rtstruct, roi_data, cts)
+        after = RtstructConverter.get_roi_contour(rtstruct, 'sample', cts)
 
         # Assert that conversion doesn't alter the segmentation.
         np.testing.assert_array_equal(before, after)

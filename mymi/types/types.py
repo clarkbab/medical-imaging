@@ -1,5 +1,7 @@
-import pytorch_lightning as pl
-from typing import List, Literal, Sequence, Tuple, Union
+from dataclasses import dataclass
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Literal, Sequence, Tuple, Union
 
 Axis = Literal[0, 1, 2]
 AxisName = Literal['sagittal', 'coronal', 'axial']
@@ -7,29 +9,41 @@ Colour = Union[str, Tuple[float, float, float]]
 Extrema = Literal[0, 1]
 GroupID = Union[int, float, str]
 GroupIDs = Union[GroupID, Sequence[GroupID]]
-ImageOffset2D = Tuple[float, float]
-ImageOffset3D = Tuple[float, float, float]
 ImageSize2D = Tuple[int, int]
 ImageSize3D = Tuple[int, int, int]
 ImageSizeMM2D = Tuple[float, float]
 ImageSizeMM3D = Tuple[float, float, float]
 ImageSpacing2D = Tuple[float, float]
 ImageSpacing3D = Tuple[float, float, float]
+Landmark = pd.DataFrame
+Landmarks = pd.DataFrame
 ModelName = Tuple[str, str, str]
-Model = pl.LightningModule
 PatientID = str
 PatientIDs = Union[PatientID, Sequence[PatientID]]
-PatientView = Literal['axial', 'sagittal', 'coronal'],
+PatientLandmark = str
+PatientLandmarks = Union[PatientLandmark, Sequence[PatientLandmark], Literal['all']]
 PatientRegion = str
-PatientRegions = Union[Literal['all'], PatientRegion, List[PatientRegion]]
+PatientRegions = Union[PatientRegion, Sequence[PatientRegion], Literal['all']]
+PatientView = Literal['axial', 'sagittal', 'coronal'],
 Point2D = Tuple[int, int]
 Point3D = Tuple[int, int, int]
-Box2D = Tuple[Point2D, Point2D]
-Box3D = Tuple[Point3D, Point3D]
 PointMM2D = Tuple[float, float]
 PointMM3D = Tuple[float, float, float]
+Box2D = Tuple[Point2D, Point2D]
+Box3D = Tuple[Point3D, Point3D]
 BoxMM2D = Tuple[PointMM2D, PointMM2D]
 BoxMM3D = Tuple[PointMM3D, PointMM3D]
+SeriesID = str
 StudyID = str
 TrainingPartition = Literal['train', 'validation', 'test']
 TrainInterval = Union[int, str]
+
+@dataclass
+class Image:
+    data: np.ndarray
+    spacing: ImageSpacing3D
+    offset: PointMM3D
+CtImage = Image
+LabelImage = Image
+RegionImage = LabelImage
+RegionImages = Dict[str, RegionImage]

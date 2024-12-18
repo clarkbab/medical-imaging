@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import pytorch_lightning as pl
 import torch
 from torch.nn.functional import one_hot
 from typing import List, Optional, Union
@@ -11,13 +12,13 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_3D, pad_3D, resample
-from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegions
+from mymi.types import ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_to_list
 
 def get_multi_segmenter_heatmap(
     input: np.ndarray,
     input_spacing: ImageSpacing3D,
-    model: Union[Model, ModelName],
+    model: Union[pl.LightningModule, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     target_region: str,

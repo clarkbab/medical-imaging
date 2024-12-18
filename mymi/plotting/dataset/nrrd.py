@@ -10,14 +10,14 @@ from mymi.regions import regions_to_list
 from mymi.types import Box2D, ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..plotter import apply_region_labels
-from ..plotter import plot_heatmap as plot_heatmap_base
-from ..plotter import plot_histogram as plot_histogram_base
-from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
-from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
-from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
-from ..plotter import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
-from ..plotter import plot_patient as plot_patient_base
+from ..plotting import apply_region_labels
+from ..plotting import plot_heatmap as plot_heatmap_base
+from ..plotting import plot_histogram as plot_histogram_base
+from ..plotting import plot_localiser_prediction as plot_localiser_prediction_base
+from ..plotting import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
+from ..plotting import plot_segmenter_prediction as plot_segmenter_prediction_base
+from ..plotting import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
+from ..plotting import plot_patient as plot_patient_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'

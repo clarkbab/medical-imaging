@@ -17,7 +17,7 @@ from typing import Dict, Literal, List, Optional, Tuple, Union
 from mymi import config
 from mymi import dataset as ds
 from mymi.dataset import DicomDataset, NiftiDataset
-from mymi.dataset.dicom import ROIData, RTSTRUCTConverter, recreate as recreate_dicom
+from mymi.dataset.dicom import ROIData, RtstructConverter, recreate as recreate_dicom
 from mymi.dataset.training import TrainingDataset, exists as exists_training
 from mymi.dataset.training import create as create_training
 from mymi.dataset.training import recreate as recreate_training
@@ -28,19 +28,14 @@ from mymi.geometry import get_extent, get_extent_centre
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.prediction.dataset.nifti import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
-from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
+from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
-from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample_3D, resample_4D, top_crop_or_pad_3D
+from mymi.transforms import centre_crop_or_pad_3D, centre_crop_or_pad_4D, crop_3D, crop_4D, resample, resample_multi_channel, top_crop_or_pad_3D
 from mymi.types import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
-from ..process import convert_to_dicom as convert_to_dicom_base
-
-DATE_FORMAT = '%Y%m%d'
-TIME_FORMAT = '%H%M%S.%f'
+from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
 def convert_replan_adaptive_to_training(
     dataset: str,
@@ -81,7 +76,7 @@ def convert_replan_adaptive_to_training(
     else:
         created = True
         set_t = create_training_adaptive(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
     if created:
@@ -156,9 +151,9 @@ def convert_replan_adaptive_to_training(
 
             # Resample input.
             if spacing is not None:
-                input_pt = resample_3D(input_pt, spacing=input_spacing, output_spacing=spacing)
-                input_mt = resample_3D(input_mt, spacing=input_spacing, output_spacing=spacing)
-                region_data_pt = dict((r, resample_3D(d, spacing=input_spacing, output_spacing=spacing)) for r, d in region_data_pt.items())
+                input_pt = resample(input_pt, spacing=input_spacing, output_spacing=spacing)
+                input_mt = resample(input_mt, spacing=input_spacing, output_spacing=spacing)
+                region_data_pt = dict((r, resample(d, spacing=input_spacing, output_spacing=spacing)) for r, d in region_data_pt.items())
 
             # Crop input.
             if crop_mm is not None:
@@ -170,7 +165,7 @@ def convert_replan_adaptive_to_training(
                 localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
                 brain_label = load_localiser_prediction_nifti(dataset, pat_id_mt, localiser)
                 if spacing is not None:
-                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                    brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
                 brain_extent = get_extent(brain_label)
 
                 # Get crop coordinates.
@@ -212,7 +207,7 @@ def convert_replan_adaptive_to_training(
 
                 # Resample label.
                 if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+                    label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop/pad.
                 if crop_mm is not None:
@@ -263,7 +258,7 @@ def convert_replan_adaptive_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -306,7 +301,7 @@ def convert_replan_adaptive_mirror_to_training(
     else:
         created = True
         set_t = create_training_adaptive(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
     if created:
@@ -386,9 +381,9 @@ def convert_replan_adaptive_mirror_to_training(
 
             # Resample input.
             if spacing is not None:
-                input_pt = resample_3D(input_pt, spacing=input_spacing, output_spacing=spacing)
-                input_mt = resample_3D(input_mt, spacing=input_spacing, output_spacing=spacing)
-                region_data_input = dict((r, resample_3D(d, spacing=input_spacing, output_spacing=spacing)) for r, d in region_data_input.items())
+                input_pt = resample(input_pt, spacing=input_spacing, output_spacing=spacing)
+                input_mt = resample(input_mt, spacing=input_spacing, output_spacing=spacing)
+                region_data_input = dict((r, resample(d, spacing=input_spacing, output_spacing=spacing)) for r, d in region_data_input.items())
 
             # Crop input.
             if crop_mm is not None:
@@ -400,7 +395,7 @@ def convert_replan_adaptive_mirror_to_training(
                 localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
                 brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
                 if spacing is not None:
-                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                    brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
                 brain_extent = get_extent(brain_label)
 
                 # Get crop coordinates.
@@ -427,7 +422,7 @@ def convert_replan_adaptive_mirror_to_training(
                     __create_training_input(set_t, i, region_data_input[region], region=region)
 
             pat_label = set.patient(pat_id_label)
-            regions_label = pat_label.list_regions(only=regions)
+            regions_label = pat_label.list_regions(regions=regions)
             for region in regions:
                 # Skip if patient doesn't have region.
                 if not pat_label.has_region(region):
@@ -444,7 +439,7 @@ def convert_replan_adaptive_mirror_to_training(
 
                 # Resample label.
                 if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+                    label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop/pad.
                 if crop_mm is not None:
@@ -495,7 +490,7 @@ def convert_replan_adaptive_mirror_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -593,7 +588,7 @@ def convert_replan_to_nnunet_ref_model(
 
                 # Resample input.
                 if spacing is not None:
-                    input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+                    input = resample(input, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop input.
                 if crop_mm is not None:
@@ -605,7 +600,7 @@ def convert_replan_to_nnunet_ref_model(
                     localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
                     brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
                     if spacing is not None:
-                        brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                        brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
                     brain_extent = get_extent(brain_label)
 
                     # Get crop coordinates.
@@ -654,7 +649,7 @@ def convert_replan_to_nnunet_ref_model(
 
                 # Resample label.
                 if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+                    label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop/pad.
                 if crop_mm is not None:
@@ -713,7 +708,7 @@ def convert_replan_to_training(
     else:
         created = True
         set_t = create_training(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
     if created:
@@ -781,7 +776,7 @@ def convert_replan_to_training(
 
             # Resample input.
             if spacing is not None:
-                input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+                input = resample(input, spacing=input_spacing, output_spacing=spacing)
 
             # Crop input.
             if crop_mm is not None:
@@ -793,7 +788,7 @@ def convert_replan_to_training(
                 localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
                 brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
                 if spacing is not None:
-                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                    brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
                 brain_extent = get_extent(brain_label)
 
                 # Get crop coordinates.
@@ -829,7 +824,7 @@ def convert_replan_to_training(
 
                 # Resample label.
                 if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+                    label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop/pad.
                 if crop_mm is not None:
@@ -879,7 +874,7 @@ def convert_replan_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -923,7 +918,7 @@ def convert_population_lens_crop_to_training(
     else:
         created = True
         set_t = create_training(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
     if created:
@@ -991,7 +986,7 @@ def convert_population_lens_crop_to_training(
 
             # Resample input.
             if spacing is not None:
-                input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+                input = resample(input, spacing=input_spacing, output_spacing=spacing)
 
             # Crop input.
             if crop_mm is not None:
@@ -1002,7 +997,7 @@ def convert_population_lens_crop_to_training(
                 localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
                 brain_label = load_localiser_prediction(dataset, pat_id, localiser)
                 if spacing is not None:
-                    brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+                    brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
                 brain_extent = get_extent(brain_label)
                 
                 if crop_method == 'low':
@@ -1066,7 +1061,7 @@ def convert_population_lens_crop_to_training(
 
                 # Resample label.
                 if spacing is not None:
-                    label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+                    label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
                 # Crop/pad.
                 if crop_mm is not None:
@@ -1116,7 +1111,7 @@ def convert_population_lens_crop_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -1127,7 +1122,7 @@ def convert_replan_to_nnunet_bootstrap() -> None:
 
     # Create the dataset.
     dset = recreate_nifti(dest_dataset)
-    __write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
 
     # Copy files.
     oset = NiftiDataset(dataset)
@@ -1183,7 +1178,7 @@ def convert_replan_to_nnunet_bootstrap() -> None:
     end = time()
 
     # Indicate success.
-    __write_flag(dset, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(dset, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(dset, hours)
 
@@ -1199,7 +1194,7 @@ def convert_replan_to_lens_crop(
 
     # Create the dataset.
     dset = recreate_nifti(dest_dataset)
-    __write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(dset, '__CONVERT_FROM_NIFTI_START__')
 
     # Copy files.
     oset = NiftiDataset(dataset)
@@ -1321,7 +1316,7 @@ def convert_replan_to_lens_crop(
     end = time()
 
     # Indicate success.
-    __write_flag(dset, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(dset, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(dset, hours)
 
@@ -1370,7 +1365,7 @@ def convert_to_training(
     else:
         created = True
         set_t = create_training(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
 
     # Write params.
     if created:
@@ -1430,7 +1425,7 @@ def convert_to_training(
 
             # Resample input.
             if output_spacing:
-                input = resample_3D(input, spacing=spacing, output_spacing=output_spacing)
+                input = resample(input, spacing=spacing, output_spacing=output_spacing)
 
             # Crop/pad.
             if output_size:
@@ -1489,7 +1484,7 @@ def convert_to_training(
 
                     # Resample data.
                     if output_spacing:
-                        label = resample_3D(label, spacing=spacing, output_spacing=output_spacing)
+                        label = resample(label, spacing=spacing, output_spacing=output_spacing)
 
                     # Crop/pad.
                     if output_size:
@@ -1529,7 +1524,7 @@ def convert_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
+    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -1619,13 +1614,13 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
         pat_id_dicom = nifti_set.patient(pat_id).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
-        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
+        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
         frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
 
         for region in RegionNames:
@@ -1647,11 +1642,10 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
             roi_data = ROIData(
                 colour=list(to_255(getattr(RegionColours, region))),
                 data=pred,
-                frame_of_reference_uid=frame_of_reference_uid,
                 name=region,
                 number=roi_number
             )
-            RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+            RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Add index row.
         if anonymise:
@@ -1682,7 +1676,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
             ct.save_as(filepath)
 
         # Copy ground truth RTSTRUCT.
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
         if anonymise:
             rtstruct_gt.PatientID = anon_id
             rtstruct_gt.PatientName = anon_id
@@ -1729,13 +1723,13 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
-        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
+        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
 
         # Load prediction.
         pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
@@ -1744,11 +1738,10 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         roi_data = ROIData(
             colour=list(to_255(getattr(RegionColours, region))),
             data=pred,
-            frame_of_reference_uid=rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
             name=region,
             number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
         )
-        RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+        RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Save prediction.
         # Get localiser checkpoint and raise error if multiple.
@@ -1835,12 +1828,6 @@ def __destroy_flag(
     flag: str) -> None:
     path = os.path.join(dataset.path, flag)
     os.remove(path)
-
-def __write_flag(
-    dataset: 'Dataset',
-    flag: str) -> None:
-    path = os.path.join(dataset.path, flag)
-    Path(path).touch()
 
 def __print_time(
     dataset: 'Dataset',
