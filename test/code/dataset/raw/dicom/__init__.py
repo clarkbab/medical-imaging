@@ -1,1 +1,1 @@
-from .test_rtstruct_converter import TestRTSTRUCTConverter
+from .test_rtstruct_converter import TestRtstructConverter

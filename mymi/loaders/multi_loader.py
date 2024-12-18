@@ -529,7 +529,7 @@ class TrainingSet(Dataset):
 
                 # Load region data.
                 sample = set.sample(s_i)
-                regions = sample.list_regions(only=self.__regions)
+                regions = sample.list_regions(regions=self.__regions)
                 input, labels = sample.pair(region=regions)
                 self.__data.append((input, labels))
 
@@ -552,7 +552,7 @@ class TrainingSet(Dataset):
 
         # Get sample regions.
         sample = set.sample(s_i)
-        regions = sample.list_regions(only=self.__regions)
+        regions = sample.list_regions(regions=self.__regions)
 
         # Load input/labels.
         if self.__preload_data:

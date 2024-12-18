@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import pytorch_lightning as pl
 import torch
 from typing import Any, Dict, List, Optional, Union
 from tqdm import tqdm
@@ -10,8 +11,8 @@ from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.systems import MultiSegmenter
-from mymi.prediction.dataset.nifti import load_localiser_prediction
-from mymi.types import ImageSpacing3D, Model, ModelName, PatientRegion, PatientRegions
+from mymi.prediction.dataset.nifti.nifti import load_localiser_prediction
+from mymi.types import ImageSpacing3D, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
@@ -19,7 +20,7 @@ from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap
 def create_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
-    model: Union[Model, ModelName],
+    model: Union[pl.LightningModule, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     target_region: str,
@@ -65,7 +66,7 @@ def create_multi_segmenter_heatmap(
 
 def create_multi_segmenter_heatmaps(
     dataset: Union[str, List[str]],
-    model: Union[Model, ModelName],
+    model: Union[pl.LightningModule, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     target_region: PatientRegion,
@@ -112,7 +113,7 @@ def create_multi_segmenter_heatmaps(
 def get_multi_segmenter_heatmap(
     dataset: str,
     pat_id: str,
-    model: Union[Model, ModelName],
+    model: Union[pl.LightningModule, ModelName],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     target_region: str,

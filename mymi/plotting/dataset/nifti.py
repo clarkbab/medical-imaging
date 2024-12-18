@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import numpy as np
 import re
 from typing import Dict, List, Literal, Optional, Union
@@ -5,22 +6,20 @@ from typing import Dict, List, Literal, Optional, Union
 from mymi.dataset import NiftiDataset
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi import logging
-from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_landmark_predictions, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
+from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_registration, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import regions_to_list
-from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.types import Box2D, ImageSpacing3D, ModelName, PatientID, PatientRegions
+from mymi.types import Box2D, ImageSpacing3D, Landmarks, ModelName, PatientID, PatientLandmarks, PatientRegions, StudyID
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..plotter import apply_region_labels
-from ..plotter import plot_heatmap as plot_heatmap_base
-from ..plotter import plot_histogram as plot_histogram_base
-from ..plotter import plot_landmarks as plot_landmarks_base
-from ..plotter import plot_localiser_prediction as plot_localiser_prediction_base
-from ..plotter import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
-from ..plotter import plot_segmenter_prediction as plot_segmenter_prediction_base
-from ..plotter import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
-from ..plotter import plot_patient as plot_patient_base
-from ..plotter import plot_registration as plot_registration_base
+from ..plotting import apply_region_labels
+from ..plotting import plot_heatmap as plot_heatmap_base
+from ..plotting import plot_histogram as plot_histogram_base
+from ..plotting import plot_localiser_prediction as plot_localiser_prediction_base
+from ..plotting import plot_multi_segmenter_prediction as plot_multi_segmenter_prediction_base
+from ..plotting import plot_segmenter_prediction as plot_segmenter_prediction_base
+from ..plotting import plot_segmenter_prediction_diff as plot_segmenter_prediction_diff_base
+from ..plotting import plot_patient as plot_patient_base
+from ..plotting import plot_registration as plot_registration_base
 
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
@@ -98,101 +97,58 @@ def plot_heatmap(
     plot_id = f"{dataset}:{pat_id}"
     plot_heatmap_base(plot_id, heatmap, spacing, centre=centre, crop=crop, ct_data=ct_data, pred_data=pred_data, region_data=region_data, **kwargs)
 
-def plot_landmarks(
-    dataset: str,
-    pat_id: str,
-    centre: Optional[str] = None,
-    crop: Optional[Union[str, Box2D]] = None,
-    model: Optional[str] = None,
-    region: Optional[PatientRegions] = None,
-    regions_ignore_missing: bool = True,
-    region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
-    show_dose: bool = False,
-    **kwargs) -> None:
-
-    # Load data.
-    set = NiftiDataset(dataset)
-    pat = set.patient(pat_id)
-    ct_data = pat.ct_data
-    region_data = pat.region_data(region=region, regions_ignore_missing=regions_ignore_missing, **kwargs) if region is not None else None
-    spacing = pat.ct_spacing
-    dose_data = pat.dose_data if show_dose else None
-
-    # Load landmarks.
-    landmarks = pat.landmarks
-
-    # Load model landmarks.
-    if model is not None:
-        model_landmarks = load_landmark_predictions(dataset, pat_id, model)
-    else:
-        model_landmarks = None
-
-    if centre is not None:
-        if type(centre) == str:
-            if region_data is None or centre not in region_data:
-                centre = pat.region_data(region=centre)[centre]
-
-    if crop is not None:
-        if type(crop) == str:
-            if region_data is None or crop not in region_data:
-                crop = pat.region_data(region=crop)[crop]
-
-    if region_label is not None:
-        # Rename regions.
-        for old, new in region_label.items():
-            region_data[new] = region_data.pop(old)
-
-        # Rename 'centre' and 'crop' keys.
-        if type(centre) == str and centre in region_label:
-            centre = region_label[centre] 
-        if type(crop) == str and crop in region_label:
-            crop = region_label[crop]
-
-    # Plot.
-    plot_id = f"{dataset}:{pat_id}"
-    okwargs = dict(
-        centre=centre,
-        crop=crop,
-        ct_data=ct_data,
-        dose_data=dose_data,
-        model_landmarks=model_landmarks,
-        region_data=region_data
-    )
-    plot_landmarks_base(plot_id, ct_data.shape, spacing, landmarks, **okwargs, **kwargs)
-
 def plot_patient(
     dataset: str,
     pat_id: str,
     centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
+    landmarks: Optional[Landmarks] = None,
     region_labels: Dict[str, str] = {},
     regions: Optional[PatientRegions] = None,
-    regions_ignore_missing: bool = True,
     show_dose: bool = False,
+    study_id: Optional[StudyID] = None,
     **kwargs) -> None:
 
-    # Load CT data, region data, dose data, and spacing.
+    # Load CT data.
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
-    ct_data = pat.ct_data
+    if study_id is not None:
+        study = pat.study(study_id)
+    else:
+        study = pat.default_study
+    ct_data = study.ct_data
+    spacing = study.ct_spacing
+
+    # Load region data.
     if regions is not None:
-        region_data = pat.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing, **kwargs)
+        region_data = study.region_data(regions=regions, **kwargs)
     else:
         region_data = None
-    dose_data = pat.dose_data if show_dose else None
-    spacing = pat.ct_spacing
 
-    # Load 'centre' data if not in 'region_data'. This will ultimately be a np.ndarray.
+    # Load landmarks.
+    if landmarks is not None:
+        landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
+    else:
+        landmark_data = None
+
+    # Load dose data.
+    dose_data = study.dose_data if show_dose else None
+
+    # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
     if centre is not None:
-        if type(centre) == str:
-            if region_data is None or centre not in region_data:
-                centre = pat.region_data(region=centre)[centre]
+        if isinstance(centre, str):
+            if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
+                centre = study.landmark_data(landmarks=centre)
+            elif study.has_region(centre) and region_data is not None and centre not in region_data:
+                centre = study.region_data(regions=centre)[centre]
 
-    # Load 'crop' data if not in 'region_data'. This will ultimately be a np.ndarray.
+    # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
     if crop is not None:
-        if type(crop) == str:
-            if region_data is None or crop not in region_data:
-                crop = pat.region_data(region=crop)[crop]
+        if isinstance(crop, str):
+            if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
+                crop = study.landmark_data(landmarks=crop)
+            elif study.has_region(crop) and region_data is not None and crop not in region_data:
+                crop = study.region_data(regions=crop)[crop]
 
     # Apply region labels.
     # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
@@ -200,140 +156,253 @@ def plot_patient(
     region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
 
     # Plot.
-    plot_id = f"{dataset}:{pat_id}"
+    max_chars = 10
+    study_id = study.id
+    if len(study_id) > max_chars:
+        study_id = study_id[:max_chars]
+    id = f"{pat_id}:{study_id}"
+    plot_patient_base(id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, landmark_data=landmark_data, region_data=region_data, **kwargs)
+
+def plot_moved(
+    dataset: str,
+    pat_id: PatientID,
+    moving_id: StudyID,
+    fixed_id: StudyID,
+    centre: Optional[str] = None,
+    crop: Optional[Union[str, Box2D]] = None,
+    region_labels: Dict[str, str] = {},
+    regions: Optional[PatientRegions] = None,
+    regions_ignore_missing: bool = True,
+    show_dose: bool = False,
+    study_id: Optional[StudyID] = None,
+    **kwargs) -> None:
+
+    # Load moved CT.
+    set = NiftiDataset(dataset)
+    pat = set.patient(pat_id)
+    moved_ct = load_
+    ct_data = study.ct_data
+    spacing = study.ct_spacing
+
+    # Load region data.
+    if regions is not None:
+        region_data = study.region_data(regions=regions, **kwargs)
+    else:
+        region_data = None
+
+    # Load dose data.
+    dose_data = study.dose_data if show_dose else None
+
+    # Load 'centre' data if not in 'region_data'. This will ultimately be a np.ndarray.
+    if centre is not None:
+        if type(centre) == str:
+            if region_data is None or centre not in region_data:
+                centre = study.region_data(region=centre)[centre]
+
+    # Load 'crop' data if not in 'region_data'. This will ultimately be a np.ndarray.
+    if crop is not None:
+        if type(crop) == str:
+            if region_data is None or crop not in region_data:
+                crop = study.region_data(region=crop)[crop]
+
+    # Apply region labels.
+    # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
+    # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
+    region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
+
+    # Plot.
+    plot_id = f"{dataset}:{pat_id}:{study.id}"
     plot_patient_base(plot_id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
 
 def plot_registration(
     dataset: str,
-    fixed_pat_id: str,
-    moving_pat_id: str,
+    moving_pat_id: PatientID,
+    moving_study_id: StudyID,
+    fixed_pat_id: PatientID,
+    fixed_study_id: StudyID,
+    model: str,
     centre: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[str, List[str], Box2D]] = None,
+    crop: Optional[Union[str, List[str]]] = None,
     crop_margin: float = 100,
+    idx: Optional[Union[int, float, List[Union[int, float]]]] = None,
     labels: Literal['included', 'excluded', 'all'] = 'all',
-    region: Optional[PatientRegions] = None,
-    region_label: Optional[Dict[str, str]] = None,
+    landmarks: Optional[PatientLandmarks] = None,
+    regions: Optional[PatientRegions] = None,
+    region_labels: Optional[Dict[str, str]] = None,
+    transform_format: Literal['itk', 'sitk'] = 'sitk',
     **kwargs) -> None:
     # Find first shared 'centre' and 'crop'.
+    # Dealing with shared region labels here - don't worry for now.
     set = NiftiDataset(dataset)
-    centres_of = arg_to_list(centre, str)
-    if centres_of is not None:
-        for i, c in enumerate(centres_of):
-            if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
-                centre = c
-                break
-            elif i == len(centres_of) - 1:
-                raise ValueError(f"Could not find shared 'centre' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
-    crops = arg_to_list(crop, str)
-    if crops is not None and not isinstance(crop, tuple):
-        for i, c in enumerate(crops):
-            if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
-                crop = c
-                break
-            elif i == len(crops) - 1:
-                raise ValueError(f"Could not find shared 'crop' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
-    logging.info(f"Selected 'centre={centre}' and 'crop={crop}'.")
+    # centres_of = arg_to_list(centre, str)
+    # if centres_of is not None:
+    #     for i, c in enumerate(centres_of):
+    #         if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+    #             centre = c
+    #             break
+    #         elif i == len(centres_of) - 1:
+    #             raise ValueError(f"Could not find shared 'centre' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
+    # crops = arg_to_list(crop, str)
+    # if crops is not None and not isinstance(crop, tuple):
+    #     for i, c in enumerate(crops):
+    #         if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+    #             crop = c
+    #             break
+    #         elif i == len(crops) - 1:
+    #             raise ValueError(f"Could not find shared 'crop' between patients '{fixed_pat_id}' and '{moving_pat_id}'.")
+    # logging.info(f"Selected 'centre={centre}' and 'crop={crop}'.")
 
-    # Load data.
-    pat_ids = (fixed_pat_id, moving_pat_id)
-    ct_data = []
-    region_data = []
+    # Load moving and fixed CT and region data.
+    ids = [(moving_pat_id, moving_study_id), (fixed_pat_id, fixed_study_id)]
+    ct_datas = []
+    landmark_datas = []
+    region_datas = []
     sizes = []
     spacings = []
-    centres_of = []
+    centres = []
     crops = []
-    for pat_id in pat_ids:
-        pat = set.patient(pat_id)
-        ct_data.append(pat.ct_data)
-        pat_region_data = pat.region_data(labels=labels, region=region, regions_ignore_missing=True) if region is not None else None
-        sizes.append(pat.ct_size)
-        spacings.append(pat.ct_spacing)
+    offsets = []
+    centres_broad = arg_broadcast(centre, 3)
+    crops_broad = arg_broadcast(crop, 3)
+    idxs_broad = arg_broadcast(idx, 3)
+    for i, (p, s) in enumerate(ids):
+        study = set.patient(p).study(s)
+        ct_data = study.ct_data
+        ct_datas.append(ct_data)
+        if landmarks is not None:
+            landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True)
+        else:
+            landmark_data = None
+        if regions is not None:
+            region_data = study.region_data(labels=labels, regions=regions, regions_ignore_missing=True)
+        else:
+            region_data = None
+        sizes.append(study.ct_size)
+        spacings.append(study.ct_spacing)
+        offsets.append(study.ct_offset)
 
         # Load 'centre' data if not already in 'region_data'.
-        pat_centre = None
+        centre = centres_broad[i]
+        ocentre = None
         if centre is not None:
             if type(centre) == str:
-                if pat_region_data is None or centre not in pat_region_data:
-                    pat_centre = pat.region_data(region=centre)[centre]
+                if region_data is None or centre not in region_data:
+                    ocentre = study.region_data(regions=centre)[centre]
                 else:
-                    pat_centre = centre
+                    ocentre = centre
             else:
-                raise ValueError('Case not handled.')
+                ocentre = centre
 
         # Load 'crop' data if not already in 'region_data'.
-        pat_crop = None
+        crop = crops_broad[i]
+        ocrop = None
         if crop is not None:
             if type(crop) == str:
-                if pat_region_data is None or crop not in pat_region_data:
-                    pat_crop = pat.region_data(region=crop)[crop]
+                if region_data is None or crop not in region_data:
+                    ocrop = study.region_data(regions=crop)[crop]
                 else:
-                    pat_crop = crop
+                    ocrop = crop
             else:
-                pat_crop = crop
+                ocrop = crop
 
-        if region_label is not None:
+        # Map region names.
+        if region_labels is not None:
             # Rename regions.
-            for old, new in region_label.items():
-                pat_region_data[new] = pat_region_data.pop(old)
+            for o, n in region_labels.items():
+                moving_region_data[n] = moving_region_data.pop(o)
 
             # Rename 'centre' and 'crop' keys.
-            if type(pat_centre) == str and pat_centre in region_label:
-                pat_centre = region_label[pat_centre] 
-            if type(pat_crop) == str and pat_crop in region_label:
-                pat_crop = region_label[pat_crop]
+            if type(ocentre) == str and ocentre in region_labels:
+                ocentre = region_labels[ocentre] 
+            if type(ocrop) == str and ocrop in region_labels:
+                ocrop = region_labels[ocrop]
         
-        region_data.append(pat_region_data)
-        centres_of.append(pat_centre)
-        crops.append(pat_crop)
+        landmark_datas.append(landmark_data)
+        region_datas.append(region_data)
+        centres.append(ocentre)
+        crops.append(ocrop)
 
     # Load registered data.
-    reg_ct_data, reg_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, regions_ignore_missing=True)
+    moved_ct_data, transform, moved_region_data, moved_landmark_data = load_registration(dataset, moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model, landmarks=landmarks, regions=regions, regions_ignore_missing=True, transform_format=transform_format, use_image_coords=True) 
 
-    # Load 'centre' data if not already in 'reg_region_data'.
-    pat_reg_centre = None
+    # Load 'moved_centre' data if not already in 'moved_region_data'.
+    centre = centres_broad[2]
+    moved_centre = None
     if centre is not None:
         if type(centre) == str:
-            if reg_region_data is None or centre not in reg_region_data:
-                _, centre_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=centre)
-                pat_reg_centre = centre_region_data[centre]
+            if moved_region_data is None or centre not in moved_region_data:
+                _, _, centre_region_data = load_registration(dataset, moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model, regions=centre, transform_format=transform_format) 
+                moved_centre = centre_region_data[centre]
             else:
-                pat_reg_centre = centre
+                moved_centre = centre
         else:
-            raise ValueError('Case not handled.')
+            moved_centre = centre
 
-    # Load 'crop' data if not already in 'reg_region_data'.
-    pat_reg_crop = None
+    # Load 'moved_crop' data if not already in 'moved_region_data'.
+    crop = crops_broad[2]
+    moved_crop = None
     if crop is not None:
         if type(crop) == str:
-            if reg_region_data is None or crop not in reg_region_data:
-                _, crop_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=crop)
-                pat_reg_crop = crop_region_data[crop]
+            if moved_region_data is None or crop not in moved_region_data:
+                _, _, crop_region_data = load_registration(dataset, moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model, regions=crop, transform_format=transform_format) 
+                moved_crop = crop_region_data[crop]
             else:
-                pat_reg_crop = crop
+                moved_crop = crop
         else:
-            pat_reg_crop = crop
+            moved_crop = crop
 
-    if region_label is not None:
+    # Rename moved labels.
+    if region_labels is not None:
         # Rename regions.
-        for old, new in region_label.items():
-            reg_region_data[new] = reg_region_data.pop(old)
+        for o, n in region_labels.items():
+            moved_region_data[n] = moved_region_data.pop(o)
 
         # Rename 'centre' and 'crop' keys.
-        if type(pat_reg_centre) == str and pat_reg_centre in region_label:
-            pat_reg_centre = region_label[pat_reg_centre] 
-        if type(pat_reg_crop) == str and pat_reg_crop in region_label:
-            pat_reg_crop = region_label[pat_reg_crop]
-
-    centres_of.append(pat_reg_centre)
-    crops.append(pat_reg_crop)
+        if type(moved_centre) == str and moved_centre in region_labels:
+            moved_centre = region_labels[moved_centre] 
+        if type(moved_crop) == str and moved_crop in region_labels:
+            moved_crop = region_labels[moved_crop]
 
     # Plot.
-    fixed_centre, moving_centre, reg_centre = centres_of
-    fixed_crop, moving_crop, reg_crop = crops
-    fixed_ct_data, moving_ct_data = ct_data
-    fixed_region_data, moving_region_data = region_data
-    fixed_spacing, moving_spacing = spacings
-    plot_registration_base(*pat_ids, *sizes, fixed_centre=fixed_centre, fixed_crop=fixed_crop, fixed_crop_margin=crop_margin, fixed_ct_data=fixed_ct_data, fixed_spacing=fixed_spacing, fixed_region_data=fixed_region_data, moving_centre=moving_centre, moving_crop=moving_crop, moving_crop_margin=crop_margin, moving_ct_data=moving_ct_data, moving_spacing=moving_spacing, moving_region_data=moving_region_data, registered_centre=reg_centre, registered_crop=reg_crop, registered_crop_margin=crop_margin, registered_ct_data=reg_ct_data, registered_region_data=reg_region_data, **kwargs)
+    moving_ct_data, fixed_ct_data = ct_datas
+    moving_centre, fixed_centre = centres
+    moving_crop, fixed_crop = crops
+    moving_spacing, fixed_spacing = spacings
+    moving_offset, fixed_offset = offsets
+    moving_landmark_data, fixed_landmark_data = landmark_datas
+    moving_region_data, fixed_region_data = region_datas
+    moving_idx, fixed_idx, moved_idx = idxs_broad
+    okwargs = dict(
+        fixed_centre=fixed_centre,
+        fixed_crop=fixed_crop,
+        fixed_crop_margin=crop_margin,
+        fixed_ct_data=fixed_ct_data,
+        fixed_idx=fixed_idx,
+        fixed_landmark_data=fixed_landmark_data,
+        fixed_offset=fixed_offset,
+        fixed_spacing=fixed_spacing,
+        fixed_region_data=fixed_region_data,
+        moved_centre=moved_centre,
+        moved_crop=moved_crop,
+        moved_crop_margin=crop_margin,
+        moved_ct_data=moved_ct_data,
+        moved_idx=moved_idx,
+        moved_landmark_data=moved_landmark_data,
+        moved_offset=fixed_offset,
+        moved_region_data=moved_region_data,
+        moving_centre=moving_centre,
+        moving_crop=moving_crop,
+        moving_crop_margin=crop_margin,
+        moving_ct_data=moving_ct_data,
+        moving_idx=moving_idx,
+        moving_landmark_data=moving_landmark_data,
+        moving_offset=moving_offset,
+        moving_spacing=moving_spacing,
+        moving_region_data=moving_region_data,
+        transform=transform,
+        transform_format=transform_format,
+    )
+    plot_registration_base(moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, **okwargs, **kwargs)
 
 def plot_localiser_prediction(
     dataset: str,

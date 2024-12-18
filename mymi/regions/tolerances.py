@@ -40,5 +40,5 @@ class RegionTolerances:
 def get_region_tolerance(region: str) -> Optional[float]:
     if hasattr(RegionTolerances, region):
         return getattr(RegionTolerances, region)
-
-    raise ValueError(f"Tolerance not found for region '{region}'.")
+    else:
+        return None

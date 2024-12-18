@@ -3,12 +3,13 @@ from dicompylercore import dvhcalc
 import os
 import pandas as pd
 import pydicom as dcm
+import pytorch_lightning as pl
 from tqdm import tqdm
 from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import RTSTRUCTConverter
+from mymi.dataset.dicom import RtstructConverter
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import dice
@@ -167,7 +168,7 @@ def create_dose_evaluation(
             continue
 
         # Load ground truth map from region name to ROI number - predictions should have same mapping.
-        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt.get_rtstruct())
+        info_gt = RtstructConverter.get_roi_info(rtstruct_gt.rtstruct)
         region_map_gt = region_maps[row.dataset]
         if region_map_gt is not None:
             info_gt = dict((region_map_gt.to_internal(name), int(id)) for id, name in info_gt)
@@ -179,7 +180,7 @@ def create_dose_evaluation(
         assert rtdose_gt.get_rtdose().DoseUnits == 'GY'
 
         # load model RTSTRUCTs.
-        rtstructs = [rtstruct_gt.get_rtstruct()]
+        rtstructs = [rtstruct_gt.rtstruct]
         names = ['ground-truth']
         paths = [rtstruct_gt.path]
         for model in models:
@@ -193,7 +194,7 @@ def create_dose_evaluation(
         # Add dose metrics.
         for name, path, rtstruct in zip(names, paths, rtstructs):
             # Get ROI info. 
-            info = RTSTRUCTConverter.get_roi_info(rtstruct)
+            info = RtstructConverter.get_roi_info(rtstruct)
             def to_internal(name):
                 if region_maps[row.dataset] is None:
                     return name
@@ -231,8 +232,8 @@ def create_dose_evaluation(
 
 def evaluate_model(
     dataset: str,
-    localiser: types.Model,
-    segmenter: types.Model,
+    localiser: pl.LightningModule,
+    segmenter: pl.LightningModule,
     region: str) -> pd.DataFrame:
     # Load gpu if available.
     if torch.cuda.is_available():

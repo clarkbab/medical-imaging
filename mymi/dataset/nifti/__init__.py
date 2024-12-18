@@ -4,7 +4,8 @@ from typing import List
 
 from mymi import config
 
-from .nifti_dataset import NiftiDataset
+from .data import Modality
+from .dataset import NiftiDataset
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'nifti')

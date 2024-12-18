@@ -1,74 +1,106 @@
 import numpy as np
+import os
 import SimpleITK as sitk
-from typing import Union
+from typing import Literal, Tuple, Union
 
-from mymi.types import ImageOffset3D, ImageSpacing3D
-from mymi.utils import from_sitk_image, to_sitk_image
+from mymi.types import Image, PointMM3D, ImageSpacing3D, ImageSize3D
+from mymi.utils import from_sitk, sitk_convert_LPS_and_RAS, to_sitk
 
-def sitk_point_transform(
-    fixed_points: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
-    moving_spacing: ImageSpacing3D,
-    fixed_offset: ImageOffset3D,
-    moving_offset: ImageOffset3D,
+def sitk_load_transform(
+    filepath: str) -> sitk.Transform:
+    if not os.path.exists(filepath):
+        raise ValueError(f"SimpleITK transform not found at filepath: {filepath}.")
+    transform = sitk.ReadTransform(filepath)
+    return transform
+
+def sitk_save_transform(
+    transform: sitk.Transform,
+    filepath: str) -> None:
+    sitk.WriteTransform(transform, filepath)
+
+def sitk_transform_image(
+    data: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: PointMM3D,
+    output_size: ImageSize3D,
+    output_spacing: ImageSpacing3D, 
+    output_offset: PointMM3D,
+    transform: sitk.Transform,
+    fill: Union[float, Literal['min']] = 'min') -> Tuple[Image, ImageSpacing3D, PointMM3D]:
+    # Load moving image.
+    moving_sitk = to_sitk(data, spacing, offset)
+
+    # Convert output params to LPS coordinates - transform will use this coordinate system.
+    output_direction = np.eye(3).flatten()
+    output_direction, output_offset = sitk_convert_LPS_and_RAS(direction=output_direction, offset=output_offset)
+
+    # Get interpolation method.
+    if data.dtype == bool:
+        interpolator = sitk.sitkNearestNeighbor
+    else:
+        interpolator = sitk.sitkLinear
+
+    # Determine default value.
+    if fill == 'min':
+        default_value = float(data.min())
+        if data.dtype == bool:
+            default_value = int(default_value)
+    else:
+        default_value = fill
+
+    # Apply transform.
+    kwargs = dict(
+        defaultPixelValue=default_value,
+        interpolator=interpolator,
+        outputDirection=output_direction,
+        outputOrigin=output_offset,
+        outputSpacing=output_spacing,
+        size=output_size,
+        transform=transform,
+    )
+    moved_sitk = sitk.Resample(moving_sitk, **kwargs)
+    moved, _, _ = from_sitk(moved_sitk)
+    return moved
+
+def sitk_transform_points(
+    points: np.ndarray,
+    transform: sitk.Transform) -> np.ndarray:
+    
+    # Apply transform to points.
+    points_t = []
+    for p_mm in points:
+        # Transform point.
+        # When we convert from numpy to sitk image, we correct the order of the axes
+        # so we don't need to reverse order here.
+        p_t_mm = transform.TransformPoint(p_mm)
+        points_t.append(p_t_mm)
+    points_t = np.vstack(points_t)
+
+    return points_t
+
+def sitk_transform_voxels(
+    points: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: PointMM3D,
+    output_offset: PointMM3D,
+    output_spacing: ImageSpacing3D,
     transform: sitk.Transform,
     fill: Union[float, str] = 'min') -> np.ndarray:
     
     # Apply transform to points.
-    moved_points = []
-    for f in fixed_points:
+    points_t = []
+    for p in points:
         # Convert from voxel to physical coordinates.
-        f_mm = fixed_offset + f * fixed_spacing
+        p_mm = offset + p * spacing
 
         # Transform point.
         # When we convert from numpy to sitk image, we correct the order of the axes
         # so we don't need to reverse order here.
-        f_t_mm = transform.TransformPoint(f_mm)
+        p_t_mm = transform.TransformPoint(p_mm)
 
         # Convert back to voxel coordinates.
-        f_t = (np.array(f_t_mm) - moving_offset) / moving_spacing
-        moved_points.append(f_t)
-    moved_points = np.vstack(moved_points)
+        p_t = (np.array(p_t_mm) - output_offset) / output_spacing
+        points_t.append(p_t)
+    points_t = np.vstack(points_t)
 
-    return moved_points
-
-def sitk_image_transform(
-    fixed_image: np.ndarray,
-    moving_image: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
-    moving_spacing: ImageSpacing3D,
-    fixed_offset: ImageOffset3D,
-    moving_offset: ImageOffset3D,
-    transform: sitk.Transform,
-    fill: Union[float, str] = 'min') -> np.ndarray:
-    fixed_image_sitk = to_sitk_image(fixed_image, fixed_spacing, fixed_offset)
-    moving_image_sitk = to_sitk_image(moving_image, moving_spacing, moving_offset)
-
-    # Get value for filling new voxels.
-    if isinstance(fill, str):
-        if fill == 'min':
-            fill = float(moving_image.min())
-        elif fill == 'max':
-            fill = float(moving_image.max())
-        else:
-            raise ValueError(f"Unknown fill value '{fill}'.")
-    else:
-        fill = float(fill)
-
-    # Apply transform (resample).
-    resample = sitk.ResampleImageFilter()
-    resample.SetDefaultPixelValue(fill)
-    if moving_image.dtype == bool:
-        resample.SetInterpolator(sitk.sitkNearestNeighbor)
-    resample.SetReferenceImage(fixed_image_sitk)
-    resample.SetTransform(transform)
-    moved_sitk = resample.Execute(moving_image_sitk)
-
-    # Convert back to numpy.
-    moved, _, _ = from_sitk_image(moved_sitk)
-
-    # Preserve original numpy datatypes.
-    if moving_image.dtype == bool:
-        moved = moved.astype(bool)
-
-    return moved
+    return points_t

@@ -65,7 +65,7 @@ class Directories:
 
     @property
     def registrations(self):
-        filepath = os.path.join(self.root, 'registrations')
+        filepath = os.path.join(self.root, 'registration')
         if not os.path.exists(filepath):
             os.makedirs(filepath)
         return filepath

@@ -828,7 +828,6 @@ def create_totalseg_prediction_figures(dataset: str) -> None:
     ]
 
     # Add images.
-    pat_ids = pat_ids[:1]
     for pat_id in tqdm(pat_ids):
         # Get centre region.
         pat = set.patient(pat_id)

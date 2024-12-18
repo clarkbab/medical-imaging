@@ -5,9 +5,10 @@ from typing import List
 from mymi import config
 
 from .index import build_index
-from .dicom_dataset import DicomDataset
-from .roi_data import ROIData
-from .rtstruct_converter import RTSTRUCTConverter
+from .dataset import DicomDataset
+from .dicom import DATE_FORMAT, TIME_FORMAT
+from .files import ROIData, RtstructConverter
+from .series import Modality
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'dicom')

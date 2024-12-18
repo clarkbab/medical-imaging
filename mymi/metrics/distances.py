@@ -47,11 +47,15 @@ def apl(
 def hausdorff_distance(
     surf_dists: Tuple[np.ndarray, np.ndarray],
     p: float = 100) -> float:
-    return np.max((np.percentile(surf_dists[0], p), np.percentile(surf_dists[1], p)))
+    surf_dists = np.concatenate(*surf_dists)
+    hd_p = np.percentile(surf_dists, p)
+    return hd_p
 
 def mean_surface_distance(
     surf_dists: Tuple[np.ndarray, np.ndarray]) -> float:
-    return np.mean((np.mean(surf_dists[0]), np.mean(surf_dists[1])))
+    surf_dists = np.concatenate(*surf_dists)
+    msd = surf_dists.mean()
+    return msd
 
 def surface_dice(
     surf_dists: Tuple[np.ndarray, np.ndarray],
@@ -65,6 +69,7 @@ def all_distances(
     b: np.ndarray,
     spacing: types.ImageSpacing3D,
     tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
+
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:
@@ -93,6 +98,8 @@ def surface_distances(
     a: np.ndarray,
     b: np.ndarray,
     spacing: types.ImageSpacing3D) -> Dict[str, float]:
+    raise ValueError('using deepmind now!!!')
+
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if a.dtype != np.bool_ or b.dtype != np.bool_:

@@ -12,7 +12,7 @@ from mymi import logging
 from mymi import types
 
 from ..nifti import recreate as recreate_nifti
-from .dicom_dataset import DicomDataset
+from .dataset import DicomDataset
 
 def convert_to_nifti(
     dataset: str,

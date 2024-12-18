@@ -13,9 +13,9 @@ from mymi.dataset import NiftiDataset
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.postprocessing import one_hot_encode
-from mymi.prediction.dataset.nifti import load_localiser_prediction
-from mymi.registration.dataset.nifti import load_patient_registration
-from mymi.transforms import resample_3D, resample_4D, crop_4D, pad_4D
+from mymi.prediction.dataset.nifti.nifti import load_localiser_prediction
+from mymi.processing.dataset.nifti.registration import load_patient_registration
+from mymi.transforms import resample, resample_multi_channel, crop_4D, pad_4D
 
 def get_brain_crop(dataset, pat_id, size) -> tuple:
     set = NiftiDataset(dataset)
@@ -33,7 +33,7 @@ def get_brain_crop(dataset, pat_id, size) -> tuple:
     mt_pat_id = pat_id.replace('-0', '-1') if '-0' in pat_id else pat_id
     brain_label = load_localiser_prediction(dataset, mt_pat_id, localiser)
     if spacing is not None:
-        brain_label = resample_3D(brain_label, spacing=input_spacing, output_spacing=spacing)
+        brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
     brain_extent = get_extent(brain_label)
 
     # Get crop coordinates.
@@ -93,7 +93,7 @@ def convert_predictions(
         logging.info(f"orig: {orig_shape, orig_spacing}")
 
         # Get resampled shape.
-        res_ct = resample_3D(ct_data, spacing=orig_spacing, output_spacing=spacing) 
+        res_ct = resample(ct_data, spacing=orig_spacing, output_spacing=spacing) 
         input_shape_before_crop = res_ct.shape
         logging.info(f"resampled: {input_shape_before_crop}")
 
@@ -110,7 +110,7 @@ def convert_predictions(
         logging.info(f"uncropped pred: {data.shape}")
 
         # Resample to original spacing.
-        data = resample_4D(data, spacing=spacing, output_spacing=orig_spacing)
+        data = resample_multi_channel(data, spacing=spacing, output_spacing=orig_spacing)
         logging.info(f"resampled pred: {data.shape}")
 
         # Crop to original shape - rounding errors during resampling.

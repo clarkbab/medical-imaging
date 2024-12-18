@@ -1,49 +1,62 @@
 from typing import Dict, List, Optional, Union
 
-from ..plotter import plot_patient as plot_patient_base
-from ..plotter import plot_segmenter_prediction
 from mymi.dataset.dicom import DicomDataset
 from mymi.prediction.dataset.dicom import load_segmenter_predictions
-from mymi import types
-from mymi.utils import arg_to_list
+from mymi.types import Box2D, Landmarks, PatientRegions
+
+from ..plotting import plot_patient as plot_patient_base
+from ..plotting import plot_segmenter_prediction
 
 def plot_patient(
     dataset: str,
     pat_id: str,
     centre: Optional[str] = None,
-    crop: Optional[Union[str, types.Box2D]] = None,
-    regions: Optional[types.PatientRegions] = None,
+    crop: Optional[Union[str, Box2D]] = None,
+    landmarks: Optional[Landmarks] = None,
+    regions: Optional[PatientRegions] = None,
     region_labels: Dict[str, str] = {},
     show_dose: bool = False,
     study_id: Optional[str] = None,
     use_mapping: bool = True,
     **kwargs) -> None:
 
-    # Deal with 'regions' arg.
-    patient = DicomDataset(dataset).patient(pat_id)
-    if regions == 'all':
-        regions = patient.list_regions()
-    else:
-        regions = arg_to_list(regions, str)
-
+    # Load CT data.
+    pat = DicomDataset(dataset).patient(pat_id)
     if study_id is not None:
-        study = patient.study(study_id)
+        study = pat.study(study_id)
     else:
-        study = patient.default_study
+        study = pat.default_study
     ct_data = study.ct_data
-    region_data = study.region_data(regions=regions, use_mapping=use_mapping) if regions is not None else None
     spacing = study.ct_spacing
     dose_data = study.dose_data if show_dose else None
 
-    if centre is not None:
-        if type(centre) == str:
-            if region_data is None or centre not in region_data:
-                centre = study.region_data(regions=centre, use_mapping=use_mapping)[centre]
+    # Load region data.
+    if regions is not None:
+        region_data = study.region_data(regions=regions, **kwargs)
+    else:
+        region_data = None
 
+    # Load landmarks.
+    if landmarks is not None:
+        landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
+    else:
+        landmark_data = None
+
+    # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+    if centre is not None:
+        if isinstance(centre, str):
+            if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
+                centre = study.landmark_data(landmarks=centre)
+            elif study.has_region(centre) and region_data is not None and centre not in region_data:
+                centre = study.region_data(regions=centre)[centre]
+
+    # Load 'crop' as np.array (region label) or pd.Series (landmark).
     if crop is not None:
-        if type(crop) == str:
-            if region_data is None or crop not in region_data:
-                crop = study.region_data(regions=crop, use_mapping=use_mapping)[crop]
+        if isinstance(crop, str):
+            if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
+                crop = study.landmark_data(landmarks=crop)
+            elif study.has_region(crop) and region_data is not None and crop not in region_data:
+                crop = study.region_data(regions=crop)[crop]
 
         # Rename 'regions' and 'region_data' keys.
         regions = [region_labels[r] if r in region_labels else r for r in regions]
@@ -57,7 +70,12 @@ def plot_patient(
             crop = region_labels[crop]
 
     # Plot.
-    plot_patient_base(pat_id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+    max_chars = 10
+    study_id = study.id
+    if len(study_id) > max_chars:
+        study_id = study_id[:max_chars]
+    id = f"{pat_id}:{study_id}"
+    plot_patient_base(id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, landmark_data=landmark_data, region_data=region_data, **kwargs)
 
 def plot_model_prediction(
     dataset: str,

@@ -5,8 +5,8 @@ from mymi.prediction.dataset.training import get_sample_localiser_prediction
 from mymi import types
 from mymi.utils import arg_to_list
 
-from ..plotter import plot_distribution, plot_localiser_prediction
-from ..plotter import plot_patient as plot_patient_base
+from ..plotting import plot_distribution, plot_localiser_prediction
+from ..plotting import plot_patient as plot_patient_base
 
 def plot_patient(
     dataset: str,

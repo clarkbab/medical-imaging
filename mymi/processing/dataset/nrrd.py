@@ -12,7 +12,7 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.dicom import DicomDataset, ROIData, RtstructConverter
 from mymi.dataset.nrrd import NrrdDataset
 from mymi.dataset.nrrd import recreate as recreate_nrrd
 from mymi.dataset.training import TrainingDataset, exists
@@ -22,15 +22,15 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
-from mymi.processing.process import convert_brain_crop_to_training as convert_brain_crop_to_training_base
+from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, to_255
 from mymi.regions import regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import crop_3D, resample_3D, top_crop_or_pad_3D
+from mymi.transforms import crop_3D, resample, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
-from ..process import convert_to_dicom as convert_to_dicom_base
+from ..processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
 def convert_brain_crop_to_training(
     dataset: str,
@@ -50,7 +50,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
         set_t = recreate_training(dest_dataset)
     else:
         set_t = create_training(dest_dataset)
-    __write_flag(set_t, f'__CONVERT_FROM_NRRD_START__')
+    write_flag(set_t, f'__CONVERT_FROM_NRRD_START__')
 
     # Write params.
     filepath = os.path.join(set_t.path, 'params.csv')
@@ -102,7 +102,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
 
         # Resample input.
         if spacing is not None:
-            input = resample_3D(input, spacing=input_spacing, output_spacing=spacing)
+            input = resample(input, spacing=input_spacing, output_spacing=spacing)
 
         # Save input.
         __create_training_input(set_t, i, input)
@@ -120,7 +120,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
             label = crop_3D(label, crop)
 
             # Resample data.
-            label = resample_3D(label, spacing=input_spacing, output_spacing=spacing)
+            label = resample(label, spacing=input_spacing, output_spacing=spacing)
 
             # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
             if label.sum() != 0:
@@ -148,7 +148,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, f'__CONVERT_FROM_{set.type.name}_END__')
+    write_flag(set_t, f'__CONVERT_FROM_{set.type.name}_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -197,7 +197,7 @@ def convert_to_training(
     else:
         created = True
         set_t = create_training(dest_dataset)
-    __write_flag(set_t, '__CONVERT_FROM_NRRD_START__')
+    write_flag(set_t, '__CONVERT_FROM_NRRD_START__')
 
     # Write params.
     if created:
@@ -255,7 +255,7 @@ def convert_to_training(
 
             # Resample input.
             if output_spacing:
-                input = resample_3D(input, spacing=spacing, output_spacing=output_spacing)
+                input = resample(input, spacing=spacing, output_spacing=output_spacing)
 
             # Crop/pad.
             if output_size:
@@ -293,7 +293,7 @@ def convert_to_training(
 
                 # Resample data.
                 if output_spacing:
-                    label = resample_3D(label, spacing=spacing, output_spacing=output_spacing)
+                    label = resample(label, spacing=spacing, output_spacing=output_spacing)
 
                 # Crop/pad.
                 if output_size:
@@ -343,7 +343,7 @@ def convert_to_training(
     index.to_csv(filepath, index=False)
 
     # Indicate success.
-    __write_flag(set_t, '__CONVERT_FROM_NRRD_END__')
+    write_flag(set_t, '__CONVERT_FROM_NRRD_END__')
     hours = int(np.ceil((end - start) / 3600))
     __print_time(set_t, hours)
 
@@ -407,12 +407,6 @@ def __destroy_flag(
     path = os.path.join(dataset.path, flag)
     os.remove(path)
 
-def __write_flag(
-    dataset: 'Dataset',
-    flag: str) -> None:
-    path = os.path.join(dataset.path, flag)
-    Path(path).touch()
-
 def __print_time(
     dataset: 'Dataset',
     hours: int) -> None:
@@ -470,13 +464,13 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
         pat_id_dicom = nrrd_set.patient(pat_id).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
-        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
+        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
         frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
 
         for region in RegionNames:
@@ -498,11 +492,10 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
             roi_data = ROIData(
                 colour=list(to_255(getattr(RegionColours, region))),
                 data=pred,
-                frame_of_reference_uid=frame_of_reference_uid,
                 name=region,
                 number=roi_number
             )
-            RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+            RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Add index row.
         if anonymise:
@@ -533,7 +526,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
             ct.save_as(filepath)
 
         # Copy ground truth RTSTRUCT.
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
         if anonymise:
             rtstruct_gt.PatientID = anon_id
             rtstruct_gt.PatientName = anon_id
@@ -580,13 +573,13 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         pat_id_dicom = nrrd_set.patient(pat_id_nrrd).patient_id
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.get_rtstruct()
-        info_gt = RTSTRUCTConverter.get_roi_info(rtstruct_gt)
+        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
+        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RTSTRUCTConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
 
         # Load prediction.
         pred = load_patient_segmenter_prediction(dataset, pat_id_nrrd, localiser, segmenter)
@@ -595,11 +588,10 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         roi_data = ROIData(
             colour=list(to_255(getattr(RegionColours, region))),
             data=pred,
-            frame_of_reference_uid=rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
             name=region,
             number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
         )
-        RTSTRUCTConverter.add_roi(rtstruct_pred, roi_data, cts)
+        RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Save prediction.
         # Get localiser checkpoint and raise error if multiple.

@@ -484,7 +484,7 @@ class TrainingSet(Dataset):
                 # Load region data.
                 sample = set.sample(s_i)
                 if self.__regions is not None:
-                    regions = sample.list_regions(only=self.__regions)
+                    regions = sample.list_regions(regions=self.__regions)
                     input, labels = sample.pair(regions=regions)
                     self.__data.append((input, labels))
                 else:
@@ -521,8 +521,8 @@ class TrainingSet(Dataset):
         # Get sample regions.
         if self.__regions is not None:
             sample = set.sample(s_i)
-            moving_regions = sample.list_regions(only=self.__regions)
-            fixed_regions = sample.list_regions(only=self.__regions)
+            moving_regions = sample.list_regions(regions=self.__regions)
+            fixed_regions = sample.list_regions(regions=self.__regions)
 
         # Load input/labels.
         if self.__preload_data:

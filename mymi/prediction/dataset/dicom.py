@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pydicom as dcm
+import pytorch_lightning as pl
 import torch
 from torch.nn.functional import one_hot
 from tqdm import tqdm
@@ -8,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import dataset as ds
-from mymi.dataset.dicom import DicomDataset, ROIData, RTSTRUCTConverter
+from mymi.dataset.dicom import DicomDataset, ROIData, RtstructConverter
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -16,7 +17,7 @@ from mymi.models.systems import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import to_255, RegionColours, regions_to_list
 from mymi.transforms import crop_3D, pad_4D, resample, resample_list
-from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, Model, ModelName, PatientID, PatientRegions
+from mymi.types import Box3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
 
 from ..prediction import get_localiser_prediction as get_localiser_prediction_base
@@ -24,7 +25,7 @@ from ..prediction import get_localiser_prediction as get_localiser_prediction_ba
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: PatientRegions,
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     model_spacing: ImageSpacing3D,
     restart_pat_id: Optional[PatientID] = None,
     use_timing: bool = True,
@@ -89,7 +90,7 @@ def create_all_multi_segmenter_predictions(
 def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: Optional[torch.device] = None,
@@ -128,7 +129,7 @@ def create_multi_segmenter_prediction(
 def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
-    model: Union[ModelName, Model],
+    model: Union[ModelName, pl.LightningModule],
     model_region: PatientRegions,
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu'),
@@ -262,7 +263,7 @@ def load_localiser_prediction(
 def create_localiser_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[PatientID, List[PatientID]],
-    localiser: Union[ModelName, Model],
+    localiser: Union[ModelName, pl.LightningModule],
     device: Optional[torch.device] = None,
     savepath: Optional[str] = None,
     **kwargs) -> None:
@@ -303,7 +304,7 @@ def create_localiser_prediction(
 def get_localiser_prediction(
     dataset: str,
     pat_id: str,
-    localiser: Model,
+    localiser: pl.LightningModule,
     loc_size: ImageSize3D = (128, 128, 150),
     loc_spacing: ImageSpacing3D = (4, 4, 4),
     device: Optional[torch.device] = None) -> np.ndarray:
@@ -355,18 +356,17 @@ def create_segmenter_predictions(
         cts = set.patient(pat).get_cts()
 
         # Create RTSTRUCT dicom.
-        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
+        rtstruct = RtstructConverter.create_rtstruct(cts, rt_info)
 
         # Create ROI data.
         roi_data = ROIData(
             colour=list(to_255(RegionColours.Parotid_L)),
             data=seg,
-            frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
             name=region
         )
 
         # Add ROI.
-        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
+        RtstructConverter.add_roi_contour(rtstruct, roi_data, cts)
 
         # Save in folder.
         filename = f"{pat}.dcm"
@@ -411,18 +411,17 @@ def create_dataset(
         cts = ds.patient(pat).get_cts()
 
         # Create RTSTRUCT dicom.
-        rtstruct = RTSTRUCTConverter.create_rtstruct(cts, rt_info)
+        rtstruct = RtstructConverter.create_rtstruct(cts, rt_info)
 
         # Create ROI data.
         roi_data = ROIData(
             colour=list(to_255(RegionColours.Parotid_L)),
             data=seg,
-            frame_of_reference_uid=rtstruct.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID,
             name='Parotid_L'
         )
 
         # Add ROI.
-        RTSTRUCTConverter.add_roi(rtstruct, roi_data, cts)
+        RtstructConverter.add_roi_contour(rtstruct, roi_data, cts)
 
         # Save in new 'pred' dataset.
         filename = f"{pat}.dcm"
@@ -447,7 +446,7 @@ def load_segmenter_predictions(
     # Get region info.
     filepath = os.path.join(set.path, 'predictions', model, f'{pat_id}.dcm')
     rtstruct = dcm.read_file(filepath)
-    region_names = RTSTRUCTConverter.get_roi_names(rtstruct)
+    region_names = RtstructConverter.get_roi_names(rtstruct)
     def to_internal(name):
         if region_map is None:
             return name
@@ -458,7 +457,7 @@ def load_segmenter_predictions(
     # Extract data.
     preds = []
     for region in regions:
-        pred = RTSTRUCTConverter.get_roi_data(rtstruct, name_map[region], ref_cts)
+        pred = RtstructConverter.get_roi_contour(rtstruct, name_map[region], ref_cts)
         preds.append(pred)
     
     # Determine return type.

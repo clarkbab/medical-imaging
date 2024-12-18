@@ -1,30 +1,24 @@
-import numpy as np
 import SimpleITK as sitk
-from typing import Tuple, Union
+from typing import Tuple
 
 from mymi import logging
-from mymi.types import ImageSize3D, ImageSpacing3D
+from mymi.types import CtImage, Image, ImageSpacing3D, PointMM3D
+from mymi.utils import from_sitk, to_sitk
 
-def register_image(
-    fixed_image: np.ndarray,
-    moving_image: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
+def rigid_image_registration(
+    moving_image: Image,
     moving_spacing: ImageSpacing3D,
-    return_transform: bool = False,
-    show_progress: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
-    # Convert to SimpleITK ordering (z, y, x).
-    fixed_spacing = tuple(reversed(fixed_spacing))
-    moving_spacing = tuple(reversed(moving_spacing))
+    moving_offset: PointMM3D,
+    fixed_image: Image,
+    fixed_spacing: ImageSpacing3D,
+    fixed_offset: PointMM3D,
+    show_progress: bool = False) -> Tuple[Image, sitk.Transform]:
+    # Convert to sitk images.
+    fixed_size = fixed_image.shape
+    moving_sitk = to_sitk(moving_image, moving_spacing, moving_offset)
+    fixed_sitk = to_sitk(fixed_image, fixed_spacing, fixed_offset)
 
-    # Convert to SimpleITK images.
-    fixed_shape = fixed_image.shape
-    fixed_image = sitk.GetImageFromArray(fixed_image)
-    fixed_image.SetSpacing(fixed_spacing)
-    moving_min = moving_image.min()
-    moving_image = sitk.GetImageFromArray(moving_image)
-    moving_image.SetSpacing(moving_spacing)
-
-    initial_transform = sitk.CenteredTransformInitializer(fixed_image, moving_image, sitk.Euler3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
+    initial_transform = sitk.CenteredTransformInitializer(fixed_sitk, moving_sitk, sitk.Euler3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
 
     registration_method = sitk.ImageRegistrationMethod()
 
@@ -58,7 +52,7 @@ def register_image(
             logging.info(f"Step: {method.GetOptimizerIteration()}, Metric: {method.GetMetricValue()}")
         registration_method.AddCommand(sitk.sitkIterationEvent, lambda: print_progress(registration_method))
 
-    registration_transform = registration_method.Execute(fixed_image, moving_image)
+    transform = registration_method.Execute(fixed_sitk, moving_sitk)
 
     # Always check the reason optimization terminated.
     if show_progress:
@@ -66,35 +60,11 @@ def register_image(
         print('Optimizer\'s stopping condition, {0}'.format(registration_method.GetOptimizerStopConditionDescription()))
 
     # Apply transform to moving image.
-    moving_resampled = sitk.Resample(moving_image, fixed_image, registration_transform, sitk.sitkLinear, moving_min, moving_image.GetPixelID())
-    moving_resampled = sitk.GetArrayFromImage(moving_resampled)
-    assert moving_resampled.shape == fixed_shape
+    moved_sitk = sitk.Resample(moving_sitk, fixed_sitk, transform, sitk.sitkLinear, moving_image.min(), moving_sitk.GetPixelID())
+    moved, moved_spacing, moved_offset = from_sitk(moved_sitk)
+    assert moved.shape == fixed_size
+    assert moved_spacing == fixed_spacing
+    assert moved_offset == fixed_offset
 
-    if return_transform:
-        return moving_resampled, registration_transform
-    else:
-        return moving_resampled 
-
-def register_label(
-    moving_label: np.ndarray,
-    fixed_spacing: ImageSpacing3D, 
-    moving_spacing: ImageSpacing3D,
-    fixed_size: ImageSize3D,
-    transform: sitk.Transform) -> np.ndarray:
-    # Convert to SimpleITK ordering (z, y, x).
-    fixed_spacing = tuple(reversed(fixed_spacing))
-    moving_spacing = tuple(reversed(moving_spacing))
-    fixed_size = tuple(reversed(fixed_size))
-
-    # Convert to SimpleITK images.
-    moving_label = moving_label.astype('uint8')     # Convert to sitk-friendly type.
-    moving_label = sitk.GetImageFromArray(moving_label)
-    moving_label.SetSpacing(moving_spacing)
-
-    # Apply transform.
-    moving_label_resampled = sitk.Resample(moving_label, fixed_size, transform=transform, interpolator=sitk.sitkNearestNeighbor, defaultPixelValue=0, outputPixelType=moving_label.GetPixelID(), outputSpacing=fixed_spacing)
-    moving_label_resampled = sitk.GetArrayFromImage(moving_label_resampled)
-    moving_label_resampled = moving_label_resampled.astype(bool)
-
-    return moving_label_resampled
+    return moved, transform
     

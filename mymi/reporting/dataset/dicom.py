@@ -3,20 +3,22 @@ import numpy as np
 import os
 import pandas as pd
 from pandas import DataFrame
+import pytorch_lightning as pl
 from tqdm import tqdm
-from typing import List, Union
+from typing import List, Optional, Union
 
 from mymi.dataset.dicom import DicomDataset
 from mymi.evaluation.dataset.dicom import evaluate_model
 from mymi.geometry import get_extent
-from mymi.types import Model, PatientRegions
+from mymi.regions import regions_to_list
+from mymi.types import PatientRegions
 from mymi.utils import append_row, encode
 
 def create_evaluation_report(
     name: str,
     dataset: str,
-    localiser: Model,
-    segmenter: Model,
+    localiser: pl.LightningModule,
+    segmenter: pl.LightningModule,
     region: str) -> None:
     # Save report.
     eval_df = evaluate_model(dataset, localiser, segmenter, region)
@@ -287,6 +289,13 @@ def get_region_summary(
 
     return df
 
+def create_region_counts(dataset: str) -> None:
+    count_df = get_region_counts(dataset)
+    set = DicomDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    count_df.to_csv(filepath, index=False)
+
 def create_region_summary(
     dataset: str,
     regions: List[str]) -> None:
@@ -299,3 +308,49 @@ def create_region_summary(
     filepath = os.path.join(set.path, 'reports', filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
+
+def get_region_counts(dataset: str) -> DataFrame:
+    # List patients.
+    set = DicomDataset(dataset)
+    pat_ids = set.list_patients()
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str
+    }
+    df = DataFrame(columns=cols.keys())
+
+    # Add rows.
+    for pat_id in tqdm(pat_ids):
+        pat_regions = set.patient(pat_id).list_regions()
+        for pat_region in pat_regions:
+            data = {
+                'patient-id': pat_id,
+                'region': pat_region
+            }
+            df = append_row(df, data)
+
+    return df
+
+def load_region_counts(
+    dataset: str,
+    regions: Optional[PatientRegions] = None,
+    exists_only: bool = False) -> Union[DataFrame, bool]:
+    set = DicomDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+        else:
+            df = pd.read_csv(filepath)
+            df = df.astype({ 'patient-id': str })
+            if regions is not None:
+                regions = regions_to_list(regions)
+                df = df[df['region'].isin(regions)]
+            return df
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
