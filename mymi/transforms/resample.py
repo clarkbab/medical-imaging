@@ -41,15 +41,15 @@ def resample_3D_zoom(
 def resample(
     data: np.ndarray,
     fill: float = 'min',
-    origin: Optional[PointMM3D] = None,
-    output_origin: Optional[PointMM3D] = None,
+    offset: Optional[PointMM3D] = None,
+    output_offset: Optional[PointMM3D] = None,
     output_size: Optional[ImageSize3D] = None,
     output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,
     spacing: Optional[ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
-    output_origin: 
-        - if None, will take on value of 'origin'.
+    output_offset: 
+        - if None, will take on value of 'offset'.
         - if specified, will result in translation of the resulting image (cropping/padding).
     output_size:
         - if None, will take on dimensions of 'data'.
@@ -61,10 +61,10 @@ def resample(
         - if specified, will change the spatial resolution of the image.
     """
     # Convert to SimpleITK ordering (z, y, x).
-    if origin is not None:
-        origin = tuple(reversed(origin))
-    if output_origin is not None:
-        output_origin = tuple(reversed(output_origin))
+    if offset is not None:
+        offset = tuple(reversed(offset))
+    if output_offset is not None:
+        output_offset = tuple(reversed(output_offset))
     if output_spacing is not None:
         output_spacing = tuple(reversed(output_spacing))
     if output_size is not None:
@@ -85,8 +85,8 @@ def resample(
 
     # Create 'sitk' image and set parameters.
     image = sitk.GetImageFromArray(data)
-    if origin is not None:
-        image.SetOrigin(origin)
+    if offset is not None:
+        image.SetOrigin(offset)
     if spacing is not None:
         image.SetSpacing(spacing)
 
@@ -106,8 +106,8 @@ def resample(
     resample.SetDefaultPixelValue(fill)
     if boolean:
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
-    if output_origin is not None:
-        resample.SetOutputOrigin(output_origin)
+    if output_offset is not None:
+        resample.SetOutputOrigin(output_offset)
     else:
         resample.SetOutputOrigin(image.GetOrigin())
     if output_spacing is not None:
@@ -140,15 +140,15 @@ def resample(
 
 def resample_3D(
     data: np.ndarray,
-    origin: Optional[PointMM3D] = None,
-    output_origin: Optional[PointMM3D] = None,
+    offset: Optional[PointMM3D] = None,
+    output_offset: Optional[PointMM3D] = None,
     output_size: Optional[ImageSize3D] = None,
     output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,
     spacing: Optional[ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     """
-    output_origin: 
-        - if None, will take on value of 'origin'.
+    output_offset: 
+        - if None, will take on value of 'offset'.
         - if specified, will result in translation of the resulting image (cropping/padding).
     output_size:
         - if None, will take on dimensions of 'data'.
@@ -162,10 +162,10 @@ def resample_3D(
     assert len(data.shape) == 3, "Data must be 3D."
 
     # Convert to SimpleITK ordering (z, y, x).
-    if origin is not None:
-        origin = tuple(reversed(origin))
-    if output_origin is not None:
-        output_origin = tuple(reversed(output_origin))
+    if offset is not None:
+        offset = tuple(reversed(offset))
+    if output_offset is not None:
+        output_offset = tuple(reversed(output_offset))
     if output_spacing is not None:
         output_spacing = tuple(reversed(output_spacing))
     if output_size is not None:
@@ -186,8 +186,8 @@ def resample_3D(
 
     # Create 'sitk' image and set parameters.
     image = sitk.GetImageFromArray(data)
-    if origin is not None:
-        image.SetOrigin(origin)
+    if offset is not None:
+        image.SetOrigin(offset)
     if spacing is not None:
         image.SetSpacing(spacing)
 
@@ -196,8 +196,8 @@ def resample_3D(
     resample.SetDefaultPixelValue(float(data.min()))
     if boolean:
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
-    if output_origin is not None:
-        resample.SetOutputOrigin(output_origin)
+    if output_offset is not None:
+        resample.SetOutputOrigin(output_offset)
     else:
         resample.SetOutputOrigin(image.GetOrigin())
     if output_spacing is not None:

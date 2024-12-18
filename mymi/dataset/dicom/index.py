@@ -139,9 +139,9 @@ def build_index(
         else:
             raise ValueError(f"Temporary index doesn't exist for dataset '{dataset}' at filepath '{temp_filepath}'.")
     else:
-        data_path = os.path.join(dataset_path, 'data')
+        data_path = os.path.join(dataset_path, 'data', 'raw')
         if not os.path.exists(data_path):
-            raise ValueError(f"No 'data' folder found for dataset '{dataset}'.")
+            raise ValueError(f"No 'data/raw' folder found for dataset '{dataset}'.")
 
         # Add all DICOM files.
         for root, _, files in tqdm(os.walk(data_path)):

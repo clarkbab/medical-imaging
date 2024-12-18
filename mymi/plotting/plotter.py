@@ -741,7 +741,7 @@ def plot_landmarks(
 
     if region_data is not None:
         # Plot regions.
-        should_show_legend = __plot_region_data(region_data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
+        should_show_legend = __plot_region_data(region_data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -2819,10 +2819,11 @@ def plot_registration(
         # fig, axs = plt.subplots(3, 1, figsize=figsize, layout='tight', gridspec_kw={'hspace': 0.1})
         # fig.subplots_adjust(hspace=0)
         if n_figs == 3:
+            figsize = (figsize_row[0], figsize_row[1] * 2)
             _, axs = plt.subplots(2, 2, figsize=figsize, gridspec_kw={ 'hspace': 0.3 })
             axs[1][1].set_visible(False)
         elif n_figs == 2:
-            n_rows, n_cols = 1, 2 
+            figsize = figsize_row
             _, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={ 'hspace': 0.3 })
         elif n_figs == 1:
             axs = np.array([plt.gca()])
@@ -2967,7 +2968,7 @@ def plot_registration(
     for ax, data, idx, crop, aspect in zip(axs, region_data, idxs, crops, aspects):
         if data is not None:
             # Plot regions.
-            should_show_legend = __plot_region_data(data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colour=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
+            should_show_legend = __plot_region_data(data, idx, alpha_region, aspect, latex, perimeter, view, ax=ax, cca=cca, colours=colour, crop=crop, legend_show_all_regions=legend_show_all_regions, linestyle=linestyle_region, show_extent=show_extent)
 
             # Create legend.
             if show_legend and should_show_legend:

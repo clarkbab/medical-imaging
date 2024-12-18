@@ -20,9 +20,11 @@ version=$(python --version)
 echo $version
 
 DATASET="PMCC-HN-REPLAN"
-# TEST_FOLD=0
+# REGION="Brain"
+# FOLD=0
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 
-python $SCRIPT_DIR/process/nnunet/convert_predictions.py \
+python $SCRIPT_DIR/process/nnunet/convert_replan_predictions.py \
     --dataset $DATASET \
-    --fold $TEST_FOLD
+    --region $REGION \
+    --fold $FOLD

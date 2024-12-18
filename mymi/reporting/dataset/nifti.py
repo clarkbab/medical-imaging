@@ -317,7 +317,7 @@ def get_region_counts(dataset: str) -> DataFrame:
 
 def load_region_counts(
     dataset: str,
-    regions: Optional[PatientRegions] = None,
+    regions: PatientRegions = 'all',
     exists_only: bool = False) -> Union[DataFrame, bool]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
@@ -326,7 +326,7 @@ def load_region_counts(
             return True
         else:
             df = pd.read_csv(filepath)
-            if regions is not None:
+            if regions != 'all':
                 regions = regions_to_list(regions)
                 df = df[df['region'].isin(regions)]
             return df
@@ -506,24 +506,6 @@ def load_region_contrast_report(
     # Concatenate reports.
     df = pd.concat(dfs, axis=0)
 
-    return df
-
-def load_region_count_report(
-        dataset: Union[str, List[str]],
-        labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
-    datasets = arg_to_list(dataset, str)
-
-    # Load/concat region counts.
-    dfs = []
-    for dataset in datasets:
-        df = load_region_summary(dataset, labels=labels)
-        df = df.groupby('region').count()[['patient-id']].rename(columns={ 'patient-id': 'count' }).reset_index()
-        df.insert(0, 'dataset', dataset)
-        dfs.append(df)
-    df = pd.concat(dfs, axis=0)
-
-    # Pivot table.
-    df = df.pivot(index='dataset', columns='region', values='count').fillna(0).astype(int)
     return df
 
 def get_ct_info_summary(

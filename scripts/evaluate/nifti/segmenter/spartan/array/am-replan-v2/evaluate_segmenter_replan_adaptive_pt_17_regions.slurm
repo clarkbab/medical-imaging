@@ -19,7 +19,7 @@ version=$(python --version)
 echo $version
 
 # Get model name.
-RESOLUTION="222"
+RESOLUTION="112"
 DATASET="PMCC-HN-REPLAN-ADPTM-$RESOLUTION"
 MODEL_NAME="segmenter-replan-$RESOLUTION"
 
@@ -35,7 +35,7 @@ RUN_NAME="adaptive-n-folds-$N_FOLDS-fold-$TEST_FOLD"
 if [[ $USE_WEIGHTS == True ]]; then
     RUN_NAME="$RUN_NAME-ivw-$WEIGHTS_IV_FACTOR_0-schedule-$SCHEDULE_EPOCHS"
 fi
-if [[ $TEST_FOLD -eq 2 ]]; then
+if [[ $TEST_FOLD -eq 4 ]]; then
     RANDOM_SEED=43
 else
     RANDOM_SEED=42

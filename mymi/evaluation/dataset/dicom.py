@@ -1,5 +1,5 @@
 from dataclasses import replace
-from dicompylercore import dvhcalc
+# from dicompylercore import dvhcalc
 import os
 import pandas as pd
 import pydicom as dcm

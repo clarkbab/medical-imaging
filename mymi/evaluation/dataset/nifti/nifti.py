@@ -252,18 +252,19 @@ def get_adaptive_segmenter_pt_evaluation(
 
     # Load ground truth (registered pre-treatment) region data.
     moving_pat_id = pat_id.replace('-1', '-0')
-    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, region=regions, regions_ignore_missing=True)
+    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, regions=regions, regions_ignore_missing=True)
 
     # Load predictions.
     set = NiftiDataset(dataset)
-    pat = set.patient(pat_id)
-    spacing = pat.ct_spacing
+    moving_pat = set.patient(moving_pat_id)
+    fixed_pat = set.patient(pat_id)
+    spacing = fixed_pat.ct_spacing
     region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
  
     region_metrics = []
     for region, pred in region_preds.items():
         # Patient ground truth may not have all the predicted regions.
-        if not pat.has_region(region):
+        if not moving_pat.has_region(region):
             region_metrics.append({})
             continue
         
@@ -510,76 +511,7 @@ def get_multi_segmenter_heatmap_evaluation(
         target_region_metrics.append(layer_metrics)
 
     return target_region_metrics
-
-def get_nnunet_multi_segmenter_evaluation(
-    dataset: str,
-    fold: int,
-    region: PatientRegions,
-    pat_id: str,
-    **kwargs) -> List[Dict[str, float]]:
-    regions = regions_to_list(region)
-
-    # Load predictions.
-    set = NiftiDataset(dataset)
-    pat = set.patient(pat_id)
-    spacing = pat.ct_spacing
-    filepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/fold-{fold}/{pat_id}_processed.nii.gz"
-    region_data = nib.load(filepath).get_fdata().astype(np.bool_)
-    region_preds = {}
-    for i, region in enumerate(regions):
-        region_preds[region] = region_data[i + 1]
- 
-    region_metrics = []
-    for region, pred in region_preds.items():
-        # Patient ground truth may not have all the predicted regions.
-        if not pat.has_region(region):
-            region_metrics.append({})
-            continue
-        
-        # Load label.
-        label = pat.region_data(region=region)[region]
-
-        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
-        if region == 'SpinalCord':
-            z_min_pred = np.nonzero(pred)[2].min()
-            z_min_label = np.nonzero(label)[2].min()
-            z_min = np.max([z_min_label, z_min_pred])
-
-            # Crop pred/label foreground voxels.
-            crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_3D(pred, crop)
-            label = crop_foreground_3D(label, crop)
-
-        # Dice.
-        metrics = {}
-        metrics['dice'] = dice(pred, label)
-
-        # Distances.
-        if pred.sum() == 0 or label.sum() == 0:
-            metrics['apl'] = np.nan
-            metrics['hd'] = np.nan
-            metrics['hd-95'] = np.nan
-            metrics['msd'] = np.nan
-            metrics['surface-dice'] = np.nan
-        else:
-            # Calculate distances for OAR tolerance.
-            tols = [0, 0.5, 1, 1.5, 2, 2.5]
-            tol = get_region_tolerance(region)
-            if tol is not None:
-                tols.append(tol)
-            dists = all_distances(pred, label, spacing, tol=tols)
-            for metric, value in dists.items():
-                metrics[metric] = value
-
-            # Add 'deepmind' comparison.
-            dists = distances_deepmind(pred, label, spacing, tol=tols)
-            for metric, value in dists.items():
-                metrics[f'dm-{metric}'] = value
-
-        region_metrics.append(metrics)
-
-    return region_metrics
-
+    
 def get_multi_segmenter_evaluation(
     dataset: str,
     region: PatientRegions,
@@ -807,7 +739,7 @@ def create_adaptive_segmenter_pt_evaluation(
                 continue
 
             # Get metrics per region.
-            region_metrics = get_adaptive_segmenter_evaluation(dataset, regions, pat_id, model)
+            region_metrics = get_adaptive_segmenter_pt_evaluation(dataset, regions, pat_id, model)
             for region, metrics in zip(regions, region_metrics):
                 for metric, value in metrics.items():
                     data = {
@@ -1176,65 +1108,6 @@ def create_replan_evaluation(
         'use_split_file': kwargs.get('use_split_file', False),
     }
     filepath = os.path.join(config.directories.evaluations, 'multi-segmenter-replan', encode(datasets), encode(regions), encode(params), 'eval.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    df.to_csv(filepath, index=False)
-
-def create_nnunet_multi_segmenter_evaluation(
-    dataset: str,
-    fold: int,
-    exclude_like: Optional[str] = None,
-    **kwargs) -> None:
-    logging.arg_log('Evaluating multi-segmenter predictions (nnU-Net) for NIFTI dataset', ('dataset', 'fold'), (dataset, fold))
-
-    # Create dataframe.
-    cols = {
-        'fold': float,
-        'dataset': str,
-        'patient-id': str,
-        'region': str,
-        'metric': str,
-        'value': float
-    }
-    df = pd.DataFrame(columns=cols.keys())
-
-    # Add evaluations to dataframe.
-    basepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/fold-{fold}"
-    files = list(sorted(os.listdir(basepath)))
-    files = [f for f in files if f.endswith('_processed.nii.gz')]
-    set = NiftiDataset(dataset)
-    pat_ids = set.list_patients()
-    for f in tqdm(files):
-        f_pat_id = f.replace('_processed.nii.gz', '')
-        if f_pat_id not in pat_ids:
-            continue
-
-        if exclude_like is not None:
-            if exclude_like in f_pat_id:
-                logging.info(f"Skipping '{dataset}:{f_pat_id}', matched 'exclude_like={exclude_like}'.")
-                continue
-
-        logging.info(f_pat_id)
-
-        # Get metrics per region.
-        regions = list(RegionList.PMCC_REPLAN)
-        region_metrics = get_nnunet_multi_segmenter_evaluation(dataset, fold, regions, f_pat_id, **kwargs)
-        for region, metrics in zip(regions, region_metrics):
-            for metric, value in metrics.items():
-                data = {
-                    'fold': fold if fold is not None else np.nan,
-                    'dataset': dataset,
-                    'patient-id': f_pat_id,
-                    'region': region,
-                    'metric': metric,
-                    'value': value
-                }
-                df = append_row(df, data)
-
-    # Set column types.
-    df = df.astype(cols)
-
-    # Save evaluation.
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', 'nnunet', f'fold-{fold}', 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -1627,13 +1500,6 @@ def load_all_multi_segmenter_evaluation(
             raise ValueError(f"Multi-segmenter (all) evaluation not found for model '{model}', dataset '{dataset}' and region '{region}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     df[['model-name', 'model-run', 'model-ckpt']] = model
-    return df
-
-def load_nnunet_evaluation(
-    dataset: str,
-    fold: int) -> Union[np.ndarray, bool]:
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', 'nnunet', f'fold-{fold}', 'eval.csv')
-    df = pd.read_csv(filepath, dtype={'patient-id': str})
     return df
 
 def load_multi_segmenter_evaluation(

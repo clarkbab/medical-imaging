@@ -287,14 +287,14 @@ def plot_registration(
         crops.append(pat_crop)
 
     # Load registered data.
-    reg_ct_data, reg_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=region, regions_ignore_missing=True)
+    reg_ct_data, reg_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, regions=region, regions_ignore_missing=True)
 
     # Load 'centre' data if not already in 'reg_region_data'.
     pat_reg_centre = None
     if centre is not None:
         if type(centre) == str:
             if reg_region_data is None or centre not in reg_region_data:
-                _, centre_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=centre)
+                _, centre_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, regions=centre)
                 pat_reg_centre = centre_region_data[centre]
             else:
                 pat_reg_centre = centre
@@ -306,7 +306,7 @@ def plot_registration(
     if crop is not None:
         if type(crop) == str:
             if reg_region_data is None or crop not in reg_region_data:
-                _, crop_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, region=crop)
+                _, crop_region_data = load_patient_registration(dataset, fixed_pat_id, moving_pat_id, regions=crop)
                 pat_reg_crop = crop_region_data[crop]
             else:
                 pat_reg_crop = crop
@@ -393,7 +393,7 @@ def plot_adaptive_segmenter_prediction(
     dataset: str,
     pat_id: str,
     model: Union[ModelName, List[ModelName]],
-    model_region: PatientRegions,
+    model_regions: PatientRegions,
     centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     load_pred: bool = True,
@@ -401,7 +401,7 @@ def plot_adaptive_segmenter_prediction(
     model_spacing: Optional[ImageSpacing3D] = None,
     n_epochs: Optional[int] = None,
     pred_label: Union[str, List[str]] = None,
-    pred_region: Optional[Union[str, List[str]]] = None,
+    pred_regions: Optional[Union[str, List[str]]] = None,
     region: Optional[Union[str, List[str]]] = None,
     region_label: Optional[Union[str, List[str]]] = None,
     seg_spacings: Optional[Union[ImageSpacing3D, List[ImageSpacing3D]]] = (1, 1, 2),
@@ -412,9 +412,9 @@ def plot_adaptive_segmenter_prediction(
     # If multiple models, list of lists must be specified, e.g. 'model_region=[['Brain'], 'Brainstem']'.
     #   Flat list not supported, e.g. 'model_region=['Brain', 'Brainstem']'.
     if len(models) == 1:
-        model_regionses = [regions_to_list(model_region)]
+        model_regionses = [regions_to_list(model_regions)]
     else:
-        model_regionses = model_region
+        model_regionses = model_regions
     regions = regions_to_list(region)
     region_labels = arg_to_list(region_label, str)
     if region_labels is not None:
@@ -422,7 +422,7 @@ def plot_adaptive_segmenter_prediction(
         region_label_map = dict(zip(regions, region_labels))
     else:
         region_label_map = None
-    pred_regions = regions_to_list(pred_region)
+    pred_regions = regions_to_list(pred_regions)
     n_models = len(models)
     model_labels = arg_to_list(model_label, str)
     if model_labels is None:

@@ -6,9 +6,6 @@ import os
 import sys
 from tqdm import tqdm
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-sys.path.append(root_dir)
-
 from mymi.dataset import NiftiDataset
 from mymi.geometry import get_extent
 from mymi import logging
@@ -63,13 +60,14 @@ def get_brain_pad(size, crop) -> tuple:
     pad = (min, max)
     return pad
 
-def convert_predictions(
+def convert_nnunet_single_region_predictions(
     dataset: str,
+    region: str,
     fold: int) -> None:
-    logging.arg_log('Converting nnU-Net predictions', ('dataset', 'fold'), (dataset, fold))
+    logging.arg_log('Converting nnU-Net single-region predictions', ('dataset', 'fold'), (dataset, fold))
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients()
-    basepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/fold-{fold}"
+    basepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/single-region/{region}/fold-{fold}"
     files = list(sorted(os.listdir(basepath)))
     for f in tqdm(files):
         f_pat_id = f.replace('.nii.gz', '')
@@ -83,7 +81,7 @@ def convert_predictions(
             # Load registered data for pre-treatment scan.
             pat_id_mt = f_pat_id.replace('-0', '-1')
             pat = set.patient(pat_id_mt)
-            ct_data, _ = load_patient_registration(dataset, pat_id_mt, f_pat_id, region=None)
+            ct_data, _ = load_patient_registration(dataset, pat_id_mt, f_pat_id, regions=None)
         else:
             pat = set.patient(f_pat_id)
             ct_data = pat.ct_data
@@ -100,7 +98,9 @@ def convert_predictions(
         # Load prediction and process to original size/space.
         filepath = os.path.join(basepath, f)
         data = nib.load(filepath).get_fdata()
-        data = one_hot_encode(data)
+        # Must ensure that one-hot-encoded data has two dimensions, even if prediction 
+        # is empty.
+        data = one_hot_encode(data, dims=2)
         logging.info(f"encoded pred: {data.shape}")
 
         # Reverse 'brain' cropping.
@@ -122,5 +122,3 @@ def convert_predictions(
         filepath = os.path.join(basepath, f"{f_pat_id}_processed.nii.gz")
         img = Nifti1Image(data.astype(np.int32), orig_affine)
         nib.save(img, filepath)
-
-fire.Fire(convert_predictions)

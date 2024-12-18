@@ -21,9 +21,11 @@ echo $version
 SCRIPT_DIR="/data/gpfs/projects/punim1413/medical-imaging/scripts"
 DATASET="PMCC-HN-REPLAN"
 EXCLUDE_LIKE="\"-0\""
+# REGION="Brain"
 # FOLD=0
 
-python $SCRIPT_DIR/evaluate/nifti/nnunet/evaluate.py \
+python $SCRIPT_DIR/evaluate/nnunet/evaluate.py \
     --dataset $DATASET \
+    --region $REGION \
     --fold $FOLD \
     --exclude_like $EXCLUDE_LIKE

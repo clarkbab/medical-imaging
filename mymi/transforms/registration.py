@@ -6,10 +6,10 @@ from mymi import logging
 from mymi.types import ImageSize3D, ImageSpacing3D
 
 def register_image(
-    fixed_image: np.ndarray,
     moving_image: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
     moving_spacing: ImageSpacing3D,
+    fixed_image: np.ndarray,
+    fixed_spacing: ImageSpacing3D,
     return_transform: bool = False,
     show_progress: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
     # Convert to SimpleITK ordering (z, y, x).
