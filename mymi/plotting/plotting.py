@@ -34,14 +34,12 @@ class AltHyp(Enum):
     TWO_SIDED = 2
 
 def plot_histogram(
-    data: Union[np.ndarray, List[np.ndarray]],
+    data: np.ndarray,
     n_bins: int = 100,
     title: Optional[str] = None) -> None:
-    # Flatten list into numpy array.
-    if not isinstance(data, np.ndarray):
-        data = [d.flatten() for d in data]
-        data = np.concatenate(data)
     plt.hist(data, bins=n_bins)
+    if title is not None:
+        plt.title(title)
     plt.show()
 
 def __plot_region_data(

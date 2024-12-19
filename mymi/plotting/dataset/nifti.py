@@ -35,6 +35,8 @@ def plot_dataset_histogram(
         pat_ids = set.list_patients()
         pat_ids = pat_ids[:n_pats]
     ct_data = [set.patient(pat_id).ct_data for pat_id in pat_ids]
+    ct_data = [c.flatten() for c in ct_data]
+    ct_data = np.concatenate(ct_data)
     plot_histogram_base(ct_data, **kwargs)
 
 def plot_heatmap(
@@ -227,6 +229,7 @@ def plot_patient_histogram(
     pat = set.patient(pat_id)
     # Use default study if not 'study_id'.
     ct_data = pat.ct_data if study_id is None else pat.study(study_id).ct_data
+    ct_data = ct_data.flatten()
     plot_histogram_base(ct_data, **kwargs)
 
 def plot_registration(
