@@ -4,7 +4,8 @@ from typing import List
 
 from mymi import config
 
-from .nrrd_dataset import NrrdDataset
+from .data import Modality
+from .dataset import NrrdDataset
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'nrrd')
@@ -13,7 +14,7 @@ def list() -> List[str]:
     else:
         return []
 
-def create(name: str) -> None:
+def create(name: str) -> NrrdDataset:
     ds_path = os.path.join(config.directories.datasets, 'nrrd', name)
     os.makedirs(ds_path)
     return NrrdDataset(name)
@@ -23,6 +24,6 @@ def destroy(name: str) -> None:
     if os.path.exists(ds_path):
         shutil.rmtree(ds_path)
 
-def recreate(name: str) -> None:
+def recreate(name: str) -> NrrdDataset:
     destroy(name)
     return create(name)
