@@ -136,7 +136,7 @@ def convert_replan_adaptive_to_training(
             # Load registered pre-treatment data.
             pat_id_pt = pat_id_mt.replace('-1', '-0')
             logging.info(f"Processing patients '{pat_id_pt}' and '{pat_id_mt}'.")
-            input_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=regions, regions_ignore_missing=True)
+            # input_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=regions, regions_ignore_missing=True)
             regions_pt = list(region_data_pt.keys())
 
             # Load mid-treatment data.
@@ -368,7 +368,7 @@ def convert_replan_adaptive_mirror_to_training(
             logging.info(f"Processing { 'mid-treatment' if is_mt else 'pre-treatment' } patient '{ pat_id_mt if is_mt else pat_id_pt }'.")
 
             # Load pre-treament data.
-            input_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=regions, regions_ignore_missing=True)
+            # input_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=regions, regions_ignore_missing=True)
 
             # Load mid-treatment data.
             pat_mt = set.patient(pat_id_mt)
@@ -578,7 +578,7 @@ def convert_replan_to_nnunet_ref_model(
                 if '-0' in pat_id:
                     # Load registered data for pre-treatment scan.
                     pat_id_mt = pat_id.replace('-0', '-1')
-                    input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=regions, regions_ignore_missing=True)
+                    # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=regions, regions_ignore_missing=True)
                     input_spacing = set.patient(pat_id_mt).ct_spacing
                 else:
                     pat_id_mt = pat_id
@@ -766,7 +766,7 @@ def convert_replan_to_training(
             if '-0' in pat_id:
                 # Load registered data for pre-treatment scan.
                 pat_id_mt = pat_id.replace('-0', '-1')
-                input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=region, regions_ignore_missing=True)
+                # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=region, regions_ignore_missing=True)
                 input_spacing = set.patient(pat_id_mt).ct_spacing
             else:
                 pat_id_mt = pat_id
@@ -976,7 +976,7 @@ def convert_population_lens_crop_to_training(
             if '-0' in pat_id:
                 # Load registered data for pre-treatment scan.
                 pat_id_mt = pat_id.replace('-0', '-1')
-                input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, regions_ignore_missing=True)
+                # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, regions_ignore_missing=True)
                 input_spacing = set.patient(pat_id_mt).ct_spacing
             else:
                 pat_id_mt = pat_id
@@ -1732,7 +1732,7 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
 
         # Load prediction.
-        pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
+        # pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
         
         # Add ROI.
         roi_data = ROIData(

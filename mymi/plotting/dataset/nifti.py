@@ -8,12 +8,7 @@ from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_registration, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import regions_to_list
-<<<<<<< Updated upstream
-from mymi.types import Box2D, ImageSpacing3D, Landmarks, ModelName, PatientID, PatientLandmarks, PatientRegions, StudyID
-=======
-from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import *
->>>>>>> Stashed changes
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotting import apply_region_labels

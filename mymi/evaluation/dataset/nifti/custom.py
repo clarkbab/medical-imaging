@@ -18,7 +18,6 @@ from mymi.models import replace_ckpt_alias
 from mymi import logging
 from mymi.prediction.dataset.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_adaptive_segmenter_no_oars_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
-from mymi.registration.dataset.nifti import load_patient_registration
 from mymi.types import ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 

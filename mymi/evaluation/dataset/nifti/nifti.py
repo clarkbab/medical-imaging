@@ -18,7 +18,6 @@ from mymi.models import replace_ckpt_alias
 from mymi import logging
 from mymi.prediction.dataset.nifti.nifti import get_institutional_localiser, load_localiser_prediction, load_adaptive_segmenter_prediction_dict, load_adaptive_segmenter_no_oars_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_prediction
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
-from mymi.processing.dataset.nifti.registration import load_patient_registration
 from mymi.types import ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode
 
@@ -242,75 +241,6 @@ def load_localiser_evaluation(
             raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {n_folds}-fold CV with test fold {test_fold} not found. Filepath: {filepath}.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
-
-def get_adaptive_segmenter_pt_evaluation(
-    dataset: str,
-    region: PatientRegions,
-    pat_id: str,
-    model: ModelName) -> List[Dict[str, float]]:
-    regions = arg_to_list(region, str)
-
-    # Load ground truth (registered pre-treatment) region data.
-    moving_pat_id = pat_id.replace('-1', '-0')
-    _, region_data = load_patient_registration(dataset, pat_id, moving_pat_id, regions=regions, regions_ignore_missing=True)
-
-    # Load predictions.
-    set = NiftiDataset(dataset)
-    moving_pat = set.patient(moving_pat_id)
-    fixed_pat = set.patient(pat_id)
-    spacing = fixed_pat.ct_spacing
-    region_preds = load_adaptive_segmenter_prediction_dict(dataset, pat_id, model, regions)
- 
-    region_metrics = []
-    for region, pred in region_preds.items():
-        # Patient ground truth may not have all the predicted regions.
-        if not moving_pat.has_region(region):
-            region_metrics.append({})
-            continue
-        
-        # Load label.
-        label = region_data[region]
-
-        # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
-        if region == 'SpinalCord':
-            z_min_pred = np.nonzero(pred)[2].min()
-            z_min_label = np.nonzero(label)[2].min()
-            z_min = np.max([z_min_label, z_min_pred])
-
-            # Crop pred/label foreground voxels.
-            crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_3D(pred, crop)
-            label = crop_foreground_3D(label, crop)
-
-        # Dice.
-        metrics = {}
-        metrics['dice'] = dice(pred, label)
-
-        # Distances.
-        if pred.sum() == 0 or label.sum() == 0:
-            metrics['apl'] = np.nan
-            metrics['hd'] = np.nan
-            metrics['hd-95'] = np.nan
-            metrics['msd'] = np.nan
-            metrics['surface-dice'] = np.nan
-        else:
-            # Calculate distances for OAR tolerance.
-            tols = [0, 0.5, 1, 1.5, 2, 2.5]
-            tol = get_region_tolerance(region)
-            if tol is not None:
-                tols.append(tol)
-            dists = all_distances(pred, label, spacing, tol=tols)
-            for metric, value in dists.items():
-                metrics[metric] = value
-
-            # Add 'deepmind' comparison.
-            dists = distances_deepmind(pred, label, spacing, tol=tols)
-            for metric, value in dists.items():
-                metrics[f'dm-{metric}'] = value
-
-        region_metrics.append(metrics)
-
-    return region_metrics
 
 def get_adaptive_segmenter_no_oars_evaluation(
     dataset: str,

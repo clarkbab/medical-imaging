@@ -11,7 +11,7 @@ from mymi.geometry import get_extent
 from mymi import logging
 from mymi.postprocessing import one_hot_encode
 from mymi.prediction.dataset.nifti.nifti import load_localiser_prediction
-from mymi.processing.dataset.nifti.registration import load_patient_registration
+# from mymi.processing.dataset.nifti.registration import load_patient_registration
 from mymi.transforms import resample, resample_multi_channel, crop_4D, pad_4D
 
 def get_brain_crop(dataset, pat_id, size) -> tuple:
@@ -81,7 +81,7 @@ def convert_nnunet_single_region_predictions(
             # Load registered data for pre-treatment scan.
             pat_id_mt = f_pat_id.replace('-0', '-1')
             pat = set.patient(pat_id_mt)
-            ct_data, _ = load_patient_registration(dataset, pat_id_mt, f_pat_id, regions=None)
+            # ct_data, _ = load_patient_registration(dataset, pat_id_mt, f_pat_id, regions=None)
         else:
             pat = set.patient(f_pat_id)
             ct_data = pat.ct_data

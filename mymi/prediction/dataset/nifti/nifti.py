@@ -509,121 +509,6 @@ def load_localiser_centre(
 
     return ext_centre
 
-def get_adaptive_segmenter_no_oars_prediction(
-    dataset: str,
-    pat_id: PatientID,
-    model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
-    crop_mm: Optional[Box3D] = None,
-    crop_type: str = 'brain',
-    device: torch.device = torch.device('cpu'),
-    include_ct: bool = True,
-    **kwargs) -> np.ndarray:
-    model_regions = regions_to_list(model_region)
-    pat_id, token = pat_id.split('-')
-    assert token == '1', f"Adaptive segmenter predicts on mid-treatment patient only."
-    pat_id_pt = f"{pat_id}-0"
-    pat_id_mt = f"{pat_id}-1"
-
-    # Load model.
-    if isinstance(model, tuple):
-        model = MultiSegmenter.load(*model, **kwargs)
-        model.eval()
-        model.to(device)
-
-    # Load patient CT data and spacing.
-    set = NiftiDataset(dataset)
-    pat_mt = set.patient(pat_id_mt)
-    ct_data_mt = pat_mt.ct_data
-    spacing = pat_mt.ct_spacing
-
-    # Load registered pre-treatment data.
-    ct_data_pt, _ = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, regions_ignore_missing=True)
-    
-    # Create input holder.
-    n_channels = len(model_regions) + 2
-    input = np.zeros((n_channels, *ct_data_mt.shape), dtype=np.float32)
-    input[0] = ct_data_mt
-    if include_ct:
-        input[1] = ct_data_pt
-    input_spatial_size = ct_data_mt.shape
-
-    # Resample input to model spacing.
-    input = resample_list(input, spacing=spacing, output_spacing=model_spacing) 
-    input_spatial_size_before_crop = input.shape[1:]
-
-    # Apply 'naive' cropping.
-    if crop_type == 'naive':
-        assert crop_mm is not None
-        # crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
-        crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
-        input = centre_crop_or_pad_3D(input, crop)
-    elif crop_type == 'brain':
-        assert crop_mm is not None
-        # Convert to voxel crop.
-        # crop_mm = (300, 400, 500)
-        crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
-
-        # Get brain extent.
-        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-        check_epochs = True
-        n_epochs = 150
-        brain_pred_exists = load_localiser_prediction(dataset, pat_id_mt, localiser, exists_only=True)
-        if not brain_pred_exists:
-            create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
-        brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
-        brain_label = resample(brain_label, spacing=spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
-
-        # Get crop coordinates.
-        # Crop origin is centre-of-extent in x/y, and max-extent in z.
-        # Cropping boundary extends from origin equally in +/- directions for x/y, and extends
-        # in - direction for z.
-        p_above_brain = 0.04
-        crop_origin = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
-        crop = (
-            (int(crop_origin[0] - crop_voxels[0] // 2), int(crop_origin[1] - crop_voxels[1] // 2), int(crop_origin[2] - int(crop_voxels[2] * (1 - p_above_brain)))),
-            (int(np.ceil(crop_origin[0] + crop_voxels[0] / 2)), int(np.ceil(crop_origin[1] + crop_voxels[1] / 2)), int(crop_origin[2] + int(crop_voxels[2] * p_above_brain)))
-        )
-
-        # Crop input.
-        input = crop_4D(input, crop)
-    else:
-        raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
-
-    # Pass image to model.
-    input = torch.Tensor(input)
-    input = input.unsqueeze(0)      # Add 'batch' dimension.
-    input = input.float()
-    input = input.to(device)
-    with torch.no_grad():
-        pred = model(input)
-    pred = pred.squeeze(0)          # Remove 'batch' dimension.
-
-    # Apply thresholding/one-hot-encoding.
-    pred = pred.argmax(dim=0)
-    pred = one_hot(pred, num_classes=len(model_regions) + 1)
-    pred = pred.moveaxis(-1, 0)
-    pred = pred.cpu().numpy().astype(np.bool_)
-    
-    # Apply postprocessing.
-    pred = largest_cc_4D(pred)
-
-    # Reverse the 'naive' or 'brain' cropping.
-    if crop_type == 'naive':
-        pred = centre_crop_or_pad_4D(pred, input_spatial_size_before_crop)
-    elif crop_type == 'brain':
-        pad_min = tuple(-np.array(crop[0]))
-        pad_max = tuple(np.array(pad_min) + np.array(input_spatial_size_before_crop))
-        pad = (pad_min, pad_max)
-        pred = pad_4D(pred, pad)
-
-    # Resample to original spacing with original size.
-    pred = resample_list(pred, spacing=model_spacing, output_size=input_spatial_size, output_spacing=spacing)
-
-    return pred
-
 def get_adaptive_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -653,7 +538,7 @@ def get_adaptive_segmenter_prediction(
     spacing = pat_mt.ct_spacing
 
     # Load registered pre-treatment data.
-    ct_data_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, regions_ignore_missing=True)
+    # ct_data_pt, region_data_pt = load_patient_registration(dataset, pat_id_mt, pat_id_pt, region=model_regions, regions_ignore_missing=True)
     
     # Create input holder.
     n_channels = len(model_regions) + 2
@@ -766,7 +651,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
     pat = set.patient(pat_id)
     pat_id_pt = pat_id
     pat_id_mt = pat_id.replace('-0', '-1')
-    input, _ = load_patient_registration(dataset, pat_id_mt, pat_id, region=model_regions, regions_ignore_missing=True)
+    # input, _ = load_patient_registration(dataset, pat_id_mt, pat_id, region=model_regions, regions_ignore_missing=True)
     # input = pat.ct_data
     input_spacing = pat.ct_spacing
 
