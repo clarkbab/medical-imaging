@@ -15,15 +15,24 @@ import seaborn as sns
 from seaborn.palettes import _ColorPalette
 import SimpleITK as sitk
 import torchio
+<<<<<<< Updated upstream:mymi/plotting/plotting.py
 from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+=======
+from typing import *
+>>>>>>> Stashed changes:mymi/plotting/plotter.py
 
 from mymi.geometry import get_box, get_extent, get_extent_centre
 from mymi import logging
 from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
+<<<<<<< Updated upstream:mymi/plotting/plotting.py
 from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, itk_transform_image, sitk_transform_image
 from mymi.types import Axis, Box2D, Box3D, Box2D, Extrema, ImageSpacing2D, ImageSize2D, ImageSize3D, ImageSpacing3D, Landmark, Landmarks, PatientID, PatientLandmark, PatientRegion, PointMM3D, Point3D, RegionImage, RegionImages, StudyID
+=======
+from mymi.transforms import crop_or_pad_box, crop_point, crop_2D, register_image
+from mymi.types import *
+>>>>>>> Stashed changes:mymi/plotting/plotter.py
 from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 10
@@ -33,10 +42,15 @@ class AltHyp(Enum):
     GREATER = 1
     TWO_SIDED = 2
 
-def plot_histogram(data: List[np.ndarray]) -> None:
-    data = [d.flatten() for d in data]
-    data = np.concatenate(data)
-    plt.hist(data, bins=100)
+def plot_histogram(
+    data: Union[np.ndarray, List[np.ndarray]],
+    n_bins: int = 100,
+    title: Optional[str] = None) -> None:
+    # Flatten list into numpy array.
+    if not isinstance(data, np.ndarray):
+        data = [d.flatten() for d in data]
+        data = np.concatenate(data)
+    plt.hist(data, bins=n_bins)
     plt.show()
 
 def __plot_region_data(

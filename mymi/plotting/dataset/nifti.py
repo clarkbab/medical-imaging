@@ -1,14 +1,19 @@
 from collections.abc import Iterable
 import numpy as np
 import re
-from typing import Dict, List, Literal, Optional, Union
+from typing import *
 
 from mymi.dataset import NiftiDataset
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi import logging
 from mymi.prediction.dataset.nifti import create_localiser_prediction, create_adaptive_segmenter_prediction, create_multi_segmenter_prediction, create_segmenter_prediction, get_localiser_prediction, load_localiser_centre, load_localiser_prediction, load_registration, load_segmenter_prediction, load_adaptive_segmenter_prediction, load_multi_segmenter_prediction, load_multi_segmenter_prediction_dict
 from mymi.regions import regions_to_list
+<<<<<<< Updated upstream
 from mymi.types import Box2D, ImageSpacing3D, Landmarks, ModelName, PatientID, PatientLandmarks, PatientRegions, StudyID
+=======
+from mymi.registration.dataset.nifti import load_patient_registration
+from mymi.types import *
+>>>>>>> Stashed changes
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..plotting import apply_region_labels
@@ -24,14 +29,18 @@ from ..plotting import plot_registration as plot_registration_base
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
 
-def plot_histogram(
+def plot_dataset_histogram(
     dataset: str,
-    n_patients: int = 10) -> None:
+    n_pats: Optional[int] = None,
+    pat_ids: Optional[PatientIDs] = None,
+    **kwargs) -> None:
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients()
-    pat_ids = pat_ids[:n_patients]
-    ct_datas = [set.patient(pat_id).ct_data for pat_id in pat_ids]
-    plot_histogram_base(ct_datas)
+    if n_pats is not None:
+        assert pat_ids is None
+        pat_ids = set.list_patients()
+        pat_ids = pat_ids[:n_pats]
+    ct_data = [set.patient(pat_id).ct_data for pat_id in pat_ids]
+    plot_histogram_base(ct_data, **kwargs)
 
 def plot_heatmap(
     dataset: str,
@@ -213,6 +222,17 @@ def plot_moved(
     # Plot.
     plot_id = f"{dataset}:{pat_id}:{study.id}"
     plot_patient_base(plot_id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, region_data=region_data, **kwargs)
+
+def plot_patient_histogram(
+    dataset: str,
+    pat_id: PatientID,
+    study_id: Optional[StudyID] = None,
+    **kwargs) -> None:
+    set = NiftiDataset(dataset)
+    pat = set.patient(pat_id)
+    # Use default study if not 'study_id'.
+    ct_data = pat.ct_data if study_id is None else pat.study(study_id).ct_data
+    plot_histogram_base(ct_data, **kwargs)
 
 def plot_registration(
     dataset: str,
