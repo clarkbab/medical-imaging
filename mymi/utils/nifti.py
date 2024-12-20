@@ -6,7 +6,7 @@ from mymi.types import *
 
 def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     data = img.get_fdata()
-    affine = img.get_affine()
+    affine = img.affine
     spacing = (affine[0][0], affine[1][1], affine[2][2])
     offset = (affine[0][3], affine[1][3], affine[2][3])
     return data, spacing, offset

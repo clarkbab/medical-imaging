@@ -1,9 +1,13 @@
 from dataclasses import dataclass
+from enum import Enum
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Literal, Sequence, Tuple, Union
 
-Axis = Literal[0, 1, 2]
+class Axis(Enum):
+    X = 0
+    Y = 1
+    Z = 2
 AxisName = Literal['sagittal', 'coronal', 'axial']
 Colour = Union[str, Tuple[float, float, float]]
 Extrema = Literal[0, 1]

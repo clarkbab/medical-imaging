@@ -44,19 +44,19 @@ def plot_histogram(
 
 def __plot_region_data(
     data: RegionImages,
+    ax: mpl.axes.Axes,
     idx: int,
-    alpha: float,
     aspect: float,
-    latex: bool,
-    perimeter: bool,
-    view: Axis,
-    ax = None,
-    cca: bool = False, connected_extent: bool = False,
+    alpha: float = 0.3,
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Box2D] = None,
+    escape_latex: bool = False,
     linestyle: str = 'solid',
     legend_show_all_regions: bool = False,
-    show_extent: bool = False) -> bool:
+    show_extent: bool = False,
+    show_boundary: bool = True,
+    use_cca: bool = False,
+    view: Axis = Axis.X) -> bool:
     __assert_view(view)
 
     regions = list(data.keys()) 
@@ -89,12 +89,6 @@ def __plot_region_data(
                 __plot_box_slice(extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
                 show_legend = True
 
-        # Plot connected extent.
-        if connected_extent:
-            extent = get_extent(largest_cc_3D(data[region]))
-            if __box_in_plane(extent, view, idx):
-                __plot_box_slice(extent, view, colour='b', crop=crop, label=f'{region} conn. extent', linestyle='dashed')
-
         # Skip region if not present on this slice.
         if not legend_show_all_regions and slice_data.max() == 0:
             continue
@@ -102,14 +96,14 @@ def __plot_region_data(
             show_legend = True
 
         # Get largest component.
-        if cca:
+        if use_cca:
             slice_data = largest_cc_3D(slice_data)
 
         # Plot region.
         ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
-        label = __escape_latex(region) if latex else region
+        label = __escape_latex(region) if escape_latex else region
         ax.plot(0, 0, c=colour, label=label)
-        if perimeter:
+        if show_boundary:
             ax.contour(slice_data, colors=[colour], levels=[.5], linestyles=linestyle)
 
         # # Set ticks.
@@ -455,11 +449,11 @@ def plot_patient(
     dose_colourbar_pad: float = 0.05,
     dose_colourbar_size: float = 0.03,
     dose_data: Optional[np.ndarray] = None,
+    escape_latex: bool = False,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
-    figsize: Tuple[int, int] = (12, 8),
+    figsize: Tuple[int, int] = (16, 8),
     fontsize: int = DEFAULT_FONT_SIZE,
     idx: Optional[float] = None,
-    latex: bool = False,
     landmark_data: Optional[Landmarks] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
@@ -468,7 +462,6 @@ def plot_patient(
     linewidth: float = 0.5,
     linewidth_legend: float = 8,
     norm: Optional[Tuple[float, float]] = None,
-    perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[RegionImages] = None,            # All data passed to 'region_data' is plotted.
     savepath: Optional[str] = None,
@@ -478,6 +471,7 @@ def plot_patient(
     show_dose_bar: bool = True,
     show_extent: bool = False,
     show_legend: bool = True,
+    show_region_boundary: bool = True,
     show_title: bool = True,
     show_title_idx: bool = True,
     show_title_view: bool = True,
@@ -495,7 +489,7 @@ def plot_patient(
 
     if ax is None:
         # Create figure/axes.
-        plt.figure(figsize=__convert_figsize(figsize))
+        plt.figure(figsize=__convert_figsize_to_inches(figsize))
         ax = plt.axes(frameon=False)
         close_figure = True
     else:
@@ -506,7 +500,7 @@ def plot_patient(
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
-    if latex:
+    if escape_latex:
         plt.rcParams.update({
             "font.family": "serif",
             'text.usetex': True
@@ -648,15 +642,17 @@ def plot_patient(
     if region_data is not None:
         # Plot regions.
         okwargs = dict(
-            ax=ax,
-            cca=cca,
+            alpha=alpha_region,
             colours=colours,
             crop=crop,
+            escape_latex=escape_latex,
             legend_show_all_regions=legend_show_all_regions,
             linestyle=linestyle_region,
+            show_boundary=show_region_boundary,
             show_extent=show_extent,
+            view=view,
         )
-        should_show_legend = __plot_region_data(region_data, idx, alpha_region, aspect, latex, perimeter, view, **okwargs)
+        should_show_legend = __plot_region_data(region_data, ax, idx, aspect, **okwargs)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -744,7 +740,7 @@ def plot_patient(
                 title = f"{title} ({__view_to_text(view)})"
 
         # Escape text if using latex.
-        if latex:
+        if escape_latex:
             title = __escape_latex(title)
 
         ax.set_title(title)
@@ -761,7 +757,7 @@ def plot_patient(
         plt.show()
 
         # Revert latex settings.
-        if latex:
+        if escape_latex:
             plt.rcParams.update({
                 "font.family": rc_params['font.family'],
                 'text.usetex': rc_params['text.usetex']
@@ -781,10 +777,10 @@ def plot_localiser_prediction(
     crop: Box2D = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
+    escape_latex: bool = False,
     extent_of: Optional[Extrema] = None,
     figsize: Tuple[int, int] = (12, 12),
     fontsize: float = DEFAULT_FONT_SIZE,
-    latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
@@ -822,7 +818,7 @@ def plot_localiser_prediction(
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
-    if latex:
+    if escape_latex:
         plt.rcParams.update({
             "font.family": "serif",
             'text.usetex': True
@@ -858,7 +854,7 @@ def plot_localiser_prediction(
         idx = extent[eo_end][axis]
 
     # Plot patient regions.
-    plot_patient(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, latex=latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, idx=idx, view=view, **kwargs)
+    plot_patient(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, escape_latex=escape_latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -965,7 +961,7 @@ def plot_localiser_prediction(
         plt.show()
 
         # Revert latex settings.
-        if latex:
+        if escape_latex:
             plt.rcParams.update({
                 "font.family": rc_params['font.family'],
                 'text.usetex': rc_params['text.usetex']
@@ -1077,11 +1073,11 @@ def plot_multi_segmenter_prediction(
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
+    escape_latex: bool = False,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
     idx: Optional[int] = None,
-    latex: bool = False,
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
@@ -1120,7 +1116,7 @@ def plot_multi_segmenter_prediction(
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
-    if latex:
+    if escape_latex:
         plt.rcParams.update({
             "font.family": "serif",
             'text.usetex': True
@@ -1156,7 +1152,7 @@ def plot_multi_segmenter_prediction(
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
     size = pred_data[list(pred_data.keys())[0]].shape
     region_colours = colours if colours_match else colours[:n_regions]
-    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
+    plot_patient(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, escape_latex=escape_latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -1220,7 +1216,7 @@ def plot_multi_segmenter_prediction(
         plt.show()
 
     # Revert latex settings.
-    if latex:
+    if escape_latex:
         plt.rcParams.update({
             "font.family": rc_params['font.family'],
             'text.usetex': rc_params['text.usetex']
@@ -1240,10 +1236,10 @@ def plot_segmenter_prediction(
     crop: Optional[Union[str, Box2D]] = None,
     crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
+    escape_latex: bool = False,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
     figsize: Tuple[float, float] = (8, 8),
     fontsize: float = DEFAULT_FONT_SIZE,
-    latex: bool = False,
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     linestyle_pred: str = 'solid',
@@ -2371,7 +2367,7 @@ def plot_registration(
     fixed_offset: Optional[PointMM3D] = None,
     fixed_region_data: Optional[np.ndarray] = None,
     fixed_spacing: Optional[ImageSpacing3D] = None,
-    figsize: Tuple[float, float] = (30, 8),
+    figsize: Tuple[float, float] = (30, 10),
     fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
@@ -2397,7 +2393,6 @@ def plot_registration(
     moving_region_data: Optional[np.ndarray] = None,
     moving_spacing: Optional[ImageSpacing3D] = None,
     norm: Optional[Tuple[float, float]] = None,
-    perimeter: bool = True,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
@@ -2407,6 +2402,8 @@ def plot_registration(
     show_grid: bool = True,
     show_legend: bool = False,
     show_moving: bool = True,
+    show_region_boundary: bool = True,
+    show_region_overlay: bool = True,
     show_title: bool = True,
     show_x_label: bool = True,
     show_x_ticks: bool = True,
@@ -2415,7 +2412,7 @@ def plot_registration(
     transform: Optional[Union[itk.Transform, sitk.Transform]] = None,
     transform_format: Literal['itk', 'sitk'] = 'sitk',
     title: Optional[str] = None,
-    view: Axis = 0,
+    view: Axis = Axis.X,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
     **kwargs) -> None:
     __assert_idx(fixed_centre, extent_of, fixed_idx)
@@ -2424,29 +2421,29 @@ def plot_registration(
     # Get all plot parameters.
     skip = 'SKIP'
     ct_datas = [moving_ct_data if show_moving else skip, fixed_ct_data if show_fixed else skip, moved_ct_data]
-    ct_datas = [c for c in ct_datas if c != skip]
+    ct_datas = [c for c in ct_datas if not (isinstance(c, str) and c == skip)]
     spacings = [moving_spacing if show_moving else skip, fixed_spacing if show_fixed else skip, fixed_spacing]
-    spacings = [c for c in spacings if c != skip]
+    spacings = [c for c in spacings if not (isinstance(c, str) and c == skip)]
     offsets = [moving_offset if show_moving else skip, fixed_offset if show_fixed else skip, fixed_offset]
-    offsets = [c for c in offsets if c != skip]
+    offsets = [c for c in offsets if not (isinstance(c, str) and c == skip)]
     sizes = [moving_ct_data.shape if show_moving else skip, fixed_ct_data.shape if show_fixed else skip, moved_ct_data.shape]
-    sizes = [c for c in sizes if c != skip]
+    sizes = [c for c in sizes if not (isinstance(c, str) and c == skip)]
     centres = [moving_centre if show_moving else skip, fixed_centre if show_fixed else skip, moved_centre]
-    centres = [c for c in centres if c != skip]
+    centres = [c for c in centres if not (isinstance(c, str) and c == skip)]
     crops = [moving_crop if show_moving else skip, fixed_crop if show_fixed else skip, moved_crop]
-    crops = [c for c in crops if c != skip]
+    crops = [c for c in crops if not (isinstance(c, str) and c == skip)]
     crop_margins = [moving_crop_margin if show_moving else skip, fixed_crop_margin if show_fixed else skip, moved_crop_margin]
-    crop_margins = [c for c in crop_margins if c != skip]
+    crop_margins = [c for c in crop_margins if not (isinstance(c, str) and c == skip)]
     ids = [f'{moving_pat_id}:{moving_study_id}' if show_moving else skip, f'{fixed_pat_id}:{fixed_study_id}' if show_fixed else skip, f'{moving_pat_id}:{moving_study_id} -> {fixed_pat_id}:{fixed_study_id}']
-    ids = [c for c in ids if c != skip]
+    ids = [c for c in ids if not (isinstance(c, str) and c == skip)]
     landmark_datas = [moving_landmark_data if show_moving else skip, fixed_landmark_data if show_fixed else skip, None]
     landmark_datas = [l for l in landmark_datas if not (isinstance(l, str) and l == skip)]
     region_datas = [moving_region_data if show_moving else skip, fixed_region_data if show_fixed else skip, moved_region_data]
-    region_datas = [c for c in region_datas if c != skip]
+    region_datas = [c for c in region_datas if not (isinstance(c, str) and c == skip)]
     idxs = [moving_idx if show_moving else skip, fixed_idx if show_fixed else skip, moved_idx]
-    idxs = [c for c in idxs if c != skip]
+    idxs = [c for c in idxs if not (isinstance(c, str) and c == skip)]
     infos = [{} if show_moving else skip, {} if show_fixed else skip, { 'fixed': moved_use_fixed_idx }]
-    infos = [c for c in infos if c != skip]
+    infos = [c for c in infos if not (isinstance(c, str) and c == skip)]
 
     n_figs = show_moving + show_fixed + 1
     axs = arg_to_list(ax, mpl.axes.Axes)
@@ -2457,23 +2454,24 @@ def plot_registration(
         figsize_height = n_rows * figsize_height
         figsize = (figsize_width, figsize_height)
         # How do I remove vertical spacing???
-        fig = plt.figure(figsize=__convert_figsize(figsize))
+        fig = plt.figure(figsize=__convert_figsize_to_inches(figsize))
         gs = GridSpec(n_rows, n_cols, figure=fig, hspace=0.05, wspace=0.3)
         axs = []
+        # Add first row of images.
         for i in range(n_figs):
             ax = fig.add_subplot(gs[0, i])
             axs.append(ax)
-        if show_grid:
+
+        # Add second row of images.
+        if show_grid or show_region_overlay:
             for i in range(n_figs):
                 ax = fig.add_subplot(gs[1, i])
                 axs.append(ax)
-        # fig, axs = plt.subplots(n_rows, n_cols, constrained_layout=True, figsize=figsize, gridspec_kw={ 'hspace': 0 })
-        # fig.subplots_adjust(hspace=0)
-        # if n_rows == 1 or n_rows == 1:
-        #     axs = np.array([axs])
-        # axs = axs.flatten()
-        if show_grid and show_fixed:
-            axs[2 * n_figs - 2].remove()
+
+            # Remove axes from second row if necessary.
+            if not show_region_overlay:
+                axs[2 * n_figs - 2].remove()
+
         close_figure = True
     else:
         assert len(axs) == n_figs
@@ -2528,39 +2526,23 @@ def plot_registration(
         grid_slice = __get_mpl_slice(moved_grid, moving_idx, view)
         aspect = __get_mpl_aspect(view, fixed_spacing)
         origin = __get_mpl_origin(view)
-        axs[2 * n_figs - 2].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
-
-        # Plot moved grid.
-        moved_idx = __convert_float_idx(moved_idx, moved_ct_data.shape, view)
-        if transform_format == 'itk':
-            moved_grid = itk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_ct_data.shape, fixed_spacing, fixed_offset, transform)
-        elif transform_format == 'sitk':
-            moved_grid = sitk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_ct_data.shape, fixed_spacing, fixed_offset, transform)
-        grid_slice = __get_mpl_slice(moved_grid, moving_idx, view)
-        aspect = __get_mpl_aspect(view, fixed_spacing)
-        origin = __get_mpl_origin(view)
         axs[2 * n_figs - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
-    # Save plot to disk.
-    if savepath is not None:
-        dirpath = os.path.dirname(savepath)
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-        logging.info(f"Saved plot to '{savepath}'.")
-
-    if show:
-        plt.show()
-
-        # Revert latex settings.
-        if latex:
-            plt.rcParams.update({
-                "font.family": rc_params['font.family'],
-                'text.usetex': rc_params['text.usetex']
-            })
-
-    if close_figure:
-        plt.close() 
+    if show_region_overlay:
+        # Plot fixed/moved regions.
+        aspect = __get_mpl_aspect(view, fixed_spacing)
+        okwargs = dict(
+            alpha=alpha_region,
+            crop=fixed_crop,
+            view=view,
+        )
+        f_idx = __convert_float_idx(fixed_idx, fixed_ct_data.shape, view)
+        background = __get_mpl_slice(np.zeros(shape=fixed_ct_data.shape), f_idx, view)
+        if fixed_crop is not None:
+            background = crop_2D(background, __reverse_box_coords_2D(fixed_crop))
+        axs[2 * n_figs - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
+        __plot_region_data(fixed_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
+        __plot_region_data(moved_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
 
 def apply_region_labels(
     region_labels: Dict[str, str],
@@ -2745,9 +2727,9 @@ def __view_to_text(view: int) -> str:
     elif view == 2:
         return 'axial'
 
-def __convert_figsize(figsize: Tuple[float, float]) -> Tuple[float, float]:
-    inch_to_cm = 1 / 2.54
-    figsize = figsize[0] * inch_to_cm if figsize[0] is not None else None, figsize[1] * inch_to_cm if figsize[1] is not None else None
+def __convert_figsize_to_inches(figsize: Tuple[float, float]) -> Tuple[float, float]:
+    cm_to_inch = 1 / 2.54
+    figsize = figsize[0] * cm_to_inch if figsize[0] is not None else None, figsize[1] * cm_to_inch if figsize[1] is not None else None
     return figsize
 
 def __create_grid(
