@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 
 from mymi.types import ImageSpacing3D, PointMM3D
 
+from .utils import transpose_image
+
 def sitk_convert_LPS_and_RAS(
     direction: Optional[Tuple[float]] = None,
     offset: Optional[PointMM3D] = None) -> Tuple[Optional[Tuple[float]], Optional[PointMM3D]]:
@@ -43,9 +45,10 @@ def load_sitk_transform(
 
     # Cast to correct type.
     t = transform.GetTransformEnum()
-    # No way to load the 'TransformEnum' object? Using hard-coded values.
-    if t == 14:
+    if t == sitk.sitkDisplacementField:
         transform = sitk.DisplacementFieldTransform(transform)
+    elif t == sitk.sitkEuler:
+        transform = sitk.Euler3DTransform(transform)
 
     return transform
 
@@ -70,7 +73,7 @@ def to_sitk(
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     # Preprocessing, such as np.transpose and np.moveaxis can change the numpy array indexing style
     # from the default C-style to Fortran-style. SimpleITK will flip coordinates for C-style but not F-style.
-    data = data.transpose()
+    data = transpose_image(data, is_vector=is_vector)
     # We can use 'copy' to reset the indexing to C-style and ensure that SimpleITK flips coordinates. If we
     # don't do this, code called before 'to_sitk' could affect the behaviour of 'GetImageFromArray', which
     # was very confusing for me.
@@ -78,8 +81,9 @@ def to_sitk(
     img = sitk.GetImageFromArray(data, isVector=is_vector)
     img.SetSpacing(spacing)
 
-    # ITK uses LPS coordinates, but we're assuming the incoming numpy data
-    # is using RAS coordinates, so convert.
+    # The rest of our code base uses RAS coordinates (like DICOM/3D Slicer),
+    # whereas sitk uses LPS coordinates. Convert direction/offset values to
+    # LPS coordinates.
     direction = np.eye(3)
     direction[0][0], direction[1][1] = -1, -1
     direction = tuple(direction.flatten())

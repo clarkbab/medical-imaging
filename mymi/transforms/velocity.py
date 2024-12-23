@@ -3,7 +3,7 @@ import SimpleITK as sitk
 import struct
 
 from mymi.types import PointMM3D
-from mymi.utils import to_sitk
+from mymi.utils import to_sitk, transpose_image
 
 def velocity_load_transform(
     filepath: str,
@@ -70,7 +70,7 @@ def velocity_load_transform(
     # and then taking the transpose to get (x, y, z).
     image = np.array(image)
     image = np.reshape(image, (*reversed(size), 3))
-    image = image.transpose()
+    image = transpose_image(image, is_vector=True)
 
     # Create transform.
     # The 'offset' is not stored in the '.bdf' file, so we need to use the fixed image offset.

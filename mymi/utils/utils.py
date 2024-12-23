@@ -2,10 +2,8 @@ from collections.abc import Iterable
 from contextlib import contextmanager
 from GPUtil import getGPUs
 import hashlib
-import itk
 import json
 import matplotlib.pyplot as plt
-import nibabel as nib
 import numpy as np
 import os
 import pandas as pd
@@ -17,7 +15,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # from mymi.loaders import Loader
 # from mymi import logging
 from mymi import config
-from mymi.types import PointMM3D, ImageSpacing3D, ModelName
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
     # Pandas doesn't preserve index name when names are different between concatenated dataframes,
@@ -342,3 +339,12 @@ def benchmark(
         after()
 
     return np.mean(durations)
+
+def transpose_image(
+    data: np.ndarray,
+    is_vector: bool = False) -> np.ndarray:
+    # Transposes spatial coordinates, whilst maintaining vector dimension as last dim.
+    data = np.transpose(data)
+    if is_vector:
+        data = np.moveaxis(data, 0, -1)
+    return data
