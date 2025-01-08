@@ -4,7 +4,7 @@ import SimpleITK as sitk
 from typing import Literal, Tuple, Union
 
 from mymi.types import Image, PointMM3D, ImageSpacing3D, ImageSize3D
-from mymi.utils import from_sitk, sitk_convert_LPS_and_RAS, to_sitk
+from mymi.utils import from_sitk, sitk_convert_RAS_and_LPS, to_sitk
 
 def sitk_load_transform(
     filepath: str) -> sitk.Transform:
@@ -30,9 +30,10 @@ def sitk_transform_image(
     # Load moving image.
     moving_sitk = to_sitk(data, spacing, offset)
 
-    # Convert output params to LPS coordinates - transform will use this coordinate system.
+    # Our 'data/spacing/offset' params use RAS coordinates, convert to LPS as this is what
+    # the sitk transform will use.
     output_direction = np.eye(3).flatten()
-    output_direction, output_offset = sitk_convert_LPS_and_RAS(direction=output_direction, offset=output_offset)
+    output_direction, output_offset = sitk_convert_RAS_and_LPS(direction=output_direction, offset=output_offset)
 
     # Get interpolation method.
     if data.dtype == bool:

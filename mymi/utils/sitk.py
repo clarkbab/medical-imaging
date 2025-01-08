@@ -7,9 +7,10 @@ from mymi.types import ImageSpacing3D, PointMM3D
 
 from .utils import transpose_image
 
-def sitk_convert_LPS_and_RAS(
+def sitk_convert_RAS_and_LPS(
     direction: Optional[Tuple[float]] = None,
     offset: Optional[PointMM3D] = None) -> Tuple[Optional[Tuple[float]], Optional[PointMM3D]]:
+    # Converts between RAS/LPS coordinate systems.
     if direction is not None:
         direction[0], direction[4] = -direction[0], -direction[4]
     if offset is not None:
@@ -84,12 +85,8 @@ def to_sitk(
     # The rest of our code base uses RAS coordinates (like DICOM/3D Slicer),
     # whereas sitk uses LPS coordinates. Convert direction/offset values to
     # LPS coordinates.
-    direction = np.eye(3)
-    direction[0][0], direction[1][1] = -1, -1
-    direction = tuple(direction.flatten())
-    offset = list(offset)
-    offset[0], offset[1] = -offset[0], -offset[1]
-    offset = tuple(offset)
+    direction = tuple(np.eye(3).flatten())
+    direction, offset = sitk_convert_RAS_and_LPS(direction=direction, offset=offset)
     img.SetDirection(direction)
     img.SetOrigin(offset)
 

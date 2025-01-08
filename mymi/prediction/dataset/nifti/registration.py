@@ -93,7 +93,7 @@ def load_registered_landmarks(
     fixed_study_id: StudyID,
     model: str,
     raise_error: bool = True,
-    use_image_coords: bool = False) -> Optional[RegionImage]:
+    use_image_coords: bool = False) -> Optional[Landmarks]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model, 'landmarks', 'series_1.csv')
     if not os.path.exists(filepath):
