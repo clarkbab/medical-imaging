@@ -286,6 +286,7 @@ def create_region_summary(
             pat = set.patient(pat_id)
             ct_data = pat.ct_data
             spacing = pat.ct_spacing
+            offset = pat.ct_offset
             region_data = pat.region_data(regions=region)[region]
             if pat.has_region('Brain'):
                 brain_data = pat.region_data(regions='Brain')['Brain']
@@ -293,7 +294,7 @@ def create_region_summary(
                 brain_data = None
 
             # Get stats.
-            stats = get_region_stats(ct_data, region_data, spacing, brain_data)
+            stats = get_region_stats(ct_data, region_data, spacing, offset, brain_data)
             for stat in stats:
                 data = {
                     'dataset': dataset,
@@ -418,45 +419,30 @@ def load_region_overlap_summary(
 
 def load_region_summary(
     dataset: Union[str, List[str]],
-    labels: Literal['included', 'excluded', 'all'] = 'all',
-    regions: Optional[PatientRegions] = None,
+    regions: PatientRegions = 'all',
     pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
-    regions = regions_to_list(regions)
+    regions_arg = regions
 
     # Load summary.
     dfs = []
-    for dataset in datasets:
-        set = NrrdDataset(dataset)
-        exc_df = set.excluded_labels
-        if regions is None:
-            regions = set.list_regions()
+    for d in datasets:
+        set = NrrdDataset(d)
+        regions = regions_to_list(regions_arg, literals={ 'all': set.list_regions() })
 
-        for region in regions:
-            filepath = os.path.join(set.path, 'reports', 'region-summary', f'{region}.csv')
+        for r in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-summary', f'{r}.csv')
             if not os.path.exists(filepath):
                 if raise_error:
-                    raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+                    raise ValueError(f"Summary not found for region '{r}', dataset '{set}'.")
                 else:
                     # Skip this region.
                     continue
 
             # Add CSV.
             df = pd.read_csv(filepath, dtype={ 'patient-id': str })
-            df.insert(1, 'region', region)
-
-            # Filter by 'excluded-labels.csv'.
-            rexc_df = None if exc_df is None else exc_df[exc_df['region'] == region]
-            if labels != 'all':
-                if rexc_df is None:
-                    raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
-            if labels == 'included':
-                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
-                df = df[df._merge == 'left_only'].drop(columns='_merge')
-            elif labels == 'excluded':
-                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
-                df = df[df._merge == 'both'].drop(columns='_merge')
+            df.insert(1, 'region', r)
 
             # Append dataframe.
             dfs.append(df)

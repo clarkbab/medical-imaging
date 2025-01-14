@@ -109,7 +109,6 @@ class NrrdDataset(Dataset):
 
     def list_patients(
         self,
-        labels: Literal['included', 'excluded', 'all'] = 'included',
         regions: Optional[PatientRegions] = None) -> List[PatientID]:
         regions = regions_to_list(regions)
 
@@ -119,12 +118,12 @@ class NrrdDataset(Dataset):
             pat_ids = list(sorted(os.listdir(pat_path)))
         else:
             # Load patients from 'ct_from' dataset.
-            pat_ids = self.__ct_from.list_patients(labels=labels, regions=None)
+            pat_ids = self.__ct_from.list_patients(regions=None)
 
         # Filter by 'regions'.
         if regions is not None:
             def filter_fn(pat_id: PatientID) -> bool:
-                pat_regions = self.patient(pat_id).list_regions(labels=labels, only=regions)
+                pat_regions = self.patient(pat_id).list_regions(regions=regions)
                 if len(pat_regions) > 0:
                     return True
                 else:

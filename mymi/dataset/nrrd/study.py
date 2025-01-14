@@ -16,14 +16,11 @@ class NrrdStudy:
         region_map: Optional[Dict[str, str]] = None) -> None:
         self.__global_id = f'{patient} - {id}'
         self.__id = id
-        self.__path = os.path.join(patient.path, id)
-        self.__patient = patient
-        self.__region_map = region_map
-
-        # Check that study ID exists.
         self.__path = os.path.join(patient.path, self.__id)
         if check_path and not os.path.exists(self.__path):
             raise ValueError(f"Study '{self}' not found. Filepath: '{self.__path}'.")
+        self.__patient = patient
+        self.__region_map = region_map
 
     @property
     def ct_data(self) -> np.ndarray:
@@ -119,6 +116,8 @@ class NrrdStudy:
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'regions'))))
         elif modality == Modality.DOSE:
             pass
+        else:
+            raise ValueError(f"Modality '{modality}' not recognised.")
     
         return data_ids
 

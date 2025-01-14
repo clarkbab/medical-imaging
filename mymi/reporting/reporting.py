@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from mymi.metrics import mean_intensity, snr
 from mymi.geometry import get_extent, get_extent_width_mm
 from mymi.postprocessing import largest_cc_3D
-from mymi.types import ImageSpacing3D
+from mymi.types import *
 
 def get_ct_stats(
     ct: np.ndarray,
@@ -27,19 +27,20 @@ def get_ct_stats(
     return stats
 
 def get_region_stats(
-    ct_data: np.ndarray,
-    region_data: np.ndarray,
+    ct_data: CtImage,
+    region_data: RegionImage,
     spacing: ImageSpacing3D,
-    brain_data: Optional[np.ndarray] = None) -> List[Dict[str, Any]]:
+    offset: Point3D,
+    brain_data: Optional[RegionImage] = None) -> List[Dict[str, Any]]:
 
     stats = []
 
     # Add 'min/max' extent metrics.
     data = {}
     min_extent_vox = np.argwhere(region_data).min(axis=0)
-    min_extent_mm = min_extent_vox * spacing
+    min_extent_mm = min_extent_vox * spacing + offset
     max_extent_vox = np.argwhere(region_data).max(axis=0)
-    max_extent_mm = max_extent_vox * spacing
+    max_extent_mm = max_extent_vox * spacing + offset
     for axis, min, max in zip(('x', 'y', 'z'), min_extent_mm, max_extent_mm):
         data['metric'] = f'min-extent-mm-{axis}'
         data['value'] = min

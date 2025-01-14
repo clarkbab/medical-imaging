@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from enum import Enum
 import itk
 import matplotlib as mpl
@@ -430,7 +431,64 @@ def plot_heatmap(
         })
 
 def plot_patient(
-    id: str,
+    plot_ids: List[str],
+    spacings: List[ImageSpacing3D],
+    ax: Optional[mpl.axes.Axes] = None,
+    centres: List[Union[PatientLandmark, PatientRegion, Landmarks, RegionImage]] = [],
+    crops: List[Union[str, np.ndarray, Box2D]] = [],
+    ct_datas: List[CtImage] = [],
+    figsize: Tuple[int, int] = (10, 10),
+    region_datas: List[RegionImages] = [],
+    views: Union[Axis, List[Axis]] = Axis.X,
+    **kwargs) -> None:
+    n_plots = len(plot_ids)
+    views = arg_to_list(views, (int, Axis))
+    n_views = len(views)
+
+    # Convert figsize from cm to inches.
+    figsize = __convert_figsize_to_inches(figsize)
+
+    # Create axes.
+    if ax is None:
+        if n_plots > 1 or n_views > 1:
+            # Subplots for multiple views.
+            _, axs = plt.subplots(n_plots, n_views, figsize=(n_views * figsize[0], n_plots * figsize[1]), gridspec_kw={ 'hspace': 0.4 })
+            if n_plots == 1:
+                axs = [axs]
+            elif n_views == 1:
+                axs = [[a] for a in axs]
+        else:
+            plt.figure(figsize=figsize)
+            ax = plt.axes(frameon=False)
+            axs = [[ax]]
+    else:
+        axs = [[ax]]
+
+    # Plot each plot.
+    show_figure = False
+    close_figure = False
+    for i in range(n_plots):
+        for j in range(n_views):
+            if i == n_plots - 1 and j == n_views - 1:
+                show_figure = True
+                close_figure = True
+
+            plot_single_patient_view(
+                plot_ids[i],
+                ct_datas[i].shape,
+                spacings[i],
+                ax=axs[i][j],
+                centre=centres[i],
+                close_figure=close_figure,
+                crop=crops[i],
+                ct_data=ct_datas[i],
+                region_data=region_datas[i],
+                show_figure=show_figure,
+                view=views[j],
+                **kwargs)
+
+def plot_single_patient_view(
+    plot_id: str,
     size: ImageSize3D,
     spacing: ImageSpacing3D,
     alpha_region: float = 0.5,
@@ -438,6 +496,7 @@ def plot_patient(
     ax: Optional[mpl.axes.Axes] = None,
     cca: bool = False,
     centre: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionImage]] = None,
+    close_figure: bool = True,
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_centre_mm: Optional[Tuple[float, float]] = None,
@@ -451,7 +510,6 @@ def plot_patient(
     dose_data: Optional[np.ndarray] = None,
     escape_latex: bool = False,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
-    figsize: Tuple[int, int] = (16, 8),
     fontsize: int = DEFAULT_FONT_SIZE,
     idx: Optional[float] = None,
     landmark_data: Optional[Landmarks] = None,
@@ -465,11 +523,11 @@ def plot_patient(
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[RegionImages] = None,            # All data passed to 'region_data' is plotted.
     savepath: Optional[str] = None,
-    show: bool = True,
     show_axes: bool = True,
     show_ct: bool = True,
     show_dose_bar: bool = True,
     show_extent: bool = False,
+    show_figure: bool = True,
     show_legend: bool = True,
     show_region_boundary: bool = True,
     show_title: bool = True,
@@ -481,22 +539,11 @@ def plot_patient(
     show_y_ticks: bool = True,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
-    view: Axis = 0,
+    view: Axis = Axis.X,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     **kwargs) -> None:
     __assert_idx(centre, extent_of, idx)
     assert view in (0, 1, 2)
-
-    if ax is None:
-        # Create figure/axes.
-        plt.figure(figsize=__convert_figsize_to_inches(figsize))
-        ax = plt.axes(frameon=False)
-        close_figure = True
-    else:
-        # Assume that parent routine will call 'plt.show()' after
-        # all axes are plotted.
-        show = False
-        close_figure = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -627,7 +674,7 @@ def plot_patient(
         elif view == 2:
             spacing_x = spacing[0]
 
-        ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm spacing]')
+        ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm]')
 
     if show_y_label:
         # Add 'y-axis' label.
@@ -637,7 +684,7 @@ def plot_patient(
             spacing_y = spacing[2]
         elif view == 2:
             spacing_y = spacing[1]
-        ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm spacing]')
+        ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm]')
 
     if region_data is not None:
         # Plot regions.
@@ -733,7 +780,7 @@ def plot_patient(
         if title is None:
             # Set default title.
             n_slices = size[view]
-            title = id
+            title = plot_id
             if show_title_idx:
                 title = f"{title}, {idx}/{n_slices - 1}"
             if show_title_view:
@@ -753,7 +800,7 @@ def plot_patient(
         plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
         logging.info(f"Saved plot to '{savepath}'.")
 
-    if show:
+    if show_figure:
         plt.show()
 
         # Revert latex settings.
@@ -2719,13 +2766,15 @@ def __set_axes_limits(
 
     return inset_ax
 
-def __view_to_text(view: int) -> str:
+def __view_to_text(
+    view: int,
+    abbreviate: bool = True) -> str:
     if view == 0:
-        return 'sagittal'
+        return 'sag.' if abbreviate else 'sagittal'
     elif view == 1:
-        return 'coronal'
+        return 'cor.' if abbreviate else 'coronal'
     elif view == 2:
-        return 'axial'
+        return 'ax.' if abbreviate else 'axial'
 
 def __convert_figsize_to_inches(figsize: Tuple[float, float]) -> Tuple[float, float]:
     cm_to_inch = 1 / 2.54

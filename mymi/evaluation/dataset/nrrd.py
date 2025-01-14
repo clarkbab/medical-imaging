@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
 from mymi.dataset import NrrdDataset
-from mymi.geometry import get_box, get_extent_centre
+from mymi.geometry import get_box, get_extent_centre, get_extent_mm
 from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import all_distances, dice, distances_deepmind, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
@@ -23,98 +23,108 @@ def get_localiser_evaluation(
     dataset: str,
     pat_id: str,
     region: str,
-    localiser: ModelName) -> Dict[str, float]:
+    localiser: ModelName,
+    metrics: Union[Literal['all'], List[str]] = 'all') -> Dict[str, float]:
     # Get pred/ground truth.
     pred = load_localiser_prediction(dataset, pat_id, localiser)
     set = NrrdDataset(dataset)
-    label = set.patient(pat_id).region_data(region=region)[region].astype(np.bool_)
+    pat = set.patient(pat_id)
+    spacing = pat.ct_spacing
+    offset = pat.ct_offset
+    if pat.has_region(region):
+        label = pat.region_data(region=region)[region].astype(np.bool_)
+    else:
+        label = None
 
-    # If 'SpinalCord' prediction extends further than ground truth in caudal z direction, then crop prediction.
-    if region == 'SpinalCord':
-        z_min_pred = np.nonzero(pred)[2].min()
-        z_min_label = np.nonzero(label)[2].min()
-        if z_min_pred < z_min_label:
-            # Crop pred/label foreground voxels.
-            crop = ((0, 0, z_min_label), label.shape)
-            pred = crop_foreground_3D(pred, crop)
-
-    # Dice.
     data = {}
-    data['dice'] = dice(pred, label)
+    if metrics == 'all' or 'dice' in metrics:
+        # Dice.
+        data['dice'] = dice(pred, label)
 
-    # Distances.
-    spacing = set.patient(pat_id).ct_spacing
-    if pred.sum() == 0 or label.sum() == 0:
-        data['apl'] = np.nan
-        data['hd'] = np.nan
-        data['hd-95'] = np.nan
-        data['msd'] = np.nan
-        data['surface-dice'] = np.nan
-    else:
-        # Calculate distances for OAR tolerance.
-        tols = [0, 0.5, 1, 1.5, 2, 2.5]
-        tol = get_region_tolerance(region)
-        if tol is not None:
-            tols.append(tol)
-        dists = all_distances(pred, label, spacing, tol=tols)
-        for metric, value in dists.items():
-            data[metric] = value
+    if metrics == 'all' or 'distances' in metrics:
+        # Distances.
+        spacing = set.patient(pat_id).ct_spacing
+        if pred.sum() == 0 or label.sum() == 0:
+            data['apl'] = np.nan
+            data['hd'] = np.nan
+            data['hd-95'] = np.nan
+            data['msd'] = np.nan
+            data['surface-dice'] = np.nan
+        else:
+            # Calculate distances for OAR tolerance.
+            tols = [0, 0.5, 1, 1.5, 2, 2.5]
+            tol = get_region_tolerance(region)
+            if tol is not None:
+                tols.append(tol)
+            dists = all_distances(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                data[metric] = value
 
-        # Add 'deepmind' comparison.
-        dists = distances_deepmind(pred, label, spacing, tol=tols)
-        for metric, value in dists.items():
-            data[f'dm-{metric}'] = value
+            # Add 'deepmind' comparison.
+            dists = distances_deepmind(pred, label, spacing, tol=tols)
+            for metric, value in dists.items():
+                data[f'dm-{metric}'] = value
 
-    # Extent distance.
-    if pred.sum() == 0:
-        ec_dist = (np.nan, np.nan, np.nan)
-    else:
-        ec_dist = extent_centre_distance(pred, label, spacing)
+    if metrics == 'all' or 'extent-centre-dist' in metrics:
+        # Extent distance.
+        if pred.sum() == 0:
+            ec_dist = (np.nan, np.nan, np.nan)
+        else:
+            ec_dist = extent_centre_distance(pred, label, spacing)
 
-    data['extent-centre-dist-x'] = ec_dist[0]
-    data['extent-centre-dist-y'] = ec_dist[1]
-    data['extent-centre-dist-z'] = ec_dist[2]
+        data['extent-centre-dist-x'] = ec_dist[0]
+        data['extent-centre-dist-y'] = ec_dist[1]
+        data['extent-centre-dist-z'] = ec_dist[2]
 
-    # Second stage patch distance.
-    if pred.sum() == 0:
-        e_dist = (np.nan, np.nan, np.nan)
-    else:
-        # Get second-stage patch min/max coordinates.
-        centre = get_extent_centre(pred)
-        size = get_region_patch_size(region, spacing)
-        min, max = get_box(centre, size)
+    # Get min/max extents.
+    if metrics == 'all' or 'pred-extent-mm' in metrics:
+        extent = get_extent_mm(pred, spacing, offset)
+        if extent is not None:
+            mins, maxs = extent
+            axes = ['x', 'y', 'z']
+            for a, min, max in zip(axes, mins, maxs):
+                data[f'pred-extent-mm-min-{a}'] = min
+                data[f'pred-extent-mm-max-{a}'] = max
 
-        # Clip second-stage patch to label size - if necessary.
-        min = np.clip(min, a_min=0, a_max=None)
-        max = np.clip(max, a_min=None, a_max=label.shape)
+    if metrics == 'all' or 'encaps-dist-mm' in metrics:
+        # Second stage patch distance.
+        if pred.sum() == 0:
+            e_dist = (np.nan, np.nan, np.nan)
+        else:
+            # Get second-stage patch min/max coordinates.
+            centre = get_extent_centre(pred)
+            size = get_region_patch_size(region, spacing)
+            min, max = get_box(centre, size)
 
-        # Convert second-stage patch coordinates into a label of ones so we can use 'get_encaps_dist_mm'.
-        patch_label = np.zeros_like(label)
-        slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
-        patch_label[slices] = 1
+            # Clip second-stage patch to label size - if necessary.
+            min = np.clip(min, a_min=0, a_max=None)
+            max = np.clip(max, a_min=None, a_max=label.shape)
 
-        # Get extent distance.
-        e_dist = get_encaps_dist_mm(patch_label, label, spacing)
+            # Convert second-stage patch coordinates into a label of ones so we can use 'get_encaps_dist_mm'.
+            patch_label = np.zeros_like(label)
+            slices = tuple([slice(l, h + 1) for l, h in zip(min, max)])
+            patch_label[slices] = 1
 
-    data['encaps-dist-mm-x'] = e_dist[0]
-    data['encaps-dist-mm-y'] = e_dist[1]
-    data['encaps-dist-mm-z'] = e_dist[2]
+            # Get extent distance.
+            e_dist = get_encaps_dist_mm(patch_label, label, spacing)
+
+        data['encaps-dist-mm-x'] = e_dist[0]
+        data['encaps-dist-mm-y'] = e_dist[1]
+        data['encaps-dist-mm-z'] = e_dist[2]
 
     return data
 
 def create_localiser_evaluation(
-    datasets: Union[str, List[str]],
+    dataset: str,
     region: str,
     localiser: ModelName,
-    n_folds: Optional[int] = 5,
-    test_fold: Optional[int] = None) -> None:
+    metrics: Union[Literal['all'], List[str]] = 'all') -> None:
     # Get unique name.
     localiser = replace_ckpt_alias(localiser)
-    logging.info(f"Evaluating localiser predictions for NRRD datasets '{datasets}', region '{region}', localiser '{localiser}', with {n_folds}-fold CV using test fold '{test_fold}'.")
+    logging.info(f"Evaluating localiser predictions for NRRD dataset '{dataset}', region '{region}', localiser '{localiser}'.")
 
     # Create dataframe.
     cols = {
-        'fold': int,
         'dataset': str,
         'patient-id': str,
         'region': str,
@@ -123,48 +133,35 @@ def create_localiser_evaluation(
     }
     df = pd.DataFrame(columns=cols.keys())
 
-    # Build test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
-
-    # Add evaluations to dataframe.
-    for pat_desc_b in tqdm(iter(test_loader)):
-        if type(pat_desc_b) == torch.Tensor:
-            pat_desc_b = pat_desc_b.tolist()
-        for pat_desc in pat_desc_b:
-            dataset, pat_id = pat_desc.split(':')
-            metrics = get_localiser_evaluation(dataset, pat_id, region, localiser)
-            for metric, value in metrics.items():
-                data = {
-                    'fold': test_fold,
-                    'dataset': dataset,
-                    'patient-id': pat_id,
-                    'region': region,
-                    'metric': metric,
-                    'value': value
-                }
-                df = append_row(df, data)
-
-    # Add fold.
-    df['fold'] = test_fold
+    set = NrrdDataset(dataset)
+    pat_ids = set.list_patients()
+    for p in tqdm(pat_ids):
+        mvs = get_localiser_evaluation(dataset, p, region, localiser, metrics=metrics)
+        for m, v in mvs.items():
+            data = {
+                'dataset': dataset,
+                'patient-id': p,
+                'region': region,
+                'metric': m,
+                'value': v
+            }
+            df = append_row(df, data)
 
     # Set column types.
     df = df.astype(cols)
 
     # Save evaluation.
-    filename = f'eval-folds-{n_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+    filepath = os.path.join(set.path, 'data', 'evaluations', 'localiser', *localiser, 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
 def load_localiser_evaluation(
-    datasets: Union[str, List[str]],
+    dataset: str,
     localiser: ModelName,
-    exists_only: bool = False,
-    n_folds: Optional[int] = 5,
-    test_fold: Optional[int] = None) -> np.ndarray:
+    exists_only: bool = False) -> pd.DataFrame:
     localiser = replace_ckpt_alias(localiser)
-    filename = f'eval-folds-{n_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+    set = NrrdDataset(dataset)
+    filepath = os.path.join(set.path, 'data', 'evaluations', 'localiser', *localiser, 'eval.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True
@@ -172,7 +169,7 @@ def load_localiser_evaluation(
         if exists_only:
             return False
         else:
-            raise ValueError(f"Localiser evaluation for dataset '{datasets}', localiser '{localiser}', {n_folds}-fold CV with test fold {test_fold} not found. Filepath: {filepath}.")
+            raise ValueError(f"Localiser evaluation for dataset '{dataset}', localiser '{localiser}'.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})
     return data
 

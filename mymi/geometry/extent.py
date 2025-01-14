@@ -1,7 +1,7 @@
 import numpy as np
-from typing import Literal, Optional, Tuple, Union
+from typing import *
 
-from mymi.types import Axis, Box2D, Box3D, ImageSize2D, ImageSize3D, Point2D, Point3D
+from mymi.types import *
 
 def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
     if a.dtype != np.bool_:
@@ -17,6 +17,26 @@ def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
         box = None
 
     return box
+
+def get_extent_mm(
+    a: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: Point3D) -> Optional[Union[Box2D, Box3D]]:
+    if a.dtype != np.bool_:
+        raise ValueError(f"'get_extent' expected a boolean array, got '{a.dtype}'.")
+
+    # Get OAR extent.
+    if a.sum() > 0:
+        non_zero = np.argwhere(a != 0).astype(int)
+        min = non_zero.min(axis=0)
+        max = non_zero.max(axis=0)
+        min_mm = min * spacing + offset
+        max_mm = max * spacing + offset
+        box_mm = (min_mm, max_mm)
+    else:
+        box_mm = None
+
+    return box_mm
 
 def get_extent_voxel(
     a: np.ndarray,

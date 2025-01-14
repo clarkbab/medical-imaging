@@ -22,7 +22,6 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.prediction.dataset.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_prediction
-from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, to_255
 from mymi.regions import regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
@@ -30,7 +29,7 @@ from mymi.transforms import crop_3D, resample, top_crop_or_pad_3D
 from mymi import types
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
-from ..processing import convert_to_dicom as convert_to_dicom_base, write_flag
+from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
 def convert_brain_crop_to_training(
     dataset: str,

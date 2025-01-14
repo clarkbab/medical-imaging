@@ -28,8 +28,8 @@ def resample_multi_channel(
 
 def resample(
     data: np.ndarray,
-    origin: Optional[PointMM3D] = None,
-    output_origin: Optional[PointMM3D] = None,
+    offset: Optional[PointMM3D] = None,
+    output_offset: Optional[PointMM3D] = None,
     output_size: Optional[ImageSize3D] = None,
     output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,

@@ -105,7 +105,7 @@ def plot_heatmap(
 
 def plot_patient(
     dataset: str,
-    pat_id: str,
+    pat_ids: PatientIDs,
     centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
     landmarks: Optional[Landmarks] = None,
@@ -114,60 +114,78 @@ def plot_patient(
     show_dose: bool = False,
     study_id: Optional[StudyID] = None,
     **kwargs) -> None:
+    pat_ids = arg_to_list(pat_ids, PatientID)
 
     # Load CT data.
     set = NiftiDataset(dataset)
-    pat = set.patient(pat_id)
-    if study_id is not None:
-        study = pat.study(study_id)
-    else:
-        study = pat.default_study
-    ct_data = study.ct_data
-    spacing = study.ct_spacing
+    plot_ids = []
+    ct_datas = []
+    spacings = []
+    region_datas = []
+    landmark_datas = []
+    dose_datas = []
+    centres = []
+    crops = []
+    for p in pat_ids:
+        pat = set.patient(p)
+        if study_id is not None:
+            study = pat.study(study_id)
+        else:
+            study = pat.default_study
+        s = study.id
+        max_chars = 10
+        if len(s) > max_chars:
+            s = s[:max_chars]
+        plot_id = f"{p}:{s}"
+        plot_ids.append(plot_id)
+        ct_data = study.ct_data
+        ct_datas.append(ct_data)
+        spacing = study.ct_spacing
+        spacings.append(spacing)
 
-    # Load region data.
-    if regions is not None:
-        region_data = study.region_data(regions=regions, **kwargs)
-    else:
-        region_data = None
+        # Load region data.
+        if regions is not None:
+            region_data = study.region_data(regions=regions, **kwargs)
+        else:
+            region_data = None
 
-    # Load landmarks.
-    if landmarks is not None:
-        landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
-    else:
-        landmark_data = None
+        # Load landmarks.
+        if landmarks is not None:
+            landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
+        else:
+            landmark_data = None
+        landmark_datas.append(landmark_data)
 
-    # Load dose data.
-    dose_data = study.dose_data if show_dose else None
+        # Load dose data.
+        dose_data = study.dose_data if show_dose else None
+        dose_datas.append(dose_data)
 
-    # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
-    if centre is not None:
-        if isinstance(centre, str):
-            if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
-                centre = study.landmark_data(landmarks=centre)
-            elif study.has_region(centre) and region_data is not None and centre not in region_data:
-                centre = study.region_data(regions=centre)[centre]
+        # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+        if centre is not None:
+            if isinstance(centre, str):
+                if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
+                    centre = study.landmark_data(landmarks=centre)
+                elif study.has_region(centre) and region_data is not None and centre not in region_data:
+                    centre = study.region_data(regions=centre)[centre]
 
-    # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
-    if crop is not None:
-        if isinstance(crop, str):
-            if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
-                crop = study.landmark_data(landmarks=crop)
-            elif study.has_region(crop) and region_data is not None and crop not in region_data:
-                crop = study.region_data(regions=crop)[crop]
+        # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+        if crop is not None:
+            if isinstance(crop, str):
+                if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
+                    crop = study.landmark_data(landmarks=crop)
+                elif study.has_region(crop) and region_data is not None and crop not in region_data:
+                    crop = study.region_data(regions=crop)[crop]
 
-    # Apply region labels.
-    # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
-    # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
-    region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
+        # Apply region labels.
+        # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
+        # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
+        region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
+        region_datas.append(region_data)
+        centres.append(centre)
+        crops.append(crop)
 
     # Plot.
-    max_chars = 10
-    study_id = study.id
-    if len(study_id) > max_chars:
-        study_id = study_id[:max_chars]
-    id = f"{pat_id}:{study_id}"
-    plot_patient_base(id, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, dose_data=dose_data, landmark_data=landmark_data, region_data=region_data, **kwargs)
+    plot_patient_base(plot_ids, spacings, centres=centres, crops=crops, ct_datas=ct_datas, dose_datas=dose_datas, landmark_datas=landmark_datas, region_datas=region_datas, **kwargs)
 
 def plot_moved(
     dataset: str,

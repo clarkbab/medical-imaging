@@ -92,7 +92,11 @@ class NiftiStudy:
         return id in self.list_data(modality)
 
     def has_landmark(self, *args, **kwargs) -> bool:
-        return self.default_landmarks.has_landmark(*args, **kwargs)
+        lms = self.default_landmarks
+        if lms is None:
+            return False
+        else:
+            return lms.has_landmark(*args, **kwargs)
 
     def has_region(self, *args, **kwargs) -> bool:
         return self.default_regions.has_region(*args, **kwargs)
@@ -110,11 +114,19 @@ class NiftiStudy:
         self,
         modality: Modality) -> List[str]:
         if modality == Modality.CT:
-            data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'ct'))))
-            data_ids = [s.replace('.nii.gz', '') for s in data_ids]
+            ct_path = os.path.join(self.__path, 'ct')
+            if os.path.exists(ct_path):
+                data_ids = list(sorted(os.listdir(ct_path)))
+                data_ids = [s.replace('.nii.gz', '') for s in data_ids]
+            else:
+                data_ids = []
         elif modality == Modality.LANDMARKS:
-            data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'landmarks'))))
-            data_ids = [s.replace('.csv', '') for s in data_ids]
+            landmarks_path  = os.path.join(self.__path, 'landmarks')
+            if os.path.exists(landmarks_path):
+                data_ids = list(sorted(os.listdir(landmarks_path)))
+                data_ids = [s.replace('.csv', '') for s in data_ids]
+            else:
+                data_ids = []
         elif modality == Modality.REGIONS:
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'regions'))))
         elif modality == Modality.DOSE:

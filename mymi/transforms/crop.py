@@ -2,8 +2,7 @@ import numpy as np
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from mymi.geometry import get_box
-from mymi import logging
-from mymi.types import Box2D, Box3D, ImageSize3D, Point2D, Point3D
+from mymi.types import *
 
 def crop_or_pad_2D(
     data: np.ndarray,
@@ -246,6 +245,47 @@ def crop_3D(
     crop_min = np.array(min).clip(0)
     crop_max = (size - max).clip(0)
     slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
+    data = data[slices]
+
+    return data
+
+def crop_mm_3D(
+    data: np.ndarray,
+    spacing: ImageSpacing3D,
+    offset: PointMM3D,
+    bounding_box: Box3D) -> np.ndarray:
+    assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
+    assert len(bounding_box[0]) == 3, f"Input 'bounding_box' must have dimension 3."
+    assert len(bounding_box[1]) == 3, f"Input 'bounding_box' must have dimension 3."
+
+    # Replace 'None' values.
+    min, max = bounding_box
+    min, max = list(min), list(max)
+    for i in range(3):
+        if min[i] is None:
+            min[i] = offset[i]
+        if max[i] is None:
+            max[i] = data.shape[i] * spacing[i] + offset[i]
+    min, max = tuple(min), tuple(max)
+
+    # Check box width.
+    for min_i, max_i in zip(min, max):
+        width = max_i - min_i
+        if width <= 0:
+            raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
+
+    # Convert crop to voxels.
+    min = (np.array(min) - offset) / spacing
+    min = tuple(np.round(min, 0).astype(int))
+    max = (np.array(max) - offset) / spacing
+    max = tuple(np.round(max, 0).astype(int))
+
+    # Crop the crop box to min/max allowed values.
+    min = np.clip(min, a_min=0, a_max=data.shape)
+    max = np.clip(max, a_min=0, a_max=data.shape)
+
+    # Perform cropping.
+    slices = tuple(slice(mn, mx) for mn, mx in zip(min, max))
     data = data[slices]
 
     return data

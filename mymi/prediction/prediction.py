@@ -36,8 +36,8 @@ def get_localiser_prediction(
     input_size = input.shape
 
     # Resample/crop data for network.
-    resample = True if spacing != loc_spacing else False
-    if resample:
+    use_resample = True if spacing != loc_spacing else False
+    if use_resample:
         input = resample(input, spacing=spacing, output_spacing=loc_spacing)
 
     # Crop the image so it won't overflow network memory. Perform 'top' crop
@@ -59,7 +59,7 @@ def get_localiser_prediction(
     pred = top_crop_or_pad_3D(pred, pre_crop_size)
 
     # Reverse the resample.
-    if resample:
+    if use_resample:
         pred = resample(pred, spacing=loc_spacing, output_spacing=spacing)
     
     # Crop to input size to clean up any resampling rounding errors.
@@ -94,8 +94,8 @@ def get_localiser_prediction_at_training_resolution(
     input_size = input.shape
 
     # Resample/crop data for network.
-    resample = True if spacing != loc_spacing else False
-    if resample:
+    use_resample = True if spacing != loc_spacing else False
+    if use_resample:
         input = resample(input, spacing=spacing, output_spacing=loc_spacing)
 
     # Crop the image so it won't overflow network memory. Perform 'top' crop
