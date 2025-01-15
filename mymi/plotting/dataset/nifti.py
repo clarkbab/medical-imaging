@@ -165,7 +165,7 @@ def plot_patient(
             if isinstance(centre, str):
                 if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
                     centre = study.landmark_data(landmarks=centre)
-                elif study.has_region(centre) and region_data is not None and centre not in region_data:
+                elif study.has_regions(centre) and region_data is not None and centre not in region_data:
                     centre = study.region_data(regions=centre)[centre]
 
         # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
@@ -173,7 +173,7 @@ def plot_patient(
             if isinstance(crop, str):
                 if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
                     crop = study.landmark_data(landmarks=crop)
-                elif study.has_region(crop) and region_data is not None and crop not in region_data:
+                elif study.has_regions(crop) and region_data is not None and crop not in region_data:
                     crop = study.region_data(regions=crop)[crop]
 
         # Apply region labels.
@@ -273,7 +273,7 @@ def plot_registration(
     # centres_of = arg_to_list(centre, str)
     # if centres_of is not None:
     #     for i, c in enumerate(centres_of):
-    #         if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+    #         if set.patient(fixed_pat_id).has_regions(c) and set.patient(moving_pat_id).has_regions(c):
     #             centre = c
     #             break
     #         elif i == len(centres_of) - 1:
@@ -281,7 +281,7 @@ def plot_registration(
     # crops = arg_to_list(crop, str)
     # if crops is not None and not isinstance(crop, tuple):
     #     for i, c in enumerate(crops):
-    #         if set.patient(fixed_pat_id).has_region(c) and set.patient(moving_pat_id).has_region(c):
+    #         if set.patient(fixed_pat_id).has_regions(c) and set.patient(moving_pat_id).has_regions(c):
     #             crop = c
     #             break
     #         elif i == len(crops) - 1:

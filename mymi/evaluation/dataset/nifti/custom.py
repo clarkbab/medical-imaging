@@ -42,7 +42,7 @@ def get_nnunet_multi_segmenter_evaluation(
     region_metrics = []
     for region, pred in region_preds.items():
         # Patient ground truth may not have all the predicted regions.
-        if not pat.has_region(region):
+        if not pat.has_regions(region):
             region_metrics.append({})
             continue
         
@@ -111,7 +111,7 @@ def get_nnunet_single_region_evaluation(
     region_metrics = []
     for region, pred in region_preds.items():
         # Patient ground truth may not have all the predicted regions.
-        if not pat.has_region(region):
+        if not pat.has_regions(region):
             region_metrics.append({})
             continue
         

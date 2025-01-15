@@ -67,7 +67,7 @@ class TrainingAdaptiveSample:
         label = None
         n_channels = len(self.__dataset.list_regions()) + 1
         for i, region in enumerate(self.__dataset.list_regions()):
-            if not self.has_region(region):
+            if not self.has_regions(region):
                 continue
 
             # Load the label data.
@@ -182,7 +182,7 @@ class TrainingAdaptiveSample:
                 return True
         return False
 
-    def has_region(
+    def has_regions(
         self,
         region: PatientRegions) -> bool:
         regions = arg_to_list(region, str)
@@ -197,7 +197,7 @@ class TrainingAdaptiveSample:
         label = None
         n_channels = len(self.__dataset.list_regions()) + 1
         for i, region in enumerate(self.__dataset.list_regions()):
-            if not self.has_region(region):
+            if not self.has_regions(region):
                 continue
 
             # Load the label data.

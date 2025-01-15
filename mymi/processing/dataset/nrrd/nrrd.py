@@ -108,7 +108,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
 
         for region in regions:
             # Skip if patient doesn't have region.
-            if not set.patient(pat_id).has_region(region):
+            if not set.patient(pat_id).has_regions(region):
                 continue
 
             # Load label data.
@@ -278,7 +278,7 @@ def convert_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not patient.has_region(region):
+                if not patient.has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -365,7 +365,7 @@ def create_excluded_brainstem(
     for pat_id in tqdm(pat_ids):
         # Skip if no 'Brainstem'.
         pat = dest_set.patient(pat_id)
-        if not pat.has_region('Brainstem'):
+        if not pat.has_regions('Brainstem'):
             continue
 
         # Load label data.

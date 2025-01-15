@@ -47,7 +47,7 @@ def plot_patient(
         if isinstance(centre, str):
             if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
                 centre = study.landmark_data(landmarks=centre)
-            elif study.has_region(centre) and region_data is not None and centre not in region_data:
+            elif study.has_regions(centre) and region_data is not None and centre not in region_data:
                 centre = study.region_data(regions=centre)[centre]
 
     # Load 'crop' as np.array (region label) or pd.Series (landmark).
@@ -55,7 +55,7 @@ def plot_patient(
         if isinstance(crop, str):
             if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
                 crop = study.landmark_data(landmarks=crop)
-            elif study.has_region(crop) and region_data is not None and crop not in region_data:
+            elif study.has_regions(crop) and region_data is not None and crop not in region_data:
                 crop = study.region_data(regions=crop)[crop]
 
         # Rename 'regions' and 'region_data' keys.

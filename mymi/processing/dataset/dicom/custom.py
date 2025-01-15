@@ -63,7 +63,7 @@ def convert_velocity_predictions_to_nifti(
             if regions is not None:
                 regions = regions_to_list(regions, literals={ 'all', moving_study.list_regions })
                 for r in regions:
-                    if not moving_study.has_region(r):
+                    if not moving_study.has_regions(r):
                         continue
                     moving_region = moving_study.region_data(regions=r)[r]
                     moved_region = sitk_transform_image(moving_region, moving_spacing, moving_offset, fixed_ct.shape, fixed_spacing, fixed_offset, transform)

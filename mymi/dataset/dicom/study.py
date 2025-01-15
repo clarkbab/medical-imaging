@@ -148,8 +148,8 @@ class DicomStudy:
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)
 
-    def has_region(self, *args, **kwargs):
-        return self.default_rtstruct.has_region(*args, **kwargs)
+    def has_regions(self, *args, **kwargs):
+        return self.default_rtstruct.has_regions(*args, **kwargs)
 
     def landmark_data(self, *args, **kwargs):
         return self.default_rtstruct.landmark_data(*args, **kwargs)

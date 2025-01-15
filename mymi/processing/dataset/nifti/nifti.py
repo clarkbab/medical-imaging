@@ -193,7 +193,7 @@ def convert_replan_adaptive_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id_mt).has_region(region):
+                if not set.patient(pat_id_mt).has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -425,7 +425,7 @@ def convert_replan_adaptive_mirror_to_training(
             regions_label = pat_label.list_regions(regions=regions)
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not pat_label.has_region(region):
+                if not pat_label.has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -546,9 +546,9 @@ def convert_replan_to_nnunet_ref_model(
         filepath = os.path.join(filepath, file, 'multi-loader-manifest.csv')
         df = pd.read_csv(filepath)
         train_pat_ids = list(df[df['loader'].isin(['train', 'validate'])]['origin-patient-id'])
-        train_pat_ids = [p for p in train_pat_ids if set.patient(p).has_region(r)]
+        train_pat_ids = [p for p in train_pat_ids if set.patient(p).has_regions(r)]
         test_pat_ids = list(df[df['loader'] == 'test']['origin-patient-id'])
-        test_pat_ids = [p for p in test_pat_ids if set.patient(p).has_region(r)]
+        test_pat_ids = [p for p in test_pat_ids if set.patient(p).has_regions(r)]
 
         # Create 'dataset.json'.
         dataset_json = {
@@ -635,7 +635,7 @@ def convert_replan_to_nnunet_ref_model(
 
                 # Skip if patient doesn't have region.
                 # This is a problem, as the missing label will be trained as "background".
-                if not set.patient(pat_id).has_region(r):
+                if not set.patient(pat_id).has_regions(r):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -810,7 +810,7 @@ def convert_replan_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
+                if not set.patient(pat_id).has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -1006,7 +1006,7 @@ def convert_population_lens_crop_to_training(
                     min_region = None
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
-                        if pat.has_region(region):
+                        if pat.has_regions(region):
                             region_data = pat.region_data(region=region)[region]
                             region_extent = get_extent(region_data)
                             if region_extent[0][2] < min_z:
@@ -1022,7 +1022,7 @@ def convert_population_lens_crop_to_training(
                     centre_z = None
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
-                        if pat.has_region(region):
+                        if pat.has_regions(region):
                             rdata = pat.region_data(region=region)[region]
                             extent_centre = get_extent_centre(rdata)
                             centre_z = extent_centre[2]
@@ -1047,7 +1047,7 @@ def convert_population_lens_crop_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
+                if not set.patient(pat_id).has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -1232,7 +1232,7 @@ def convert_replan_to_lens_crop(
             min_region = None
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
-                if pat.has_region(eye_region):
+                if pat.has_regions(eye_region):
                     region_data = pat.region_data(region=eye_region)[eye_region]
                     region_extent = get_extent(region_data)
                     if region_extent[0][2] < min_z:
@@ -1263,7 +1263,7 @@ def convert_replan_to_lens_crop(
             centre_z = None
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
-                if pat.has_region(eye_region):
+                if pat.has_regions(eye_region):
                     rdata = pat.region_data(region=eye_region)[eye_region]
                     extent_centre = get_extent_centre(rdata)
                     centre_z = extent_centre[2]
@@ -1325,209 +1325,6 @@ def convert_brain_crop_to_training(
     **kwargs) -> None:
     set = NiftiDataset(dataset)
     convert_brain_crop_to_training_base(set, load_localiser_prediction=load_localiser_prediction, **kwargs)
-
-def convert_to_training(
-    dataset: str,
-    create_data: bool = True,
-    dest_dataset: Optional[str] = None,
-    dilate_iter: int = 3,
-    dilate_regions: List[str] = [],
-    log_warnings: bool = False,
-    output_size: Optional[ImageSize3D] = None,
-    output_spacing: Optional[ImageSpacing3D] = None,
-    recreate_dataset: bool = True,
-    regions: Optional[PatientRegions] = 'all',
-    round_dp: Optional[int] = None) -> None:
-    logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'regions'), (dataset, regions))
-
-    # Use all regions if region is 'None'.
-    set = NiftiDataset(dataset)
-    regions = regions_to_list(regions)
-    if regions == 'all':
-        regions = set.list_regions()
-
-    # Create the dataset.
-    dest_dataset = dataset if dest_dataset is None else dest_dataset
-    if exists_training(dest_dataset):
-        if recreate_dataset:
-            created = True
-            set_t = recreate_training(dest_dataset)
-        else:
-            created = False
-            set_t = TrainingDataset(dest_dataset)
-            __destroy_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
-
-            # Delete old labels.
-            if regions is not None:
-                for region in regions:
-                    filepath = os.path.join(set_t.path, 'data', 'labels', region)
-                    shutil.rmtree(filepath)
-    else:
-        created = True
-        set_t = create_training(dest_dataset)
-    write_flag(set_t, '__CONVERT_FROM_NIFTI_START__')
-
-    # Write params.
-    if created:
-        filepath = os.path.join(set_t.path, 'params.csv')
-        params_df = pd.DataFrame({
-            'dilate-iter': [str(dilate_iter)],
-            'dilate-regions': [str(dilate_regions)],
-            'output-size': [str(output_size)] if output_size is not None else ['None'],
-            'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
-            'regions': [str(regions)],
-        })
-        params_df.to_csv(filepath, index=False)
-    else:
-        if regions is not None:
-            for region in regions:
-                filepath = os.path.join(set_t.path, f'params-{region}.csv')
-                params_df = pd.DataFrame({
-                    'dilate-iter': [str(dilate_iter)],
-                    'dilate-regions': [str(dilate_regions)],
-                    'output-size': [str(output_size)] if output_size is not None else ['None'],
-                    'output-spacing': [str(output_spacing)] if output_spacing is not None else ['None'],
-                    'regions': [str(regions)],
-                })
-                params_df.to_csv(filepath, index=False)
-
-    # Load patients.
-    pat_ids = set.list_patients(regions=regions)
-
-    # Get exclusions.
-    exc_df = set.excluded_labels
-
-    # Create index.
-    cols = {
-        'dataset': str,
-        'sample-id': int,
-        'group-id': str,
-        'origin-dataset': str,
-        'origin-patient-id': str,
-    }
-    if regions is not None:
-        cols['region'] = str
-        cols['empty'] = bool
-    index = pd.DataFrame(columns=cols.keys())
-    index = index.astype(cols)
-
-    # Load patient grouping if present.
-    group_df = set.group_index
-
-    # Write each patient to dataset.
-    start = time()
-    if create_data:
-        for i, pat_id in enumerate(tqdm(pat_ids)):
-            # Load input data.
-            patient = set.patient(pat_id)
-            spacing = patient.ct_spacing
-            input = patient.ct_data
-
-            # Resample input.
-            if output_spacing:
-                input = resample(input, spacing=spacing, output_spacing=output_spacing)
-
-            # Crop/pad.
-            if output_size:
-                # Log warning if we're cropping the FOV as we're losing information.
-                if log_warnings:
-                    if output_spacing:
-                        fov_spacing = output_spacing
-                    else:
-                        fov_spacing = spacing
-                    fov = np.array(input.shape) * fov_spacing
-                    new_fov = np.array(output_size) * fov_spacing
-                    for axis in range(len(output_size)):
-                        if fov[axis] > new_fov[axis]:
-                            logging.warning(f"Patient '{patient}' had FOV '{fov}', larger than new FOV after crop/pad '{new_fov}' for axis '{axis}'.")
-
-                # Perform crop/pad.
-                input = top_crop_or_pad_3D(input, output_size, fill=input.min())
-
-            # Save input.
-            __create_training_input(set_t, i, input)
-
-            # Get group ID.
-            if group_df is not None:
-                tdf = group_df[group_df['patient-id'] == pat_id]
-                if len(tdf) == 0:
-                    group_id = np.nan
-                else:
-                    assert len(tdf) == 1
-                    group_id = tdf.iloc[0]['group-id']
-            else:
-                group_id = np.nan
-
-            if regions is None:
-                data = {
-                    'dataset': set_t.name,
-                    'sample-id': i,
-                    'group-id': group_id,
-                    'origin-dataset': set.name,
-                    'origin-patient-id': pat_id
-                }
-                index = append_row(index, data)
-            else:
-                for region in regions:
-                    # Skip if patient doesn't have region.
-                    if not set.patient(pat_id).has_region(region):
-                        continue
-
-                    # Skip if region in 'excluded-labels.csv'.
-                    if exc_df is not None:
-                        pr_df = exc_df[(exc_df['patient-id'] == pat_id) & (exc_df['region'] == region)]
-                        if len(pr_df) == 1:
-                            continue
-
-                    # Load label data.
-                    label = patient.region_data(region=region)[region]
-
-                    # Resample data.
-                    if output_spacing:
-                        label = resample(label, spacing=spacing, output_spacing=output_spacing)
-
-                    # Crop/pad.
-                    if output_size:
-                        label = top_crop_or_pad_3D(label, output_size)
-
-                    # Round data after resampling to save on disk space.
-                    if round_dp is not None:
-                        input = np.around(input, decimals=round_dp)
-
-                    # Dilate the labels if requested.
-                    if region in dilate_regions:
-                        label = binary_dilation(label, iterations=dilate_iter)
-
-                    # Save label. Filter out labels with no foreground voxels, e.g. from resampling small OARs.
-                    if label.sum() != 0:
-                        empty = False
-                        __create_training_label(set_t, i, label, region=region)
-                    else:
-                        empty = True
-
-                    data = {
-                        'dataset': set_t.name,
-                        'sample-id': i,
-                        'group-id': group_id,
-                        'origin-dataset': set.name,
-                        'origin-patient-id': pat_id,
-                        'region': region,
-                        'empty': empty
-                    }
-                    index = append_row(index, data)
-
-    end = time()
-
-    # Write index.
-    index = index.astype(cols)
-    filepath = os.path.join(set_t.path, 'index.csv')
-    index.to_csv(filepath, index=False)
-
-    # Indicate success.
-    write_flag(set_t, '__CONVERT_FROM_NIFTI_END__')
-    hours = int(np.ceil((end - start) / 3600))
-    __print_time(set_t, hours)
-
 def create_excluded_brainstem(
     dataset: str,
     dest_dataset: str) -> None:
@@ -1547,7 +1344,7 @@ def create_excluded_brainstem(
     for pat_id in tqdm(pat_ids):
         # Skip if no 'Brainstem'.
         pat = dest_set.patient(pat_id)
-        if not pat.has_region('Brainstem'):
+        if not pat.has_regions('Brainstem'):
             continue
 
         # Load label data.

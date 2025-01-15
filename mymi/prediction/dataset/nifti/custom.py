@@ -57,7 +57,7 @@ def predict_unigradicon(
         if regions is not None:
             regions = regions_to_list(regions, literals={ 'all': set.list_regions })
             for r in regions:
-                if not moving_study.has_region(r):
+                if not moving_study.has_regions(r):
                     continue
 
                 # Perform region warp.

@@ -44,7 +44,7 @@ def get_region_overlap_summary(
 
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
-        if not pat.has_region(region, labels='all'):
+        if not pat.has_regions(region, labels='all'):
             continue
 
         # Load region data.
@@ -119,7 +119,7 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add intensity metrics.
-        if pat.has_region('Brain'):
+        if pat.has_regions('Brain'):
             data['metric'] = 'snr-brain'
             brain_label = pat.region_data(region='Brain')['Brain']
             data['value'] = snr(ct_data, label, brain_label, spacing)
@@ -197,7 +197,7 @@ def create_region_contrast_report(
     for pat_id in tqdm(pat_ids):
         # Load CT and region data.
         pat = set.patient(pat_id)
-        if not pat.has_region(region):
+        if not pat.has_regions(region):
             continue
         ct_data = pat.ct_data
         region_data = pat.region_data(region=region)[region]
@@ -217,7 +217,7 @@ def create_region_contrast_report(
         cnr = contrast / background_noise
 
         # Calculate region noise.
-        if pat.has_region(noise_region):
+        if pat.has_regions(noise_region):
             noise_data = pat.region_data(region=noise_region)[noise_region]
             noise_data_eroded = binary_erosion(noise_data, iterations=3)
             if noise_data_eroded.sum() == 0:
@@ -288,7 +288,7 @@ def create_region_summary(
             spacing = pat.ct_spacing
             offset = pat.ct_offset
             region_data = pat.region_data(regions=region)[region]
-            if pat.has_region('Brain'):
+            if pat.has_regions('Brain'):
                 brain_data = pat.region_data(regions='Brain')['Brain']
             else:
                 brain_data = None
@@ -919,7 +919,7 @@ def create_localiser_figures(
     for pat in tqdm(pats, leave=False):
         # Skip if patient doesn't have region.
         patient = set.patient(pat)
-        if not patient.has_region(region):
+        if not patient.has_regions(region):
             continue
 
         # Start info section.

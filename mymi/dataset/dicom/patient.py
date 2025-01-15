@@ -188,8 +188,8 @@ class DicomPatient:
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)
 
-    def has_region(self, *args, **kwargs):
-        return self.default_rtstruct.has_region(*args, **kwargs)
+    def has_regions(self, *args, **kwargs):
+        return self.default_rtstruct.has_regions(*args, **kwargs)
 
     def info(self) -> pd.DataFrame:
         # Define dataframe structure.

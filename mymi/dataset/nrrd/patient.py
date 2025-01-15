@@ -106,8 +106,8 @@ class NrrdPatient:
     def has_landmark(self, *args, **kwargs) -> bool:
         return self.default_study.has_landmark(*args, **kwargs)
 
-    def has_region(self, *args, **kwargs) -> bool:
-        return self.default_study.has_region(*args, **kwargs)
+    def has_regions(self, *args, **kwargs) -> bool:
+        return self.default_study.has_regions(*args, **kwargs)
 
     def landmark_data(self, *args, **kwargs) -> Landmarks:
         return self.default_study.landmark_data(*args, **kwargs)

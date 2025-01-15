@@ -32,7 +32,7 @@ def plot_patient(
     if regions is not None:
         region_data = {}
         for i, r in enumerate(all_regions):
-            if r not in regions or not sample.has_region(r):
+            if r not in regions or not sample.has_regions(r):
                 continue
             region_data[r] = label[i + 1]
     else:

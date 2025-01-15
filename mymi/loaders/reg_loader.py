@@ -330,7 +330,7 @@ class RegLoader:
             train_samples = []
             for set_i, sample_id in train_samples_tmp:
                 sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
+                if sample.has_regions(regions):
                     train_samples.append((set_i, sample_id))
                     
             # Filter validation samples.
@@ -338,7 +338,7 @@ class RegLoader:
             val_samples = []
             for set_i, sample_id in val_samples_tmp:
                 sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
+                if sample.has_regions(regions):
                     val_samples.append((set_i, sample_id))
 
             # Filter test samples.
@@ -346,7 +346,7 @@ class RegLoader:
             test_samples = []
             for set_i, sample_id in test_samples_tmp:
                 sample = sets[set_i].sample(sample_id)
-                if sample.has_region(regions):
+                if sample.has_regions(regions):
                     test_samples.append((set_i, sample_id))
 
         # Create train loader.

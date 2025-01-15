@@ -1,11 +1,10 @@
 import SimpleITK as sitk
-from typing import Optional, Tuple
+from typing import *
 
 from mymi.dataset import NiftiDataset
-from mymi.types import CtImage, PatientID, PatientLandmarks, PatientRegions, RegionImages, StudyID
+from mymi.types import *
 
 from ..registration import rigid_image_registration
-from ..resample import resample
 from ..sitk import sitk_transform_image, sitk_transform_points
 
 def rigid_registration(

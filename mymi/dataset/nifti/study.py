@@ -98,8 +98,8 @@ class NiftiStudy:
         else:
             return lms.has_landmark(*args, **kwargs)
 
-    def has_region(self, *args, **kwargs) -> bool:
-        return self.default_regions.has_region(*args, **kwargs)
+    def has_regions(self, *args, **kwargs) -> bool:
+        return self.default_regions.has_regions(*args, **kwargs)
 
     def landmark_data(self, *args, **kwargs) -> Landmarks:
         return self.default_landmarks.data(*args, **kwargs)

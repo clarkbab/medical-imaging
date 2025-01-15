@@ -108,7 +108,7 @@ class RTSTRUCT(DicomFile):
         token: str = 'Marker') -> bool:
         return landmark in self.list_landmarks(token=token)
 
-    def has_region(
+    def has_regions(
         self,
         region: PatientRegion,
         use_mapping: bool = True) -> bool:

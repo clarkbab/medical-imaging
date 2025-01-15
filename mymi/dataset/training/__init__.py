@@ -4,7 +4,7 @@ from typing import List
 
 from mymi import config
 
-from .training_dataset import TrainingDataset
+from .dataset import TrainingDataset
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'training')

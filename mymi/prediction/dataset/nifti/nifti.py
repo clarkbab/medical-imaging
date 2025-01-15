@@ -1999,7 +1999,7 @@ def load_moved_data(
         regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
         moved_regions = {}
         for r in regions:
-            if not moving_study.has_region(r):
+            if not moving_study.has_regions(r):
                 continue
 
             filepath = os.path.join(basepath, 'rtstruct', f'{r}.nii.gz')

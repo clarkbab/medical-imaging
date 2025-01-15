@@ -159,7 +159,7 @@ def convert_brain_crop_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_region(region):
+                if not set.patient(pat_id).has_regions(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -468,7 +468,7 @@ def convert_to_dicom(
                     palette = matplotlib.cm.tab20
                     logging.info('rtstruct building')
                     for i, r in enumerate(regions):
-                        if not rt_series.has_region(r):
+                        if not rt_series.has_regions(r):
                             continue
 
                         # Add 'ROI' data.

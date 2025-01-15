@@ -28,7 +28,7 @@ class RegionData(NrrdData):
 
         rd = {}
         for r in regions:
-            if not self.has_region(r):
+            if not self.has_regions(r):
                 if regions_ignore_missing:
                     continue
                 else:
@@ -43,7 +43,7 @@ class RegionData(NrrdData):
         return rd
     
     # Returns 'True' if has at least one of the passed 'regions'.
-    def has_region(
+    def has_regions(
         self,
         regions: PatientRegions) -> bool:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })

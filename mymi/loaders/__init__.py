@@ -6,6 +6,7 @@ from .multi_loader import MultiLoader
 from .multi_loader_convergence import MultiLoaderConvergence
 from .multi_loader_v2 import MultiLoaderV2
 from .reg_loader import RegLoader
+from .splits import *
 
 def get_n_train_max(
     datasets: Union[str, List[str]],

@@ -31,7 +31,7 @@ def get_localiser_evaluation(
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     offset = pat.ct_offset
-    if pat.has_region(region):
+    if pat.has_regions(region):
         label = pat.region_data(region=region)[region].astype(np.bool_)
     else:
         label = None
