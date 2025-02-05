@@ -27,8 +27,7 @@ def from_sitk(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     # which is our standard (and DICOM/Slicer's).
     offset = tuple(img.GetOrigin())
     offset = list(img.GetOrigin())
-    offset[0], offset[1] = -offset[0], -offset[1]
-    offset = tuple(offset)
+    offset = sitk_convert_point_RAS_LPS(offset)
     return data, spacing, offset
 
 def load_sitk(filepath: str) -> sitk.Image:

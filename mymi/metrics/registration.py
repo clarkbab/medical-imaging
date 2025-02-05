@@ -1,6 +1,7 @@
 import numpy as np
+from typing import *
 
-from mymi.typing import ImageSpacing3D
+from mymi.typing import *
 
 def ncc(
     a: np.ndarray,
@@ -17,17 +18,16 @@ def ncc(
 
     return result
 
-def tre(
-    a: np.ndarray,
-    b: np.ndarray,
-    spacing: ImageSpacing3D) -> float:
+def tre(    # a, b contain coordinates in mm, spacing not required.
+    a: np.ndarray,  
+    b: np.ndarray) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
     # Calculate euclidean distances.
     tres = []
     for ai, bi in zip(a, b):
-        tre = np.linalg.norm((bi - ai) * spacing)
+        tre = np.linalg.norm(bi - ai)
         tres.append(tre)
 
     stats = {

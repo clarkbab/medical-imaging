@@ -57,7 +57,6 @@ def get_registration_landmarks_evaluation(
     # Load moving landmarks.
     set = NiftiDataset(dataset)
     moving_study = set.patient(moving_pat_id).study(moving_study_id)
-    moving_spacing = moving_study.ct_spacing
     moving_landmarks = moving_study.landmark_data(landmarks=landmarks)
 
     # Get shared landmarks.
@@ -67,7 +66,7 @@ def get_registration_landmarks_evaluation(
     moved_cols = [f'{c}_moved' for c in range(3)]
     moved_data = merged_df[moved_cols].to_numpy()
 
-    tre_metrics = tre(moving_data, moved_data, moving_spacing)
+    tre_metrics = tre(moving_data, moved_data)
 
     return tre_metrics
 

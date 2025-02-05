@@ -22,15 +22,15 @@ echo $version
 
 DATASET="DIRLAB-LUNG-4DCT"
 MODEL="unigradicon"
-REGISTER_IMAGES=True
-REGISTER_LABELS=True
-REGIONS=None
+REGISTER_CT=True
+LANDMARKS="all"
+REGIONS="all"
 
 command="python $MYMI_CODE/scripts/predict/nifti/registration/unigradicon/predict.py \
     --dataset $DATASET \
     --model $MODEL \
-    --register_images $REGISTER_IMAGES \
-    --register_labels $REGISTER_LABELS \
+    --register_ct $REGISTER_CT \
+    --landmarks $LANDMARKS \
     --regions $REGIONS"
 echo $command
 eval $command
