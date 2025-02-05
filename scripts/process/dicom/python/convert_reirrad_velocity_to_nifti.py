@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.processing.dataset.dicom.custom import convert_velocity_predictions_to_nifti
+from mymi.processing.datasets.dicom.custom import convert_velocity_predictions_to_nifti
 
 dataset = 'PMCC-REIRRAD'
 # pat_prefix = 'PMCC_ReIrrad_'

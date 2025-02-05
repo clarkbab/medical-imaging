@@ -9,15 +9,15 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Optional, Tuple, Union
 
 from mymi import config
-from mymi import dataset as ds
-from mymi.dataset.nifti import NiftiDataset
-from mymi.dataset.training import TrainingDataset
-from mymi.geometry import get_box, get_extent_centre
+from mymi import datasets as ds
+from mymi.datasets.nifti import NiftiDataset
+from mymi.datasets.training import TrainingDataset
+from mymi.geometry import get_box, centre_of_extent
 from mymi import logging
 from mymi.metrics import get_encaps_dist_vox
 from mymi.regions import get_region_patch_size
-from mymi.transforms import point_crop_or_pad_3D, resample, top_crop_or_pad_3D
-from mymi import types
+from mymi.transforms import point_crop_or_pad, resample, top_crop_or_pad
+from mymi import typing
 from mymi.utils import append_row
 
 class Loader:
@@ -35,7 +35,7 @@ class Loader:
         n_workers: int = 1,
         random_seed: int = 0,
         shuffle_train: bool = True,
-        spacing: Optional[types.ImageSpacing3D] = None,
+        spacing: Optional[typing.ImageSpacing3D] = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
         use_seg_run: bool = False,
@@ -172,7 +172,7 @@ class TrainingDataset(Dataset):
         samples: List[Tuple[int, int]],
         extract_patch: bool = False,
         load_data: bool = True,
-        spacing: types.ImageSpacing3D = None,
+        spacing: typing.ImageSpacing3D = None,
         transform: torchio.transforms.Transform = None):
         self.__datasets = datasets
         self.__extract_patch = extract_patch
@@ -232,8 +232,8 @@ class TrainingDataset(Dataset):
                 dilate_iter = 3
                 input = resample(input, spacing=orig_spacing, output_spacing=output_spacing)
                 label = resample(label, spacing=orig_spacing, output_spacing=output_spacing)
-                input = top_crop_or_pad_3D(input, output_size)
-                label = top_crop_or_pad_3D(label, output_size)
+                input = top_crop_or_pad(input, output_size)
+                label = top_crop_or_pad(label, output_size)
                 if self.__region in dilate_regions:
                     label = binary_dilation(label, iterations=dilate_iter)
                 
@@ -307,7 +307,7 @@ class TrainingDataset(Dataset):
         label: np.ndarray) -> np.ndarray:
 
         # Create segmenter patch.
-        centre = get_extent_centre(label)
+        centre = centre_of_extent(label)
         size = get_region_patch_size(self.__region, self.__spacing)
         min, max = get_box(centre, size)
 
@@ -334,8 +334,8 @@ class TrainingDataset(Dataset):
         centre = tuple(np.array(centre) + t)
 
         # Extract segmentation patch.
-        input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
-        label = point_crop_or_pad_3D(label, size, centre)
+        input = point_crop_or_pad(input, size, centre, fill=input.min())        
+        label = point_crop_or_pad(label, size, centre)
 
         return input, label
 
@@ -348,8 +348,8 @@ class TrainingDataset(Dataset):
 
         # Extract patch around centre.
         size = get_region_patch_size(self.__region, self.__spacing)
-        input = point_crop_or_pad_3D(input, size, centre, fill=input.min())        
-        label = point_crop_or_pad_3D(label, size, centre)
+        input = point_crop_or_pad(input, size, centre, fill=input.min())        
+        label = point_crop_or_pad(label, size, centre)
 
         return input, label
     

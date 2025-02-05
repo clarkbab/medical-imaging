@@ -2,8 +2,8 @@ import numpy as np
 import SimpleITK as sitk
 import struct
 
-from mymi.types import PointMM3D
-from mymi.utils import to_sitk, transpose_image
+from mymi.typing import *
+from mymi.utils import *
 
 def velocity_load_transform(
     filepath: str,
@@ -74,6 +74,6 @@ def velocity_load_transform(
 
     # Create transform.
     # The 'offset' is not stored in the '.bdf' file, so we need to use the fixed image offset.
-    image = to_sitk(image, spacing, fixed_offset, is_vector=True)
+    image = to_sitk_image(image, spacing, fixed_offset, is_vector=True)
     transform = sitk.DisplacementFieldTransform(image)
     return transform

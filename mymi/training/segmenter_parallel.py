@@ -7,13 +7,13 @@ from torchio.transforms import RandomAffine
 from typing import List, Optional, Tuple, Union
 
 from mymi import config
-from mymi import dataset as ds
+from mymi import datasets as ds
 from mymi.loaders import Loader
-from mymi.dataset.training import exists
+from mymi.datasets.training import exists
 from mymi.losses import DiceLoss
 from mymi import logging
-from mymi.models.systems import SegmenterParallel
-from mymi import types
+from mymi.models.lightning_modules import SegmenterParallel
+from mymi import typing
 
 def train_segmenter_parallel(
     model_name: str,
@@ -27,7 +27,7 @@ def train_segmenter_parallel(
     n_nodes: int = 1,
     n_train: Optional[int] = None,
     n_workers: int = 1,
-    pretrained_model: Optional[types.ModelName] = None,    
+    pretrained_model: Optional[typing.ModelName] = None,    
     p_val: float = 0.2,
     resume: bool = False,
     resume_ckpt: Optional[str] = None,

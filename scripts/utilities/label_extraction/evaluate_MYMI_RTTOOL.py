@@ -10,15 +10,15 @@ filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(filepath))))
 sys.path.append(mymi_dir)
 from mymi import config
-from mymi import dataset
+from mymi import datasets
 from mymi import logging
 from mymi.metrics import dice, distances
 
 # Get datasets.
 mymi_name = 'MYMI'
 rttool_name = 'RTTOOL'
-mymi_set = dataset.get(f'HN1-{mymi_name}', 'nifti')
-rttool_set = dataset.get(f'HN1-{rttool_name}', 'nifti')
+mymi_set = datasets.get(f'HN1-{mymi_name}', 'nifti')
+rttool_set = datasets.get(f'HN1-{rttool_name}', 'nifti')
 
 # Get patients.
 mymi_pats = mymi_set.list_patients()

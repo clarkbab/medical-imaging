@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.processing.dataset.nifti.nifti import convert_adaptive_brain_crop_to_training_adaptive
+from mymi.processing.datasets.nifti.nifti import convert_adaptive_brain_crop_to_training_adaptive
 
 dataset = 'PMCC-HN-REPLAN'
 resolution='222'

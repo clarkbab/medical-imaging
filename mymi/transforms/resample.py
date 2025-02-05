@@ -3,30 +3,30 @@ from scipy.ndimage import zoom
 import SimpleITK as sitk
 from typing import Any, Dict, Optional, Tuple, Union
 
-from mymi.types import Box3D, PointMM3D, PointMM3D, ImageSize3D, ImageSpacing3D
-
-def resample_list(
-    data: np.ndarray,
-    **kwargs: Dict[str, Any]) -> np.ndarray:
-    ds = []
-    for d in data:
-        d = resample(d, **kwargs)
-        ds.append(d)
-    output = np.stack(ds, axis=0)
-    return output
-
-def resample_multi_channel(
-    data: np.ndarray,
-    **kwargs: Dict[str, Any]) -> np.ndarray:
-    assert len(data.shape) == 4, "Data must be 4D."
-    ds = []
-    for d in data:
-        d = resample(d, **kwargs)
-        ds.append(d)
-    output = np.stack(ds, axis=0)
-    return output
+from mymi import logging
+from mymi.typing import Box3D, PointMM3D, PointMM3D, ImageSize3D, ImageSpacing3D
 
 def resample(
+    data: np.ndarray,
+    **kwargs) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    n_dims = len(data.shape)
+    if n_dims in (2, 3):
+        output = spatial_resample(data, **kwargs)
+    elif n_dims == 4:
+        size = data.shape
+        if size[0] > size[-1]:
+            logging.warning(f"Channels dimension should come first when resampling 4D. Got shape {size}, is this right?")
+        os = []
+        for d in data:
+            d = spatial_resample(d, **kwargs)
+            os.append(d)
+        output = np.stack(os, axis=0)
+    else:
+        raise ValueError(f"Data to resample should have (2, 3, 4) dims, got {n_dims}.")
+
+    return output
+
+def spatial_resample(
     data: np.ndarray,
     offset: Optional[PointMM3D] = None,
     output_offset: Optional[PointMM3D] = None,
@@ -47,7 +47,8 @@ def resample(
         - if None, will take on value of 'spacing'.
         - if specified, will change the spatial resolution of the image.
     """
-    assert len(data.shape) == 3, "Data must be 3D."
+    n_dims = len(data.shape)
+    assert n_dims in (2, 3)
 
     # Convert to SimpleITK ordering (z, y, x).
     if offset is not None:

@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import Tuple
 
-from mymi import types
+from mymi import typing
 
 # Define region color map.
 palette_tab20 = plt.cm.tab20
@@ -26,7 +26,7 @@ class RegionColours:
     Submandibular_L = palette_tab20(12)
     Submandibular_R = palette_tab20(13)
 
-def to_255(colour: types.Colour) -> Tuple[int, int, int]:
+def to_255(colour: typing.Colour) -> Tuple[int, int, int]:
     """
     returns: a colour in RGB (0-255) scale.
     args:

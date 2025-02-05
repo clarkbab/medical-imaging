@@ -1,6 +1,6 @@
 from typing import List
 
-from mymi import types
+from mymi import typing
 
 from .colours import to_255, RegionColours
 from .dose_constraints import get_dose_constraint

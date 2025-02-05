@@ -9,7 +9,7 @@ from unittest import TestCase
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.dataset.raw.dicom import ROIData, RtstructConverter
+from mymi.datasets.raw.dicom import ROIData, RtstructConverter
 from mymi.regions import to_255, RegionColours
 
 class TestRtstructConverter(TestCase):

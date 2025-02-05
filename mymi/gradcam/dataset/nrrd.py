@@ -4,10 +4,10 @@ import torch
 from typing import List, Union
 
 from mymi import config
-from mymi.dataset import NrrdDataset
+from mymi.datasets import NrrdDataset
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.types import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
+from mymi.typing import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base

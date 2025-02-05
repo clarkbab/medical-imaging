@@ -1,7 +1,7 @@
 import numpy as np
 from typing import *
 
-from mymi.types import *
+from mymi.typing import *
 
 def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
     if a.dtype != np.bool_:

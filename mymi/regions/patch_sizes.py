@@ -1,6 +1,6 @@
 import numpy as np
 
-from mymi import types
+from mymi import typing
 
 # Patch sizes in mm.
 class RegionPatchSizes:
@@ -33,7 +33,7 @@ class RegionPatchSizes:
 
 def get_region_patch_size(
     region: str,
-    spacing: types.ImageSpacing3D) -> types.ImageSize3D:
+    spacing: typing.ImageSpacing3D) -> typing.ImageSize3D:
     size_mm = getattr(RegionPatchSizes, region)
     size = tuple(np.round(np.array(size_mm) / spacing).astype(int))
     return size

@@ -4,14 +4,14 @@ import seaborn as sns
 import SimpleITK as sitk
 from typing import List, Tuple
 
-from mymi import types
+from mymi import typing
 
 # Calculate signal-to-noise ratio.
 def snr(
     image: np.ndarray,
     label: np.ndarray,
     brain_label: np.ndarray,
-    spacing: types.ImageSpacing3D,
+    spacing: typing.ImageSpacing3D,
     d: float = 3) -> float:
     if image.shape != label.shape or image.shape != brain_label.shape:
         raise ValueError(f"Metric 'snr' expects images of equal shape. Got '{image.shape}', '{label.shape}', and '{brain_label.shape}'.")

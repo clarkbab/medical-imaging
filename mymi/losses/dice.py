@@ -14,10 +14,10 @@ class DiceLoss(nn.Module):
         self,
         pred: torch.Tensor,
         label: torch.Tensor,
-        include_background: bool = True,
+        include_background: bool = False,
         mask: Optional[torch.Tensor] = None,
         weights: Optional[torch.Tensor] = None,
-        reduce_channels: bool = True,
+        reduce_channels: bool = False,
         reduction: Literal['mean', 'sum'] = 'mean',
         sc_channel: Optional[int] = None) -> float:
         """

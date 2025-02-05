@@ -12,7 +12,7 @@ import wandb
 from mymi import config
 from mymi.loaders import MultiLoader
 from mymi.loaders.augmentation import get_transforms
-from mymi.models.systems import MultiSegmenter
+from mymi.models.lightning_modules import MultiSegmenter
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 BATCH_SIZE = 256 if torch.cuda.is_available() else 64

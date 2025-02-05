@@ -2,7 +2,7 @@ import nibabel as nib
 import os
 from typing import Tuple
 
-from mymi.types import *
+from mymi.typing import *
 
 def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     data = img.get_fdata()

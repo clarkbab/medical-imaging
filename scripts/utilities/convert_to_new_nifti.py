@@ -6,7 +6,7 @@ import sys
 mymi_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(mymi_path)
 
-from mymi import dataset as ds
+from mymi import datasets as ds
 
 # Convert data.
 dataset = 'LUNG-4DCT'

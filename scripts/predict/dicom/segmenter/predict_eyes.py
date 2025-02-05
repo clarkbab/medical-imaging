@@ -7,10 +7,10 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
-from mymi.dataset import DicomDataset
-from mymi.dataset.dicom import ROIData, RtstructConverter
+from mymi.datasets import DicomDataset
+from mymi.datasets.dicom import ROIData, RtstructConverter
 from mymi import logging
-from mymi.prediction.dataset.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
+from mymi.predictions.datasets.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
 
 # Set path to data.
 # This file (__file__) runs at '_internal/predict_eyes.py'. Is it unzipped from 'base_library.zip'?

@@ -1,10 +1,10 @@
 import numpy as np
 
-from mymi import types
+from mymi import typing
 
 def get_box(
-    centre: types.Point3D,
-    size: types.ImageSize3D) -> types.Box3D:
+    centre: typing.Point3D,
+    size: typing.ImageSize3D) -> typing.Box3D:
     # Convert to box.
     size = np.array(size)
     lower_sub = np.ceil(size / 2).astype(int)

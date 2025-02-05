@@ -6,7 +6,7 @@ from tqdm import tqdm
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi import dataset as ds
+from mymi import datasets as ds
 from mymi import logging
 
 STRUCT_MAP = {

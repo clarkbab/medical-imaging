@@ -6,13 +6,12 @@ from typing import Any, Dict, List, Optional, Union
 from tqdm import tqdm
 
 from mymi import config
-from mymi.dataset import NiftiDataset
+from mymi.datasets import NiftiDataset
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.models.systems import MultiSegmenter
-from mymi.prediction.dataset.nifti.nifti import load_localiser_prediction
-from mymi.types import ImageSpacing3D, ModelName, PatientRegion, PatientRegions
+from mymi.models.lightning_modules import MultiSegmenter
+from mymi.typing import ImageSpacing3D, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
@@ -109,43 +108,6 @@ def create_multi_segmenter_heatmaps(
             n_pat_count += 1
             if n_pats is not None and n_pat_count >= n_pats:
                 return
-
-def get_multi_segmenter_heatmap(
-    dataset: str,
-    pat_id: str,
-    model: Union[pl.LightningModule, ModelName],
-    model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
-    target_region: str,
-    layer: Union[str, List[str]],
-    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
-    device: torch.device = torch.device('cpu'),
-    use_crop: str = 'brain',
-    **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-
-    # Load model.
-    if isinstance(model, tuple):
-        logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, **kwargs)
-        model.eval()
-        model.to(device)
-
-    # Load patient CT data and spacing.
-    set = NiftiDataset(dataset)
-    patient = set.patient(pat_id)
-    input = patient.ct_data
-    input_spacing = patient.ct_spacing
-
-    # Get brain label if required.
-    if use_crop == 'brain':
-        localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
-        brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-    else:
-        brain_label = None
-
-    # Call base method.
-    id = f'{dataset}:{pat_id}'
-    return get_multi_segmenter_heatmap_base(input, input_spacing, model, model_region, model_spacing, target_region, layer, layer_spacing, brain_label=brain_label, device=device, id=id, **kwargs)
 
 def load_multi_segmenter_heatmap(
     dataset: str,

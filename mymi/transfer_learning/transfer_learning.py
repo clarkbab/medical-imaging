@@ -12,7 +12,7 @@ from tqdm import tqdm
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
-from mymi.evaluation.dataset.nifti import load_segmenter_evaluation
+from mymi.evaluations.datasets.nifti import load_segmenter_evaluation
 from mymi.loaders import Loader, get_n_train_max
 from mymi import logging
 from mymi.metrics import higher_is_better

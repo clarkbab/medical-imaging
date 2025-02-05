@@ -17,16 +17,16 @@ from torch.utils.checkpoint import checkpoint
 from typing import List, Optional, Union
 
 from mymi import config
-from mymi import dataset as ds
-from mymi.dataset.training import exists
+from mymi import datasets as ds
+from mymi.datasets.training import exists
 from mymi.geometry import get_centre
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.losses import TverskyWithFocalLoss
-from mymi.models.networks import MultiUNet3D
+from mymi.models.architectures import MultiUNet3D
 from mymi.regions import regions_to_list
 from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi import types
+from mymi import typing
 from mymi.utils import append_row, arg_to_list, save_csv
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
@@ -43,7 +43,7 @@ def train_multi_segmenter_pytorch(
     n_train: Optional[int] = None,
     n_workers: int = 1,
     p_val: float = 0.2,
-    regions: types.PatientRegions = 'all',
+    regions: typing.PatientRegions = 'all',
     resume: bool = False,
     resume_run: Optional[str] = None,
     resume_ckpt: str = 'last',

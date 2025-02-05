@@ -15,10 +15,10 @@ from mymi.loaders.augmentation import get_transforms
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
-from mymi.models.systems import AdaptiveSegmenter
+from mymi.models.lightning_modules import AdaptiveSegmenter
 from mymi.regions import RegionList, regions_to_list
 from mymi.reporting.loaders import get_adaptive_loader_manifest
-from mymi.types import PatientRegions
+from mymi.typing import PatientRegions
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'

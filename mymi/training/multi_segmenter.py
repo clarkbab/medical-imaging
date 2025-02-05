@@ -3,11 +3,11 @@ import json
 import numpy as np
 import os
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import DeviceStatsMonitor, EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import DeviceStatsMonitor, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.tuner import Tuner
 import torch
-from typing import List, Optional, Tuple, Union
+from typing import *
 
 from mymi import config
 from mymi.loaders import MultiLoader
@@ -16,10 +16,10 @@ from mymi.loaders.hooks import centre_crop
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi.models import replace_ckpt_alias
-from mymi.models.systems import MultiSegmenter, Segmenter
+from mymi.models.lightning_modules import MultiSegmenter
 from mymi.regions import RegionList, regions_to_list
 from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi.types import PatientRegions
+from mymi.typing import *
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'

@@ -7,7 +7,7 @@ sys.path.append(root_dir)
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.dataset import NiftiDataset
+from mymi.datasets import NiftiDataset
 # from mymi.processing.dataset.nifti.registration import create_patient_registration
 
 dataset = 'PMCC-HN-REPLAN-BOOT'

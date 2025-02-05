@@ -6,7 +6,7 @@ filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(up(filepath)))))
 sys.path.append(mymi_dir)
 
-from mymi.processing.dataset.dicom import upload_cts_from_all_patients
+from mymi.processing.datasets.dicom import upload_cts_from_all_patients
 
 N_PATS = 50
 INTERVAL = 30

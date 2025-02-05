@@ -7,11 +7,11 @@ from torchio.transforms import RandomAffine
 from typing import List, Optional, Union
 
 from mymi import config
-from mymi import dataset as ds
+from mymi import datasets as ds
 from mymi.loaders import OtherLoader
 from mymi.losses import DiceLoss
 from mymi import logging
-from mymi.models.systems import Segmenter2D
+from mymi.models.lightning_modules import Segmenter2D
 
 def train_segmenter_2d(
     model_name: str,

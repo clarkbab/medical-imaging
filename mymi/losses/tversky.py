@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from typing import *
 
 class TverskyLoss(nn.Module):
     def __init__(self,
@@ -15,15 +16,16 @@ class TverskyLoss(nn.Module):
         self,
         pred: torch.Tensor,
         label: torch.Tensor,
-        class_mask: torch.Tensor,
-        class_weights: torch.Tensor) -> float:
+        mask: Optional[torch.Tensor] = None,
+        reduce_channels: bool = False,
+        weights: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         returns: the Tversky loss.
         args:
             pred: the B x C x X x Y x Z batch of network predictions probabilities.
             label: the B x C x X x Y x Z batch of binary labels.
-            class_mask: the B x C batch of class masks indicating which regions are present.
-            class_weights: the B x C batch of class weights to up/down-weight particular regions during training.
+            mask: the B x C batch of channel masks indicating which channels are present in GT.
+            weights: the B x C batch of channel weights to weight the channel-wise loss components.
         """
         if pred.shape != label.shape:
             raise ValueError(f"Expected pred shape ({pred.shape}) to equal label shape ({label.shape}).")
@@ -36,16 +38,26 @@ class TverskyLoss(nn.Module):
 
         # Compute TP, FP and FN.
         TP = (pred * label).sum(dim=2)
-        FP = (pred * ~label).sum(dim=2)
+        FP = (pred * (1 - label)).sum(dim=2)
         FN = ((1 - pred) * label).sum(dim=2)
 
         # Calculate Tversky loss.
-        n_classes = label.shape[1]
-        inner_loss = (TP + self.__epsilon) / (TP + self.__alpha * FN + self.__beta * FP + self.__epsilon)
-        inner_loss = class_mask * class_weights * inner_loss
-        loss = n_classes - inner_loss.sum(axis=1)
+        tversky = (TP + self.__epsilon) / (TP + self.__alpha * FN + self.__beta * FP + self.__epsilon)
 
-        # Average across batch samples.
-        loss = loss.mean()
+        # Apply mask/weights across channels.
+        if mask is not None:
+            tversky = mask * tversky
+        if weights is not None:
+            tversky = weights * tversky
+
+        # Remove background channel.
+        # When all foreground classes are present, background classes can be derived from
+        # these. Otherwise, background mask is empty - so it's kind of useless.
+        tversky = tversky[:, 1:]
+
+        # Calculate loss.
+        # Reduce across batch dimension only - preserve channel loss so we can see
+        # how well individual channels are performing during training.
+        loss = -tversky.mean(0)
 
         return loss

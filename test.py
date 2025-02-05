@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from mymi import dataset as ds
+from mymi import datasets as ds
 
 if True:
     set = ds.get('MICCAI-2015', 'nrrd')

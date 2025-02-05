@@ -2,11 +2,11 @@ import numpy as np
 import SimpleITK as sitk
 from typing import List, Tuple
 
-from mymi import types
+from mymi import typing
 
 def volume(
     a: np.ndarray,
-    spacing: types.ImageSpacing3D) -> float:
+    spacing: typing.ImageSpacing3D) -> float:
     if a.dtype != np.bool_:
         raise ValueError(f"Metric 'volume' expects boolean array. Got '{a.dtype}'.")
 

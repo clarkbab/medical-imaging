@@ -1,14 +1,19 @@
 import os
 from typing import *
 
-from mymi.dataset import NiftiDataset
+from mymi.datasets import NiftiDataset
 from mymi import logging
-from mymi.types import *
+from mymi.typing import *
 from mymi.utils import append_row
 
 def get_custom_holdout_split(
     dataset: str,
-    exists_only: bool = False) -> Union[Tuple[List[PatientID], List[PatientID], List[PatientID]], bool]:
+    exists_only: bool = False,
+    n_val: Optional[int] = None,
+    p_val: Optional[float] = 0.2,
+    random_seed: float = 42,
+    shuffle_train: bool = False,
+    **kwargs) -> Union[Tuple[List[PatientID], List[PatientID], List[PatientID]], bool]:
     # Loads train/validate/test for 'split.csv' file.
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'holdout-split.csv')
@@ -27,6 +32,16 @@ def get_custom_holdout_split(
     # Get splits.
     train_ids = df[df['split'] == 'train']['patient-id'].tolist()
     val_ids = df[df['split'] == 'validate']['patient-id'].tolist()
+    if len(val_ids) == 0:
+        logging.info(f"No validation samples found - splitting training samples.")
+        if shuffle_train:
+            np.random.seed(random_seed)
+            np.random.shuffle(train_ids)
+        if n_val is None:
+            n_val = int(np.ceil(p_val * len(train_ids)))
+        n_train = len(train_ids) - n_val
+        val_ids = train_ids[n_train:]
+        train_ids = train_ids[:n_train]
     test_ids = df[df['split'] == 'test']['patient-id'].tolist()
 
     return train_ids, val_ids, test_ids
@@ -34,14 +49,22 @@ def get_custom_holdout_split(
 def get_holdout_split(
     # Splits into train/validate/test.
     dataset: str,
+    n_val: Optional[float] = None,
     p_test: float = 0.2,
-    p_val: float = 0.2,
+    p_val: Optional[float] = 0.2,
     random_seed = 42,
     shuffle: bool = True,
-    use_custom: bool = True) -> Tuple[List[PatientID], List[PatientID], List[PatientID]]:
+    use_custom: bool = True,
+    **kwargs) -> Tuple[List[PatientID], List[PatientID], List[PatientID]]:
     # Check for custom split.
     if use_custom and get_custom_holdout_split(dataset, exists_only=True):
-        return get_custom_holdout_split(dataset)
+        okwargs = dict(
+            n_val=n_val,
+            p_val=p_val,
+            random_seed=random_seed,
+            **kwargs
+        )
+        return get_custom_holdout_split(dataset, **okwargs)
 
     # Load patients.
     set = NiftiDataset(dataset)

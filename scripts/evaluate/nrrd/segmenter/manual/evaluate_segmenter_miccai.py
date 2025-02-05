@@ -4,7 +4,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.evaluation.dataset.nrrd import create_multi_segmenter_evaluation
+from mymi.evaluations.datasets.nrrd import create_multi_segmenter_evaluation
 
 reses = ['112', '222', '444']
 reses = ['444']

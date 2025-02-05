@@ -17,11 +17,11 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
-from mymi.dataset.nifti import NiftiDataset
+from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import centre_crop_or_pad_3D
-from mymi.types import PatientRegions
+from mymi.transforms import centre_crop_or_pad
+from mymi.typing import PatientRegions
 
 VMXPATH="/home/baclark/code/voxelmorph"
 
@@ -58,7 +58,7 @@ def predict(
             print(f"original shape = {original_shape}")
             shape = (192, 192, 208)
             if crop_images:
-                data = centre_crop_or_pad_3D(data, shape)
+                data = centre_crop_or_pad(data, shape)
             print(f"cropped shape = {data.shape}")
             moving_min, moving_max = np.min(data), np.max(data)
             data = (data - moving_min) / (moving_max - moving_min)
@@ -69,7 +69,7 @@ def predict(
             img = nib.load(fixedpath)
             data = img.get_fdata()
             if crop_images:
-                data = centre_crop_or_pad_3D(data, shape)
+                data = centre_crop_or_pad(data, shape)
             data = (data - np.min(data)) / (np.max(data) - np.min(data))
             img = Nifti1Image(data, img.affine)
             nib.save(img, tmpfixedpath)
@@ -91,7 +91,7 @@ def predict(
             print(f"predicted shape = {data.shape}")
             data = data * (moving_max - moving_min) + moving_min
             if crop_images:
-                data = centre_crop_or_pad_3D(data, original_shape)
+                data = centre_crop_or_pad(data, original_shape)
             print(f"padded shape = {data.shape}")
             img = Nifti1Image(data, img.affine)
             nib.save(img, movedpath)

@@ -1,8 +1,8 @@
 import SimpleITK as sitk
 from typing import *
 
-from mymi.dataset import NiftiDataset
-from mymi.types import *
+from mymi.datasets import NiftiDataset
+from mymi.typing import *
 
 from ..registration import rigid_image_registration
 from ..sitk import sitk_transform_image, sitk_transform_points

@@ -8,12 +8,12 @@ from torchio.transforms import RandomAffine
 from typing import List, Optional, Tuple, Union
 
 from mymi import config
-from mymi import dataset as ds
-from mymi.dataset.training import exists
+from mymi import datasets as ds
+from mymi.datasets.training import exists
 from mymi.loaders import Loader, MultiLoader
 from mymi.losses import DiceLoss, DiceWithFocalLoss
 from mymi import logging
-from mymi.models.systems import Localiser, MultiSegmenter
+from mymi.models.lightning_modules import Localiser, MultiSegmenter
 from mymi.reporting.loaders import get_loader_manifest
 from mymi.utils import arg_to_list
 

@@ -4,7 +4,7 @@ import yaml
 
 from mymi import config
 from mymi import logging
-from mymi.types import PatientRegions
+from mymi.typing import PatientRegions
 from mymi.utils import arg_to_list
 
 EXPANDED_REGION_MAP = {

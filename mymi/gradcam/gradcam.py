@@ -9,10 +9,10 @@ from tqdm import tqdm
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.models.systems import MultiSegmenter
+from mymi.models.lightning_modules import MultiSegmenter
 from mymi.regions import regions_to_list
-from mymi.transforms import centre_crop_3D, centre_pad_3D, crop_3D, pad_3D, resample
-from mymi.types import ImageSpacing3D, ModelName, PatientRegions
+from mymi.transforms import centre_crop, centre_pad, crop, pad, resample
+from mymi.typing import ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_to_list
 
 def get_multi_segmenter_heatmap(
@@ -81,7 +81,7 @@ def get_multi_segmenter_heatmap(
         # This value used for MICCAI-2015 multi-segmenter only.
         crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
         crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
-        input = centre_crop_3D(input, crop)
+        input = centre_crop(input, crop)
     elif use_crop == 'brain':
         assert brain_label is not None
         # Convert to voxel crop.
@@ -111,7 +111,7 @@ def get_multi_segmenter_heatmap(
         crop = (min, max)
 
         # Crop input.
-        input = crop_3D(input, crop)
+        input = crop(input, crop)
     else:
         raise ValueError(f"Unknown 'use_crop' value '{use_crop}'.")
 
@@ -203,14 +203,14 @@ def get_multi_segmenter_heatmap(
 
         # Reverse the 'naive' or 'brain' cropping.
         if use_crop == 'naive':
-            heatmap = centre_pad_3D(heatmap, input_size_after_resample)
+            heatmap = centre_pad(heatmap, input_size_after_resample)
         elif use_crop == 'brain':
             pad_min = tuple(-np.array(crop[0]))
             pad_max = np.array(pad_min) + np.array(input_size_after_resample)
             pad = (pad_min, pad_max)
             # Fill with 'heatmap_fill' as we want to know where the heatmap edges are.
             # E.g. if it was cropped in the brain, we can exclude the 'heatmap_fill' values from our mean calculation.
-            heatmap = pad_3D(heatmap, pad, fill=heatmap_fill)
+            heatmap = pad(heatmap, pad, fill=heatmap_fill)
 
         # TODO: remove.
         if save_tmp_files:

@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence as CSequence
 from contextlib import contextmanager
 from GPUtil import getGPUs
 import hashlib
@@ -9,7 +9,7 @@ import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
 from time import perf_counter, time
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import *
 
 # Commented due to circular import.
 # from mymi.loaders import Loader
@@ -85,6 +85,48 @@ def encode(o: Any) -> str:
 #     for ds_b, samp_b in iter(test_loader):
 #         samples.append((ds_b[0], samp_b[0].item()))
 #     return samples
+
+def is_generic(t: Any) -> bool:
+    return get_origin(t) is not None
+
+def isinstance_generic(a: Any, t: Any) -> bool:
+    # Checks if 'a' is of type 't' for generic (e.g. List[], Dict[]) and
+    # non-generic types.
+    if t is None:
+        return a is None
+    if not is_generic(t):
+        return isinstance(a, t)
+    
+    # Check parent type.
+    origin = get_origin(t)
+    
+    # Union - Check if any subtype matches.
+    if origin is Union:
+        subtypes = get_args(t)
+        for s in subtypes:
+            if isinstance_generic(a, s):
+                return True
+        return False
+    
+    # For non-Union types, check parent type matches.
+    if not isinstance(a, origin):
+        return False
+    
+    # Iterable - Check if all elements match type.
+    if origin in (list, CSequence):
+        # Check all elements.
+        subtype = get_args(t)[0]
+        for ai in a:
+            if not isinstance_generic(ai, subtype):
+                return False
+    elif origin in (dict,):
+        # Check all keys/values.
+        ktype, vtype = get_args(t)
+        for k, v in a.items():
+            if not isinstance_generic(k, ktype) or not isinstance(v, vtype):
+                return False
+            
+    return True
 
 def get_batch_centroids(label_batch, plane):
     """
@@ -178,18 +220,33 @@ def save_csv(
 
 def load_csv(
     *path: List[str],
-    raise_error: bool = True,
+    exists_only: bool = False,
+    map_cols: Dict[str, str] = {},
+    map_landmark_id: bool = True,
+    map_patient_id: bool = True,
+    map_types: Dict[str, Any] = {},
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(config.directories.files, *path)
-    if os.path.exists(filepath):
-        df = pd.read_csv(filepath, **kwargs)
-        if 'patient-id' in df.columns:
-            df['patient-id'] = df['patient-id'].astype(str)
-        return df
-    elif raise_error:
-        raise ValueError(f"CSV at filepath '{filepath}' not found.")
-    else:
-        return None
+    if not os.path.exists(filepath):
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"CSV at filepath '{filepath}' not found.")
+    elif exists_only:
+        return True
+
+    # Load CSV.
+    if map_landmark_id:
+        map_types['landmark-id'] = str
+    if map_patient_id:
+        map_types['patient-id'] = str
+
+    df = pd.read_csv(filepath, dtype=map_types, **kwargs)
+
+    # Map column names.
+    df = df.rename(columns=map_cols)
+
+    return df
 
 def arg_assert_lengths(args: List[List[Any]]) -> None:
     arg_0 = args[0]
@@ -223,11 +280,9 @@ def arg_assert_present(
 def arg_to_list(
     arg: Optional[Any],
     arg_type: Union[Any, Tuple[Any]],
+    length: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
     literals: Dict[str, Tuple[Any]] = {},
-    out_type: Optional[Any] = None) -> List[Any]:
-    if arg is None:
-        return arg
-
+    out_type: Optional[Any] = None,) -> List[Any]:
     # Allow multiple types in 'arg_type'.
     # E.g. patient ID can be str/int, colours can be str/tuple.
     if type(arg_type) is tuple:
@@ -237,20 +292,25 @@ def arg_to_list(
     else:
         arg_types = (arg_type,)
 
-    # Convert to list.
-    if type(arg) in arg_types:
-        if arg in literals:
-            arg = literals[arg]
-            # If arg is a function, run it now. This means the function
-            # is not evaluated every time 'arg_to_list' is called, only when
-            # the arg matches the appropriate literal (e.g. 'all').
-            if callable(arg):
-                arg = arg()
-        else:
-            arg = [arg]
+    # Check types.
+    matched = False
+    for a in arg_types:
+        if isinstance_generic(arg, a):
+            matched = True
+
+            literal_types = (int, str) 
+            if type(arg) in literal_types and arg in literals:
+                arg = literals[arg]
+                # If arg is a function, run it now. This means the function
+                # is not evaluated every time 'arg_to_list' is called, only when
+                # the arg matches the appropriate literal (e.g. 'all').
+                if callable(arg):
+                    arg = arg()
+            else:
+               arg = [arg] * length
         
     # Convert to output type.
-    if out_type is not None:
+    if matched and out_type is not None:
         arg = [out_type(a) for a in arg]
 
     return arg

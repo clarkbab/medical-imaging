@@ -4,7 +4,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.prediction.dataset.nrrd import create_multi_segmenter_predictions
+from mymi.predictions.datasets.nrrd import create_multi_segmenter_predictions
 
 reses = ['112', '222']
 n_regionses = [1, 2, 4, 8, 9]

@@ -3,7 +3,7 @@ import numpy as np
 from mymi.geometry import get_extent, get_extent_width_mm
 from mymi import logging
 from mymi.transforms import crop_foreground_3D
-from mymi import types
+from mymi import typing
 
 # Limits in mm.
 class RegionLimits:
@@ -11,7 +11,7 @@ class RegionLimits:
 
 def truncate_spine(
     pred: np.ndarray,
-    spacing: types.ImageSpacing3D) -> np.ndarray:
+    spacing: typing.ImageSpacing3D) -> np.ndarray:
     ext_width = get_extent_width_mm(pred, spacing)
     if ext_width is not None and ext_width[2] > RegionLimits.SpinalCord[2]:
         # Crop caudal end of spine.

@@ -8,18 +8,16 @@ from tqdm import tqdm
 
 from mymi import config
 from mymi.models import replace_ckpt_alias
-from mymi.types import ModelName
+from mymi.typing import ModelName
 from mymi.utils import append_row, arg_to_list
 
 from .adaptive_segmenter import train_adaptive_segmenter
-# from .auto_encoder_2d import train_auto_encoder_2d
 from .localiser import train_localiser
-# from .segmenter_2d import train_segmenter_2d
 from .multi_segmenter import train_multi_segmenter
 from .multi_segmenter_convergence import train_multi_segmenter_convergence
 from .multi_segmenter_pytorch import train_multi_segmenter_pytorch
 from .localiser_replan import train_localiser_replan
-from .segmenter import train_segmenter
+from .segmenter import *
 from .segmenter_test import train_segmenter_test
 from .segmenter_parallel import train_segmenter_parallel
 from .memory_test import train_memory_test

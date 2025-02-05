@@ -3,7 +3,7 @@ import numpy as np
 import os
 from typing import Literal, Tuple, Union
 
-from mymi.types import Image, PointMM3D, ImageSpacing3D, ImageSize3D
+from mymi.typing import Image, PointMM3D, ImageSpacing3D, ImageSize3D
 from mymi.utils import from_itk, itk_convert_LPS_and_RAS, to_itk
 
 def itk_load_transform(

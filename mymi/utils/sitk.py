@@ -3,21 +3,19 @@ import os
 import SimpleITK as sitk
 from typing import Optional, Tuple
 
-from mymi.types import ImageSpacing3D, PointMM3D
+from mymi.typing import ImageSpacing3D, PointMM3D
 
 from .utils import transpose_image
 
-def sitk_convert_RAS_and_LPS(
-    direction: Optional[Tuple[float]] = None,
-    offset: Optional[PointMM3D] = None) -> Tuple[Optional[Tuple[float]], Optional[PointMM3D]]:
-    # Converts between RAS/LPS coordinate systems.
-    if direction is not None:
-        direction[0], direction[4] = -direction[0], -direction[4]
-    if offset is not None:
-        offset = list(offset)
-        offset[0], offset[1] = -offset[0], -offset[1]
-        offset = tuple(offset)
-    return direction, offset
+def sitk_convert_point_RAS_LPS(data: Tuple[float]) -> Tuple[float]:
+    data = list(data)
+    data[0], data[1] = -data[0], -data[1]
+    return tuple(data)
+
+def sitk_convert_matrix_RAS_LPS(data: np.ndarray) -> np.ndarray:
+    assert data.shape == (3, 3) or data.shape == (4, 4)
+    data[0][0], data[1][1] = -data[0][0], -data[1][1]
+    return data
 
 def from_sitk(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     data = sitk.GetArrayFromImage(img)
@@ -59,8 +57,8 @@ def save_sitk_transform(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     sitk.WriteTransform(transform, filepath)
 
-def to_sitk(
-    data: np.ndarray,
+def to_sitk_image(
+    data: np.ndarray,   # Fed in using RAS coordinates - our standard.
     spacing: ImageSpacing3D,
     offset: PointMM3D,
     is_vector: bool = False) -> sitk.Image:
@@ -86,7 +84,9 @@ def to_sitk(
     # whereas sitk uses LPS coordinates. Convert direction/offset values to
     # LPS coordinates.
     direction = tuple(np.eye(3).flatten())
-    direction, offset = sitk_convert_RAS_and_LPS(direction=direction, offset=offset)
+    direction = np.eye(3)
+    direction = sitk_convert_matrix_RAS_LPS(direction).flatten()
+    offset = sitk_convert_point_RAS_LPS(offset)
     img.SetDirection(direction)
     img.SetOrigin(offset)
 

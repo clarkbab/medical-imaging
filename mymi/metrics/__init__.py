@@ -1,10 +1,9 @@
-import torch
-
-from .intensity import mean_intensity, snr
-from .dice import batch_mean_dice, dice
-from .distances import all_distances, apl, batch_mean_all_distances, extent_centre_distance, get_encaps_dist_mm, get_encaps_dist_vox, hausdorff_distance, mean_surface_distance, surface_dice, surface_distances, distances_deepmind
-from .registration import ncc, tre
-from .volume import volume
+from .batch import *
+from .dice import *
+from .distances import *
+from .intensity import *
+from .registration import *
+from .volume import *
 
 # In which direction does the metric improve?
 # Higher is better (True) or lower is better (False).

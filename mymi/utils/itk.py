@@ -4,7 +4,7 @@ import numpy as np
 import os
 from typing import Optional, Tuple, Union
 
-from mymi.types import ImageSpacing3D, PointMM3D
+from mymi.typing import ImageSpacing3D, PointMM3D
 
 def itk_convert_LPS_and_RAS(
     direction: Optional[Union[np.ndarray]] = None,

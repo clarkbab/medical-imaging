@@ -5,7 +5,7 @@ from typing import Optional
 
 from mymi import config
 from mymi.reporting.models import load_model_manifest
-from mymi.types import ModelName
+from mymi.typing import ModelName
 
 CKPT_KEYS = [
     'epoch',

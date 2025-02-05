@@ -1,6 +1,6 @@
 import nrrd
 
-from mymi.types import *
+from mymi.typing import *
 
 def load_nrrd(filepath: str) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     data, header = nrrd.read(filepath)

@@ -10,9 +10,9 @@ from mymi import config
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.losses import DiceLoss, DiceWithFocalLoss
-from mymi.models.systems import MultiSegmenter
+from mymi.models.lightning_modules import MultiSegmenter
 from mymi.reporting.loaders import get_multi_loader_manifest
-from mymi.transforms import centre_crop_or_pad_3D
+from mymi.transforms import centre_crop_or_pad
 from mymi.utils import arg_to_list
 
 DATETIME_FORMAT = '%Y_%m_%d_%H_%M_%S'
@@ -63,11 +63,11 @@ def train_localiser_replan(
         # Crop input.
         crop = list(input.shape)
         crop[0] = int(crop_x_mm / spacing[0])
-        input = centre_crop_or_pad_3D(input, crop)
+        input = centre_crop_or_pad(input, crop)
 
         # Crop labels.
         for r in labels.keys():
-            labels[r] = centre_crop_or_pad_3D(labels[r], crop)
+            labels[r] = centre_crop_or_pad(labels[r], crop)
 
         return input, labels
 

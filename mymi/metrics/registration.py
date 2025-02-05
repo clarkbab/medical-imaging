@@ -1,6 +1,6 @@
 import numpy as np
 
-from mymi.types import ImageSpacing3D
+from mymi.typing import ImageSpacing3D
 
 def ncc(
     a: np.ndarray,

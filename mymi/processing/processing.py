@@ -11,15 +11,15 @@ from time import time
 from tqdm import tqdm
 from typing import Callable, Dict, List, Optional, Union
 
-from mymi.dataset import DicomDataset, TrainingDataset
-from mymi.dataset.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtstructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
-from mymi.dataset.nifti import Modality
-from mymi.dataset.training import create as create_training, exists as exists_training, recreate as recreate_training
+from mymi.datasets import DicomDataset, TrainingDataset
+from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtstructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
+from mymi.datasets.nifti import Modality
+from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.regions import regions_to_list, to_255
-from mymi.transforms import crop_3D, resample
-from mymi.types import BoxMM3D, ImageSizeMM3D, ImageSpacing3D, PatientID, PatientLandmarks, PatientRegion, PatientRegions
+from mymi.transforms import crop, resample
+from mymi.typing import BoxMM3D, ImageSizeMM3D, ImageSpacing3D, PatientID, PatientLandmarks, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 def convert_brain_crop_to_training(
@@ -152,7 +152,7 @@ def convert_brain_crop_to_training(
                     )
 
                 # Crop input.
-                input = crop_3D(input, crop)
+                input = crop(input, crop)
 
             # Save input.
             __create_training_input(set_t, i, input)
@@ -177,7 +177,7 @@ def convert_brain_crop_to_training(
 
                 # Crop/pad.
                 if crop_mm is not None:
-                    label = crop_3D(label, crop)
+                    label = crop(label, crop)
 
                 # Round data after resampling to save on disk space.
                 if round_dp is not None:

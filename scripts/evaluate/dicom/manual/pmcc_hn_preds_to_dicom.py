@@ -5,7 +5,7 @@ import sys
 filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(up(filepath)))))
 sys.path.append(mymi_dir)
-from mymi.evaluation.dataset.dicom import create_dose_evaluation
+from mymi.evaluations.datasets.dicom import create_dose_evaluation
 
 DATASETS = ('PMCC-HN-TEST-LOC','PMCC-HN-TRAIN-LOC') # Code links from 'training' set to nifti set.
 REGIONS = (

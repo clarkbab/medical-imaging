@@ -15,7 +15,7 @@ libgcc_s = ctypes.CDLL('libgcc_s.so.1')
 from mymi import config
 from mymi import logging
 from mymi.losses import DiceWithFocalLoss
-from mymi.models.networks import MultiUNet3D
+from mymi.models.architectures import MultiUNet3D
 from mymi.reporting.gpu_usage import record_gpu_usage
 from mymi.utils import Timer
 

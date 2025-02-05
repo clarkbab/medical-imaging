@@ -16,10 +16,10 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
-from mymi.dataset.nifti import NiftiDataset
+from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.types import PatientRegions
+from mymi.typing import PatientRegions
 
 VMXPATH="/home/baclark/code/voxelmorph"
 

@@ -1,9 +1,9 @@
 import SimpleITK as sitk
-from typing import Tuple
+from typing import *
 
 from mymi import logging
-from mymi.types import CtImage, Image, ImageSpacing3D, PointMM3D
-from mymi.utils import from_sitk, to_sitk
+from mymi.typing import *
+from mymi.utils import *
 
 def rigid_image_registration(
     moving_image: Image,
@@ -15,8 +15,8 @@ def rigid_image_registration(
     show_progress: bool = False) -> Tuple[Image, sitk.Transform]:
     # Convert to sitk images.
     fixed_size = fixed_image.shape
-    moving_sitk = to_sitk(moving_image, moving_spacing, moving_offset)
-    fixed_sitk = to_sitk(fixed_image, fixed_spacing, fixed_offset)
+    moving_sitk = to_sitk_image(moving_image, moving_spacing, moving_offset)
+    fixed_sitk = to_sitk_image(fixed_image, fixed_spacing, fixed_offset)
 
     initial_transform = sitk.CenteredTransformInitializer(fixed_sitk, moving_sitk, sitk.Euler3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
 

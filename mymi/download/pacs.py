@@ -10,7 +10,7 @@ from typing import List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi import logging
-from mymi import types
+from mymi import typing
 from mymi.utils import append_row, load_csv, save_csv
 
 # To download images from PACS, your desktop must have a static IP configured
@@ -53,7 +53,7 @@ def download_dicoms(
     save_csv(error_df, 'patient-specific-models', 'data', 'errors.csv', overwrite=True)
 
 def download_patient_dicoms(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_date: datetime,
     error_df: pd.DataFrame) -> None:
     logging.arg_log("Downloading patient DICOMS", ('pat_id', 'study_date'), (pat_id, study_date))
@@ -144,7 +144,7 @@ def download_patient_dicoms(
     return error_df
 
 def download_patient_rtdose_dicoms(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     start_date: datetime,
     end_date: datetime) -> List[Tuple[str, str]]:
     logging.arg_log("Downloading patient RTDOSE dicoms", ('pat_id', 'start_date', 'end_date'), (pat_id, start_date, end_date))
@@ -175,7 +175,7 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
     return query_results
 
 def download_patient_rtplan_dicoms(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str,
     rtplan_id: str) -> None:
     logging.arg_log("Downloading patient RTPLAN dicoms", ('pat_id', 'study_id', 'rtplan_id'), (pat_id, study_id, rtplan_id))
@@ -205,7 +205,7 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
     return query_results
 
 def download_patient_rtstruct_dicoms(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str,
     rtstruct_id: str) -> None:
     logging.arg_log("Downloading patient RTSTRUCT dicoms", ('pat_id', 'study_id', 'rtstruct_id'), (pat_id, study_id, rtstruct_id))
@@ -235,7 +235,7 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
     return query_results
 
 def download_patient_ct_dicoms(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str,
     ct_series_id: str) -> List[Tuple[str, str]]:
     logging.arg_log("Downloading patient CT dicoms", ('pat_id', 'study_id', 'ct_series_id'), (pat_id, study_id, ct_series_id))
@@ -267,7 +267,7 @@ powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key Patien
     return query_results
 
 def queryPACS(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     modality: Literal['CT', 'RTDOSE', 'RTPLAN', 'RTSTRUCT'],
     end_date: Optional[datetime] = None,
     series_id: str = '*',
@@ -345,18 +345,18 @@ def parse_date(s: str) -> datetime:
     return datetime.strptime(s, '%Y%m%d')
 
 def study_folder(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str):
     return os.path.join(config.directories.files, 'patient-specific-models', 'data', 'dcmFiles', str(pat_id), study_id)
 
 def series_folder(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str,
     modality: Literal['CT', 'RTDOSE', 'RTPLAN', 'RTSTRUCT']) -> str:
     return os.path.join(study_folder(pat_id, study_id), modality)
 
 def image_filepath(
-    pat_id: types.PatientID,
+    pat_id: typing.PatientID,
     study_id: str,
     modality: Literal['CT', 'RTDOSE', 'RTPLAN', 'RTSTRUCT'],
     sop_id: str) -> str:
