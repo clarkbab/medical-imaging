@@ -18,7 +18,7 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
 from mymi.models.lightning_modules import Localiser
-from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_patient, plot_segmenter_prediction
+from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_patient, plot_segmenter_predictions
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
 from mymi.typing import Axis, ModelName, PatientRegion, PatientRegions
@@ -559,7 +559,7 @@ def create_segmenter_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_predictions(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 

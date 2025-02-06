@@ -735,7 +735,7 @@ def create_multi_segmenter_heatmap_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_predictions(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 
@@ -991,7 +991,7 @@ def create_segmenter_prediction_figures(
             for view, page_coord in zip(views, img_coords):
                 # Add image to report.
                 filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_prediction(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
+                plot_segmenter_predictions(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
                 pdf.image(filepath, *page_coord, w=img_width, h=img_height)
                 os.remove(filepath)
 

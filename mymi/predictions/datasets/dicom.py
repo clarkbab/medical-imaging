@@ -13,14 +13,12 @@ from mymi.datasets.dicom import DicomDataset, ROIData, RtstructConverter
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.models.lightning_modules import Localiser, MultiSegmenter, Segmenter
+from mymi.models.lightning_modules import MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import to_255, RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
 from mymi.typing import Box3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
-
-from ..prediction import get_localiser_prediction as get_localiser_prediction_base
 
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
@@ -86,61 +84,6 @@ def create_all_multi_segmenter_predictions(
         filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
-
-def create_segmenter_predictions(
-    dataset: str,
-    localiser: ModelName,
-    segmenter: ModelName,
-    region: PatientRegions = 'all') -> None:
-    # Load gpu if available.
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
-    else:
-        device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    # Load patients.
-    set = ds.get(dataset, 'dicom')
-    pats = set.list_patients(regions=region)
-
-    # Load models.
-    localiser_args = localiser
-    segmenter_args = segmenter
-    localiser = Localiser.load(*localiser)
-    segmenter = Segmenter.load(*segmenter)
-
-    # Create RTSTRUCT info.
-    rt_info = {
-        'label': 'MYMI',
-        'institution-name': 'MYMI'
-    }
-
-    for pat in tqdm(pats):
-        # Get segmentation.
-        seg = get_patient_segmentation(set, pat, localiser, segmenter, device=device)
-
-        # Load reference CT dicoms.
-        cts = set.patient(pat).get_cts()
-
-        # Create RTSTRUCT dicom.
-        rtstruct = RtstructConverter.create_rtstruct(cts, rt_info)
-
-        # Create ROI data.
-        roi_data = ROIData(
-            colour=list(to_255(RegionColours.Parotid_L)),
-            data=seg,
-            name=region
-        )
-
-        # Add ROI.
-        RtstructConverter.add_roi_contour(rtstruct, roi_data, cts)
-
-        # Save in folder.
-        filename = f"{pat}.dcm"
-        filepath = os.path.join(set.path, 'predictions', 'two-stage', f"{localiser_args[0]}-{segmenter_args[0]}", f"{localiser_args[1]}-{segmenter_args[1]}", f"{localiser_args[2]}-{segmenter_args[2]}", filename) 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        rtstruct.save_as(filepath)
 
 def create_dataset(
     dataset: str,

@@ -17,7 +17,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Localiser, MultiSegmenter, Segmenter
 from mymi.postprocessing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, truncate_spine
-from mymi.transforms import centre_crop, centre_pad_4D, crop_or_pad, crop_or_pad, resample, resample_multi_channel
+from mymi.transforms import centre_crop, centre_pad_4D, crop_or_pad, crop_or_pad, resample
 from mymi.typing import ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegions, Point3D
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode, load_csv
 
@@ -262,7 +262,7 @@ def get_multi_segmenter_prediction(
     pred = centre_pad_4D(pred, resampled_input_size)
 
     # Resample to original spacing.
-    pred = resample_multi_channel(pred, spacing=model_spacing, output_spacing=input_spacing)
+    pred = resample(pred, spacing=model_spacing, output_spacing=input_spacing)
     # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
     crop_box = ((0, 0, 0), input_size)
     pred = crop_or_pad(pred, crop_box)

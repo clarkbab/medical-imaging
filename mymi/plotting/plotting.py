@@ -37,8 +37,11 @@ class AltHyp(Enum):
 def plot_histogram(
     data: np.ndarray,
     n_bins: int = 100,
-    title: Optional[str] = None) -> None:
+    title: Optional[str] = None,
+    x_lim: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
     plt.hist(data, bins=n_bins)
+    if x_lim is not None:
+        plt.xlim(x_lim)
     if title is not None:
         plt.title(title)
     plt.show()
@@ -438,7 +441,7 @@ def plot_patients_matrix(
     figsize: Tuple[int, int] = (10, 10),
     landmark_datas: Optional[Union[Landmarks, List[Landmarks]]] = None,
     region_datas: Optional[Union[RegionImages, List[RegionImages]]] = None,
-    views: Union[Axis, List[Axis]] = Axis.X,
+    views: Union[Axis, List[Axis], Literal['all']] = Axis.X,
     **kwargs) -> None:
     # Broadcast args to length of plot_ids.
     plot_ids = arg_to_list(plot_ids, str)
@@ -450,6 +453,8 @@ def plot_patients_matrix(
     landmark_datas = arg_to_list(landmark_datas, (None, Landmarks), length=n_rows)
     region_datas = arg_to_list(region_datas, (None, RegionImages), length=n_rows)
     views = arg_to_list(views, (int, Axis))
+    if views == 'all':
+        views = tuple(list(range(3)))
     n_cols = len(views)
 
     # Convert figsize from cm to inches.
@@ -659,6 +664,13 @@ def plot_patient(
                 width, level = window
             vmin = level - (width / 2)
             vmax = level + (width / 2)
+
+            # Check that CT data isn't going to be hidden.
+            ct_min, ct_max = ct_data.min(), ct_data.max()
+            ct_width = ct_max - ct_min
+            f = 0.1
+            if ct_width < f * width:
+                logging.warning(f"CT data range ({ct_min}, {ct_max}) is less than {f} * window range ({vmin}, {vmax}). You may be looking at grey - use a custom window (level, width).")
         else:
             vmin = ct_data.min()
             vmax = ct_data.max()
@@ -2433,8 +2445,10 @@ def plot_registration(
         if fixed_crop is not None:
             background = crop(background, __reverse_box_coords_2D(fixed_crop))
         axs[2 * n_figs - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
-        __plot_region_data(fixed_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
-        __plot_region_data(moved_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
+        if fixed_region_data is not None:
+            __plot_region_data(fixed_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
+        if moved_region_data is not None:
+            __plot_region_data(moved_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
 
 def apply_region_labels(
     region_labels: Dict[str, str],

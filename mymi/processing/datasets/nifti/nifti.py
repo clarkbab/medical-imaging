@@ -31,7 +31,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
 from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import centre_crop_or_pad, centre_crop_or_pad, crop, resample, resample_multi_channel, top_crop_or_pad
+from mymi.transforms import centre_crop_or_pad, centre_crop_or_pad, crop, resample, top_crop_or_pad
 from mymi.typing import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 

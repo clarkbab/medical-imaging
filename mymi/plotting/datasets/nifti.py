@@ -9,9 +9,8 @@ from mymi.predictions.datasets.nifti import load_registration
 from mymi.typing import *
 from mymi.utils import *
 
-from ..plotting import apply_region_labels
+from ..plotting import apply_region_labels, plot_histogram
 from ..plotting import plot_heatmap as plot_heatmap_base
-from ..plotting import plot_histogram as plot_histogram_base
 from ..plotting import plot_segmenter_predictions as plot_segmenter_predictions_base
 from ..plotting import plot_patients_matrix
 from ..plotting import plot_registration as plot_registration_base
@@ -32,7 +31,7 @@ def plot_dataset_histogram(
     ct_data = [set.patient(pat_id).ct_data for pat_id in pat_ids]
     ct_data = [c.flatten() for c in ct_data]
     ct_data = np.concatenate(ct_data)
-    plot_histogram_base(ct_data, **kwargs)
+    plot_histogram(ct_data, **kwargs)
 
 def plot_heatmap(
     dataset: str,

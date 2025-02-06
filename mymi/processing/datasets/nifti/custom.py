@@ -12,7 +12,7 @@ from mymi import logging
 from mymi.postprocessing import one_hot_encode
 from mymi.predictions.datasets.nifti.segmentation.segmentation import load_localiser_prediction
 # from mymi.processing.dataset.nifti.registration import load_patient_registration
-from mymi.transforms import resample, resample_multi_channel, crop, pad_4D
+from mymi.transforms import resample, pad
 
 def get_brain_crop(dataset, pat_id, size) -> tuple:
     set = NiftiDataset(dataset)
@@ -106,11 +106,11 @@ def convert_nnunet_single_region_predictions(
         # Reverse 'brain' cropping.
         crop = get_brain_crop(dataset, f_pat_id, input_shape_before_crop)
         pad = get_brain_pad(input_shape_before_crop, crop)
-        data = pad_4D(data, pad)
+        data = pad(data, pad)
         logging.info(f"uncropped pred: {data.shape}")
 
         # Resample to original spacing.
-        data = resample_multi_channel(data, spacing=spacing, output_spacing=orig_spacing)
+        data = resample(data, spacing=spacing, output_spacing=orig_spacing)
         logging.info(f"resampled pred: {data.shape}")
 
         # Crop to original shape - rounding errors during resampling.
