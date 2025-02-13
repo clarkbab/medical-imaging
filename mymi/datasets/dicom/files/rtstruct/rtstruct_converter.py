@@ -522,6 +522,14 @@ class RtstructConverter:
         contour.NumberOfContourPoints = 1
         contour.ContourGeometricType = 'POINT'
         contour.ContourData = list(landmark)
+        zs = np.array([float(c.ImagePositionPatient[2]) for c in ref_cts])
+        # Get the closest CT to the landmark.
+        ref_ct = ref_cts[np.abs(zs - landmark[2]).argmin()]
+        ref_image = Dataset()
+        ref_image.ReferencedSOPClassUID = ref_ct.file_meta.MediaStorageSOPClassUID
+        ref_image.ReferencedSOPInstanceUID = ref_ct.file_meta.MediaStorageSOPInstanceUID
+        contour.ContourImageSequence = dcm.sequence.Sequence()
+        contour.ContourImageSequence.append(ref_image)
         roi_contour.ContourSequence.append(contour)
         rtstruct.ROIContourSequence.append(roi_contour)
 
