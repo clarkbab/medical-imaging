@@ -9,13 +9,13 @@ from tqdm import tqdm
 from mymi.geometry import get_extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.models.lightning_modules import MultiSegmenter
+from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop, centre_pad, crop, pad, resample
 from mymi.typing import ImageSpacing3D, ModelName, PatientRegions
 from mymi.utils import arg_to_list
 
-def get_multi_segmenter_heatmap(
+def get_segmenter_heatmap(
     input: np.ndarray,
     input_spacing: ImageSpacing3D,
     model: Union[pl.LightningModule, ModelName],
@@ -40,7 +40,7 @@ def get_multi_segmenter_heatmap(
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
+        model = Segmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 
@@ -78,14 +78,14 @@ def get_multi_segmenter_heatmap(
     if use_crop == 'naive':
         # Apply 'naive' cropping.
         logging.info('naive cropping')
-        # This value used for MICCAI-2015 multi-segmenter only.
+        # This value used for MICCAI-2015 segmenter only.
         crop_mm = (250, 400, 500)   # With 60 mm margin (30 mm either end) for each axis.
         crop = tuple(np.round(np.array(crop_mm) / model_spacing).astype(int))
         input = centre_crop(input, crop)
     elif use_crop == 'brain':
         assert brain_label is not None
         # Convert to voxel crop.
-        # This value used for PMCC-HN-TEST/TRAIN multi-segmenter only.
+        # This value used for PMCC-HN-TEST/TRAIN segmenter only.
         crop_mm = (300, 400, 500)
         crop_voxels = tuple((np.array(crop_mm) / np.array(model_spacing)).astype(np.int32))
 

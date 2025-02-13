@@ -295,6 +295,7 @@ def convert_to_dicom(
     convert_landmarks: bool = True,
     convert_regions: bool = True,
     landmarks: PatientLandmarks = 'all',
+    landmarks_prefix: Optional[str] = 'Marker',
     pat_id_map: Optional[Dict[PatientID, PatientID]] = None,
     pat_prefix: Optional[str] = None,
     recreate_dataset: bool = True,
@@ -442,14 +443,14 @@ def convert_to_dicom(
                     ct_dicom.SliceThickness = abs(spacing[2])
 
                     if convert_ct:
-                        filepath = os.path.join(destset.path, 'data', 'patients', p_mapped, s, 'ct', d, f'{i:03d}.dcm')
+                        filepath = os.path.join(destset.path, 'data', 'raw', 'patients', p_mapped, s, 'ct', d, f'{i:03d}.dcm')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
                         ct_dicom.save_as(filepath)
                     ct_dicoms.append(ct_dicom)
 
             # Convert regions to RTSTRUCT.
             regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-            landmark_data_ids = study.list_data(Modality.REGIONS)
+            landmark_data_ids = study.list_data(Modality.LANDMARKS)
             region_data_ids = study.list_data(Modality.REGIONS)
             data_ids = np.union1d(landmark_data_ids, region_data_ids)
             for d in data_ids:
@@ -484,12 +485,14 @@ def convert_to_dicom(
                         lm_series = study.data(d, Modality.LANDMARKS)
                         lm_df = lm_series.data(landmarks=landmarks)
                         lm_names = list(lm_df['landmark-id'])
+                        if landmarks_prefix is not None:
+                            lm_names = [f"{landmarks_prefix}{l}" for l in lm_names]
                         lm_data = lm_df[list(range(3))].to_numpy()
                         for n, lm in zip(lm_names, lm_data):
                             RtstructConverter.add_roi_landmark(rtstruct, n, lm, ct_dicoms)
 
                 # Save RTSTRUCT.
-                filepath = os.path.join(destset.path, 'data', 'patients', p_mapped, s, 'rtstruct', f'{d}.dcm')
+                filepath = os.path.join(destset.path, 'data', 'raw', 'patients', p_mapped, s, 'rtstruct', f'{d}.dcm')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 rtstruct.save_as(filepath)
 

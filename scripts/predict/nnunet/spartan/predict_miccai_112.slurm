@@ -39,8 +39,7 @@ REGIONS=(
 )
 REGION=${REGIONS[$SLURM_ARRAY_TASK_ID]}
 
-FIRST_DATASET_ID=106
-DATASET_ID=$(($FIRST_DATASET_ID + $SLURM_ARRAY_TASK_ID))
+DATASET_ID=115
 echo $DATASET_ID
 
 MODEL="3d_fullres"
@@ -48,9 +47,9 @@ FOLD="all"
 PLAN="nnUNetResEncUNetPlansXXL"
 TRAINER="nnUNetTrainerNoMirroring"
 
-DATA_PATH="$nnUNet_raw/Dataset${DATASET_ID}_SINGLE_REGION_${REGION}/imagesTs"
+DATA_PATH="$nnUNet_raw/Dataset${DATASET_ID}_MULTI_REGION/imagesTs"
 echo $DATA_PATH
-PRED_PATH="$nnUNet_predictions/Dataset${DATASET_ID}/single-region/${REGION}"
+PRED_PATH="$nnUNet_predictions/Dataset${DATASET_ID}"
 echo $PRED_PATH
 
 command="nnUNetv2_predict \

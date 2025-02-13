@@ -7,6 +7,8 @@ from mymi import config
 from mymi.reporting.models import load_model_manifest
 from mymi.typing import ModelName
 
+from .architectures import layer_summary
+
 CKPT_KEYS = [
     'epoch',
     'global_step'

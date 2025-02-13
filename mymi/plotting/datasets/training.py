@@ -1,19 +1,36 @@
-from typing import Dict, Optional, Tuple, Union
+from typing import *
 
 from mymi.datasets import TrainingDataset
-from mymi.predictions.datasets.training import get_sample_localiser_prediction
-from mymi import typing
-from mymi.utils import arg_to_list
+from mymi.typing import *
+from mymi.utils import *
 
-from ..plotting import plot_distribution, plot_localiser_prediction
-from ..plotting import plot_patient as plot_patient_base
+from ..plotting import *
+
+def plot_dataset_histogram(
+    dataset: str,
+    n_samples: Optional[int] = None,
+    sample_ids: Optional[PatientIDs] = None,
+    split_id: Optional[SplitID] = None,
+    **kwargs) -> None:
+    set = TrainingDataset(dataset)
+    if split_id is None:
+        split = set.split(set.list_splits()[0])
+    else:
+        split = set.split(split_id)
+    if n_samples is not None:
+        assert sample_ids is None
+        sample_ids = split.list_samples()
+        sample_ids = sample_ids[:n_samples]
+    inputs = [split.sample(s).input for s in sample_ids]
+    inputs = np.concatenate([i.flatten() for i in inputs])
+    plot_histogram(inputs, **kwargs)
 
 def plot_patients(
     dataset: str,
     sample_idx: str,
     centre: Optional[str] = None,
-    crop: Optional[Union[str, typing.Box2D]] = None,
-    region: Optional[typing.PatientRegions] = None,
+    crop: Optional[Union[str, Box2D]] = None,
+    region: Optional[PatientRegions] = None,
     region_label: Optional[Dict[str, str]] = None,     # Gives 'regions' different names to those used for loading the data.
     **kwargs) -> None:
     regions = arg_to_list(region, str)
@@ -49,40 +66,4 @@ def plot_patients(
             crop = region_labels[crop]
 
     # Plot.
-    plot_patient_base(sample_idx, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
-
-def plot_sample_localiser_prediction(
-    dataset: str,
-    sample_idx: str,
-    region: str,
-    localiser: typing.ModelName,
-    **kwargs) -> None:
-    # Load data.
-    set = TrainingDataset(dataset, **kwargs)
-    samples = set.sample(sample_idx)
-    input = sample.input
-    label = sample.label(region=region)[region]
-    spacing = sample.spacing
-
-    # Set truncation if 'SpinalCord'.
-    truncate = True if region == 'SpinalCord' else False
-
-    # Make prediction.
-    pred = get_sample_localiser_prediction(dataset, sample_idx, localiser, truncate=truncate)
-    
-    # Plot.
-    plot_localiser_prediction(sample_idx, region, input, label, spacing, pred, **kwargs)
-
-def plot_sample_distribution(
-    dataset: str,
-    sample_idx: int,
-    figsize: Tuple[float, float] = (12, 6),
-    range: Optional[Tuple[float, float]] = None,
-    resolution: float = 10) -> None:
-    # Load data.
-    set = TrainingDataset(dataset)
-    sample = set.sample(sample_idx)
-    input = sample.input
-    
-    # Plot distribution.
-    plot_distribution(input, figsize=figsize, range=range, resolution=resolution)
+    plot_patients_matrix(sample_idx, ct_data.shape, spacing, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)

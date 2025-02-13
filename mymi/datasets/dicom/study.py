@@ -3,7 +3,7 @@ import pandas as pd
 import pydicom as dcm
 from typing import Dict, List, Optional
 
-from .files import RegionMap, RTDOSE, RTPLAN, RTSTRUCT
+from .files import RegionMap
 from .series import CtSeries, DicomSeries, Modality, RtdoseSeries, RtplanSeries, RtstructSeries, SeriesInstanceUID
 
 StudyInstanceUID = str

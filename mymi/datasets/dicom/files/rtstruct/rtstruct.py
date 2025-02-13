@@ -2,12 +2,11 @@ import collections
 import numpy as np
 import pandas as pd
 import pydicom as dcm
-from typing import Dict, List, Optional, OrderedDict, Tuple, Union
+from typing import *
 
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import PatientLandmark, PatientLandmarks, PatientRegion, PatientRegions
-from mymi.utils import arg_to_list
+from mymi.typing import *
 
 # Must import from series submodules to avoid circular import.
 from ...series.ct import CtSeries
@@ -26,7 +25,6 @@ class RTSTRUCT(DicomFile):
         self.__global_id = f"{series}:{id}"
         self.__id = id
         self.__ref_ct = None        # Lazy-loaded.
-        self.__region_dups = region_dups
         self.__region_map = region_map
         self.__series = series
 
@@ -135,18 +133,30 @@ class RTSTRUCT(DicomFile):
         lms = np.vstack(lms)
         lm_df = pd.DataFrame(lms, index=landmarks).reset_index()
         lm_df = lm_df.rename(columns={ 'index': 'landmark-id' })
+
+        # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
+        if 'patient-id' not in lm_df.columns:
+            lm_df.insert(0, 'patient-id', self.__series.study.patient.id)
+        if 'study-id' not in lm_df.columns:
+            lm_df.insert(1, 'study-id', self.__series.study.id)
+
+        # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
+        # Dicom/Nifti dataset types.
+        lm_df = lm_df.sort_values(['patient-id', 'study-id', 'landmark-id'])
+
         return lm_df
 
     def list_landmarks(
         self,
         token: str = 'Marker') -> List[str]:
-        lms = self.list_regions()
+        lms = self.list_regions(landmarks_token=None)
         lms = [l for l in lms if token in l]
         return lms
 
     def list_regions(
         self,
         # Only the regions in 'regions' should be returned, saves us from performing filtering code elsewhere.
+        landmarks_token: Optional[str] = 'Marker',
         regions: Optional[PatientRegions] = 'all',
         return_unmapped: bool = False,
         use_mapping: bool = True) -> Union[List[PatientRegion], Tuple[List[PatientRegion], List[PatientRegion]]]:
@@ -228,6 +238,13 @@ class RTSTRUCT(DicomFile):
             mapped_regions = list(sorted(mapped_regions, key=lambda r: r[1]))
         else:
             unmapped_regions = list(sorted(unmapped_regions))
+
+        # Filter landmarks.
+        if landmarks_token is not None:
+            if use_mapping:
+                mapped_regions = list(filter(lambda r: landmarks_token not in r[1], mapped_regions))
+            else:
+                unmapped_regions = list(filter(lambda r: landmarks_token not in r, unmapped_regions))
 
         # Choose return type when using mapping.
         if use_mapping:

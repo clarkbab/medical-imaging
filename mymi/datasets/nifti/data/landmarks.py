@@ -28,7 +28,6 @@ class LandmarkData(NiftiData):
     def data(
         self,
         landmarks: Optional[PatientLandmarks] = 'all',
-        n_landmarks: Optional[int] = None,
         use_image_coords: bool = False,
         **kwargs) -> Landmarks:
 
@@ -36,15 +35,15 @@ class LandmarkData(NiftiData):
         lm_df = load_csv(self.__path)
         lm_df = lm_df.rename(columns={ '0': 0, '1': 1, '2': 2 })
 
+        # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
+        # Dicom/Nifti dataset types.
+        lm_df = lm_df.sort_values('landmark-id')
+
         # Filter on landmark names.
         if landmarks is not None:
             if landmarks != 'all':
                 landmarks = regions_to_list(landmarks)
                 lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
-        
-        # Select n landmarks.
-        if n_landmarks is not None:
-            lm_df = lm_df.iloc[:n_landmarks]
 
         # Convert to image coordinates.
         if use_image_coords:

@@ -22,7 +22,7 @@ def load_registration(
     regions: Optional[PatientRegions] = None,
     regions_ignore_missing: bool = False,
     transform_format: Literal['itk', 'sitk'] = 'sitk',
-    use_image_coords: bool = False) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionImages], Optional[Landmarks]]:
+    use_image_coords: bool = False) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionLabels], Optional[Landmarks]]:
     # Load moved CT.
     if fixed_pat_id is None:
         fixed_pat_id = moving_pat_id
@@ -74,7 +74,7 @@ def load_registered_region(
     fixed_study_id: StudyID,
     model: str,
     region: PatientRegion,
-    raise_error: bool = True) -> Optional[RegionImage]:
+    raise_error: bool = True) -> Optional[RegionLabel]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, 'regions', region, f'{model}.nii.gz')
     if not os.path.exists(filepath):

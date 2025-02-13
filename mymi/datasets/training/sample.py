@@ -9,7 +9,7 @@ class TrainingSample:
     def __init__(
         self,
         split: 'TrainingSplit',
-        id: int) -> None:
+        id: SampleID) -> None:
         self.__split = split
         self.__id = id
         self.__index = None

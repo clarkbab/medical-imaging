@@ -37,7 +37,7 @@ FIRST_TASK_ID=001
 TASK_ID=$(($FIRST_TASK_ID + $SLURM_ARRAY_TASK_ID))
 
 MODEL="3d_fullres"
-TRAINER="nnUNetTrainerV2_MedNeXt_M_kernel3"
+TRAINER="nnUNetTrainerV2_MedNeXt_B_kernel3"
 FOLD="all"
 PLAN="nnUNetPlansv2.1"
 

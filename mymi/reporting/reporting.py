@@ -28,10 +28,10 @@ def get_ct_stats(
 
 def get_region_stats(
     ct_data: CtImage,
-    region_data: RegionImage,
+    region_data: RegionLabel,
     spacing: ImageSpacing3D,
     offset: Point3D,
-    brain_data: Optional[RegionImage] = None) -> List[Dict[str, Any]]:
+    brain_data: Optional[RegionLabel] = None) -> List[Dict[str, Any]]:
 
     stats = []
 

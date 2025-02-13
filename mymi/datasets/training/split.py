@@ -8,11 +8,11 @@ class TrainingSplit:
     def __init__(
         self,
         dataset: 'TrainingDataset',
-        name: str) -> None:
+        id: str) -> None:
         self.__dataset = dataset
-        self.__global_id = f"{self.__dataset}:{name}"
-        self.__name = name
-        self.__path = os.path.join(self.__dataset.path, 'data', name)
+        self.__id = id
+        self.__global_id = f"{self.__dataset}:{self.__id}"
+        self.__path = os.path.join(self.__dataset.path, 'data', self.__id)
         self.__index = None
 
     @property
@@ -23,7 +23,7 @@ class TrainingSplit:
     def index(self) -> pd.DataFrame:
         if self.__index is None:
             ds_index = self.dataset.index
-            self.__index = ds_index[ds_index['split'] == self.__name].copy()
+            self.__index = ds_index[ds_index['split'] == self.__id].copy()
         return self.__index
 
     @property

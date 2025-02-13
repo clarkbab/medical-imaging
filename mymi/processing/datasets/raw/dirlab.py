@@ -5,6 +5,7 @@ import SimpleITK as sitk
 from tqdm import tqdm
 
 from mymi import config
+from mymi.datasets import RawDataset
 from mymi.datasets.nifti import recreate
 from mymi.utils import *
 
@@ -19,11 +20,12 @@ def convert_lung_4dct_to_nifti() -> None:
     data_min, data_max = (-1024, 1000)
 
     # Convert to our NiftiDataset format.
-    filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'metadata.csv')
+    rset = RawDataset(dataset)
+    filepath = os.path.join(rset.path, 'metadata.csv')
     df = pd.read_csv(filepath)
 
     set = recreate(dataset)
-    filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'data')
+    filepath = os.path.join(set.path, 'data')
     files = list(sorted(os.listdir(filepath)))
     for f in tqdm(files):
         # print(pat_id)
@@ -32,8 +34,8 @@ def convert_lung_4dct_to_nifti() -> None:
         size = tuple(pat_info[['size-x', 'size-y', 'size-z']].tolist())
         spacing = tuple(pat_info[['spacing-x', 'spacing-y', 'spacing-z']].tolist())
         
-        # Exhale.
-        filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'data', f, 'Images', f'{pat_id}_{phase_1}-ssm.img')
+        # Inhale.
+        filepath = os.path.join(set.path, 'data', f, 'Images', f'{pat_id}_{phase_1}-ssm.img')
         img = __read_lung_4dct_image(filepath, size, sitk.sitkInt16, image_spacing=spacing)
         edata = sitk.GetArrayFromImage(img)
         edata = np.moveaxis(np.moveaxis(edata, 0, -1), 0, 1)
@@ -48,8 +50,8 @@ def convert_lung_4dct_to_nifti() -> None:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, 'study_0', 'ct', 'series_0.nii.gz')
             save_as_nifti(edata, spacing, offset, filepath)
             
-        # Exhale points.
-        filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_1}_xyz.txt')
+        # Inhale points.
+        filepath = os.path.join(set.path, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_1}_xyz.txt')
         epoints = pd.read_csv(filepath, sep='\t', header=None, engine='python')
         epoints = epoints[[0, 1, 2]]
         epoints[2] = size[2] - epoints[2]
@@ -64,8 +66,8 @@ def convert_lung_4dct_to_nifti() -> None:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, 'study_0', 'landmarks', 'series_1.csv')
             save_csv(epoints, filepath, header=True, index=False)
         
-        # Inhale.
-        filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'data', f, 'Images', f'{pat_id}_{phase_2}-ssm.img')
+        # Exhale.
+        filepath = os.path.join(set.path, 'data', f, 'Images', f'{pat_id}_{phase_2}-ssm.img')
         img = __read_lung_4dct_image(filepath, size, sitk.sitkInt16, image_spacing=spacing)
         idata = sitk.GetArrayFromImage(img)
         idata = np.moveaxis(np.moveaxis(idata, 0, -1), 0, 1)
@@ -80,8 +82,8 @@ def convert_lung_4dct_to_nifti() -> None:
             offset = (0, 0, 0)
             save_as_nifti(idata, spacing, offset, filepath)
             
-        # Inhale points.
-        filepath = os.path.join(config.directories.datasets, 'raw', dataset, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_2}_xyz.txt')
+        # Exhale points.
+        filepath = os.path.join(set.path, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_2}_xyz.txt')
         ipoints = pd.read_csv(filepath, sep='\t', header=None, engine='python')
         ipoints = ipoints[[0, 1, 2]]
         ipoints[2] = size[2] - ipoints[2]

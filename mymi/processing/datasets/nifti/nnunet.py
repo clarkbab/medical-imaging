@@ -14,6 +14,7 @@ from mymi.transforms import crop, resample
 from mymi.typing import *
 from mymi.utils import load_nifti, save_as_nifti
 
+# This is nnU-Net's v1 data format.
 def convert_to_nnunet_single_region_v1(
     # Creates a single nnU-Net 'raw' dataset per region.
     dataset: str,

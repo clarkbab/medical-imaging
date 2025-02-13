@@ -40,14 +40,24 @@ def plot_histogram(
     title: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
     plt.hist(data, bins=n_bins)
+
     if x_lim is not None:
         plt.xlim(x_lim)
     if title is not None:
         plt.title(title)
+
+    # Add stats box.
+    text = f"min/max: {data.min():.2f}/{data.max():.2f}\n\
+        mean: {data.mean():.2f}\n\
+        median: {np.median(data):.2f}\n\
+        stdev: {data.std():.2f}"
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    plt.text(0.95, 0.95, text, bbox=props, transform=plt.gca().transAxes, verticalalignment='top', horizontalalignment='right')
+
     plt.show()
 
 def __plot_region_data(
-    data: RegionImages,
+    data: RegionLabels,
     ax: mpl.axes.Axes,
     idx: int,
     aspect: float,
@@ -55,12 +65,11 @@ def __plot_region_data(
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Box2D] = None,
     escape_latex: bool = False,
-    linestyle: str = 'solid',
     legend_show_all_regions: bool = False,
     show_extent: bool = False,
     show_boundary: bool = True,
     use_cca: bool = False,
-    view: Axis = Axis.X) -> bool:
+    view: Axis = 0) -> bool:
     __assert_view(view)
 
     regions = list(data.keys()) 
@@ -107,8 +116,7 @@ def __plot_region_data(
         ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
         label = __escape_latex(region) if escape_latex else region
         ax.plot(0, 0, c=colour, label=label)
-        if show_boundary:
-            ax.contour(slice_data, colors=[colour], levels=[.5], linestyles=linestyle)
+        ax.contour(slice_data, colors=[colour], levels=[.5], linestyles='solid')
 
         # # Set ticks.
         # if crop is not None:
@@ -298,15 +306,12 @@ def plot_heatmap(
     latex: bool = False,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    linestyle_pred: str = 'solid',
-    linestyle_region: str = 'solid',
     pred_data: Optional[Dict[str, np.ndarray]] = None,
     region_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
     show_colorbar: bool = True,
     show_legend: bool = True,
-    show_pred_boundary: bool = True,
     idx: Optional[int] = None,
     view: Axis = 0, 
     **kwargs) -> None:
@@ -342,7 +347,7 @@ def plot_heatmap(
 
     # Plot patient regions.
     size = heatmap.shape
-    plot_patients_matrix(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
+    plot_patients_matrix(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -389,8 +394,7 @@ def plot_heatmap(
                     cmap = ListedColormap(((1, 1, 1, 0), colour))
                     ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
                     ax.plot(0, 0, c=colour, label=pred_label)
-                    if show_pred_boundary:
-                        ax.contour(pred_slice, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+                    ax.contour(pred_slice, colors=[colour], levels=[.5], linestyles='solid')
 
             # Plot prediction extent.
             if pred.sum() != 0 and show_pred_extent:
@@ -435,23 +439,23 @@ def plot_patients_matrix(
     plot_ids: Union[str, List[str]],
     spacings: Union[ImageSpacing3D, List[ImageSpacing3D]],
     ax: Optional[mpl.axes.Axes] = None,
-    centres: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionImage, List[Union[PatientLandmark, PatientRegion, Landmarks, RegionImage]]]] = None,
+    centres: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel, List[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
     ct_datas: Optional[Union[CtImage, List[CtImage]]] = None,
     figsize: Tuple[int, int] = (10, 10),
     landmark_datas: Optional[Union[Landmarks, List[Landmarks]]] = None,
-    region_datas: Optional[Union[RegionImages, List[RegionImages]]] = None,
-    views: Union[Axis, List[Axis], Literal['all']] = Axis.X,
+    region_datas: Optional[Union[RegionLabels, List[RegionLabels]]] = None,
+    views: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
     # Broadcast args to length of plot_ids.
     plot_ids = arg_to_list(plot_ids, str)
     n_rows = len(plot_ids)
     spacings = arg_to_list(spacings, ImageSpacing3D, length=n_rows)
-    centres = arg_to_list(centres, (None, PatientLandmark, PatientRegion, Landmarks, RegionImage), length=n_rows)
+    centres = arg_to_list(centres, (None, PatientLandmark, PatientRegion, Landmarks, RegionLabel), length=n_rows)
     crops = arg_to_list(crops, (None, str, np.ndarray, Box2D), length=n_rows)
     ct_datas = arg_to_list(ct_datas, (None, CtImage), length=n_rows)
     landmark_datas = arg_to_list(landmark_datas, (None, Landmarks), length=n_rows)
-    region_datas = arg_to_list(region_datas, (None, RegionImages), length=n_rows)
+    region_datas = arg_to_list(region_datas, (None, RegionLabels), length=n_rows)
     views = arg_to_list(views, (int, Axis))
     if views == 'all':
         views = tuple(list(range(3)))
@@ -510,12 +514,10 @@ def plot_patient(
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
-    cca: bool = False,
-    centre: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionImage]] = None,
+    centre: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel]] = None,
     close_figure: bool = True,
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
-    crop_centre_mm: Optional[Tuple[float, float]] = None,
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     ct_data: Optional[np.ndarray] = None,
     dose_alpha_min: float = 0.1,
@@ -532,12 +534,11 @@ def plot_patient(
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_show_all_regions: bool = False,
-    linestyle_region: bool = 'solid',
     linewidth: float = 0.5,
     linewidth_legend: float = 8,
     norm: Optional[Tuple[float, float]] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    region_data: Optional[RegionImages] = None,            # All data passed to 'region_data' is plotted.
+    region_data: Optional[RegionLabels] = None,            # All data passed to 'region_data' is plotted.
     savepath: Optional[str] = None,
     show_axes: bool = True,
     show_ct: bool = True,
@@ -545,7 +546,6 @@ def plot_patient(
     show_extent: bool = False,
     show_figure: bool = True,
     show_legend: bool = True,
-    show_region_boundary: bool = True,
     show_title: bool = True,
     show_title_idx: bool = True,
     show_title_view: bool = True,
@@ -555,7 +555,7 @@ def plot_patient(
     show_y_ticks: bool = True,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
-    view: Axis = Axis.X,
+    view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     **kwargs) -> None:
     __assert_idx(centre, extent_of, idx)
@@ -578,9 +578,11 @@ def plot_patient(
                 centre_point = tuple(landmark_data[landmark_data['landmark-id'] == centre][list(range(3))].iloc[0])
             elif region_data is not None and centre in region_data:
                 centre_point = __get_region_centre(region_data[centre])
+            else:
+                raise ValueError(f"No region/landmark '{centre}' found in data.")
         elif isinstance(centre, Landmarks):
             centre_point = tuple(landmark_data[list(range(3))].iloc[0])
-        elif isinstance(centre, RegionImage):
+        elif isinstance(centre, RegionLabel):
             centre_point = __get_region_centre(centre)
         idx = centre_point[view]
 
@@ -610,7 +612,7 @@ def plot_patient(
                 crop = __get_region_crop_box(region_data[crop], crop_margin, spacing, view)
         elif isinstance(crop, Landmarks):
             crop = __get_landmark_crop_box(crop, crop_margin, size, spacing, view)
-        elif isinstance(centre, RegionImage):
+        elif isinstance(centre, RegionLabel):
             crop = __get_region_crop_box(crop, crop_margin, spacing, view)
         else:
             # Crop is passed as ((x_min, x_max), (y_min, y_max)) but box uses
@@ -717,8 +719,6 @@ def plot_patient(
             crop=crop,
             escape_latex=escape_latex,
             legend_show_all_regions=legend_show_all_regions,
-            linestyle=linestyle_region,
-            show_boundary=show_region_boundary,
             show_extent=show_extent,
             view=view,
         )
@@ -853,7 +853,6 @@ def plot_localiser_prediction(
     fontsize: float = DEFAULT_FONT_SIZE,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    linestyle_pred: str = 'solid',
     alpha_pred: float = 0.5,
     pred_centre_colour: str = 'deepskyblue',
     pred_colour: str = 'deepskyblue',
@@ -864,7 +863,6 @@ def plot_localiser_prediction(
     show_label_extent: bool = True,
     show_legend: bool = True,
     show_pred_centre: bool = True,
-    show_pred_boundary: bool = True,
     show_pred_extent: bool = True,
     show_pred: bool = True,
     show_seg_patch: bool = True,
@@ -953,8 +951,7 @@ def plot_localiser_prediction(
         cmap = ListedColormap(colours)
         plt.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
         plt.plot(0, 0, c=pred_colour, label='Loc. Prediction')
-        if show_pred_boundary:
-            plt.contour(pred_slice, colors=[pred_colour], levels=[.5], linestyles=linestyle_pred)
+        plt.contour(pred_slice, colors=[pred_colour], levels=[.5], linestyles='solid')
 
     # Plot prediction extent.
     if show_pred_extent and not empty_pred:
@@ -1040,7 +1037,7 @@ def plot_localiser_prediction(
     if close_figure:
         plt.close() 
 
-def __get_region_centre(data: RegionImage) -> int:
+def __get_region_centre(data: RegionLabel) -> int:
     if data.sum() == 0:
         raise ValueError("Centre region has no foreground voxels.")
     return centre_of_extent(data)
@@ -1132,56 +1129,47 @@ def plot_distribution(
 def plot_segmenter_predictions(
     id: str,
     spacing: ImageSpacing3D,
-    pred_data: Dict[str, np.ndarray],
+    pred_data: RegionLabels,
+    alpha_diff: float = 0.7,
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
     aspect: float = None,
     ax: Optional[mpl.axes.Axes] = None,
     centre: Optional[str] = None,
-    colour: Optional[Union[str, List[str]]] = None,
-    colours_match: bool = False,
     crop: Optional[Union[str, Box2D]] = None,
-    crop_margin: float = 100,
     ct_data: Optional[np.ndarray] = None,
     escape_latex: bool = False,
     extent_of: Optional[Tuple[str, Literal[0, 1]]] = None,
-    figsize: Tuple[float, float] = (8, 8),
+    figsize: Tuple[float, float] = (36, 12),
     fontsize: float = DEFAULT_FONT_SIZE,
     idx: Optional[int] = None,
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    linestyle_pred: str = 'solid',
-    linestyle_region: str = 'solid',
-    region_data: Optional[Dict[str, np.ndarray]] = None,
+    pred_colours: Optional[Union[str, List[str]]] = None,
+    region_data: Optional[RegionLabels] = None,
     savepath: Optional[str] = None,
     show: bool = True,
     show_legend: bool = True,
     show_pred: bool = True,
-    show_pred_boundary: bool = True,
-    show_pred_extent: bool = True,
+    show_pred_extent: bool = False,
     view: Axis = 0,
     **kwargs: dict) -> None:
     __assert_idx(centre, extent_of, idx)
-    model_names = tuple(pred_data.keys())
-    n_models = len(model_names)
+    pred_regions = tuple(pred_data.keys())
+    n_pred_regions = len(pred_regions)
     n_regions = len(region_data.keys()) if region_data is not None else 0
 
     # Create plot figure/axis.
     if ax is None:
-        plt.figure(figsize=figsize)
-        ax = plt.axes(frameon=False)
+        _, axs = plt.subplots(1, 3, figsize=figsize)
     else:
         show = False
 
-    # Get unique colours.
-    if colour is None:
-        if colours_match:
-            n_colours = np.max((n_regions, n_models))
-        else:
-            n_colours = n_regions + n_models
-        colours = sns.color_palette('colorblind', n_colours)
+    # Get pred colours.
+    if pred_colours is None:
+        pred_colours = sns.color_palette('colorblind', n_regions)
     else:
-        colours = arg_to_list(colour, (str, tuple))
+        pred_colours = arg_to_list(colour, (str, tuple))
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -1192,13 +1180,13 @@ def plot_segmenter_predictions(
         })
 
     # Print prediction summary info.
-    for model_name, pred in pred_data.items():
+    for r, pred in pred_data.items():
         if pred.sum() != 0:
             volume_vox = pred.sum()
             volume_mm3 = volume_vox * np.prod(spacing)
-            logging.info(f"{model_name}: volume (vox.)={volume_vox}, volume (mm3)={volume_mm3}.")
+            logging.info(f"{r}: volume (vox.)={volume_vox}, volume (mm3)={volume_mm3}.")
         else:
-            logging.info(f"{model_name}: empty.")
+            logging.info(f"{r}: empty.")
 
     # Get idx at centre of label.
     if centre is not None:
@@ -1220,23 +1208,42 @@ def plot_segmenter_predictions(
 
     # Plot patient regions - even if no 'ct_data/region_data' we still want to plot shape as black background.
     size = pred_data[list(pred_data.keys())[0]].shape
-    region_colours = colours if colours_match else colours[:n_regions]
-    plot_patients_matrix(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, colour=region_colours, crop=crop, crop_margin=crop_margin, ct_data=ct_data, escape_latex=escape_latex, legend_loc=legend_loc, linestyle_region=linestyle_region, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
-
-    if crop is not None:
-        # Convert 'crop' to 'Box2D' type.
-        if type(crop) == str:
-            crop = __get_region_crop(region_data[crop], crop_margin, spacing, view)     # Crop was 'region_data' key.
-        elif type(crop) == np.ndarray:
-            crop = __get_region_crop(crop, crop_margin, spacing, view)                  # Crop was 'np.ndarray'.
-        else:
-            crop = tuple(zip(*crop))                                                    # Crop was 'Box2D' type.
+    okwargs = dict(
+        alpha_region=alpha_region,
+        aspect=aspect,
+        ax=axs[0],
+        colour=pred_colours,
+        crops=crop,
+        ct_datas=ct_data,
+        escape_latex=escape_latex,
+        legend_loc=legend_loc,
+        region_datas=region_data,
+        show=False,
+        show_legend=False,
+        idx=idx,
+        views=view,
+    )
+    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
 
     # Plot predictions.
-    for i in range(n_models):
-        model_name = model_names[i]
-        pred = pred_data[model_name]
-        colour = colours[i] if colours_match else colours[n_regions + i]
+    okwargs = dict(
+        aspect=aspect,
+        ax=axs[1],
+        crops=crop,
+        ct_datas=ct_data,
+        escape_latex=escape_latex,
+        legend_loc=legend_loc,
+        show=False,
+        show_legend=False,
+        idx=idx,
+        views=view,
+    )
+    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
+
+    for i in range(n_pred_regions):
+        region = pred_regions[i]
+        pred = pred_data[region]
+        colour = pred_colours[i]
 
         if pred.sum() != 0 and show_pred:
             # Get aspect ratio.
@@ -1253,10 +1260,9 @@ def plot_segmenter_predictions(
             # Plot prediction.
             if pred_slice.sum() != 0: 
                 cmap = ListedColormap(((1, 1, 1, 0), colour))
-                ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
-                ax.plot(0, 0, c=colour, label=model_name)
-                if show_pred_boundary:
-                    ax.contour(pred_slice, colors=[colour], levels=[.5], linestyles=linestyle_pred)
+                axs[1].imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+                axs[1].plot(0, 0, c=colour, label=region)
+                axs[1].contour(pred_slice, colors=[colour], levels=[.5], linestyles='solid')
 
         # Plot prediction extent.
         if pred.sum() != 0 and show_pred_extent:
@@ -1264,12 +1270,63 @@ def plot_segmenter_predictions(
             pred_extent = get_extent(pred)
 
             # Plot if extent box is in view.
-            label = f'{model_name} extent' if __box_in_plane(pred_extent, view, idx) else f'{model_name} extent (offscreen)'
-            __plot_box_slice(pred_extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
+            label = f'{region} extent' if __box_in_plane(pred_extent, view, idx) else f'{region} extent (offscreen)'
+            __plot_box_slice(pred_extent, view, ax=axs[1], colour=colour, crop=crop, label=label, linestyle='dashed')
+
+    # Plot diff.
+    okwargs = dict(
+        aspect=aspect,
+        ax=axs[2],
+        crops=crop,
+        ct_datas=ct_data,
+        escape_latex=escape_latex,
+        legend_loc=legend_loc,
+        show=False,
+        show_legend=False,
+        idx=idx,
+        views=view,
+    )
+    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
+
+    # Plot diffs.
+    # Calculate single diff across all regions.
+    label = np.zeros_like(region_data[list(region_data.keys())[0]])
+    pred = np.zeros_like(pred_data[list(pred_data.keys())[0]])
+    for i in range(n_pred_regions):
+        region = pred_regions[i]
+        label += region_data[region]
+        label = np.clip(label, a_min=0, a_max=1)  # In case over overlapping regions.
+        pred += pred_data[region]
+        pred = np.clip(pred, a_min=0, a_max=1)  # In case over overlapping regions.
+    diff = pred - label
+
+    if diff.sum() != 0:
+        # Get aspect ratio.
+        if not aspect:
+            aspect = __get_mpl_aspect(view, spacing) 
+
+        # Get slice data.
+        diff_slice = __get_mpl_slice(diff, idx, view)
+
+        # Crop the image.
+        if crop:
+            diff_slice = crop(diff_slice, __reverse_box_coords_2D(crop))
+
+        # Plot prediction.
+        cmap = ListedColormap(('red', (1, 1, 1, 0), 'green'))     # Red for false negatives, green for false positives.
+        axs[2].imshow(diff_slice, alpha=alpha_diff, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+        axs[2].plot(0, 0, c=colour, label=region)
+        axs[2].contour(diff_slice, colors=[colour], levels=[.5], linestyles='solid')
 
     # Show legend.
     if show_legend:
-        plt_legend = ax.legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
+        plt_legend = axs[0].legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
+        for l in plt_legend.get_lines():
+            l.set_linewidth(8)
+        plt_legend = axs[1].legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
+        for l in plt_legend.get_lines():
+            l.set_linewidth(8)
+        plt_legend = axs[2].legend(bbox_to_anchor=legend_bbox, fontsize=fontsize, loc=legend_loc)
         for l in plt_legend.get_lines():
             l.set_linewidth(8)
 
@@ -1286,121 +1343,6 @@ def plot_segmenter_predictions(
 
     # Revert latex settings.
     if escape_latex:
-        plt.rcParams.update({
-            "font.family": rc_params['font.family'],
-            'text.usetex': rc_params['text.usetex']
-        })
-
-def plot_segmenter_prediction_diff(
-    id: str,
-    spacing: ImageSpacing3D,
-    diff_data: Dict[str, np.ndarray],
-    alpha_diff: float = 1.0,
-    aspect: float = None,
-    ax: Optional[mpl.axes.Axes] = None,
-    centre: Optional[str] = None,
-    crop: Optional[Union[str, Box2D]] = None,
-    crop_margin: float = 100,
-    ct_data: Optional[np.ndarray] = None,
-    extent_of: Optional[str] = None,
-    figsize: Tuple[float, float] = (8, 8),
-    fontsize: float = DEFAULT_FONT_SIZE,
-    latex: bool = False,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
-    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    linestyle_diff: str = 'solid',
-    savepath: Optional[str] = None,
-    show: bool = True,
-    show_diff: bool = True,
-    show_diff_contour: bool = False,
-    show_legend: bool = True,
-    idx: Optional[int] = None,
-    view: Axis = 0,
-    **kwargs: dict) -> None:
-    __assert_idx(centre, extent_of, idx)
-    __assert_view(view)
-    diff_names = list(diff_data.keys())
-    n_diffs = len(diff_names)
-    colours = sns.color_palette('husl', n_diffs)
-
-    # Create plot figure/axis.
-    if ax is None:
-        plt.figure(figsize=figsize)
-        ax = plt.axes(frameon=False)
-
-    # Set latex as text compiler.
-    rc_params = plt.rcParams.copy()
-    if latex:
-        plt.rcParams.update({
-            "font.family": "serif",
-            'text.usetex': True
-        })
-
-    # Print diff summary info.
-    for diff_name, diff in diff_data.items():
-        logging.info(f"""
-Diff: {diff_name}""")
-        if diff.sum() != 0:
-            volume_vox = diff.sum()
-            volume_mm3 = volume_vox * np.prod(spacing)
-            logging.info(f"""
-    Volume (vox): {volume_vox}
-    Volume (mm^3): {volume_mm3:.2f}""")
-        else:
-            logging.info(f"""
-    Empty""")
-
-    # Plot CT data.
-    size = ct_data.shape
-    plot_patients_matrix(id, size, spacing, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, show=False, show_legend=False, idx=idx, view=view, **kwargs)
-
-    if crop is not None:
-        crop = tuple(zip(*crop))    # Convert from 'Box2D' to 'Box2D'.
-
-    # Plot diffs.
-    for i in range(n_diffs):
-        model_name = diff_names[i]
-        diff = diff_data[model_name]
-        colour = colours[i]
-
-        if diff.sum() != 0 and show_diff:
-            # Get aspect ratio.
-            if not aspect:
-                aspect = __get_mpl_aspect(view, spacing) 
-
-            # Get slice data.
-            slice_data = __get_mpl_slice(diff, idx, view)
-
-            # Crop the image.
-            if crop:
-                slice_data = crop(slice_data, __reverse_box_coords_2D(crop))
-
-            # Plot prediction.
-            cmap = ListedColormap(((1, 1, 1, 0), colour))
-            ax.imshow(slice_data, alpha=alpha_diff, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
-            ax.plot(0, 0, c=colour, label=model_name)
-            if show_diff_contour:
-                ax.contour(slice_data, colors=[colour], levels=[.5], linestyles=linestyle_diff)
-
-    # Show legend.
-    if show_legend:
-        plt_legend = ax.legend(bbox_to_anchor=legend_bbox_to_anchor, fontsize=fontsize, loc=legend_loc)
-        for l in plt_legend.get_lines():
-            l.set_linewidth(8)
-
-    # Save plot to disk.
-    if savepath is not None:
-        dirpath = os.path.dirname(savepath)
-        if not os.path.exists(dirpath):
-            os.makedirs(dirpath)
-        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
-        logging.info(f"Saved plot to '{savepath}'.")
-
-    if show:
-        plt.show()
-
-    # Revert latex settings.
-    if latex:
         plt.rcParams.update({
             "font.family": rc_params['font.family'],
             'text.usetex': rc_params['text.usetex']
@@ -2242,7 +2184,6 @@ def plot_registration(
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     legend_show_all_regions: bool = False,
-    linestyle_region: bool = 'solid',
     match_landmarks: bool = True,
     moved_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'moved_region_data' if 'str', else uses 'np.ndarray'.
     moved_colour: str = 'red',
@@ -2276,7 +2217,6 @@ def plot_registration(
     show_moved_landmarks: bool = True,
     show_moving: bool = True,
     show_moving_landmarks: bool = True,
-    show_region_boundary: bool = True,
     show_region_overlay: bool = True,
     show_title: bool = True,
     show_x_label: bool = True,
@@ -2286,7 +2226,7 @@ def plot_registration(
     transform: Optional[Union[itk.Transform, sitk.Transform]] = None,
     transform_format: Literal['itk', 'sitk'] = 'sitk',
     title: Optional[str] = None,
-    view: Axis = Axis.X,
+    view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
     **kwargs) -> None:
     __assert_idx(fixed_centre, extent_of, fixed_idx)

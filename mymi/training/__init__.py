@@ -11,16 +11,7 @@ from mymi.models import replace_ckpt_alias
 from mymi.typing import ModelName
 from mymi.utils import append_row, arg_to_list
 
-from .adaptive_segmenter import train_adaptive_segmenter
-from .localiser import train_localiser
-from .multi_segmenter import train_multi_segmenter
-from .multi_segmenter_convergence import train_multi_segmenter_convergence
-from .multi_segmenter_pytorch import train_multi_segmenter_pytorch
-from .localiser_replan import train_localiser_replan
 from .segmenter import *
-from .segmenter_test import train_segmenter_test
-from .segmenter_parallel import train_segmenter_parallel
-from .memory_test import train_memory_test
 
 def load_run_manifest(model: Tuple[str, str]) -> DataFrame:
     filepath = os.path.join(config.directories.runs, *model)

@@ -4,9 +4,6 @@ from typing import *
 from mymi.typing import *
 
 def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
-    if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent' expected a boolean array, got '{a.dtype}'.")
-
     # Get OAR extent.
     if a.sum() > 0:
         non_zero = np.argwhere(a != 0).astype(int)

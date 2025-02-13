@@ -9,9 +9,9 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import config
-from mymi.datasets import NiftiDataset, TrainingAdaptiveDataset, TrainingDataset
+from mymi.datasets import NiftiDataset, TrainingDataset
 from mymi.geometry import get_box, get_extent, centre_of_extent
-from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
+from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
@@ -737,93 +737,6 @@ def get_segmenter_prediction(
 
     return pred
 
-def create_adaptive_segmenter_no_oars_prediction(
-    dataset: Union[str, List[str]],
-    pat_id: Union[str, List[str]],
-    model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
-    device: Optional[torch.device] = None,
-    include_ct: bool = True,
-    savepath: Optional[str] = None,
-    **kwargs: Dict[str, Any]) -> None:
-    datasets = arg_to_list(dataset, str)
-    pat_ids = arg_to_list(pat_id, str)
-    assert len(datasets) == len(pat_ids)
-
-    # Load gpu if available.
-    if device is None:
-        if torch.cuda.is_available():
-            device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
-        else:
-            device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
-
-    # Load PyTorch model.
-    if type(model) == tuple:
-        n_gpus = 0 if device.type == 'cpu' else 1
-        model = AdaptiveSegmenter.load(model, map_location=device, n_gpus=n_gpus, region=model_region, **kwargs)
-
-    for dataset, pat_id in zip(datasets, pat_ids):
-        # Load dataset.
-        set = NiftiDataset(dataset)
-        pat = set.patient(pat_id)
-
-        logging.info(f"Creating adaptive segmenter prediction (no prior OARs{ '' if include_ct else ' or CT' }) for patient '{pat}', model '{model.name}'.")
-
-        # Make prediction.
-        pred = get_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, include_ct=include_ct, **kwargs)
-
-        # Save segmentation.
-        if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", dataset, pat_id, *model.name, 'pred.npz')
-        os.makedirs(os.path.dirname(savepath), exist_ok=True)
-        np.savez_compressed(savepath, data=pred)
-
-def create_adaptive_segmenter_prediction(
-    dataset: Union[str, List[str]],
-    pat_id: Union[str, List[str]],
-    model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
-    model_spacing: ImageSpacing3D,
-    device: Optional[torch.device] = None,
-    savepath: Optional[str] = None,
-    **kwargs: Dict[str, Any]) -> None:
-    datasets = arg_to_list(dataset, str)
-    pat_ids = arg_to_list(pat_id, str)
-    assert len(datasets) == len(pat_ids)
-
-    # Load gpu if available.
-    if device is None:
-        if torch.cuda.is_available():
-            device = torch.device('cuda:0')
-            logging.info('Predicting on GPU...')
-        else:
-            device = torch.device('cpu')
-            logging.info('Predicting on CPU...')
-
-    # Load PyTorch model.
-    if type(model) == tuple:
-        n_gpus = 0 if device.type == 'cpu' else 1
-        model = AdaptiveSegmenter.load(model, map_location=device, n_gpus=n_gpus, region=model_region, **kwargs)
-
-    for dataset, pat_id in zip(datasets, pat_ids):
-        # Load dataset.
-        set = NiftiDataset(dataset)
-        pat = set.patient(pat_id)
-
-        logging.info(f"Creating prediction for patient '{pat}', model '{model.name}'.")
-
-        # Make prediction.
-        pred = get_adaptive_segmenter_prediction(dataset, pat_id, model, model_region, model_spacing, device=device, **kwargs)
-
-        # Save segmentation.
-        if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'adaptive-segmenter', dataset, pat_id, *model.name, 'pred.npz')
-        os.makedirs(os.path.dirname(savepath), exist_ok=True)
-        np.savez_compressed(savepath, data=pred)
-
 def create_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
@@ -973,161 +886,6 @@ def create_segmenter_prediction(
             savepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, pat_id, *localiser, *segmenter.name, filename)
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
-
-def create_adaptive_segmenter_no_oars_predictions(
-    dataset: Union[str, List[str]],
-    region: PatientRegions,
-    model: Union[ModelName, pl.LightningModule],
-    include_ct: bool = True,
-    use_timing: bool = True,
-    **kwargs: Dict[str, Any]) -> None:
-    logging.arg_log(f"Creating adaptive segmenter predictions (no prior OARs{ '' if include_ct else ' or CT' })", ('dataset', 'region', 'model'), (dataset, region, model))
-    datasets = arg_to_list(dataset, str)
-    regions = regions_to_list(region)
-    test_fold = kwargs.get('test_fold', None)
-    model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
-
-    # Load gpu if available.
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
-    else:
-        device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    # Create timing table.
-    if use_timing:
-        cols = {
-            'fold': float,
-            'dataset': str,
-            'patient-id': str,
-            'region': str,
-            'device': str
-        }
-        timer = Timer(cols)
-
-    # Create test loader.
-    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
-
-    # Load PyTorch model.
-    if type(model) == tuple:
-        n_gpus = 0 if device.type == 'cpu' else 1
-        model = AdaptiveSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
-
-    # Make predictions.
-    for pat_desc_b in tqdm(iter(test_loader)):
-        if type(pat_desc_b) == torch.Tensor:
-            pat_desc_b = pat_desc_b.tolist()
-        for pat_desc in pat_desc_b:
-            dataset, pat_id = pat_desc.split(':')
-
-            # Skip pre-treatment patients.
-            if '-0' in pat_id:
-                continue
-
-            # Timing table data.
-            data = {
-                'fold': test_fold if test_fold is not None else np.nan,
-                'dataset': dataset,
-                'patient-id': pat_id,
-                'region': str(regions),
-                'device': device.type
-            }
-
-            with timer.record(data, enabled=use_timing):
-                create_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, regions, model_spacing, device=device, include_ct=include_ct, **kwargs)
-
-    # Save timing data.
-    if use_timing:
-        model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        params = {
-            'device': device.type,
-            'load_all_samples': kwargs.get('load_all_samples', False),
-            'n_folds': kwargs.get('n_folds', None),
-            'shuffle_samples': kwargs.get('shuffle_samples', True),
-            'use_grouping': kwargs.get('use_grouping', False),
-            'use_split_file': kwargs.get('use_split_file', False),
-        }
-        filepath = os.path.join(config.directories.predictions, 'timing', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct' }", encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        timer.save(filepath)
-
-def create_adaptive_segmenter_predictions(
-    dataset: Union[str, List[str]],
-    region: PatientRegions,
-    model: Union[ModelName, pl.LightningModule],
-    use_timing: bool = True,
-    **kwargs: Dict[str, Any]) -> None:
-    logging.arg_log('Creating adaptive segmenter predictions', ('dataset', 'region', 'model'), (dataset, region, model))
-    datasets = arg_to_list(dataset, str)
-    regions = regions_to_list(region)
-    test_fold = kwargs.get('test_fold', None)
-    model_spacing = TrainingAdaptiveDataset(datasets[0]).params['spacing']     # Consistency is checked when building loaders in 'MultiLoader'.
-
-    # Load gpu if available.
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        logging.info('Predicting on GPU...')
-    else:
-        device = torch.device('cpu')
-        logging.info('Predicting on CPU...')
-
-    # Create timing table.
-    if use_timing:
-        cols = {
-            'fold': float,
-            'dataset': str,
-            'patient-id': str,
-            'region': str,
-            'device': str
-        }
-        timer = Timer(cols)
-
-    # Create test loader.
-    _, _, test_loader = AdaptiveLoader.build_loaders(datasets, region=regions, **kwargs) 
-
-    # Load PyTorch model.
-    if type(model) == tuple:
-        n_gpus = 0 if device.type == 'cpu' else 1
-        model = AdaptiveSegmenter.load(model, n_gpus=n_gpus, region=regions, **kwargs)
-
-    # Make predictions.
-    for pat_desc_b in tqdm(iter(test_loader)):
-        if type(pat_desc_b) == torch.Tensor:
-            pat_desc_b = pat_desc_b.tolist()
-        for pat_desc in pat_desc_b:
-            dataset, pat_id = pat_desc.split(':')
-
-            # Skip pre-treatment patients.
-            if '-0' in pat_id:
-                continue
-
-            # Timing table data.
-            data = {
-                'fold': test_fold if test_fold is not None else np.nan,
-                'dataset': dataset,
-                'patient-id': pat_id,
-                'region': str(regions),
-                'device': device.type
-            }
-
-            with timer.record(data, enabled=use_timing):
-                create_adaptive_segmenter_prediction(dataset, pat_id, model, regions, model_spacing, device=device, **kwargs)
-
-    # Save timing data.
-    if use_timing:
-        model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        params = {
-            'device': device.type,
-            'load_all_samples': kwargs.get('load_all_samples', False),
-            'n_folds': kwargs.get('n_folds', None),
-            'shuffle_samples': kwargs.get('shuffle_samples', True),
-            'use_grouping': kwargs.get('use_grouping', False),
-            'use_split_file': kwargs.get('use_split_file', False),
-        }
-        filepath = os.path.join(config.directories.predictions, 'timing', 'adaptive-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        timer.save(filepath)
 
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
@@ -1496,54 +1254,6 @@ def create_segmenter_predictions(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
-def load_adaptive_segmenter_no_oars_prediction(
-    dataset: str,
-    pat_id: PatientID,
-    model: ModelName,
-    exists_only: bool = False,
-    include_ct: bool = True,
-    use_model_manifest: bool = False,
-    **kwargs) -> Union[np.ndarray, bool]:
-    pat_id = str(pat_id)
-    model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
-
-    # Load prediction.
-    filepath = os.path.join(config.directories.predictions, 'data', f"adaptive-segmenter-no-oars{ '' if include_ct else '-or-ct'}", dataset, pat_id, *model, 'pred.npz')
-    if os.path.exists(filepath):
-        if exists_only:
-            return True
-    else:
-        if exists_only:
-            return False
-        else:
-            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
-    pred = np.load(filepath)['data']
-
-    return pred
-
-def load_adaptive_segmenter_prediction(
-    dataset: str,
-    pat_id: PatientID,
-    model: ModelName,
-    exists_only: bool = False,
-    use_model_manifest: bool = False) -> Union[np.ndarray, bool]:
-    pat_id = str(pat_id)
-    model = replace_ckpt_alias(model, use_manifest=use_model_manifest)
-
-    # Load prediction.
-    filepath = os.path.join(config.directories.predictions, 'data', 'adaptive-segmenter', dataset, pat_id, *model, 'pred.npz')
-    if os.path.exists(filepath):
-        if exists_only:
-            return True
-    else:
-        if exists_only:
-            return False
-        else:
-            raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', model '{model}'. Path: {filepath}")
-    pred = np.load(filepath)['data']
-
-    return pred
-
 def load_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
@@ -1569,50 +1279,6 @@ def load_multi_segmenter_prediction(
     pred = np.load(filepath)['data']
 
     return pred
-
-def load_adaptive_segmenter_no_oars_prediction_dict(
-    dataset: str,
-    pat_id: PatientID,
-    model: ModelName,
-    model_region: PatientRegions,
-    **kwargs) -> Union[Dict[str, np.ndarray], bool]:
-    model_regions = arg_to_list(model_region, str)
-
-    # Load prediction.
-    pred = load_adaptive_segmenter_no_oars_prediction(dataset, pat_id, model, **kwargs)
-    if pred.shape[0] != len(model_regions) + 1:
-        logging.error(f"Error when processing patient '{dataset}:{pat_id}'.")
-        raise ValueError(f"Number of channels in prediction ({pred.shape[0]}) should be one more than number of 'model_regions' ({len(model_regions)}).")
-
-    # Convert to dict.
-    data = {}
-    for i, region in enumerate(model_region):
-        region_pred = pred[i + 1]
-        data[region] = region_pred
-
-    return data
-
-def load_adaptive_segmenter_prediction_dict(
-    dataset: str,
-    pat_id: PatientID,
-    model: ModelName,
-    model_region: PatientRegions,
-    **kwargs) -> Union[Dict[str, np.ndarray], bool]:
-    model_regions = arg_to_list(model_region, str)
-
-    # Load prediction.
-    pred = load_adaptive_segmenter_prediction(dataset, pat_id, model, **kwargs)
-    if pred.shape[0] != len(model_regions) + 1:
-        logging.error(f"Error when processing patient '{dataset}:{pat_id}'.")
-        raise ValueError(f"Number of channels in prediction ({pred.shape[0]}) should be one more than number of 'model_regions' ({len(model_regions)}).")
-
-    # Convert to dict.
-    data = {}
-    for i, region in enumerate(model_region):
-        region_pred = pred[i + 1]
-        data[region] = region_pred
-
-    return data
 
 def load_multi_segmenter_prediction_dict(
     dataset: str,
@@ -1810,7 +1476,7 @@ def load_moved_data(
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
     model: str,
-    regions: Optional[PatientRegions] = 'all') -> Tuple[CtImage, RegionImages]:
+    regions: Optional[PatientRegions] = 'all') -> Tuple[CtImage, RegionLabels]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     basepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)

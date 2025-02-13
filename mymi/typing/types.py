@@ -4,10 +4,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Literal, Sequence, Tuple, Union
 
-class Axis(Enum):
-    X = 0
-    Y = 1
-    Z = 2
+Axis = int
 AxisName = Literal['sagittal', 'coronal', 'axial']
 Colour = Union[str, Tuple[float, float, float]]
 Extrema = Literal[0, 1]
@@ -36,13 +33,15 @@ Box2D = Tuple[Point2D, Point2D]
 Box3D = Tuple[Point3D, Point3D]
 BoxMM2D = Tuple[PointMM2D, PointMM2D]
 BoxMM3D = Tuple[PointMM3D, PointMM3D]
+SampleID = int
 SeriesID = str
+SplitID = str
 StudyID = str
 TrainingPartition = Literal['train', 'validation', 'test']
-TrainInterval = Union[int, str]
+TrainingInterval = str
 
 Image = np.ndarray
 CtImage = Image
 LabelImage = Image
-RegionImage = LabelImage
-RegionImages = Dict[str, RegionImage]
+RegionLabel = LabelImage
+RegionLabels = Dict[str, RegionLabel]

@@ -5,7 +5,7 @@ from typing import *
 
 from mymi.datasets import NiftiDataset
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
-from mymi.predictions.datasets.nifti import load_registration
+from mymi.predictions.datasets.nifti import load_registration, load_segmenter_predictions
 from mymi.typing import *
 from mymi.utils import *
 

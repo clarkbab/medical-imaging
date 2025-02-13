@@ -10,8 +10,7 @@ class DatasetType(Enum):
     NIFTI = 1
     NRRD = 2
     TRAINING = 3
-    TRAINING_ADAPTIVE = 4
-    OTHER = 5
+    RAW = 6
 
 def to_type(name: str) -> DatasetType:
     if name.lower() == DatasetType.DICOM.name.lower():
@@ -22,9 +21,7 @@ def to_type(name: str) -> DatasetType:
         return DatasetType.NRRD
     elif name.lower() == DatasetType.TRAINING.name.lower():
         return DatasetType.TRAINING
-    elif name.lower() == 'training-adaptive':
-        return DatasetType.TRAINING_ADAPTIVE
-    elif name.lower() == DatasetType.OTHER.name.lower():
-        return DatasetType.OTHER
+    elif name.lower() == DatasetType.RAW.name.lower():
+        return DatasetType.RAW
     else:
         raise ValueError(f"Dataset type '{name}' not recognised.")

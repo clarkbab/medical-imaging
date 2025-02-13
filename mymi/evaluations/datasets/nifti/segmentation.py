@@ -522,4 +522,7 @@ def load_segmenter_holdout_evaluation(
         return True
 
     df = load_csv(filepath)
+    if 'model' not in df.columns:
+        df.insert(0, 'model', model)
+
     return df

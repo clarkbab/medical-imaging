@@ -72,6 +72,10 @@ class NiftiDataset(Dataset):
     @property
     def name(self) -> str:
         return self.__name
+
+    @property
+    def n_patients(self) -> int:
+        return len(self.list_patients())
     
     @property
     def path(self) -> str:

@@ -7,12 +7,10 @@ from .nifti import NiftiDataset
 from .nifti import list as list_nifti
 from .nrrd import NrrdDataset
 from .nrrd import list as list_nrrd
+from .raw import RawDataset
+from .raw import list as list_raw
 from .training import TrainingDataset
 from .training import list as list_training
-from .training_adaptive import TrainingAdaptiveDataset
-from .training_adaptive import list as list_training_adaptive
-from .other import OtherDataset
-from .other import list as list_other
 
 def list(type_str: str) -> List[str]:
     # Convert from string to type.
@@ -24,10 +22,10 @@ def list(type_str: str) -> List[str]:
         return list_nifti()
     elif type == DatasetType.NRRD:
         return list_nrrd()
+    elif type == DatasetType.RAW:
+        return list_raw()
     elif type == DatasetType.TRAINING:
         return list_training()
-    elif type == DatasetType.TRAINING_ADAPTIVE:
-        return list_training_adaptive()
     else:
         raise ValueError(f"Dataset type '{type}' not found.")
 
@@ -46,12 +44,10 @@ def get(
             return NiftiDataset(name, **kwargs)
         elif type == DatasetType.NRRD:
             return NrrdDataset(name, **kwargs)
+        elif type == DatasetType.RAW:
+            return RawDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
             return TrainingDataset(name, **kwargs)
-        elif type == DatasetType.TRAINING_ADAPTIVE:
-            return TrainingAdaptiveDataset(name, **kwargs)
-        elif type == DatasetType.OTHER:
-            return OtherDataset(name)
         else:
             raise ValueError(f"Dataset type '{type}' not found.")
     else:
@@ -59,11 +55,6 @@ def get(
         proc_ds = list_training()
         if name in proc_ds:
             return TrainingDataset(name, **kwargs)
-
-        # Preference 1: TRAINING ADAPTIVE.
-        proc_ds = list_training_adaptive()
-        if name in proc_ds:
-            return TrainingAdaptiveDataset(name, **kwargs)
 
         # Preference 2a: NIFTI.
         nifti_ds = list_nifti()
@@ -81,9 +72,9 @@ def get(
             return DicomDataset(name, **kwargs)
 
         # Preference : OTHER.
-        other_ds = list_other()
-        if name in other_ds:
-            return OtherDataset(name, **kwargs)
+        raw_ds = list_raw()
+        if name in raw_ds:
+            return RawDataset(name, **kwargs)
 
 def default() -> Optional[Dataset]:
     """
@@ -91,11 +82,6 @@ def default() -> Optional[Dataset]:
     """
     # Preference 1: Training.
     proc_ds = list_training()
-    if len(proc_ds) != 0:
-        return get(proc_ds[0])
-
-    # Preference 1: Training Adaptive.
-    proc_ds = list_training_adaptive()
     if len(proc_ds) != 0:
         return get(proc_ds[0])
 
@@ -113,6 +99,11 @@ def default() -> Optional[Dataset]:
     dicom_ds = list_dicom()
     if len(dicom_ds) != 0:
         return get(dicom_ds[0])
+
+    # Preference 4: RAW.
+    raw_ds = list_raw()
+    if len(raw_ds) != 0:
+        return get(raw_ds[0])
 
     return None
 

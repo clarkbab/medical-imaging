@@ -10,13 +10,13 @@ from mymi.datasets import NiftiDataset
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.models.lightning_modules import MultiSegmenter
+from mymi.models.lightning_modules import Segmenter
 from mymi.typing import ImageSpacing3D, ModelName, PatientRegion, PatientRegions
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
+from ..gradcam import get_segmenter_heatmap as get_segmenter_heatmap_base
 
-def create_multi_segmenter_heatmap(
+def create_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: Union[pl.LightningModule, ModelName],
@@ -44,13 +44,13 @@ def create_multi_segmenter_heatmap(
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
+        model = Segmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 
     # Get heatmaps.
     for dataset, pat_id in zip(datasets, pat_ids):
-        heatmap = get_multi_segmenter_heatmap(dataset, pat_id, model, model_region, model_spacing, target_region, layer, layer_spacing, device=device, **kwargs)
+        heatmap = get_segmenter_heatmap(dataset, pat_id, model, model_region, model_spacing, target_region, layer, layer_spacing, device=device, **kwargs)
 
         # Save heatmaps.
         layers = arg_to_list(layer, str)
@@ -63,7 +63,7 @@ def create_multi_segmenter_heatmap(
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             np.savez_compressed(filepath, data=heatmap)
 
-def create_multi_segmenter_heatmaps(
+def create_segmenter_heatmaps(
     dataset: Union[str, List[str]],
     model: Union[pl.LightningModule, ModelName],
     model_region: PatientRegions,
@@ -90,7 +90,7 @@ def create_multi_segmenter_heatmaps(
     # Load model.
     if isinstance(model, tuple):
         logging.info('loading model')
-        model = MultiSegmenter.load(model, region=model_region, use_softmax=True, **kwargs)
+        model = Segmenter.load(model, region=model_region, use_softmax=True, **kwargs)
         model.eval()
         model.to(device)
 

@@ -122,11 +122,6 @@ def get_segmenter_evaluation(
         for metric, value in dists.items():
             data[metric] = value
 
-        # Add 'deepmind' comparison.
-        dists = distances(pred, label, spacing, tol=tols)
-        for metric, value in dists.items():
-            data[f'dm-{metric}'] = value
-
     return data
     
 def create_multi_segmenter_evaluation(

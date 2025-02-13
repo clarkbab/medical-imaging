@@ -12,11 +12,11 @@ from mymi import config
 from mymi.datasets import NiftiDataset
 from mymi.geometry import get_box, centre_of_extent
 from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
-from mymi.loaders import AdaptiveLoader, Loader, MultiLoader
+from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import distances, dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
-from mymi.predictions.datasets.nifti import get_institutional_localiser, load_adaptive_segmenter_prediction_dict, load_adaptive_segmenter_no_oars_prediction_dict, load_multi_segmenter_prediction_dict, load_segmenter_predictions
+from mymi.predictions.datasets.nifti import get_institutional_localiser, load_multi_segmenter_prediction_dict, load_segmenter_predictions
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import ModelName, PatientRegion, PatientRegions
 from mymi.utils import append_row, arg_to_list, encode

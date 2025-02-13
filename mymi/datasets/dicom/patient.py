@@ -1,9 +1,9 @@
 from datetime import datetime
 import pandas as pd
-from typing import Any, List, Optional
+from typing import *
 
-from mymi import typing
-from mymi.utils import append_row
+from mymi.typing import *
+from mymi.utils import *
 
 from .study import DicomStudy, StudyInstanceUID
 from .files import RegionMap
@@ -13,7 +13,7 @@ class DicomPatient:
     def __init__(
         self,
         dataset: 'DicomDataset',
-        id: typing.PatientID,
+        id: PatientID,
         ct_from: Optional['DicomPatient'] = None,
         region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None,
@@ -239,7 +239,7 @@ class DicomPatient:
 
     def study(
         self,
-        id: str) -> DicomStudy:
+        id: Union[int, StudyInstanceUID]) -> DicomStudy:
         return DicomStudy(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
