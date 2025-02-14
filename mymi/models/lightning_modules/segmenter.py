@@ -301,10 +301,10 @@ class Segmenter(pl.LightningModule):
     def on_after_backward(self) -> None:
         # Save layer stats.
         if self.__save_layer_stats and self.__interval_matches(self.__layer_stats_save_interval):
-            filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'activation-stats.csv')
-            save_csv(self.__activation_stats, filepath)
-            filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'parameter-stats.csv')
-            save_csv(self.__parameter_stats, filepath)
+            filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'output-stats.csv')
+            save_csv(self.__output_stats, filepath)
+            filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'gradient-stats.csv')
+            save_csv(self.__gradient_stats, filepath)
 
     def __interval_matches(
         self,
@@ -340,7 +340,7 @@ class Segmenter(pl.LightningModule):
         return self.global_step % step == 0
     
     def __register_layer_stats_hooks(self) -> None:
-        # Create activation stats dataframe.
+        # Create output stats dataframe.
         cols = {
             'epoch': int,
             'step': int,
@@ -350,8 +350,8 @@ class Segmenter(pl.LightningModule):
             'metric': str,
             'value': float,
         }
-        self.__activation_stats = pd.DataFrame(columns=cols.keys())
-        self.__parameter_stats = pd.DataFrame(columns=cols.keys())
+        self.__output_stats = pd.DataFrame(columns=cols.keys())
+        self.__gradient_stats = pd.DataFrame(columns=cols.keys())
 
         # Only register hooks for leaf layers (no submodules).
         df = layer_summary(self.__network, params_only=False, leafs_only=True)
@@ -365,13 +365,13 @@ class Segmenter(pl.LightningModule):
         self,
         name: str) -> Callable:
         def hook(module, _, output) -> None:
-            # Save activation stats.
+            # Save output stats.
             if module.training and self.__interval_matches(self.__layer_stats_record_interval):
                 metrics = [
-                    'activation-min',
-                    'activation-max',
-                    'activation-mean',
-                    'activation-std',
+                    'output-min',
+                    'output-max',
+                    'output-mean',
+                    'output-std',
                 ]
                 values = [
                     output.min().item(),
@@ -385,11 +385,11 @@ class Segmenter(pl.LightningModule):
                         'step': self.global_step,
                         'module': name,
                         'module-type': module.__class__.__name__,
-                        'shape': str(output.shape),
+                        'shape': str(list(output.shape)),
                         'metric': m,
                         'value': v,
                     }
-                    self.__activation_stats = append_row(self.__activation_stats, data)
+                    self.__output_stats = append_row(self.__output_stats, data)
 
         return hook
 
@@ -422,10 +422,10 @@ class Segmenter(pl.LightningModule):
                         'step': self.global_step,
                         'module': name,
                         'module-type': module.__class__.__name__,
-                        'shape': str(list(p.shape)),
+                        'shape': str(list(grad_output.shape)),
                         'metric': m,
                         'value': v,
                     }
-                    self.__parameter_stats = append_row(self.__parameter_stats, data)
+                    self.__gradient_stats = append_row(self.__gradient_stats, data)
 
         return hook

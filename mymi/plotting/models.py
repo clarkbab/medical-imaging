@@ -6,18 +6,14 @@ from mymi.typing import *
 from mymi.utils import *
 
 ALL_METRICS = [
-    'activation-min',
-    'activation-max',
-    'activation-mean',
-    'activation-std',
-    'parameter-min',
-    'parameter-max',
-    'parameter-mean',
-    'parameter-std',
-    'gradient-min',
-    'gradient-max',
-    'gradient-mean',
-    'gradient-std',
+    'output-min',
+    'output-max',
+    'output-mean',
+    'output-std',
+    'gradient-output-min',
+    'gradient-output-max',
+    'gradient-output-mean',
+    'gradient-output-std',
 ]
 
 def plot_layer_stats(
@@ -28,11 +24,11 @@ def plot_layer_stats(
     metrics = arg_to_list(metrics, str, literals={ 'all': ALL_METRICS })
 
     # Load data.
-    filepath = os.path.join(config.directories.models, model[0], model[1], 'activation-stats.csv')
-    act_df = load_csv(filepath)
-    filepath = os.path.join(config.directories.models, model[0], model[1], 'parameter-stats.csv')
+    filepath = os.path.join(config.directories.models, model[0], model[1], 'output-stats.csv')
+    out_df = load_csv(filepath)
+    filepath = os.path.join(config.directories.models, model[0], model[1], 'gradient-stats.csv')
     param_df = load_csv(filepath)
-    df = pd.concat([act_df, param_df], axis=0)
+    df = pd.concat([out_df, param_df], axis=0)
     modules = arg_to_list(modules, str, literals={ 'all': df['module'].unique().tolist() })
 
     _, axs = plt.subplots(len(metrics), 1, figsize=(16, 6 * len(metrics)), gridspec_kw={ 'hspace': 0.3 }, sharex=False)
@@ -40,8 +36,8 @@ def plot_layer_stats(
     # Plot each metric.
     for ax, m in zip(axs, metrics):
         for mod in modules:
-            mod_df = df[df['module'] == mod]
-            ax.plot(mod_df['step'], mod_df[m], label=mod[1:])
+            plot_df = df[(df['module'] == mod) & (df['metric'] == m)]
+            ax.plot(plot_df['step'], plot_df['value'], label=mod[1:])
         ax.set_xlabel('Step')
         ax.set_ylabel(m)
         ax.set_xlim(df['step'].min(), df['step'].max())
