@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Optional, Union
 
 from mymi import config
 from mymi.datasets import NrrdDataset
-from mymi.geometry import get_box, centre_of_extent, get_extent_mm
+from mymi.geometry import get_box, centre_of_extent, extent_mm
 from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias

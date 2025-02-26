@@ -2,7 +2,7 @@ import numpy as np
 from surface_distance import *
 from typing import *
 
-from mymi.geometry import get_extent, centre_of_extent
+from mymi.geometry import extent, centre_of_extent
 from mymi.typing import *
 from mymi.utils import arg_to_list
 
@@ -84,8 +84,8 @@ def extent_distance(
         raise ValueError(f"Metric 'extent_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
 
     # Calculate extents.
-    a_ext = get_extent(a)
-    b_ext = get_extent(b)
+    a_ext = extent(a)
+    b_ext = extent(b)
 
     # Calculate distances.
     a = np.array(a_ext)
@@ -109,8 +109,8 @@ def get_encaps_dist_vox(
         raise ValueError(f"'get_encaps_dist_vox' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
 
     # Calculate extents.
-    a_ext = get_extent(a)
-    b_ext = get_extent(b)
+    a_ext = extent(a)
+    b_ext = extent(b)
 
     # Calculate distances.
     a = np.array(a_ext)

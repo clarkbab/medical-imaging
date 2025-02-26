@@ -2,6 +2,8 @@ import os
 import pandas as pd
 from typing import *
 
+from mymi.utils import *
+
 from .sample import TrainingSample
 
 class TrainingSplit:
@@ -30,8 +32,13 @@ class TrainingSplit:
     def path(self) -> str:
         return self.__path
 
-    def list_samples(self) -> List[int]:
+    def list_samples(
+        self,
+        regions: Optional[PatientRegions] = None) -> List[int]:
+        regions = arg_to_list(regions, PatientRegion)
         sample_ids = self.index['sample-id'].to_list()
+        if regions is not None:
+            sample_ids = [s for s in sample_ids if self.sample(s).has_regions(regions)]
         return sample_ids
 
     def sample(

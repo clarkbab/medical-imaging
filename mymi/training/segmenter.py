@@ -22,6 +22,10 @@ def train_segmenter(
     arch: str = 'unet3d:M',
     batch_size: int = 1,
     ckpt_model: bool = True,
+    loss_fn: str = 'dice',
+    loss_smoothing: float = 0,
+    lr_init: float = 1e-3,
+    ls_func: Literal['abs', 'square'] = 'square',
     n_epochs: int = 1000,
     n_gpus: int = 1,
     n_nodes: int = 1,
@@ -34,6 +38,7 @@ def train_segmenter(
     resume_run: Optional[str] = None,
     resume_ckpt: str = 'last',
     resume_ckpt_version: Optional[int] = None,
+    save_training_metrics: bool = False,
     slurm_job_id: Optional[str] = None,
     slurm_array_job_id: Optional[str] = None,
     slurm_array_task_id: Optional[str] = None,
@@ -75,7 +80,17 @@ def train_segmenter(
     tl, vl, _ = HoldoutLoader.build_loaders(dataset, **okwargs)
 
     # Create model.
-    model = Segmenter(arch=arch, name=(model_name, run_name), regions=regions)
+    okwargs = dict(
+        arch=arch,
+        loss_fn=loss_fn,
+        loss_smoothing=loss_smoothing,
+        lr_init=lr_init,
+        ls_func=ls_func,
+        name=(model_name, run_name),
+        regions=regions,
+        save_training_metrics=save_training_metrics,
+    )
+    model = Segmenter(**okwargs)
 
     # Create logger.
     if use_wandb:

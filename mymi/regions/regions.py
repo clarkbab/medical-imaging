@@ -1,6 +1,7 @@
 from enum import Enum
 
 from mymi import config
+from mymi.typing import *
 
 if config.regions.mode == 0:
     RegionNames = [
@@ -51,3 +52,9 @@ elif config.regions.mode == 1:
         Submandibular_R = 16
 
     RegionNames = [r.name for r in Regions]
+
+def regions_is_all(regions: PatientRegions) -> bool:
+    if isinstance(regions, str) and regions == 'all':
+        return True
+    else:
+        return False

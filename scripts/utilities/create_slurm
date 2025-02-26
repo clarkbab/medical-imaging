@@ -1,0 +1,101 @@
+#!/usr/bin/env python
+from datetime import timedelta
+import fire
+import os
+import sys
+from typing import *
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.typing import *
+from mymi.utils import *
+
+PARTITIONS = [
+    'gpu-h100',
+    'gpu-a100',
+    'gpu-a100-short',
+    'feit-gpu-a100',
+]
+
+def create_slurm(
+    file: str,
+    array: Optional[str] = None,
+    memory: int = 128,
+    partitions: str = 'gpu-h100',
+    queue: bool = True,
+    time: timedelta = timedelta(days=7)) -> None:
+    if partitions == 'go-fishing':
+        partitions = PARTITIONS
+    else:
+        partitions = partitions.split(',')  # Fire won't interpret as a list.
+    for p in partitions:
+        if p not in PARTITIONS:
+            raise ValueError(f"Partition {p} not recognised. Must be one of {PARTITIONS}.")
+
+        # Handle partition specifics.
+        qos = ''
+        p_memory = memory
+        p_time = time
+        if p == 'feit-gpu-a100':
+            qos = """
+#SBATCH --qos feit"""
+        elif p == 'gpu-a100-short':
+            max_memory = 120
+            if p_memory > max_memory:
+                print(f"Partition memory limit exceeded. Setting memory to {max_memory}GB.")
+                p_memory = max_memory
+            max_time = timedelta(hours=4)
+            if p_time > max_time:
+                print(f"Partition time limit exceeded. Setting time to {max_time}.")
+                p_time = max_time
+
+        # Convert time.
+        days = p_time.days
+        hours, remainder = divmod(p_time.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        # Create header.
+        header = f"""\
+#!/bin/bash
+#SBATCH --account punim1413 {qos}
+#SBATCH --partition {p}
+#SBATCH --nodes 1
+#SBATCH --mem {p_memory}G
+#SBATCH --gres gpu:1
+#SBATCH --time {days}-{hours:02}:{minutes:02}:{seconds:02}
+
+module load GCCcore/11.3.0
+module load Python/3.10.4
+source ~/venvs/medical-imaging/bin/activate
+
+version=$(python --version)
+echo $version
+
+"""
+
+        # Read main content.
+        with open(file, 'r') as f:
+            main = f.read()
+
+        # Combine.
+        content = header + main 
+
+        # Write to file.
+        p_file = file.replace('.sh', '')
+        filepath = f'{p_file}-{p}.slurm'
+        print(f"Writing to {filepath}.")
+        with open(filepath, 'w') as f:
+            f.write(content)
+
+        # Queue job.
+        if queue:
+            command = f'sbatch '
+            if array is not None:
+                command += f'--array={array} '
+            command += f'{filepath}'
+
+            print(f"Queueing job with command: {command}")
+            os.system(command)
+
+fire.Fire(create_slurm)

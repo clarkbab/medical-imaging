@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional
 
 from mymi.metrics import mean_intensity, snr
-from mymi.geometry import get_extent, get_extent_width_mm
+from mymi.geometry import extent, extent_width_mm
 from mymi.postprocessing import largest_cc_3D
 from mymi.typing import *
 
@@ -68,7 +68,7 @@ def get_region_stats(
     stats.append(data.copy())
 
     # Add OAR extent.
-    ext_width_mm = get_extent_width_mm(region_data, spacing)
+    ext_width_mm = extent_width_mm(region_data, spacing)
     if ext_width_mm is None:
         ext_width_mm = (0, 0, 0)
     data['metric'] = 'extent-mm-x'
@@ -82,9 +82,9 @@ def get_region_stats(
     stats.append(data.copy())
 
     # Add extent of largest connected component.
-    extent = get_extent(lcc_region_data)
-    if extent:
-        min, max = extent
+    ext = extent(lcc_region_data)
+    if ext:
+        min, max = ext
         extent_vox = np.array(max) - min
         extent_mm = extent_vox * spacing
     else:

@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
+def extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
     # Get OAR extent.
     if a.sum() > 0:
         non_zero = np.argwhere(a != 0).astype(int)
@@ -15,12 +15,12 @@ def get_extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
 
     return box
 
-def get_extent_mm(
+def extent_mm(
     a: np.ndarray,
     spacing: ImageSpacing3D,
     offset: Point3D) -> Optional[Union[Box2D, Box3D]]:
     if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent' expected a boolean array, got '{a.dtype}'.")
+        raise ValueError(f"'extent_mm' expected a boolean array, got '{a.dtype}'.")
 
     # Get OAR extent.
     if a.sum() > 0:
@@ -35,13 +35,13 @@ def get_extent_mm(
 
     return box_mm
 
-def get_extent_voxel(
+def extent_edge_voxel(
     a: np.ndarray,
     axis: Axis,
     end: Literal['min', 'max'],
     view_axis: Axis) -> Point3D:
     if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent' expected a boolean array, got '{a.dtype}'.")
+        raise ValueError(f"'extent' expected a boolean array, got '{a.dtype}'.")
     assert end in ('min', 'max')
 
     # Find extreme voxel.
@@ -58,28 +58,45 @@ def get_extent_voxel(
     max_voxel = tuple(axis_voxels[len(axis_voxels) // 2])
     return max_voxel
 
-def get_extent_width_vox(a: np.ndarray) -> Optional[Union[ImageSize2D, ImageSize3D]]:
+def extent_width(a: np.ndarray) -> Optional[Union[ImageSize2D, ImageSize3D]]:
     if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent_width_vox' expected a boolean array, got '{a.dtype}'.")
+        raise ValueError(f"'extent_width' expected a boolean array, got '{a.dtype}'.")
 
     # Get OAR extent.
-    extent = get_extent(a)
-    if extent:
-        min, max = extent
+    ext = extent(a)
+    if ext:
+        min, max = ext
         width = tuple(np.array(max) - min)
         return width
     else:
         return None
 
-def get_extent_width_mm(
+def extent_width_mm(
     a: np.ndarray,
     spacing: Tuple[float, float, float]) -> Optional[Union[Tuple[float, float], Tuple[float, float, float]]]:
     if a.dtype != np.bool_:
-        raise ValueError(f"'get_extent_width_mm' expected a boolean array, got '{a.dtype}'.")
+        raise ValueError(f"'extent_width_mm' expected a boolean array, got '{a.dtype}'.")
 
     # Get OAR extent in mm.
-    ext_width_vox = get_extent_width_vox(a)
+    ext_width_vox = extent_width(a)
     if ext_width_vox is None:
         return None
     ext_width = tuple(np.array(ext_width_vox) * spacing)
     return ext_width
+
+def centre_of_extent(
+    a: np.ndarray,
+    smoothed_label: bool = False) -> Optional[Union[Point2D, Point3D]]:
+    if smoothed_label:
+        a = np.round(a)
+
+    # Get extent.
+    ext = extent(a)
+
+    if ext:
+        # Find the extent centre.
+        centre = tuple(np.floor(np.array(ext).sum(axis=0) / 2).astype(int))
+    else:
+        return None
+
+    return centre

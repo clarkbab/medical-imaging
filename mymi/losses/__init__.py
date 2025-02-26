@@ -1,4 +1,4 @@
-from .dice import DiceLoss
+from .dice import *
 from .dice_with_focal import DiceWithFocalLoss
 from .focal import FocalLoss
 from .ncc import NCCLoss

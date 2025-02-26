@@ -239,7 +239,7 @@ class UNet3D(torch.nn.Module):
         n_gpus: int = 1,
         n_input_channels: int = 1,
         n_split_channels: int = 2,
-        use_affine_norm: bool = False,
+        use_affine_norm: bool = True,
         use_init: bool = False,
         use_single_downsample: bool = False,
         use_softmax: bool = True,

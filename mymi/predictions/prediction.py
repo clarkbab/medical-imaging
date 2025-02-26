@@ -4,7 +4,7 @@ import torch
 from typing import Optional
 
 from mymi import logging
-from mymi.geometry import get_extent, get_extent_width_mm
+from mymi.geometry import extent, extent_width_mm
 from mymi.models.lightning_modules import Localiser
 from mymi.regions import RegionLimits
 from mymi.transforms import crop_foreground_3D, crop_or_pad, resample, top_crop_or_pad

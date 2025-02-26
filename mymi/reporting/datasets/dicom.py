@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 from mymi.datasets.dicom import DicomDataset
 from mymi.evaluations.datasets.dicom import evaluate_model
-from mymi.geometry import get_extent
+from mymi.geometry import extent
 from mymi.regions import regions_to_list
 from mymi.typing import PatientRegions
 from mymi.utils import append_row, encode
@@ -271,7 +271,7 @@ def get_region_summary(
         # Add extents for all regions.
         for r in rs_data.keys():
             r_data = rs_data[r]
-            min, max = get_extent(r_data)
+            min, max = extent(r_data)
             for axis in axes:
                 extent_vox = max[axis] - min[axis]
                 extent_mm = extent_vox * spacing[axis]

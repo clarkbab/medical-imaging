@@ -2,8 +2,9 @@ import numpy as np
 import os
 from typing import *
 
-from mymi.regions import regions_to_list
+from mymi.regions import regions_is_all, regions_to_list
 from mymi.typing import *
+from mymi.utils import *
 
 class TrainingSample:
     def __init__(
@@ -63,15 +64,28 @@ class TrainingSample:
         # Note: 'label' should return all 'regions' required for training, not just those 
         # present for this sample, as otherwise our label volumes will have different numbers
         # of channels between samples.
-        regions = regions_to_list(regions)
+        all_regions = self.split.dataset.list_regions()
+        regions = regions_to_list(regions, literals={ 'all': all_regions })
+        
+        # Raise error if sample has no requested regions - the label will be full of zeros.
+        if not self.has_regions(regions):
+            raise ValueError(f"Sample {self.__id} has no regions {regions}.")
 
         # Extract requested 'regions'.
-        all_regions = self.split.dataset.list_regions()
         channels = [0]
         channels += [all_regions.index(r) + 1 for r in regions]
         label = label[channels]
 
         return label
+
+    def has_regions(
+        self,
+        regions: PatientRegions) -> bool:
+        if regions_is_all(regions):
+            return True
+
+        regions = regions_to_list(regions)
+        return len(np.intersect1d(regions, self.list_regions())) > 0
 
     def list_regions(self) -> List[PatientRegion]:
         all_regions = self.split.dataset.list_regions()

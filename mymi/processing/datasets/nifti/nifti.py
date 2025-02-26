@@ -21,7 +21,7 @@ from mymi.datasets.dicom import ROIData, RtstructConverter, recreate as recreate
 from mymi.datasets.training import TrainingDataset, exists as exists_training
 from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
-from mymi.geometry import get_extent, centre_of_extent
+from mymi.geometry import extent, centre_of_extent
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -141,7 +141,7 @@ def convert_replan_to_nnunet_ref_model(
                     brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
                     if spacing is not None:
                         brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
-                    brain_extent = get_extent(brain_label)
+                    brain_extent = extent(brain_label)
 
                     # Get crop coordinates.
                     # Crop origin is centre-of-extent in x/y, and max-extent in z.
@@ -329,7 +329,7 @@ def convert_replan_to_training(
                 brain_label = load_localiser_prediction(dataset, pat_id_mt, localiser)
                 if spacing is not None:
                     brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
-                brain_extent = get_extent(brain_label)
+                brain_extent = extent(brain_label)
 
                 # Get crop coordinates.
                 # Crop origin is centre-of-extent in x/y, and max-extent in z.
@@ -538,7 +538,7 @@ def convert_population_lens_crop_to_training(
                 brain_label = load_localiser_prediction(dataset, pat_id, localiser)
                 if spacing is not None:
                     brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
-                brain_extent = get_extent(brain_label)
+                brain_extent = extent(brain_label)
                 
                 if crop_method == 'low':
                     # Find lowest point containing eye/lens.
@@ -548,7 +548,7 @@ def convert_population_lens_crop_to_training(
                     for region in regions:
                         if pat.has_regions(region):
                             region_data = pat.region_data(region=region)[region]
-                            region_extent = get_extent(region_data)
+                            region_extent = extent(region_data)
                             if region_extent[0][2] < min_z:
                                 min_z = region_extent[0][2]
                                 min_region = region
@@ -765,7 +765,7 @@ def convert_replan_to_lens_crop(
             # Get brain extent.
             localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
             brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-            brain_extent = get_extent(brain_label)
+            brain_extent = extent(brain_label)
             
             # Find lowest point containing eye/lens.
             min_z = np.inf
@@ -774,7 +774,7 @@ def convert_replan_to_lens_crop(
             for eye_region in eye_regions:
                 if pat.has_regions(eye_region):
                     region_data = pat.region_data(region=eye_region)[eye_region]
-                    region_extent = get_extent(region_data)
+                    region_extent = extent(region_data)
                     if region_extent[0][2] < min_z:
                         min_z = region_extent[0][2]
                         min_region = eye_region
@@ -797,7 +797,7 @@ def convert_replan_to_lens_crop(
             # Get brain extent.
             localiser = ('localiser-Brain', 'public-1gpu-150epochs', 'best')
             brain_label = load_localiser_prediction(dataset, pat_id, localiser)
-            brain_extent = get_extent(brain_label)
+            brain_extent = extent(brain_label)
 
             # Get extent centre of first available region.
             centre_z = None

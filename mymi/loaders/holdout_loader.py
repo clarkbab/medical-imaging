@@ -62,7 +62,7 @@ class TrainingSet(Dataset):
             assert self.__spacing is not None, 'Spacing is required when transform applied to dataloader.'
 
         # Record number of samples.
-        self.__sample_ids = self.__split.list_samples()
+        self.__sample_ids = self.__split.list_samples(regions=self.__regions)
         self.__n_samples = len(self.__sample_ids)
 
         # Preload samples.
@@ -126,7 +126,7 @@ class TrainingSet(Dataset):
 
             # Convert to numpy.
             input = input.numpy()
-            label = label.numpy().astype(bool)
+            label = label.numpy().astype(np.bool_)
 
         # Add channel dimension - expected by pytorch.
         input = np.expand_dims(input, 0)

@@ -1,4 +1,5 @@
 from .batch import *
+from .classification import *
 from .dice import *
 from .distances import *
 from .intensity import *

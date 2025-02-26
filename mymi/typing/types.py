@@ -34,10 +34,13 @@ Box3D = Tuple[Point3D, Point3D]
 BoxMM2D = Tuple[PointMM2D, PointMM2D]
 BoxMM3D = Tuple[PointMM3D, PointMM3D]
 SampleID = int
+SampleIDs = Union[SampleID, Sequence[SampleID]]
 SeriesID = str
 SplitID = str
+SpartanPartition = Literal['feit-gpu-a100', 'gpu-a100', 'gpu-a100-short', 'gpu-h100']
+SpartanPartitions = Union[SpartanPartition, Sequence[SpartanPartition]]
 StudyID = str
-TrainingPartition = Literal['train', 'validation', 'test']
+TrainingSplit = Literal['train', 'validation', 'test']
 TrainingInterval = str
 
 Image = np.ndarray

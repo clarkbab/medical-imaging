@@ -15,7 +15,7 @@ from mymi.datasets import DicomDataset, TrainingDataset
 from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtstructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
 from mymi.datasets.nifti import Modality
 from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
-from mymi.geometry import get_extent
+from mymi.geometry import extent
 from mymi import logging
 from mymi.regions import regions_to_list, to_255
 from mymi.transforms import crop, resample
@@ -126,7 +126,7 @@ def convert_brain_crop_to_training(
                 brain_label = load_localiser_prediction(set.name, pat_id, localiser)
                 if spacing is not None:
                     brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
-                brain_extent = get_extent(brain_label)
+                brain_extent = extent(brain_label)
                 crop_ref = ((brain_extent[0][0] + brain_extent[1][0]) // 2, (brain_extent[0][1] + brain_extent[1][1]) // 2, brain_extent[1][2])
 
                 # Determine if asymmetric (box) or symmetric (size) crop.

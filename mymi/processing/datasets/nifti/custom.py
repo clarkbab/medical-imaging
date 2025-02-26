@@ -7,7 +7,7 @@ import sys
 from tqdm import tqdm
 
 from mymi.datasets import NiftiDataset
-from mymi.geometry import get_extent
+from mymi.geometry import extent
 from mymi import logging
 from mymi.postprocessing import one_hot_encode
 from mymi.predictions.datasets.nifti.segmentation.segmentation import load_localiser_prediction
@@ -31,7 +31,7 @@ def get_brain_crop(dataset, pat_id, size) -> tuple:
     brain_label = load_localiser_prediction(dataset, mt_pat_id, localiser)
     if spacing is not None:
         brain_label = resample(brain_label, spacing=input_spacing, output_spacing=spacing)
-    brain_extent = get_extent(brain_label)
+    brain_extent = extent(brain_label)
 
     # Get crop coordinates.
     # Crop origin is centre-of-extent in x/y, and max-extent in z.

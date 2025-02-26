@@ -10,7 +10,7 @@ from typing import *
 
 from mymi import config
 from mymi.datasets import NiftiDataset, TrainingDataset
-from mymi.geometry import get_box, get_extent, centre_of_extent
+from mymi.geometry import get_box, extent, centre_of_extent
 from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -500,7 +500,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
             create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
         brain_label = load_localiser_prediction(dataset, pat_id, localiser)
         brain_label = resample(brain_label, spacing=input_spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
+        brain_extent = extent(brain_label)
 
         # Use image extent if brain isn't present.
         if brain_extent is None:
@@ -609,7 +609,7 @@ def get_multi_segmenter_prediction(
             create_localiser_prediction(dataset, pat_id, localiser, check_epochs=check_epochs, device=device, n_epochs=n_epochs)
         brain_label = load_localiser_prediction(dataset, pat_id, localiser)
         brain_label = resample(brain_label, spacing=input_spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
+        brain_extent = extent(brain_label)
 
         # Use image extent if brain isn't present.
         if brain_extent is None:

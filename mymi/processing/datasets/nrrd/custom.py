@@ -5,7 +5,7 @@ from typing import *
 
 from mymi.datasets.nifti import recreate as recreate_nifti
 from mymi.datasets.nrrd import NrrdDataset
-from mymi.geometry import get_extent_mm
+from mymi.geometry import extent_mm
 from mymi import logging
 from mymi.predictions.datasets.nrrd import load_localiser_prediction
 from mymi.processing import write_flag
@@ -31,7 +31,7 @@ def convert_to_brain_crop(
         spacing = pat.ct_spacing
         offset = pat.ct_offset
         brain_pred = load_localiser_prediction(dataset, p, localiser)
-        brain_extent = get_extent_mm(brain_pred, spacing, offset)
+        brain_extent = extent_mm(brain_pred, spacing, offset)
 
         # Add margins.
         crop_min, crop_max = brain_extent

@@ -14,7 +14,7 @@ from uuid import uuid1
 
 from mymi import config
 from mymi.datasets import DicomDataset, NiftiDataset
-from mymi.geometry import get_extent, centre_of_extent, get_extent_width_mm
+from mymi.geometry import extent, centre_of_extent, extent_width_mm
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
@@ -126,7 +126,7 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add OAR extent.
-        ext_width_mm = get_extent_width_mm(label, spacing)
+        ext_width_mm = extent_width_mm(label, spacing)
         if ext_width_mm is None:
             ext_width_mm = (0, 0, 0)
         data['metric'] = 'extent-mm-x'
@@ -140,9 +140,9 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add extent of largest connected component.
-        extent = get_extent(lcc_label)
-        if extent:
-            min, max = extent
+        ext = extent(lcc_label)
+        if ext:
+            min, max = ext
             extent_vox = np.array(max) - min
             extent_mm = extent_vox * spacing
         else:
@@ -1292,7 +1292,7 @@ def get_object_summary(
         data = {}
 
         # Get extent.
-        min, max = get_extent(obj)
+        min, max = extent(obj)
         width = tuple(np.array(max) - min)
         width_mm = tuple(np.array(spacing) * width)
         data['extent-mm'] = str(width_mm)

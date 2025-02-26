@@ -10,7 +10,7 @@ from uuid import uuid1
 
 from mymi import config
 from mymi.datasets import TrainingDataset
-from mymi.geometry import get_extent, centre_of_extent
+from mymi.geometry import extent, centre_of_extent
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
@@ -348,7 +348,7 @@ def get_object_summary(
         data = {}
 
         # Get extent.
-        min, max = get_extent(obj)
+        min, max = extent(obj)
         width = tuple(np.array(max) - min)
         data['extent-width-vox'] = str(width)
         

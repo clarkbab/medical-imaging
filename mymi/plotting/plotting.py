@@ -18,7 +18,7 @@ import SimpleITK as sitk
 import torchio
 from typing import *
 
-from mymi.geometry import get_box, get_extent, centre_of_extent
+from mymi.geometry import get_box, extent, centre_of_extent
 from mymi import logging
 from mymi.postprocessing import largest_cc_3D
 from mymi.regions import get_region_patch_size
@@ -96,10 +96,10 @@ def __plot_region_data(
 
         # Plot extent.
         if show_extent:
-            extent = get_extent(data[region])
-            if extent is not None:
-                label = f'{region} extent' if __box_in_plane(extent, view, idx) else f'{region} extent (offscreen)'
-                __plot_box_slice(extent, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
+            ext = extent(data[region])
+            if ext is not None:
+                label = f'{region} extent' if __box_in_plane(ext, view, idx) else f'{region} extent (offscreen)'
+                __plot_box_slice(ext, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
                 show_legend = True
 
         # Skip region if not present on this slice.
@@ -342,8 +342,8 @@ def plot_heatmap(
         # Get 'idx' at min/max extent of data.
         label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
         extent_end = 0 if extent_of[1] == 'min' else 1
-        extent = get_extent(label)
-        idx = extent[extent_end][view]
+        ext = extent(label)
+        idx = ext[extent_end][view]
 
     # Plot patient regions.
     size = heatmap.shape
@@ -399,7 +399,7 @@ def plot_heatmap(
             # Plot prediction extent.
             if pred.sum() != 0 and show_pred_extent:
                 # Get prediction extent.
-                pred_extent = get_extent(pred)
+                pred_extent = extent(pred)
 
                 # Plot if extent box is in view.
                 label = f'{model_name} extent' if __box_in_plane(pred_extent, view, z) else f'{model_name} extent (offscreen)'
@@ -599,8 +599,8 @@ def plot_patient(
         eo_end = 0 if eo_end == 'min' else 1
         if postproc:
             label = postproc(label)
-        extent_voxel = get_extent_voxel(label, eo_axis, eo_end, view)
-        idx = extent[eo_end][axis]
+        ext_vox = extent(label, eo_axis, eo_end, view)
+        idx = ext_vox[eo_end][axis]
 
     # Convert 'crop' to 'Box2D' type.
     if crop is not None:
@@ -918,8 +918,8 @@ def plot_localiser_prediction(
         eo_end = 0 if eo_end == 'min' else 1
         if postproc:
             label = postproc(label)
-        extent = get_extent(label)
-        idx = extent[eo_end][axis]
+        ext = extent(label)
+        idx = ext[eo_end][axis]
 
     # Plot patient regions.
     plot_patients_matrix(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, escape_latex=escape_latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, idx=idx, view=view, **kwargs)
@@ -956,7 +956,7 @@ def plot_localiser_prediction(
     # Plot prediction extent.
     if show_pred_extent and not empty_pred:
         # Get extent of prediction.
-        pred_extent = get_extent(pred_data)
+        pred_extent = extent(pred_data)
 
         # Plot extent if in view.
         label = 'Loc. extent' if __box_in_plane(pred_extent, view, idx) else 'Loc. extent (offscreen)'
@@ -1077,7 +1077,7 @@ def __get_region_crop_box(
     spacing: ImageSpacing3D,
     view: Axis) -> Box2D:
     # Get 3D crop box.
-    extent = get_extent(data)
+    ext = extent(data)
 
     # Add crop margin.
     crop_margin_vox = tuple(np.ceil(np.array(crop_margin) / spacing).astype(int))
@@ -1198,8 +1198,8 @@ def plot_segmenter_predictions(
     if extent_of is not None:
         label = region_data[extent_of[0]] if type(extent_of[0]) == str else extent_of
         extent_end = 0 if extent_of[1] == 'min' else 1
-        extent = get_extent(label)
-        idx = extent[extent_end][view]
+        ext = extent(label)
+        idx = ext[extent_end][view]
 
     # Convert float idx to int.
     size = pred_data[list(pred_data.keys())[0]].shape
@@ -1267,7 +1267,7 @@ def plot_segmenter_predictions(
         # Plot prediction extent.
         if pred.sum() != 0 and show_pred_extent:
             # Get prediction extent.
-            pred_extent = get_extent(pred)
+            pred_extent = extent(pred)
 
             # Plot if extent box is in view.
             label = f'{region} extent' if __box_in_plane(pred_extent, view, idx) else f'{region} extent (offscreen)'
@@ -2658,3 +2658,11 @@ def __plot_landmark_data(
     if show_landmark_ids:
         for x, y, t in zip(lm_x, lm_y, lm_ids):
             ax.text(x, y, t, fontsize=fontsize, color='white')
+
+def sanitise_label(
+    s: str,
+    max_length: int = 25) -> str:
+    s = s.lstrip('_')
+    if len(s) > max_length:
+        s = s[:max_length]
+    return s

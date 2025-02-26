@@ -1,11 +1,11 @@
 import numpy as np
 
-from mymi.geometry import get_extent
+from mymi.geometry import extent
 from mymi.transforms import resample
 
 def interpolate_z(data: np.ndarray) -> np.ndarray:
     # Find "missing" slices.
-    extent = get_extent(data)
+    extent = extent(data)
     z_min = extent[0][2]
     z_max = extent[1][2]
 

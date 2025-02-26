@@ -6,7 +6,7 @@ from torch.nn.functional import one_hot
 from typing import List, Optional, Union
 from tqdm import tqdm
 
-from mymi.geometry import get_extent
+from mymi.geometry import extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
@@ -91,7 +91,7 @@ def get_segmenter_heatmap(
 
         # Get brain extent.
         brain_label = resample(brain_label, spacing=input_spacing, output_spacing=model_spacing)
-        brain_extent = get_extent(brain_label)
+        brain_extent = extent(brain_label)
 
         # Get crop coordinates.
         # Crop origin is centre-of-extent in x/y, and max-extent in z.
