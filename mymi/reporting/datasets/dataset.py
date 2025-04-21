@@ -12,7 +12,7 @@ from mymi import typing
 def generate_dataset_regions_report(
     dataset: str,
     pat_ids: typing.PatientIDs = 'all',
-    regions: typing.PatientRegions = 'all',
+    regions: typing.Regions = 'all',
     report_name: str = None) -> None:
     """
     effect: Generates a PDF report of dataset segmentations.

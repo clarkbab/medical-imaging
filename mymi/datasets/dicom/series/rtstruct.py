@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import List, Optional
 
-from mymi.typing.types import PatientRegion
+from mymi.typing.types import Region
 
 from ..files import RegionMap, RTSTRUCT, SOPInstanceUID
 from .ct import CtSeries

@@ -16,12 +16,12 @@ from mymi import logging
 from mymi.postprocessing import get_object, one_hot_encode
 from mymi.plotting.dataset.training import plot_patient
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 from mymi.utils import append_row, arg_to_list, encode
 
 def create_ct_figures_report(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
+    region: Optional[Regions] = None) -> None:
     logging.arg_log('Creating CT figures (TrainingDataset)', ('dataset', 'region'), (dataset, region))
 
     # Set PDF margins.
@@ -144,7 +144,7 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
 
 def create_region_counts_report(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
+    region: Optional[Regions] = None) -> None:
     # Get regions.
     set = TrainingDataset(dataset)
     regions = set.list_regions() if region is None else arg_to_list(region, str)
@@ -157,7 +157,7 @@ def create_region_counts_report(
 
 def create_region_figures(
     dataset: str,
-    regions: PatientRegions = 'all') -> None:
+    regions: Regions = 'all') -> None:
     # Get dataset.
     set = TrainingDataset(dataset)
 
@@ -297,7 +297,7 @@ def create_region_figures(
 
 def get_region_counts(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    region: Optional[Regions] = None) -> pd.DataFrame:
     # Get regions.
     set = TrainingDataset(dataset)
     regions = set.list_regions() if region is None else arg_to_list(region, str)
@@ -378,7 +378,7 @@ def load_ct_summary(dataset: str) -> pd.DataFrame:
 
 def load_region_counts_report(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    region: Optional[Regions] = None) -> pd.DataFrame:
     # Get regions.
     set = TrainingDataset(dataset)
     regions = set.list_regions() if region is None else arg_to_list(region, str)

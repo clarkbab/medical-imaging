@@ -6,6 +6,7 @@ from typing import *
 
 from mymi.checkpointing import get_checkpoints, get_level_checkpoints
 from mymi import logging
+from mymi.utils import *
 
 CUDA_INT_MAX = 2 ** 31 - 1
 PRINT_ENABLED = False
@@ -232,20 +233,21 @@ class UNet3D(torch.nn.Module):
         n_output_channels: int,
         ckpt_library: Literal['baseline', 'ckpt-pytorch', 'ckpt-fairscale', 'ckpt-fairscale-offload'] = 'baseline',
         ckpt_mode: Literal['', '-level'] = '',
+        devices: Union[torch.device, List[torch.device]] = torch.device('cpu'),
         double_groups: bool = False,
         halve_channels: bool = False,
         n_ckpts: int = 22,
         n_features: int = 32,   # S=16, M=32, L=64, XL=128
-        n_gpus: int = 1,
         n_input_channels: int = 1,
         n_split_channels: int = 2,
         use_affine_norm: bool = True,
         use_init: bool = False,
         use_single_downsample: bool = False,
         use_softmax: bool = True,
+        use_small_output_params: bool = False,
         **kwargs) -> None:
         super().__init__()
-        self.__n_gpus = n_gpus
+        devices = arg_to_list(devices, torch.device)
         assert not ((double_groups and halve_channels) or (double_groups and n_split_channels > 1))
 
         # Set mode flags. 
@@ -269,14 +271,13 @@ class UNet3D(torch.nn.Module):
             raise ValueError(f"'ckpt_library={ckpt_library}' not recognised.")
 
         # Assign devices based on number of GPUs.
-        if self.__n_gpus == 0:
-            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = 4 * ['cpu']
-        if self.__n_gpus == 1:
-            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = 4 * ['cuda:0']
-        elif self.__n_gpus == 2:
-            self.__device_0, self.__device_2, self.__device_1, self.__device_3 = 2 * ['cuda:0', 'cuda:1']
-        elif self.__n_gpus == 4:
-            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = ['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3']
+        assert len(devices) in (1, 2, 4)
+        if len(devices) == 1:
+            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = 4 * devices
+        elif len(devices) == 2:
+            self.__device_0, self.__device_2, self.__device_1, self.__device_3 = 2 * devices
+        else:
+            self.__device_0, self.__device_1, self.__device_2, self.__device_3 = devices
 
         # Define layers.
         self.__layers = torch.nn.ParameterList()
@@ -440,6 +441,12 @@ class UNet3D(torch.nn.Module):
                         torch.nn.init.constant_(m.bias, 0)
                 elif isinstance(m, torch.nn.ConvTranspose3d):
                     torch.nn.init.kaiming_normal_(m.weight)
+
+        if use_small_output_params:
+            logging.info(f"Setting output layer params to small values.")
+            m = self.get_submodule('_UNet3D__layers.62._LayerWrapper__layer')
+            torch.nn.init.normal_(m.weight, mean=0, std=1e-5)
+            torch.nn.init.constant_(m.bias, 0)
 
     @property
     def layers(self) -> List[torch.nn.Module]:

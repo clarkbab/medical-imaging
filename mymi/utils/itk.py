@@ -1,5 +1,4 @@
 import itk
-import logging
 import numpy as np
 import os
 from typing import Optional, Tuple, Union

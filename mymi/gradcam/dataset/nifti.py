@@ -11,7 +11,7 @@ from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
-from mymi.typing import ImageSpacing3D, ModelName, PatientRegion, PatientRegions
+from mymi.typing import ImageSpacing3D, ModelName, Region, Regions
 from mymi.utils import arg_broadcast, arg_to_list
 
 from ..gradcam import get_segmenter_heatmap as get_segmenter_heatmap_base
@@ -20,7 +20,7 @@ def create_segmenter_heatmap(
     dataset: str,
     pat_id: str,
     model: Union[pl.LightningModule, ModelName],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     target_region: str,
     layer: Union[str, List[str]],
@@ -66,9 +66,9 @@ def create_segmenter_heatmap(
 def create_segmenter_heatmaps(
     dataset: Union[str, List[str]],
     model: Union[pl.LightningModule, ModelName],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
-    target_region: PatientRegion,
+    target_region: Region,
     layer: Union[str, List[str]],
     layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
     load_all_samples: bool = False,

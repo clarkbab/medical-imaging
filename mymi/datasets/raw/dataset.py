@@ -10,9 +10,9 @@ class RawDataset(Dataset):
         name: str):
         # Create 'global ID'.
         self.__name = name
-        self.__path = os.path.join(config.directories.datasets, 'nifti', self.__name)
+        self.__path = os.path.join(config.directories.datasets, 'raw', self.__name)
         if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset 'RAW: {self.__name}' not found.")
+            raise ValueError(f"Dataset 'RAW: {self.__name}' not found. Filepath: {self.__path}")
     
     @property
     def description(self) -> str:

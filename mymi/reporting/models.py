@@ -1,12 +1,18 @@
 import os
 import pandas as pd
 from tqdm import tqdm
-from typing import List
+from typing import *
 
 from mymi import config
 from mymi.loaders import Loader
 from mymi.regions import RegionNames
-from mymi.utils import append_row, load_csv, save_csv
+from mymi.typing import *
+from mymi.utils import *
+
+def load_training_metrics(
+    model: ModelName) -> pd.DataFrame:
+    filepath = os.path.join(config.directories.models, model[0], model[1], 'training-metrics.csv')
+    return load_csv(filepath)
 
 def create_model_manifest() -> None:
     datasets = ('PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC')

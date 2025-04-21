@@ -58,8 +58,13 @@ class MedNeXtBlock(nn.Module):
             padding = 0
         )
         
-        # GeLU activations
-        self.act = nn.GELU()
+        # # GeLU activations
+        # self.act = nn.GELU()
+        # ReLU activations
+        # Use ReLU as Kaiming initialisation was derived for this activation.
+        # Plus, the ConvNeXt paper showed very minor differences when changing
+        # activation functions.
+        self.act = nn.ReLU()
         
         # Third convolution (Compression) layer with Conv3D 1x1x1
         self.conv3 = conv(

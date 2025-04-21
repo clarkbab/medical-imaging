@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+import fire
+
+from mymi.utils import create_slurm_grid
+
+fire.Fire(create_slurm_grid)

@@ -12,7 +12,7 @@ from mymi.utils import load_nifti, save_as_nifti
 def convert_predictions_to_nifti_single_region(
     dataset: str,
     dataset_id: int,
-    region: PatientRegion,
+    region: Region,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting from nnU-Net single-region predictions to NIFTI', ('dataset',), (dataset,))
 
@@ -51,7 +51,7 @@ def convert_predictions_to_nifti_single_region(
 def convert_predictions_to_nifti_multi_region(
     dataset: str,
     dataset_id: int,
-    regions: PatientRegions,
+    regions: Regions,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting from nnU-Net single-region predictions to NIFTI', ('dataset',), (dataset,))
 

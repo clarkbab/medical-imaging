@@ -21,7 +21,7 @@ from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 
 VMXPATH="/home/baclark/code/voxelmorph"
 
@@ -31,7 +31,7 @@ def predict(
     modelname: str,
     crop_images: bool = False,
     register_images: bool = True,
-    region: Optional[PatientRegions] = None) -> None:
+    region: Optional[Regions] = None) -> None:
     modelpath = os.path.join(config.directories.models, 'voxelmorph', model)
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'voxelmorph-index-paired.csv')

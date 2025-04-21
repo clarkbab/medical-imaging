@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegion, PatientRegions, SeriesID
+from mymi.typing import Region, Regions, SeriesID
 from mymi.utils import load_nrrd
 
 from .data import NrrdData
@@ -21,7 +21,7 @@ class RegionData(NrrdData):
 
     def data(
         self,
-        regions: PatientRegions = 'all',
+        regions: Regions = 'all',
         regions_ignore_missing: bool = False,
         **kwargs) -> Dict[str, np.ndarray]:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
@@ -45,7 +45,7 @@ class RegionData(NrrdData):
     # Returns 'True' if has at least one of the passed 'regions'.
     def has_regions(
         self,
-        regions: PatientRegions) -> bool:
+        regions: Regions) -> bool:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
         pat_regions = self.list_regions()
         if len(np.intersect1d(regions, pat_regions)) != 0:
@@ -57,7 +57,7 @@ class RegionData(NrrdData):
         self,
         # Only the regions in 'regions' should be returned.
         # Saves us from performing filtering code elsewhere many times.
-        regions: Optional[PatientRegions] = None) -> List[PatientRegion]:
+        regions: Optional[Regions] = None) -> List[Region]:
         regions = regions_to_list(regions)
 
         # Load regions from filenames.
@@ -79,6 +79,6 @@ class RegionData(NrrdData):
 
     def region_path(
         self,
-        region: PatientRegion) -> str:
+        region: Region) -> str:
         return os.path.join(self.__path, f'{region}.nrrd')
     

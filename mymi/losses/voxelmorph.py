@@ -3,15 +3,19 @@ import torch.nn.functional as F
 import numpy as np
 import math
 
-class NCC:
+from mymi import logging
+
+class NCC(torch.nn.Module):
     """
     Local (over window) normalized cross correlation loss.
     """
 
     def __init__(self, win=None):
+        super().__init__()
+        logging.info(f"Initialising NCC.")
         self.win = win
 
-    def loss(self, y_true, y_pred):
+    def forward(self, y_pred, y_true):
 
         Ii = y_true
         Ji = y_pred
@@ -66,12 +70,15 @@ class NCC:
         return -torch.mean(cc)
 
 
-class MSE:
+class MSE(torch.nn.Module):
     """
     Mean squared error loss.
     """
+    def __init__(self) -> None:
+        super().__init__()
+        logging.info(f"Initialising MSE.")
 
-    def loss(self, y_true, y_pred):
+    def forward(self, y_pred, y_true):
         return torch.mean((y_true - y_pred) ** 2)
 
 
@@ -89,12 +96,14 @@ class Dice:
         return -dice
 
 
-class Grad:
+class Grad(torch.nn.Module):
     """
     N-D gradient loss.
     """
 
     def __init__(self, penalty='l1', loss_mult=None):
+        super().__init__()
+        logging.info(f"Initialising Grad.")
         self.penalty = penalty
         self.loss_mult = loss_mult
 
@@ -118,14 +127,17 @@ class Grad:
 
         return df
 
-    def loss(self, _, y_pred):
+    def forward(self, y_pred):
         if self.penalty == 'l1':
             dif = [torch.abs(f) for f in self._diffs(y_pred)]
         else:
             assert self.penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % self.penalty
             dif = [f * f for f in self._diffs(y_pred)]
 
+        # None of this 'mean' stuff is mentioned in the paper.
+        # Takes mean of gradients over spatial coordinates and u-element.
         df = [torch.mean(torch.flatten(f, start_dim=1), dim=-1) for f in dif]
+        # Takes mean of gradients over x/y partials.
         grad = sum(df) / len(df)
 
         if self.loss_mult is not None:

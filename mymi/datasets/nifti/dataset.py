@@ -2,12 +2,13 @@ import numpy as np
 import os
 from pandas import DataFrame, read_csv
 import re
-from typing import Dict, List, Literal, Optional, Union
+from typing import *
 
 from mymi import config
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import PatientID, PatientRegions
+from mymi.typing import *
+from mymi.utils import *
 
 from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
@@ -101,19 +102,21 @@ class NiftiDataset(Dataset):
         pat_id: PatientID) -> bool:
         return pat_id in self.list_patients()
 
-    def list_landmarks(self) -> List[str]:
+    # 'list_landmarks' can accept 'landmarks' keyword to filter - saves code elsewhere.
+    def list_landmarks(self, *args, **kwargs) -> List[str]:
         # Load each patient.
         landmarks = []
         pat_ids = self.list_patients()
         for pat_id in pat_ids:
-            pat_landmarks = self.patient(pat_id).list_landmarks()
+            pat_landmarks = self.patient(pat_id).list_landmarks(*args, **kwargs)
             landmarks += pat_landmarks
-        landmarks = list(sorted([str(r) for r in np.unique(landmarks)]))
+        landmarks = list(sorted(np.unique(landmarks)))
         return landmarks
 
     def list_patients(
         self,
-        regions: Optional[PatientRegions] = None) -> List[PatientID]:
+        regions: Optional[Regions] = None,
+        splits: Optional[Splits] = None) -> List[PatientID]:
         regions = regions_to_list(regions)
 
         if self.__ct_from is None:
@@ -134,22 +137,52 @@ class NiftiDataset(Dataset):
                     return False
             pat_ids = list(filter(filter_fn, pat_ids))
 
+        # Filter by 'splits'.
+        if splits is not None:
+            filepath = os.path.join(self.__path, 'holdout-split.csv')
+            if not os.path.exists(filepath):
+                raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
+            split_df = load_csv(filepath)
+            splits = arg_to_list(splits, Split, literals={ 'all': self.list_splits })
+            def filter_fn(pat_id: PatientID) -> bool:
+                pat_split = split_df[split_df['patient-id'] == pat_id].iloc[0]['split']
+                if pat_split in splits:
+                    return True
+                else:
+                    return False
+            pat_ids = list(filter(filter_fn, pat_ids))
+
         return pat_ids
 
-    def list_regions(self) -> List[str]:
+    # 'list_regions' can accept 'regions' keyword to filter - saves code elsewhere.
+    def list_regions(self, *args, **kwargs) -> List[str]:
         # Load each patient.
         regions = []
         pat_ids = self.list_patients()
         for pat_id in pat_ids:
-            pat_regions = self.patient(pat_id).list_regions()
+            pat_regions = self.patient(pat_id).list_regions(*args, **kwargs)
             regions += pat_regions
         regions = list(sorted([str(r) for r in np.unique(regions)]))
         return regions
 
+    def list_splits(self) -> List[Split]:
+        filepath = os.path.join(self.__path, 'holdout-split.csv')
+        if not os.path.exists(filepath):
+            raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
+        split_df = load_csv(filepath)
+        splits = list(sorted(split_df['split'].unique()))
+        return splits
+
     def patient(
         self,
-        id: PatientID,
+        id: Optional[PatientID] = None,
+        n: Optional[int] = None,
         **kwargs) -> NiftiPatient:
+        if n is not None:
+            if id is not None:
+                raise ValueError("Cannot specify both 'id' and 'n'.")
+            id = self.list_patients()[n]
+
         # Filte indexes to include only rows relevant to the new patient.
         dicom_index = self.dicom_index[self.dicom_index['nifti-patient-id'] == str(id)].iloc[0] if self.dicom_index is not None else None
         exc_df = self.excluded_labels[self.excluded_labels['patient-id'] == str(id)] if self.excluded_labels is not None else None

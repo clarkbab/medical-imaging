@@ -9,7 +9,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.typing import ImageSpacing3D, PatientRegion, PatientRegions
+from mymi.typing import ImageSpacing3D, Region, Regions
 from mymi import datasets as ds
 from mymi.datasets.training import TrainingDataset
 from mymi.geometry import get_centre
@@ -90,7 +90,7 @@ class RegLoader:
         p_same: float = 0,
         preload_data: bool = True,
         random_seed: int = 0,
-        regions: Optional[PatientRegions] = None,
+        regions: Optional[Regions] = None,
         shuffle_samples: bool = True,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
@@ -405,7 +405,7 @@ class TrainingSet(Dataset):
         load_origin: bool = False,
         preload_data: bool = True,
         random_seed: float = 0,
-        regions: Optional[PatientRegions] = None,
+        regions: Optional[Regions] = None,
         spacing: Optional[ImageSpacing3D] = None,
         transform: torchio.transforms.Transform = None) -> None:
         self.__class_weights = class_weights

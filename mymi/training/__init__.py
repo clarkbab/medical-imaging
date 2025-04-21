@@ -11,7 +11,8 @@ from mymi.models import replace_ckpt_alias
 from mymi.typing import ModelName
 from mymi.utils import append_row, arg_to_list
 
-from .segmenter import *
+from .registration import *
+from .segmentation import *
 
 def load_run_manifest(model: Tuple[str, str]) -> DataFrame:
     filepath = os.path.join(config.directories.runs, *model)

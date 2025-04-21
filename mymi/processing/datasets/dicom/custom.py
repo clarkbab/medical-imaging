@@ -6,16 +6,16 @@ from mymi.datasets import DicomDataset, NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import sitk_transform_image, sitk_transform_points, velocity_load_transform
-from mymi.typing import PatientLandmarks, PatientRegions
+from mymi.typing import Landmarks, Regions
 from mymi.utils import save_as_nifti, save_csv, save_sitk_transform
 
 def convert_velocity_predictions_to_nifti(
     dataset: str,
     fixed_study_id: str = 'study_1',
     moving_study_id: str = 'study_0',
-    landmarks: Optional[PatientLandmarks] = None,
+    landmarks: Optional[Landmarks] = None,
     pat_prefix: Optional[str] = None,
-    regions: Optional[PatientRegions] = None,
+    regions: Optional[Regions] = None,
     transform_types: List[str] = ['DMP', 'EDMP']) -> None:
     dicom_set = DicomDataset(dataset)
     nifti_set = NiftiDataset(dataset)
@@ -48,7 +48,7 @@ def convert_velocity_predictions_to_nifti(
             transform = velocity_load_transform(transform_path, fixed_offset)
 
             # Move CT image.
-            moved_ct = sitk_transform_image(moving_ct, moving_spacing, moving_offset, fixed_ct.shape, fixed_spacing, fixed_offset, transform)
+            moved_ct = sitk_transform_image(moving_ct, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
                 
             # Save moved CT.
             modelname = f'VELOCITY-{t}'
@@ -66,7 +66,7 @@ def convert_velocity_predictions_to_nifti(
                     if not moving_study.has_regions(r):
                         continue
                     moving_region = moving_study.region_data(regions=r)[r]
-                    moved_region = sitk_transform_image(moving_region, moving_spacing, moving_offset, fixed_ct.shape, fixed_spacing, fixed_offset, transform)
+                    moved_region = sitk_transform_image(moving_region, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, modelname, 'regions', 'series_1', f'{r}.nii.gz')
                     save_as_nifti(moved_region, fixed_spacing, fixed_offset, filepath)
 

@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+from datetime import timedelta
+import fire
+import os
+import re
+import sys
+from typing import *
+
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(root_dir)
+
+from mymi.typing import *
+from mymi.utils import *
+
+CPU_PARTITIONS =[
+    'sapphire'
+]
+GPU_PARTITIONS = [
+    'gpu-h100',
+    'gpu-a100',
+    'gpu-a100-short',
+    'feit-gpu-a100',
+]
+
+def remove_slurm() -> None:
+    files = os.listdir('.')
+    slurm_files = [f for f in files if f.endswith('.slurm') or f.endswith('.out')]
+    for f in slurm_files:
+        os.remove(f)
+
+fire.Fire(remove_slurm)

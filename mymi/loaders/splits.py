@@ -58,6 +58,7 @@ def get_holdout_split(
     **kwargs) -> Tuple[List[PatientID], List[PatientID], List[PatientID]]:
     # Check for custom split.
     if use_custom and get_custom_holdout_split(dataset, exists_only=True):
+        logging.info(f"Applying custom holdout split for dataset '{dataset}'.")
         okwargs = dict(
             n_val=n_val,
             p_val=p_val,
@@ -65,6 +66,8 @@ def get_holdout_split(
             **kwargs
         )
         return get_custom_holdout_split(dataset, **okwargs)
+
+    logging.info(f"Applying default holdout split for dataset '{dataset}'.")
 
     # Load patients.
     set = NiftiDataset(dataset)

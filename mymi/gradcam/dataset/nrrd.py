@@ -7,16 +7,16 @@ from mymi import config
 from mymi.datasets import NrrdDataset
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.typing import ImageSpacing3D, ModelName, PatientIDs, PatientRegions
+from mymi.typing import ImageSpacing3D, ModelName, PatientIDs, Regions
 from mymi.utils import arg_broadcast, arg_to_list
 
-from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
+# from ..gradcam import get_multi_segmenter_heatmap as get_multi_segmenter_heatmap_base
 
 def create_heatmap(
     dataset: str,
     pat_id: str,
     model: ModelName,
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     region: str,
     layer: Union[str, List[str]],
@@ -56,7 +56,7 @@ def get_heatmap(
     dataset: str,
     pat_id: str,
     model: ModelName,
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     region: str,
     layer: Union[str, List[str]],

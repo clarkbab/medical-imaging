@@ -1,13 +1,12 @@
 import os
-from re import match
 import torch
-from typing import Optional
 
 from mymi import config
-from mymi.typing import ModelName
+from mymi.typing import *
 
 from .architectures import *
 from .lightning_modules import *
+from .models import *
 
 CKPT_KEYS = [
     'epoch',

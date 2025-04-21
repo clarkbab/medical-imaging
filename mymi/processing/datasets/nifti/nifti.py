@@ -29,13 +29,13 @@ from mymi.processing.processing import convert_brain_crop_to_training as convert
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad, centre_crop_or_pad, crop, resample, top_crop_or_pad
-from mymi.typing import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, PatientRegion, PatientRegions
+from mymi.typing import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, Region, Regions
 from mymi.utils import append_row, arg_to_list, load_csv, save_csv
 
 from ...processing import write_flag
 
 def convert_replan_to_nnunet_ref_model(
-    regions: PatientRegions,
+    regions: Regions,
     n_regions: int,
     create_data: bool = True,
     crop: Optional[ImageSize3D] = None,
@@ -219,7 +219,7 @@ def convert_replan_to_training(
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
     recreate_dataset: bool = True,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
@@ -429,7 +429,7 @@ def convert_population_lens_crop_to_training(
     dilate_regions: List[str] = [],
     log_warnings: bool = False,
     recreate_dataset: bool = True,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
@@ -728,7 +728,7 @@ def convert_replan_to_lens_crop(
     dest_dataset: str,
     crop_method: str,
     crop_mm: Tuple[float],
-    region: Optional[PatientRegions] = None) -> None:
+    region: Optional[Regions] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to NIFTI (lens crop)', ('dataset', 'pat_ids', 'dest_dataset', 'crop_method', 'crop_mm'), (dataset, pat_ids, dest_dataset, crop_method, crop_mm))
     regions = regions_to_list(region)
 
@@ -1170,7 +1170,7 @@ def __create_training_input(
     dataset: 'Dataset',
     index: Union[int, str],
     data: np.ndarray,
-    region: Optional[PatientRegion] = None,
+    region: Optional[Region] = None,
     use_compression: bool = True) -> None:
     if region is not None:
         filepath = os.path.join(dataset.path, 'data', 'inputs', region)

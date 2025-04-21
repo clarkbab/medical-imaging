@@ -21,7 +21,7 @@ from mymi.metrics import mean_intensity, snr
 from mymi.plotting.datasets.nifti import plot_patients, plot_registration, plot_segmenter_predictions
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
-from mymi.typing import Axis, ModelName, PatientRegion, PatientRegions
+from mymi.typing import Axis, ModelName, Region, Regions
 from mymi.utils import append_row, arg_to_list, encode
 
 def get_region_overlap_summary(
@@ -177,8 +177,8 @@ def create_region_counts(dataset: str) -> None:
 
 def create_region_contrast_report(
     dataset: str,
-    region: PatientRegion,
-    noise_region: PatientRegion = 'Brain') -> None:
+    region: Region,
+    noise_region: Region = 'Brain') -> None:
     logging.arg_log('Creating region contrast report', ('dataset', 'region', 'noise_region'), (dataset, region, noise_region))
 
     # Create dataframe.
@@ -266,7 +266,7 @@ def create_region_overlap_summary(
 
 def create_region_summary(
     dataset: str,
-    regions: Optional[PatientRegions] = None) -> None:
+    regions: Optional[Regions] = None) -> None:
     logging.arg_log('Creating region summaries', ('dataset', 'regions'), (dataset, regions))
     set = NiftiDataset(dataset)
     regions = regions_to_list(regions)
@@ -315,7 +315,7 @@ def get_region_counts(dataset: str) -> DataFrame:
 
 def load_region_counts(
     dataset: str,
-    regions: PatientRegions = 'all',
+    regions: Regions = 'all',
     exists_only: bool = False) -> Union[DataFrame, bool]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
@@ -426,7 +426,7 @@ def load_region_overlap_summary(
 def load_region_summary(
     dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'included',
-    regions: Optional[PatientRegions] = None,
+    regions: Optional[Regions] = None,
     pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
@@ -486,7 +486,7 @@ def load_region_summary(
 
 def load_region_contrast_report(
     dataset: Union[str, List[str]],
-    region: PatientRegions) -> pd.DataFrame:
+    region: Regions) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
     regions = regions_to_list(region)
             
@@ -508,7 +508,7 @@ def load_region_contrast_report(
 
 def get_ct_info_summary(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    region: Optional[Regions] = None) -> pd.DataFrame:
     # Get patients.
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients(region=region)
@@ -616,7 +616,7 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
     
 def create_ct_info_summary_report(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> None:
+    region: Optional[Regions] = None) -> None:
     # Get regions.
     set = NiftiDataset(dataset)
     regions = arg_to_list(region, str) if region is None else set.list_regions()
@@ -643,7 +643,7 @@ def create_ct_summary(dataset: str) -> None:
 
 def load_ct_info_summary_report(
     dataset: str,
-    region: Optional[PatientRegions] = None) -> pd.DataFrame:
+    region: Optional[Regions] = None) -> pd.DataFrame:
     # Get regions.
     set = NiftiDataset(dataset)
     regions = arg_to_list(region, str) if region is None else set.list_regions()
@@ -856,7 +856,7 @@ def create_segmenter_prediction_figures(
     dataset: str,
     region: str,
     model: Union[ModelName, List[ModelName]],
-    model_region: PatientRegions,
+    model_region: Regions,
     n_folds: Optional[int] = 5,
     test_fold: Optional[int] = None,
     view: Union[Axis, List[Axis]] = list(range(3)),

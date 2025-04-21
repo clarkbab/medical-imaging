@@ -102,19 +102,19 @@ class RTSTRUCT(DicomFile):
 
     def has_landmark(
         self,
-        landmark: PatientLandmark,
+        landmark: Landmark,
         token: str = 'Marker') -> bool:
         return landmark in self.list_landmarks(token=token)
 
     def has_regions(
         self,
-        region: PatientRegion,
+        region: Region,
         use_mapping: bool = True) -> bool:
         return region in self.list_regions(regions=region, use_mapping=use_mapping)
 
     def landmark_data(
         self,
-        landmarks: PatientLandmarks = 'all',
+        landmarks: Landmarks = 'all',
         token: str = 'Marker',
         use_image_coords: bool = False,
         **kwargs) -> pd.DataFrame:
@@ -150,16 +150,16 @@ class RTSTRUCT(DicomFile):
         self,
         token: str = 'Marker') -> List[str]:
         lms = self.list_regions(landmarks_token=None)
-        lms = [l for l in lms if token in l]
+        lms = [int(l) for l in lms if token in l]
         return lms
 
     def list_regions(
         self,
         # Only the regions in 'regions' should be returned, saves us from performing filtering code elsewhere.
         landmarks_token: Optional[str] = 'Marker',
-        regions: Optional[PatientRegions] = 'all',
+        regions: Optional[Regions] = 'all',
         return_unmapped: bool = False,
-        use_mapping: bool = True) -> Union[List[PatientRegion], Tuple[List[PatientRegion], List[PatientRegion]]]:
+        use_mapping: bool = True) -> Union[List[Region], Tuple[List[Region], List[Region]]]:
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
             use_mapping = False
@@ -258,7 +258,7 @@ class RTSTRUCT(DicomFile):
 
     def region_data(
         self,
-        regions: PatientRegions = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
+        regions: Regions = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
         regions_ignore_missing: bool = False,
         use_mapping: bool = True,
         **kwargs) -> OrderedDict:

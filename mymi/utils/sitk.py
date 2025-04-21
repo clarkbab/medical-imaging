@@ -1,33 +1,37 @@
 import numpy as np
 import os
 import SimpleITK as sitk
-from typing import Optional, Tuple
+from typing import *
 
-from mymi.typing import ImageSpacing3D, PointMM3D
+from mymi.typing import *
 
 from .utils import transpose_image
 
-def sitk_convert_point_RAS_LPS(data: Tuple[float]) -> Tuple[float]:
-    data = list(data)
-    data[0], data[1] = -data[0], -data[1]
-    return tuple(data)
-
-def sitk_convert_matrix_RAS_LPS(data: np.ndarray) -> np.ndarray:
-    assert data.shape == (3, 3) or data.shape == (4, 4)
-    data[0][0], data[1][1] = -data[0][0], -data[1][1]
-    return data
-
-def from_sitk(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
+def from_sitk_image(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
-    # SimpleITK always loads data in LPS coordinates. -x/y offset is required to convert to RAS coordinates
-    # which is our standard (and DICOM/Slicer's).
-    offset = tuple(img.GetOrigin())
     offset = list(img.GetOrigin())
-    offset = sitk_convert_point_RAS_LPS(offset)
+
+    # Although SimpleITK uses LPS coordinates, the direction matrix can change this.
+    # Convert to LPS coordinates.
+    direction = img.GetDirection()
+    if direction[0] == -1:
+        # Convert x from R -> L coordinates.
+        data = np.flip(data, axis=0)
+        offset[0] = -offset[0]
+    if direction[4] == -1:
+        # Convert y from A -> P coordinates.
+        data = np.flip(data, axis=1)
+        offset[1] = -offset[1]
+    if direction[8] == -1:
+        # Convert z from I -> S coordinates.
+        data = np.flip(data, axis=2)
+        offset[2] = -offset[2]
+
+    offset = tuple(offset)
     return data, spacing, offset
 
 def load_sitk(filepath: str) -> sitk.Image:
@@ -57,7 +61,7 @@ def save_sitk_transform(
     sitk.WriteTransform(transform, filepath)
 
 def to_sitk_image(
-    data: np.ndarray,   # Fed in using RAS coordinates - our standard.
+    data: np.ndarray,   # We use LPS coordinates - the same as SimpleITK!
     spacing: ImageSpacing3D,
     offset: PointMM3D,
     is_vector: bool = False) -> sitk.Image:
@@ -76,17 +80,27 @@ def to_sitk_image(
     # don't do this, code called before 'to_sitk' could affect the behaviour of 'GetImageFromArray', which
     # was very confusing for me.
     data = data.copy()
+    if is_vector:
+        assert data.shape[0] == 3
+        # Move our channels to last dim - for sitk.
+        data = np.moveaxis(data, 0, -1)
     img = sitk.GetImageFromArray(data, isVector=is_vector)
     img.SetSpacing(spacing)
 
-    # The rest of our code base uses RAS coordinates (like DICOM/3D Slicer),
-    # whereas sitk uses LPS coordinates. Convert direction/offset values to
-    # LPS coordinates.
-    direction = tuple(np.eye(3).flatten())
+    # SimpleITK uses LPS coordinates, so we need to reverse the direction matrix for
+    # x/y axes to show that our image data is coming in backwards. Same for the offset.
     direction = np.eye(3)
-    direction = sitk_convert_matrix_RAS_LPS(direction).flatten()
-    offset = sitk_convert_point_RAS_LPS(offset)
-    img.SetDirection(direction)
+    img.SetDirection(direction.flatten())
     img.SetOrigin(offset)
 
     return img
+
+def to_sitk_transform(
+    dvf: np.ndarray,   # (3, X, Y, Z)
+    spacing: ImageSpacing3D,
+    offset: PointMM3D) -> sitk.Transform:
+    dvf = dvf.astype(np.float64)
+    assert dvf.shape[0] == 3
+    dvf_sitk = to_sitk_image(dvf, spacing, offset, is_vector=True)
+    dvf_transform = sitk.DisplacementFieldTransform(dvf_sitk)
+    return dvf_transform

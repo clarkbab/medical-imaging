@@ -159,7 +159,7 @@ def convert_to_dicom(
     
 def convert_to_training(
     dataset: str,
-    regions: typing.PatientRegions,
+    regions: typing.Regions,
     create_data: bool = True,
     dilate_iter: int = 5,
     dilate_regions: List[str] = [],

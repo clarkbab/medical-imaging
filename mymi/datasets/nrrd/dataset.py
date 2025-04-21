@@ -7,7 +7,7 @@ from typing import Dict, List, Literal, Optional, Union
 from mymi import config
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import PatientID, PatientRegions
+from mymi.typing import PatientID, Regions
 
 from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
@@ -109,7 +109,7 @@ class NrrdDataset(Dataset):
 
     def list_patients(
         self,
-        regions: Optional[PatientRegions] = None) -> List[PatientID]:
+        regions: Optional[Regions] = None) -> List[PatientID]:
         regions = regions_to_list(regions)
 
         if self.__ct_from is None:

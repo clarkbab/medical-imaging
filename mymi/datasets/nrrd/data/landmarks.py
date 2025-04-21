@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 
 from mymi.regions import regions_to_list
-from mymi.typing import Landmarks, PatientLandmark, PatientLandmarks, SeriesID
+from mymi.typing import Landmarks, Landmark, Landmarks, SeriesID
 from mymi.utils import arg_to_list, load_csv, load_nrrd
 
 from .data import NrrdData
@@ -27,7 +27,7 @@ class LandmarkData(NrrdData):
 
     def data(
         self,
-        landmarks: PatientLandmarks = 'all',
+        landmarks: Landmarks = 'all',
         use_image_coords: bool = False,
         **kwargs) -> Landmarks:
 
@@ -37,7 +37,7 @@ class LandmarkData(NrrdData):
 
         # Filter on landmarks.
         if landmarks != 'all':
-            landmarks = regions_to_list(landmarks)
+            landmarks = arg_to_list(landmarks, int)
             lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
 
         # Convert to image coordinates.
@@ -61,8 +61,8 @@ class LandmarkData(NrrdData):
     # Returns 'True' if has at least one of the passed 'regions'.
     def has_landmark(
         self,
-        landmarks: PatientLandmarks) -> bool:
-        landmarks = regions_to_list(landmarks, literals={ 'all': self.list_landmarks })
+        landmarks: Landmarks) -> bool:
+        landmarks = arg_to_list(landmarks, int, literals={ 'all': self.list_landmarks })
         pat_landmarks = self.list_landmarks()
         if len(np.intersect1d(landmarks, pat_landmarks)) != 0:
             return True
@@ -73,7 +73,7 @@ class LandmarkData(NrrdData):
         self,
         # Only the landmarks in 'landmarks' should be returned.
         # Saves us from performing filtering code elsewhere many times.
-        landmarks: Optional[PatientLandmarks] = 'all') -> List[PatientLandmark]:
+        landmarks: Optional[Landmarks] = 'all') -> List[Landmark]:
 
         # Get landmark names.
         lm_df = self.data(landmarks=landmarks)

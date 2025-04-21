@@ -1,5 +1,4 @@
 from collections.abc import Iterable, Sequence as CSequence
-from contextlib import contextmanager
 from GPUtil import getGPUs
 import hashlib
 import json
@@ -15,6 +14,7 @@ from typing import *
 # from mymi.loaders import Loader
 # from mymi import logging
 from mymi import config
+from mymi.typing import *
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
     # Pandas doesn't preserve index name when names are different between concatenated dataframes,
@@ -36,6 +36,12 @@ def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
 
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
+
+def escape_filepath(f: str) -> str:
+    if f.split(':')[0] == 'files':
+        f = f.split(':')[1]
+        f = os.path.join(config.directories.files, f)
+    return f
 
 # Commented due to circular import.
 # def get_manifest():
@@ -61,33 +67,42 @@ def isinstance_generic(a: Any, t: Any) -> bool:
     if not is_generic(t):
         return isinstance(a, t)
     
-    # Check parent type.
-    origin = get_origin(t)
+    # Check main type - e.g. 'list' for List[str], or 'union' for Union[str, int].
+    main_type = get_origin(t)
+
+    if main_type is Literal:
+        # Check for literal matches.
+        literals = get_args(t)
+        for l in literals:
+            if a == l:
+                return True
+        return False
     
-    # Union - Check if any subtype matches.
-    if origin is Union:
+    if main_type is Union:
+        # Check for any matching subtype.
         subtypes = get_args(t)
         for s in subtypes:
             if isinstance_generic(a, s):
                 return True
         return False
     
-    # For non-Union types, check parent type matches.
-    if not isinstance(a, origin):
+    # If not a Union main type, then main type must match.
+    if not isinstance(a, main_type):
         return False
     
-    # Iterable - Check if all elements match type.
-    if origin in (list, CSequence):
-        # Check all elements.
+    if main_type in (list, CSequence):
+        # For iterable main types (one subtype only - e.g. List[str] or List[int]),
+        # check that all elements in 'a' match the required subtype.
         subtype = get_args(t)[0]
         for ai in a:
             if not isinstance_generic(ai, subtype):
                 return False
-    elif origin in (dict,):
-        # Check all keys/values.
-        ktype, vtype = get_args(t)
+    elif main_type in (dict,):
+        # For dict main types (key/value subtypes - e.g. Dict[str, int]),
+        # check that all keys/values in 'a' match the required subtypes.
+        k_subtype, v_subtype = get_args(t)
         for k, v in a.items():
-            if not isinstance_generic(k, ktype) or not isinstance(v, vtype):
+            if not isinstance_generic(k, k_subtype) or not isinstance(v, v_subtype):
                 return False
             
     return True
@@ -164,6 +179,14 @@ def fplot(
 
     plt.show()
 
+def save_json(
+    data: Any,
+    filepath: str) -> None:
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    assert filepath.split('.')[-1] == 'json'
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=4)
+
 def save_csv(
     data: pd.DataFrame,
     *path: List[str],
@@ -171,6 +194,7 @@ def save_csv(
     header: bool = True,
     overwrite: bool = True) -> None:
     filepath = os.path.join(config.directories.files, *path)
+    assert filepath.split('.')[-1] == 'csv'
     dirpath = os.path.dirname(filepath)
     if os.path.exists(filepath):
         if overwrite:
@@ -186,8 +210,6 @@ def load_csv(
     *path: List[str],
     exists_only: bool = False,
     map_cols: Dict[str, str] = {},
-    map_landmark_id: bool = True,
-    map_patient_id: bool = True,
     map_types: Dict[str, Any] = {},
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     filepath = os.path.join(config.directories.files, *path)
@@ -200,11 +222,8 @@ def load_csv(
         return True
 
     # Load CSV.
-    if map_landmark_id:
-        map_types['landmark-id'] = str
-    if map_patient_id:
-        map_types['patient-id'] = str
-
+    map_types['patient-id'] = str
+    map_types['study-id'] = str
     df = pd.read_csv(filepath, dtype=map_types, **kwargs)
 
     # Map column names.
@@ -246,7 +265,7 @@ def arg_to_list(
     arg_type: Union[Any, Tuple[Any]],
     length: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
     literals: Dict[str, Tuple[Any]] = {},
-    out_type: Optional[Any] = None,) -> List[Any]:
+    out_type: Optional[Any] = None) -> List[Any]:
     # Allow multiple types in 'arg_type'.
     # E.g. patient ID can be str/int, colours can be str/tuple.
     if type(arg_type) is tuple:
@@ -255,23 +274,26 @@ def arg_to_list(
         arg_types = arg_type
     else:
         arg_types = (arg_type,)
+    
+    # Check literal matches.
+    literal_types = (int, str) 
+    if type(arg) in literal_types and arg in literals:
+        arg = literals[arg]
+        # If arg is a function, run it now. This means the function
+        # is not evaluated every time 'arg_to_list' is called, only when
+        # the arg matches the appropriate literal (e.g. 'all').
+        if callable(arg):
+            arg = arg()
+
+        return arg
 
     # Check types.
     matched = False
     for a in arg_types:
         if isinstance_generic(arg, a):
             matched = True
-
-            literal_types = (int, str) 
-            if type(arg) in literal_types and arg in literals:
-                arg = literals[arg]
-                # If arg is a function, run it now. This means the function
-                # is not evaluated every time 'arg_to_list' is called, only when
-                # the arg matches the appropriate literal (e.g. 'all').
-                if callable(arg):
-                    arg = arg()
-            else:
-               arg = [arg] * length
+            arg = [arg] * length
+            break
         
     # Convert to output type.
     if matched and out_type is not None:
@@ -298,34 +320,6 @@ def arg_broadcast(
         arg = b_len * [arg]
 
     return arg
-
-# Time for each 'recorded' event is stored in a row of the CSV.
-# Additional columns can be populated using 'data'.
-class Timer:
-    def __init__(
-        self,
-        columns: Dict[str, str] = {}):
-        self.__cols = columns
-        self.__cols['time'] = float
-        self.__df = pd.DataFrame(columns=self.__cols.keys())
-
-    @contextmanager
-    def record(
-        self,
-        data: Dict[str, Union[str, int, float]] = {},
-        enabled: bool = True):
-        try:
-            if enabled:
-                start = time()
-            yield None
-        finally:
-            if enabled:
-                print(data)
-                data['time'] = time() - start
-                self.__df = append_row(self.__df, data)
-
-    def save(self, filepath):
-        self.__df.astype(self.__cols).to_csv(filepath, index=False)
 
 def gpu_count() -> int:
     return len(getGPUs())
@@ -364,11 +358,33 @@ def benchmark(
 
     return np.mean(durations)
 
+def read_json(filepath: str) -> Any:
+    with open(filepath, 'r') as f:
+        return json.load(f)
+
+def p_landmarks(landmarks: List[Landmark], f: float) -> List[Landmark]:
+    # Take non-random subset of landmarks.
+    n_landmarks = int(f * len(landmarks))
+    idxs = np.linspace(0, len(landmarks), n_landmarks).astype(int)
+    landmarks = [l for i, l in enumerate(landmarks) if i in idxs]
+    return landmarks
+
 def transpose_image(
     data: np.ndarray,
     is_vector: bool = False) -> np.ndarray:
-    # Transposes spatial coordinates, whilst maintaining vector dimension as last dim.
+    # Transposes spatial coordinates, whilst maintaining vector dimension as first dim.
     data = np.transpose(data)
     if is_vector:
-        data = np.moveaxis(data, 0, -1)
+        assert data.shape[-1] == 3
+        data = np.moveaxis(data, -1, 0)
     return data
+
+def view_to_text(
+    view: int,
+    abbreviate: bool = True) -> str:
+    if view == 0:
+        return 'sag.' if abbreviate else 'sagittal'
+    elif view == 1:
+        return 'cor.' if abbreviate else 'coronal'
+    elif view == 2:
+        return 'ax.' if abbreviate else 'axial'

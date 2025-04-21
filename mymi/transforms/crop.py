@@ -44,46 +44,17 @@ def spatial_centre_crop(
 def crop(
     data: np.ndarray,
     *args, **kwargs) -> np.ndarray:
-    n_dims = len(data.shape)
-    if n_dims in (2, 3):
-        output = spatial_crop(data, *args, **kwargs)
-    elif n_dims == 4:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Channels dimension should come first when cropping 4D. Got shape {size}, is this right?")
-        os = []
-        for d in data:
-            d = spatial_crop(d, *args, **kwargs)
-            os.append(d)
-        output = np.stack(os, axis=0)
-    else:
-        raise ValueError(f"Data to crop should have (2, 3, 4) dims, got {n_dims}.")
-
-    return output
+    return handle_non_spatial_dims(spatial_crop, data, *args, **kwargs)
 
 def spatial_crop(
     data: np.ndarray,
     bounding_box: Union[Box2D, Box3D]) -> np.ndarray:
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
-
-    # Replace 'None' values.
-    min, max = bounding_box
-    min, max = list(min), list(max)
-    for i in range(n_dims):
-        if min[i] is None:
-            min[i] = 0
-        if max[i] is None:
-            max[i] = data.shape[i]
-    min, max = tuple(min), tuple(max)
-
-    # Check box width.
-    for min_i, max_i in zip(min, max):
-        width = max_i - min_i
-        if width <= 0:
-            raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
+    __assert_dims(data, (2, 3))
+    bounding_box = __replace_box_none(bounding_box, data.shape)
+    __assert_box_width(bounding_box)
 
     # Perform cropping.
+    min, max = bounding_box
     size = np.array(data.shape)
     crop_min = np.array(min).clip(0)
     crop_max = (size - max).clip(0)
@@ -132,6 +103,75 @@ def crop_mm_3D(
     data = data[slices]
 
     return data
+
+def handle_non_spatial_dims(
+    spatial_fn: Callable,
+    data: np.ndarray,
+    *args, **kwargs) -> np.ndarray:
+    n_dims = len(data.shape)
+    if n_dims in (2, 3):
+        output = spatial_fn(data, *args, **kwargs)
+    elif n_dims == 4:
+        size = data.shape
+        if size[0] > size[-1]:
+            logging.warning(f"Channels dimension should come first when resampling 4D. Got shape {size}, is this right?")
+        os = []
+        for d in data:
+            d = spatial_fn(d, *args, **kwargs)
+            os.append(d)
+        output = np.stack(os, axis=0)
+    elif n_dims == 5:
+        size = data.shape
+        if size[0] > size[-1]:
+            logging.warning(f"Batch dimension should come first when resampling 5D. Got shape {size}, is this right?")
+        if size[1] > size[-1]:
+            logging.warning(f"Channel dimension should come second when resampling 5D. Got shape {size}, is this right?")
+        bs = []
+        for batch_item in data:
+            ocs = []
+            for channel_data in batch_item:
+                oc = spatial_fn(channel_data, *args, **kwargs)
+                ocs.append(oc)
+            ocs = np.stack(ocs, axis=0)
+            bs.append(ocs)
+        output = np.stack(bs, axis=0)
+    else:
+        raise ValueError(f"Data should have (2, 3, 4, 5) dims, got {n_dims}.")
+
+    return output
+
+def crop_foreground(
+    data: np.ndarray,
+    *args, **kwargs) -> np.ndarray:
+    return handle_non_spatial_dims(spatial_crop_foreground, data, *args, **kwargs)
+
+def spatial_crop_foreground(
+    data: np.ndarray,
+    bounding_box: Box3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    __assert_dims(data, (2, 3))
+    bounding_box = __replace_box_none(bounding_box, data.shape)
+    __assert_box_width(bounding_box)
+
+    if fill == 'min':
+        fill = np.min(data)
+    cropped = data.copy()
+    ct_size = cropped.shape
+
+    # Crop upper bound.
+    min, max = bounding_box
+    for a in range(len(ct_size)):
+        index = [slice(None)] * len(ct_size)
+        index[a] = slice(0, min[a])
+        cropped[tuple(index)] = fill
+
+    # Crop upper bound.
+    for a in range(len(ct_size)):
+        index = [slice(None)] * len(ct_size)
+        index[a] = slice(max[a], ct_size[a])
+        cropped[tuple(index)] = fill
+
+    return cropped
 
 def crop_foreground_3D(
     data: np.ndarray,
@@ -205,8 +245,37 @@ def crop_or_pad_box(
 
     return box
 
+def __assert_box_width(bounding_box: Union[Box2D, Box3D]) -> None:
+    # Check box width.
+    min, max = bounding_box
+    for min_i, max_i in zip(min, max):
+        width = max_i - min_i
+        if width <= 0:
+            raise ValueError(f"Box width must be positive, got '{bounding_box}'.")
+
+def __assert_dims(
+    data: np.ndarray,
+    dims: Tuple[int]) -> None:
+    n_dims = len(data.shape)
+    if n_dims not in dims:
+        raise ValueError(f"Data should have dims={dims}, got {n_dims}.")
+
 def __assert_is_box(box: Union[Box2D, Box3D]) -> None:
     min, max = box
     if not np.all(list(mx >= mn for mn, mx in zip(min, max))):
         raise ValueError(f"Invalid box '{box}'.")
     
+def __replace_box_none(
+    bounding_box: Union[Box2D, Box3D],
+    data_size: Union[ImageSize2D, ImageSize3D]) -> Tuple[Box2D, Box3D]:
+    # Replace 'None' values.
+    n_dims = len(data_size)
+    min, max = bounding_box
+    min, max = list(min), list(max)
+    for i in range(n_dims):
+        if min[i] is None:
+            min[i] = 0
+        if max[i] is None:
+            max[i] = data_size[i]
+    min, max = tuple(min), tuple(max)
+    return min, max

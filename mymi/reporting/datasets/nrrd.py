@@ -21,7 +21,7 @@ from mymi.models.lightning_modules import Localiser
 from mymi.plotting.dataset.nrrd import plot_localiser_prediction, plot_patient, plot_segmenter_predictions
 from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
-from mymi.typing import Axis, ModelName, PatientRegion, PatientRegions
+from mymi.typing import Axis, ModelName, Region, Regions
 from mymi.utils import append_row, arg_to_list, encode
 
 from ..reporting import get_region_stats
@@ -172,8 +172,8 @@ def get_region_summary(
 
 def create_region_contrast_report(
     dataset: str,
-    region: PatientRegion,
-    noise_region: PatientRegion = 'Parotid_L') -> None:
+    region: Region,
+    noise_region: Region = 'Parotid_L') -> None:
     logging.arg_log('Creating region contrast report', ('dataset', 'region', 'noise_region'), (dataset, region, noise_region))
 
     # Create dataframe.
@@ -261,7 +261,7 @@ def create_region_overlap_summary(
 
 def create_region_summary(
     dataset: str,
-    regions: Optional[PatientRegions] = None) -> None:
+    regions: Optional[Regions] = None) -> None:
     # Load regions.
     set = NrrdDataset(dataset)
     if regions is None:
@@ -366,7 +366,7 @@ def add_region_summary_outliers(
 
 def load_region_contrast_report(
     dataset: Union[str, List[str]],
-    region: PatientRegions) -> pd.DataFrame:
+    region: Regions) -> pd.DataFrame:
     datasets = arg_to_list(dataset, str)
     regions = regions_to_list(region)
             
@@ -418,7 +418,7 @@ def load_region_overlap_summary(
 
 def load_region_summary(
     dataset: Union[str, List[str]],
-    regions: PatientRegions = 'all',
+    regions: Regions = 'all',
     pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)

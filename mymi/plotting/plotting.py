@@ -17,6 +17,7 @@ from seaborn.palettes import _ColorPalette
 import SimpleITK as sitk
 import torchio
 from typing import *
+from wand import image
 
 from mymi.geometry import get_box, extent, centre_of_extent
 from mymi import logging
@@ -25,39 +26,69 @@ from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop, itk_transform_image, sitk_transform_image
 from mymi.typing import *
-from mymi.utils import arg_to_list
+from mymi.utils import *
 
-DEFAULT_FONT_SIZE = 10
+DEFAULT_FONT_SIZE = 16
 
 class AltHyp(Enum):
     LESSER = 0
     GREATER = 1
     TWO_SIDED = 2
 
-def plot_histogram(
+def plot_histograms(
+    datas: Union[np.ndarray, List[np.ndarray]],
+    axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
+    figsize: Tuple[float, float] = (6, 4),
+    **kwargs) -> None:
+    datas = arg_to_list(datas, np.ndarray)
+    figsize = (len(datas) * figsize[0], figsize[1])
+    axs = arg_to_list(axs, mpl.axes.Axes)
+    if axs is None:
+        _, axs = plt.subplots(1, len(datas), figsize=figsize, squeeze=False)
+    else:
+        assert len(axs) == len(datas), "Number of axes must match number of data arrays."
+    for a, d in zip(axs, datas):
+        plot_single_histogram(d, ax=a, **kwargs)
+
+def plot_single_histogram(
     data: np.ndarray,
+    ax: Optional[mpl.axes.Axes] = None,
+    fontsize: float = DEFAULT_FONT_SIZE,
     n_bins: int = 100,
     title: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
-    plt.hist(data, bins=n_bins)
+    # Handle arguments.
+    if ax is None:
+        ax = plt.gca()
+        show = True
+    else:
+        show = False
+
+    ax.hist(data.flatten(), bins=n_bins)
+    ax.set_xlabel('Value', fontsize=fontsize)
+    ax.set_ylabel('Count', fontsize=fontsize)
+    ax.tick_params(axis='both', which='major', labelsize=fontsize)
 
     if x_lim is not None:
-        plt.xlim(x_lim)
+        ax.set_xlim(x_lim)
     if title is not None:
-        plt.title(title)
+        ax.set_title(title, fontsize=fontsize)
 
     # Add stats box.
-    text = f"min/max: {data.min():.2f}/{data.max():.2f}\n\
-        mean: {data.mean():.2f}\n\
-        median: {np.median(data):.2f}\n\
-        stdev: {data.std():.2f}"
+    text = f"""\
+mean: {data.mean():.2f}\n\
+std: {data.std():.2f}\n\
+median: {np.median(data):.2f}\n\
+min/max: {data.min():.2f}/{data.max():.2f}\
+"""
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    plt.text(0.95, 0.95, text, bbox=props, transform=plt.gca().transAxes, verticalalignment='top', horizontalalignment='right')
+    ax.text(0.95, 0.95, text, bbox=props, fontsize=fontsize, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right')
 
-    plt.show()
+    if show:
+        plt.show()
 
 def __plot_region_data(
-    data: RegionLabels,
+    data: RegionData,
     ax: mpl.axes.Axes,
     idx: int,
     aspect: float,
@@ -145,7 +176,7 @@ def __get_mpl_slice(
     view: Axis) -> np.ndarray:
     # Check that slice index isn't too large.
     if idx >= data.shape[view]:
-        raise ValueError(f"Idx '{idx}' out of bounds, only '{data.shape[view]}' {__view_to_text(view)} indices.")
+        raise ValueError(f"Idx '{idx}' out of bounds, only '{data.shape[view]}' {view_to_text(view)} indices.")
 
     # Get correct plane.
     data_index = (
@@ -285,7 +316,8 @@ def __assert_idx(
         raise ValueError(f"Only one of 'centre', 'extent_of' or 'idx' can be set.")
 
 def __assert_view(view: int) -> None:
-    assert view in (0, 1, 2)
+    if view not in (0, 1, 2):
+        raise ValueError(f"View '{view}' not recognised. Must be one of (0, 1, 2).")
 
 def plot_heatmap(
     id: str,
@@ -413,6 +445,7 @@ def plot_heatmap(
 
     # Save plot to disk.
     if savepath is not None:
+        savepath = escape_filepath(savepath)
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
@@ -429,37 +462,38 @@ def plot_heatmap(
             'text.usetex': rc_params['text.usetex']
         })
 
+def plot_loaded(filepath: str) -> image.Image:
+    filepath = escape_filepath(filepath)
+    img = image.Image(filename=filepath)
+    return img
+
 def plot_patients_matrix(
-    # Allows us to plot multiple patients (rows) and patient views (columns).
-    # Difficult to extent do patient studies on the columns - the data lists are
-    # for different patients. E.g. list[ct_data] shows data for each patient,
-    # and plot_single_patient_view can slice this data using the view it wants.
-    # For multiple studies along the columns, we'd have to pass multiple ct data
-    # per patient.
-    plot_ids: Union[str, List[str]],
-    spacings: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    # Allows us to plot multiple patients (rows) and patient studies or views (columns).
+    plot_ids: Union[str, List[str], List[Union[str, List[str]]]],
+    spacings: Union[ImageSpacing3D, List[ImageSpacing3D], List[Union[ImageSpacing3D, List[ImageSpacing3D]]]],
     ax: Optional[mpl.axes.Axes] = None,
-    centres: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel, List[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel]]]] = None,
+    centres: Optional[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]], List[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
-    ct_datas: Optional[Union[CtImage, List[CtImage]]] = None,
+    ct_datas: Optional[Union[CtImage, List[CtImage], List[Union[CtImage, List[CtImage]]]]] = None,
     figsize: Tuple[int, int] = (10, 10),
-    landmark_datas: Optional[Union[Landmarks, List[Landmarks]]] = None,
-    region_datas: Optional[Union[RegionLabels, List[RegionLabels]]] = None,
+    landmark_datas: Optional[Union[Landmarks, List[Landmarks], List[Union[Landmarks, List[Landmarks]]]]] = None,
+    region_datas: Optional[Union[RegionData, List[RegionData], List[Union[RegionData, List[RegionData]]]]] = None,
+    savepath: Optional[str] = None,
     views: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
     # Broadcast args to length of plot_ids.
     plot_ids = arg_to_list(plot_ids, str)
     n_rows = len(plot_ids)
     spacings = arg_to_list(spacings, ImageSpacing3D, length=n_rows)
-    centres = arg_to_list(centres, (None, PatientLandmark, PatientRegion, Landmarks, RegionLabel), length=n_rows)
-    crops = arg_to_list(crops, (None, str, np.ndarray, Box2D), length=n_rows)
+    centres = arg_to_list(centres, (None, Landmark, Region, LandmarkData, RegionLabel), length=n_rows)
+    crops = arg_to_list(crops, (None, str, RegionLabel, Box2D), length=n_rows)
     ct_datas = arg_to_list(ct_datas, (None, CtImage), length=n_rows)
-    landmark_datas = arg_to_list(landmark_datas, (None, Landmarks), length=n_rows)
-    region_datas = arg_to_list(region_datas, (None, RegionLabels), length=n_rows)
-    views = arg_to_list(views, (int, Axis))
-    if views == 'all':
-        views = tuple(list(range(3)))
-    n_cols = len(views)
+    landmark_datas = arg_to_list(landmark_datas, (None, LandmarkData), length=n_rows)
+    region_datas = arg_to_list(region_datas, (None, RegionData), length=n_rows)
+    views = arg_to_list(views, int, literals={ 'all': tuple(range(3)) })
+    # This tracks the number of studies that were passed for a patient - affects the number of columns.
+    n_studies = np.max([1 if isinstance(i, str) else len(i) for i in plot_ids])
+    n_cols = len(views) * n_studies
 
     # Convert figsize from cm to inches.
     figsize = __convert_figsize_to_inches(figsize)
@@ -480,32 +514,49 @@ def plot_patients_matrix(
     else:
         axs = [[ax]]
 
-    # Only show figure if 'ax' wasn't passed.
-    show_figure, close_figure = ax is None, ax is None
-
     # Plot each plot.
-    show_figure_i = False
-    close_figure_i = False
     for i in range(n_rows):
         for j in range(n_cols):
-            if i == n_rows - 1 and j == n_cols - 1:
-                show_figure_i = show_figure
-                close_figure_i = close_figure
+            # Multiple studies can be provided for a patient.
+            # Interleave studies and views across the columns.
+            study_idx = j % n_studies
+            view_idx = j // n_studies
+            plot_id = plot_ids[i][study_idx] if isinstance(plot_ids[i], list) else plot_ids[i]
+            ct_data = ct_datas[i][study_idx] if isinstance(ct_datas[i], list) else ct_datas[i]
+            spacing = spacings[i][study_idx] if isinstance(spacings[i], list) else spacings[i]
+            region_data = region_datas[i][study_idx] if isinstance(region_datas[i], list) else region_datas[i]
+            landmark_data = landmark_datas[i][study_idx] if isinstance(landmark_datas[i], list) else landmark_datas[i]
+            crop = crops[i][study_idx] if isinstance(crops[i], list) else crops[i]
+            centre = centres[i][study_idx] if isinstance(centres[i], list) else centres[i]
+            view = views[view_idx] if len(views) > 1 else views[0]
 
             plot_patient(
-                plot_ids[i],
-                ct_datas[i].shape,
-                spacings[i],
+                plot_id,
+                ct_data.shape,
+                spacing,
                 ax=axs[i][j],
-                centre=centres[i],
-                close_figure=close_figure_i,
-                crop=crops[i],
-                ct_data=ct_datas[i],
-                landmark_data=landmark_datas[i],
-                region_data=region_datas[i],
-                show_figure=show_figure_i,
-                view=views[j],
+                centre=centre,
+                close_figure=False,
+                crop=crop,
+                ct_data=ct_data,
+                landmark_data=landmark_data,
+                region_data=region_data,
+                show_figure=False,
+                view=view,
                 **kwargs)
+
+    # Save plot to disk.
+    if savepath is not None:
+        savepath = escape_filepath(savepath)
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
+
+    if ax is None:
+        plt.show()
+        plt.close() 
 
 def plot_patient(
     plot_id: str,
@@ -514,7 +565,7 @@ def plot_patient(
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
-    centre: Optional[Union[PatientLandmark, PatientRegion, Landmarks, RegionLabel]] = None,
+    centre: Optional[Union[Landmark, Region, Landmarks, RegionLabel]] = None,
     close_figure: bool = True,
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
@@ -538,7 +589,7 @@ def plot_patient(
     linewidth_legend: float = 8,
     norm: Optional[Tuple[float, float]] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    region_data: Optional[RegionLabels] = None,            # All data passed to 'region_data' is plotted.
+    region_data: Optional[RegionData] = None,            # All data passed to 'region_data' is plotted.
     savepath: Optional[str] = None,
     show_axes: bool = True,
     show_ct: bool = True,
@@ -557,9 +608,10 @@ def plot_patient(
     transform: torchio.transforms.Transform = None,
     view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
+    window_mask: Optional[Tuple[float, float]] = None,
     **kwargs) -> None:
     __assert_idx(centre, extent_of, idx)
-    assert view in (0, 1, 2)
+    __assert_view(view)
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -683,6 +735,16 @@ def plot_patient(
     # Plot CT data.
     if show_ct:
         ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view), vmin=vmin, vmax=vmax)
+
+        if window_mask is not None:
+            # Plot values that are outside the window.
+            cmap = ListedColormap(((1, 1, 1, 0), 'red'))
+            hw_slice = np.zeros_like(ct_slice)
+            if window_mask[0] is not None:
+                hw_slice[ct_slice < window_mask[0]] = 1
+            if window_mask[1] is not None:
+                hw_slice[ct_slice >= window_mask[1]] = 1
+            ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
     else:
         # Plot black background.
         ax.imshow(np.zeros_like(ct_slice), cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
@@ -807,7 +869,7 @@ def plot_patient(
             if show_title_idx:
                 title = f"{title}, {idx}/{n_slices - 1}"
             if show_title_view:
-                title = f"{title} ({__view_to_text(view)})"
+                title = f"{title} ({view_to_text(view)})"
 
         # Escape text if using latex.
         if escape_latex:
@@ -817,6 +879,7 @@ def plot_patient(
 
     # Save plot to disk.
     if savepath is not None:
+        savepath = escape_filepath(savepath)
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
@@ -1017,6 +1080,7 @@ def plot_localiser_prediction(
 
     # Save plot to disk.
     if savepath is not None:
+        savepath = escape_filepath(savepath)
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
@@ -1043,7 +1107,7 @@ def __get_region_centre(data: RegionLabel) -> int:
     return centre_of_extent(data)
 
 def __get_landmark_crop_box(
-    landmark: PatientLandmark,
+    landmark: Landmark,
     crop_margin: float,
     size: ImageSize3D,
     spacing: ImageSpacing3D,
@@ -1129,7 +1193,7 @@ def plot_distribution(
 def plot_segmenter_predictions(
     id: str,
     spacing: ImageSpacing3D,
-    pred_data: RegionLabels,
+    pred_data: RegionData,
     alpha_diff: float = 0.7,
     alpha_pred: float = 0.5,
     alpha_region: float = 0.5,
@@ -1146,7 +1210,7 @@ def plot_segmenter_predictions(
     legend_bbox: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     pred_colours: Optional[Union[str, List[str]]] = None,
-    region_data: Optional[RegionLabels] = None,
+    region_data: Optional[RegionData] = None,
     savepath: Optional[str] = None,
     show: bool = True,
     show_legend: bool = True,
@@ -1332,6 +1396,7 @@ def plot_segmenter_predictions(
 
     # Save plot to disk.
     if savepath is not None:
+        savepath = escape_filepath(savepath)
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
@@ -2148,26 +2213,108 @@ def plot_dataframe(
 
     # Save plot to disk.
     if savepath is not None:
+        savepath = escape_filepath(savepath)
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
         plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=save_pad_inches)
         logging.info(f"Saved plot to '{savepath}'.")
 
+def plot_registrations(
+    fixed_pat_ids: Sequence[PatientID],
+    fixed_study_ids: Sequence[StudyID],
+    moving_pat_ids: Sequence[PatientID],
+    moving_study_ids: Sequence[StudyID],
+    fixed_centres: Sequence[Optional[Union[str, np.ndarray]]] = [],             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
+    fixed_crops: Sequence[Optional[Union[str, np.ndarray, Box2D]]] = [],    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    fixed_ct_datas: Sequence[Optional[Images]] = [],
+    fixed_idxs: Sequence[Optional[Union[int, float]]] = [],
+    fixed_landmark_datas: Sequence[Optional[LandmarkData]] = [],
+    fixed_offsets: Sequence[Optional[PointMM3D]] = [],
+    fixed_region_datas: Sequence[Optional[np.ndarray]] = [],
+    fixed_spacings: Sequence[Optional[ImageSpacing3D]] = [],
+    figsize: Tuple[float, float] = (16, 4),     # Width always the same, height is based on a single row.
+    moved_centres: Sequence[Optional[Union[str, LabelImage]]] = [],             # Uses 'moved_region_data' if 'str', else uses 'np.ndarray'.
+    moved_crops: Sequence[Optional[Union[str, LabelImage, Box2D]]] = [],    # Uses 'moved_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    moved_ct_datas: Sequence[Optional[Image]] = [],
+    moved_idxs: Sequence[Optional[Union[int, float]]] = [],
+    moved_landmark_datas: Sequence[Optional[LandmarkData]] = [],
+    moved_region_datas: Sequence[Optional[RegionData]] = [],
+    moving_centres: Sequence[Optional[Union[str, LabelImage]]] = [],             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
+    moving_crops: Sequence[Optional[Union[str, LabelImage, Box2D]]] = [],    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    moving_ct_datas: Sequence[Optional[Image]] = [],
+    moving_idxs: Sequence[Optional[Union[int, float]]] = [],
+    moving_landmark_datas: Sequence[Optional[LandmarkData]] = [],
+    moving_offsets: Sequence[Optional[PointMM3D]] = [],
+    moving_region_datas: Sequence[Optional[RegionData]] = [],
+    moving_spacings: Sequence[Optional[ImageSpacing3D]] = [],
+    savepath: Optional[str] = None,
+    show_fixed: bool = True,
+    show_grid: bool = True,
+    show_moving: bool = True,
+    transforms: Sequence[Optional[sitk.Transform]] = [],
+    **kwargs) -> None:
+    # Create subplots.
+    n_pats = len(moving_pat_ids)
+    n_rows = 2 if show_grid else 1
+    n_cols = show_moving + show_fixed + 1
+    figsize = (figsize[0], n_pats * n_rows * figsize[1])
+    _, axs = plt.subplots(n_pats * n_rows, n_cols, figsize=figsize, squeeze=False)
+
+    # Handle arguments.
+    transforms = arg_to_list(transforms, (sitk.Transform, None), length=n_pats)
+    for i in range(n_pats):
+        pat_axs = axs[n_rows * i: n_rows * (i + 1)]
+        pat_axs = pat_axs.flatten()
+        okwargs = dict(
+            axs=pat_axs,
+            fixed_centre=fixed_centres[i],
+            fixed_crop=fixed_crops[i],
+            fixed_ct_data=fixed_ct_datas[i],
+            fixed_idx=fixed_idxs[i],
+            fixed_landmark_data=fixed_landmark_datas[i],
+            fixed_offset=fixed_offsets[i],
+            fixed_region_data=fixed_region_datas[i],
+            fixed_spacing=fixed_spacings[i],
+            moved_centre=moved_centres[i],
+            moved_crop=moved_crops[i],
+            moved_ct_data=moved_ct_datas[i],
+            moved_idx=moved_idxs[i],
+            moved_landmark_data=moved_landmark_datas[i],
+            moved_region_data=moved_region_datas[i],
+            moved_spacing=moving_spacings[i],
+            moving_centre=moving_centres[i],
+            moving_crop=moving_crops[i],
+            moving_ct_data=moving_ct_datas[i],
+            moving_idx=moving_idxs[i],
+            moving_landmark_data=moving_landmark_datas[i],
+            moving_offset=moving_offsets[i],
+            moving_region_data=moving_region_datas[i],
+            moving_spacing=moving_spacings[i],
+            transform=transforms[i],
+        )
+        plot_registration(fixed_pat_ids[i], fixed_study_ids[i], moving_pat_ids[i], moving_study_ids[i], **okwargs, **kwargs)
+
+    # Save plot to disk.
+    if savepath is not None:
+        savepath = escape_filepath(savepath)
+        dirpath = os.path.dirname(savepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        plt.savefig(savepath, bbox_inches='tight', pad_inches=0)
+        logging.info(f"Saved plot to '{savepath}'.")
+
+    plt.show()
+    plt.close()
+
 def plot_registration(
-    moving_pat_id: PatientID,
-    moving_study_id: StudyID,
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
+    moving_pat_id: PatientID,
+    moving_study_id: StudyID,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
-    ax: Optional[mpl.axes.Axes] = None,
-    cca: bool = False,
-    colour: Optional[Union[str, List[str]]] = None,
-    dose_alpha_min: float = 0.1,
-    dose_alpha_max: float = 0.7,
-    dose_colourbar_size: float = 0.03,
-    dose_data: Optional[np.ndarray] = None,
+    axs: Optional[mpl.axes.Axes] = None,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
     fixed_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
     fixed_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
@@ -2181,9 +2328,6 @@ def plot_registration(
     figsize: Tuple[float, float] = (30, 10),
     fontsize: int = DEFAULT_FONT_SIZE,
     latex: bool = False,
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
-    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
-    legend_show_all_regions: bool = False,
     match_landmarks: bool = True,
     moved_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'moved_region_data' if 'str', else uses 'np.ndarray'.
     moved_colour: str = 'red',
@@ -2193,7 +2337,6 @@ def plot_registration(
     moved_idx: Optional[int] = None,
     moved_landmark_data: Optional[Landmarks] = None,
     moved_region_data: Optional[np.ndarray] = None,
-    moved_use_fixed_crop: bool = True,
     moved_use_fixed_idx: bool = True,
     moving_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
     moving_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
@@ -2205,12 +2348,6 @@ def plot_registration(
     moving_region_data: Optional[np.ndarray] = None,
     moving_spacing: Optional[ImageSpacing3D] = None,
     n_landmarks: Optional[int] = None,
-    norm: Optional[Tuple[float, float]] = None,
-    postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    savepath: Optional[str] = None,
-    show: bool = True,
-    show_axes: bool = True,
-    show_extent: bool = True,
     show_fixed: bool = True,
     show_grid: bool = True,
     show_legend: bool = False,
@@ -2218,19 +2355,13 @@ def plot_registration(
     show_moving: bool = True,
     show_moving_landmarks: bool = True,
     show_region_overlay: bool = True,
-    show_title: bool = True,
-    show_x_label: bool = True,
-    show_x_ticks: bool = True,
-    show_y_label: bool = True,
-    show_y_ticks: bool = True,
     transform: Optional[Union[itk.Transform, sitk.Transform]] = None,
     transform_format: Literal['itk', 'sitk'] = 'sitk',
-    title: Optional[str] = None,
     view: Axis = 0,
-    window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = None,
     **kwargs) -> None:
     __assert_idx(fixed_centre, extent_of, fixed_idx)
     __assert_idx(moving_centre, extent_of, moving_idx)
+    __assert_idx(moved_centre, extent_of, moved_idx)
 
     if n_landmarks is not None and match_landmarks:
         # Ensure that the n "moving/moved" landmarks targeted by "n_landmarks" are
@@ -2269,7 +2400,7 @@ def plot_registration(
     crops = [c for c in crops if not (isinstance(c, str) and c == hidden)]
     crop_margins = [moving_crop_margin if show_moving else hidden, fixed_crop_margin if show_fixed else hidden, moved_crop_margin]
     crop_margins = [c for c in crop_margins if not (isinstance(c, str) and c == hidden)]
-    ids = [f'{moving_pat_id}:{moving_study_id}' if show_moving else hidden, f'{fixed_pat_id}:{fixed_study_id}' if show_fixed else hidden, f'{moving_pat_id}:{moving_study_id} -> {fixed_pat_id}:{fixed_study_id}']
+    ids = [f'{moving_pat_id}:{moving_study_id}' if show_moving else hidden, f'{fixed_pat_id}:{fixed_study_id}' if show_fixed else hidden, f'moved']
     ids = [c for c in ids if not (isinstance(c, str) and c == hidden)]
     landmark_datas = [moving_landmark_data if show_moving else hidden, fixed_landmark_data if show_fixed else hidden, None]
     if not show_moving_landmarks:
@@ -2284,11 +2415,10 @@ def plot_registration(
     infos = [{} if show_moving else hidden, {} if show_fixed else hidden, { 'fixed': moved_use_fixed_idx }]
     infos = [c for c in infos if not (isinstance(c, str) and c == hidden)]
 
-    n_figs = show_moving + show_fixed + 1
-    axs = arg_to_list(ax, mpl.axes.Axes)
+    n_rows = 2 if show_grid else 1
+    n_cols = show_moving + show_fixed + 1
+    axs = arg_to_list(axs, mpl.axes.Axes)
     if axs is None:
-        n_rows = 2 if show_grid else 1
-        n_cols = n_figs
         figsize_width, figsize_height = figsize
         figsize_height = n_rows * figsize_height
         figsize = (figsize_width, figsize_height)
@@ -2297,25 +2427,26 @@ def plot_registration(
         gs = GridSpec(n_rows, n_cols, figure=fig, hspace=0.05, wspace=0.3)
         axs = []
         # Add first row of images.
-        for i in range(n_figs):
+        for i in range(n_cols):
             ax = fig.add_subplot(gs[0, i])
             axs.append(ax)
 
         # Add second row of images.
         if show_grid or show_region_overlay:
-            for i in range(n_figs):
+            for i in range(n_cols):
                 ax = fig.add_subplot(gs[1, i])
                 axs.append(ax)
 
             # Remove axes from second row if necessary.
             if not show_region_overlay:
-                axs[2 * n_figs - 2].remove()
+                axs[2 * n_cols - 2].remove()
 
         close_figure = True
+        show_figure = True
     else:
-        assert len(axs) == n_figs
+        assert len(axs) == n_rows * n_cols
         close_figure = False
-        show = False
+        show_figure = False
 
     # Set latex as text compiler.
     rc_params = plt.rcParams.copy()
@@ -2326,7 +2457,7 @@ def plot_registration(
         })
 
     # Plot images.
-    for i in range(n_figs):
+    for i in range(n_cols):
         okwargs = dict(
             ax=axs[i],
             centres=centres[i],
@@ -2359,18 +2490,18 @@ def plot_registration(
             grid_slice = __get_mpl_slice(moving_grid, moving_idx, view)
             aspect = __get_mpl_aspect(view, moving_spacing)
             origin = __get_mpl_origin(view)
-            axs[n_figs].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
+            axs[n_cols].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         # Plot moved grid.
         moved_idx = __convert_float_idx(moved_idx, moved_ct_data.shape, view)
         if transform_format == 'itk':
             moved_grid = itk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_ct_data.shape, fixed_spacing, fixed_offset, transform)
         elif transform_format == 'sitk':
-            moved_grid = sitk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_ct_data.shape, fixed_spacing, fixed_offset, transform)
+            moved_grid = sitk_transform_image(moving_grid, transform, fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing)
         grid_slice = __get_mpl_slice(moved_grid, moving_idx, view)
         aspect = __get_mpl_aspect(view, fixed_spacing)
         origin = __get_mpl_origin(view)
-        axs[2 * n_figs - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
+        axs[2 * n_cols - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
     if show_region_overlay:
         # Plot fixed/moved regions.
@@ -2384,11 +2515,16 @@ def plot_registration(
         background = __get_mpl_slice(np.zeros(shape=fixed_ct_data.shape), f_idx, view)
         if fixed_crop is not None:
             background = crop(background, __reverse_box_coords_2D(fixed_crop))
-        axs[2 * n_figs - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
+        axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
         if fixed_region_data is not None:
-            __plot_region_data(fixed_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
+            __plot_region_data(fixed_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
         if moved_region_data is not None:
-            __plot_region_data(moved_region_data, axs[2 * n_figs - 2], f_idx, aspect, **okwargs)
+            __plot_region_data(moved_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
+
+    if show_figure:
+        plt.show()
+    if close_figure:
+        plt.close()
 
 def apply_region_labels(
     region_labels: Dict[str, str],
@@ -2565,16 +2701,6 @@ def __set_axes_limits(
 
     return inset_ax
 
-def __view_to_text(
-    view: int,
-    abbreviate: bool = True) -> str:
-    if view == 0:
-        return 'sag.' if abbreviate else 'sagittal'
-    elif view == 1:
-        return 'cor.' if abbreviate else 'coronal'
-    elif view == 2:
-        return 'ax.' if abbreviate else 'axial'
-
 def __convert_figsize_to_inches(figsize: Tuple[float, float]) -> Tuple[float, float]:
     cm_to_inch = 1 / 2.54
     figsize = figsize[0] * cm_to_inch if figsize[0] is not None else None, figsize[1] * cm_to_inch if figsize[1] is not None else None
@@ -2632,6 +2758,7 @@ def __plot_landmark_data(
     colour: str = 'yellow',
     n_landmarks: Optional[int] = None,
     show_landmark_ids: bool = False,
+    show_landmark_dists: bool = True,
     zorder: float = 1,
     **kwargs) -> None:
     idx = __convert_float_idx(idx, size, view)
@@ -2649,19 +2776,25 @@ def __plot_landmark_data(
     base_alpha = 0.3
     landmark_data['alpha'] = base_alpha + (1 - base_alpha) * (1 - landmark_data['dist-norm'])
     
-    r, g, b = to_rgb(colour)
-    colours = [(r, g, b, a) for a in landmark_data['alpha']]
+    r, g, b = mpl.colors.to_rgb(colour)
+    if show_landmark_dists:
+        colours = [(r, g, b, a) for a in landmark_data['alpha']]
+    else:
+        colours = [(r, g, b, 1) for _ in landmark_data['alpha']]
     img_axs = list(range(3))
     img_axs.remove(view)
     lm_x, lm_y, lm_ids = landmark_data[img_axs[0]], landmark_data[img_axs[1]], landmark_data['landmark-id']
     ax.scatter(lm_x, lm_y, c=colours, s=20, zorder=zorder)
     if show_landmark_ids:
         for x, y, t in zip(lm_x, lm_y, lm_ids):
-            ax.text(x, y, t, fontsize=fontsize, color='white')
+            ax.text(x, y, t, fontsize=fontsize, color='red')
 
 def sanitise_label(
-    s: str,
+    s: Optional[str],
     max_length: int = 25) -> str:
+    if s is None:
+        return None
+
     s = s.lstrip('_')
     if len(s) > max_length:
         s = s[:max_length]

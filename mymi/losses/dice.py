@@ -24,17 +24,13 @@ class DiceLoss(nn.Module):
         weights: Optional[torch.Tensor] = None,
         reduce_channels: bool = False,
         reduction: Literal['mean', 'sum'] = 'mean',
-        sc_channel: Optional[int] = None) -> float:
+        sc_channel: Optional[int] = None) -> torch.Tensor:
         """
         returns: the dice loss.
         args:
             pred: the B x C x X x Y x Z batch of network predictions probabilities.
             label: the B x C x X x Y x Z batch of one-hot-encoded labels.
         """
-        if label.dtype != torch.bool:
-            raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
-        if pred.dtype == torch.bool:
-            raise ValueError(f"Pred should have float type, not bool.")
         if label.shape != pred.shape:
             if label.shape != (pred.shape[0], *pred.shape[2:]):
                 raise ValueError(f"DiceLoss expects label to be one-hot-encoded and match prediction shape, or categorical and match on all dimensions except channels.")
@@ -141,132 +137,16 @@ class DiceLoss(nn.Module):
         if weights is not None:
             loss = weights * loss
 
-        if reduce_channels:
-            # Reduce across batch and channel dimensions.
-            dim = (0, 1)
-        else:
-            # Reduce across batch dimension only.
-            dim = 0
-
         # Remove background channel before computing final loss.
         if not include_background:
             loss = loss[:, 1:]
 
-        if reduction == 'mean':
-            loss = loss.mean(dim)
-        elif reduction == 'sum':
-            loss = loss.sum(dim)
-
-        return loss
-
-class DiceWithLabelSmoothingLoss(nn.Module):
-    def __init__(
-        self,
-        epsilon: float = 1e-6,
-        fn_coef: float = 1,
-        fp_coef: float = 1,
-        smoothing: float = 0.1,
-        dist_fn: Literal['abs', 'square'] = 'square') -> None:
-        logging.info(f"Initialising DiceLossWithLabelSmoothing with epsilon={epsilon}, smoothing={smoothing}, dist_fn={dist_fn}.")
-        super().__init__()
-        self.__epsilon = epsilon
-        self.__fn_coef = fn_coef
-        self.__fp_coef = fp_coef
-        self.__smoothing = smoothing
-        self.__dist_fn = dist_fn
-        if dist_fn == 'abs':
-            self.__dist_fn = torch.abs
-        elif dist_fn == 'square':
-            self.__dist_fn = lambda x: x ** 2
-        else:
-            raise ValueError(f"Unknown distance function '{dist_fn}'.")
-
-    def forward(
-        self,
-        pred: torch.Tensor,
-        label: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-        weights: Optional[torch.Tensor] = None,
-        reduce_channels: bool = False,
-        reduction: Literal['mean', 'sum'] = 'mean') -> float:
-        """
-        returns: the dice loss.
-        args:
-            pred: the B x C x X x Y x Z batch of network predictions probabilities.
-            label: the B x C x X x Y x Z batch of one-hot-encoded labels.
-        """
-        if label.dtype != torch.bool:
-            raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
-        if pred.dtype == torch.bool:
-            raise ValueError(f"Pred should have float type, not bool.")
-        if label.shape != pred.shape:
-            if label.shape != (pred.shape[0], *pred.shape[2:]):
-                raise ValueError(f"DiceLoss expects label to be one-hot-encoded and match prediction shape, or categorical and match on all dimensions except channels.")
-
-            # One-hot encode the label.
-            label = label.long()    # 'F.one_hot' Expects dtype 'int64'.
-            label = F.one_hot(label, num_classes=2)
-            label = label.movedim(-1, 1)
-        if mask is not None:
-            assert mask.shape == label.shape[:2]
-        batch_size = label.shape[0]
-        if weights is not None:
-            assert weights.shape == label.shape[:2]
-            for b in range(batch_size):
-                weight_sum = weights[b].sum().round(decimals=3)
-                if weight_sum != 1:
-                    raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
-        assert reduction in ('mean', 'sum')
-
-        # Flatten spatial dimensions (X, Y, Z).
-        pred = pred.flatten(start_dim=2)
-        label = label.flatten(start_dim=2)
-
-        # Compute smoothed label.
-        label = label.type(torch.float32)
-        smoothed_label = label.clone()
-        smoothed_label[smoothed_label == 0] = self.__smoothing
-        smoothed_label[smoothed_label == 1] = 1 - self.__smoothing
-
-        dists = self.__dist_fn(pred - smoothed_label)
-        # Compute TP values. As our predictions move away from the smoothed label values
-        # for label foreground voxels, this quantity should decrease.
-        TP = (label * (1 - dists)).sum(dim=2)
-        # Compute FP values. As our predictions move away from the smoothed label values
-        # for label background voxels, this quantity should increase.
-        FP = ((1 - label) * dists).sum(dim=2)
-        # Compute FN values. As our predictions move away from the smoothed label values
-        # for label foreground voxels, this quantity should increase.
-        FN = (label * dists).sum(dim=2)
-
-        # Compute label-smoothed dice.
-        numer = 2 * TP
-        denom = 2 * TP + self.__fp_coef * FP + self.__fn_coef * FN
-        # Can deno be negative?
-        # pred is in [0, 1], smoothed_label is in [0, 1], dist(pred, smoothed) is in [0, 1].
-        dice = (numer + self.__epsilon) / (denom + self.__epsilon)
-        # loss = -dice
-        loss = 1 - dice  # Follow the convention...
-
-        # Apply mask across channels.
-        if mask is not None:
-            loss = mask * loss
-
-        # Apply weights across channels.
-        if weights is not None:
-            loss = weights * loss
-
         if reduce_channels:
             # Reduce across batch and channel dimensions.
             dim = (0, 1)
         else:
             # Reduce across batch dimension only.
             dim = 0
-
-        # If multi-channel, remove the background channel as this
-        # can be computed from the other channels.
-        if loss.shape[1] > 1:
-            loss = loss[:, 1:]
 
         if reduction == 'mean':
             loss = loss.mean(dim)

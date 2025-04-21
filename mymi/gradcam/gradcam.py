@@ -12,14 +12,14 @@ from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop, centre_pad, crop, pad, resample
-from mymi.typing import ImageSpacing3D, ModelName, PatientRegions
+from mymi.typing import ImageSpacing3D, ModelName, Regions
 from mymi.utils import arg_to_list
 
 def get_segmenter_heatmap(
     input: np.ndarray,
     input_spacing: ImageSpacing3D,
     model: Union[pl.LightningModule, ModelName],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     target_region: str,
     layer: Union[str, List[str]],

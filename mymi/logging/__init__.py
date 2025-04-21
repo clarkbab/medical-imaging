@@ -1,8 +1,8 @@
 from colorlog import ColoredFormatter
-import logging
-from typing import Any, List, Union
+import logging as python_logging
+from typing import *
 
-from mymi.utils import arg_assert_lengths
+from mymi.utils import *
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LEVEL_MAP = {
@@ -20,14 +20,14 @@ def config(level: str) -> None:
     global logger
 
     # Create logger and set level.
-    logger = logging.getLogger('MYMI')
-    level = getattr(logging, level.upper(), None)
+    logger = python_logging.getLogger('MYMI')
+    level = getattr(python_logging, level.upper(), None)
     if not isinstance(level, int):
         raise ValueError(f"Logging level '{level}' not valid.")
     logger.setLevel(level)
 
     # Create console handler and set level.
-    ch = logging.StreamHandler()
+    ch = python_logging.StreamHandler()
     ch.setLevel(level)
 
     # Add formatter to console handler.
@@ -69,7 +69,7 @@ def arg_log(
     arg_names: Union[str, List[str]],
     arg_vals: Union[Any, List[Any]]) -> None:
     arg_assert_lengths((arg_names, arg_vals)) 
-    message = action + ' with ' + ', '.join([f"{arg_name} '{arg_val}'" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
+    message = action + ' with ' + ', '.join([f"{arg_name}={arg_val}" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
     info(message)
 
 # Default config.

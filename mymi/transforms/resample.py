@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.ndimage import zoom
 import SimpleITK as sitk
 from typing import Any, Dict, Optional, Tuple, Union
@@ -21,8 +22,23 @@ def resample(
             d = spatial_resample(d, **kwargs)
             os.append(d)
         output = np.stack(os, axis=0)
+    elif n_dims == 5:
+        size = data.shape
+        if size[0] > size[-1]:
+            logging.warning(f"Batch dimension should come first when resampling 5D. Got shape {size}, is this right?")
+        if size[1] > size[-1]:
+            logging.warning(f"Channel dimension should come second when resampling 5D. Got shape {size}, is this right?")
+        bs = []
+        for batch_item in data:
+            ocs = []
+            for channel_data in batch_item:
+                oc = spatial_resample(channel_data, **kwargs)
+                ocs.append(oc)
+            ocs = np.stack(ocs, axis=0)
+            bs.append(ocs)
+        output = np.stack(bs, axis=0)
     else:
-        raise ValueError(f"Data to resample should have (2, 3, 4) dims, got {n_dims}.")
+        raise ValueError(f"Data to resample should have (2, 3, 4, 5) dims, got {n_dims}.")
 
     return output
 
@@ -144,3 +160,17 @@ def resample_box_3D(
     bounding_box = (min, max)
 
     return bounding_box
+
+def resample_landmarks(
+    landmarks: pd.DataFrame,
+    offset: PointMM3D = (0, 0, 0),
+    output_offset: PointMM3D = (0, 0, 0),
+    output_spacing: ImageSpacing3D = (1, 1, 1),
+    spacing: ImageSpacing3D = (1, 1, 1)) -> pd.DataFrame:
+    raise MemoryError("You forgot that this function makes no sense. Landmarks are not images, they're points in physical space.")
+
+    # Transform landmarks.
+    mult = np.array(spacing) / np.array(output_spacing)
+    landmarks[list(range(3))] = (landmarks[list(range(3))] - offset) * mult + output_offset
+
+    return landmarks

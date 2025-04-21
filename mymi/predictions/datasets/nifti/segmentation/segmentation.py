@@ -452,7 +452,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu'),
     crop_mm: Optional[Box3D] = None,
@@ -564,7 +564,7 @@ def get_multi_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     device: torch.device = torch.device('cpu'),
     crop_mm: Optional[Box3D] = None,
@@ -741,7 +741,7 @@ def create_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
     model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     crop_type: str = 'brain',
     device: Optional[torch.device] = None,
@@ -786,7 +786,7 @@ def create_multi_segmenter_prediction(
     dataset: Union[str, List[str]],
     pat_id: Union[str, List[str]],
     model: Union[ModelName, pl.LightningModule],
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     crop_type: str = 'brain',
     device: Optional[torch.device] = None,
@@ -890,7 +890,7 @@ def create_segmenter_prediction(
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     model: ModelName,
-    model_region: PatientRegions,
+    model_region: Regions,
     model_spacing: ImageSpacing3D,
     timing: bool = True,
     **kwargs) -> None:
@@ -943,7 +943,7 @@ def create_all_multi_segmenter_predictions(
 
 def create_multi_segmenter_predictions_nnunet_bootstrap(
     dataset: Union[str, List[str]],
-    region: PatientRegions,
+    region: Regions,
     model: Union[ModelName, pl.LightningModule],
     exclude_like: Optional[str] = None,
     use_timing: bool = True,
@@ -1028,7 +1028,7 @@ def create_multi_segmenter_predictions_nnunet_bootstrap(
 
 def create_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
-    region: PatientRegions,
+    region: Regions,
     model: Union[ModelName, pl.LightningModule],
     exclude_like: Optional[str] = None,
     use_timing: bool = True,
@@ -1284,8 +1284,8 @@ def load_multi_segmenter_prediction_dict(
     dataset: str,
     pat_id: PatientID,
     model: ModelName,
-    model_region: PatientRegions,
-    region: Optional[PatientRegions] = None,
+    model_region: Regions,
+    region: Optional[Regions] = None,
     **kwargs) -> Union[Dict[str, np.ndarray], bool]:
     model_regions = regions_to_list(model_region)
     regions = regions_to_list(region)
@@ -1310,7 +1310,7 @@ def load_multi_segmenter_prediction_dict(
 
 def load_multi_segmenter_prediction_timings(
     dataset: Union[str, List[str]],
-    region: PatientRegions,
+    region: Regions,
     model: ModelName,
     **kwargs) -> None:
     datasets = arg_to_list(dataset, str)
@@ -1338,7 +1338,7 @@ def load_segmenter_predictions(
     pat_id: PatientID,
     model: str,
     exists_only: bool = False,
-    regions: PatientRegions = 'all',
+    regions: Regions = 'all',
     series_id: str = 'series_1',
     study_id: str = 'study_0') -> Union[np.ndarray, bool]:
 
@@ -1476,7 +1476,7 @@ def load_moved_data(
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
     model: str,
-    regions: Optional[PatientRegions] = 'all') -> Tuple[CtImage, RegionLabels]:
+    regions: Optional[Regions] = 'all') -> Tuple[CtImage, RegionData]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     basepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, PatientLandmark, PatientRegion, PointMM3D, SeriesID, StudyID
+from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, Landmark, Region, PointMM3D, SeriesID, StudyID
 
 from .data import CtData, LandmarkData, Modality, NiftiData, RegionData
 
@@ -104,13 +104,19 @@ class NiftiStudy:
             return False
         return def_regions.has_regions(*args, **kwargs)
 
-    def landmark_data(self, *args, **kwargs) -> Landmarks:
-        return self.default_landmarks.data(*args, **kwargs)
+    def landmark_data(self, *args, **kwargs) -> Optional[Landmarks]:
+        def_landmarks = self.default_landmarks
+        if def_landmarks is None:
+            return None
+        return def_landmarks.data(*args, **kwargs)
 
-    def list_landmarks(self, *args, **kwargs) -> List[PatientLandmark]:
-        return self.default_landmarks.list_landmarks(*args, **kwargs)
+    def list_landmarks(self, *args, **kwargs) -> List[Landmark]:
+        def_landmarks = self.default_landmarks
+        if def_landmarks is None:
+            return []
+        return def_landmarks.list_landmarks(*args, **kwargs)
 
-    def list_regions(self, *args, **kwargs) -> List[PatientRegion]:
+    def list_regions(self, *args, **kwargs) -> List[Region]:
         def_regions = self.default_regions 
         if def_regions is None:
             return []
@@ -144,10 +150,10 @@ class NiftiStudy:
     
         return data_ids
 
-    def region_data(self, *args, **kwargs) -> Dict[PatientRegion, np.ndarray]:
+    def region_data(self, *args, **kwargs) -> Optional[RegionData]:
         def_regions = self.default_regions 
         if def_regions is None:
-            return {}
+            return None
         return def_regions.data(*args, **kwargs)
 
     def region_path(self, *args, **kwargs) -> Optional[str]:

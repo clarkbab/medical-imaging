@@ -9,7 +9,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.typing import ImageSpacing3D, PatientRegion, PatientRegions
+from mymi.typing import ImageSpacing3D, Region, Regions
 from mymi import datasets as ds
 from mymi.datasets.training import TrainingDataset
 from mymi.geometry import get_centre
@@ -88,7 +88,7 @@ class MultiLoaderConvergence:
         p_val: float = .2,
         preload_data: bool = False,
         random_seed: int = 0,
-        region: Optional[PatientRegions] = None,
+        region: Optional[Regions] = None,
         shuffle_samples: bool = True,
         shuffle_train: bool = True,
         test_fold: Optional[int] = None,
@@ -445,7 +445,7 @@ class TrainingSet(Dataset):
     def __init__(
         self,
         datasets: List[str],
-        regions: List[PatientRegion],
+        regions: List[Region],
         samples: List[Tuple[int, int]],
         class_weights: Optional[np.ndarray] = None,
         data_hook: Optional[Callable] = None,

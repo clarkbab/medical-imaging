@@ -3,7 +3,7 @@ import os
 from typing import Dict, List, Optional
 
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegion, PatientRegions, SeriesID
+from mymi.typing import Region, Regions, SeriesID
 from mymi.utils import load_nifti
 
 from .data import NiftiData
@@ -21,7 +21,7 @@ class RegionData(NiftiData):
 
     def data(
         self,
-        regions: PatientRegions = 'all',
+        regions: Regions = 'all',
         **kwargs) -> Dict[str, np.ndarray]:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
 
@@ -40,8 +40,8 @@ class RegionData(NiftiData):
     
     def has_regions(
         self,
-        regions: PatientRegions,
-        all: bool = True) -> bool:
+        regions: Regions,
+        all: bool = False) -> bool:
         # Load matching regions.
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
         pat_regions = self.list_regions()
@@ -58,7 +58,7 @@ class RegionData(NiftiData):
         self,
         # Only the regions in 'regions' should be returned.
         # Saves us from performing filtering code elsewhere many times.
-        regions: Optional[PatientRegions] = None) -> List[PatientRegion]:
+        regions: Optional[Regions] = None) -> List[Region]:
         regions = regions_to_list(regions)
 
         # Load regions from filenames.
@@ -80,6 +80,6 @@ class RegionData(NiftiData):
 
     def region_path(
         self,
-        region: PatientRegion) -> str:
+        region: Region) -> str:
         return os.path.join(self.__path, f'{region}.nii.gz')
     

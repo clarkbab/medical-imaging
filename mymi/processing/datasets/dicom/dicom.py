@@ -14,7 +14,7 @@ from mymi.datasets.dicom import DicomDataset, Modality
 from mymi.datasets.nifti import recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 from mymi.utils import append_row, save_csv, save_as_nifti
 
 from ...processing import write_flag
@@ -33,7 +33,7 @@ def convert_to_nifti(
     anonymise_series: bool = True,
     anonymise_studies: bool = True,
     dest_dataset: Optional[str] = None,
-    regions: Optional[PatientRegions] = 'all') -> None:
+    regions: Optional[Regions] = 'all') -> None:
     logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_studies', 'regions'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, regions))
     start = time()
 
@@ -210,7 +210,7 @@ def convert_to_nifti(
 def convert_to_nifti_replan(
     dataset: str,
     dicom_dataset: Optional[str] = None,
-    region: PatientRegions = 'all',
+    region: Regions = 'all',
     anonymise: bool = False) -> None:
     regions = regions_to_list(region)
 

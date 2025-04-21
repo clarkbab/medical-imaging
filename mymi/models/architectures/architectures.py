@@ -5,27 +5,27 @@ from .mednext import create_mednext_v1
 from .unet3d import UNet3D
 
 def layer_summary(
-    model: str,
+    arch: str,
     *args,
     leafs_only: bool = True,
     params_only: bool = False,
     **kwargs) -> pd.DataFrame:
-    if model == 'unet3d:m':
+    if arch == 'unet3d:m':
         model = UNet3D(*args, **kwargs)
-    elif model == 'unet3d:l':
+    elif arch == 'unet3d:l':
         model = UNet3D(*args, n_features=64, **kwargs)
-    elif model == 'unet3d:xl':
+    elif arch == 'unet3d:xl':
         model = UNet3D(*args, n_features=128, **kwargs)
-    elif model == 'mednext:s':
+    elif arch == 'mednext:s':
         model = create_mednext_v1(*args, 'S', **kwargs)
-    elif model == 'mednext:b':
+    elif arch == 'mednext:b':
         model = create_mednext_v1(*args, 'B', **kwargs)
-    elif model == 'mednext:m':
+    elif arch == 'mednext:m':
         model = create_mednext_v1(*args, 'M', **kwargs)
-    elif model == 'mednext:l':
+    elif arch == 'mednext:l':
         model = create_mednext_v1(*args, 'L', **kwargs)
     else:
-        raise ValueError(f'Unknown model: {model}.')
+        raise ValueError(f'Unknown arch: {arch}.')
 
     cols = {
         'module': str,

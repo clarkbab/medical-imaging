@@ -19,7 +19,7 @@ def convert_to_nnunet_single_region_v1(
     # Creates a single nnU-Net 'raw' dataset per region.
     dataset: str,
     first_dataset_id: int,
-    region: PatientRegion,
+    region: Region,
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
@@ -206,7 +206,7 @@ def convert_to_nnunet_single_region(
     # Creates a single nnU-Net 'raw' dataset per region.
     dataset: str,
     first_dataset_id: int,
-    region: PatientRegion,
+    region: Region,
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,

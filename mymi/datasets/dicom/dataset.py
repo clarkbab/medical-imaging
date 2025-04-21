@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi.typing import PatientID, PatientIDs, PatientRegions
+from mymi.typing import PatientID, PatientIDs, Regions
 from mymi.utils import arg_to_list
 
 from ..dataset import Dataset, DatasetType
@@ -119,7 +119,7 @@ class DicomDataset(Dataset):
 
     def list_patients(
         self,
-        regions: Optional[PatientRegions] = None,
+        regions: Optional[Regions] = None,
         show_progress: bool = False,
         use_mapping: bool = True,
         use_patient_regions_report: bool = True) -> List[str]:
@@ -195,7 +195,7 @@ class DicomDataset(Dataset):
 
     def __filter_patient_by_region(
         self,
-        region: PatientRegions,
+        region: Regions,
         use_mapping: bool = True) -> Callable[[str], bool]:
         regions = arg_to_list(region, str)
 

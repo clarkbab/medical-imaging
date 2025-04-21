@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSpacing3D, Landmarks, PatientID, PatientLandmark, PatientRegion, Point3D, StudyID
+from mymi.typing import ImageSpacing3D, Landmarks, PatientID, Landmark, Region, Point3D, StudyID
 
 from .study import NrrdStudy
 
@@ -112,10 +112,10 @@ class NrrdPatient:
     def landmark_data(self, *args, **kwargs) -> Landmarks:
         return self.default_study.landmark_data(*args, **kwargs)
 
-    def list_landmarks(self, *args, **kwargs) -> List[PatientLandmark]:
+    def list_landmarks(self, *args, **kwargs) -> List[Landmark]:
         return self.default_study.list_landmarks(*args, **kwargs)
 
-    def list_regions(self, *args, **kwargs) -> List[PatientRegion]:
+    def list_regions(self, *args, **kwargs) -> List[Region]:
         return self.default_study.list_regions(*args, **kwargs)
 
     def list_studies(self) -> List[StudyID]:
@@ -124,7 +124,7 @@ class NrrdPatient:
         # as they're sorted during DICOM -> NRRD conversion.
         return list(sorted(os.listdir(self.__path)))
 
-    def region_data(self, *args, **kwargs) -> Dict[PatientRegion, np.ndarray]:
+    def region_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
         return self.default_study.region_data(*args, **kwargs)
 
     def study(

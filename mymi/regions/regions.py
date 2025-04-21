@@ -53,7 +53,7 @@ elif config.regions.mode == 1:
 
     RegionNames = [r.name for r in Regions]
 
-def regions_is_all(regions: PatientRegions) -> bool:
+def regions_is_all(regions: Regions) -> bool:
     if isinstance(regions, str) and regions == 'all':
         return True
     else:

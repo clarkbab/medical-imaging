@@ -1,10 +1,7 @@
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions.normal import Normal
 
-class SpatialTransformer(nn.Module):
+class SpatialTransformer(torch.nn.Module):
     """
     N-D Spatial Transformer
     """
@@ -46,10 +43,10 @@ class SpatialTransformer(nn.Module):
             new_locs = new_locs.permute(0, 2, 3, 4, 1)
             new_locs = new_locs[..., [2, 1, 0]]
 
-        return nnf.grid_sample(src, new_locs, align_corners=True, mode=self.mode)
+        return torch.nn.functional.grid_sample(src, new_locs, align_corners=True, mode=self.mode)
 
 
-class VecInt(nn.Module):
+class VecInt(torch.nn.Module):
     """
     Integrates a vector field via scaling and squaring.
     """
@@ -69,7 +66,7 @@ class VecInt(nn.Module):
         return vec
 
 
-class ResizeTransform(nn.Module):
+class ResizeTransform(torch.nn.Module):
     """
     Resize a transform, which involves resizing the vector field *and* rescaling it.
     """
@@ -86,13 +83,13 @@ class ResizeTransform(nn.Module):
     def forward(self, x):
         if self.factor < 1:
             # resize first to save memory
-            x = nnf.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
+            x = torch.nn.functional.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
             x = self.factor * x
 
         elif self.factor > 1:
             # multiply first to save memory
             x = self.factor * x
-            x = nnf.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
+            x = torch.nn.functional.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
 
         # don't do anything if resize is 1
         return x
@@ -104,7 +101,7 @@ def default_unet_features():
     ]
     return nb_features
 
-class Unet(nn.Module):
+class Unet(torch.nn.Module):
     """
     A unet architecture. Layer features can be specified directly as a list of encoder and decoder
     features or as a single integer along with a number of unet levels. The default network features
@@ -175,16 +172,16 @@ class Unet(nn.Module):
             max_pool = [max_pool] * self.nb_levels
 
         # cache downsampling / upsampling operations
-        MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
+        MaxPooling = getattr(torch.nn, 'MaxPool%dd' % ndims)
         self.pooling = [MaxPooling(s) for s in max_pool]
-        self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
+        self.upsampling = [torch.nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
 
         # configure encoder (down-sampling path)
         prev_nf = infeats
         encoder_nfs = [prev_nf]
-        self.encoder = nn.ModuleList()
+        self.encoder = torch.nn.ModuleList()
         for level in range(self.nb_levels - 1):
-            convs = nn.ModuleList()
+            convs = torch.nn.ModuleList()
             for conv in range(nb_conv_per_level):
                 nf = enc_nf[level * nb_conv_per_level + conv]
                 convs.append(ConvBlock(ndims, prev_nf, nf))
@@ -194,9 +191,9 @@ class Unet(nn.Module):
 
         # configure decoder (up-sampling path)
         encoder_nfs = np.flip(encoder_nfs)
-        self.decoder = nn.ModuleList()
+        self.decoder = torch.nn.ModuleList()
         for level in range(self.nb_levels - 1):
-            convs = nn.ModuleList()
+            convs = torch.nn.ModuleList()
             for conv in range(nb_conv_per_level):
                 nf = dec_nf[level * nb_conv_per_level + conv]
                 convs.append(ConvBlock(ndims, prev_nf, nf))
@@ -206,7 +203,7 @@ class Unet(nn.Module):
                 prev_nf += encoder_nfs[level]
 
         # now we take care of any remaining convolutions
-        self.remaining = nn.ModuleList()
+        self.remaining = torch.nn.ModuleList()
         for num, nf in enumerate(final_convs):
             self.remaining.append(ConvBlock(ndims, prev_nf, nf))
             prev_nf = nf
@@ -238,7 +235,7 @@ class Unet(nn.Module):
         return x
 
 
-class VxmDense(nn.Module):
+class VxmDense(torch.nn.Module):
     """
     VoxelMorph network for (unsupervised) nonlinear registration between two images.
     """
@@ -300,12 +297,12 @@ class VxmDense(nn.Module):
         )
 
         # configure unet to flow field layer
-        Conv = getattr(nn, 'Conv%dd' % ndims)
+        Conv = getattr(torch.nn, 'Conv%dd' % ndims)
         self.flow = Conv(self.unet_model.final_nf, ndims, kernel_size=3, padding=1)
 
         # init flow layer with small weights and bias
-        self.flow.weight = nn.Parameter(Normal(0, 1e-5).sample(self.flow.weight.shape))
-        self.flow.bias = nn.Parameter(torch.zeros(self.flow.bias.shape))
+        self.flow.weight = torch.nn.Parameter(torch.distributions.Normal(0, 1e-5).sample(self.flow.weight.shape))
+        self.flow.bias = torch.nn.Parameter(torch.zeros(self.flow.bias.shape))
 
         # probabilities are not supported in pytorch
         if use_probs:
@@ -380,7 +377,7 @@ class VxmDense(nn.Module):
             return y_source, pos_flow
 
 
-class ConvBlock(nn.Module):
+class ConvBlock(torch.nn.Module):
     """
     Specific convolutional block followed by leakyrelu for unet.
     """
@@ -388,9 +385,9 @@ class ConvBlock(nn.Module):
     def __init__(self, ndims, in_channels, out_channels, stride=1):
         super().__init__()
 
-        Conv = getattr(nn, 'Conv%dd' % ndims)
+        Conv = getattr(torch.nn, 'Conv%dd' % ndims)
         self.main = Conv(in_channels, out_channels, 3, stride, 1)
-        self.activation = nn.LeakyReLU(0.2)
+        self.activation = torch.nn.LeakyReLU(0.2)
 
     def forward(self, x):
         out = self.main(x)

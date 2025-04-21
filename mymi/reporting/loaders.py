@@ -13,7 +13,7 @@ from mymi.loaders import Loader, MultiLoader
 from mymi.loaders.augmentation import get_transforms
 from mymi import logging
 from mymi.plotting import plot_patient
-from mymi.typing import PatientID, PatientRegions
+from mymi.typing import PatientID, Regions
 from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
 
 def get_loader_manifest(
@@ -174,7 +174,7 @@ def create_multi_loader_manifest(
     check_processed: bool = True,
     load_all_samples: bool = False,
     n_folds: Optional[int] = None,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     test_fold: Optional[int] = None,
     use_split_file: bool = False,
     **kwargs) -> None:
@@ -203,7 +203,7 @@ def load_multi_loader_manifest(
     load_all_samples: bool = False,
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
     use_split_file: bool = False) -> pd.DataFrame:
@@ -230,7 +230,7 @@ def create_multi_loader_figures(
     n_folds: Optional[int] = None,
     n_subfolds: Optional[int] = None,
     random_seed: float = 42,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     test_fold: Optional[int] = None,
     test_subfold: Optional[int] = None,
     use_augmentation: bool = False,

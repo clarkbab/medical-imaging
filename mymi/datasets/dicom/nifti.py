@@ -16,7 +16,7 @@ from .dataset import DicomDataset
 
 def convert_to_nifti(
     dataset: str,
-    regions: typing.PatientRegions = 'all') -> None:
+    regions: typing.Regions = 'all') -> None:
     # Load all patients.
     set = DicomDataset(dataset)
     pats = set.list_patients(regions=regions)

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, PatientLandmark, PatientRegion, PointMM3D, SeriesID, StudyID
+from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, Landmark, Region, PointMM3D, SeriesID, StudyID
 
 from .data import CtData, LandmarkData, Modality, NrrdData, RegionData
 
@@ -97,10 +97,10 @@ class NrrdStudy:
     def landmark_data(self, *args, **kwargs) -> Landmarks:
         return self.default_landmarks.data(*args, **kwargs)
 
-    def list_landmarks(self, *args, **kwargs) -> List[PatientLandmark]:
+    def list_landmarks(self, *args, **kwargs) -> List[Landmark]:
         return self.default_landmarks.list_landmarks(*args, **kwargs)
 
-    def list_regions(self, *args, **kwargs) -> List[PatientRegion]:
+    def list_regions(self, *args, **kwargs) -> List[Region]:
         return self.default_regions.list_regions(*args, **kwargs)
 
     def list_data(
@@ -121,7 +121,7 @@ class NrrdStudy:
     
         return data_ids
 
-    def region_data(self, *args, **kwargs) -> Dict[PatientRegion, np.ndarray]:
+    def region_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
         return self.default_regions.data(*args, **kwargs)
 
     def region_path(self, *args, **kwargs) -> str:

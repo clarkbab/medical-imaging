@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from mymi import config
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 from mymi.utils import arg_to_list
 
 DEFAULT_FONT_SIZE = 8
@@ -72,7 +72,7 @@ def plot(
     fontsize_title: Optional[float] = None,
     label: Optional[Union[str, List[str]]] = None,
     legend_bbox: Optional[Tuple[float, float]] = (1, 1),
-    region: Optional[PatientRegions] = 'all',
+    region: Optional[Regions] = 'all',
     savepath: Optional[str] = None,
     show: bool = True,
     show_legend: bool = True,

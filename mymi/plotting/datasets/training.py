@@ -7,110 +7,119 @@ from mymi.utils import *
 from ..plotting import *
 
 def plot_dataset_histogram(
-    dataset: str,
+    datasets: Union[str, List[str]],
     n_samples: Optional[int] = None,
-    sample_ids: Optional[PatientIDs] = None,
-    split_id: Optional[SplitID] = None,
+    sample_ids: Optional[PatientIDs] = [],
+    split_id: Optional[Split] = None,
+    **kwargs) -> None:
+    datasets = arg_to_list(datasets, str)
+    _, axs = plt.subplots(1, len(datasets), figsize=(12 * len(datasets), 6), sharex=True, squeeze=False)
+
+    for d, ax in zip(datasets, axs[0]):
+        set = TrainingDataset(d)
+        if split_id is None:
+            split = set.split(set.list_splits()[0])
+        else:
+            split = set.split(split_id)
+
+        # Filter on sample IDs.
+        sids = sample_ids
+        if n_samples is not None:
+            sids = split.list_samples()
+            sids = sids[:n_samples]
+
+        inputs = [split.sample(s).input for s in sids]
+        inputs = np.concatenate([i.flatten() for i in inputs])
+
+        plot_histogram(inputs, ax=ax, title=d, **kwargs)
+
+    plt.show()
+
+def plot_samples(
+    dataset: str,
+    split_ids: Splits = 'all',
+    sample_ids: SampleIDs = 'all',
+    centre: Optional[str] = None,
+    channels: Union[int, List[int], Literal['all']] = 0,
     **kwargs) -> None:
     set = TrainingDataset(dataset)
-    if split_id is None:
-        split = set.split(set.list_splits()[0])
-    else:
-        split = set.split(split_id)
-    if n_samples is not None:
-        assert sample_ids is None
-        sample_ids = split.list_samples()
-        sample_ids = sample_ids[:n_samples]
-    inputs = [split.sample(s).input for s in sample_ids]
-    inputs = np.concatenate([i.flatten() for i in inputs])
-    plot_histogram(inputs, **kwargs)
-
-def plot_patients(
-    dataset: str,
-    splits: TrainingSplit,
-    sample_ids: SampleIDs,
-    centre: Optional[str] = None,
-    crop: Optional[Union[str, Box2D]] = None,
-    landmarks: Optional[Landmarks] = None,
-    region_labels: Dict[str, str] = {},
-    regions: Optional[PatientRegions] = None,
-    show_dose: bool = False,
-    study_id: Optional[StudyID] = None,
-    **kwargs) -> None:
-    sample_ids = arg_to_list(sample_ids, SampleID)
-    splits = arg_to_list(splits, TrainingSplit)
-    if len(splits) == 1:
-        splits = splits * len(samples_ids)
-    else:
-        assert len(splits) == sample_ids
+    split_ids = arg_to_list(split_ids, str, literals={ 'all': set.splits })
+    channels = arg_to_list(channels, int, literals={ 'all': list(range(set.n_input_channels)) })
+    n_channels = len(channels)
 
     # Load CT data.
-    set = TrainingDataset(dataset)
-    plot_ids = []
-    ct_datas = []
-    spacings = []
-    region_datas = []
-    landmark_datas = []
-    dose_datas = []
-    centres = []
-    crops = []
-    for s, sam in zip(splits, sample_ids):
-        sample = set.split(s).sample(sam)
-        plot_id = f"{s}:{sam}"
-        plot_ids.append(plot_id)
-        ct_data = sample.input
-        ct_datas.append(ct_data)
-        spacing = set.spacing
-        spacings.append(spacing)
+    plot_idses = []
+    inputses = []
+    spacingses = []
+    centreses = []
+    for s in split_ids:
+        # Get split samples.
+        split = set.split(s)
+        split_sample_ids = arg_to_list(sample_ids, SampleID, literals={ 'all': split.list_samples })
+        for ss in split_sample_ids:
+            plot_ids = []
+            inputs = []
+            spacings = []
+            centres = []
 
-        # Load region data.
-        if regions is not None:
-            region_data = study.region_data(regions=regions, **kwargs)
-        else:
-            region_data = None
+            for c in channels:
+                # Add sample data.
+                plot_id = f'{s}:{ss}:{c}'
+                sample = split.sample(ss)
+                input = sample.input[c]
+                spacing = set.spacing
 
-        # Load landmarks.
-        if landmarks is not None:
-            landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
-        else:
-            landmark_data = None
-        landmark_datas.append(landmark_data)
+                plot_ids.append(plot_id)
+                inputs.append(input)
+                spacings.append(spacing)
+                centres.append(centre)
 
-        # Load dose data.
-        dose_data = study.dose_data if show_dose else None
-        dose_datas.append(dose_data)
+            # Collapse list if single channel.
+            if n_channels == 1:
+                plot_ids = plot_ids[0]
+                inputs = inputs[0]
+                spacings = spacings[0]
+                centres = centres[0]
 
-        # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
-        if centre is not None:
-            if isinstance(centre, str):
-                if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
-                    centre = study.landmark_data(landmarks=centre)
-                elif study.has_regions(centre) and region_data is not None and centre not in region_data:
-                    centre = study.region_data(regions=centre)[centre]
-
-        # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
-        if crop is not None:
-            if isinstance(crop, str):
-                if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
-                    crop = study.landmark_data(landmarks=crop)
-                elif study.has_regions(crop) and region_data is not None and crop not in region_data:
-                    crop = study.region_data(regions=crop)[crop]
-
-        # Apply region labels.
-        # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
-        # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
-        region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
-        region_datas.append(region_data)
-        centres.append(centre)
-        crops.append(crop)
+            plot_idses.append(plot_ids)
+            inputses.append(inputs)
+            spacingses.append(spacings)
+            centreses.append(centres)
 
     # Plot.
     okwargs = dict(
-        centres=centres,
-        crops=crops,
-        ct_datas=ct_datas,
-        dose_datas=dose_datas,
-        landmark_datas=landmark_datas,
-        region_datas=region_datas
+        centres=centreses,
+        ct_datas=inputses,
     )
-    plot_patients_matrix(plot_ids, spacings, **okwargs, **kwargs)
+    plot_patients_matrix(plot_idses, spacingses, **okwargs, **kwargs)
+
+def plot_sample_histograms(
+    dataset: str,
+    split_ids: Splits = 'all',
+    sample_ids: PatientIDs = 'all',
+    channels: Optional[Channels] = 'all',
+    **kwargs) -> None:
+    set = TrainingDataset(dataset)
+    split_ids = arg_to_list(split_ids, str, literals={ 'all': set.splits })
+    channels = arg_to_list(channels, int, literals={ 'all': list(range(set.n_input_channels)) })
+    row_ids = []    # ('split_id', 'sample_id')
+    for s in split_ids:
+        split = set.split(s)
+        split_sample_ids = arg_to_list(sample_ids, SampleID, literals={ 'all': split.list_samples })
+        for ss in split_sample_ids:
+            row_ids.append((s, ss))
+    n_rows = len(row_ids)
+    n_cols = len(channels) if channels is not None else 1
+    
+    _, axs = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), squeeze=False)
+    for row_axs, (s, ss) in zip(axs, row_ids):
+        sample = set.split(s).sample(ss)
+        input = sample.input
+        if channels is None:
+            title = f"{s}:{ss}"
+            plot_histogram(input.flatten(), ax=row_axs[0], title=title, **kwargs)
+        else:
+            for col_ax, c in zip(row_axs, channels):
+                title = f"{s}:{ss}:{c}"
+                plot_histogram(input[c].flatten(), ax=col_ax, title=title, **kwargs)
+            

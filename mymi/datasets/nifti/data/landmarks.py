@@ -27,7 +27,7 @@ class LandmarkData(NiftiData):
 
     def data(
         self,
-        landmarks: Optional[PatientLandmarks] = 'all',
+        landmarks: Landmarks = 'all',
         use_image_coords: bool = False,
         **kwargs) -> Landmarks:
 
@@ -39,20 +39,18 @@ class LandmarkData(NiftiData):
         # Dicom/Nifti dataset types.
         lm_df = lm_df.sort_values('landmark-id')
 
-        # Filter on landmark names.
-        if landmarks is not None:
-            if landmarks != 'all':
-                landmarks = regions_to_list(landmarks)
-                lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
+        if landmarks != 'all':
+            landmarks = self.list_landmarks(landmarks=landmarks)
+            lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
 
         # Convert to image coordinates.
         if use_image_coords:
             spacing = self.__study.ct_spacing
             offset = self.__study.ct_offset
-            lm_data = lm_df[list(range(3))]
+            lm_data = lm_df[list(range(3))].to_numpy()
             lm_data = (lm_data - offset) / spacing
             lm_data = lm_data.round()
-            lm_data = lm_data.astype(np.uint32)
+            lm_data = lm_data.astype(np.int32)  # Don't use unsigned int - there could be negative values after registration for example.
             lm_df[list(range(3))] = lm_data
 
         # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
@@ -66,8 +64,8 @@ class LandmarkData(NiftiData):
     # Returns 'True' if has at least one of the passed 'regions'.
     def has_landmark(
         self,
-        landmarks: PatientLandmarks) -> bool:
-        landmarks = regions_to_list(landmarks, literals={ 'all': self.list_landmarks })
+        landmarks: Landmarks) -> bool:
+        landmarks = arg_to_list(landmarks, int, literals={ 'all': self.list_landmarks })
         pat_landmarks = self.list_landmarks()
         if len(np.intersect1d(landmarks, pat_landmarks)) != 0:
             return True
@@ -78,11 +76,22 @@ class LandmarkData(NiftiData):
         self,
         # Only the landmarks in 'landmarks' should be returned.
         # Saves us from performing filtering code elsewhere many times.
-        landmarks: Optional[PatientLandmarks] = 'all') -> List[PatientLandmark]:
+        landmarks: Optional[Landmarks] = 'all') -> List[Landmark]:
 
-        # Get landmark names.
-        lm_df = self.data(landmarks=landmarks)
-        lms = list(lm_df['landmark-id'])
+        # Load landmark IDs.
+        lm_df = load_csv(self.__path)
+        landmark_ids = list(sorted(lm_df['landmark-id']))
 
-        return lms
+        if landmarks == 'all':
+            return landmark_ids
+
+        if isinstance(landmarks, float) and landmarks > 0 and landmarks < 1:
+            # Take non-random subset of landmarks.
+            landmark_ids = p_landmarks(landmark_ids, landmarks)
+        else:
+            # Filter based on passed landmarks.
+            landmarks = arg_to_list(landmarks, int)
+            landmark_ids = [i for i in landmark_ids if i in landmarks]
+
+        return landmark_ids
     

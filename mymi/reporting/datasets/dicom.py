@@ -11,7 +11,7 @@ from mymi.datasets.dicom import DicomDataset
 from mymi.evaluations.datasets.dicom import evaluate_model
 from mymi.geometry import extent
 from mymi.regions import regions_to_list
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 from mymi.utils import append_row, encode
 
 def create_evaluation_report(
@@ -30,7 +30,7 @@ def create_evaluation_report(
 
 def get_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> pd.DataFrame:
+    regions: Regions = 'all') -> pd.DataFrame:
     # Get patients.
     set = DicomDataset(dataset)
     pats = set.list_patients(regions=regions)
@@ -70,7 +70,7 @@ def get_ct_summary(
 
 def create_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> None:
+    regions: Regions = 'all') -> None:
     # Get summary.
     df = get_ct_summary(dataset, regions=regions)
 
@@ -82,7 +82,7 @@ def create_ct_summary(
 
 def load_ct_summary(
     dataset: str,
-    regions: PatientRegions = 'all') -> None:
+    regions: Regions = 'all') -> None:
     set = DicomDataset(dataset)
     filepath = os.path.join(set.path, 'reports', f'ct-summary-{encode(regions)}.csv')
     return pd.read_csv(filepath)
@@ -211,7 +211,7 @@ def get_mapped_duplicates(dataset: str) -> DataFrame:
 def region_overlap(
     dataset: str,
     clear_cache: bool = True,
-    regions: PatientRegions = 'all') -> int:
+    regions: Regions = 'all') -> int:
     # List regions.
     set = DicomDataset(dataset)
     regions_df = set.list_regions(clear_cache=clear_cache) 
@@ -237,7 +237,7 @@ def region_overlap(
 
 def get_region_summary(
     dataset: str,
-    region: PatientRegions) -> pd.DataFrame:
+    region: Regions) -> pd.DataFrame:
     set = DicomDataset(dataset)
     pat_ids = set.list_patients(region=region)
 
@@ -335,7 +335,7 @@ def get_region_counts(dataset: str) -> DataFrame:
 
 def load_region_counts(
     dataset: str,
-    regions: Optional[PatientRegions] = None,
+    regions: Optional[Regions] = None,
     exists_only: bool = False) -> Union[DataFrame, bool]:
     set = DicomDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')

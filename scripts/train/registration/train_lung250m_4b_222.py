@@ -1,0 +1,18 @@
+from mymi.training import train_registration
+from mymi.utils import grid_arg
+
+# Overridden args.
+loss_lambda = grid_arg('loss_lambda', 0.02)
+ 
+dataset = "LUNG250M-4B-222"
+project = "IMREG"
+lr_init = 1e-4
+n_epochs = 5000
+kwargs = dict(
+    loss_fn="mse",
+    loss_lambda=loss_lambda,
+    resume=False,
+)
+model = f"lung250m-222-lambda={loss_lambda}"
+
+train_registration(dataset, project, model, n_epochs, lr_init, **kwargs)

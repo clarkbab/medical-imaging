@@ -8,15 +8,15 @@ from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import sitk_load_transform, sitk_transform_points
-from mymi.typing import PatientLandmarks, PatientRegions
+from mymi.typing import Landmarks, Regions
 from mymi.utils import save_csv
 
 def create_unigradicon_predictions(
     dataset: str,
     model: str,
     register_ct: bool = True,
-    landmarks: Optional[PatientLandmarks] = 'all',
-    regions: Optional[PatientRegions] = 'all',
+    landmarks: Optional[Landmarks] = 'all',
+    regions: Optional[Regions] = 'all',
     use_io: bool = False) -> None:
     logging.arg_log('Making UniGradICON predictions', ('dataset', 'model', 'regions'), (dataset, model, regions))
 

@@ -4,27 +4,35 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim import Adam
-from typing import Dict, List, Optional, Tuple
+from typing import *
 import wandb
 
 from mymi import config
-from mymi.losses.voxelmorph import Grad, NCC
+from mymi.losses import MSE, SpatialGradients
 from mymi.models import replace_ckpt_alias
-from mymi import typing
+from mymi.typing import *
 
 from ..architectures import VxmDense
 
 class Voxelmorph(pl.LightningModule):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        loss_fn: str = 'mse') -> None:
         super().__init__()
-        self.__loss = lambda y_true, y_pred: NCC().loss(y_true, y_pred) + 0.01 * Grad('l2', loss_mult=2).loss(y_true, y_pred)
+        if loss_fn == 'unsupervised':
+            mse = MSE()
+            sg = SpatialSmoothingLoss()
+            lam = 0.02
+            def loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+                return mse(pred, label) + lam * sg(pred)
+            self.__loss = loss
+
         self._log_args = {
             'on_epoch': True,
             'on_step': False,
         }
         self.__max_image_batches = 2
         self.__network = VxmDense()
-        self.save_hyperparameters(ignore=['loss'])
 
     @property
     def network(self) -> nn.Module:

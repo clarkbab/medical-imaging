@@ -29,7 +29,7 @@ def plot_patients(
     crop: Optional[Union[str, Box2D]] = None,
     landmarks: Optional[Landmarks] = None,
     region_labels: Dict[str, str] = {},
-    regions: Optional[PatientRegions] = None,
+    regions: Optional[Regions] = None,
     show_dose: bool = False,
     study_id: Optional[StudyID] = None,
     **kwargs) -> None:

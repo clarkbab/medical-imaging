@@ -9,10 +9,10 @@ from mymi.utils import *
 class TrainingSample:
     def __init__(
         self,
-        split: 'TrainingSplit',
+        split: 'HoldoutSplit',
         id: SampleID) -> None:
         self.__split = split
-        self.__id = id
+        self.__id = int(id)     # Could be passed as a string by mistake.
         self.__index = None
         self.__global_id = f'{self.__split}:{self.__id}'
 
@@ -34,8 +34,13 @@ class TrainingSample:
         return input
 
     @property
-    def origin(self) -> Tuple[str, str, str]:
-        return self.index['origin-dataset'], self.index['origin-patient-id'], self.index['origin-study-id']
+    def origin(self) -> Tuple[str]:
+        origin = [self.index['origin-dataset'], self.index['origin-patient-id']]
+        opt_vals = ['origin-study-id', 'origin-fixed-study-id', 'origin-moving-study-id']
+        for o in opt_vals:
+            if o in self.index:
+                origin.append(self.index[o])
+        return tuple(origin)
 
     @property
     def size(self) -> ImageSize3D:
@@ -46,7 +51,7 @@ class TrainingSample:
         return self.__split.dataset.spacing
 
     @property
-    def split(self) -> 'TrainingSplit':
+    def split(self) -> 'HoldoutSplit':
         return self.__split
 
     # We have to filter by 'regions' here, otherwise we'd have to create a new dataset
@@ -54,48 +59,96 @@ class TrainingSample:
     # a lot of datasets for the multi-organ work.
     def label(
         self,
-        regions: PatientRegions = 'all') -> np.ndarray:
-        filepath = os.path.join(self.split.path, 'labels', f"{self.__id:03}.npz")
-        label = np.load(filepath)['data']
-        if regions == 'all':
-            return label
+        landmarks: Landmarks = 'all',
+        landmark_data_only: bool = True,
+        label_idx: Optional[int] = None,    # Enables multi-label training.
+        regions: Regions = 'all') -> np.ndarray:
+        # Get label type.
+        label_types = self.split.dataset.label_types
+        if len(label_types) == 1:
+            label_idx = 0
+        elif label_idx is None:
+            raise ValueError("Multiple labels present - must specify 'label_idx'.")
+        label_type = label_types[label_idx]
+        label_id = f'{self.__id:03}-{label_idx}' if len(label_types) > 1 else f'{self.__id:03}'  # Don't need suffix if single-label.
 
-        # Filter regions.
-        # Note: 'label' should return all 'regions' required for training, not just those 
-        # present for this sample, as otherwise our label volumes will have different numbers
-        # of channels between samples.
-        all_regions = self.split.dataset.list_regions()
-        regions = regions_to_list(regions, literals={ 'all': all_regions })
-        
-        # Raise error if sample has no requested regions - the label will be full of zeros.
-        if not self.has_regions(regions):
-            raise ValueError(f"Sample {self.__id} has no regions {regions}.")
+        if label_type == 'image':
+            # Load image label.
+            filepath = os.path.join(self.split.path, 'labels', f'{label_id}.npz')
+            label = np.load(filepath)['data']
 
-        # Extract requested 'regions'.
-        channels = [0]
-        channels += [all_regions.index(r) + 1 for r in regions]
-        label = label[channels]
+        elif label_type == 'regions':
+            # Load regions label - slightly different to an 'image' label, as we need to 
+            # check requested 'regions', and set channels accordingly.
+            filepath = os.path.join(self.split.path, 'labels', f'{label_id}.npz')
+            label = np.load(filepath)['data']
+            if regions == 'all':
+                return label
+
+            # Filter regions.
+            # Note: 'label' should return all 'regions' required for training, not just those 
+            # present for this sample, as otherwise our label volumes will have different numbers
+            # of channels between samples.
+            all_regions = self.split.dataset.regions
+            regions = regions_to_list(regions, literals={ 'all': all_regions })
+            
+            # Raise error if sample has no requested regions - the label will be full of zeros.
+            if not self.has_regions(regions):
+                raise ValueError(f"Sample {self.__id} has no regions {regions}.")
+
+            # Extract requested 'regions'.
+            channels = [0]
+            channels += [all_regions.index(r) + 1 for r in regions]
+            label = label[channels]
+
+        elif label_type == 'landmarks':
+            # Load landmarks dataframe.
+            filepath = os.path.join(self.split.path, 'labels', f'{label_id}.csv')
+            label = load_csv(filepath)
+            if landmarks != 'all':
+                # Filter on requested landmarks.
+                landmarks = arg_to_list(landmarks, str, literals={ 'all': self.split.dataset.list_landmarks })
+                label = label[label['landmark-id'].isin(landmarks)]
+            label = label.rename(columns={ '0': 0, '1': 1, '2': 2 })
+
+            if landmark_data_only:
+                # Return coordinates only - tensors don't handle multiple data types.
+                label = label[list(range(3))].to_numpy()
 
         return label
 
     def has_regions(
         self,
-        regions: PatientRegions) -> bool:
+        regions: Regions,
+        all: bool = False) -> bool:
         if regions_is_all(regions):
             return True
 
         regions = regions_to_list(regions)
-        return len(np.intersect1d(regions, self.list_regions())) > 0
+        n_matching = len(np.intersect1d(regions, self.regions))
 
-    def list_regions(self) -> List[PatientRegion]:
-        all_regions = self.split.dataset.list_regions()
-        regions = [r for r, m in zip(all_regions, self.mask()[1:]) if m]
-        return regions
+        if n_matching == len(regions):
+            return True
+        elif not all and n_matching > 0:
+            return True
+
+        return False
 
     def mask(
         self,
-        regions: PatientRegions = 'all') -> np.ndarray:
-        filepath = os.path.join(self.split.path, 'masks', f"{self.__id:03}.npz")
+        label_idx: Optional[int] = None,    # Enables multi-label training.
+        regions: Regions = 'all') -> np.ndarray:
+        label_types = self.split.dataset.label_types
+        if len(label_types) == 1:
+            label_idx = 0
+        elif label_idx is None:
+            raise ValueError("Multiple labels present - must specify 'label_idx'.")
+        label_type = label_types[label_idx]
+        if label_type != 'regions':
+            raise ValueError(f"Mask only available for 'regions' labels, not '{label_type}'.")
+
+        label_id = f'{self.__id:03}-{label_idx}' if len(label_types) > 1 else f'{self.__id:03}'  # Don't need suffix if single-label.
+        filepath = os.path.join(self.split.path, 'masks', f"{label_id}.npz")
         mask = np.load(filepath)['data']
         if regions == 'all':
             return mask
@@ -104,10 +157,10 @@ class TrainingSample:
         # Note: 'mask' should return all 'regions' required for training, not just those 
         # present for this sample, as otherwise our masks will have different numbers
         # of channels between samples.
-        regions = regions_to_list(regions)
+        all_regions = self.split.dataset.regions
+        regions = regions_to_list(regions, literals={ 'all': all_regions })
 
         # Extract requested 'regions'.
-        all_regions = self.split.dataset.list_regions()
         channels = [0]
         channels += [all_regions.index(r) + 1 for r in regions]
         mask = mask[channels]
@@ -115,8 +168,35 @@ class TrainingSample:
 
     def pair(
         self,
-        regions: PatientRegions = 'all') -> Tuple[np.ndarray, np.ndarray]:
-        return self.input, self.label(regions=regions)
+        **kwargs) -> Tuple[np.ndarray, np.ndarray]:
+        return self.input, self.label(**kwargs)
+
+    @property
+    def regions(
+        self,
+        label_idx: Optional[int] = None) -> List[Region]:
+        label_types = self.split.dataset.label_types
+        if len(label_types) == 1:
+            label_idx = 0
+        elif label_idx is None:
+            raise ValueError("Multiple labels present - must specify 'label_idx'.")
+        label_type = label_types[label_idx]
+        if label_type != 'regions':
+            raise ValueError(f"Mask only available for 'regions' labels, not '{label_type}'.")
+        all_regions = self.split.dataset.regions
+        if all_regions is None:
+            return None
+
+        include = [False] * len(all_regions)
+        for i, l in enumerate(label_types):
+            if l != 'regions':
+                continue
+            for r in self.mask(label_idx=i)[1:]:
+                if r:
+                    include[i] = True
+                    continue
+        regions = [r for i, r in enumerate(all_regions) if include[i]]
+        return regions
 
     def __str__(self) -> str:
         return self.__global_id

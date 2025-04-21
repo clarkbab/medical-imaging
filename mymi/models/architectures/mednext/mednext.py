@@ -276,6 +276,8 @@ class MedNeXt(nn.Module):
 
         self.block_counts = block_counts
 
+        # Brett added.
+        self.out_softmax = torch.nn.Softmax(dim=1)
 
     def iterative_checkpoint(self, sequential_block, x):
         """
@@ -376,6 +378,9 @@ class MedNeXt(nn.Module):
             del x_res_0, x_up_0, dec_x
 
             x = self.out_0(x)
+
+        # Brett added final softmax layer.
+        x = self.out_softmax(x)
 
         if self.do_ds:
             return [x, x_ds_1, x_ds_2, x_ds_3, x_ds_4]

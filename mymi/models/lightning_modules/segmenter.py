@@ -13,12 +13,12 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ..architectures import create_mednext_v1, layer_summary, UNet3D
-from .lightning_modules import replace_ckpt_alias
+from ..models import replace_ckpt_alias
 
 class Segmenter(pl.LightningModule):
     def __init__(
         self,
-        regions: PatientRegions,
+        regions: Regions,
         arch: str = 'unet3d:m',
         loss_fn: str = 'dice',
         loss_smoothing: float = 0.1,
@@ -26,35 +26,44 @@ class Segmenter(pl.LightningModule):
         name: Optional[ModelName] = None,
         save_training_metrics: bool = False,
         loss_record_interval: TrainingInterval = 'step:1',     # Loss should typically be recorded more frequently - it's not very expensive.
-        metrics_record_interval: TrainingInterval = 'step:5',
+        train_metrics_record_interval: TrainingInterval = 'step:5',
         metrics_save_interval: TrainingInterval = 'epoch:end',
+        tversky_alpha: float = 0.5,
+        tversky_beta: float = 0.5,
         val_image_interval: int = 50,
         val_loss_record_interval: TrainingInterval = 'epoch:1',   # Requires its own parameter as step could have any value at the end of the epoch.
         val_max_image_batches: Optional[int] = 3,
         val_metrics_record_interval: TrainingInterval = 'epoch:1',   # Requires own parameter.
         wandb_log_on_epoch: bool = True,    # If True, regardless of our logging frequency, wandb will accumulate values over the epoch before logging.
         wandb_loss_record_interval: TrainingInterval = 'step:1',
-        wandb_metrics_record_interval: TrainingInterval = 'step:5',
+        wandb_train_metrics_record_interval: TrainingInterval = 'step:5',
         wandb_val_loss_record_interval: TrainingInterval = 'epoch:1',
         wandb_val_metrics_record_interval: TrainingInterval = 'epoch:1',    # Requires own parameter.
         **kwargs) -> None:
         super().__init__()
-        self.__metrics_record_interval = metrics_record_interval
+        self.__train_metrics_record_interval = train_metrics_record_interval
         self.__loss_record_interval = loss_record_interval
         self.__val_loss_record_interval = val_loss_record_interval
         self.__val_metrics_record_interval = val_metrics_record_interval
         self.__metrics_save_interval = metrics_save_interval
         self.__wandb_log_on_epoch = wandb_log_on_epoch
         if loss_fn == 'dice':
+            logging.info(f"Using DiceLoss with smoothing={loss_smoothing}.")
             self.__loss_fn = DiceLoss(smoothing=loss_smoothing)
-        elif loss_fn == 'dice-label-smoothing':
-            self.__loss_fn = DiceWithLabelSmoothingLoss(smoothing=loss_smoothing)
         elif loss_fn == 'dml1':
+            logging.info(f"Using DML1Loss with smoothing={loss_smoothing}.")
             self.__loss_fn = DML1Loss(smoothing=loss_smoothing)
         elif loss_fn == 'dml2':
+            logging.info(f"Using DML2Loss with smoothing={loss_smoothing}.")
             self.__loss_fn = DML2Loss(smoothing=loss_smoothing)
         elif loss_fn == 'tversky':
-            self.__loss_fn = TverskyLoss()
+            logging.info(f"Using TverskyLoss with alpha={tversky_alpha}, beta={tversky_beta}, smoothing={loss_smoothing}.")
+            self.__loss_fn = TverskyLoss(alpha=tversky_alpha, beta=tversky_beta, smoothing=loss_smoothing)
+        elif loss_fn == 'tversky-dist':
+            logging.info(f"Using TverskyDistanc3Loss with alpha={tversky_alpha}, beta={tversky_beta}, smoothing={loss_smoothing}.")
+            self.__loss_fn = TverskyDistanceLoss(alpha=tversky_alpha, beta=tversky_beta, smoothing=loss_smoothing)
+        else:
+            raise ValueError(f"Unknown loss function '{loss_fn}'.")
         self.lr = lr_init        # 'self.lr' is default key that LR finder looks for on module.
         self.__name = name
         self.__regions = regions
@@ -98,7 +107,7 @@ class Segmenter(pl.LightningModule):
             raise ValueError(f"Unknown architecture '{arch}'.")
         self.__save_training_metrics = save_training_metrics
         self.__wandb_loss_record_interval = wandb_loss_record_interval
-        self.__wandb_metrics_record_interval = wandb_metrics_record_interval
+        self.__wandb_train_metrics_record_interval = wandb_train_metrics_record_interval
         self.__val_image_interval = val_image_interval
         self.__val_max_image_batches = val_max_image_batches
         self.__wandb_val_metrics_record_interval = wandb_val_metrics_record_interval
@@ -143,10 +152,9 @@ class Segmenter(pl.LightningModule):
         return segmenter
 
     def configure_optimizers(self):
-        # self.__optimiser = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.__weight_decay) 
-        self.__optimiser = torch.optim.SGD(self.parameters(), lr=self.lr, momentum=0.9)
+        # self.__optimiser = torch.optim.SGD(self.parameters(), lr=self.lr, momentum=0.9)
+        self.__optimiser = torch.optim.AdamW(self.parameters(), lr=self.lr) 
         logging.info(f"Using optimiser '{self.__optimiser}' with learning rate '{self.lr}'.")
-
         opt = {
             'optimizer': self.__optimiser,
             'monitor': 'val/loss'
@@ -161,7 +169,7 @@ class Segmenter(pl.LightningModule):
         x: torch.Tensor) -> torch.Tensor:
         return self.__network(x)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, _):
         desc, x, y, mask = batch
         n_batch_items = len(desc)
 
@@ -169,7 +177,23 @@ class Segmenter(pl.LightningModule):
         y_hat = self.forward(x)
 
         # Loss calculation.
+        def log_fn(metric: str, value: float) -> None:
+            mode = 'train' if self.training else 'validate'
+            self.log(f'{mode}/{metric}', value, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
+            if self.__save_training_metrics and self.__interval_matches(self.__loss_record_interval):
+                data = {
+                    'epoch': self.current_epoch,
+                    'step': self.global_step,
+                    'mode': mode,
+                    'module': '',
+                    'module-type': '',
+                    'shape': '',
+                    'metric': metric,
+                    'value': value,
+                }
+                self.__training_metrics = append_row(self.__training_metrics, data)
         kwargs = dict(
+            log_fn=log_fn,
             mask=mask,
         )
         loss = self.__loss_fn(y_hat, y, **kwargs) 
@@ -190,22 +214,31 @@ class Segmenter(pl.LightningModule):
         self.log('train/lr', self.lr, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
 
         # Report metrics.
-        if (self.logger is not None and self.__interval_matches(self.__wandb_metrics_record_interval)) or \
-            self.__interval_matches(self.__metrics_record_interval):
+        if (self.logger is not None and self.__interval_matches(self.__wandb_train_metrics_record_interval)) or \
+            self.__interval_matches(self.__train_metrics_record_interval):
                 # Convert from softmax to binary mask.
                 y_hat = torch.nn.functional.one_hot(y_hat.argmax(axis=1), num_classes=self.__n_channels)
                 y_hat = y_hat.moveaxis(-1, 1)
                 y_hat = y_hat.cpu().numpy().astype(bool)
                 y = y.cpu().numpy()
 
+                # Save masks for TP/TN/FP/FN gradient calculations - during backward hook
+                # that doesn't have access to preds and labels.
+                if self.__save_training_metrics:
+                    self.__tp_mask = torch.tensor((y_hat == 1) & (y == 1), dtype=torch.bool, device=x.device)
+                    self.__tn_mask = torch.tensor((y_hat == 0) & (y == 0), dtype=torch.bool, device=x.device)
+                    self.__fp_mask = torch.tensor((y_hat == 1) & (y == 0), dtype=torch.bool, device=x.device)
+                    self.__fn_mask = torch.tensor((y_hat == 0) & (y == 1), dtype=torch.bool, device=x.device)
+
                 # Calculate mean stats over batch items.
+                mean_dices = []
                 for i, r in enumerate(self.__regions):
                     c = i + 1
                     dices = []
-                    tps = []
-                    fps = []
-                    fns = []
-                    tns = []
+                    tprs = []
+                    fprs = []
+                    fnrs = []
+                    tnrs = []
                     for b in range(n_batch_items):
                         if mask[b, c]:
                             # Get batch item.
@@ -217,34 +250,56 @@ class Segmenter(pl.LightningModule):
                             dices.append(d)
 
                             # Calculate classification stats.
-                            tp = true_positives(y_hat_c, y_c)
-                            fp = false_positives(y_hat_c, y_c)
-                            fn = false_negatives(y_hat_c, y_c)
-                            tn = true_negatives(y_hat_c, y_c)
-                            tps.append(tp)
-                            fps.append(fp)
-                            fns.append(fn)
-                            tns.append(tn)
+                            tpr = true_positive_rate(y_hat_c, y_c)
+                            fpr = false_positive_rate(y_hat_c, y_c)
+                            fnr = false_negative_rate(y_hat_c, y_c)
+                            tnr = true_negative_rate(y_hat_c, y_c)
+                            tprs.append(tpr)
+                            fprs.append(fpr)
+                            fnrs.append(fnr)
+                            tnrs.append(tnr)
+                    if len(dices) > 0:  
+                        mean_dices.append(np.mean(dices))
 
-                    metrics = ['dice', 'tp', 'fp', 'fn', 'tn']
-                    values = [dices, tps, fps, fns, tns]
+                    metrics = ['dice', 'tpr', 'fpr', 'fnr', 'tnr']
+                    values = [dices, tprs, fprs, fnrs, tnrs]
                     for m, v in zip(metrics, values):
                         if len(v) > 0:
                             mean_value = np.mean(v)
-                            if self.logger is not None and self.__interval_matches(self.__wandb_metrics_record_interval):
+                            if self.logger is not None and self.__interval_matches(self.__wandb_train_metrics_record_interval):
                                 self.log(f'train/{m}/{r}', mean_value, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
 
-                            if self.__interval_matches(self.__metrics_record_interval):
+                            if self.__save_training_metrics and self.__interval_matches(self.__train_metrics_record_interval):
                                 data = {
                                     'epoch': self.current_epoch,
                                     'step': self.global_step,
+                                    'mode': 'train',
                                     'module': '',
                                     'module-type': '',
                                     'shape': '',
-                                    'metric': f'train-{m}-{r}',
+                                    'metric': f'{m}-{r}',
                                     'value': mean_value,
                                 }
                                 self.__training_metrics = append_row(self.__training_metrics, data)
+
+                # Log mean dice across all regions.
+                if len(mean_dices) > 0:
+                    mean_dice = np.mean(mean_dices)
+                    if self.logger is not None and self.__interval_matches(self.__wandb_train_metrics_record_interval):
+                        self.log(f'train/dice', mean_dice, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
+
+                    if self.__save_training_metrics and self.__interval_matches(self.__train_metrics_record_interval):
+                        data = {
+                            'epoch': self.current_epoch,
+                            'step': self.global_step,
+                            'mode': 'train',
+                            'module': '',
+                            'module-type': '',
+                            'shape': '',
+                            'metric': 'dice',
+                            'value': mean_dice,
+                        }
+                        self.__training_metrics = append_row(self.__training_metrics, data)
 
         return loss
 
@@ -291,13 +346,14 @@ class Segmenter(pl.LightningModule):
                 y = y.cpu().numpy()
 
                 # Calculate mean stats over batch items.
+                mean_dices = []
                 for i, r in enumerate(self.__regions):
                     c = i + 1
                     dices = []
-                    tps = []
-                    fps = []
-                    fns = []
-                    tns = []
+                    tprs = []
+                    fprs = []
+                    fnrs = []
+                    tnrs = []
                     for b in range(n_batch_items):
                         if mask[b, c]:
                             # Get batch item.
@@ -309,34 +365,56 @@ class Segmenter(pl.LightningModule):
                             dices.append(d)
 
                             # Calculate classification stats.
-                            tp = true_positives(y_hat_c, y_c)
-                            fp = false_positives(y_hat_c, y_c)
-                            fn = false_negatives(y_hat_c, y_c)
-                            tn = true_negatives(y_hat_c, y_c)
-                            tps.append(tp)
-                            fps.append(fp)
-                            fns.append(fn)
-                            tns.append(tn)
+                            tpr = true_positive_rate(y_hat_c, y_c)
+                            fpr = false_positive_rate(y_hat_c, y_c)
+                            fnr = false_negative_rate(y_hat_c, y_c)
+                            tnr = true_negative_rate(y_hat_c, y_c)
+                            tprs.append(tpr)
+                            fprs.append(fpr)
+                            fnrs.append(fnr)
+                            tnrs.append(tnr)
+                    if len(dices) > 0:
+                        mean_dices.append(np.mean(dices))
 
-                    metrics = ['dice', 'tp', 'fp', 'fn', 'tn']
-                    values = [dices, tps, fps, fns, tns]
+                    metrics = ['dice', 'tpr', 'fpr', 'fnr', 'tnr']
+                    values = [dices, tprs, fprs, fnrs, tnrs]
                     for m, v in zip(metrics, values):
                         if len(v) > 0:
                             mean_value = np.mean(v)
                             if self.logger is not None and self.__interval_matches(self.__wandb_val_metrics_record_interval):
                                 self.log(f'val/{m}/{r}', mean_value, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
 
-                            if self.__interval_matches(self.__metrics_record_interval):
+                            if self.__save_training_metrics and self.__interval_matches(self.__val_metrics_record_interval):
                                 data = {
                                     'epoch': self.current_epoch,
                                     'step': self.global_step,
+                                    'mode': 'validate',
                                     'module': '',
                                     'module-type': '',
                                     'shape': '',
-                                    'metric': f'validate-{m}-{r}',
+                                    'metric': f'{m}-{r}',
                                     'value': mean_value,
                                 }
                                 self.__training_metrics = append_row(self.__training_metrics, data)
+
+                # Log mean dice across all regions.
+                if len(mean_dices) > 0:
+                    mean_dice = np.mean(mean_dices)
+                    if self.logger is not None and self.__interval_matches(self.__wandb_val_metrics_record_interval):
+                        self.log(f'val/dice', mean_dice, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
+
+                    if self.__save_training_metrics and self.__interval_matches(self.__val_metrics_record_interval):
+                        data = {
+                            'epoch': self.current_epoch,
+                            'step': self.global_step,
+                            'mode': 'validate',
+                            'module': '',
+                            'module-type': '',
+                            'shape': '',
+                            'metric': 'dice',
+                            'value': mean_dice,
+                        }
+                        self.__training_metrics = append_row(self.__training_metrics, data)
                         
         # Log prediction images.
         if self.logger is not None:
@@ -486,8 +564,12 @@ class Segmenter(pl.LightningModule):
                     p.register_hook(self.__get_parameter_hook(n, m.__class__.__name__, pn))
 
             # Custom hooks.
-            if n == '_UNet3D__layers.62._LayerWrapper__layer':
-                m.register_forward_hook(self.__get_final_conv_diff_hook(n))
+            channel_grad_modules = [
+                '_UNet3D__layers.62._LayerWrapper__layer',
+                '_UNet3D__layers.63._LayerWrapper__layer',
+            ]
+            if n in channel_grad_modules:
+                m.register_full_backward_hook(self.__get_channel_grad_backward_hook(n))
 
     def __get_parameter_hook(
         self,
@@ -495,7 +577,9 @@ class Segmenter(pl.LightningModule):
         module_type: str,
         param_name: str) -> Callable:
         def hook(grad) -> None:
-            if self.__interval_matches(self.__metrics_record_interval):
+            mode = 'train' if self.training else 'validate'
+            if (mode == 'train' and self.__interval_matches(self.__train_metrics_record_interval)) or \
+                (mode == 'validate' and self.__interval_matches(self.__val_metrics_record_interval)):
                 mode = 'train' if self.training else 'validate'
 
                 # Save parameter gradient stats.
@@ -504,12 +588,14 @@ class Segmenter(pl.LightningModule):
                     f'gradient-{param_name}-max',
                     f'gradient-{param_name}-mean',
                     f'gradient-{param_name}-std',
+                    f'gradient-{param_name}-l2'
                 ]
                 values = [
                     grad.min().item(),
                     grad.max().item(),
                     grad.mean().item(),
                     grad.std().item(),
+                    grad.norm(2).item(),
                 ]
                 
                 for m, v in zip(metrics, values):
@@ -531,40 +617,45 @@ class Segmenter(pl.LightningModule):
         self,
         name: str) -> Callable:
         def hook(module, _, output) -> None:
-            if self.__interval_matches(self.__metrics_record_interval):
-                mode = 'train' if self.training else 'validate'
+            mode = 'train' if self.training else 'validate'
+            if (mode == 'train' and self.__interval_matches(self.__train_metrics_record_interval)) or \
+                (mode == 'validate' and self.__interval_matches(self.__val_metrics_record_interval)):
 
                 # Add output metrics.
                 metrics = [
-                    f'output-min',
-                    f'output-max',
-                    f'output-mean',
-                    f'output-std',
+                    'output-min',
+                    'output-max',
+                    'output-mean',
+                    'output-std',
+                    'output-l2',
                 ]
                 values = [
                     output.min().item(),
                     output.max().item(),
                     output.mean().item(),
                     output.std().item(),
+                    output.norm(2).item(),
                 ]
 
                 # Add parameter metrics.
-                if module.__class__.__name__ in self.__param_modules:
+                if name in self.__param_modules:
                     params = list(module.parameters())
                     assert len(params) == 2
                     param_names = ['weight', 'bias']
                     for n, p in zip(param_names, params):
                         metrics += [
-                            f'parameter-{n}-min',
-                            f'parameter-{n}-max',
-                            f'parameter-{n}-mean',
-                            f'parameter-{n}-std',
+                            f'{n}-min',
+                            f'{n}-max',
+                            f'{n}-mean',
+                            f'{n}-std',
+                            f'{n}-l2',
                         ]
                         values += [
                             p.min().item(),
                             p.max().item(),
                             p.mean().item(),
                             p.std().item(),
+                            p.norm(2).item(),
                         ]
 
                 for m, v, in zip(metrics, values):
@@ -586,15 +677,17 @@ class Segmenter(pl.LightningModule):
         self,
         name: str) -> Callable:
         def hook(module, _, output) -> None:
-            if self.__interval_matches(self.__metrics_record_interval):
-                mode = 'train' if self.training else 'validate'
+            mode = 'train' if self.training else 'validate'
+            if (mode == 'train' and self.__interval_matches(self.__train_metrics_record_interval)) or \
+                (mode == 'validate' and self.__interval_matches(self.__val_metrics_record_interval)):
 
                 # Add abs diff between foreground/background channels.
                 metrics = [
-                    f'output-diff-min',
-                    f'output-diff-max',
-                    f'output-diff-mean',
-                    f'output-diff-std',
+                    'output-diff-min',
+                    'output-diff-max',
+                    'output-diff-mean',
+                    'output-diff-std',
+                    'output-diff-l2',
                 ]
                 diff = torch.abs(output[:, 1] - output[:, 0])
                 values = [
@@ -602,6 +695,7 @@ class Segmenter(pl.LightningModule):
                     diff.max().item(),
                     diff.mean().item(),
                     diff.std().item(),
+                    diff.norm(2).item(),
                 ]
 
                 for m, v, in zip(metrics, values):
@@ -624,8 +718,9 @@ class Segmenter(pl.LightningModule):
         name: str) -> Callable:
         # 'grad_input' is not straightforward - https://discuss.pytorch.org/t/exact-meaning-of-grad-input-and-grad-output/14186/7.
         def hook(module, _, grad_output) -> None:
-            if self.__interval_matches(self.__metrics_record_interval):
-                mode = 'train' if self.training else 'validate'
+            mode = 'train' if self.training else 'validate'
+            if (mode == 'train' and self.__interval_matches(self.__train_metrics_record_interval)) or \
+                (mode == 'validate' and self.__interval_matches(self.__val_metrics_record_interval)):
 
                 # 'grad_output' is a tuple because some layers (e.g. torch.split) return multiple outputs.
                 if len(grad_output) != 1:
@@ -638,12 +733,14 @@ class Segmenter(pl.LightningModule):
                     'gradient-output-max',
                     'gradient-output-mean',
                     'gradient-output-std',
+                    'gradient-output-l2',
                 ]
                 values = [
                     grad_output.min().item(),
                     grad_output.max().item(),
                     grad_output.mean().item(),
                     grad_output.std().item(),
+                    grad_output.norm(2).item(),
                 ]
                 for m, v, in zip(metrics, values):
                     data = {
@@ -657,5 +754,97 @@ class Segmenter(pl.LightningModule):
                         'value': v,
                     }
                     self.__training_metrics = append_row(self.__training_metrics, data)
+
+        return hook
+
+    def __get_channel_grad_backward_hook(
+        self,
+        name: str) -> Callable:
+        def hook(module, _, grad_output) -> None:
+            mode = 'train' if self.training else 'validate'
+            if (mode == 'train' and self.__interval_matches(self.__train_metrics_record_interval)) or \
+                (mode == 'validate' and self.__interval_matches(self.__val_metrics_record_interval)):
+
+                # 'grad_output' is a tuple because some layers (e.g. torch.split) return multiple outputs.
+                if len(grad_output) != 1:
+                    raise ValueError(f"Module '{module.__class__.__name__} has 'grad_output' of length {len(grad_output)}.")
+                grad_output = grad_output[0]
+
+                # Save gradient stats.
+                # What happens when a sample is missing a particular channel, e.g. optic chiasm.
+                # We've masked out that channel's contribution to the loss function, so gradients will
+                # be zero for that step. They'll still flow backwards though, and it could be interesting
+                # as this will show us how much class imbalance affects the gradients.
+                n_channels = grad_output.shape[1]
+                assert n_channels == self.__n_channels
+                channel_names = ['background'] + self.__regions
+                for c, n in zip(range(n_channels), channel_names):
+                    # Save total gradient stats.
+                    grad_c = grad_output[:, c]
+                    metrics = [
+                        f'gradient-output-{n}-min',
+                        f'gradient-output-{n}-max',
+                        f'gradient-output-{n}-mean',
+                        f'gradient-output-{n}-std',
+                        f'gradient-output-{n}-l2',
+                    ]
+                    values = [
+                        grad_c.min().item(),
+                        grad_c.max().item(),
+                        grad_c.mean().item(),
+                        grad_c.std().item(),
+                        grad_c.norm(2).item(),
+                    ]
+                    for m, v, in zip(metrics, values):
+                        data = {
+                            'epoch': self.current_epoch,
+                            'step': self.global_step,
+                            'mode': mode,
+                            'module': name,
+                            'module-type': module.__class__.__name__,
+                            'shape': str(list(grad_c.shape)),
+                            'metric': m,
+                            'value': v,
+                        }
+                        self.__training_metrics = append_row(self.__training_metrics, data)
+
+                    # Save TP/TN/FP/FN gradient stats.
+                    # Need to actually select the values.
+                    TP = torch.masked_select(grad_c, self.__tp_mask[:, c])
+                    TN = torch.masked_select(grad_c, self.__tn_mask[:, c])
+                    FP = torch.masked_select(grad_c, self.__fp_mask[:, c])
+                    FN = torch.masked_select(grad_c, self.__fn_mask[:, c])
+                    groups = ['tp', 'tn', 'fp', 'fn']
+                    dists = [TP, TN, FP, FN]
+                    for g, d in zip(groups, dists):
+                        metrics = [
+                            f'gradient-output-{n}-{g}-min',
+                            f'gradient-output-{n}-{g}-max',
+                            f'gradient-output-{n}-{g}-mean',
+                            f'gradient-output-{n}-{g}-std',
+                            f'gradient-output-{n}-{g}-l2',
+                        ]
+                        if d.numel() == 0:
+                            values = [np.nan, np.nan, np.nan, np.nan, np.nan]
+                        else:
+                            values = [
+                                d.min().item(),
+                                d.max().item(),
+                                d.mean().item(),
+                                d.std().item(),
+                                d.norm(2).item(),
+                            ]
+                        for m, v, in zip(metrics, values):
+                            data = {
+                                'epoch': self.current_epoch,
+                                'step': self.global_step,
+                                'mode': mode,
+                                'module': name,
+                                'module-type': module.__class__.__name__,
+                                'shape': str(list(grad_c.shape)),
+                                'metric': m,
+                                'value': v,
+                            }
+                            self.__training_metrics = append_row(self.__training_metrics, data)
 
         return hook

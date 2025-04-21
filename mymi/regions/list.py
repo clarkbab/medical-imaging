@@ -4,7 +4,7 @@ import yaml
 
 from mymi import config
 from mymi import logging
-from mymi.typing import PatientRegions
+from mymi.typing import Regions
 from mymi.utils import arg_to_list
 
 EXPANDED_REGION_MAP = {
@@ -326,7 +326,7 @@ class RegionList(list, Enum):
     assert len(PMCC) == len(PMCC_CVG_THRESHOLDS) == len(PMCC_INVERSE_VOLUMES) == len(PMCC_SHORT)
 
 # Behaves like 'arg_to_list', but also handles special 'RL:<region list>' format.
-def regions_to_list(regions: PatientRegions, **kwargs) -> PatientRegions:
+def regions_to_list(regions: Regions, **kwargs) -> Regions:
     if regions is None:
         return None
 
@@ -350,13 +350,15 @@ def regions_to_list(regions: PatientRegions, **kwargs) -> PatientRegions:
     else:
         regions = arg_to_list(regions, str, **kwargs)
 
-    # Expand any special region names. Allows for grouping of regions, e.g. ribs.
-    expanded_regions = [] 
-    for r in regions:
-        if r in EXPANDED_REGION_MAP:
-            expanded_regions += EXPANDED_REGION_MAP[r]
-        else:
-            expanded_regions.append(r)
+    # # Expand any special region names. Allows for grouping of regions, e.g. ribs.
+    # if regions is not None:
+    #     expanded_regions = [] 
+    #     for r in regions:
+    #         if r in EXPANDED_REGION_MAP:
+    #             expanded_regions += EXPANDED_REGION_MAP[r]
+    #         else:
+    #             expanded_regions.append(r)
+    #     regions = expanded_regions
 
-    return expanded_regions
+    return regions
     

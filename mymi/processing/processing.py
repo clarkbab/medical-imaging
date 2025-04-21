@@ -5,11 +5,11 @@ import os
 import pandas as pd
 import pydicom as dcm
 from pathlib import Path
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, label
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import Callable, Dict, List, Optional, Union
+from typing import *
 
 from mymi.datasets import DicomDataset, TrainingDataset
 from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtstructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
@@ -18,9 +18,9 @@ from mymi.datasets.training import create as create_training, exists as exists_t
 from mymi.geometry import extent
 from mymi import logging
 from mymi.regions import regions_to_list, to_255
-from mymi.transforms import crop, resample
-from mymi.typing import BoxMM3D, ImageSizeMM3D, ImageSpacing3D, PatientID, PatientLandmarks, PatientRegion, PatientRegions
-from mymi.utils import append_row, arg_to_list, load_csv, save_csv
+from mymi.transforms import crop_foreground, resample
+from mymi.typing import *
+from mymi.utils import *
 
 def convert_brain_crop_to_training(
     set: 'Dataset',
@@ -31,7 +31,7 @@ def convert_brain_crop_to_training(
     dilate_regions: List[str] = [],
     load_localiser_prediction: Optional[Callable] = None,
     recreate_dataset: bool = True,
-    region: Optional[PatientRegions] = None,
+    region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
     spacing: Optional[ImageSpacing3D] = None) -> None:
     logging.arg_log(f'Converting {set.type.name} dataset to TRAINING', ('dataset', 'region'), (set, region))
@@ -243,7 +243,7 @@ def __create_training_input(
     dataset: 'Dataset',
     index: Union[int, str],
     data: np.ndarray,
-    region: Optional[PatientRegion] = None,
+    region: Optional[Region] = None,
     use_compression: bool = True) -> None:
     if region is not None:
         filepath = os.path.join(dataset.path, 'data', 'inputs', region)
@@ -294,12 +294,12 @@ def convert_to_dicom(
     convert_ct: bool = True,
     convert_landmarks: bool = True,
     convert_regions: bool = True,
-    landmarks: PatientLandmarks = 'all',
+    landmarks: Landmarks = 'all',
     landmarks_prefix: Optional[str] = 'Marker',
     pat_id_map: Optional[Dict[PatientID, PatientID]] = None,
     pat_prefix: Optional[str] = None,
     recreate_dataset: bool = True,
-    regions: PatientRegions = 'all') -> None:
+    regions: Regions = 'all') -> None:
 
     # Create destination folder.
     if recreate_dataset:
@@ -518,3 +518,78 @@ def write_flag(
     flag: str) -> None:
     path = os.path.join(dataset.path, flag)
     Path(path).touch()
+
+def fill_border_padding(
+    data: np.ndarray,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    size = data.shape
+    crop_min = [None] * len(size)
+    crop_max = [None] * len(size)
+    for axis in range(len(size)):
+        # We need to separate this into two opposite passes, as we might get confused
+        # by single-valued slices in the middle of the image.
+        for slice_idx in range(size[axis]):
+            index = [slice(None)] * 3
+            index[axis] = slice_idx
+            slice_data = data[tuple(index)]
+            
+            # Look for first slice with more than one intensity value.
+            # This is the lower bound (inclusive).
+            if len(np.unique(slice_data)) != 1:
+                crop_min[axis] = slice_idx
+                break
+                
+        for slice_idx in reversed(range(size[axis])):
+            index = [slice(None)] * 3
+            index[axis] = slice_idx
+            slice_data = data[tuple(index)]
+            
+            # Look for the first slice with more than one intensity value.
+            # The slice above this is the upper bound (if there's a slice above).
+            if len(np.unique(slice_data)) != 1:
+                crop_max[axis] = slice_idx + 1
+                break
+                
+    crop = (tuple(crop_min), tuple(crop_max)) 
+    logging.info(f'Border padding {crop} with values {fill}.')
+    data = crop_foreground(data, crop, fill=fill)
+    return data
+
+def fill_contiguous_padding(
+    data: np.ndarray,
+    fill: Union[float, Literal['min']] = 'min',
+    n_largest_intensities: int = 10,
+    n_largest_components: int = 10,
+    threshold: float = 0.01) -> np.ndarray:
+    n_voxels = data.size
+    threshold = threshold * n_voxels    # Contiguous objects smaller than this won't be filled.
+    fill = data.min() if fill == 'min' else fill
+
+    # Get largest intensity counts.
+    def get_largest_value_counts(data: np.ndarray, n: int) -> Tuple[List[float], List[int]]:
+        vals, counts = np.unique(data, return_counts=True)
+        vals, counts = list(zip(*sorted(zip(vals, counts), key=lambda p: p[1], reverse=True)))
+        return vals[:n], counts[:n]
+    vals, counts = get_largest_value_counts(data, n=n_largest_intensities)
+
+    for v, _ in zip(vals, counts):
+        if v == fill:
+            continue
+
+        # Get n largest connected components.
+        mask, _ = label(data == v)
+        mask_vals, mask_counts = get_largest_value_counts(mask, n=n_largest_components)
+
+        for mv, mc in zip(mask_vals, mask_counts):
+            if mv == 0:  # Represents 'background'.
+                continue
+
+            # Check size threshold.
+            if mc < threshold:
+                continue
+
+            # Apply padding.
+            logging.info(f'Filling {mc} {v}-valued voxels with {fill} (size={mc / n_voxels:.3f}%)')
+            data[mask == mv] = fill
+
+    return data
