@@ -8,7 +8,7 @@ sys.path.append(root_dir)
 
 from mymi import config
 from mymi.datasets import DicomDataset
-from mymi.datasets.dicom import ROIData, RtstructConverter
+from mymi.datasets.dicom import ROIData, RtStructConverter
 from mymi import logging
 from mymi.predictions.datasets.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
 
@@ -51,12 +51,12 @@ for pat_id in pat_ids:
     # Get ROI IDs from DICOM dataset.
     pat = set.patient(pat_id)
     rtstruct_gt = pat.default_rtstruct.rtstruct
-    info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
+    info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
     region_map_gt = dict((set.to_internal(data['name']), id) for id, data in info_gt.items())
 
     # Create RTSTRUCT.
     cts = pat.get_cts()
-    rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
+    rtstruct_pred = RtStructConverter.create_rtstruct(cts, default_rt_info)
     frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
 
     for region, colour in zip(regions, colours):
@@ -81,7 +81,7 @@ for pat_id in pat_ids:
             name=region,
             number=roi_number
         )
-        RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
+        RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Save pred RTSTRUCT.
         filepath = os.path.join(config.directories.predictions, 'dicom', f'{pat_id}.dcm')

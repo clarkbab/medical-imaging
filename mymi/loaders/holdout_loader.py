@@ -155,8 +155,8 @@ class TrainingSet(Dataset):
         if self.__preload_samples:
             logging.info(f"Preloading training samples (n={self.__n_samples}).")
             self.__inputs = []
-            self.__labels = dict((p, []) for p in range(len(self.__sample_ids)))    # Enable multi-label training.
-            self.__masks = []
+            self.__labels = dict((i, []) for i in range(len(self.__sample_ids)))    # Enable multi-label training.
+            self.__masks = dict((i, []) for i in range(len(self.__sample_ids)))    # Enable multi-label training.
             for i, s in tqdm(enumerate(self.__sample_ids)):
                 # Load input.
                 sample = self.__split.sample(s)
@@ -167,7 +167,7 @@ class TrainingSet(Dataset):
                     input[input < self.__pad_threshold] = self.__pad_fill
                 self.__inputs.append(input)
 
-                # Add preloaded outputs (multiple allowed per sample, e.g. labels and landmarks).
+                # Add preloaded labels and masks (multiple allowed per sample, e.g. labels and landmarks).
                 for j, l in enumerate(self.__label_types):
                     # Load label.
                     okwargs = dict(
@@ -179,14 +179,10 @@ class TrainingSet(Dataset):
                         okwargs['landmarks'] = self.__landmarks
                     label = sample.label(**okwargs)
                     self.__labels[i].append(label)
-                
-                if self.__regions is not None:
-                    # At the moment, masks apply to region outputs globally. This might need to change when
-                    # we have regions for both moving/fixed images, as the masks could be different.
-                    mask = sample.mask(regions=self.__regions)
-                    self.__masks.append(mask)
-                else:
-                    self.__masks = None
+
+                    if self.__regions is not None and l == 'regions':
+                        mask = sample.mask(label_idx=j, regions=self.__regions)
+                        self.__masks[i].append(mask)
 
     def __len__(self):
         return self.__n_samples
@@ -208,9 +204,7 @@ class TrainingSet(Dataset):
             input = self.__inputs[idx]
             labels = self.__labels[idx]     #  Could be multiple labels.
             if self.__regions is not None:
-                mask = self.__masks[idx]
-            else:
-                mask = None
+                masks = self.__masks[idx]   # Could be multiple masks.
         else:
             # Load input.
             input = sample.input
@@ -221,6 +215,7 @@ class TrainingSet(Dataset):
 
             # Load multiple outputs.
             labels = []
+            masks = []
             for i, l in enumerate(self.__label_types):
                 # Load label.
                 okwargs = dict(
@@ -232,10 +227,10 @@ class TrainingSet(Dataset):
                     okwargs['landmarks'] = self.__landmarks
                 label = sample.label(**okwargs)
                 labels.append(label)
-            if self.__regions is not None:
-                mask = sample.mask(regions=self.__regions)
-            else:
-                mask = None
+
+                if self.__regions is not None:
+                    mask = sample.mask(label_idx=j, regions=self.__regions)
+                    masks.append(mask)
 
         if self.__transform is not None:
             # Get concrete transform.
@@ -292,8 +287,8 @@ class TrainingSet(Dataset):
         # Handle return values. Can't pass None, as PyTorch doesn't recognise this
         # as a type.
         return_vals = [desc, input, *labels]
-        if mask is not None:
-            return_vals.append(mask)
+        if self.__regions is not None:
+            return_vals += masks
 
         return tuple(return_vals)
     

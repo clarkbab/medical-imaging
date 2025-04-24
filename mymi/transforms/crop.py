@@ -66,7 +66,7 @@ def spatial_crop(
 def crop_mm_3D(
     data: np.ndarray,
     spacing: ImageSpacing3D,
-    offset: PointMM3D,
+    offset: Point3D,
     bounding_box: Box3D) -> np.ndarray:
     assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
     assert len(bounding_box[0]) == 3, f"Input 'bounding_box' must have dimension 3."
@@ -185,8 +185,8 @@ def crop_foreground_3D(
     return cropped
 
 def crop_point(
-    point: Union[Point2D, Point3D],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Point2D, Point3D]]:
+    point: Union[Pixel, Voxel],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -206,8 +206,8 @@ def crop_point(
     return point
 
 def crop_or_pad_point(
-    point: Union[Point2D, Point3D],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Point2D, Point3D]]:
+    point: Union[Pixel, Voxel],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 

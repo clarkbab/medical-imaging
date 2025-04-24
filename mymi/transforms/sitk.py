@@ -45,10 +45,10 @@ def sitk_transform_image_spatial(
     transform: sitk.Transform,
     output_size: ImageSize3D,
     fill: Union[float, Literal['min']] = 'min',
-    offset: PointMM3D = (0, 0, 0),
+    offset: Point3D = (0, 0, 0),
     output_spacing: ImageSpacing3D = (1, 1, 1), 
-    output_offset: PointMM3D = (0, 0, 0),
-    spacing: ImageSpacing3D = (1, 1, 1)) -> Tuple[Image, ImageSpacing3D, PointMM3D]:
+    output_offset: Point3D = (0, 0, 0),
+    spacing: ImageSpacing3D = (1, 1, 1)) -> Tuple[Image, ImageSpacing3D, Point3D]:
     # Load moving image.
     moving_sitk = to_sitk_image(data, spacing, offset)
 

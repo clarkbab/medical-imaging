@@ -9,7 +9,7 @@ def velocity_load_transform(
     filepath: str,
     # Velocity '.bdf' file does not preserve the DICOM 'ImageOffsetPatient' offset.
     # We need to pass this manually.
-    fixed_offset: PointMM3D) -> sitk.Transform:
+    fixed_offset: Point3D) -> sitk.Transform:
 
     # Read ".bdf" file.
     with open(filepath, "rb") as f:

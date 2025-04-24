@@ -30,7 +30,7 @@ def get_region_stats(
     ct_data: CtImage,
     region_data: RegionLabel,
     spacing: ImageSpacing3D,
-    offset: Point3D,
+    offset: Voxel,
     brain_data: Optional[RegionLabel] = None) -> List[Dict[str, Any]]:
 
     stats = []

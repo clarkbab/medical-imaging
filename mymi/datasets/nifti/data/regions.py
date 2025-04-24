@@ -1,10 +1,10 @@
 import numpy as np
 import os
-from typing import Dict, List, Optional
+from typing import *
 
 from mymi.regions import regions_to_list
-from mymi.typing import Region, Regions, SeriesID
-from mymi.utils import load_nifti
+from mymi.typing import *
+from mymi.utils import *
 
 from .data import NiftiData
 
@@ -19,10 +19,14 @@ class RegionData(NiftiData):
         self.__region_map = region_map
         self.__inv_region_map = {v: k for k, v in self.__region_map.items()} if self.__region_map is not None else None
 
+    @property
+    def id(self) -> SeriesID:
+        return self.__id
+
     def data(
         self,
         regions: Regions = 'all',
-        **kwargs) -> Dict[str, np.ndarray]:
+        **kwargs) -> RegionData:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
 
         rd = {}

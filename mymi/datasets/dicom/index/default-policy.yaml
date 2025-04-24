@@ -1,0 +1,28 @@
+ct:
+    no-rtstruct:
+        allow: false
+    slice:
+        inconsistent-spacing:
+            allow: false
+        non-standard-orientation:
+            allow: false
+    slices:
+        inconsistent-position:
+            allow: false
+        inconsistent-spacing:
+            allow: false
+duplicates:
+    allow: false
+rtdose:
+    no-ref-rtplan:
+        allow: false
+rtplan:
+    no-ref-rtstruct:
+        allow: false
+rtstruct:
+    no-ref-ct:
+        allow: false 
+study:
+    map-ids: {}
+    no-rtstruct:
+        allow: false

@@ -1,11 +1,10 @@
 import numpy as np
 import os
-import pandas as pd
-from typing import Dict, List, Optional
+from typing import *
 
-from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, Landmark, Region, PointMM3D, SeriesID, StudyID
+from mymi.typing import *
 
-from .data import CtData, LandmarkData, Modality, NiftiData, RegionData
+from .data import *
 
 class NiftiStudy:
     def __init__(
@@ -26,32 +25,47 @@ class NiftiStudy:
             raise ValueError(f"Study '{self}' not found. Filepath: '{self.__path}'.")
 
     @property
-    def ct_data(self) -> np.ndarray:
-        return self.default_ct.data
+    def ct_data(self) -> Optional[CtImage]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.data
 
     @property
-    def ct_affine(self) -> np.ndarray:
-        return self.default_ct.affine
+    def ct_affine(self) -> Optional[np.ndarray]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.affine
 
     @property
-    def ct_offset(self) -> PointMM3D:
-        return self.default_ct.offset
+    def ct_offset(self) -> Optional[Point3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.offset
 
     @property
     def ct_path(self) -> str:
         return self.default_ct.path
 
     @property
-    def ct_size(self) -> ImageSize3D:
-        return self.default_ct.size
+    def ct_size(self) -> Optional[ImageSize3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.size
 
     @property
-    def ct_spacing(self) -> ImageSpacing3D:
-        return self.default_ct.spacing
+    def ct_spacing(self) -> Optional[ImageSpacing3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.spacing
 
     @property
     def default_ct(self) -> Optional[CtData]:
-        data_ids = self.list_data(Modality.CT)
+        data_ids = self.list_data('CT')
         if len(data_ids) == 0:
             return None
         else:
@@ -59,7 +73,7 @@ class NiftiStudy:
 
     @property
     def default_landmarks(self) -> Optional[LandmarkData]:
-        data_ids = self.list_data(Modality.LANDMARKS)
+        data_ids = self.list_data('LANDMARKS')
         if len(data_ids) == 0:
             return None
         else:
@@ -67,7 +81,7 @@ class NiftiStudy:
 
     @property
     def default_regions(self) -> Optional[RegionData]:
-        data_ids = self.list_data(Modality.REGIONS)
+        data_ids = self.list_data('REGIONS')
         if len(data_ids) == 0:
             return None
         else:
@@ -125,28 +139,37 @@ class NiftiStudy:
     def list_data(
         self,
         modality: Modality) -> List[str]:
-        if modality == Modality.CT:
-            ct_path = os.path.join(self.__path, 'ct')
-            if os.path.exists(ct_path):
-                data_ids = list(sorted(os.listdir(ct_path)))
+        if modality == 'CT':
+            filepath = os.path.join(self.__path, 'ct')
+            if os.path.exists(filepath):
+                data_ids = list(sorted(os.listdir(filepath)))
                 data_ids = [s.replace('.nii.gz', '') for s in data_ids]
             else:
                 data_ids = []
-        elif modality == Modality.LANDMARKS:
-            landmarks_path  = os.path.join(self.__path, 'landmarks')
-            if os.path.exists(landmarks_path):
-                data_ids = list(sorted(os.listdir(landmarks_path)))
+        elif modality == 'DOSE':
+            pass
+        elif modality == 'LANDMARKS':
+            filepath  = os.path.join(self.__path, 'landmarks')
+            if os.path.exists(filepath):
+                data_ids = list(sorted(os.listdir(filepath)))
                 data_ids = [s.replace('.csv', '') for s in data_ids]
             else:
                 data_ids = []
-        elif modality == Modality.REGIONS:
-            regions_path = os.path.join(self.__path, 'regions')
-            if os.path.exists(regions_path):
-                data_ids = list(sorted(os.listdir(regions_path)))
+        elif modality == 'MR':
+            filepath = os.path.join(self.__path, 'mr')
+            if os.path.exists(filepath):
+                data_ids = list(sorted(os.listdir(filepath)))
+                data_ids = [s.replace('.nii.gz', '') for s in data_ids]
             else:
                 data_ids = []
-        elif modality == Modality.DOSE:
-            pass
+        elif modality == 'REGIONS':
+            filepath = os.path.join(self.__path, 'regions')
+            if os.path.exists(filepath):
+                data_ids = list(sorted(os.listdir(filepath)))
+            else:
+                data_ids = []
+        else:
+            raise ValueError(f"Modality '{modality}' not supported.")
     
         return data_ids
 
@@ -165,17 +188,34 @@ class NiftiStudy:
     def data(
         self,
         id: str,
-        modality: Modality) -> NiftiData:
-        if modality == Modality.CT:
+        modality: Optional[Modality] = None) -> NiftiData:
+        if modality is None:
+            modality = self.data_modality(id)
+
+        if modality == 'CT':
             data = CtData(self, id)
-        elif modality == Modality.LANDMARKS:
-            data = LandmarkData(self, id)
-        elif modality == Modality.REGIONS:
-            data = RegionData(self, id, region_map=self.__region_map)
-        elif modality == Modality.DOSE:
+        elif modality == 'DOSE':
             pass
+        elif modality == 'LANDMARKS':
+            data = LandmarkData(self, id)
+        elif modality == 'MR':
+            data = MrData(self, id)
+        elif modality == 'REGIONS':
+            data = RegionData(self, id, region_map=self.__region_map)
+        else:
+            raise ValueError(f"Modality '{modality}' not supported.")
 
         return data
+
+    def data_modality(
+        self,
+        id: SeriesID) -> Modality:
+        modalities = ['CT', 'MR', 'LANDMARKS', 'REGIONS']
+        for m in modalities:
+            data_ids = self.list_data(m)
+            if id in data_ids:
+                return m
+        raise ValueError(f"Data with ID '{id}' not found in study '{self.__global_id}'.")
 
     def __str__(self) -> str:
         return self.__global_id

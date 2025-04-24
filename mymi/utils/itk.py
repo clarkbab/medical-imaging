@@ -3,11 +3,11 @@ import numpy as np
 import os
 from typing import Optional, Tuple, Union
 
-from mymi.typing import ImageSpacing3D, PointMM3D
+from mymi.typing import ImageSpacing3D, Point3D
 
 def itk_convert_LPS_and_RAS(
     direction: Optional[Union[np.ndarray]] = None,
-    offset: Optional[PointMM3D] = None) -> Tuple[Optional[np.ndarray], Optional[PointMM3D]]:
+    offset: Optional[Point3D] = None) -> Tuple[Optional[np.ndarray], Optional[Point3D]]:
     if direction is not None:
         direction[0][0], direction[1][1] = -direction[0][0], -direction[1][1]
     if offset is not None:
@@ -16,7 +16,7 @@ def itk_convert_LPS_and_RAS(
         offset = tuple(offset)
     return direction, offset
 
-def from_itk(img: itk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
+def from_itk(img: itk.Image) -> Tuple[np.ndarray, ImageSpacing3D, Point3D]:
     data = itk.GetArrayFromImage(img)
     # ITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -38,7 +38,7 @@ def load_itk(filepath: str) -> itk.Image:
 def to_itk(
     data: np.ndarray,
     spacing: ImageSpacing3D,
-    offset: PointMM3D,
+    offset: Point3D,
     is_vector: bool = False) -> itk.Image:
     # Convert to ITK types.
     if data.dtype == bool:

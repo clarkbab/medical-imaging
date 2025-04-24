@@ -17,7 +17,7 @@ from typing import Dict, Literal, List, Optional, Tuple, Union
 from mymi import config
 from mymi import datasets as ds
 from mymi.datasets import DicomDataset, NiftiDataset
-from mymi.datasets.dicom import ROIData, RtstructConverter, recreate as recreate_dicom
+from mymi.datasets.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
 from mymi.datasets.training import TrainingDataset, exists as exists_training
 from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
@@ -946,12 +946,12 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
-        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
+        info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtStructConverter.create_rtstruct(cts, default_rt_info)
         frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
 
         for region in RegionNames:
@@ -976,7 +976,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
                 name=region,
                 number=roi_number
             )
-            RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
+            RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Add index row.
         if anonymise:
@@ -1055,12 +1055,12 @@ def convert_segmenter_predictions_to_dicom_from_loader(
         set_dicom = DicomDataset(dataset)
         patient_dicom = set_dicom.patient(pat_id_dicom)
         rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
-        info_gt = RtstructConverter.get_roi_info(rtstruct_gt)
+        info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
         region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
 
         # Create RTSTRUCT.
         cts = patient_dicom.get_cts()
-        rtstruct_pred = RtstructConverter.create_rtstruct(cts, default_rt_info)
+        rtstruct_pred = RtStructConverter.create_rtstruct(cts, default_rt_info)
 
         # Load prediction.
         # pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
@@ -1072,7 +1072,7 @@ def convert_segmenter_predictions_to_dicom_from_loader(
             name=region,
             number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
         )
-        RtstructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
+        RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Save prediction.
         # Get localiser checkpoint and raise error if multiple.

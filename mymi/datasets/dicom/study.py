@@ -1,18 +1,18 @@
 from datetime import datetime
 import pandas as pd
-import pydicom as dcm
-from typing import Dict, List, Optional
+from typing import *
 
-from .files import RegionMap
-from .series import CtSeries, DicomSeries, Modality, RtdoseSeries, RtplanSeries, RtstructSeries, SeriesInstanceUID
+from mymi.typing import *
+from mymi.utils import *
 
-StudyInstanceUID = str
+from .series import *
+from .files import RegionMap    # import from "series" first to avoid circular imports, as "series" imports from "files".
 
 class DicomStudy:
     def __init__(
         self,
         patient: 'DicomPatient',
-        id: StudyInstanceUID,
+        id: StudyID,
         region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None):
         self.__default_rtdose = None        # Lazy-loaded.  
@@ -34,24 +34,39 @@ class DicomStudy:
         self.__region_policy = self.__patient.region_policy
 
     @property
-    def cts(self) -> List[dcm.FileDataset]:
-        return self.default_ct.cts
+    def ct_data(self) -> Optional[CtImage]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.data
 
     @property
-    def ct_data(self):
-        return self.default_ct.data
+    def ct_fov(self) -> Optional[Point3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.fov
 
     @property
-    def ct_offset(self):
-        return self.default_ct.offset
+    def ct_offset(self) -> Optional[Point3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.offset
 
     @property
-    def ct_size(self):
-        return self.default_ct.size
+    def ct_size(self) -> Optional[ImageSize3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.size
 
     @property
-    def ct_spacing(self):
-        return self.default_ct.spacing
+    def ct_spacing(self) -> Optional[ImageSpacing3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.spacing
 
     @property
     def datetime(self) -> datetime:
@@ -59,32 +74,36 @@ class DicomStudy:
 
     @property
     def default_ct(self) -> Optional[CtSeries]:
-        series_ids = self.list_series(Modality.CT)
+        series_ids = self.list_series('CT')
         if len(series_ids) == 0:
             return None
-        else:
-            return self.series(series_ids[-1], Modality.CT)
+        return self.series(series_ids[-1], 'CT')
 
     @property
-    def default_rtdose(self) -> RtdoseSeries:
+    def default_mr(self) -> Optional[MrSeries]:
+        series_ids = self.list_series('MR')
+        if len(series_ids) == 0:
+            return None
+        return self.series(series_ids[-1], 'MR')
+
+    @property
+    def default_rtdose(self) -> RtDoseSeries:
         if self.__default_rtdose is None:
             self.__load_default_rtplan_and_rtdose()
         return self.__default_rtdose
 
     @property
-    def default_rtplan(self) -> RtplanSeries:
+    def default_rtplan(self) -> RtPlanSeries:
         if self.__default_rtplan is None:
             self.__load_default_rtplan_and_rtdose()
         return self.__default_rtplan
     
     @property
-    def default_rtstruct(self) -> Optional[RtstructSeries]:
-        # Choose most recent RTSTRUCT series.
-        series_ids = self.list_series(Modality.RTSTRUCT)
+    def default_rtstruct(self) -> Optional[RtStructSeries]:
+        series_ids = self.list_series('RTSTRUCT')
         if len(series_ids) == 0:
             return None
-        else:
-            return self.series(series_ids[-1], Modality.RTSTRUCT)
+        return self.series(series_ids[-1], 'RTSTRUCT')
 
     @property
     def description(self) -> str:
@@ -120,13 +139,13 @@ class DicomStudy:
 
     @property
     def has_ct(self):
-        if len(self.list_series(Modality.CT)) > 0:
+        if len(self.list_series('CT')) > 0:
             return True
         else:
             return False
 
     @property
-    def id(self) -> str:
+    def id(self) -> StudyID:
         return self.__id
 
     @property
@@ -136,6 +155,41 @@ class DicomStudy:
     @property
     def index_policy(self) -> pd.DataFrame:
         return self.__index_policy
+
+    @property
+    def mr_data(self) -> Optional[MrImage]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.data
+
+    @property
+    def mr_fov(self) -> Optional[Point3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.fov
+
+    @property
+    def mr_offset(self) -> Optional[Point3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.offset
+
+    @property
+    def mr_size(self) -> Optional[ImageSize3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.size
+
+    @property
+    def mr_spacing(self) -> Optional[ImageSpacing3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.spacing
 
     @property
     def patient(self) -> str:
@@ -162,10 +216,13 @@ class DicomStudy:
 
     def list_series(
         self,
-        modality: Modality) -> List[SeriesInstanceUID]:
-        # Sort series by date/time - oldest first.
-        index = self.__index[self.__index.modality == modality]
-        series_ids = list(index.sort_values(['series-date', 'series-time'])['series-id'].unique())
+        modalities: Optional[Union[Modality, Sequence[Modality]]] = None) -> List[SeriesID]:
+        modalities = arg_to_list(modalities, Modality)
+        index = self.__index.copy()
+        if modalities is not None:
+            index = index[index.modality.isin(modalities)]
+        index = index.sort_values(['series-date', 'series-time'], ascending=[True, True])
+        series_ids = list(index['series-id'].unique())
         return series_ids
 
     def region_data(self, *args, **kwargs):
@@ -173,19 +230,35 @@ class DicomStudy:
 
     def series(
         self,
-        id: SeriesInstanceUID,
-        modality: Modality,
+        id: SeriesID,
+        modality: Optional[Modality] = None,
         **kwargs: Dict) -> DicomSeries:
-        if modality == Modality.CT:
+        if modality is None:
+            modality = self.series_modality(id)
+
+        if modality == 'CT':
             return CtSeries(self, id, **kwargs)
-        elif modality == Modality.RTDOSE:
-            return RtdoseSeries(self, id, **kwargs)
-        elif modality == Modality.RTPLAN:
-            return RtplanSeries(self, id, **kwargs)
-        elif modality == Modality.RTSTRUCT:
-            return RtstructSeries(self, id, region_dups=self.__region_dups, region_map=self.__region_map, **kwargs)
+        elif modality == 'MR':
+            return MrSeries(self, id, **kwargs)
+        elif modality == 'RTDOSE':
+            return RtDoseSeries(self, id, **kwargs)
+        elif modality == 'RTPLAN':
+            return RtPlanSeries(self, id, **kwargs)
+        elif modality == 'RTSTRUCT':
+            return RtStructSeries(self, id, region_dups=self.__region_dups, region_map=self.__region_map, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
+
+    def series_modality(
+        self,
+        id: SeriesID) -> Modality:
+        # Get modality from index.
+        index = self.__index.copy()
+        index = index[index['series-id'] == id]
+        if len(index) == 0:
+            raise ValueError(f"Series '{id}' not found in study '{self}'.")
+        modality = index.iloc[0]['modality']
+        return modality
 
     def __load_default_rtplan_and_rtdose(self) -> None:
         if not self.__index_policy['rtplan']['no-ref-rtstruct']['allow']:
@@ -197,9 +270,9 @@ class DicomStudy:
             # Find RTPLANs that link to default RTSTRUCT.
             linked_rtplan_sop_ids = []
             linked_rtplan_series_ids = []
-            rtplan_series_ids = self.list_series(Modality.RTPLAN)
+            rtplan_series_ids = self.list_series('RTPLAN')
             for rtplan_series_id in rtplan_series_ids:
-                rtplan_series = self.series(rtplan_series_id, Modality.RTPLAN)
+                rtplan_series = self.series(rtplan_series_id, 'RTPLAN')
                 rtplan_sop_ids = rtplan_series.list_rtplans()
                 for rtplan_sop_id in rtplan_sop_ids:
                     rtplan = rtplan_series.rtplan(rtplan_sop_id)
@@ -217,15 +290,15 @@ class DicomStudy:
             # Preference most recent RTPLAN as default.
             def_rtplan_series_id = linked_rtplan_series_ids[-1]
             def_rtplan_sop_id = linked_rtplan_sop_ids[-1]
-            def_rtplan_series = self.series(def_rtplan_series_id, Modality.RTPLAN)
+            def_rtplan_series = self.series(def_rtplan_series_id, 'RTPLAN')
             self.__default_rtplan = def_rtplan_series.rtplan(def_rtplan_sop_id)
 
         elif self.__index_policy['rtplan']['no-ref-rtstruct']['only'] == 'at-least-one-rtstruct':
             # Choose first RTPLAN from study.
-            rtplan_series_ids = self.list_series(Modality.RTPLAN)
+            rtplan_series_ids = self.list_series('RTPLAN')
             if len(rtplan_series_ids) > 0:
                 def_rtplan_series_id = rtplan_series_ids[-1]
-                def_rtplan_series = self.series(def_rtplan_series_id, Modality.RTPLAN)
+                def_rtplan_series = self.series(def_rtplan_series_id, 'RTPLAN')
                 def_rtplan_sop_id = def_rtplan_series.list_rtplans()[-1]
                 self.__default_rtplan = def_rtplan_series.rtplan(def_rtplan_sop_id) 
             else:
@@ -235,9 +308,9 @@ class DicomStudy:
             # Get RTDOSEs linked to first RTPLAN.
             linked_rtdose_series_ids = []
             linked_rtdose_sop_ids = []
-            rtdose_series_ids = self.list_series(Modality.RTDOSE)
+            rtdose_series_ids = self.list_series('RTDOSE')
             for rtdose_series_id in rtdose_series_ids:
-                rtdose_series = self.series(rtdose_series_id, Modality.RTDOSE)
+                rtdose_series = self.series(rtdose_series_id, 'RTDOSE')
                 rtdose_sop_ids = rtdose_series.list_rtdoses()
                 for rtdose_sop_id in rtdose_sop_ids:
                     rtdose = rtdose_series.rtdose(rtdose_sop_id)
@@ -253,15 +326,15 @@ class DicomStudy:
             # Preference most recent RTDOSE as default.
             def_rtdose_series_id = linked_rtdose_series_ids[-1]
             def_rtdose_sop_id = linked_rtdose_sop_ids[-1]
-            def_rtdose_series = self.series(def_rtdose_series_id, Modality.RTDOSE)
+            def_rtdose_series = self.series(def_rtdose_series_id, 'RTDOSE')
             self.__default_rtdose = def_rtdose_series.rtdose(def_rtdose_sop_id)
 
         elif self.__index_policy['rtdose']['no-ref-rtplan']['only'] == 'at-least-one-rtplan':
             # Choose first RTDOSE from study.
-            rtdose_series_ids = self.list_series(Modality.RTDOSE)
+            rtdose_series_ids = self.list_series('RTDOSE')
             if len(rtdose_series_ids) > 0:
                 def_rtdose_series_id = rtdose_series_ids[-1]
-                def_rtdose_series = self.series(def_rtdose_series_id, Modality.RTDOSE)
+                def_rtdose_series = self.series(def_rtdose_series_id, 'RTDOSE')
                 def_rtdose_sop_id = def_rtdose_series.list_rtdoses()[-1]
                 self.__default_rtdose = def_rtdose_series.rtdose(def_rtdose_sop_id) 
             else:

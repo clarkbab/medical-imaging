@@ -9,9 +9,7 @@ from mymi.typing import *
 from ..dicom import DATE_FORMAT, TIME_FORMAT
 from .series import Modality, DicomSeries
 
-CLOSENESS_ABS_TOL = 1e-10;
-
-class CtSeries(DicomSeries):
+class MrSeries(DicomSeries):
     def __init__(
         self,
         study: 'DicomStudy',
@@ -29,21 +27,21 @@ class CtSeries(DicomSeries):
 
         # Load index.
         index = self.__study.index
-        index = index[(index.modality == 'CT') & (index['series-id'] == id)]
+        index = index[(index.modality == 'MR') & (index['series-id'] == id)]
         self.__index = index
         self.__verify_index()
     
-    # Should really return 'CT' file object IDs.
+    # Should really return 'MR' file object IDs.
     @property
-    def ct_files(self) -> List[dcm.FileDataset]:
-        # Sort CTs by z position, smallest first.
-        ct_paths = list(self.__index['filepath'])
-        cts = [dcm.read_file(f, force=self.__force_dicom_read) for f in ct_paths]
-        cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
-        return cts
+    def mr_files(self) -> List[dcm.FileDataset]:
+        # Sort MRs by z position, smallest first.
+        filepaths = list(self.__index['filepath'])
+        mrs = [dcm.read_file(f, force=self.__force_dicom_read) for f in filepaths]
+        mrs = list(sorted(mrs, key=lambda m: m.ImagePositionPatient[2]))
+        return mrs
 
     @property
-    def data(self) -> np.ndarray:
+    def data(self) -> MrImage:
         if self.__data is None:
             self.__load_data()
         return self.__data
@@ -68,7 +66,7 @@ class CtSeries(DicomSeries):
 
     @property
     def modality(self) -> Modality:
-        return 'CT'
+        return 'MR'
 
     @property
     def offset(self) -> Point3D:
@@ -98,59 +96,57 @@ class CtSeries(DicomSeries):
 
     @property
     def study_datetime(self) -> datetime:
-        ct = self.ct_files[0]
-        datetime_str = f"{ct.StudyDate}:{ct.StudyTime}"
+        mr = self.mrs[0]
+        datetime_str = f"{mr.StudyDate}:{mr.StudyTime}"
         datetime_fmt = f"{DATE_FORMAT}:{TIME_FORMAT}"
         return datetime.strptime(datetime_str, datetime_fmt)
 
     @property
-    def first_ct(self) -> dcm.FileDataset:
-        return self.ct_files[0]
+    def first_mr(self) -> dcm.FileDataset:
+        return self.mrs[0]
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"CtSeries '{self}' not found in index for study '{self.__study}'.")
+            raise ValueError(f"MrSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __load_data(self) -> None:
-        cts = self.ct_files
+        mrs = self.mr_files
 
         # Store offset.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
-        offset = cts[0].ImagePositionPatient    
+        offset = mrs[0].ImagePositionPatient    
         self.__offset = tuple(int(round(o)) for o in offset)
 
         # Store size.
-        # Indexing checked that CT slices had consisent x/y spacing in series.
+        # Indexing checked that MR slices had consisent x/y spacing in series.
         self.__size = (
-            cts[0].pixel_array.shape[1],
-            cts[0].pixel_array.shape[0],
-            len(cts)
+            mrs[0].pixel_array.shape[1],
+            mrs[0].pixel_array.shape[0],
+            len(mrs)
         )
 
         # Store spacing.
-        # Indexing checked that CT slices were equally spaced in z-dimension.
+        # Indexing checked that MR slices were equally spaced in z-dimension.
         self.__spacing = (
-            float(cts[0].PixelSpacing[0]),
-            float(cts[0].PixelSpacing[1]),
-            np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
+            float(mrs[0].PixelSpacing[0]),
+            float(mrs[0].PixelSpacing[1]),
+            np.abs(mrs[1].ImagePositionPatient[2] - mrs[0].ImagePositionPatient[2])
         )
 
         # Store field-of-view.
         self.__fov = tuple(np.array(self.__spacing) * self.__size)
 
-        # Store CT data.
+        # Store MR data.
         data = np.zeros(shape=self.__size)
-        for ct in cts:
-            # Convert values to HU.
-            ct_data = np.transpose(ct.pixel_array)      # 'pixel_array' contains row-first image data.
-            ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
+        for mr in mrs:
+            mr_data = np.transpose(mr.pixel_array)      # 'pixel_array' contains row-first image data.
 
             # Get z index.
-            z_offset =  ct.ImagePositionPatient[2] - self.__offset[2]
+            z_offset =  mr.ImagePositionPatient[2] - self.__offset[2]
             z_idx = int(round(z_offset / self.__spacing[2]))
 
             # Add data.
-            data[:, :, z_idx] = ct_data
+            data[:, :, z_idx] = mr_data
         self.__data = data
 
     def __str__(self) -> str:

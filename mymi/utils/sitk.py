@@ -7,7 +7,7 @@ from mymi.typing import *
 
 from .utils import transpose_image
 
-def from_sitk_image(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
+def from_sitk_image(img: sitk.Image) -> Tuple[np.ndarray, ImageSpacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -63,7 +63,7 @@ def save_sitk_transform(
 def to_sitk_image(
     data: np.ndarray,   # We use LPS coordinates - the same as SimpleITK!
     spacing: ImageSpacing3D,
-    offset: PointMM3D,
+    offset: Point3D,
     is_vector: bool = False) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:
@@ -98,7 +98,7 @@ def to_sitk_image(
 def to_sitk_transform(
     dvf: np.ndarray,   # (3, X, Y, Z)
     spacing: ImageSpacing3D,
-    offset: PointMM3D) -> sitk.Transform:
+    offset: Point3D) -> sitk.Transform:
     dvf = dvf.astype(np.float64)
     assert dvf.shape[0] == 3
     dvf_sitk = to_sitk_image(dvf, spacing, offset, is_vector=True)

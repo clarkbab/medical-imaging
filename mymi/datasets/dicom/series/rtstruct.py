@@ -1,17 +1,17 @@
 import pandas as pd
-from typing import List, Optional
+from typing import *
 
-from mymi.typing.types import Region
+from mymi.typing import *
 
-from ..files import RegionMap, RTSTRUCT, SOPInstanceUID
+from ..files import RegionMap, RtStructFile, SOPInstanceUID
 from .ct import CtSeries
-from .series import Modality, DicomSeries, SeriesInstanceUID
+from .series import Modality, DicomSeries
 
-class RtstructSeries(DicomSeries):
+class RtStructSeries(DicomSeries):
     def __init__(
         self,
         study: 'DicomStudy',
-        id: SeriesInstanceUID,
+        id: SeriesID,
         region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None) -> None:
         self.__global_id = f"{study}:{id}"
@@ -22,7 +22,7 @@ class RtstructSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == Modality.RTSTRUCT) & (index['series-id'] == self.__id)]
+        self.__index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == self.__id)]
         self.__verify_index()
 
         # Get policies.
@@ -30,7 +30,7 @@ class RtstructSeries(DicomSeries):
         self.__region_policy = self.__study.region_policy
 
     @property
-    def default_rtstruct(self) -> Optional[RTSTRUCT]:
+    def default_rtstruct(self) -> Optional[RtStructFile]:
         # Choose most recent RTSTRUCT.
         rtstruct_ids = self.list_rtstructs()
         if len(rtstruct_ids) == 0:
@@ -43,7 +43,7 @@ class RtstructSeries(DicomSeries):
         return self.__global_id
 
     @property
-    def id(self) -> SOPInstanceUID:
+    def id(self) -> SeriesID:
         return self.__id
 
     @property
@@ -56,7 +56,7 @@ class RtstructSeries(DicomSeries):
 
     @property
     def modality(self) -> Modality:
-        return Modality.RTSTRUCT
+        return 'RTSTRUCT'
 
     @property
     def ref_ct(self) -> CtSeries:
@@ -93,12 +93,12 @@ class RtstructSeries(DicomSeries):
 
     def rtstruct(
         self,
-        id: SOPInstanceUID) -> RTSTRUCT:
-        return RTSTRUCT(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
+        id: SOPInstanceUID) -> RtStructFile:
+        return RtStructFile(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"RtstructSeries '{self}' not found in index for study '{self.__study}'.")
+            raise ValueError(f"RtStructSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __str__(self) -> str:
         return self.__global_id

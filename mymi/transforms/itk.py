@@ -3,7 +3,7 @@ import numpy as np
 import os
 from typing import Literal, Tuple, Union
 
-from mymi.typing import Image, PointMM3D, ImageSpacing3D, ImageSize3D
+from mymi.typing import Image, Point3D, ImageSpacing3D, ImageSize3D
 from mymi.utils import from_itk, itk_convert_LPS_and_RAS, to_itk
 
 def itk_load_transform(
@@ -16,12 +16,12 @@ def itk_load_transform(
 def itk_transform_image(
     data: np.ndarray,
     spacing: ImageSpacing3D,
-    offset: PointMM3D,
+    offset: Point3D,
     output_size: ImageSize3D,
     output_spacing: ImageSpacing3D, 
-    output_offset: PointMM3D,
+    output_offset: Point3D,
     transform: itk.Transform,
-    fill: Union[float, Literal['min']] = 'min') -> Tuple[Image, ImageSpacing3D, PointMM3D]:
+    fill: Union[float, Literal['min']] = 'min') -> Tuple[Image, ImageSpacing3D, Point3D]:
     # Load moving image.
     moving_itk = to_itk(data, spacing, offset)
 
@@ -62,8 +62,8 @@ def itk_transform_points(
     fixed_points: np.ndarray,
     fixed_spacing: ImageSpacing3D,
     moving_spacing: ImageSpacing3D,
-    fixed_offset: PointMM3D,
-    moving_offset: PointMM3D,
+    fixed_offset: Point3D,
+    moving_offset: Point3D,
     transform: itk.Transform,
     fill: Union[float, str] = 'min') -> np.ndarray:
     

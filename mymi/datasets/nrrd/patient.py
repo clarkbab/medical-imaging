@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSpacing3D, Landmarks, PatientID, Landmark, Region, Point3D, StudyID
+from mymi.typing import ImageSpacing3D, Landmarks, PatientID, Landmark, Region, Voxel, StudyID
 
 from .study import NrrdStudy
 
@@ -42,7 +42,7 @@ class NrrdPatient:
         return self.default_study.ct_affine
 
     @property
-    def ct_offset(self) -> Point3D:
+    def ct_offset(self) -> Voxel:
         return self.default_study.ct_offset
 
     @property

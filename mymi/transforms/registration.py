@@ -8,10 +8,10 @@ from mymi.utils import *
 def rigid_image_registration(
     moving_image: Image,
     moving_spacing: ImageSpacing3D,
-    moving_offset: PointMM3D,
+    moving_offset: Point3D,
     fixed_image: Image,
     fixed_spacing: ImageSpacing3D,
-    fixed_offset: PointMM3D,
+    fixed_offset: Point3D,
     disable_x_axis_rotation: bool = False,
     disable_y_axis_rotation: bool = False,
     fill: Union[float, Literal['min']] = 'min',

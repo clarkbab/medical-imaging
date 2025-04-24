@@ -713,30 +713,43 @@ class SegmenterGradNorm(pl.LightningModule):
                     self.__training_metrics = append_row(self.__training_metrics, data)
 
             # Clip gradients.
-            # mean_norm = task_norms.mean()
-            # Calculate the mean if each task was excluded - this stops a large task from dragging up the mean.
-            mean_norms = (task_norms.sum() - task_norms) / len(task_norms)
+            min_norm = task_norms.min()
 
             if self.logger is not None:
-                for r, n in zip(self.__regions, mean_norms):
-                    self.log(f'train/gn-clip-norm-mean/{r}', n, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
+                self.log(f'train/gn-clip-norm-min', min_norm, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
 
-                    if self.__save_training_metrics and self.__interval_matches(self.__metrics_record_interval):
-                        data = {
-                            'epoch': self.current_epoch,
-                            'step': self.global_step,
-                            'mode': 'train',
-                            'module': '',
-                            'module-type': '',
-                            'shape': '',
-                            'metric': f'gradnorm-clip-norm-mean-{r}',
-                            'value': n.item(),
-                        }
-                        self.__training_metrics = append_row(self.__training_metrics, data)
+                if self.__save_training_metrics and self.__interval_matches(self.__metrics_record_interval):
+                    data = {
+                        'epoch': self.current_epoch,
+                        'step': self.global_step,
+                        'mode': 'train',
+                        'module': '',
+                        'module-type': '',
+                        'shape': '',
+                        'metric': f'gradnorm-clip-norm-min',
+                        'value': min_norm.item(),
+                    }
+                    self.__training_metrics = append_row(self.__training_metrics, data)
 
             # Perform clipping.
-            task_thresholds = mean_norms * self.__gn_clip_mult
-            should_clip = task_norms > task_thresholds
+            task_threshold = min_norm * self.__gn_clip_mult
+
+            if self.logger is not None:
+                self.log(f'train/gn-clip-norm-thresh', task_threshold, on_epoch=self.__wandb_log_on_epoch, on_step=not self.__wandb_log_on_epoch)
+
+                if self.__save_training_metrics and self.__interval_matches(self.__metrics_record_interval):
+                    data = {
+                        'epoch': self.current_epoch,
+                        'step': self.global_step,
+                        'mode': 'train',
+                        'module': '',
+                        'module-type': '',
+                        'shape': '',
+                        'metric': f'gradnorm-clip-norm-thresh',
+                        'value': task_threshold.item(),
+                    }
+                    self.__training_metrics = append_row(self.__training_metrics, data)
+            should_clip = task_norms > task_threshold
             clipped_norms = []
             for i in range(len(task_grads)):
                 r = self.__regions[i]
@@ -761,7 +774,7 @@ class SegmenterGradNorm(pl.LightningModule):
                     clipped_norms.append(task_norms[i])
                     continue
 
-                task_grads[i] = task_grads[i] * (task_thresholds[i] / task_norms[i])     # Scale to the threshold.
+                task_grads[i] = task_grads[i] * (task_threshold / task_norms[i])     # Scale to the threshold.
                 clipped_norms.append(task_grads[i].norm(2))
 
             for r, n in zip(self.__regions, clipped_norms):

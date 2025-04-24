@@ -5,14 +5,14 @@ from pydicom.dataset import FileDataset
 
 from mymi import logging
 from mymi.transforms import resample
-from mymi.typing import ImageSize3D, ImageSpacing3D, PointMM3D
+from mymi.typing import *
 
 from .files import DicomFile, SOPInstanceUID
 
-class RTDOSE(DicomFile):
+class RtDoseFile(DicomFile):
     def __init__(
         self,
-        series: 'RtdoseSeries',
+        series: 'RtDoseSeries',
         id: SOPInstanceUID):
         self.__loaded_data = False
         self.__data = None      # Lazy-loaded.
@@ -29,7 +29,7 @@ class RTDOSE(DicomFile):
         self.__path = self.__index.iloc[0]['filepath']
 
     @property
-    def data(self) -> np.ndarray:
+    def data(self) -> DoseImage:
         if not self.__loaded_data:
             self.__load_rtdose_data()
             self.__loaded_data = True
@@ -48,7 +48,7 @@ class RTDOSE(DicomFile):
         return self.__index
 
     @property
-    def offset(self) -> PointMM3D:
+    def offset(self) -> Point3D:
         if not self.__loaded_data:
             self.__load_rtdose_data()
             self.__loaded_data = True
@@ -93,7 +93,7 @@ class RTDOSE(DicomFile):
         spacing_x_y = rtdose.PixelSpacing 
         z_diffs = np.unique(np.diff(rtdose.GridFrameOffsetVector))
         if len(z_diffs) != 1:
-            logging.warning(f"Slice z spacings for RTDOSE {self} not equal, setting RTDOSE data to 'None'.")
+            logging.warning(f"Slice z spacings for RtDoseFile {self} not equal, setting RtDoseFile data to 'None'.")
             self.__offset = None
             self.__spacing = None
             self.__data = None

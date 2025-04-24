@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --account punim1413
-#SBATCH --partition gpu-a100
+#SBATCH --qos feit
+#SBATCH --partition feit-gpu-a100
 #SBATCH --nodes 1
 #SBATCH --mem 128G
 #SBATCH --gres gpu:1
@@ -14,4 +15,4 @@ source ~/venvs/medical-imaging/bin/activate
 version=$(python --version)
 echo $version
 
-python train_lung250m_4b_222.py --loss_lambda "0.02" 
+python train_lung250m_4b_222.py --loss_lambda "20.0" 

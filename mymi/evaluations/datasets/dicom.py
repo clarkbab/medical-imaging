@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import datasets as ds
-from mymi.datasets.dicom import RtstructConverter
+from mymi.datasets.dicom import RtStructConverter
 from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import dice
@@ -168,7 +168,7 @@ def create_dose_evaluation(
             continue
 
         # Load ground truth map from region name to ROI number - predictions should have same mapping.
-        info_gt = RtstructConverter.get_roi_info(rtstruct_gt.rtstruct)
+        info_gt = RtStructConverter.get_roi_info(rtstruct_gt.rtstruct)
         region_map_gt = region_maps[row.dataset]
         if region_map_gt is not None:
             info_gt = dict((region_map_gt.to_internal(name), int(id)) for id, name in info_gt)
@@ -194,7 +194,7 @@ def create_dose_evaluation(
         # Add dose metrics.
         for name, path, rtstruct in zip(names, paths, rtstructs):
             # Get ROI info. 
-            info = RtstructConverter.get_roi_info(rtstruct)
+            info = RtStructConverter.get_roi_info(rtstruct)
             def to_internal(name):
                 if region_maps[row.dataset] is None:
                     return name

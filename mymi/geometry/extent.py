@@ -18,7 +18,7 @@ def extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
 def extent_mm(
     a: np.ndarray,
     spacing: ImageSpacing3D,
-    offset: Point3D) -> Optional[Union[Box2D, Box3D]]:
+    offset: Voxel) -> Optional[Union[Box2D, Box3D]]:
     if a.dtype != np.bool_:
         raise ValueError(f"'extent_mm' expected a boolean array, got '{a.dtype}'.")
 
@@ -39,7 +39,7 @@ def extent_edge_voxel(
     a: np.ndarray,
     axis: Axis,
     end: Literal['min', 'max'],
-    view_axis: Axis) -> Point3D:
+    view_axis: Axis) -> Voxel:
     if a.dtype != np.bool_:
         raise ValueError(f"'extent' expected a boolean array, got '{a.dtype}'.")
     assert end in ('min', 'max')
@@ -86,7 +86,7 @@ def extent_width_mm(
 
 def centre_of_extent(
     a: np.ndarray,
-    smoothed_label: bool = False) -> Optional[Union[Point2D, Point3D]]:
+    smoothed_label: bool = False) -> Optional[Union[Pixel, Voxel]]:
     if smoothed_label:
         a = np.round(a)
 

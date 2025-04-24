@@ -19,6 +19,9 @@ import torchio
 from typing import *
 from wand import image
 
+from mymi.datasets import Dataset
+from mymi.datasets.dicom import Modality as DicomModality
+from mymi.datasets.nifti import Modality as NiftiModality
 from mymi.geometry import get_box, extent, centre_of_extent
 from mymi import logging
 from mymi.postprocessing import largest_cc_3D
@@ -35,22 +38,27 @@ class AltHyp(Enum):
     GREATER = 1
     TWO_SIDED = 2
 
-def plot_histograms(
-    datas: Union[np.ndarray, List[np.ndarray]],
-    axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
-    figsize: Tuple[float, float] = (6, 4),
+def plot_dataset_histogram(
+    dataset_type: Dataset,
+    dataset: str,
+    n_pats: Optional[int] = None,
+    pat_ids: Optional[PatientIDs] = None,
     **kwargs) -> None:
-    datas = arg_to_list(datas, np.ndarray)
-    figsize = (len(datas) * figsize[0], figsize[1])
-    axs = arg_to_list(axs, mpl.axes.Axes)
-    if axs is None:
-        _, axs = plt.subplots(1, len(datas), figsize=figsize, squeeze=False)
+    set = dataset_type(dataset)
+    if n_pats is not None:
+        assert pat_ids is None
+        pat_ids = set.list_patients()
+        pat_ids = pat_ids[:n_pats]
+    elif pat_ids is not None:
+        pat_ids = arg_to_list(pat_ids, PatientID, literals={ 'all': set.list_patients })
     else:
-        assert len(axs) == len(datas), "Number of axes must match number of data arrays."
-    for a, d in zip(axs, datas):
-        plot_single_histogram(d, ax=a, **kwargs)
+        pat_ids = set.list_patients()
+    ct_data = [set.patient(pat_id).ct_data for pat_id in pat_ids]
+    ct_data = [c.flatten() for c in ct_data]
+    ct_data = np.concatenate(ct_data)
+    plot_histograms(ct_data, **kwargs)
 
-def plot_single_histogram(
+def plot_histogram(
     data: np.ndarray,
     ax: Optional[mpl.axes.Axes] = None,
     fontsize: float = DEFAULT_FONT_SIZE,
@@ -86,6 +94,22 @@ min/max: {data.min():.2f}/{data.max():.2f}\
 
     if show:
         plt.show()
+
+def plot_histograms(
+    datas: Union[np.ndarray, List[np.ndarray]],
+    axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
+    figsize: Tuple[float, float] = (6, 4),
+    **kwargs) -> None:
+    datas = arg_to_list(datas, np.ndarray)
+    figsize = (len(datas) * figsize[0], figsize[1])
+    axs = arg_to_list(axs, mpl.axes.Axes)
+    if axs is None:
+        _, axs = plt.subplots(1, len(datas), figsize=figsize, squeeze=False)
+        axs = axs[0]    # Only one row.
+    else:
+        assert len(axs) == len(datas), "Number of axes must match number of data arrays."
+    for a, d in zip(axs, datas):
+        plot_histogram(d, ax=a, **kwargs)
 
 def __plot_region_data(
     data: RegionData,
@@ -379,7 +403,7 @@ def plot_heatmap(
 
     # Plot patient regions.
     size = heatmap.shape
-    plot_patients_matrix(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
+    plot_patients(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin=crop_margin, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -467,33 +491,170 @@ def plot_loaded(filepath: str) -> image.Image:
     img = image.Image(filename=filepath)
     return img
 
+def plot_patients(
+    dataset_type: Dataset,
+    dataset: str,
+    pat_ids: Union[PatientIDs, int] = 'all',
+    centre: Optional[str] = None,
+    crop: Optional[Union[str, Box2D]] = None,
+    landmarks: Optional[Landmarks] = None,
+    loadpath: Optional[str] = None,
+    modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'series_ids'.
+    region_labels: Dict[str, str] = {},
+    regions: Optional[Regions] = None,
+    series_ids: Optional[Union[SeriesID, List[SeriesID], Literal['all']]] = None,
+    study_ids: Optional[Union[StudyID, List[StudyID], Literal['all']]] = None,
+    **kwargs) -> Optional[image.Image]:
+    if loadpath is not None:
+        return plot_loaded(loadpath)
+
+    set = dataset_type(dataset)
+    if isinstance(pat_ids, int):
+        pat_ids = set.list_patients()[:pat_ids]
+    else:
+        pat_ids = arg_to_list(pat_ids, PatientID, literals={ 'all': set.list_patients })
+
+    # Load all patient data.
+    # This is the row-level data for 'plot_patients_matrix'.
+    loaded_study_ids = []
+    loaded_series_ids = []
+    datas = []
+    spacings = []
+    region_datas = []
+    landmark_datas = []
+    centre_datas = []
+    crop_datas = []
+    for p in pat_ids:
+        # Load single patient data.
+        # This is the column-level data for 'plot_patients_matrix'.
+
+        # Combinations:
+        # one study ID, multiple series IDs (or all).
+        # multiple study IDs (or all), one series IDs.
+
+        # Get study ID/s.
+        pat = set.patient(p)
+        if study_ids is None:
+            pat_study_ids = [pat.default_study.id]
+        else:
+            pat_study_ids = arg_to_list(study_ids, StudyID, literals={ 'all': pat.list_studies })
+
+        row_series_ids = []
+        row_study_ids = []
+        row_datas = []
+        row_spacings = []
+        row_region_datas = []
+        row_landmark_datas = []
+        row_centre_datas = []
+        row_crop_datas = []
+        for s in pat_study_ids:
+            study = pat.study(s)
+            if series_ids is not None:
+                study_series_ids = arg_to_list(series_ids, (SeriesID, Union[DicomModality, NiftiModality]), literals={ 'all': study.list_series(('CT', 'MR')) })
+                # Replace CT/MR with default series IDs.
+                for i, ss in enumerate(study_series_ids):
+                    if ss == 'CT':
+                        study_series_ids[i] = study.default_ct.id
+                    elif ss == 'MR':
+                        study_series_ids[i] = study.default_mr.id
+            elif modality is not None:
+                study_series_ids = study.list_series(modality) if hasattr(study, 'list_series') else study.list_data(modality)
+            else:
+                study_series_ids = [study.default_ct.id if study.default_ct is not None else study.default_mr.id]
+
+            # Add data for each series.
+            for ss in study_series_ids:
+                row_series_ids.append(ss)
+                row_study_ids.append(s)
+
+                # Load series data.
+                # NiftiDataset doesn't have 'series' method as this is a DICOM concept that we'd like to remove.
+                series = study.series(ss) if hasattr(study, 'series') else study.data(ss)
+                row_datas.append(series.data)
+                row_spacings.append(series.spacing)
+                # Whist the image data belongs to the series (e.g. CT/MR), the region/landmark data belongs to the study
+                # and is currently taken from the latest RTSTRUCT in the study.
+                rdata = study.region_data(regions=regions, **kwargs) if regions is not None else None
+                row_region_datas.append(rdata)
+                ldata = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs) if landmarks is not None else None
+                row_landmark_datas.append(ldata)
+
+                # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+                c = None
+                if centre is not None:
+                    if isinstance(centre, str):
+                        if study.has_regions(centre) and rdata is not None and centre not in rdata:
+                            c = study.region_data(regions=centre)[centre]
+                        elif study.has_landmarks(centre) and ldata is not None and centre not in ldata['landmark-id']:
+                            c = study.landmark_data(landmarks=centre)
+                row_centre_datas.append(c)
+
+                # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+                c = None
+                if crop is not None:
+                    if isinstance(crop, str):
+                        if study.has_regions(crop) and rdata is not None and crop not in rdata:
+                            c = study.region_data(regions=crop)[crop]
+                        elif study.has_landmarks(crop) and ldata is not None and crop not in ldata['landmark-id']:
+                            c = study.landmark_data(landmarks=crop)
+                row_crop_datas.append(c)
+
+        # Apply region labels.
+        # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
+        # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
+        for i in range(len(row_series_ids)):
+            row_region_datas[i], row_centre_datas[i], row_crop_datas[i] = apply_region_labels(region_labels, row_region_datas[i], row_centre_datas[i], row_crop_datas[i])
+
+        loaded_study_ids.append(row_study_ids)
+        loaded_series_ids.append(row_series_ids)
+        datas.append(row_datas)
+        spacings.append(row_spacings)
+        region_datas.append(row_region_datas)
+        landmark_datas.append(row_landmark_datas)
+        centre_datas.append(row_centre_datas)
+        crop_datas.append(row_crop_datas)
+
+    # Plot.
+    okwargs = dict(
+        centres=centre_datas,
+        crops=crop_datas,
+        datas=datas,
+        landmark_datas=landmark_datas,
+        region_datas=region_datas,
+        series_ids=loaded_series_ids,
+        spacings=spacings,
+        study_ids=loaded_study_ids,
+    )
+    plot_patients_matrix(pat_ids, **okwargs, **kwargs)
+
 def plot_patients_matrix(
-    # Allows us to plot multiple patients (rows) and patient studies or views (columns).
-    plot_ids: Union[str, List[str], List[Union[str, List[str]]]],
-    spacings: Union[ImageSpacing3D, List[ImageSpacing3D], List[Union[ImageSpacing3D, List[ImageSpacing3D]]]],
+    # Allows us to plot multiple patients (rows) and patient studies, series, and views (columns).
+    pat_ids: Union[str, List[str]],
     ax: Optional[mpl.axes.Axes] = None,
     centres: Optional[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]], List[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
-    ct_datas: Optional[Union[CtImage, List[CtImage], List[Union[CtImage, List[CtImage]]]]] = None,
-    figsize: Tuple[int, int] = (10, 10),
+    datas: Optional[Union[Image, List[Image], List[Union[Image, List[Image]]]]] = None,
+    figsize: Tuple[int, int] = (45, 10),    # In cm.
     landmark_datas: Optional[Union[Landmarks, List[Landmarks], List[Union[Landmarks, List[Landmarks]]]]] = None,
     region_datas: Optional[Union[RegionData, List[RegionData], List[Union[RegionData, List[RegionData]]]]] = None,
     savepath: Optional[str] = None,
+    spacings: Union[ImageSpacing3D, List[ImageSpacing3D], List[Union[ImageSpacing3D, List[ImageSpacing3D]]]] = None,
+    series_ids: Union[StudyID, Sequence[StudyID], List[Union[StudyID, Sequence[StudyID]]]] = None,
+    study_ids: Union[StudyID, Sequence[StudyID], List[Union[StudyID, Sequence[StudyID]]]] = None,
     views: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
     # Broadcast args to length of plot_ids.
-    plot_ids = arg_to_list(plot_ids, str)
-    n_rows = len(plot_ids)
+    pat_ids = arg_to_list(pat_ids, PatientID)
+    n_rows = len(pat_ids)
     spacings = arg_to_list(spacings, ImageSpacing3D, length=n_rows)
     centres = arg_to_list(centres, (None, Landmark, Region, LandmarkData, RegionLabel), length=n_rows)
     crops = arg_to_list(crops, (None, str, RegionLabel, Box2D), length=n_rows)
-    ct_datas = arg_to_list(ct_datas, (None, CtImage), length=n_rows)
+    datas = arg_to_list(datas, (None, Image), length=n_rows)
     landmark_datas = arg_to_list(landmark_datas, (None, LandmarkData), length=n_rows)
     region_datas = arg_to_list(region_datas, (None, RegionData), length=n_rows)
     views = arg_to_list(views, int, literals={ 'all': tuple(range(3)) })
-    # This tracks the number of studies that were passed for a patient - affects the number of columns.
-    n_studies = np.max([1 if isinstance(i, str) else len(i) for i in plot_ids])
-    n_cols = len(views) * n_studies
+    n_series_max = np.max([len(ss) for ss in series_ids])
+    n_cols = len(views) * n_series_max
 
     # Convert figsize from cm to inches.
     figsize = __convert_figsize_to_inches(figsize)
@@ -502,7 +663,7 @@ def plot_patients_matrix(
     if ax is None:
         if n_rows > 1 or n_cols > 1:
             # Subplots for multiple views.
-            _, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols * figsize[0], n_rows * figsize[1]), gridspec_kw={ 'hspace': 0.4 })
+            _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw={ 'hspace': 0.4 })
             if n_rows == 1:
                 axs = [axs]
             elif n_cols == 1:
@@ -516,29 +677,30 @@ def plot_patients_matrix(
 
     # Plot each plot.
     for i in range(n_rows):
+        pat_id = pat_ids[i]
+
         for j in range(n_cols):
             # Multiple studies can be provided for a patient.
             # Interleave studies and views across the columns.
-            study_idx = j % n_studies
-            view_idx = j // n_studies
-            plot_id = plot_ids[i][study_idx] if isinstance(plot_ids[i], list) else plot_ids[i]
-            ct_data = ct_datas[i][study_idx] if isinstance(ct_datas[i], list) else ct_datas[i]
-            spacing = spacings[i][study_idx] if isinstance(spacings[i], list) else spacings[i]
-            region_data = region_datas[i][study_idx] if isinstance(region_datas[i], list) else region_datas[i]
-            landmark_data = landmark_datas[i][study_idx] if isinstance(landmark_datas[i], list) else landmark_datas[i]
-            crop = crops[i][study_idx] if isinstance(crops[i], list) else crops[i]
-            centre = centres[i][study_idx] if isinstance(centres[i], list) else centres[i]
+            series_idx = j % n_series_max
+            view_idx = j // n_series_max
+            data = datas[i][series_idx] if isinstance(datas[i], list) else datas[i]
+            spacing = spacings[i][series_idx] if isinstance(spacings[i], list) else spacings[i]
+            region_data = region_datas[i][series_idx] if isinstance(region_datas[i], list) else region_datas[i]
+            landmark_data = landmark_datas[i][series_idx] if isinstance(landmark_datas[i], list) else landmark_datas[i]
+            crop = crops[i][series_idx] if isinstance(crops[i], list) else crops[i]
+            centre = centres[i][series_idx] if isinstance(centres[i], list) else centres[i]
             view = views[view_idx] if len(views) > 1 else views[0]
 
             plot_patient(
-                plot_id,
-                ct_data.shape,
+                pat_id,
+                data.shape,
                 spacing,
                 ax=axs[i][j],
                 centre=centre,
                 close_figure=False,
                 crop=crop,
-                ct_data=ct_data,
+                data=data,
                 landmark_data=landmark_data,
                 region_data=region_data,
                 show_figure=False,
@@ -570,7 +732,7 @@ def plot_patient(
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
-    ct_data: Optional[np.ndarray] = None,
+    data: Optional[Image] = None,
     dose_alpha_min: float = 0.1,
     dose_alpha_max: float = 0.7,
     dose_cmap: str = 'rainbow',
@@ -671,22 +833,22 @@ def plot_patient(
             # ((x_min, y_min), (x_max, y_max)) format.
             crop = tuple(*zip(crop))
 
-    if ct_data is not None:
+    if data is not None:
         # Perform any normalisation.
         if norm is not None:
             mean, std_dev = norm
             
         # Load CT slice.
-        ct_slice = __get_mpl_slice(ct_data, idx, view)
+        data_slice = __get_mpl_slice(data, idx, view)
         if dose_data is not None:
             dose_slice = __get_mpl_slice(dose_data, idx, view)
     else:
         # Load empty slice.
-        ct_slice = __get_mpl_slice(np.zeros(shape=size), idx, view)
+        data_slice = __get_mpl_slice(np.zeros(shape=size), idx, view)
 
     # Perform crop on CT data or placeholder.
     if crop is not None:
-        ct_slice = crop(ct_slice, __reverse_box_coords_2D(crop))
+        data_slice = crop(data_slice, __reverse_box_coords_2D(crop))
 
         if dose_data is not None:
             dose_slice = crop(dose_slice, __reverse_box_coords_2D(crop))
@@ -699,15 +861,15 @@ def plot_patient(
         else:
             aspect = __get_mpl_aspect(view, spacing) 
 
-    # Determine CT window.
-    if ct_data is not None:
+    # Determine data window.
+    if data is not None:
         if window is not None:
             if type(window) == str:
                 if window == 'bone':
                     width, level = (1800, 400)
                 elif window == 'extent':
-                    width = ct_data.max() - ct_data.min()
-                    level = (ct_data.min() + ct_data.max()) / 2
+                    width = data.max() - data.min()
+                    level = (data.min() + data.max()) / 2
                 elif window == 'lung':
                     width, level = (1500, -600)
                 elif window == 'tissue':
@@ -720,34 +882,32 @@ def plot_patient(
             vmax = level + (width / 2)
 
             # Check that CT data isn't going to be hidden.
-            ct_min, ct_max = ct_data.min(), ct_data.max()
-            ct_width = ct_max - ct_min
+            data_min, data_max = data.min(), data.max()
+            data_width = data_max - data_min
             f = 0.1
-            if ct_width < f * width:
-                logging.warning(f"CT data range ({ct_min}, {ct_max}) is less than {f} * window range ({vmin}, {vmax}). You may be looking at grey - use a custom window (level, width).")
+            if data_width < f * width:
+                logging.warning(f"CT data range ({data_min}, {data_max}) is less than {f} * window range ({vmin}, {vmax}). You may be looking at grey - use a custom window (level, width).")
         else:
-            vmin = ct_data.min()
-            vmax = ct_data.max()
+            vmin, vmax = data.min(), data.max()
     else:
-        vmin = 0
-        vmax = 0
+        vmin, vmax = 0, 0
 
     # Plot CT data.
     if show_ct:
-        ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view), vmin=vmin, vmax=vmax)
+        ax.imshow(data_slice, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view), vmin=vmin, vmax=vmax)
 
         if window_mask is not None:
             # Plot values that are outside the window.
             cmap = ListedColormap(((1, 1, 1, 0), 'red'))
-            hw_slice = np.zeros_like(ct_slice)
+            hw_slice = np.zeros_like(data_slice)
             if window_mask[0] is not None:
-                hw_slice[ct_slice < window_mask[0]] = 1
+                hw_slice[data_slice < window_mask[0]] = 1
             if window_mask[1] is not None:
-                hw_slice[ct_slice >= window_mask[1]] = 1
+                hw_slice[data_slice >= window_mask[1]] = 1
             ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
     else:
         # Plot black background.
-        ax.imshow(np.zeros_like(ct_slice), cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
+        ax.imshow(np.zeros_like(data_slice), cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
 
     if not show_axes:
         ax.set_axis_off()
@@ -804,7 +964,7 @@ def plot_patient(
     if crop is not None:
         # Get new x ticks/labels.
         x_diff = int(np.diff(ax.get_xticks())[0])
-        x_crop_max = crop[1][0] if crop[1][0] is not None else ct_slice.shape[1]
+        x_crop_max = crop[1][0] if crop[1][0] is not None else data_slice.shape[1]
         x_tick_label_max = int(np.floor(x_crop_max / x_diff) * x_diff)
         x_crop_min = crop[0][0] if crop[0][0] is not None else 0
         x_tick_labels = list(range(x_crop_min, x_tick_label_max, x_diff))
@@ -821,7 +981,7 @@ def plot_patient(
 
         # Get new y ticks/labels.
         y_diff = int(np.diff(ax.get_yticks())[0])
-        y_crop_max = crop[1][1] if crop[1][1] is not None else ct_slice.shape[0]
+        y_crop_max = crop[1][1] if crop[1][1] is not None else data_slice.shape[0]
         y_tick_label_max = int(np.floor(y_crop_max / y_diff) * y_diff)
         y_crop_min = crop[0][1] if crop[0][1] is not None else 0
         y_tick_labels = list(range(y_crop_min, y_tick_label_max, y_diff))
@@ -985,7 +1145,7 @@ def plot_localiser_prediction(
         idx = ext[eo_end][axis]
 
     # Plot patient regions.
-    plot_patients_matrix(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, escape_latex=escape_latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, idx=idx, view=view, **kwargs)
+    plot_patients(id, pred_data.shape, spacing, aspect=aspect, ax=ax, crop=crop, ct_data=ct_data, figsize=figsize, escape_latex=escape_latex, legend_loc=legend_loc, region_data=region_data, show_legend=show_legend, show_extent=show_label_extent, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
@@ -1287,7 +1447,7 @@ def plot_segmenter_predictions(
         idx=idx,
         views=view,
     )
-    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
+    plot_patients(id, spacing, **okwargs, **kwargs)
 
     # Plot predictions.
     okwargs = dict(
@@ -1302,7 +1462,7 @@ def plot_segmenter_predictions(
         idx=idx,
         views=view,
     )
-    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
+    plot_patients(id, spacing, **okwargs, **kwargs)
 
     for i in range(n_pred_regions):
         region = pred_regions[i]
@@ -1350,7 +1510,7 @@ def plot_segmenter_predictions(
         idx=idx,
         views=view,
     )
-    plot_patients_matrix(id, spacing, **okwargs, **kwargs)
+    plot_patients(id, spacing, **okwargs, **kwargs)
 
     # Plot diffs.
     # Calculate single diff across all regions.
@@ -2220,6 +2380,36 @@ def plot_dataframe(
         plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=save_pad_inches)
         logging.info(f"Saved plot to '{savepath}'.")
 
+
+def plot_patient_histograms(
+    dataset_type: Dataset,
+    dataset: str,
+    pat_ids: PatientIDs = 'all',
+    study_ids: StudyIDs = 'all',
+    **kwargs) -> None:
+    set = dataset_type(dataset)
+    pat_ids = arg_to_list(pat_ids, PatientID, literals={ 'all': set.list_patients })
+    n_rows = len(pat_ids)
+
+    # Get n_cols.
+    n_cols = 0
+    study_idses = []
+    for p in pat_ids:
+        pat = set.patient(p)
+        study_ids = arg_to_list(study_ids, StudyID, literals={ 'all': pat.list_studies })
+        study_idses.append(study_ids)
+        if len(study_ids) > n_cols:
+            n_cols = len(study_ids)
+    
+    _, axs = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), squeeze=False)
+    for row_axs, p, ss in zip(axs, pat_ids, study_idses):
+        pat = set.patient(p)
+        for col_ax, s in zip(row_axs, ss):
+            study = pat.study(s)
+            ct_data = study.ct_data.flatten()
+            title = f"{p}:{s}"
+            plot_histograms(ct_data, axs=col_ax, title=title, **kwargs)
+
 def plot_registrations(
     fixed_pat_ids: Sequence[PatientID],
     fixed_study_ids: Sequence[StudyID],
@@ -2230,7 +2420,7 @@ def plot_registrations(
     fixed_ct_datas: Sequence[Optional[Images]] = [],
     fixed_idxs: Sequence[Optional[Union[int, float]]] = [],
     fixed_landmark_datas: Sequence[Optional[LandmarkData]] = [],
-    fixed_offsets: Sequence[Optional[PointMM3D]] = [],
+    fixed_offsets: Sequence[Optional[Point3D]] = [],
     fixed_region_datas: Sequence[Optional[np.ndarray]] = [],
     fixed_spacings: Sequence[Optional[ImageSpacing3D]] = [],
     figsize: Tuple[float, float] = (16, 4),     # Width always the same, height is based on a single row.
@@ -2245,7 +2435,7 @@ def plot_registrations(
     moving_ct_datas: Sequence[Optional[Image]] = [],
     moving_idxs: Sequence[Optional[Union[int, float]]] = [],
     moving_landmark_datas: Sequence[Optional[LandmarkData]] = [],
-    moving_offsets: Sequence[Optional[PointMM3D]] = [],
+    moving_offsets: Sequence[Optional[Point3D]] = [],
     moving_region_datas: Sequence[Optional[RegionData]] = [],
     moving_spacings: Sequence[Optional[ImageSpacing3D]] = [],
     savepath: Optional[str] = None,
@@ -2322,7 +2512,7 @@ def plot_registration(
     fixed_ct_data: Optional[np.ndarray] = None,
     fixed_idx: Optional[int] = None,
     fixed_landmark_data: Optional[Landmarks] = None,
-    fixed_offset: Optional[PointMM3D] = None,
+    fixed_offset: Optional[Point3D] = None,
     fixed_region_data: Optional[np.ndarray] = None,
     fixed_spacing: Optional[ImageSpacing3D] = None,
     figsize: Tuple[float, float] = (30, 10),
@@ -2344,7 +2534,7 @@ def plot_registration(
     moving_ct_data: Optional[np.ndarray] = None,
     moving_idx: Optional[int] = None,
     moving_landmark_data: Optional[Landmarks] = None,
-    moving_offset: Optional[PointMM3D] = None,
+    moving_offset: Optional[Point3D] = None,
     moving_region_data: Optional[np.ndarray] = None,
     moving_spacing: Optional[ImageSpacing3D] = None,
     n_landmarks: Optional[int] = None,
@@ -2470,7 +2660,7 @@ def plot_registration(
             show_legend=show_legend,
             views=view,
         )
-        plot_patients_matrix(ids[i], spacings[i], **okwargs, **kwargs)
+        plot_patients(ids[i], spacings[i], **okwargs, **kwargs)
 
     # Add moved landmarks.
     if moved_landmark_data is not None and show_moved_landmarks:

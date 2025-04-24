@@ -2,7 +2,7 @@ import nrrd
 
 from mymi.typing import *
 
-def load_nrrd(filepath: str) -> Tuple[np.ndarray, ImageSpacing3D, PointMM3D]:
+def load_nrrd(filepath: str) -> Tuple[np.ndarray, ImageSpacing3D, Point3D]:
     data, header = nrrd.read(filepath)
     affine = header['space directions']
     assert affine.sum() == np.diag(affine).sum()

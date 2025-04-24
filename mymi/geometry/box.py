@@ -3,7 +3,7 @@ import numpy as np
 from mymi import typing
 
 def get_box(
-    centre: typing.Point3D,
+    centre: typing.Voxel,
     size: typing.ImageSize3D) -> typing.Box3D:
     # Convert to box.
     size = np.array(size)

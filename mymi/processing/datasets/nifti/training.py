@@ -185,7 +185,7 @@ def convert_to_registration_training_holdout(
             
             output_n = 0
             if regions is not None:
-                # Save fixed region data.
+                # Load fixed region data.
                 n_channels = len(regions) + 1
                 label = np.zeros((n_channels, *fixed_ct.shape), dtype=bool)
                 mask = np.zeros((n_channels), dtype=bool)
@@ -199,7 +199,7 @@ def convert_to_registration_training_holdout(
                     label[0] = np.invert(label.any(axis=0))
                     mask[0] = True
 
-                # Save output data.
+                # Save fixed region data.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.npz")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 np.savez_compressed(filepath, data=label)
@@ -208,7 +208,7 @@ def convert_to_registration_training_holdout(
                 np.savez_compressed(filepath, data=mask, exist_ok=True)
                 output_n += 1
                 
-                # Save moving region data (label 2).
+                # Load moving region data.
                 n_channels = len(regions) + 1
                 label = np.zeros((n_channels, *fixed_ct.shape), dtype=bool)
                 mask = np.zeros((n_channels), dtype=bool)
@@ -222,7 +222,7 @@ def convert_to_registration_training_holdout(
                     label[0] = np.invert(label.any(axis=0))
                     mask[0] = True
 
-                # Save output data.
+                # Save moving region data.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.npz")
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 np.savez_compressed(filepath, data=label)
@@ -232,13 +232,13 @@ def convert_to_registration_training_holdout(
                 output_n += 1
 
             if landmarks is not None:
-                # Save fixed landmarks.
+                # Save fixed landmark data.
                 landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.csv")
                 save_csv(fixed_landmarks[landmark_cols], filepath)
                 output_n += 1
 
-                # Save moving landmarks.
+                # Save moving landmark data.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.csv")
                 save_csv(moving_landmarks[landmark_cols], filepath)
                 output_n += 1

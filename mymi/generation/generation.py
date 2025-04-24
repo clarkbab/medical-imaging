@@ -5,7 +5,7 @@ from mymi import typing
 
 def create_cylinder(
     img_size: typing.ImageSize3D,
-    centre: Optional[typing.PointMM3D] = None,
+    centre: Optional[typing.Point3D] = None,
     height: Optional[float] = None,
     radius: Optional[float] = None) -> np.ndarray:
     img_size_2D = img_size[:-1]
@@ -30,7 +30,7 @@ def create_cylinder(
 
 def create_n_sphere(
     img_size: Union[typing.ImageSize2D, typing.ImageSize3D],
-    centre: Optional[Union[typing.PointMM2D, typing.PointMM3D]] = None,
+    centre: Optional[Union[typing.Point2D, typing.Point3D]] = None,
     radius: Optional[float] = None) -> np.ndarray:
     # Default to middle of image.
     if centre is None:

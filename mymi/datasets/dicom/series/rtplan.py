@@ -1,21 +1,23 @@
 import pandas as pd
-from typing import List, Optional
+from typing import *
 
-from ..files import RTPLAN, SOPInstanceUID
-from .series import Modality, DicomSeries, SeriesInstanceUID
+from mymi.typing import *
 
-class RtplanSeries(DicomSeries):
+from ..files import RtPlanFile, SOPInstanceUID
+from .series import Modality, DicomSeries
+
+class RtPlanSeries(DicomSeries):
     def __init__(
         self,
         study: 'DicomStudy',
-        id: SeriesInstanceUID) -> None:
+        id: SeriesID) -> None:
         self.__global_id = f"{study}:{id}"
         self.__id = id
         self.__study = study
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == Modality.RTPLAN) & (index['series-id'] == self.__id)]
+        self.__index = index[(index.modality == 'RTPLAN') & (index['series-id'] == self.__id)]
         self.__verify_index()
 
     @property
@@ -29,12 +31,12 @@ class RtplanSeries(DicomSeries):
         return self.__global_id
 
     @property
-    def id(self) -> SOPInstanceUID:
+    def id(self) -> SeriesID:
         return self.__id
 
     @property
     def modality(self) -> Modality:
-        return Modality.RTPLAN
+        return 'RTPLAN'
 
     @property
     def study(self) -> str:
@@ -49,12 +51,12 @@ class RtplanSeries(DicomSeries):
 
     def rtplan(
         self,
-        id: SOPInstanceUID) -> RTPLAN:
-        return RTPLAN(self, id)
+        id: SOPInstanceUID) -> RtPlanFile:
+        return RtPlanFile(self, id)
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"RtplanSeries '{self}' not found in index for study '{self.__study}'.")
+            raise ValueError(f"RtPlanSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __load_default_rtplan(self) -> None:
         # Preference most recent RTPLAN.

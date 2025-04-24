@@ -679,7 +679,7 @@ def get_segmenter_prediction(
     dataset: str,
     pat_id: PatientID,
     region: str,
-    loc_centre: Point3D,
+    loc_centre: Voxel,
     segmenter: Union[pl.LightningModule, ModelName],
     probs: bool = False,
     seg_spacing: ImageSpacing3D = (1, 1, 2),

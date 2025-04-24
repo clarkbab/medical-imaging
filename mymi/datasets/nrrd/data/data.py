@@ -1,12 +1,8 @@
-from enum import Enum
+from typing import *
 
-from mymi.typing import SeriesID
+from mymi.typing import *
 
-class Modality(str, Enum):
-    CT = 'CT'
-    DOSE = 'DOSE'
-    LANDMARKS = 'LANDMARKS'
-    REGIONS = 'REGIONS'
+Modality = Literal['CT', 'DOSE', 'LANDMARKS', 'REGIONS']
 
 # Abstract class.
 class NrrdData:

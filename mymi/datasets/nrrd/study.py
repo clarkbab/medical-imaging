@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, Landmark, Region, PointMM3D, SeriesID, StudyID
+from mymi.typing import ImageSize3D, ImageSpacing3D, Landmarks, Landmark, Region, Point3D, SeriesID, StudyID
 
 from .data import CtData, LandmarkData, Modality, NrrdData, RegionData
 
@@ -31,7 +31,7 @@ class NrrdStudy:
         return self.default_ct.affine
 
     @property
-    def ct_offset(self) -> PointMM3D:
+    def ct_offset(self) -> Point3D:
         return self.default_ct.offset
 
     @property
@@ -48,7 +48,7 @@ class NrrdStudy:
 
     @property
     def default_ct(self) -> Optional[CtData]:
-        data_ids = self.list_data(Modality.CT)
+        data_ids = self.list_data('CT')
         if len(data_ids) == 0:
             return None
         else:
@@ -56,7 +56,7 @@ class NrrdStudy:
 
     @property
     def default_landmarks(self) -> Optional[LandmarkData]:
-        data_ids = self.list_data(Modality.LANDMARKS)
+        data_ids = self.list_data('LANDMARKS')
         if len(data_ids) == 0:
             return None
         else:
@@ -64,7 +64,7 @@ class NrrdStudy:
 
     @property
     def default_regions(self) -> Optional[RegionData]:
-        data_ids = self.list_data(Modality.REGIONS)
+        data_ids = self.list_data('REGIONS')
         if len(data_ids) == 0:
             return None
         else:
@@ -106,15 +106,15 @@ class NrrdStudy:
     def list_data(
         self,
         modality: Modality) -> List[str]:
-        if modality == Modality.CT:
+        if modality == 'CT':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'ct'))))
             data_ids = [s.replace('.nrrd', '') for s in data_ids]
-        elif modality == Modality.LANDMARKS:
+        elif modality == 'LANDMARKS':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'landmarks'))))
             data_ids = [s.replace('.csv', '') for s in data_ids]
-        elif modality == Modality.REGIONS:
+        elif modality == 'REGIONS':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'regions'))))
-        elif modality == Modality.DOSE:
+        elif modality == 'DOSE':
             pass
         else:
             raise ValueError(f"Modality '{modality}' not recognised.")
@@ -131,13 +131,13 @@ class NrrdStudy:
         self,
         id: str,
         modality: Modality) -> NrrdData:
-        if modality == Modality.CT:
+        if modality == 'CT':
             data = CtData(self, id)
-        elif modality == Modality.LANDMARKS:
+        elif modality == 'LANDMARKS':
             data = LandmarkData(self, id)
-        elif modality == Modality.REGIONS:
+        elif modality == 'REGIONS':
             data = RegionData(self, id, region_map=self.__region_map)
-        elif modality == Modality.DOSE:
+        elif modality == 'DOSE':
             pass
 
         return data

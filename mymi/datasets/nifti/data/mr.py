@@ -6,16 +6,16 @@ from mymi.utils import *
 
 from .data import NiftiData
 
-class CtData(NiftiData):
+class MrData(NiftiData):
     def __init__(
         self,
         study: 'NiftiStudy',
         id: SeriesID) -> None:
         self.__id = id
-        self.__path = os.path.join(study.path, 'ct', f'{id}.nii.gz')
+        self.__path = os.path.join(study.path, 'mr', f'{id}.nii.gz')
 
     @property
-    def data(self) -> CtImage:
+    def data(self) -> MrImage:
         data, _, _ = load_nifti(self.__path)
         return data
 

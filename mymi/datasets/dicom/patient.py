@@ -5,9 +5,9 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .study import DicomStudy, StudyInstanceUID
+from .study import DicomStudy
 from .files import RegionMap
-from .series import RtdoseSeries, RtplanSeries, RtstructSeries
+from .series import *
 
 class DicomPatient:
     def __init__(
@@ -53,46 +53,82 @@ class DicomPatient:
         return self.get_cts()[0].PatientBirthDate
 
     @property
-    def ct_data(self):
-        return self.default_rtstruct.ref_ct.data
+    def ct_data(self) -> Optional[CtImage]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.data
+
+    @property
+    def ct_fov(self) -> Optional[ImageSizeMM3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.fov
 
     @property
     def ct_from(self) -> str:
         return self.__ct_from
 
     @property
-    def ct_offset(self):
-        return self.default_rtstruct.ref_ct.offset
+    def ct_offset(self) -> Optional[Point3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.offset
 
     @property
-    def ct_size(self):
-        return self.default_rtstruct.ref_ct.size
+    def ct_size(self) -> Optional[ImageSize3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.size
 
     @property
-    def ct_spacing(self):
-        return self.default_rtstruct.ref_ct.spacing
+    def ct_spacing(self) -> Optional[ImageSpacing3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.spacing
 
     @property
     def dataset(self) -> str:
         return self.__dataset
-
-    @property
-    def default_rtdose(self) -> str:
-        if self.__default_rtdose is None:
-            self.__load_default_rtdose_and_rtplan()
-        return self.__default_rtdose
-
-    @property
-    def default_rtplan(self) -> RtplanSeries:
-        if self.__default_rtplan is None:
-            self.__load_default_rtdose_and_rtplan()
-        return self.__default_rtplan
     
     @property
-    def default_rtstruct(self) -> RtstructSeries:
-        if self.__default_rtstruct is None:
-            self.__load_default_rtstruct()
-        return self.__default_rtstruct
+    def default_ct(self) -> Optional[CtSeries]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_ct
+    
+    @property
+    def default_mr(self) -> Optional[MrSeries]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_mr
+
+    @property
+    def default_rtdose(self) -> Optional[RtDoseSeries]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_rtdose
+
+    @property
+    def default_rtplan(self) -> Optional[RtPlanSeries]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_rtplan
+    
+    @property
+    def default_rtstruct(self) -> Optional[RtStructSeries]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_rtstruct
     
     @property
     def default_study(self) -> DicomStudy:
@@ -149,6 +185,34 @@ class DicomPatient:
         return self.__id
 
     @property
+    def mr_fov(self) -> Optional[ImageSizeMM3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.fov
+
+    @property
+    def mr_offset(self) -> Optional[Point3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.offset
+
+    @property
+    def mr_size(self) -> Optional[ImageSize3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.size
+
+    @property
+    def mr_spacing(self) -> Optional[ImageSpacing3D]:
+        def_mr = self.default_mr
+        if def_mr is None:
+            return None
+        return def_mr.spacing
+
+    @property
     def name(self) -> str:
         return self.get_cts()[0].PatientName
 
@@ -171,12 +235,6 @@ class DicomPatient:
     @property
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
-
-    def ct_slice_summary(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.slice_summary(*args, **kwargs)
-
-    def ct_summary(self, *args, **kwargs):
-        return self.default_rtstruct.ref_ct.summary(*args, **kwargs)
 
     @property
     def first_ct(self):
@@ -223,7 +281,7 @@ class DicomPatient:
     def list_landmarks(self, *args, **kwargs):
         return self.default_rtstruct.list_landmarks(*args, **kwargs)
 
-    def list_studies(self) -> List[StudyInstanceUID]:
+    def list_studies(self) -> List[StudyID]:
         # Sort studies by date/time - oldest first.
         study_ids = list(self.__index.sort_values(['study-date', 'study-time'])['study-id'].unique())
         return study_ids
@@ -239,15 +297,12 @@ class DicomPatient:
 
     def study(
         self,
-        id: Union[int, StudyInstanceUID]) -> DicomStudy:
+        id: StudyID) -> DicomStudy:
         return DicomStudy(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
         self.__default_rtplan = self.default_study.default_rtplan
         self.__default_rtdose = self.default_study.default_rtdose
-
-    def __load_default_rtstruct(self) -> None:
-        self.__default_rtstruct = self.default_study.default_rtstruct
 
     def __str__(self) -> str:
         return self.__global_id

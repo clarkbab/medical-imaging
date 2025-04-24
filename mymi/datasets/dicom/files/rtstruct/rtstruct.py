@@ -13,12 +13,12 @@ from ...series.ct import CtSeries
 from ...series.series import Modality
 from ..files import DicomFile, SOPInstanceUID
 from .region_map import RegionMap
-from .rtstruct_converter import RtstructConverter
+from .rtstruct_converter import RtStructConverter
 
-class RTSTRUCT(DicomFile):
+class RtStructFile(DicomFile):
     def __init__(
         self,
-        series: 'RtstructSeries',
+        series: 'RtStructSeries',
         id: SOPInstanceUID,
         region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None):
@@ -73,7 +73,7 @@ class RTSTRUCT(DicomFile):
         return dcm.read_file(self.__path)
     
     @property
-    def series(self) -> 'RtstructSeries':
+    def series(self) -> 'RtStructSeries':
         return self.__series
 
     def get_region_info(
@@ -83,11 +83,11 @@ class RTSTRUCT(DicomFile):
         rtstruct = self.rtstruct
 
         # Get region IDs.
-        roi_info = RtstructConverter.get_roi_info(rtstruct)
+        roi_info = RtStructConverter.get_roi_info(rtstruct)
 
         # Filter names on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        roi_info = dict(filter(lambda i: RtstructConverter.has_roi_data(rtstruct, i[1]['name']), roi_info.items()))
+        roi_info = dict(filter(lambda i: RtStructConverter.has_roi_data(rtstruct, i[1]['name']), roi_info.items()))
 
         # Map to internal names.
         if use_mapping and self.__region_map:
@@ -117,12 +117,12 @@ class RTSTRUCT(DicomFile):
         landmarks: Landmarks = 'all',
         token: str = 'Marker',
         use_image_coords: bool = False,
-        **kwargs) -> pd.DataFrame:
+        **kwargs) -> Optional[pd.DataFrame]:
         landmarks = regions_to_list(landmarks, literals={ 'all': lambda: self.list_landmarks(token=token) })
         rtstruct = self.rtstruct
         lms = []
         for l in landmarks:
-            lm = RtstructConverter.get_roi_landmark(rtstruct, l)
+            lm = RtStructConverter.get_roi_landmark(rtstruct, l)
             if use_image_coords:
                 spacing = self.ref_ct.spacing
                 offset = self.ref_ct.offset
@@ -130,6 +130,8 @@ class RTSTRUCT(DicomFile):
                 lm = lm.round()
                 lm = lm.astype(np.uint32)
             lms.append(lm)
+        if len(lms) == 0:
+            return None
         lms = np.vstack(lms)
         lm_df = pd.DataFrame(lms, index=landmarks).reset_index()
         lm_df = lm_df.rename(columns={ 'index': 'landmark-id' })
@@ -166,11 +168,11 @@ class RTSTRUCT(DicomFile):
 
         # Get unmapped region names.
         rtstruct = self.rtstruct
-        unmapped_regions = RtstructConverter.get_roi_names(rtstruct)
+        unmapped_regions = RtStructConverter.get_roi_names(rtstruct)
 
         # Filter regions on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        unmapped_regions = list(filter(lambda r: RtstructConverter.has_roi_data(rtstruct, r), unmapped_regions))
+        unmapped_regions = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct, r), unmapped_regions))
 
         # Map regions using 'region-map.csv'.
         if use_mapping:
@@ -229,9 +231,9 @@ class RTSTRUCT(DicomFile):
 
             if len(dup_regions) > 0:
                 if use_mapping and self.__region_map is not None:
-                    raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
+                    raise ValueError(f"Duplicate regions found for RtStructFile '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
                 else:
-                    raise ValueError(f"Duplicate regions found for RTSTRUCT '{self}'. Duplicated regions: '{dup_regions}'")
+                    raise ValueError(f"Duplicate regions found for RtStructFile '{self}'. Duplicated regions: '{dup_regions}'")
 
         # Sort regions.
         if use_mapping:
@@ -273,7 +275,7 @@ class RTSTRUCT(DicomFile):
         if not regions_ignore_missing:
             for r in regions:
                 if not r in rtstruct_regions:
-                    raise ValueError(f"Requested region '{r}' not present for RTSTRUCT '{self}'.")
+                    raise ValueError(f"Requested region '{r}' not present for RtStructFile '{self}'.")
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
         # need these to load regions from RTSTRUCT dicom.
@@ -286,7 +288,7 @@ class RTSTRUCT(DicomFile):
             rtstruct_regions = [r for r in rtstruct_regions if r in regions]
 
         # Get reference CTs.
-        cts = self.ref_ct.cts
+        cts = self.ref_ct.ct_files
 
         # Load RTSTRUCT dicom.
         rtstruct = self.rtstruct
@@ -296,12 +298,12 @@ class RTSTRUCT(DicomFile):
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
             for unmapped_region, mapped_region in rtstruct_regions:
-                rdata = RtstructConverter.get_roi_contour(rtstruct, unmapped_region, cts)
+                rdata = RtStructConverter.get_roi_contour(rtstruct, unmapped_region, cts)
                 data[mapped_region] = rdata
         else:
             # Load and store region using unmapped name.
             for r in rtstruct_regions:
-                rdata = RtstructConverter.get_roi_contour(rtstruct, r, cts)
+                rdata = RtStructConverter.get_roi_contour(rtstruct, r, cts)
                 data[r] = rdata
 
         # Sort dict keys.
@@ -311,9 +313,9 @@ class RTSTRUCT(DicomFile):
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"RTSTRUCT '{self}' not found in index for series '{self.__series}'.")
+            raise ValueError(f"RtStructFile '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RTSTRUCTs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RtStructFiles found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
     def __load_ref_ct(self) -> None:
         if not self.__index_policy['no-ref-ct']['allow']:
@@ -323,7 +325,7 @@ class RTSTRUCT(DicomFile):
 
         elif self.__index_policy['no-ref-ct']['only'] == 'at-least-one-ct' or self.__index_policy['no-ref-ct']['only'] == 'single-ct':
             # Load first CT series in study.
-            ct_id = self.__series.study.list_series(Modality.CT)[-1]
+            ct_id = self.__series.study.list_series('CT')[-1]
 
         self.__ref_ct = CtSeries(self.__series.study, ct_id)
 

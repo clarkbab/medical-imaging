@@ -1,15 +1,15 @@
-from enum import Enum
+from typing import *
 
-SeriesInstanceUID = str
+from mymi.typing import *
 
-class Modality(str, Enum):
-    CT = 'CT'
-    RTSTRUCT = 'RTSTRUCT'
-    RTPLAN = 'RTPLAN'
-    RTDOSE = 'RTDOSE'
+Modality = Literal['CT', 'MR', 'RTSTRUCT', 'RTPLAN', 'RTDOSE']
 
 # Abstract class.
 class DicomSeries:
+    @property
+    def id(self) -> SeriesID:
+        raise NotImplementedError("Child class must implement 'id'.")
+
     @property
     def modality(self) -> Modality:
         raise NotImplementedError("Child class must implement 'modality'.")
@@ -17,3 +17,4 @@ class DicomSeries:
     @property
     def study(self) -> 'DicomStudy':
         raise NotImplementedError("Child class must implement 'study'.")
+ 

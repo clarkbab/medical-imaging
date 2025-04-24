@@ -5,7 +5,7 @@ import SimpleITK as sitk
 from typing import Any, Dict, Optional, Tuple, Union
 
 from mymi import logging
-from mymi.typing import Box3D, PointMM3D, PointMM3D, ImageSize3D, ImageSpacing3D
+from mymi.typing import Box3D, Point3D, Point3D, ImageSize3D, ImageSpacing3D
 
 def resample(
     data: np.ndarray,
@@ -44,8 +44,8 @@ def resample(
 
 def spatial_resample(
     data: np.ndarray,
-    offset: Optional[PointMM3D] = None,
-    output_offset: Optional[PointMM3D] = None,
+    offset: Optional[Point3D] = None,
+    output_offset: Optional[Point3D] = None,
     output_size: Optional[ImageSize3D] = None,
     output_spacing: Optional[ImageSpacing3D] = None,
     return_transform: bool = False,
@@ -163,8 +163,8 @@ def resample_box_3D(
 
 def resample_landmarks(
     landmarks: pd.DataFrame,
-    offset: PointMM3D = (0, 0, 0),
-    output_offset: PointMM3D = (0, 0, 0),
+    offset: Point3D = (0, 0, 0),
+    output_offset: Point3D = (0, 0, 0),
     output_spacing: ImageSpacing3D = (1, 1, 1),
     spacing: ImageSpacing3D = (1, 1, 1)) -> pd.DataFrame:
     raise MemoryError("You forgot that this function makes no sense. Landmarks are not images, they're points in physical space.")

@@ -10,9 +10,6 @@ from pynvml.smi import nvidia_smi
 from time import perf_counter, time
 from typing import *
 
-# Commented due to circular import.
-# from mymi.loaders import Loader
-# from mymi import logging
 from mymi import config
 from mymi.typing import *
 
@@ -34,6 +31,25 @@ def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def deep_merge(d: Dict[str, Any], default: Dict[str, Any]) -> Dict[str, Any]:
+    all_keys = list(set(d.keys()).union(set(default.keys())))
+    merged = {}
+    for k in all_keys:
+        if k in d and k in default:
+            if isinstance(default[k], dict):
+                assert isinstance(d[k], dict)
+                merged[k] = deep_merge(d[k], default[k])
+            elif isinstance(default[k], (bool, int, float, str)):
+                merged[k] = d[k] if k in d else default[k]
+            else:
+                raise ValueError(f"Unrecognised type for default key '{k}'.")
+        elif k in d:
+            merged[k] = d[k]
+        else:
+            merged[k] = default[k]
+            
+    return merged
+
 def encode(o: Any) -> str:
     return hashlib.sha1(json.dumps(o).encode('utf-8')).hexdigest()
 
@@ -42,19 +58,6 @@ def escape_filepath(f: str) -> str:
         f = f.split(':')[1]
         f = os.path.join(config.directories.files, f)
     return f
-
-# Commented due to circular import.
-# def get_manifest():
-#     datasets = ['PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC']
-#     region = 'BrainStem'
-#     n_folds = 5
-#     n_train = 5
-#     test_fold = 0
-#     _, _, test_loader = Loader.build_loaders(datasets, region, load_test_origin=False, n_folds=n_folds, n_train=n_train, test_fold=test_fold)
-#     samples = []
-#     for ds_b, samp_b in iter(test_loader):
-#         samples.append((ds_b[0], samp_b[0].item()))
-#     return samples
 
 def is_generic(t: Any) -> bool:
     return get_origin(t) is not None
@@ -178,58 +181,6 @@ def fplot(
     plt.title(f"{f_str}, {param_str}")
 
     plt.show()
-
-def save_json(
-    data: Any,
-    filepath: str) -> None:
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    assert filepath.split('.')[-1] == 'json'
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
-
-def save_csv(
-    data: pd.DataFrame,
-    *path: List[str],
-    index: bool = False,
-    header: bool = True,
-    overwrite: bool = True) -> None:
-    filepath = os.path.join(config.directories.files, *path)
-    assert filepath.split('.')[-1] == 'csv'
-    dirpath = os.path.dirname(filepath)
-    if os.path.exists(filepath):
-        if overwrite:
-            os.makedirs(dirpath, exist_ok=True)
-            data.to_csv(filepath, header=header, index=index)
-        else:
-            raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
-    else:
-        os.makedirs(dirpath, exist_ok=True)
-        data.to_csv(filepath, header=header, index=index)
-
-def load_csv(
-    *path: List[str],
-    exists_only: bool = False,
-    map_cols: Dict[str, str] = {},
-    map_types: Dict[str, Any] = {},
-    **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
-    filepath = os.path.join(config.directories.files, *path)
-    if not os.path.exists(filepath):
-        if exists_only:
-            return False
-        else:
-            raise ValueError(f"CSV at filepath '{filepath}' not found.")
-    elif exists_only:
-        return True
-
-    # Load CSV.
-    map_types['patient-id'] = str
-    map_types['study-id'] = str
-    df = pd.read_csv(filepath, dtype=map_types, **kwargs)
-
-    # Map column names.
-    df = df.rename(columns=map_cols)
-
-    return df
 
 def arg_assert_lengths(args: List[List[Any]]) -> None:
     arg_0 = args[0]
@@ -357,10 +308,6 @@ def benchmark(
         after()
 
     return np.mean(durations)
-
-def read_json(filepath: str) -> Any:
-    with open(filepath, 'r') as f:
-        return json.load(f)
 
 def p_landmarks(landmarks: List[Landmark], f: float) -> List[Landmark]:
     # Take non-random subset of landmarks.

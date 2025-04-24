@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 import re
 from time import time
-from typing import List, Optional
+from typing import *
 from tqdm import tqdm
 
 from mymi.datasets.shared import CT_FROM_REGEXP
@@ -14,8 +14,8 @@ from mymi.datasets.dicom import DicomDataset, Modality
 from mymi.datasets.nifti import recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import Regions
-from mymi.utils import append_row, save_csv, save_as_nifti
+from mymi.typing import *
+from mymi.utils import *
 
 from ...processing import write_flag
 
@@ -96,12 +96,12 @@ def convert_to_nifti(
             else:
                 nifti_study_id = s
 
-            # Convert CT series.
             anon_series_id = 0
             if ct_from is None:
-                ct_series_ids = study.list_series(Modality.CT)
+                # Convert CT series.
+                ct_series_ids = study.list_series('CT')
                 for sr in ct_series_ids:
-                    series = study.series(sr, Modality.CT)
+                    series = study.series(sr, 'CT')
                     
                     # Get Nifti series ID.
                     if anonymise_series:
@@ -127,10 +127,39 @@ def convert_to_nifti(
                     }
                     index_df = append_row(index_df, data)
 
+                # Convert MR series.
+                mr_series_ids = study.list_series('MR')
+                for sr in mr_series_ids:
+                    series = study.series(sr, 'MR')
+                    
+                    # Get Nifti series ID.
+                    if anonymise_series:
+                        nifti_series_id = f'series_{anon_series_id}'
+                        anon_series_id += 1
+                    else:
+                        nifti_series_id = sr
+                    
+                    # Create Nifti MR.
+                    filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'mr', f'{nifti_series_id}.nii.gz')
+                    save_as_nifti(series.data, series.spacing, series.offset, filepath)
+
+                    # Add index entry.
+                    data = {
+                        'dicom-dataset': dataset,
+                        'dicom-patient-id': p,
+                        'dicom-study-id': s,
+                        'dicom-series-id': sr,
+                        'nifti-dataset': dataset,
+                        'nifti-patient-id': nifti_pat_id,
+                        'nifti-study-id': nifti_study_id,
+                        'nifti-series-id': nifti_series_id,
+                    }
+                    index_df = append_row(index_df, data)
+
             # Convert RTSTRUCT series.
-            rtstruct_series_ids = study.list_series(Modality.RTSTRUCT)
+            rtstruct_series_ids = study.list_series('RTSTRUCT')
             for sr in rtstruct_series_ids:
-                series = study.series(sr, Modality.RTSTRUCT)
+                series = study.series(sr, 'RTSTRUCT')
 
                 # Get Nifti series ID.
                 if anonymise_series:
@@ -148,26 +177,14 @@ def convert_to_nifti(
 
                 # Create landmarks.
                 lm_df = series.landmark_data()
-                filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'landmarks', f'{nifti_series_id}.csv')
-                save_csv(lm_df, filepath)
-
-                # Add index entry.
-                data = {
-                    'dicom-dataset': dataset,
-                    'dicom-patient-id': p,
-                    'dicom-study-id': s,
-                    'dicom-series-id': sr,
-                    'nifti-dataset': dataset,
-                    'nifti-patient-id': nifti_pat_id,
-                    'nifti-study-id': nifti_study_id,
-                    'nifti-series-id': nifti_series_id,
-                }
-                index_df = append_row(index_df, data)
+                if lm_df is not None:
+                    filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'landmarks', f'{nifti_series_id}.csv')
+                    save_csv(lm_df, filepath)
 
             # Convert RTDOSE series.
-            rtdose_series_ids = study.list_series(Modality.RTDOSE)
+            rtdose_series_ids = study.list_series('RTDOSE')
             for sr in rtdose_series_ids:
-                series = study.series(sr, Modality.RTDOSE)
+                series = study.series(sr, 'RTDOSE')
 
                 # Get Nifti series ID.
                 if anonymise_series:
@@ -180,20 +197,7 @@ def convert_to_nifti(
                 data = series.dose_data
                 if data is not None:
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'rtdose', f'{nifti_series_id}.nii.gz')
-                    save_as_nifti(data, spacing, offset, filepath)
-
-                # Add index entry.
-                data = {
-                    'dicom-dataset': dataset,
-                    'dicom-patient-id': p,
-                    'dicom-study-id': s,
-                    'dicom-series-id': sr,
-                    'nifti-dataset': dataset,
-                    'nifti-patient-id': nifti_pat_id,
-                    'nifti-study-id': nifti_study_id,
-                    'nifti-series-id': nifti_series_id,
-                }
-                index_df = append_row(index_df, data)
+                    save_as_nifti(data, ref_ct.spacing, ref_ct.offset, filepath)
 
     # Save index.
     if len(index_df) > 0:

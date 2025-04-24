@@ -1,11 +1,10 @@
 from enum import Enum
 import os
-import yaml
+import pandas as pd
 
 from mymi import config
-from mymi import logging
-from mymi.typing import Regions
-from mymi.utils import arg_to_list
+from mymi.typing import *
+from mymi.utils import *
 
 EXPANDED_REGION_MAP = {
     'Lungs': ['Lung_Lower_Lobe_L', 'Lung_Lower_Lobe_R', 'Lung_Middle_Lobe_R', 'Lung_Upper_Lobe_L', 'Lung_Upper_Lobe_R'],
@@ -336,17 +335,11 @@ def regions_to_list(regions: Regions, **kwargs) -> Regions:
         if hasattr(RegionList, rl_name):
             regions = list(getattr(RegionList, rl_name))
         else:
-            filepath = os.path.join(config.directories.config, 'region-lists', f'{rl_name}.txt')
+            filepath = os.path.join(config.directories.config, 'region-lists', f'{rl_name}.csv')
             if not os.path.exists(filepath):
                 raise ValueError(f"Region list '{rl_name}' not found.")
-
-            with open(filepath) as f:
-                try:
-                    regions = f.readlines()
-                    regions = [r.strip() for r in regions]
-                    regions = [r for r in regions if r != '']
-                except yaml.YAMLError as exc:
-                    logging.error(exc)
+            df = pd.read_csv(filepath, header=None)
+            regions = list(sorted(df[0]))
     else:
         regions = arg_to_list(regions, str, **kwargs)
 

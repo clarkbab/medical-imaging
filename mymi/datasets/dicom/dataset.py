@@ -2,21 +2,20 @@ from ast import literal_eval
 import json
 import numpy as np
 import os
-from pandas import DataFrame, read_csv
-from pandas.errors import EmptyDataError
+import pandas as pd
 import re
 from tqdm import tqdm
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import *
 
 from mymi import config
 from mymi import logging
-from mymi.typing import PatientID, PatientIDs, Regions
-from mymi.utils import arg_to_list
+from mymi.typing import *
+from mymi.utils import *
 
 from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
 from .patient import DicomPatient
-from .index import DEFAULT_POLICY as DEFAULT_INDEX_POLICY, INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index as build_index_fn
+from .index import INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index as build_index_fn
 from .files.rtstruct import RegionMap, DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
 Z_SPACING_ROUND_DP = 2
@@ -40,7 +39,7 @@ class DicomDataset(Dataset):
         self.__global_id = f"DICOM:{self.__name}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__name}"
 
         self.__index = None             # Lazy-loaded.
-        self.__error_index = None      # Lazy-loaded.
+        self.__index_errors = None      # Lazy-loaded.
         self.__index_policy = None      # Lazy-loaded.
         self.__loaded_region_dups = False
         self.__loaded_region_map = False
@@ -60,16 +59,16 @@ class DicomDataset(Dataset):
         return self.__global_id
 
     @property
-    def index(self) -> DataFrame:
+    def index(self) -> pd.DataFrame:
         if self.__index is None:
             self.__load_index()
         return self.__index
 
     @property
-    def error_index(self) -> DataFrame:
-        if self.__error_index is None:
+    def index_errors(self) -> pd.DataFrame:
+        if self.__index_errors is None:
             self.__load_index()
-        return self.__error_index
+        return self.__index_errors
 
     @property
     def index_policy(self) -> Dict[str, Any]:
@@ -92,7 +91,7 @@ class DicomDataset(Dataset):
         return self.__path
 
     @property
-    def region_dups(self) -> DataFrame:
+    def region_dups(self) -> pd.DataFrame:
         if not self.__loaded_region_dups:
             self.__load_region_dups()
             self.__loaded_region_dups = True
@@ -159,7 +158,7 @@ class DicomDataset(Dataset):
     def list_regions(
         self,
         pat_id: Optional[PatientIDs] = None,
-        use_mapping: bool = True) -> DataFrame:
+        use_mapping: bool = True) -> pd.DataFrame:
         # Load all patients.
         pats = self.list_patients()
 
@@ -208,62 +207,58 @@ class DicomDataset(Dataset):
         return fn
 
     def __load_index(self) -> None:
-        # Load index policy.
-        filepath = os.path.join(self.__path, 'index-policy.json')
-        if os.path.exists(filepath):
-            with open(filepath, 'r') as f:
-                self.__index_policy = json.load(f)
-        else:
-            self.__index_policy = DEFAULT_INDEX_POLICY
-
-        # Trigger index build if not present.
-        filepath = os.path.join(self.__path, 'index.csv')
+        # Trigger build if necessary.
+        filepath = os.path.join(self.__path, 'index-policy.yaml')
         if not os.path.exists(filepath):
             self.build_index()
 
+        # Load index policy.
+        self.__index_policy = load_yaml(filepath)
+
         # Load index.
+        filepath = os.path.join(self.__path, 'index.csv')
         try:
-            self.__index = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+            self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
             self.__index['mod-spec'] = self.__index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
-        except EmptyDataError:
+        except pd.errors.EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = DataFrame(columns=INDEX_COLS.keys())
+            self.__index = pd.DataFrame(columns=INDEX_COLS.keys())
 
         # Load index errors.
         try:
             filepath = os.path.join(self.__path, 'index-errors.csv')
-            self.__error_index = read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
-        except EmptyDataError:
+            self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+        except pd.errors.EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = DataFrame(columns=ERROR_INDEX_COLS.keys())
+            self.__index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
 
     # Copied from 'mymi/reporting/dataset/dicom.py' to avoid circular dependency.
     def __load_patient_regions_report(
         self,
         exists_only: bool = False,
-        use_mapping: bool = True) -> Union[DataFrame, bool]:
+        use_mapping: bool = True) -> Union[pd.DataFrame, bool]:
         filename = 'region-count.csv' if use_mapping else 'region-count-unmapped.csv'
         filepath = os.path.join(self.__path, 'reports', filename)
         if os.path.exists(filepath):
             if exists_only:
                 return True
             else:
-                return read_csv(filepath)
+                return pd.read_csv(filepath)
         else:
             if exists_only:
                 return False
             else:
-                raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
+                raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
 
-    def __load_region_dups(self) -> Optional[DataFrame]:
+    def __load_region_dups(self) -> Optional[pd.DataFrame]:
         filepath = os.path.join(self.__path, 'region-dups.csv')
         if os.path.exists(filepath):
-            self.__region_dups = read_csv(filepath)
+            self.__region_dups = pd.read_csv(filepath)
         else:
             self.__region_dups = None
 
     def __load_region_map(self) -> Optional[RegionMap]:
-        filepath = os.path.join(self.__path, 'region-map.csv')
+        filepath = os.path.join(self.path, 'region-map.csv')
         if os.path.exists(filepath):
             self.__region_map = RegionMap.load(filepath)
         else:

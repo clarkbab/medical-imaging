@@ -18,6 +18,10 @@ class LandmarkData(NiftiData):
         self.__study = study
 
     @property
+    def id(self) -> SeriesID:
+        return self.__id
+
+    @property
     def path(self) -> str:
         return self.__path
 
@@ -29,7 +33,7 @@ class LandmarkData(NiftiData):
         self,
         landmarks: Landmarks = 'all',
         use_image_coords: bool = False,
-        **kwargs) -> Landmarks:
+        **kwargs) -> LandmarkData:
 
         # Load landmarks.
         lm_df = load_csv(self.__path)

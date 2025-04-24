@@ -12,7 +12,7 @@ from tqdm import tqdm
 from typing import *
 
 from mymi.datasets import DicomDataset, TrainingDataset
-from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtstructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
+from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtStructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
 from mymi.datasets.nifti import Modality
 from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
 from mymi.geometry import extent
@@ -327,12 +327,12 @@ def convert_to_dicom(
             ct_dicoms = []
 
             # Convert CT series.
-            data_ids = study.list_data(Modality.CT)
+            data_ids = study.list_data('CT')
             if len(data_ids) > 1:
                 raise ValueError(f"Code only handles studies with a single CT series. See 'ct_dicoms' above.")
             for d in data_ids:
                 # Load data.
-                ct_series = study.data(d, Modality.CT)
+                ct_series = study.data(d, 'CT')
                 ct_data = ct_series.data
                 spacing = ct_series.spacing
                 offset = ct_series.offset
@@ -450,8 +450,8 @@ def convert_to_dicom(
 
             # Convert regions to RTSTRUCT.
             regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-            landmark_data_ids = study.list_data(Modality.LANDMARKS)
-            region_data_ids = study.list_data(Modality.REGIONS)
+            landmark_data_ids = study.list_data('LANDMARKS')
+            region_data_ids = study.list_data('REGIONS')
             data_ids = np.union1d(landmark_data_ids, region_data_ids)
             for d in data_ids:
                 # Create RTSTRUCT info.
@@ -461,10 +461,10 @@ def convert_to_dicom(
                 }
 
                 # Create RTSTRUCT dicom.
-                rtstruct = RtstructConverter.create_rtstruct(ct_dicoms, rt_info)
+                rtstruct = RtStructConverter.create_rtstruct(ct_dicoms, rt_info)
 
-                if convert_regions and study.has_data(d, Modality.REGIONS):
-                    rt_series = study.data(d, Modality.REGIONS)
+                if convert_regions and study.has_data(d, 'REGIONS'):
+                    rt_series = study.data(d, 'REGIONS')
                     # Add 'ROI' data for each region.
                     palette = matplotlib.cm.tab20
                     logging.info('rtstruct building')
@@ -479,17 +479,17 @@ def convert_to_dicom(
                             data=region_data,
                             name=r,
                         )
-                        RtstructConverter.add_roi_contour(rtstruct, roi_data, ct_dicoms)
+                        RtStructConverter.add_roi_contour(rtstruct, roi_data, ct_dicoms)
 
-                if convert_landmarks and study.has_data(d, Modality.LANDMARKS):
-                        lm_series = study.data(d, Modality.LANDMARKS)
+                if convert_landmarks and study.has_data(d, 'LANDMARKS'):
+                        lm_series = study.data(d, 'LANDMARKS')
                         lm_df = lm_series.data(landmarks=landmarks)
                         lm_names = list(lm_df['landmark-id'])
                         if landmarks_prefix is not None:
                             lm_names = [f"{landmarks_prefix}{l}" for l in lm_names]
                         lm_data = lm_df[list(range(3))].to_numpy()
                         for n, lm in zip(lm_names, lm_data):
-                            RtstructConverter.add_roi_landmark(rtstruct, n, lm, ct_dicoms)
+                            RtStructConverter.add_roi_landmark(rtstruct, n, lm, ct_dicoms)
 
                 # Save RTSTRUCT.
                 filepath = os.path.join(destset.path, 'data', 'raw', 'patients', p_mapped, s, 'rtstruct', f'{d}.dcm')

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import datasets as ds
-from mymi.datasets.dicom import DicomDataset, ROIData, RtstructConverter
+from mymi.datasets.dicom import DicomDataset, ROIData, RtStructConverter
 from mymi.geometry import extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -122,7 +122,7 @@ def create_dataset(
         cts = ds.patient(pat).get_cts()
 
         # Create RTSTRUCT dicom.
-        rtstruct = RtstructConverter.create_rtstruct(cts, rt_info)
+        rtstruct = RtStructConverter.create_rtstruct(cts, rt_info)
 
         # Create ROI data.
         roi_data = ROIData(
@@ -132,7 +132,7 @@ def create_dataset(
         )
 
         # Add ROI.
-        RtstructConverter.add_roi_contour(rtstruct, roi_data, cts)
+        RtStructConverter.add_roi_contour(rtstruct, roi_data, cts)
 
         # Save in new 'pred' dataset.
         filename = f"{pat}.dcm"
@@ -157,7 +157,7 @@ def load_segmenter_predictions(
     # Get region info.
     filepath = os.path.join(set.path, 'predictions', model, f'{pat_id}.dcm')
     rtstruct = dcm.read_file(filepath)
-    region_names = RtstructConverter.get_roi_names(rtstruct)
+    region_names = RtStructConverter.get_roi_names(rtstruct)
     def to_internal(name):
         if region_map is None:
             return name
@@ -168,7 +168,7 @@ def load_segmenter_predictions(
     # Extract data.
     preds = []
     for region in regions:
-        pred = RtstructConverter.get_roi_contour(rtstruct, name_map[region], ref_cts)
+        pred = RtStructConverter.get_roi_contour(rtstruct, name_map[region], ref_cts)
         preds.append(pred)
     
     # Determine return type.

@@ -125,7 +125,7 @@ class TrainingSample:
             return True
 
         regions = regions_to_list(regions)
-        n_matching = len(np.intersect1d(regions, self.regions))
+        n_matching = len(np.intersect1d(regions, self.regions()))
 
         if n_matching == len(regions):
             return True
@@ -171,31 +171,35 @@ class TrainingSample:
         **kwargs) -> Tuple[np.ndarray, np.ndarray]:
         return self.input, self.label(**kwargs)
 
-    @property
     def regions(
         self,
-        label_idx: Optional[int] = None) -> List[Region]:
+        label_idxs: Optional[Union[int, Sequence[int]]] = 'all') -> List[Region]:
         label_types = self.split.dataset.label_types
         if len(label_types) == 1:
-            label_idx = 0
-        elif label_idx is None:
-            raise ValueError("Multiple labels present - must specify 'label_idx'.")
-        label_type = label_types[label_idx]
-        if label_type != 'regions':
-            raise ValueError(f"Mask only available for 'regions' labels, not '{label_type}'.")
+            label_idxs = [0]
+        else:
+            def all_region_label_idxs() -> List[str]:
+                return [i for i, l in enumerate(label_types) if l == 'regions']
+            label_idxs = arg_to_list(label_idxs, int, literals={ 'all': all_region_label_idxs })
+            if label_idxs is None:
+                raise ValueError("Multiple labels present - must specify 'label_idxs'.")
+            else:
+                for i in label_idxs:
+                    if label_types[i] != 'regions':
+                        raise ValueError(f"Only 'regions' type label_idxs can be passed for sample 'regions'. Got '{i}', type '{label_types[i]}'.")
+        label_types = [label_types[i] for i in label_idxs]
         all_regions = self.split.dataset.regions
         if all_regions is None:
             return None
 
         include = [False] * len(all_regions)
-        for i, l in enumerate(label_types):
-            if l != 'regions':
-                continue
-            for r in self.mask(label_idx=i)[1:]:
-                if r:
-                    include[i] = True
-                    continue
+        for i in label_idxs:
+            mask = self.mask(label_idx=i)[1:]
+            for j, m in enumerate(mask):
+                if m:
+                    include[j] = True
         regions = [r for i, r in enumerate(all_regions) if include[i]]
+
         return regions
 
     def __str__(self) -> str:

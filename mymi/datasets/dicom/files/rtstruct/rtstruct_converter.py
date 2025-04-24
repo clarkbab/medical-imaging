@@ -36,7 +36,7 @@ class SOPClassUID:
     RTSTRUCT = '1.2.840.10008.5.1.4.1.1.481.3'
     RTSTRUCT_IMPLEMENTATION_CLASS = PYDICOM_IMPLEMENTATION_UID
 
-class RtstructConverter:
+class RtStructConverter:
     @classmethod
     def has_roi_data(
         cls,
@@ -191,7 +191,7 @@ class RtstructConverter:
         points: np.ndarray,
         size: typing.ImageSize2D,
         spacing: typing.ImageSpacing2D,
-        offset: typing.PointMM2D) -> np.ndarray:
+        offset: typing.Point2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:

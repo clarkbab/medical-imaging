@@ -204,7 +204,7 @@ def read_dirlab_image(
     image_size,
     spacing,
     sitk_pixel_type,
-    offset: Optional[Point3D] = None,
+    offset: Optional[Voxel] = None,
     big_endian=False) -> np.ndarray:
     """
     Read a raw binary scalar image.

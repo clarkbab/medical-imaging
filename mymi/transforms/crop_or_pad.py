@@ -105,7 +105,7 @@ def spatial_crop_or_pad(
 def point_crop_or_pad(
     data: np.ndarray,
     size: ImageSize3D,
-    point: Point3D,
+    point: Voxel,
     fill: Union[float, Literal['min']] = 'min',
     return_box: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, Box3D]]:
     # Perform the crop or pad.
