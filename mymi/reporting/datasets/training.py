@@ -13,7 +13,7 @@ from mymi.datasets import TrainingDataset
 from mymi.geometry import extent, centre_of_extent
 from mymi.loaders import Loader
 from mymi import logging
-from mymi.postprocessing import get_object, one_hot_encode
+from mymi.processing import get_object, one_hot_encode
 from mymi.plotting.dataset.training import plot_patient
 from mymi.regions import regions_to_list
 from mymi.typing import Regions

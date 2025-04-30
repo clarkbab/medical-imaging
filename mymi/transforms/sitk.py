@@ -11,6 +11,12 @@ def sitk_load_transform(
     filepath: str) -> sitk.Transform:
     if not os.path.exists(filepath):
         raise ValueError(f"SimpleITK transform not found at filepath: {filepath}.")
+
+    # Convert nifti files to transforms.
+    if filepath.endswith('.nii') or filepath.endswith('.nii.gz'):
+        transform = to_sitk_transform(*load_nifti(filepath))
+        return transform
+
     transform = sitk.ReadTransform(filepath)
     return transform
 
@@ -82,6 +88,8 @@ def sitk_transform_image_spatial(
 def sitk_transform_points(
     points: np.ndarray,     # N x 3
     transform: sitk.Transform) -> np.ndarray:
+    if isinstance(points, pd.DataFrame):
+        points = points.to_numpy()  # Iterating over 'points' produces indices when using dataframes.
     assert points.shape[1] == 3
     points = points.astype(np.float64)  # sitk expects double.
     

@@ -1,3 +1,4 @@
+from .assertions import *
 from .interval import *
 from .io import *
 from .itk import *

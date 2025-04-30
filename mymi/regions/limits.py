@@ -2,7 +2,7 @@ import numpy as np
 
 from mymi.geometry import extent, extent_width_mm
 from mymi import logging
-from mymi.transforms import crop_foreground_3D
+from mymi.transforms import crop_foreground
 from mymi import typing
 
 # Limits in mm.
@@ -19,6 +19,6 @@ def truncate_spine(
         top_z = extent(pred)[1][2]
         bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
         crop = ((0, 0, bottom_z), tuple(np.array(pred.shape) - 1))
-        pred = crop_foreground_3D(pred, crop)
+        pred = crop_foreground(pred, crop)
 
     return pred

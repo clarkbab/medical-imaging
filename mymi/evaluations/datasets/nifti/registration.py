@@ -2,45 +2,36 @@ import numpy as np
 import os
 import pandas as pd
 from tqdm import tqdm
-from typing import Dict, List, Optional, Tuple
+from typing import *
 
 from mymi.datasets import NiftiDataset
 from mymi.metrics import dice, distances, tre
 from mymi import logging
 from mymi.predictions.datasets.nifti import load_registration
 from mymi.regions import regions_to_list
-from mymi.typing import PatientID, Landmarks, Region, Regions
-from mymi.utils import append_row, arg_to_list, load_csv, save_csv
+from mymi.typing import *
+from mymi.utils import *
     
-def load_registration_evaluation(
+def load_registrations_evaluation(
     dataset: str,
-    model: str,
-    landmarks: Optional[Landmarks] = None,
-    regions: Optional[Regions] = None) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    model: str) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     set = NiftiDataset(dataset)
 
     # Load regions evaluations.
-    if regions is not None:
-        dfs = []
-        regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-        for r in regions:
-            filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'regions', f'{r}.csv')
-            if not os.path.exists(filepath):
-                continue
-            df = load_csv(filepath)
-            dfs.append(df)
-        regions_eval = pd.concat(dfs, axis=0)
+    filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'regions.csv')
+    if os.path.exists(filepath):
+        regions_df = pd.read_csv(filepath)
     else:
-        regions_eval = None
+        regions_df = None
 
     # Load landmarks evaluation.
-    if landmarks is not None:
-        filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'landmarks.csv')
-        landmarks_eval = pd.read_csv(filepath)
+    filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'landmarks.csv')
+    if os.path.exists(filepath):
+        landmarks_df = pd.read_csv(filepath)
     else:
-        landmarks_eval = None
+        landmarks_df = None
 
-    return regions_eval, landmarks_eval
+    return regions_df, landmarks_df
 
 def get_registration_landmarks_evaluation(
     dataset: str,
@@ -99,8 +90,8 @@ def get_registration_region_evaluation(
 
     #     # Crop pred/label foreground voxels.
     #     crop = ((0, 0, z_min), label.shape)
-    #     pred = crop_foreground_3D(pred, crop)
-    #     label = crop_foreground_3D(label, crop)
+    #     pred = crop_foreground(pred, crop)
+    #     label = crop_foreground(label, crop)
 
     # Dice.
     metrics = {}
@@ -132,12 +123,13 @@ def create_registrations_evaluation(
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
-    regions: Optional[Regions] = 'all') -> None:
+    regions: Optional[Regions] = 'all',
+    splits: Optional[Splits] = None) -> None:
     logging.arg_log('Evaluating NIFTI registration', ('dataset', 'model', 'landmarks', 'region'), (dataset, model, landmarks, regions))
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients()
+    pat_ids = set.list_patients(splits=splits)
     if regions is not None:
         regions = regions_to_list(regions, literals={ 'all': set.list_regions })
 
@@ -182,7 +174,7 @@ def create_registrations_evaluation(
             # Save evaluation.
             df = df.astype(cols)
             filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'regions.csv')
-            save_csv(df, filepath, overwrite=True)
+            save_files_csv(df, filepath, overwrite=True)
 
     if landmarks is not None:
         cols = {
@@ -226,4 +218,4 @@ def create_registrations_evaluation(
             # Save evaluation.
             df = df.astype(cols)
             filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'landmarks.csv')
-            save_csv(df, filepath, overwrite=True)
+            save_files_csv(df, filepath, overwrite=True)

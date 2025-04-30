@@ -7,7 +7,7 @@ from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import sitk_transform_image, sitk_transform_points, velocity_load_transform
 from mymi.typing import Landmarks, Regions
-from mymi.utils import save_as_nifti, save_csv, save_sitk_transform
+from mymi.utils import save_as_nifti, save_files_csv, save_sitk_transform
 
 def convert_velocity_predictions_to_nifti(
     dataset: str,
@@ -80,4 +80,4 @@ def convert_velocity_predictions_to_nifti(
             # These are redundant columns, and shouldn't be stored on disk. They should be added at load time.
             lm_df = lm_df.drop(columns=['patient-id', 'study-id'])
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, modelname, 'landmarks', 'series_1.csv')
-            save_csv(lm_df, filepath, overwrite=True)
+            save_files_csv(lm_df, filepath, overwrite=True)

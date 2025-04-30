@@ -8,7 +8,7 @@ from mymi.utils import *
 
 from .data import NiftiData
 
-class LandmarkData(NiftiData):
+class LandmarkNiftiData(NiftiData):
     def __init__(
         self,
         study: 'NiftiStudy',
@@ -66,7 +66,7 @@ class LandmarkData(NiftiData):
         return lm_df
     
     # Returns 'True' if has at least one of the passed 'regions'.
-    def has_landmark(
+    def has_landmarks(
         self,
         landmarks: Landmarks) -> bool:
         landmarks = arg_to_list(landmarks, int, literals={ 'all': self.list_landmarks })

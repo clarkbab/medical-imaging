@@ -8,7 +8,7 @@ from mymi.utils import *
 
 from .data import NiftiData
 
-class RegionData(NiftiData):
+class RegionNiftiData(NiftiData):
     def __init__(
         self,
         study: 'NiftiStudy',

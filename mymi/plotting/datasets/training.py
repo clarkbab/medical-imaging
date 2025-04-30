@@ -43,15 +43,16 @@ def plot_samples(
     channels: Union[int, List[int], Literal['all']] = 0,
     **kwargs) -> None:
     set = TrainingDataset(dataset)
-    split_ids = arg_to_list(split_ids, str, literals={ 'all': set.splits })
+    spacing = set.spacing
+    split_ids = arg_to_list(split_ids, str, literals={ 'all': set.list_splits })
     channels = arg_to_list(channels, int, literals={ 'all': list(range(set.n_input_channels)) })
-    n_channels = len(channels)
 
     # Load CT data.
     plot_idses = []
     inputses = []
     spacingses = []
     centreses = []
+    series_idses = []
     for s in split_ids:
         # Get split samples.
         split = set.split(s)
@@ -61,6 +62,7 @@ def plot_samples(
             inputs = []
             spacings = []
             centres = []
+            series_ids = []
 
             for c in channels:
                 # Add sample data.
@@ -73,25 +75,25 @@ def plot_samples(
                 inputs.append(input)
                 spacings.append(spacing)
                 centres.append(centre)
-
-            # Collapse list if single channel.
-            if n_channels == 1:
-                plot_ids = plot_ids[0]
-                inputs = inputs[0]
-                spacings = spacings[0]
-                centres = centres[0]
+                series_ids.append(c)
 
             plot_idses.append(plot_ids)
             inputses.append(inputs)
             spacingses.append(spacings)
             centreses.append(centres)
+            series_idses.append(series_ids)
 
     # Plot.
+    n_rows = len(inputses)
     okwargs = dict(
         centres=centreses,
-        ct_datas=inputses,
+        datas=inputses,
+        landmark_datas=None,
+        region_datas=None,
+        series_ids=series_idses,
+        spacings=[spacing] * n_rows,
     )
-    plot_patients_matrix(plot_idses, spacingses, **okwargs, **kwargs)
+    plot_patients_matrix(plot_idses, **okwargs, **kwargs)
 
 def plot_sample_histograms(
     dataset: str,

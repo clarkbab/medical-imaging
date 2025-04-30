@@ -14,7 +14,7 @@ from mymi.loaders.augmentation import get_transforms
 from mymi import logging
 from mymi.plotting import plot_patient
 from mymi.typing import PatientID, Regions
-from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
+from mymi.utils import append_row, arg_to_list, encode, load_csv, save_files_csv
 
 def get_loader_manifest(
     dataset: Union[str, List[str]],
@@ -82,7 +82,7 @@ def create_loader_manifest(
     df = get_loader_manifest(datasets, region, check_processed=check_processed, n_folds=n_folds, test_fold=test_fold)
 
     # Save manifest.
-    save_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
+    save_files_csv(df, 'loader-manifests', encode(datasets), f'{region}-fold-{test_fold}.csv', index=False, overwrite=True)
 
 def load_loader_manifest(
     datasets: Union[str, List[str]],

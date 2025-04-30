@@ -6,7 +6,7 @@ from mymi.utils import *
 
 from .data import NiftiData
 
-class CtData(NiftiData):
+class CtNiftiData(NiftiData):
     def __init__(
         self,
         study: 'NiftiStudy',

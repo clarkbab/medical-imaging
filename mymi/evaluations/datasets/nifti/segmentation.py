@@ -15,7 +15,7 @@ from mymi.predictions.datasets.nifti import load_segmenter_predictions
 from mymi import logging
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import *
-from mymi.utils import append_row, arg_to_list, encode, load_csv, save_csv
+from mymi.utils import append_row, arg_to_list, encode, load_csv, save_files_csv
 
 def get_segmenter_patient_evaluation(
     dataset: str,
@@ -271,7 +271,7 @@ def create_segmenter_holdout_evaluation(
     # Save evaluation.
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'evaluations', 'segmentations', f'{model}.csv')
-    save_csv(df, filepath, overwrite=True)
+    save_files_csv(df, filepath, overwrite=True)
 
 def load_segmenter_holdout_evaluation(
     dataset: str,

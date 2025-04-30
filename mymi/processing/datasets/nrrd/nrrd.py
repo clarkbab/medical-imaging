@@ -27,7 +27,7 @@ from mymi.regions import regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import crop, resample, top_crop_or_pad
 from mymi import typing
-from mymi.utils import append_row, arg_to_list, load_csv, save_csv
+from mymi.utils import append_row, arg_to_list, load_csv, save_files_csv
 
 from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
@@ -534,7 +534,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     
     # Save index.
     if anonymise:
-        save_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
+        save_files_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
 
 def convert_segmenter_predictions_to_dicom_from_loader(
     datasets: Union[str, List[str]],

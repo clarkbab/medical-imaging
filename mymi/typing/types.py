@@ -1,7 +1,6 @@
-from dataclasses import dataclass
-from enum import Enum
 import numpy as np
 import pandas as pd
+import torch
 from typing import Dict, List, Literal, Sequence, Tuple, Union
 
 Axis = Literal[0, 1, 2]
@@ -17,7 +16,7 @@ BoxMM3D = Tuple[Point3D, Point3D]
 Channel = int
 Channels = Union[Channel, Sequence[Channel], Literal['all']]
 Colour = Union[str, Tuple[float, float, float]]
-Image = np.ndarray      # Required by 'CtImage'.
+Image = Union[np.ndarray, torch.Tensor]      # An image with dimensions (2, 3, 4, or 5).
 CtImage = Image
 DoseImage = Image
 Extrema = Literal[0, 1]

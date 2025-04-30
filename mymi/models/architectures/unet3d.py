@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from typing import *
 
-from mymi.checkpointing import get_checkpoints, get_level_checkpoints
+from mymi.misc.checkpointing import get_checkpoints, get_level_checkpoints
 from mymi import logging
 from mymi.utils import *
 

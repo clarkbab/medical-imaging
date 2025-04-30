@@ -119,7 +119,7 @@ def create_patient_registration(
             landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
             moved_landmark_data = moved_landmark_data[landmark_cols]
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
-            save_csv(moved_landmark_data, filepath)
+            save_files_csv(moved_landmark_data, filepath)
 
 def create_dataset_registrations(
     dataset: str,
@@ -170,7 +170,6 @@ def load_registration(
     moving_study_id: StudyID = 'study_0',
     regions: Optional[Regions] = 'all',
     regions_ignore_missing: bool = False,
-    transform_format: Literal['itk', 'sitk'] = 'sitk',
     use_image_coords: bool = False) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionData], Optional[Landmarks]]:
     # Load moved CT.
     if fixed_pat_id is None:
@@ -182,13 +181,15 @@ def load_registration(
     moved_ct, _, _ = load_nifti(filepath)
 
     # Load transform.
-    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'dvf', f'{model}.hdf5')
-    if transform_format == 'itk':
-        transform = itk_load_transform(filepath)
-    elif transform_format == 'sitk':
-        transform = sitk_load_transform(filepath)
-    else:
-        raise ValueError(f"Unrecognised transform_format '{transform_format}'.")
+    suffixes = ['.hdf5', '.nii', '.nii.gz']
+    transform = None
+    base_path = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'dvf')
+    for s in suffixes:
+        filepath = os.path.join(base_path, f'{model}{s}')
+        if os.path.exists(filepath):
+            transform = sitk_load_transform(filepath)
+    if transform is None:
+        raise ValueError(f"Transform not found for model '{model}' at '{base_path}'. Allowed suffixes: {suffixes}.")
 
     if regions is not None:
         # Load moved regions.

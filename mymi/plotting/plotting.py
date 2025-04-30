@@ -24,7 +24,7 @@ from mymi.datasets.dicom import Modality as DicomModality
 from mymi.datasets.nifti import Modality as NiftiModality
 from mymi.geometry import get_box, extent, centre_of_extent
 from mymi import logging
-from mymi.postprocessing import largest_cc_3D
+from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop, itk_transform_image, sitk_transform_image
@@ -634,7 +634,7 @@ def plot_patients_matrix(
     centres: Optional[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]], List[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
     datas: Optional[Union[Image, List[Image], List[Union[Image, List[Image]]]]] = None,
-    figsize: Tuple[int, int] = (45, 10),    # In cm.
+    figsize: Tuple[int, int] = (46, 12),    # In cm.
     landmark_datas: Optional[Union[Landmarks, List[Landmarks], List[Union[Landmarks, List[Landmarks]]]]] = None,
     region_datas: Optional[Union[RegionData, List[RegionData], List[Union[RegionData, List[RegionData]]]]] = None,
     savepath: Optional[str] = None,
@@ -663,11 +663,7 @@ def plot_patients_matrix(
     if ax is None:
         if n_rows > 1 or n_cols > 1:
             # Subplots for multiple views.
-            _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw={ 'hspace': 0.4 })
-            if n_rows == 1:
-                axs = [axs]
-            elif n_cols == 1:
-                axs = [[a] for a in axs]
+            _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw={ 'hspace': 0.4 }, squeeze=False)
         else:
             plt.figure(figsize=figsize)
             ax = plt.axes(frameon=False)
@@ -703,7 +699,6 @@ def plot_patients_matrix(
                 data=data,
                 landmark_data=landmark_data,
                 region_data=region_data,
-                show_figure=False,
                 view=view,
                 **kwargs)
 
@@ -728,7 +723,6 @@ def plot_patient(
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
     centre: Optional[Union[Landmark, Region, Landmarks, RegionLabel]] = None,
-    close_figure: bool = True,
     colours: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
@@ -741,6 +735,7 @@ def plot_patient(
     dose_data: Optional[np.ndarray] = None,
     escape_latex: bool = False,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
+    figsize: Tuple[float, float] = (36, 12),
     fontsize: int = DEFAULT_FONT_SIZE,
     idx: Optional[float] = None,
     landmark_data: Optional[Landmarks] = None,
@@ -757,7 +752,6 @@ def plot_patient(
     show_ct: bool = True,
     show_dose_bar: bool = True,
     show_extent: bool = False,
-    show_figure: bool = True,
     show_legend: bool = True,
     show_title: bool = True,
     show_title_idx: bool = True,
@@ -775,13 +769,12 @@ def plot_patient(
     __assert_idx(centre, extent_of, idx)
     __assert_view(view)
 
-    # Set latex as text compiler.
-    rc_params = plt.rcParams.copy()
-    if escape_latex:
-        plt.rcParams.update({
-            "font.family": "serif",
-            'text.usetex': True
-        })
+    if ax is None:
+        plt.figure(figsize=figsize)
+        ax = plt.axes(frameon=False)
+        show_figure = True
+    else:
+        show_figure = False
 
     idx = __convert_float_idx(idx, size, view)
 
@@ -1048,16 +1041,7 @@ def plot_patient(
 
     if show_figure:
         plt.show()
-
-        # Revert latex settings.
-        if escape_latex:
-            plt.rcParams.update({
-                "font.family": rc_params['font.family'],
-                'text.usetex': rc_params['text.usetex']
-            })
-
-    if close_figure:
-        plt.close() 
+        plt.close()
 
 def plot_localiser_prediction(
     id: str,
@@ -2411,13 +2395,233 @@ def plot_patient_histograms(
             plot_histograms(ct_data, axs=col_ax, title=title, **kwargs)
 
 def plot_registrations(
+    dataset_type: Dataset,
+    load_reg_fn: Callable,
+    dataset: str,
+    model: str,
+    centre: Optional[Union[str, List[str]]] = None,
+    crop: Optional[Union[str, List[str]]] = None,
+    crop_margin: float = 100,
+    fixed_pat_ids: Optional[PatientIDs] = None,
+    fixed_study_id: StudyID = 'study_1',
+    idx: Optional[Union[int, float, List[Union[int, float]]]] = None,
+    labels: Literal['included', 'excluded', 'all'] = 'all',
+    landmarks: Optional[Landmarks] = 'all',
+    loadpath: Optional[str] = None,
+    moving_pat_ids: Optional[PatientIDs] = None,
+    moving_study_id: StudyID = 'study_0',
+    regions: Optional[Regions] = 'all',
+    region_labels: Optional[Dict[str, str]] = None,
+    splits: Optional[Splits] = None,
+    **kwargs) -> None:
+    if loadpath is not None:
+        return plot_loaded(loadpath)
+    set = dataset_type(dataset)
+    if splits is not None:
+        fixed_pat_ids = set.list_patients(splits=splits)
+        moving_pat_ids = fixed_pat_ids
+    else:
+        if fixed_pat_ids is None:
+            raise ValueError("Must provide 'fixed_pat_ids' or 'splits' to plot registrations.")
+        fixed_pat_ids = arg_to_list(fixed_pat_ids, PatientID, literals={ 'all': set.list_patients })
+        if moving_pat_ids is None:
+            moving_pat_ids = fixed_pat_ids
+        else:
+            moving_pat_ids = arg_to_list(moving_pat_ids, PatientID, literals={ 'all': set.list_patients })
+
+    fixed_study_ids = arg_broadcast(fixed_study_id, len(fixed_pat_ids))
+    moving_study_ids = arg_broadcast(moving_study_id, len(moving_pat_ids))
+
+    moving_datas, fixed_datas, moved_datas = [], [], []
+    moving_centres, fixed_centres, moved_centres = [], [], []
+    moving_crops, fixed_crops, moved_crops = [], [], []
+    moving_spacings, fixed_spacings, moved_spacings = [], [], []
+    moving_offsets, fixed_offsets, moved_offsets = [], [], []
+    moving_landmark_datas, fixed_landmark_datas, moved_landmark_datas = [], [], []
+    moving_region_datas, fixed_region_datas, moved_region_datas = [], [], []
+    moving_idxs, fixed_idxs, moved_idxs = [], [], []
+    transforms = []
+
+    for i, p in enumerate(fixed_pat_ids):
+        moving_pat_id = p if moving_pat_ids is None else moving_pat_ids[i]
+
+        # Load moving and fixed CT and region data.
+        ids = [(moving_pat_id, moving_study_id), (p, fixed_study_id)]
+        ct_datas = []
+        landmark_datas = []
+        region_datas = []
+        sizes = []
+        spacings = []
+        centres = []
+        crops = []
+        offsets = []
+        centres_broad = arg_broadcast(centre, 3)
+        crops_broad = arg_broadcast(crop, 3)
+        idxs_broad = arg_broadcast(idx, 3)
+        for j, (p, s) in enumerate(ids):
+            study = set.patient(p).study(s)
+            ct_data = study.ct_data
+            ct_datas.append(ct_data)
+            if landmarks is not None:
+                landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True)
+            else:
+                landmark_data = None
+            if regions is not None:
+                region_data = study.region_data(labels=labels, regions=regions, regions_ignore_missing=True)
+            else:
+                region_data = None
+            sizes.append(study.ct_size)
+            spacings.append(study.ct_spacing)
+            offsets.append(study.ct_offset)
+
+            # Load 'centre' data if not already in 'region_data'.
+            centre = centres_broad[j]
+            ocentre = None
+            if centre is not None:
+                if type(centre) == str:
+                    if region_data is None or centre not in region_data:
+                        ocentre = study.region_data(regions=centre)[centre]
+                    else:
+                        ocentre = centre
+                else:
+                    ocentre = centre
+
+            # Load 'crop' data if not already in 'region_data'.
+            crop = crops_broad[j]
+            ocrop = None
+            if crop is not None:
+                if type(crop) == str:
+                    if region_data is None or crop not in region_data:
+                        ocrop = study.region_data(regions=crop)[crop]
+                    else:
+                        ocrop = crop
+                else:
+                    ocrop = crop
+
+            # Map region names.
+            if region_labels is not None:
+                # Rename regions.
+                for o, n in region_labels.items():
+                    region_data[n] = region_data.pop(o)
+
+                # Rename 'centre' and 'crop' keys.
+                if type(ocentre) == str and ocentre in region_labels:
+                    ocentre = region_labels[ocentre] 
+                if type(ocrop) == str and ocrop in region_labels:
+                    ocrop = region_labels[ocrop]
+            
+            landmark_datas.append(landmark_data)
+            region_datas.append(region_data)
+            centres.append(ocentre)
+            crops.append(ocrop)
+
+        # Load registered data.
+        moved_data, transform, moved_region_data, moved_landmark_data = load_reg_fn(dataset, p, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=regions, regions_ignore_missing=True, use_image_coords=True) 
+
+        # Load 'moved_centre' data if not already in 'moved_region_data'.
+        centre = centres_broad[2]
+        moved_centre = None
+        if centre is not None:
+            if type(centre) == str:
+                if moved_region_data is None or centre not in moved_region_data:
+                    _, _, centre_region_data, _ = load_reg_fn(dataset, p, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=centre)
+                    moved_centre = centre_region_data[centre]
+                else:
+                    moved_centre = centre
+            else:
+                moved_centre = centre
+
+        # Load 'moved_crop' data if not already in 'moved_region_data'.
+        crop = crops_broad[2]
+        moved_crop = None
+        if crop is not None:
+            if type(crop) == str:
+                if moved_region_data is None or crop not in moved_region_data:
+                    _, _, crop_region_data, _ = load_reg_fn(dataset, p, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=crop)
+                    moved_crop = crop_region_data[crop]
+                else:
+                    moved_crop = crop
+            else:
+                moved_crop = crop
+
+        # Rename moved labels.
+        if region_labels is not None:
+            # Rename regions.
+            for o, n in region_labels.items():
+                moved_region_data[n] = moved_region_data.pop(o)
+
+            # Rename 'centre' and 'crop' keys.
+            if type(moved_centre) == str and moved_centre in region_labels:
+                moved_centre = region_labels[moved_centre] 
+            if type(moved_crop) == str and moved_crop in region_labels:
+                moved_crop = region_labels[moved_crop]
+
+        # Add to main lists.
+        fixed_datas.append(ct_datas[1])
+        moving_datas.append(ct_datas[0])
+        moved_datas.append(moved_data)
+        fixed_centres.append(centres[1])
+        moving_centres.append(centres[0])
+        moved_centres.append(moved_centre)
+        fixed_crops.append(crops[1])
+        moving_crops.append(crops[0])
+        moved_crops.append(moved_crop)
+        fixed_spacings.append(spacings[1])
+        moving_spacings.append(spacings[0])
+        moved_spacings.append(spacings[1])
+        fixed_offsets.append(offsets[1])
+        moving_offsets.append(offsets[0])
+        moved_offsets.append(offsets[1])
+        fixed_landmark_datas.append(landmark_datas[1])
+        moving_landmark_datas.append(landmark_datas[0])
+        moved_landmark_datas.append(moved_landmark_data)
+        fixed_region_datas.append(region_datas[1])
+        moving_region_datas.append(region_datas[0])
+        moved_region_datas.append(moved_region_data)
+        fixed_idxs.append(idxs_broad[1])
+        moving_idxs.append(idxs_broad[0])
+        moved_idxs.append(idxs_broad[2])
+        transforms.append(transform)
+
+    okwargs = dict(
+        fixed_centres=fixed_centres,
+        fixed_crops=fixed_crops,
+        fixed_crop_margin=crop_margin,
+        fixed_datas=fixed_datas,
+        fixed_idxs=fixed_idxs,
+        fixed_landmark_datas=fixed_landmark_datas,
+        fixed_offsets=fixed_offsets,
+        fixed_spacings=fixed_spacings,
+        fixed_region_datas=fixed_region_datas,
+        moved_centres=moved_centres,
+        moved_crops=moved_crops,
+        moved_crop_margin=crop_margin,
+        moved_datas=moved_datas,
+        moved_idxs=moved_idxs,
+        moved_landmark_datas=moved_landmark_datas,
+        moved_offsets=fixed_offsets,
+        moved_region_datas=moved_region_datas,
+        moving_centres=moving_centres,
+        moving_crops=moving_crops,
+        moving_crop_margin=crop_margin,
+        moving_datas=moving_datas,
+        moving_idxs=moving_idxs,
+        moving_landmark_datas=moving_landmark_datas,
+        moving_offsets=moving_offsets,
+        moving_spacings=moving_spacings,
+        moving_region_datas=moving_region_datas,
+        transforms=transforms,
+    )
+    plot_registrations_matrix(fixed_pat_ids, fixed_study_ids, moving_pat_ids, moving_study_ids, **okwargs, **kwargs)
+
+def plot_registrations_matrix(
     fixed_pat_ids: Sequence[PatientID],
     fixed_study_ids: Sequence[StudyID],
     moving_pat_ids: Sequence[PatientID],
     moving_study_ids: Sequence[StudyID],
     fixed_centres: Sequence[Optional[Union[str, np.ndarray]]] = [],             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
     fixed_crops: Sequence[Optional[Union[str, np.ndarray, Box2D]]] = [],    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
-    fixed_ct_datas: Sequence[Optional[Images]] = [],
+    fixed_datas: Sequence[Optional[Images]] = [],
     fixed_idxs: Sequence[Optional[Union[int, float]]] = [],
     fixed_landmark_datas: Sequence[Optional[LandmarkData]] = [],
     fixed_offsets: Sequence[Optional[Point3D]] = [],
@@ -2426,13 +2630,13 @@ def plot_registrations(
     figsize: Tuple[float, float] = (16, 4),     # Width always the same, height is based on a single row.
     moved_centres: Sequence[Optional[Union[str, LabelImage]]] = [],             # Uses 'moved_region_data' if 'str', else uses 'np.ndarray'.
     moved_crops: Sequence[Optional[Union[str, LabelImage, Box2D]]] = [],    # Uses 'moved_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
-    moved_ct_datas: Sequence[Optional[Image]] = [],
+    moved_datas: Sequence[Optional[Image]] = [],
     moved_idxs: Sequence[Optional[Union[int, float]]] = [],
     moved_landmark_datas: Sequence[Optional[LandmarkData]] = [],
     moved_region_datas: Sequence[Optional[RegionData]] = [],
     moving_centres: Sequence[Optional[Union[str, LabelImage]]] = [],             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
     moving_crops: Sequence[Optional[Union[str, LabelImage, Box2D]]] = [],    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
-    moving_ct_datas: Sequence[Optional[Image]] = [],
+    moving_datas: Sequence[Optional[Image]] = [],
     moving_idxs: Sequence[Optional[Union[int, float]]] = [],
     moving_landmark_datas: Sequence[Optional[LandmarkData]] = [],
     moving_offsets: Sequence[Optional[Point3D]] = [],
@@ -2460,7 +2664,7 @@ def plot_registrations(
             axs=pat_axs,
             fixed_centre=fixed_centres[i],
             fixed_crop=fixed_crops[i],
-            fixed_ct_data=fixed_ct_datas[i],
+            fixed_data=fixed_datas[i],
             fixed_idx=fixed_idxs[i],
             fixed_landmark_data=fixed_landmark_datas[i],
             fixed_offset=fixed_offsets[i],
@@ -2468,14 +2672,14 @@ def plot_registrations(
             fixed_spacing=fixed_spacings[i],
             moved_centre=moved_centres[i],
             moved_crop=moved_crops[i],
-            moved_ct_data=moved_ct_datas[i],
+            moved_data=moved_datas[i],
             moved_idx=moved_idxs[i],
             moved_landmark_data=moved_landmark_datas[i],
             moved_region_data=moved_region_datas[i],
             moved_spacing=moving_spacings[i],
             moving_centre=moving_centres[i],
             moving_crop=moving_crops[i],
-            moving_ct_data=moving_ct_datas[i],
+            moving_data=moving_datas[i],
             moving_idx=moving_idxs[i],
             moving_landmark_data=moving_landmark_datas[i],
             moving_offset=moving_offsets[i],
@@ -2509,9 +2713,9 @@ def plot_registration(
     fixed_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray'.
     fixed_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'fixed_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     fixed_crop_margin: float = 100,                                       # Applied if cropping to 'fixed_region_data' or 'np.ndarray'
-    fixed_ct_data: Optional[np.ndarray] = None,
+    fixed_data: Optional[Image] = None,
     fixed_idx: Optional[int] = None,
-    fixed_landmark_data: Optional[Landmarks] = None,
+    fixed_landmark_data: Optional[LandmarkData] = None,
     fixed_offset: Optional[Point3D] = None,
     fixed_region_data: Optional[np.ndarray] = None,
     fixed_spacing: Optional[ImageSpacing3D] = None,
@@ -2523,7 +2727,7 @@ def plot_registration(
     moved_colour: str = 'red',
     moved_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'moved_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     moved_crop_margin: float = 100,                                       # Applied if cropping to 'moved_region_data' or 'np.ndarray'
-    moved_ct_data: Optional[np.ndarray] = None,
+    moved_data: Optional[Image] = None,
     moved_idx: Optional[int] = None,
     moved_landmark_data: Optional[Landmarks] = None,
     moved_region_data: Optional[np.ndarray] = None,
@@ -2531,7 +2735,7 @@ def plot_registration(
     moving_centre: Optional[Union[str, np.ndarray]] = None,             # Uses 'moving_region_data' if 'str', else uses 'np.ndarray'.
     moving_crop: Optional[Union[str, np.ndarray, Box2D]] = None,    # Uses 'moving_region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     moving_crop_margin: float = 100,                                       # Applied if cropping to 'moving_region_data' or 'np.ndarray'
-    moving_ct_data: Optional[np.ndarray] = None,
+    moving_data: Optional[Image] = None,
     moving_idx: Optional[int] = None,
     moving_landmark_data: Optional[Landmarks] = None,
     moving_offset: Optional[Point3D] = None,
@@ -2558,7 +2762,7 @@ def plot_registration(
         # are the same as the n "fixed" landmarks. 
 
         # Get n fixed landmarks.
-        fixed_idx = __convert_float_idx(fixed_idx, fixed_ct_data.shape, view)
+        fixed_idx = __convert_float_idx(fixed_idx, fixed_data.shape, view)
         fixed_landmark_data['dist'] = np.abs(fixed_landmark_data[view] - fixed_idx)
         fixed_landmark_data = fixed_landmark_data.sort_values('dist')
         fixed_landmark_data = fixed_landmark_data.iloc[:n_landmarks]
@@ -2576,13 +2780,13 @@ def plot_registration(
 
     # Get all plot parameters.
     hidden = 'HIDDEN'
-    ct_datas = [moving_ct_data if show_moving else hidden, fixed_ct_data if show_fixed else hidden, moved_ct_data]
-    ct_datas = [c for c in ct_datas if not (isinstance(c, str) and c == hidden)]
+    datas = [moving_data if show_moving else hidden, fixed_data if show_fixed else hidden, moved_data]
+    datas = [c for c in datas if not (isinstance(c, str) and c == hidden)]
     spacings = [moving_spacing if show_moving else hidden, fixed_spacing if show_fixed else hidden, fixed_spacing]
     spacings = [c for c in spacings if not (isinstance(c, str) and c == hidden)]
     offsets = [moving_offset if show_moving else hidden, fixed_offset if show_fixed else hidden, fixed_offset]
     offsets = [c for c in offsets if not (isinstance(c, str) and c == hidden)]
-    sizes = [moving_ct_data.shape if show_moving else hidden, fixed_ct_data.shape if show_fixed else hidden, moved_ct_data.shape]
+    sizes = [moving_data.shape if show_moving else hidden, fixed_data.shape if show_fixed else hidden, moved_data.shape]
     sizes = [c for c in sizes if not (isinstance(c, str) and c == hidden)]
     centres = [moving_centre if show_moving else hidden, fixed_centre if show_fixed else hidden, moved_centre]
     centres = [c for c in centres if not (isinstance(c, str) and c == hidden)]
@@ -2631,15 +2835,12 @@ def plot_registration(
             if not show_region_overlay:
                 axs[2 * n_cols - 2].remove()
 
-        close_figure = True
         show_figure = True
     else:
         assert len(axs) == n_rows * n_cols
-        close_figure = False
         show_figure = False
 
     # Set latex as text compiler.
-    rc_params = plt.rcParams.copy()
     if latex:
         plt.rcParams.update({
             "font.family": "serif",
@@ -2650,17 +2851,17 @@ def plot_registration(
     for i in range(n_cols):
         okwargs = dict(
             ax=axs[i],
-            centres=centres[i],
-            crops=crops[i],
-            ct_datas=ct_datas[i],
+            centre=centres[i],
+            crop=crops[i],
+            data=datas[i],
             idx=idxs[i],
-            landmark_datas=landmark_datas[i],
+            landmark_data=landmark_datas[i],
             n_landmarks=n_landmarks,
-            region_datas=region_datas[i],
+            region_data=region_datas[i],
             show_legend=show_legend,
-            views=view,
+            view=view,
         )
-        plot_patients(ids[i], spacings[i], **okwargs, **kwargs)
+        plot_patient(ids[i], datas[i].shape, spacings[i], **okwargs, **kwargs)
 
     # Add moved landmarks.
     if moved_landmark_data is not None and show_moved_landmarks:
@@ -2674,8 +2875,8 @@ def plot_registration(
         # Plot moving grid.
         include = [True] * 3
         include[view] = False
-        moving_grid = __create_grid(moving_ct_data.shape, moving_spacing, include=include)
-        moving_idx = __convert_float_idx(moving_idx, moving_ct_data.shape, view)
+        moving_grid = __create_grid(moving_data.shape, moving_spacing, include=include)
+        moving_idx = __convert_float_idx(moving_idx, moving_data.shape, view)
         if show_moving:
             grid_slice = __get_mpl_slice(moving_grid, moving_idx, view)
             aspect = __get_mpl_aspect(view, moving_spacing)
@@ -2683,11 +2884,11 @@ def plot_registration(
             axs[n_cols].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         # Plot moved grid.
-        moved_idx = __convert_float_idx(moved_idx, moved_ct_data.shape, view)
+        moved_idx = __convert_float_idx(moved_idx, moved_data.shape, view)
         if transform_format == 'itk':
-            moved_grid = itk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_ct_data.shape, fixed_spacing, fixed_offset, transform)
+            moved_grid = itk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_data.shape, fixed_spacing, fixed_offset, transform)
         elif transform_format == 'sitk':
-            moved_grid = sitk_transform_image(moving_grid, transform, fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing)
+            moved_grid = sitk_transform_image(moving_grid, transform, fixed_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing)
         grid_slice = __get_mpl_slice(moved_grid, moving_idx, view)
         aspect = __get_mpl_aspect(view, fixed_spacing)
         origin = __get_mpl_origin(view)
@@ -2701,8 +2902,8 @@ def plot_registration(
             crop=fixed_crop,
             view=view,
         )
-        f_idx = __convert_float_idx(fixed_idx, fixed_ct_data.shape, view)
-        background = __get_mpl_slice(np.zeros(shape=fixed_ct_data.shape), f_idx, view)
+        f_idx = __convert_float_idx(fixed_idx, fixed_data.shape, view)
+        background = __get_mpl_slice(np.zeros(shape=fixed_data.shape), f_idx, view)
         if fixed_crop is not None:
             background = crop(background, __reverse_box_coords_2D(fixed_crop))
         axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
@@ -2713,7 +2914,6 @@ def plot_registration(
 
     if show_figure:
         plt.show()
-    if close_figure:
         plt.close()
 
 def apply_region_labels(

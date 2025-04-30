@@ -68,7 +68,7 @@ def convert_lung_copd_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'landmarks', 'series_1.csv')
-            save_csv(points, filepath, header=True, index=False)
+            save_files_csv(points, filepath, header=True, index=False)
         
         # Exhale - should be moving image.
         moving_study = 'study_0'
@@ -102,7 +102,7 @@ def convert_lung_copd_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'landmarks', 'series_1.csv')
-            save_csv(points, filepath, header=True, index=False)
+            save_files_csv(points, filepath, header=True, index=False)
 
 def convert_lung_4dct_to_nifti() -> None:
     dataset = 'DIRLAB-LUNG-4DCT'
@@ -163,7 +163,7 @@ def convert_lung_4dct_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, inhale_study, 'landmarks', 'series_1.csv')
-            save_csv(points, filepath, header=True, index=False)
+            save_files_csv(points, filepath, header=True, index=False)
         
         # Exhale - should be moving image.
         exhale_study = 'study_0'
@@ -197,7 +197,7 @@ def convert_lung_4dct_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, exhale_study, 'landmarks', 'series_1.csv')
-            save_csv(points, filepath, header=True, index=False)
+            save_files_csv(points, filepath, header=True, index=False)
 
 def read_dirlab_image(
     binary_file_name,

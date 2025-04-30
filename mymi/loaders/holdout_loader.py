@@ -8,7 +8,6 @@ from torchio.transforms import Transform
 from tqdm import tqdm
 from typing import *
 
-from mymi import config
 from mymi import datasets as ds
 from mymi.datasets.training import TrainingDataset
 from mymi import logging

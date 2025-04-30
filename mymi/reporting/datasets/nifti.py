@@ -19,7 +19,7 @@ from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
 from mymi.plotting.datasets.nifti import plot_patients, plot_registration, plot_segmenter_predictions
-from mymi.postprocessing import largest_cc_3D, get_object, one_hot_encode
+from mymi.processing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
 from mymi.typing import Axis, ModelName, Region, Regions
 from mymi.utils import append_row, arg_to_list, encode

@@ -64,28 +64,28 @@ class NiftiStudy:
         return def_ct.spacing
 
     @property
-    def default_ct(self) -> Optional[CtData]:
+    def default_ct(self) -> Optional[CtNiftiData]:
         data_ids = self.list_data('CT')
         if len(data_ids) == 0:
             return None
         else:
-            return CtData(self, data_ids[-1])
+            return CtNiftiData(self, data_ids[-1])
 
     @property
-    def default_landmarks(self) -> Optional[LandmarkData]:
+    def default_landmarks(self) -> Optional[LandmarkNiftiData]:
         data_ids = self.list_data('LANDMARKS')
         if len(data_ids) == 0:
             return None
         else:
-            return LandmarkData(self, data_ids[-1])
+            return LandmarkNiftiData(self, data_ids[-1])
 
     @property
-    def default_regions(self) -> Optional[RegionData]:
+    def default_regions(self) -> Optional[RegionNiftiData]:
         data_ids = self.list_data('REGIONS')
         if len(data_ids) == 0:
             return None
         else:
-            return RegionData(self, data_ids[-1], region_map=self.__region_map)
+            return RegionNiftiData(self, data_ids[-1], region_map=self.__region_map)
 
     @property
     def id(self) -> str:
@@ -105,12 +105,12 @@ class NiftiStudy:
         modality: Modality) -> bool:
         return id in self.list_data(modality)
 
-    def has_landmark(self, *args, **kwargs) -> bool:
+    def has_landmarks(self, *args, **kwargs) -> bool:
         lms = self.default_landmarks
         if lms is None:
             return False
         else:
-            return lms.has_landmark(*args, **kwargs)
+            return lms.has_landmarks(*args, **kwargs)
 
     def has_regions(self, *args, **kwargs) -> bool:
         def_regions = self.default_regions 
@@ -118,7 +118,7 @@ class NiftiStudy:
             return False
         return def_regions.has_regions(*args, **kwargs)
 
-    def landmark_data(self, *args, **kwargs) -> Optional[Landmarks]:
+    def landmark_data(self, *args, **kwargs) -> Optional[LandmarkData]:
         def_landmarks = self.default_landmarks
         if def_landmarks is None:
             return None
@@ -193,15 +193,15 @@ class NiftiStudy:
             modality = self.data_modality(id)
 
         if modality == 'CT':
-            data = CtData(self, id)
+            data = CtNiftiData(self, id)
         elif modality == 'DOSE':
             pass
         elif modality == 'LANDMARKS':
-            data = LandmarkData(self, id)
+            data = LandmarkNiftiData(self, id)
         elif modality == 'MR':
-            data = MrData(self, id)
+            data = MrNiftiData(self, id)
         elif modality == 'REGIONS':
-            data = RegionData(self, id, region_map=self.__region_map)
+            data = RegionNiftiData(self, id, region_map=self.__region_map)
         else:
             raise ValueError(f"Modality '{modality}' not supported.")
 

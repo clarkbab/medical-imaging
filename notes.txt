@@ -1,2 +1,0 @@
-# Setting env var on Windows.
-[Environment]::SetEnvironmentVariable('NAME', 'value', 'User')

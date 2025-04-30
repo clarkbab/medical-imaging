@@ -14,7 +14,7 @@ from mymi.geometry import extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import MultiSegmenter, Segmenter
-from mymi.postprocessing import largest_cc_4D
+from mymi.processing import largest_cc_4D
 from mymi.regions import to_255, RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
 from mymi.typing import Box3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, Regions

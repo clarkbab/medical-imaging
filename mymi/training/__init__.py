@@ -13,6 +13,7 @@ from mymi.utils import append_row, arg_to_list
 
 from .registration import *
 from .segmentation import *
+from .voxelmorph import *
 
 def load_run_manifest(model: Tuple[str, str]) -> DataFrame:
     filepath = os.path.join(config.directories.runs, *model)

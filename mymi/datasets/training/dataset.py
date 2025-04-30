@@ -5,8 +5,10 @@ from typing import *
 
 from mymi import config
 from mymi.typing import *
+from mymi.utils import *
 
 from ..dataset import Dataset, DatasetType
+from .split import TrainingSample
 from .split import HoldoutSplit
 
 class TrainingDataset(Dataset):
@@ -48,6 +50,20 @@ class TrainingDataset(Dataset):
     @property
     def label_types(self) -> List[str]:
         return self.params['label-types'] if 'label-types' in self.params else []
+
+    def list_samples(
+        self,
+        splits: Optional[Splits] = 'all') -> List[SampleID]:
+        splits = arg_to_list(splits, Split, literals={ 'all': self.list_splits })
+        samples = []
+        for s in splits:
+            split = self.split(s)
+            samples += split.list_samples()
+        samples = list(sorted(samples))
+        return samples
+
+    def list_splits(self) -> List[HoldoutSplit]:
+        return list(self.index['split'].unique())
     
     @property
     def landmarks(self) -> List[Landmark]:
@@ -55,7 +71,7 @@ class TrainingDataset(Dataset):
     
     @property
     def n_input_channels(self) -> int:
-        def_split = self.split(self.splits[0])
+        def_split = self.split(self.list_splits()[0])
         def_sample = def_split.sample(def_split.list_samples()[0])
         input = def_sample.input
         n_channels = input.shape[0]
@@ -80,14 +96,20 @@ class TrainingDataset(Dataset):
     @property
     def regions(self) -> List[Region]:
         return self.params['regions'] if 'regions' in self.params else []
+
+    def sample(self,
+        id: SampleID) -> TrainingSample:
+        splits = self.list_splits()
+        for s in splits:
+            split = self.split(s)
+            samples = split.list_samples()
+            if id in samples:
+                return split.sample(id)
+        raise ValueError(f"Unknown sample ID '{id}'.")
     
     @property
     def spacing(self) -> ImageSpacing3D:
         return self.params['spacing']
-
-    @property
-    def splits(self) -> List[HoldoutSplit]:
-        return list(self.index['split'].unique())
 
     @property
     def type(self) -> DatasetType:

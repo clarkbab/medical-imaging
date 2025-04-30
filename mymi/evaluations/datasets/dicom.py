@@ -16,7 +16,7 @@ from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.reporting.loaders import load_loader_manifest
 from mymi import typing
-from mymi.utils import append_row, encode, load_csv, save_csv
+from mymi.utils import append_row, encode, load_csv, save_files_csv
 
 def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],
@@ -228,7 +228,7 @@ def create_dose_evaluation(
 
     # Write evaluation.
     df = df.astype(cols)
-    save_csv(df, 'dose-evals', output_file, overwrite=True)
+    save_files_csv(df, 'dose-evals', output_file, overwrite=True)
 
 def evaluate_model(
     dataset: str,

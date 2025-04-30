@@ -66,7 +66,7 @@ def create_model_manifest() -> None:
 
     # Save manifest.
     df = df.astype(cols)
-    save_csv(df, 'model-manifest.csv', overwrite=True) 
+    save_files_csv(df, 'model-manifest.csv', overwrite=True) 
     
 def load_model_manifest():
     return load_csv('model-manifest.csv')

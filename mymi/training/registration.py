@@ -26,9 +26,8 @@ def train_registration(
     loss_lambda: float = 0.02,
     n_val: Optional[int] = None,
     n_workers: int = 1,
-    pad_replace: Optional[float] = -1024,
+    pad_fill: Optional[float] = -1024,
     pad_threshold: Optional[float] = -1024,
-    pad_value: Optional[float] = -2000,
     random_seed: int = 42,
     resume: bool = False,
     resume_ckpt: str = 'last',
@@ -53,9 +52,8 @@ def train_registration(
         batch_size=1,
         n_val=n_val,
         n_workers=n_workers,
-        pad_replace=pad_replace,
+        pad_fill=pad_fill,
         pad_threshold=pad_threshold,
-        pad_value=pad_value,
         transform_train=data_aug,
     )
     tl, vl, _, norm_params = HoldoutLoader.build_loaders(dataset, **okwargs)

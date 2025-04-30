@@ -11,7 +11,7 @@ from typing import List, Literal, Optional, Tuple, Union
 from mymi import config
 from mymi import logging
 from mymi import typing
-from mymi.utils import append_row, load_csv, save_csv
+from mymi.utils import append_row, load_csv, save_files_csv
 
 # To download images from PACS, your desktop must have a static IP configured
 # and a record should be created in PACS admin to allow your images to be downloaded
@@ -50,7 +50,7 @@ def download_dicoms(
         error_df = download_patient_dicoms(pat_id, study_date, error_df)
 
     # Save error file.
-    save_csv(error_df, 'patient-specific-models', 'data', 'errors.csv', overwrite=True)
+    save_files_csv(error_df, 'patient-specific-models', 'data', 'errors.csv', overwrite=True)
 
 def download_patient_dicoms(
     pat_id: typing.PatientID,

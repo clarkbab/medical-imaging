@@ -41,6 +41,12 @@ def load_yaml(filepath: str) -> Any:
 
 def save_csv(
     data: pd.DataFrame,
+    filepath: str,
+    index: bool = False) -> None:
+    data.to_csv(filepath, index=index)
+
+def save_files_csv(
+    data: pd.DataFrame,
     *path: List[str],
     index: bool = False,
     header: bool = True,

@@ -16,6 +16,9 @@ class TrainingSample:
         self.__index = None
         self.__global_id = f'{self.__split}:{self.__id}'
 
+        # Define paths.
+        self.__input_path = os.path.join(self.split.path, 'inputs', f"{self.__id:03}.npz")
+
     @property
     def id(self) -> str:
         return self.__id
@@ -29,9 +32,12 @@ class TrainingSample:
 
     @property
     def input(self) -> np.ndarray:
-        filepath = os.path.join(self.split.path, 'inputs', f"{self.__id:03}.npz")
-        input = np.load(filepath)['data']
+        input = np.load(self.__input_path)['data']
         return input
+
+    @property
+    def input_path(self) -> str:
+        return self.__input_path
 
     @property
     def origin(self) -> Tuple[str]:

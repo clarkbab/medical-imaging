@@ -33,7 +33,7 @@ def convert_lung250m_4b_to_nifti() -> None:
     test_df = pd.DataFrame(np.transpose([test_ids, ['test'] * len(test_ids)]), columns=['patient-id', 'split'])
     df = pd.concat((train_df, val_df, test_df), axis=0)
     filepath = os.path.join(set.path, 'holdout-split.csv')
-    save_csv(df, filepath)
+    save_files_csv(df, filepath)
 
     # Load manual landmarks.
     filepath = os.path.join(rset.path, 'lms_validation.pth')
@@ -134,6 +134,6 @@ def convert_lung250m_4b_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'landmarks', 'series_1.csv')
-            save_csv(fixed_points, filepath, header=True, index=False)
+            save_files_csv(fixed_points, filepath, header=True, index=False)
             filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'landmarks', 'series_1.csv')
-            save_csv(moving_points, filepath, header=True, index=False)
+            save_files_csv(moving_points, filepath, header=True, index=False)

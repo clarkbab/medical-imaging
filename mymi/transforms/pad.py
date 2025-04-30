@@ -1,32 +1,28 @@
 import numpy as np
+import torch
 from typing import *
 
-from mymi import logging
 from mymi.typing import *
+from mymi.utils import *
+
+from .shared import handle_non_spatial_dims
 
 def centre_pad(
-    data: np.ndarray,
-    *args, **kwargs) -> np.ndarray:
-    n_dims = len(data.shape)
-    if n_dims in (2, 3):
-        output = spatial_centre_pad(data, *args, **kwargs)
-    elif n_dims == 4:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Channels dimension should come first when padding 4D. Got shape {size}, is this right?")
-        os = []
-        for d in data:
-            d = spatial_centre_pad(d, *args, **kwargs)
-            os.append(d)
-        output = np.stack(os, axis=0)
-    else:
-        raise ValueError(f"Data to centre_pad should have (2, 3, 4) dims, got {n_dims}.")
+    data: Image,
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_centre_pad, data, *args, **kwargs)
 
-    return output
+def pad(
+    data: Image,
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_pad, data, *args, **kwargs)
 
-def spatial_centre_pad(
-    data: np.ndarray,
-    size: ImageSize3D) -> np.ndarray:
+def __spatial_centre_pad(
+    data: Image,
+    size: ImageSize3D,
+    **kwargs) -> Image:
     # Determine padding amounts.
     to_pad = np.array(size) - data.shape
     box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
@@ -34,37 +30,17 @@ def spatial_centre_pad(
     bounding_box = (box_min, box_max)
 
     # Perform padding.
-    output = spatial_pad(data, bounding_box)
+    output = __spatial_pad(data, bounding_box, **kwargs)
 
     return output
 
-def pad(
-    data: np.ndarray,
-    *args, **kwargs) -> np.ndarray:
-    n_dims = len(data.shape)
-    if n_dims in (2, 3):
-        output = spatial_pad(data, *args, **kwargs)
-    elif n_dims == 4:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Channels dimension should come first when padding 4D. Got shape {size}, is this right?")
-        os = []
-        for d in data:
-            d = spatial_pad(d, *args, **kwargs)
-            os.append(d)
-        output = np.stack(os, axis=0)
-    else:
-        raise ValueError(f"Data to pad should have (2, 3, 4) dims, got {n_dims}.")
-
-    return output
-
-def spatial_pad(
-    data: np.ndarray,
+def __spatial_pad(
+    data: Image,
     bounding_box: Union[Box2D, Box3D],
-    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    fill: Union[float, Literal['min']] = 'min') -> Image:
     n_dims = len(data.shape)
     assert n_dims in (2, 3)
-    fill = np.min(data) if fill == 'min' else fill
+    fill = data.min() if fill == 'min' else fill
 
     # Check width of padding box.
     min, max = bounding_box
@@ -79,6 +55,12 @@ def spatial_pad(
     pad_min = (-np.array(min)).clip(0)
     pad_max = (max - size).clip(0)
     padding = tuple(zip(pad_min, pad_max))
-    data = np.pad(data, padding, constant_values=fill)
+
+    if isinstance(data, np.ndarray):
+        data = np.pad(data, padding, constant_values=fill)
+    elif isinstance(data, torch.Tensor):
+        padding = list(reversed(padding))  # torch 'pad' operates from back to front.
+        padding = tuple(torch.tensor(padding).flatten())
+        data = torch.nn.functional.pad(data, padding, value=fill)
 
     return data

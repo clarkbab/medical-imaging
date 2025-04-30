@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from mymi.geometry import extent
 from mymi import logging
-from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop, centre_pad, crop, pad, resample

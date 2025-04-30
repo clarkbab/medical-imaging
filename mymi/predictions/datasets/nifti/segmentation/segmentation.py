@@ -15,7 +15,7 @@ from mymi.loaders import Loader, MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
-from mymi.postprocessing import largest_cc_4D
+from mymi.processing import largest_cc_4D
 from mymi.regions import RegionNames, get_region_patch_size, regions_to_list, truncate_spine
 from mymi.transforms import centre_crop_or_pad, crop_or_pad
 from mymi.typing import *
@@ -539,7 +539,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
     pred = pred.moveaxis(-1, 0)
     pred = pred.cpu().numpy().astype(np.bool_)
     
-    # Apply postprocessing.
+    # Apply processing.
     pred = largest_cc_4D(pred)
 
     # Reverse the 'naive' or 'brain' cropping.
@@ -654,7 +654,7 @@ def get_multi_segmenter_prediction(
     pred = pred.moveaxis(-1, 0)
     pred = pred.cpu().numpy().astype(np.bool_)
     
-    # Apply postprocessing.
+    # Apply processing.
     pred = largest_cc_4D(pred)
 
     # Reverse the 'naive' or 'brain' cropping.

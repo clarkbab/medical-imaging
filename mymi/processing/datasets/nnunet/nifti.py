@@ -4,7 +4,7 @@ from typing import *
 
 from mymi.datasets import NiftiDataset
 from mymi import logging
-from mymi.postprocessing import one_hot_encode
+from mymi.processing import one_hot_encode
 from mymi.transforms import crop, resample
 from mymi.typing import *
 from mymi.utils import load_nifti, save_as_nifti

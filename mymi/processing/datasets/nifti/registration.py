@@ -9,7 +9,7 @@ from mymi.regions import regions_to_list
 from mymi.transforms import sitk_save_transform
 from mymi.transforms.dataset.nifti import rigid_registration
 from mymi.typing import Landmarks, Regions
-from mymi.utils import save_as_nifti, save_csv
+from mymi.utils import save_as_nifti, save_files_csv
 
 from ...processing import write_flag
 
@@ -66,7 +66,7 @@ def create_registered_dataset(
         landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
         if moved_landmark_data is not None:
             filepath = os.path.join(moved_study.path, 'landmarks', 'series_1.csv')
-            save_csv(moved_landmark_data[landmark_cols], filepath)
+            save_files_csv(moved_landmark_data[landmark_cols], filepath)
 
         # Save transform - we'll need this to propagate fixed landmarks to non-registered moving images.
         # TRE is typically calculated in the moving image space. 
@@ -93,4 +93,4 @@ def create_registered_dataset(
             fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
             if fixed_landmark_data is not None:
                 filepath = os.path.join(dest_fixed_study.path, 'landmarks', 'series_1.csv')
-                save_csv(fixed_landmark_data[landmark_cols], filepath)
+                save_files_csv(fixed_landmark_data[landmark_cols], filepath)

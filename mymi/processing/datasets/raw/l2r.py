@@ -20,7 +20,7 @@ def convert_l2r_lung_ct_to_nifti() -> None:
     test_df = pd.DataFrame(np.transpose([pat_ids, ['test'] * len(pat_ids)]), columns=['patient-id', 'split'])
     df = pd.concat((train_df, test_df), axis=0)
     filepath = os.path.join(set.path, 'holdout-split.csv')
-    save_csv(df, filepath)
+    save_files_csv(df, filepath)
 
     # Copy data.
     folders = ['training', 'test']

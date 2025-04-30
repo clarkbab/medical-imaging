@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from mymi.metrics import mean_intensity, snr
 from mymi.geometry import extent, extent_width_mm
-from mymi.postprocessing import largest_cc_3D
+from mymi.processing import largest_cc_3D
 from mymi.typing import *
 
 def get_ct_stats(

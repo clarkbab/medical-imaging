@@ -235,12 +235,12 @@ def convert_to_registration_training_holdout(
                 # Save fixed landmark data.
                 landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.csv")
-                save_csv(fixed_landmarks[landmark_cols], filepath)
+                save_files_csv(fixed_landmarks[landmark_cols], filepath)
                 output_n += 1
 
                 # Save moving landmark data.
                 filepath = os.path.join(dest_set.path, 'data', s, 'labels', f"{sample_id}-{output_n}.csv")
-                save_csv(moving_landmarks[landmark_cols], filepath)
+                save_files_csv(moving_landmarks[landmark_cols], filepath)
                 output_n += 1
 
             # Add index entry.

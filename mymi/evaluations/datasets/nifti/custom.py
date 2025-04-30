@@ -1,4 +1,4 @@
-from mymi.transforms.crop import crop_foreground_3D
+from mymi.transforms.crop import crop_foreground
 import nibabel as nib
 import numpy as np
 import os
@@ -57,8 +57,8 @@ def get_nnunet_multi_segmenter_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_3D(pred, crop)
-            label = crop_foreground_3D(label, crop)
+            pred = crop_foreground(pred, crop)
+            label = crop_foreground(label, crop)
 
         # Dice.
         metrics = {}
@@ -126,8 +126,8 @@ def get_nnunet_single_region_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_3D(pred, crop)
-            label = crop_foreground_3D(label, crop)
+            pred = crop_foreground(pred, crop)
+            label = crop_foreground(label, crop)
 
         # Dice.
         metrics = {}
