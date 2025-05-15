@@ -1,45 +1,32 @@
 import itk
 import numpy as np
-import os
-from typing import Optional, Tuple, Union
+from typing import *
 
-from mymi.typing import ImageSpacing3D, Point3D
+from mymi.typing import *
 
-def itk_convert_LPS_and_RAS(
-    direction: Optional[Union[np.ndarray]] = None,
-    offset: Optional[Point3D] = None) -> Tuple[Optional[np.ndarray], Optional[Point3D]]:
-    if direction is not None:
-        direction[0][0], direction[1][1] = -direction[0][0], -direction[1][1]
-    if offset is not None:
-        offset = list(offset)
-        offset[0], offset[1] = -offset[0], -offset[1]
-        offset = tuple(offset)
-    return direction, offset
-
-def from_itk(img: itk.Image) -> Tuple[np.ndarray, ImageSpacing3D, Point3D]:
+def from_itk_image(img: itk.Image) -> Tuple[Image, ImageSpacing3D, Point3D]:
     data = itk.GetArrayFromImage(img)
     # ITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
-    # ITK always loads data in LPS coordinates. -x/y offset is required to convert to RAS coordinates
-    # which is our standard (and DICOM/Slicer's).
-    offset = tuple(img.GetOrigin())
-    _, offset = itk_convert_LPS_and_RAS(offset=offset)
+    # ITK assumes loaded nifti data is using RAS coordinates, so they set negative offsets
+    # and directions. For all images we write to nifti, they'll be in LPS, so undo ITK changes.
+    # The image data is not flipped by ITK.
+    offset = list(img.GetOrigin())
+    offset[0], offset[1] = -offset[0], -offset[1]
+    offset = tuple(offset)
     return data, spacing, offset
 
-def load_itk(filepath: str) -> itk.Image:
-    # When ITK loads an image, it converts it to LPS coordinates.
-    # This means that all ITK images will have -x/y coordinates for
-    # origin and direction. Our code handles this when converting to/from numpy.
-    img = itk.imread(filepath)
-    return img
+def load_itk_image(filepath: str) -> itk.Image:
+    return itk.imread(filepath)
 
-def to_itk(
-    data: np.ndarray,
+def to_itk_image(
+    data: Image,
     spacing: ImageSpacing3D,
     offset: Point3D,
-    is_vector: bool = False) -> itk.Image:
+    vector: bool = False,
+    reverse_xy: bool = False) -> itk.Image:
     # Convert to ITK types.
     if data.dtype == bool:
         data = data.astype(np.uint8)
@@ -55,15 +42,12 @@ def to_itk(
     # don't do this, code called before 'to_itk' could affect the behaviour of 'GetImageFromArray', which
     # was very confusing for me.
     data = data.copy()
-    img = itk.GetImageFromArray(data, is_vector=is_vector)
+    if vector:
+        assert data.shape[0] == 3
+        # Move our channels to last dim - for itk.
+        data = np.moveaxis(data, 0, -1)
+    img = itk.GetImageFromArray(data, is_vector=vector)
     img.SetSpacing(spacing)
-
-    # ITK uses LPS coordinates, but we're assuming the incoming numpy data
-    # is using RAS coordinates, so convert.
-    direction = np.eye(3)
-    direction, offset = itk_convert_LPS_and_RAS(direction=direction, offset=offset)
-    direction = itk.matrix_from_array(direction)
-    img.SetDirection(direction)
     img.SetOrigin(offset)
 
     return img

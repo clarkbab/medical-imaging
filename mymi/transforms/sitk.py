@@ -3,21 +3,40 @@ import os
 import SimpleITK as sitk
 from typing import *
 
-from mymi import logging
 from mymi.typing import *
 from mymi.utils import *
 
-def sitk_load_transform(
+from .shared import handle_non_spatial_dims
+
+def load_sitk_transform(
     filepath: str) -> sitk.Transform:
     if not os.path.exists(filepath):
         raise ValueError(f"SimpleITK transform not found at filepath: {filepath}.")
 
     # Convert nifti files to transforms.
     if filepath.endswith('.nii') or filepath.endswith('.nii.gz'):
-        transform = to_sitk_transform(*load_nifti(filepath))
+        transform = dvf_to_sitk_transform(*load_nifti(filepath))
         return transform
 
     transform = sitk.ReadTransform(filepath)
+    return transform
+
+def sitk_create_affine_transform(
+    offset: Optional[Point3D] = (0, 0, 0),
+    output_offset: Optional[Point3D] = (0, 0, 0),
+    output_spacing: Optional[ImageSpacing3D] = (1, 1, 1),
+    spacing: Optional[ImageSpacing3D] = (1, 1, 1)) -> sitk.AffineTransform:
+
+    # Create transform.
+    transform = sitk.AffineTransform(3)
+    transform.SetCenter(offset)   # Scaling should happen around this point.
+    matrix = np.eye(3)
+    for i in range(3):
+        matrix[i, i] = spacing[i] / output_spacing[i]
+    transform.SetMatrix(matrix.flatten())
+    translation = tuple(np.array(output_offset) - offset)
+    transform.SetTranslation(translation)
+
     return transform
 
 def sitk_save_transform(
@@ -26,34 +45,14 @@ def sitk_save_transform(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     sitk.WriteTransform(transform, filepath)
 
-def sitk_transform_image(
-    data: np.ndarray,
-    *args, **kwargs) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
-    n_dims = len(data.shape)
-    if n_dims in (2, 3):
-        output = sitk_transform_image_spatial(data, *args, **kwargs)
-    elif n_dims == 4:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Channels dimension should come first when transforming 4D. Got shape {size}, is this right?")
-        os = []
-        for d in data:
-            d = sitk_transform_image_spatial(d, *args, **kwargs)
-            os.append(d)
-        output = np.stack(os, axis=0)
-    else:
-        raise ValueError(f"Data to resample should have (2, 3, 4) dims, got {n_dims}.")
-
-    return output
-
-def sitk_transform_image_spatial(
+def __spatial_sitk_transform_image(
     data: np.ndarray,
     transform: sitk.Transform,
     output_size: ImageSize3D,
     fill: Union[float, Literal['min']] = 'min',
     offset: Point3D = (0, 0, 0),
-    output_spacing: ImageSpacing3D = (1, 1, 1), 
     output_offset: Point3D = (0, 0, 0),
+    output_spacing: ImageSpacing3D = (1, 1, 1), 
     spacing: ImageSpacing3D = (1, 1, 1)) -> Tuple[Image, ImageSpacing3D, Point3D]:
     # Load moving image.
     moving_sitk = to_sitk_image(data, spacing, offset)
@@ -84,6 +83,13 @@ def sitk_transform_image_spatial(
     moved_sitk = sitk.Resample(moving_sitk, **kwargs)
     moved, _, _ = from_sitk_image(moved_sitk)
     return moved
+
+@delegates(__spatial_sitk_transform_image)
+def sitk_transform_image(
+    data: Image,
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_sitk_transform_image, data, *args, **kwargs)
 
 def sitk_transform_points(
     points: np.ndarray,     # N x 3

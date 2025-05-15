@@ -11,7 +11,6 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 from mymi import config
 from mymi.datasets import NiftiDataset
 from mymi.geometry import get_box, centre_of_extent
-from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import distances, dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias

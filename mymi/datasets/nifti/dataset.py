@@ -115,34 +115,35 @@ class NiftiDataset(Dataset):
 
     def list_patients(
         self,
-        regions: Optional[Regions] = None,
-        splits: Optional[Splits] = None) -> List[PatientID]:
-        regions = regions_to_list(regions)
+        pat_ids: PatientIDs = 'all',    # Saves on filtering code elsewhere.
+        regions: Regions = 'all',
+        splits: Splits = 'all') -> List[PatientID]:
 
         if self.__ct_from is None:
             # Load patients from filenames.
             pat_path = os.path.join(self.__path, 'data', 'patients')
-            pat_ids = list(sorted(os.listdir(pat_path)))
+            res_pat_ids = list(sorted(os.listdir(pat_path)))
         else:
             # Load patients from 'ct_from' dataset.
-            pat_ids = self.__ct_from.list_patients(regions=None)
+            res_pat_ids = self.__ct_from.list_patients(regions=None)
 
         # Filter by 'regions'.
-        if regions is not None:
+        if regions != 'all':
+            regions = regions_to_list(regions)
             def filter_fn(pat_id: PatientID) -> bool:
                 pat_regions = self.patient(pat_id).list_regions(regions=regions)
                 if len(pat_regions) > 0:
                     return True
                 else:
                     return False
-            pat_ids = list(filter(filter_fn, pat_ids))
+            res_pat_ids = list(filter(filter_fn, res_pat_ids))
 
         # Filter by 'splits'.
-        if splits is not None:
+        if splits != 'all':
             filepath = os.path.join(self.__path, 'holdout-split.csv')
             if not os.path.exists(filepath):
                 raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
-            split_df = load_csv(filepath)
+            split_df = load_files_csv(filepath)
             splits = arg_to_list(splits, Split, literals={ 'all': self.list_splits })
             def filter_fn(pat_id: PatientID) -> bool:
                 pat_split = split_df[split_df['patient-id'] == pat_id].iloc[0]['split']
@@ -150,9 +151,14 @@ class NiftiDataset(Dataset):
                     return True
                 else:
                     return False
-            pat_ids = list(filter(filter_fn, pat_ids))
+            res_pat_ids = list(filter(filter_fn, res_pat_ids))
 
-        return pat_ids
+        # Filter by 'pat_ids'.
+        if pat_ids != 'all':
+            pat_ids = arg_to_list(pat_ids, PatientID)
+            res_pat_ids = [p for p in res_pat_ids if p in pat_ids] 
+
+        return res_pat_ids
 
     # 'list_regions' can accept 'regions' keyword to filter - saves code elsewhere.
     def list_regions(self, *args, **kwargs) -> List[str]:
@@ -169,7 +175,7 @@ class NiftiDataset(Dataset):
         filepath = os.path.join(self.__path, 'holdout-split.csv')
         if not os.path.exists(filepath):
             raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
-        split_df = load_csv(filepath)
+        split_df = load_files_csv(filepath)
         splits = list(sorted(split_df['split'].unique()))
         return splits
 

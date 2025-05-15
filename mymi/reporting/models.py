@@ -12,7 +12,7 @@ from mymi.utils import *
 def load_training_metrics(
     model: ModelName) -> pd.DataFrame:
     filepath = os.path.join(config.directories.models, model[0], model[1], 'training-metrics.csv')
-    return load_csv(filepath)
+    return load_files_csv(filepath)
 
 def create_model_manifest() -> None:
     datasets = ('PMCC-HN-TEST-LOC', 'PMCC-HN-TRAIN-LOC')
@@ -69,7 +69,7 @@ def create_model_manifest() -> None:
     save_files_csv(df, 'model-manifest.csv', overwrite=True) 
     
 def load_model_manifest():
-    return load_csv('model-manifest.csv')
+    return load_files_csv('model-manifest.csv')
 
 def list_checkpoints(
     name: str,

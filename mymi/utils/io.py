@@ -7,6 +7,30 @@ import yaml
 from mymi import config
 
 def load_csv(
+    filepath: str,
+    exists_only: bool = False,
+    map_cols: Dict[str, str] = {},
+    map_types: Dict[str, Any] = {},
+    **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
+    if not os.path.exists(filepath):
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"CSV at filepath '{filepath}' not found.")
+    elif exists_only:
+        return True
+
+    # Load CSV.
+    map_types['patient-id'] = str
+    map_types['study-id'] = str
+    df = pd.read_csv(filepath, dtype=map_types, **kwargs)
+
+    # Map column names.
+    df = df.rename(columns=map_cols)
+
+    return df
+
+def load_files_csv(
     *path: List[str],
     exists_only: bool = False,
     map_cols: Dict[str, str] = {},

@@ -25,6 +25,13 @@ class NiftiStudy:
             raise ValueError(f"Study '{self}' not found. Filepath: '{self.__path}'.")
 
     @property
+    def ct_affine(self) -> Optional[np.ndarray]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.affine
+
+    @property
     def ct_data(self) -> Optional[CtImage]:
         def_ct = self.default_ct
         if def_ct is None:
@@ -32,11 +39,18 @@ class NiftiStudy:
         return def_ct.data
 
     @property
-    def ct_affine(self) -> Optional[np.ndarray]:
+    def ct_extrema(self) -> Optional[Point3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None
-        return def_ct.affine
+        return def_ct.extrema
+
+    @property
+    def ct_fov(self) -> Optional[ImageFOV3D]:
+        def_ct = self.default_ct
+        if def_ct is None:
+            return None
+        return def_ct.fov
 
     @property
     def ct_offset(self) -> Optional[Point3D]:

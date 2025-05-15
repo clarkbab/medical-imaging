@@ -14,31 +14,50 @@ class CtNiftiData(NiftiData):
         self.__id = id
         self.__path = os.path.join(study.path, 'ct', f'{id}.nii.gz')
 
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__data'):
+                self.__data, self.__spacing, self.__offset = load_nifti(self.__path)
+            return fn(self, *args, **kwargs)
+        return wrapper
+
     @property
+    @ensure_loaded
     def data(self) -> CtImage:
-        data, _, _ = load_nifti(self.__path)
-        return data
+        return self.__data
+
+    @property
+    @ensure_loaded
+    def extrema(self) -> Point3D:
+        extrema = tuple(np.array(self.fov) + self.__offset)
+        return extrema
+
+    @property
+    @ensure_loaded
+    def fov(self) -> ImageFOV3D:
+        fov = tuple((np.array(self.__data.shape) - 1) * self.__spacing)
+        return fov
 
     @property
     def id(self) -> SeriesID:
         return self.__id
 
     @property
-    def offset(self) -> np.ndarray:
-        _, _, offset = load_nifti(self.__path)
-        return offset
+    @ensure_loaded
+    def offset(self) -> Point3D:
+        return self.__offset
 
     @property
     def path(self) -> str:
         return self.__path
 
     @property
+    @ensure_loaded
     def size(self) -> np.ndarray:
-        data, _, _ = load_nifti(self.__path)
-        return data.shape
+        return self.__data.shape
 
     @property
+    @ensure_loaded
     def spacing(self) -> np.ndarray:
-        _, spacing, _ = load_nifti(self.__path)
-        return spacing
+        return self.__spacing
 

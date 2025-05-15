@@ -7,7 +7,6 @@ from typing import *
 
 from mymi import config
 from mymi.datasets import NiftiDataset
-from mymi.gradcam.dataset.nifti import load_multi_segmenter_heatmap
 from mymi.loaders import get_holdout_split
 from mymi.metrics import dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
@@ -15,7 +14,7 @@ from mymi.predictions.datasets.nifti import load_segmenter_predictions
 from mymi import logging
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import *
-from mymi.utils import append_row, arg_to_list, encode, load_csv, save_files_csv
+from mymi.utils import append_row, arg_to_list, encode, load_files_csv, save_files_csv
 
 def get_segmenter_patient_evaluation(
     dataset: str,
@@ -288,7 +287,7 @@ def load_segmenter_holdout_evaluation(
     elif exists_only:
         return True
 
-    df = load_csv(filepath)
+    df = load_files_csv(filepath)
     if 'model' not in df.columns:
         df.insert(0, 'model', model)
 

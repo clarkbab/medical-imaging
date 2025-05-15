@@ -112,7 +112,7 @@ def convert_to_nifti(
                     
                     # Create Nifti CT.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'ct', f'{nifti_series_id}.nii.gz')
-                    save_as_nifti(series.data, series.spacing, series.offset, filepath)
+                    save_nifti(series.data, series.spacing, series.offset, filepath)
 
                     # Add index entry.
                     data = {
@@ -141,7 +141,7 @@ def convert_to_nifti(
                     
                     # Create Nifti MR.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'mr', f'{nifti_series_id}.nii.gz')
-                    save_as_nifti(series.data, series.spacing, series.offset, filepath)
+                    save_nifti(series.data, series.spacing, series.offset, filepath)
 
                     # Add index entry.
                     data = {
@@ -173,7 +173,7 @@ def convert_to_nifti(
                 region_data = series.region_data(regions=regions, regions_ignore_missing=True)
                 for r, data in region_data.items():
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'regions', nifti_series_id, f'{r}.nii.gz')
-                    save_as_nifti(data, ref_ct.spacing, ref_ct.offset, filepath)
+                    save_nifti(data, ref_ct.spacing, ref_ct.offset, filepath)
 
                 # Create landmarks.
                 lm_df = series.landmark_data()
@@ -197,7 +197,7 @@ def convert_to_nifti(
                 data = series.dose_data
                 if data is not None:
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'rtdose', f'{nifti_series_id}.nii.gz')
-                    save_as_nifti(data, ref_ct.spacing, ref_ct.offset, filepath)
+                    save_nifti(data, ref_ct.spacing, ref_ct.offset, filepath)
 
     # Save index.
     if len(index_df) > 0:

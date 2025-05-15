@@ -7,15 +7,19 @@ from mymi.utils import *
 
 from ..plotting import plot_dataset_histogram as pdh, plot_patient_histograms as pph, plot_patients as pp, plot_registrations as pr, plot_segmenter_predictions as plot_segmenter_predictions_base
 
+@delegates(pdh)
 def plot_dataset_histogram(*args, **kwargs) -> None:
     pdh(NiftiDataset, *args, **kwargs)
 
+@delegates(pp)
 def plot_patients(*args, **kwargs) -> None:
     pp(NiftiDataset, *args, **kwargs)
 
+@delegates(pph)
 def plot_patient_histograms(*args, **kwargs) -> None:
     pph(NiftiDataset, *args, **kwargs)
 
+@delegates(pr)
 def plot_registrations(*args, **kwargs) -> None:
     pr(NiftiDataset, lr, *args, **kwargs)
 

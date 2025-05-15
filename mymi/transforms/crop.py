@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 from typing import *
 
 from mymi.typing import *
@@ -7,12 +6,48 @@ from mymi.utils import *
 
 from .shared import handle_non_spatial_dims
 
+def __spatial_centre_crop(
+    data: Image,
+    size: Union[ImageSize2D, ImageSize3D]) -> Image:
+    n_dims = len(data.shape)
+    assert n_dims in (2, 3)
+
+    # Determine cropping/padding amounts.
+    to_crop = data.shape - np.array(size)
+    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
+
+    # Perform crop or padding.
+    output = __spatial_crop(data, bounding_box)
+
+    return output
+
+@delegates(__spatial_centre_crop)
 def centre_crop(
     data: Image,
     *args, **kwargs) -> Image:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
+def __spatial_crop(
+    data: Image,
+    bounding_box: Union[Box2D, Box3D]) -> Image:
+    __assert_dims(data, (2, 3))
+    bounding_box = __replace_box_none(bounding_box, data.shape)
+    __assert_box_width(bounding_box)
+
+    # Perform cropping.
+    min, max = bounding_box
+    size = np.array(data.shape)
+    crop_min = np.array(min).clip(0)
+    crop_max = (size - max).clip(0)
+    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
+    data = data[slices]
+
+    return data
+
+@delegates(__spatial_crop)
 def crop(
     data: Image,
     *args, **kwargs) -> Image:
@@ -60,6 +95,35 @@ def crop_mm_3D(
 
     return data
 
+def __spatial_crop_foreground(
+    data: np.ndarray,
+    bounding_box: Box3D,
+    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
+    __assert_dims(data, (2, 3))
+    bounding_box = __replace_box_none(bounding_box, data.shape)
+    __assert_box_width(bounding_box)
+
+    if fill == 'min':
+        fill = np.min(data)
+    cropped = data.copy()
+    ct_size = cropped.shape
+
+    # Crop upper bound.
+    min, max = bounding_box
+    for a in range(len(ct_size)):
+        index = [slice(None)] * len(ct_size)
+        index[a] = slice(0, min[a])
+        cropped[tuple(index)] = fill
+
+    # Crop upper bound.
+    for a in range(len(ct_size)):
+        index = [slice(None)] * len(ct_size)
+        index[a] = slice(max[a], ct_size[a])
+        cropped[tuple(index)] = fill
+
+    return cropped
+
+@delegates(__spatial_crop_foreground)
 def crop_foreground(
     data: np.ndarray,
     *args, **kwargs) -> np.ndarray:
@@ -161,64 +225,3 @@ def __replace_box_none(
     min, max = tuple(min), tuple(max)
     return min, max
 
-def __spatial_centre_crop(
-    data: Image,
-    size: Union[ImageSize2D, ImageSize3D]) -> Image:
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
-
-    # Determine cropping/padding amounts.
-    to_crop = data.shape - np.array(size)
-    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
-    box_max = box_min + size
-    bounding_box = (box_min, box_max)
-
-    # Perform crop or padding.
-    output = __spatial_crop(data, bounding_box)
-
-    return output
-
-def __spatial_crop(
-    data: Image,
-    bounding_box: Union[Box2D, Box3D]) -> Image:
-    __assert_dims(data, (2, 3))
-    bounding_box = __replace_box_none(bounding_box, data.shape)
-    __assert_box_width(bounding_box)
-
-    # Perform cropping.
-    min, max = bounding_box
-    size = np.array(data.shape)
-    crop_min = np.array(min).clip(0)
-    crop_max = (size - max).clip(0)
-    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
-    data = data[slices]
-
-    return data
-
-def __spatial_crop_foreground(
-    data: np.ndarray,
-    bounding_box: Box3D,
-    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
-    __assert_dims(data, (2, 3))
-    bounding_box = __replace_box_none(bounding_box, data.shape)
-    __assert_box_width(bounding_box)
-
-    if fill == 'min':
-        fill = np.min(data)
-    cropped = data.copy()
-    ct_size = cropped.shape
-
-    # Crop upper bound.
-    min, max = bounding_box
-    for a in range(len(ct_size)):
-        index = [slice(None)] * len(ct_size)
-        index[a] = slice(0, min[a])
-        cropped[tuple(index)] = fill
-
-    # Crop upper bound.
-    for a in range(len(ct_size)):
-        index = [slice(None)] * len(ct_size)
-        index[a] = slice(max[a], ct_size[a])
-        cropped[tuple(index)] = fill
-
-    return cropped

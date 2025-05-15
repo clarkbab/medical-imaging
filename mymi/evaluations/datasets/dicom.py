@@ -16,7 +16,7 @@ from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi.reporting.loaders import load_loader_manifest
 from mymi import typing
-from mymi.utils import append_row, encode, load_csv, save_files_csv
+from mymi.utils import append_row, encode, load_files_csv, save_files_csv
 
 def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],
@@ -130,7 +130,7 @@ def create_dose_evaluation(
         models = [models]
 
     # Load patients.
-    pdf = load_csv(pat_file)
+    pdf = load_files_csv(pat_file)
 
     # Get datasets.
     datasets = list(sorted(pdf.dataset.unique())) 

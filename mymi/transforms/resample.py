@@ -1,48 +1,15 @@
 import numpy as np
 import pandas as pd
-from scipy.ndimage import zoom
 import SimpleITK as sitk
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import *
 
 from mymi import logging
-from mymi.typing import Box3D, Point3D, Point3D, ImageSize3D, ImageSpacing3D
+from mymi.typing import *
+from mymi.utils import *
 
-def resample(
-    data: np.ndarray,
-    **kwargs) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
-    n_dims = len(data.shape)
-    if n_dims in (2, 3):
-        output = spatial_resample(data, **kwargs)
-    elif n_dims == 4:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Channels dimension should come first when resampling 4D. Got shape {size}, is this right?")
-        os = []
-        for d in data:
-            d = spatial_resample(d, **kwargs)
-            os.append(d)
-        output = np.stack(os, axis=0)
-    elif n_dims == 5:
-        size = data.shape
-        if size[0] > size[-1]:
-            logging.warning(f"Batch dimension should come first when resampling 5D. Got shape {size}, is this right?")
-        if size[1] > size[-1]:
-            logging.warning(f"Channel dimension should come second when resampling 5D. Got shape {size}, is this right?")
-        bs = []
-        for batch_item in data:
-            ocs = []
-            for channel_data in batch_item:
-                oc = spatial_resample(channel_data, **kwargs)
-                ocs.append(oc)
-            ocs = np.stack(ocs, axis=0)
-            bs.append(ocs)
-        output = np.stack(bs, axis=0)
-    else:
-        raise ValueError(f"Data to resample should have (2, 3, 4, 5) dims, got {n_dims}.")
+from .shared import handle_non_spatial_dims
 
-    return output
-
-def spatial_resample(
+def __spatial_resample(
     data: np.ndarray,
     offset: Optional[Point3D] = None,
     output_offset: Optional[Point3D] = None,
@@ -132,6 +99,12 @@ def spatial_resample(
         return output, resample.GetTransform()
     else:
         return output
+
+@delegates(__spatial_resample)
+def resample(
+    data: np.ndarray,
+    *args, **kwargs) -> np.ndarray:
+    return handle_non_spatial_dims(__spatial_resample, data, *args, **kwargs)
 
 def resample_box_3D(
     bounding_box: Box3D,

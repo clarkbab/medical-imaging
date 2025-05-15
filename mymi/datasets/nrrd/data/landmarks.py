@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from mymi.regions import regions_to_list
 from mymi.typing import Landmarks, Landmark, Landmarks, SeriesID
-from mymi.utils import arg_to_list, load_csv, load_nrrd
+from mymi.utils import arg_to_list, load_files_csv, load_nrrd
 
 from .data import NrrdData
 
@@ -28,11 +28,11 @@ class LandmarkData(NrrdData):
     def data(
         self,
         landmarks: Landmarks = 'all',
-        use_image_coords: bool = False,
+        use_patient_coords: bool = True,
         **kwargs) -> Landmarks:
 
         # Load landmarks.
-        lm_df = load_csv(self.__path)
+        lm_df = load_files_csv(self.__path)
         lm_df = lm_df.rename(columns={ '0': 0, '1': 1, '2': 2 })
 
         # Filter on landmarks.
@@ -41,7 +41,7 @@ class LandmarkData(NrrdData):
             lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
 
         # Convert to image coordinates.
-        if use_image_coords:
+        if not use_patient_coords:
             spacing = self.__study.ct_spacing
             offset = self.__study.ct_offset
             lm_data = lm_df[list(range(3))]

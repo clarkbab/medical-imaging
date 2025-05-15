@@ -204,7 +204,7 @@ def train_registration(
                     img = np.flip(img, axis=0)      # Wandb plots rows from top down.
 
                     # Send image.
-                    caption = f'{desc}:{view_to_text(view)}'
+                    caption = f'{desc}:{get_view_name(view)}'
                     image = wandb.Image(
                         img,
                         caption=caption,

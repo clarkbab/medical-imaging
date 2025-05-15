@@ -102,9 +102,10 @@ def create_slurm(
 #SBATCH --mem {p_memory}G{g_res}{c_res}
 #SBATCH --time {days}-{hours:02}:{minutes:02}:{seconds:02}
 
-module load GCCcore/11.3.0
-module load Python/3.10.4
-source ~/venvs/medical-imaging/bin/activate
+# Host not set for slurm jobs.
+export HOST="spartan"
+export DOTFILES_HOME="$HOME/code/dotfiles"
+source $DOTFILES_HOME/.profile
 
 version=$(python --version)
 echo $version

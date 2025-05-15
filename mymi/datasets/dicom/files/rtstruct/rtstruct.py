@@ -116,14 +116,14 @@ class RtStructFile(DicomFile):
         self,
         landmarks: Landmarks = 'all',
         token: str = 'Marker',
-        use_image_coords: bool = False,
+        use_patient_coords: bool = True,
         **kwargs) -> Optional[pd.DataFrame]:
         landmarks = regions_to_list(landmarks, literals={ 'all': lambda: self.list_landmarks(token=token) })
         rtstruct = self.rtstruct
         lms = []
         for l in landmarks:
             lm = RtStructConverter.get_roi_landmark(rtstruct, l)
-            if use_image_coords:
+            if not use_patient_coords:
                 spacing = self.ref_ct.spacing
                 offset = self.ref_ct.offset
                 lm = (lm - offset) / spacing

@@ -60,11 +60,8 @@ class RegionNiftiData(NiftiData):
 
     def list_regions(
         self,
-        # Only the regions in 'regions' should be returned.
-        # Saves us from performing filtering code elsewhere many times.
-        regions: Optional[Regions] = None) -> List[Region]:
-        regions = regions_to_list(regions)
-
+        regions: Regions = 'all',   # Don't have to filter elsewhere in code.
+        ) -> List[Region]:
         # Load regions from filenames.
         rs = os.listdir(self.__path)
         rs = [r.replace('.nii.gz', '') for r in rs]
@@ -74,7 +71,8 @@ class RegionNiftiData(NiftiData):
             rs = [self.__region_map[r] if r in self.__region_map else r for r in rs]
 
         # Filter on 'only'.
-        if regions is not None:
+        if regions != 'all':
+            regions = regions_to_list(regions)
             rs = [r for r in rs if r in regions]
 
         # Sort regions.

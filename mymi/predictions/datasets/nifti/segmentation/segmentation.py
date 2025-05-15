@@ -148,7 +148,7 @@ def create_localiser_predictions_for_first_n_pats(
     logging.info(f"Making localiser predictions for NIFTI datasets for region '{region}', first '{n_pats}' patients in 'all-patients.csv'.")
 
     # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
 
     # Load gpu if available.
     if torch.cuda.is_available():

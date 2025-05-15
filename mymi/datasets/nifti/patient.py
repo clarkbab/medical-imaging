@@ -1,11 +1,13 @@
 import numpy as np
 import os
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import *
 
-from mymi.typing import ImageSpacing3D, Landmarks, PatientID, Landmark, Region, Voxel, StudyID
+from mymi.typing import *
+from mymi.utils import *
 
 from .study import NiftiStudy
+from .data import CtNiftiData
 
 class NiftiPatient:
     def __init__(
@@ -60,6 +62,13 @@ class NiftiPatient:
     @property
     def dataset(self) -> 'NiftiDataset':
         return self.__dataset
+
+    @property
+    def default_ct(self) -> Optional[CtNiftiData]:
+        def_study = self.default_study
+        if def_study is None:
+            return None
+        return def_study.default_ct
 
     @property
     def default_study(self) -> Optional[NiftiStudy]:
@@ -118,11 +127,18 @@ class NiftiPatient:
     def list_regions(self, *args, **kwargs) -> List[Region]:
         return self.default_study.list_regions(*args, **kwargs)
 
-    def list_studies(self) -> List[StudyID]:
+    def list_studies(
+        self,
+        study_ids: StudyIDs = 'all',    # Used for filtering.
+        ) -> List[StudyID]:
         # Might have to deal with sorting at some point for 'default_study'.
         # Right now sorting is just alphabetical, which is fine if we're using anonymous IDs,
         # as they're sorted during DICOM -> NIFTI conversion.
-        return list(sorted(os.listdir(self.__path)))
+        pat_study_ids = list(sorted(os.listdir(self.__path)))
+        if study_ids != 'all':
+            study_ids = arg_to_list(study_ids, StudyID)
+            pat_study_ids = [s for s in pat_study_ids if s in study_ids]
+        return pat_study_ids
 
     def region_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
         return self.default_study.region_data(*args, **kwargs)

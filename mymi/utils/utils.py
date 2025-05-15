@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Sequence as CSequence
 from GPUtil import getGPUs
 import hashlib
+import inspect
 import json
 import matplotlib.pyplot as plt
 import numpy as np
@@ -316,17 +317,40 @@ def p_landmarks(landmarks: List[Landmark], f: float) -> List[Landmark]:
     landmarks = [l for i, l in enumerate(landmarks) if i in idxs]
     return landmarks
 
+def reverse_xy(data: Union[Sequence, np.ndarray]) -> Union[Sequence, np.ndarray]:
+    if isinstance(data, np.ndarray):
+        if data.shape == (3, 3):
+            data[0][0], data[1][1] = -data[0][0], -data[1][1]
+        elif data.shape == (9,):
+            data[0], data[4] = -data[0], -data[4]
+        elif data.shape == (3,):
+            data[0], data[1] = -data[0], -data[1]
+        else:
+            raise ValueError(f"Expected data to be 3 or 9 elements, got {data.shape}.")
+    elif isinstance(data, tuple):
+        data = list(data)
+        if len(data) == 3:
+            data[0], data[1] = -data[0], -data[1]
+        elif len(data) == 9:
+            data[0], data[4] = -data[0], -data[4]
+        else:
+            raise ValueError(f"Expected data to be 3 or 9 elements, got {len(data)}.")
+        data = tuple(data)
+    else:
+        raise ValueError(f"Expected data to be a numpy array or tuple, got {type(data)}.")
+    return data
+
 def transpose_image(
     data: np.ndarray,
-    is_vector: bool = False) -> np.ndarray:
+    vector: bool = False) -> np.ndarray:
     # Transposes spatial coordinates, whilst maintaining vector dimension as first dim.
     data = np.transpose(data)
-    if is_vector:
+    if vector:
         assert data.shape[-1] == 3
         data = np.moveaxis(data, -1, 0)
     return data
 
-def view_to_text(
+def get_view_name(
     view: int,
     abbreviate: bool = True) -> str:
     if view == 0:

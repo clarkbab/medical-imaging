@@ -70,7 +70,7 @@ def plot_patients(
 
         # Load landmarks.
         if landmarks is not None:
-            landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs)
+            landmark_data = study.landmark_data(landmarks=landmarks, use_patient_coords=False, **kwargs)
         else:
             landmark_data = None
         landmark_datas.append(landmark_data)

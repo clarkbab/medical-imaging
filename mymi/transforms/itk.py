@@ -1,12 +1,12 @@
 import itk
 import numpy as np
 import os
-from typing import Literal, Tuple, Union
+from typing import *
 
-from mymi.typing import Image, Point3D, ImageSpacing3D, ImageSize3D
-from mymi.utils import from_itk, itk_convert_LPS_and_RAS, to_itk
+from mymi.typing import *
+from mymi.utils import *
 
-def itk_load_transform(
+def load_itk_transform(
     filepath: str) -> itk.Transform:
     if not os.path.exists(filepath):
         raise ValueError(f"ITK transform not found at filepath: {filepath}.")
@@ -15,20 +15,16 @@ def itk_load_transform(
 
 def itk_transform_image(
     data: np.ndarray,
-    spacing: ImageSpacing3D,
-    offset: Point3D,
-    output_size: ImageSize3D,
-    output_spacing: ImageSpacing3D, 
-    output_offset: Point3D,
     transform: itk.Transform,
-    fill: Union[float, Literal['min']] = 'min') -> Tuple[Image, ImageSpacing3D, Point3D]:
+    output_size: ImageSize3D,
+    fill: Union[float, Literal['min']] = 'min',
+    offset: Point3D = (0, 0, 0),
+    output_offset: Point3D = (0, 0, 0),
+    output_spacing: ImageSpacing3D = (1, 1, 1), 
+    spacing: ImageSpacing3D = (1, 1, 1),
+    reverse_xy: bool = False) -> Tuple[Image, ImageSpacing3D, Point3D]:
     # Load moving image.
-    moving_itk = to_itk(data, spacing, offset)
-
-    # Convert output params to LPS coordinates - transform will use this coordinate system.
-    output_direction = np.eye(3)
-    output_direction, output_offset = itk_convert_LPS_and_RAS(direction=output_direction, offset=output_offset)
-    output_direction = itk.matrix_from_array(output_direction)
+    moving_itk = to_itk_image(data, spacing, offset)
 
     # Get interpolation method.
     if data.dtype == bool:
@@ -48,14 +44,13 @@ def itk_transform_image(
     kwargs = dict(
         default_pixel_value=default_value,
         interpolator=interpolator,
-        output_direction=output_direction,
         output_origin=output_offset,
         output_spacing=output_spacing,
         size=output_size,
         transform=transform,
     )
     moved_itk = itk.resample_image_filter(moving_itk, **kwargs)
-    moved, _, _ = from_itk(moved_itk)
+    moved, _, _ = from_itk_image(moved_itk)
     return moved
 
 def itk_transform_points(

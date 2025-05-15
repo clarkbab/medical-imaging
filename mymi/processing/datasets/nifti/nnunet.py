@@ -12,7 +12,7 @@ from mymi import logging
 from mymi.processing import one_hot_encode
 from mymi.transforms import crop, resample
 from mymi.typing import *
-from mymi.utils import load_nifti, save_as_nifti
+from mymi.utils import load_nifti, save_nifti
 
 # This is nnU-Net's v1 data format.
 def convert_to_nnunet_single_region_v1(
@@ -81,7 +81,7 @@ def convert_to_nnunet_single_region_v1(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_as_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
 
             # Resample label.
             if spacing is not None:
@@ -89,7 +89,7 @@ def convert_to_nnunet_single_region_v1(
 
             # Save data.
             filepath = os.path.join(labelspath, f'{p}.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_as_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, spacing, (0, 0, 0), filepath)
 
     # Create 'dataset.json'.
     train_items = [{ "image": f"./imagesTr/{p}.nii.gz", "label": f"./labelsTr/{p}.nii.gz"} for p in t]
@@ -170,7 +170,7 @@ def convert_to_nnunet_multi_region(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_as_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
 
             # Resample label.
             if spacing is not None:
@@ -183,7 +183,7 @@ def convert_to_nnunet_multi_region(
                 region_class = regions.index(r) + 1
                 label[d == 1] = region_class
             filepath = os.path.join(labelspath, f'{p}.nii.gz')
-            save_as_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, spacing, (0, 0, 0), filepath)
 
     # Create 'dataset.json'.
     dataset_json = {
@@ -268,7 +268,7 @@ def convert_to_nnunet_single_region(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_as_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
 
             # Resample label.
             if spacing is not None:
@@ -276,7 +276,7 @@ def convert_to_nnunet_single_region(
 
             # Save label data.
             filepath = os.path.join(labelspath, f'{p}.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_as_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, spacing, (0, 0, 0), filepath)
 
             # Increment training numbers.
             if p in t:

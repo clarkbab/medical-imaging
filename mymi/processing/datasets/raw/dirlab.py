@@ -52,7 +52,7 @@ def convert_lung_copd_to_nifti() -> None:
         offset = (0, 0, 0)
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
-            save_as_nifti(data, spacing, offset, filepath)
+            save_nifti(data, spacing, offset, filepath)
             
         # Inhale points.
         filepath = os.path.join(rset.path, 'data', p, f'{p}_300_iBH_xyz_r1.txt')
@@ -86,7 +86,7 @@ def convert_lung_copd_to_nifti() -> None:
         offset = (0, 0, 0)
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
-            save_as_nifti(data, spacing, offset, filepath)
+            save_nifti(data, spacing, offset, filepath)
             
         # Exhale points.
         filepath = os.path.join(rset.path, 'data', p, f'{p}_300_eBH_xyz_r1.txt')
@@ -147,7 +147,7 @@ def convert_lung_4dct_to_nifti() -> None:
         offset = (0, 0, 0)
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, 'study_1', 'ct', 'series_0.nii.gz')
-            save_as_nifti(data, spacing, offset, filepath)
+            save_nifti(data, spacing, offset, filepath)
             
         # Inhale points.
         filepath = os.path.join(rset.path, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_1}_xyz.txt')
@@ -181,7 +181,7 @@ def convert_lung_4dct_to_nifti() -> None:
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', pat_id, exhale_study, 'ct', 'series_0.nii.gz')
             offset = (0, 0, 0)
-            save_as_nifti(data, spacing, offset, filepath)
+            save_nifti(data, spacing, offset, filepath)
             
         # Exhale points.
         filepath = os.path.join(rset.path, 'data', f, 'ExtremePhases', f'{pat_id.capitalize()}_300_{phase_2}_xyz.txt')

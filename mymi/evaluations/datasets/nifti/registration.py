@@ -12,22 +12,33 @@ from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
     
-def load_registrations_evaluation(
+def load_registrations_evaluations(
     dataset: str,
-    model: str) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    models: Union[str, List[str]]) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     set = NiftiDataset(dataset)
+    models = arg_to_list(models, str)
 
     # Load regions evaluations.
-    filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'regions.csv')
-    if os.path.exists(filepath):
-        regions_df = pd.read_csv(filepath)
+    dfs = []
+    for m in models:
+        filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'regions.csv')
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+            dfs.append(df)
+    if len(dfs) > 0:
+        regions_df = pd.concat(dfs, ignore_index=True)
     else:
         regions_df = None
 
     # Load landmarks evaluation.
-    filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'landmarks.csv')
-    if os.path.exists(filepath):
-        landmarks_df = pd.read_csv(filepath)
+    dfs = []
+    for m in models:
+        filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'landmarks.csv')
+        if os.path.exists(filepath):
+            df = pd.read_csv(filepath)
+            dfs.append(df)
+    if len(dfs) > 0:
+        landmarks_df = pd.concat(dfs, ignore_index=True)
     else:
         landmarks_df = None
 
@@ -196,7 +207,7 @@ def create_registrations_evaluation(
             # Skip if either moving/fixed study is missing the landmarks.
             moving_study = set.patient(p).study(moving_study_id)
             fixed_study = set.patient(p).study(fixed_study_id)
-            if not moving_study.has_landmark(landmarks) or not fixed_study.has_landmark(landmarks):
+            if not moving_study.has_landmarks(landmarks) or not fixed_study.has_landmarks(landmarks):
                 continue
 
             # Get metrics per region.

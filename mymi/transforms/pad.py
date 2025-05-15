@@ -41,6 +41,8 @@ def __spatial_pad(
     n_dims = len(data.shape)
     assert n_dims in (2, 3)
     fill = data.min() if fill == 'min' else fill
+    if isinstance(fill, torch.Tensor):
+        fill = fill.item()
 
     # Check width of padding box.
     min, max = bounding_box

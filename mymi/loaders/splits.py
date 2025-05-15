@@ -4,7 +4,7 @@ from typing import *
 from mymi.datasets import NiftiDataset
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import append_row
+from mymi.utils import *
 
 def get_custom_holdout_split(
     dataset: str,
@@ -27,7 +27,7 @@ def get_custom_holdout_split(
 
     # Load split file.
     logging.info(f"Loading custom split 'holdout-split.csv'.")
-    df = pd.read_csv(filepath)
+    df = load_csv(filepath)
     
     # Get splits.
     train_ids = df[df['split'] == 'train']['patient-id'].tolist()

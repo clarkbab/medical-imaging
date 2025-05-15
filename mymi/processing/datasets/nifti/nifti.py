@@ -30,7 +30,7 @@ from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import centre_crop_or_pad, centre_crop_or_pad, crop, resample, top_crop_or_pad
 from mymi.typing import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, Region, Regions
-from mymi.utils import append_row, arg_to_list, load_csv, save_files_csv
+from mymi.utils import append_row, arg_to_list, load_files_csv, save_files_csv
 
 from ...processing import write_flag
 
@@ -921,7 +921,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     logging.arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
 
     # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
     df = df.astype({ 'patient-id': str })
     df = df.head(n_pats)
 
@@ -1097,7 +1097,7 @@ def combine_segmenter_predictions_from_all_patients(
     logging.arg_log("Combining (NIFTI) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
 
     # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
     df = df.astype({ 'patient-id': str })
     df = df.head(n_pats)
 

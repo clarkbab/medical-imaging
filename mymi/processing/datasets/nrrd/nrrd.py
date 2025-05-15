@@ -27,7 +27,7 @@ from mymi.regions import regions_to_list
 from mymi.reporting.loaders import load_loader_manifest
 from mymi.transforms import crop, resample, top_crop_or_pad
 from mymi import typing
-from mymi.utils import append_row, arg_to_list, load_csv, save_files_csv
+from mymi.utils import append_row, arg_to_list, load_files_csv, save_files_csv
 
 from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
@@ -64,7 +64,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
     pat_ids = set.list_patients()
 
     # Load crop file.
-    crop_df = load_csv('adaptive-models', 'data', f'extrema-MICCAI-2015.csv')
+    crop_df = load_files_csv('adaptive-models', 'data', f'extrema-MICCAI-2015.csv')
     crop_df = crop_df.pivot(index='patient-id', columns='axis', values=['min-voxel', 'max-voxel'])
 
     # Create index.
@@ -439,7 +439,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     logging.arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
 
     # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
     df = df.astype({ 'patient-id': str })
     df = df.head(n_pats)
 
@@ -615,7 +615,7 @@ def combine_segmenter_predictions_from_all_patients(
     logging.arg_log("Combining (NRRD) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
 
     # Load 'all-patients.csv'.
-    df = load_csv('transfer-learning', 'data', 'all-patients.csv')
+    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
     df = df.astype({ 'patient-id': str })
     df = df.head(n_pats)
 

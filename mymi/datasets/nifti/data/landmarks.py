@@ -32,7 +32,7 @@ class LandmarkNiftiData(NiftiData):
     def data(
         self,
         landmarks: Landmarks = 'all',
-        use_image_coords: bool = False,
+        use_patient_coords: bool = True,
         **kwargs) -> LandmarkData:
 
         # Load landmarks.
@@ -48,7 +48,7 @@ class LandmarkNiftiData(NiftiData):
             lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
 
         # Convert to image coordinates.
-        if use_image_coords:
+        if not use_patient_coords:
             spacing = self.__study.ct_spacing
             offset = self.__study.ct_offset
             lm_data = lm_df[list(range(3))].to_numpy()

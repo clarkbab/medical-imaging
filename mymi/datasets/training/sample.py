@@ -110,7 +110,7 @@ class TrainingSample:
         elif label_type == 'landmarks':
             # Load landmarks dataframe.
             filepath = os.path.join(self.split.path, 'labels', f'{label_id}.csv')
-            label = load_csv(filepath)
+            label = load_files_csv(filepath)
             if landmarks != 'all':
                 # Filter on requested landmarks.
                 landmarks = arg_to_list(landmarks, str, literals={ 'all': self.split.dataset.list_landmarks })

@@ -111,6 +111,42 @@ def plot_histograms(
     for a, d in zip(axs, datas):
         plot_histogram(d, ax=a, **kwargs)
 
+def plot_image(
+    data: Image,
+    figsize: Tuple[float, float] = (16, 6),
+    idx: Union[int, float] = 0.5,
+    offset: Point3D = (0, 0, 0),
+    spacing: ImageSpacing3D = (1, 1, 1),
+    use_patient_coords: bool = False,
+    views: Union[int, Sequence[int]] = 'all') -> None:
+    views = arg_to_list(views, int, literals={ 'all': list(range(3)) })
+    _, axs = plt.subplots(1, len(views), figsize=figsize, squeeze=False)
+    for ax, v in zip(axs[0], views):
+        image, view_idx = __get_slice(data, idx, v)
+        aspect = __get_aspect(v, spacing)
+        origin = __get_origin(v)
+        ax.imshow(image, aspect=aspect, cmap='gray', origin=origin)
+        ax.set_title(f'{get_view_name(v)} view, slice {view_idx}')
+        if use_patient_coords:
+            spacings = __get_view_xy(spacing, v)
+            offsets = __get_view_xy(offset, v)
+            _, x_tick_labels = ax.get_xticks(), ax.get_xticklabels()
+            x_tick_labels = [float(l.get_text().replace('−', '-')) for l in x_tick_labels]
+            x_tick_labels = np.array(spacings[0]) * x_tick_labels + offsets[0]
+            ax.set_xticklabels(x_tick_labels)
+            _, y_tick_labels = ax.get_yticks(), ax.get_yticklabels()
+            y_tick_labels = [float(l.get_text().replace('−', '-')) for l in y_tick_labels]
+            y_tick_labels = np.array(spacings[1]) * y_tick_labels + offsets[1]
+            ax.set_yticklabels(y_tick_labels)
+
+@delegates(plot_image)
+def plot_nifti(
+    filepath: str,
+    **kwargs) -> None:
+    data, spacing, offset = load_nifti(filepath)
+    print(spacing, offset)
+    plot_image(data, offset=offset, spacing=spacing, **kwargs)
+
 def __plot_region_data(
     data: RegionData,
     ax: mpl.axes.Axes,
@@ -143,7 +179,7 @@ def __plot_region_data(
         cmap = ListedColormap(((1, 1, 1, 0), colour))
 
         # Convert data to 'imshow' co-ordinate system.
-        slice_data = __get_mpl_slice(data[region], idx, view)
+        slice_data, _ = __get_slice(data[region], idx, view)
 
         # Crop image.
         if crop:
@@ -168,7 +204,7 @@ def __plot_region_data(
             slice_data = largest_cc_3D(slice_data)
 
         # Plot region.
-        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
+        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_origin(view))
         label = __escape_latex(region) if escape_latex else region
         ax.plot(0, 0, c=colour, label=label)
         ax.contour(slice_data, colors=[colour], levels=[.5], linestyles='solid')
@@ -188,19 +224,34 @@ def __plot_region_data(
 
     return show_legend
 
-def __get_mpl_origin(view: Axis) -> str:
+def __get_aspect(
+    view: Axis,
+    spacing: ImageSpacing3D) -> float:
+    if view == 0:
+        aspect = spacing[2] / spacing[1]
+    elif view == 1:
+        aspect = spacing[2] / spacing[0]
+    elif view == 2:
+        aspect = spacing[1] / spacing[0]
+    return np.abs(aspect)
+
+def __get_origin(view: Axis) -> str:
     if view == 2:
         return 'upper'
     else:
         return 'lower'
 
-def __get_mpl_slice(
-    data: np.ndarray,
-    idx: int,
-    view: Axis) -> np.ndarray:
+def __get_slice(
+    data: Image,
+    idx: Union[int, float],
+    view: Axis) -> Tuple[Image2D, int]:
     # Check that slice index isn't too large.
     if idx >= data.shape[view]:
-        raise ValueError(f"Idx '{idx}' out of bounds, only '{data.shape[view]}' {view_to_text(view)} indices.")
+        raise ValueError(f"Idx '{idx}' out of bounds, only '{data.shape[view]}' {get_view_name(view)} indices.")
+    
+    # Handle index in range [0, 1).
+    if isinstance(idx, float) and idx >= 0 and idx < 1:
+        idx = int(np.round(idx * data.shape[view]))
 
     # Get correct plane.
     data_index = (
@@ -213,18 +264,7 @@ def __get_mpl_slice(
     # Convert from our coordinate system (LPS) to 'imshow' coords.
     slice_data = np.transpose(slice_data)
 
-    return slice_data
-
-def __get_mpl_aspect(
-    view: Axis,
-    spacing: ImageSpacing3D) -> float:
-    if view == 0:
-        aspect = spacing[2] / spacing[1]
-    elif view == 1:
-        aspect = spacing[2] / spacing[0]
-    elif view == 2:
-        aspect = spacing[1] / spacing[0]
-    return aspect
+    return slice_data, idx
 
 def __reverse_box_coords_2D(box: Box2D) -> Box2D:
     # Swap x/y coordinates.
@@ -416,17 +456,17 @@ def plot_heatmap(
 
     # Get aspect ratio.
     if not aspect:
-        aspect = __get_mpl_aspect(view, spacing) 
+        aspect = __get_aspect(view, spacing) 
 
     # Get slice data.
-    heatmap_slice = __get_mpl_slice(heatmap, idx, view)
+    heatmap_slice, _ = __get_slice(heatmap, idx, view)
 
     # Crop the image.
     if crop is not None:
         heatmap_slice = crop(heatmap_slice, __reverse_box_coords_2D(crop))
 
     # Plot heatmap
-    image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_mpl_origin(view))
+    image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=__get_origin(view))
     if show_colorbar:
         # create an axes on the right side of ax. The width of cax will be 5%
         # of ax and the padding between cax and ax will be fixed at 0.05 inch.
@@ -439,7 +479,7 @@ def plot_heatmap(
         for pred_label, pred in pred_data.items():
             if pred.sum() != 0:
                 # Get slice data.
-                pred_slice = __get_mpl_slice(pred, idx, view)
+                pred_slice, _ = __get_slice(pred, idx, view)
 
                 # Crop the image.
                 if crop:
@@ -448,7 +488,7 @@ def plot_heatmap(
                 # Plot prediction.
                 if pred_slice.sum() != 0: 
                     cmap = ListedColormap(((1, 1, 1, 0), colour))
-                    ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+                    ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
                     ax.plot(0, 0, c=colour, label=pred_label)
                     ax.contour(pred_slice, colors=[colour], levels=[.5], linestyles='solid')
 
@@ -497,11 +537,11 @@ def plot_patients(
     pat_ids: Union[PatientIDs, int] = 'all',
     centre: Optional[str] = None,
     crop: Optional[Union[str, Box2D]] = None,
-    landmarks: Optional[Landmarks] = None,
+    landmarks: Optional[Landmarks] = 'all',
     loadpath: Optional[str] = None,
     modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'series_ids'.
     region_labels: Dict[str, str] = {},
-    regions: Optional[Regions] = None,
+    regions: Optional[Regions] = 'all',
     series_ids: Optional[Union[SeriesID, List[SeriesID], Literal['all']]] = None,
     study_ids: Optional[Union[StudyID, List[StudyID], Literal['all']]] = None,
     **kwargs) -> Optional[image.Image]:
@@ -576,7 +616,7 @@ def plot_patients(
                 # and is currently taken from the latest RTSTRUCT in the study.
                 rdata = study.region_data(regions=regions, **kwargs) if regions is not None else None
                 row_region_datas.append(rdata)
-                ldata = study.landmark_data(landmarks=landmarks, use_image_coords=True, **kwargs) if landmarks is not None else None
+                ldata = study.landmark_data(landmarks=landmarks, use_patient_coords=False, **kwargs) if landmarks is not None else None
                 row_landmark_datas.append(ldata)
 
                 # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
@@ -752,7 +792,7 @@ def plot_patient(
     show_ct: bool = True,
     show_dose_bar: bool = True,
     show_extent: bool = False,
-    show_legend: bool = True,
+    show_legend: bool = False,
     show_title: bool = True,
     show_title_idx: bool = True,
     show_title_view: bool = True,
@@ -832,12 +872,12 @@ def plot_patient(
             mean, std_dev = norm
             
         # Load CT slice.
-        data_slice = __get_mpl_slice(data, idx, view)
+        data_slice, _ = __get_slice(data, idx, view)
         if dose_data is not None:
-            dose_slice = __get_mpl_slice(dose_data, idx, view)
+            dose_slice, _ = __get_slice(dose_data, idx, view)
     else:
         # Load empty slice.
-        data_slice = __get_mpl_slice(np.zeros(shape=size), idx, view)
+        data_slice, _ = __get_slice(np.zeros(shape=size), idx, view)
 
     # Perform crop on CT data or placeholder.
     if crop is not None:
@@ -852,7 +892,7 @@ def plot_patient(
         if transform:
             aspect = 1
         else:
-            aspect = __get_mpl_aspect(view, spacing) 
+            aspect = __get_aspect(view, spacing) 
 
     # Determine data window.
     if data is not None:
@@ -887,7 +927,7 @@ def plot_patient(
 
     # Plot CT data.
     if show_ct:
-        ax.imshow(data_slice, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view), vmin=vmin, vmax=vmax)
+        ax.imshow(data_slice, cmap='gray', aspect=aspect, interpolation='none', origin=__get_origin(view), vmin=vmin, vmax=vmax)
 
         if window_mask is not None:
             # Plot values that are outside the window.
@@ -897,10 +937,10 @@ def plot_patient(
                 hw_slice[data_slice < window_mask[0]] = 1
             if window_mask[1] is not None:
                 hw_slice[data_slice >= window_mask[1]] = 1
-            ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_mpl_origin(view))
+            ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=__get_origin(view))
     else:
         # Plot black background.
-        ax.imshow(np.zeros_like(data_slice), cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
+        ax.imshow(np.zeros_like(data_slice), cmap='gray', aspect=aspect, interpolation='none', origin=__get_origin(view))
 
     if not show_axes:
         ax.set_axis_off()
@@ -1001,7 +1041,7 @@ def plot_patient(
         cmap[1:, -1] = np.linspace(dose_alpha_min, dose_alpha_max, mpl_cmap.N - 1)
         cmap = ListedColormap(cmap)
 
-        axim = ax.imshow(dose_slice, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+        axim = ax.imshow(dose_slice, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         if show_dose_bar:
             cbar = plt.colorbar(axim, fraction=dose_colourbar_size, pad=dose_colourbar_pad)
             cbar.set_label(label='Dose [Gray]', size=fontsize)
@@ -1022,7 +1062,7 @@ def plot_patient(
             if show_title_idx:
                 title = f"{title}, {idx}/{n_slices - 1}"
             if show_title_view:
-                title = f"{title} ({view_to_text(view)})"
+                title = f"{title} ({get_view_name(view)})"
 
         # Escape text if using latex.
         if escape_latex:
@@ -1144,10 +1184,10 @@ def plot_localiser_prediction(
     if show_pred and not empty_pred:
         # Get aspect ratio.
         if not aspect:
-            aspect = __get_mpl_aspect(view, spacing) 
+            aspect = __get_aspect(view, spacing) 
 
         # Get slice data.
-        pred_slice = __get_mpl_slice(pred_data, idx, view)
+        pred_slice, _ = __get_slice(pred_data, idx, view)
 
         # Crop the image.
         if crop:
@@ -1156,7 +1196,7 @@ def plot_localiser_prediction(
         # Plot prediction.
         colours = [(1, 1, 1, 0), pred_colour]
         cmap = ListedColormap(colours)
-        plt.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+        plt.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         plt.plot(0, 0, c=pred_colour, label='Loc. Prediction')
         plt.contour(pred_slice, colors=[pred_colour], levels=[.5], linestyles='solid')
 
@@ -1456,10 +1496,10 @@ def plot_segmenter_predictions(
         if pred.sum() != 0 and show_pred:
             # Get aspect ratio.
             if not aspect:
-                aspect = __get_mpl_aspect(view, spacing) 
+                aspect = __get_aspect(view, spacing) 
 
             # Get slice data.
-            pred_slice = __get_mpl_slice(pred, idx, view)
+            pred_slice, _ = __get_slice(pred, idx, view)
 
             # Crop the image.
             if crop:
@@ -1468,7 +1508,7 @@ def plot_segmenter_predictions(
             # Plot prediction.
             if pred_slice.sum() != 0: 
                 cmap = ListedColormap(((1, 1, 1, 0), colour))
-                axs[1].imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+                axs[1].imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=__get_origin(view))
                 axs[1].plot(0, 0, c=colour, label=region)
                 axs[1].contour(pred_slice, colors=[colour], levels=[.5], linestyles='solid')
 
@@ -1511,10 +1551,10 @@ def plot_segmenter_predictions(
     if diff.sum() != 0:
         # Get aspect ratio.
         if not aspect:
-            aspect = __get_mpl_aspect(view, spacing) 
+            aspect = __get_aspect(view, spacing) 
 
         # Get slice data.
-        diff_slice = __get_mpl_slice(diff, idx, view)
+        diff_slice, _ = __get_slice(diff, idx, view)
 
         # Crop the image.
         if crop:
@@ -1522,7 +1562,7 @@ def plot_segmenter_predictions(
 
         # Plot prediction.
         cmap = ListedColormap(('red', (1, 1, 1, 0), 'green'))     # Red for false negatives, green for false positives.
-        axs[2].imshow(diff_slice, alpha=alpha_diff, aspect=aspect, cmap=cmap, origin=__get_mpl_origin(view))
+        axs[2].imshow(diff_slice, alpha=alpha_diff, aspect=aspect, cmap=cmap, origin=__get_origin(view))
         axs[2].plot(0, 0, c=colour, label=region)
         axs[2].contour(diff_slice, colors=[colour], levels=[.5], linestyles='solid')
 
@@ -1565,7 +1605,7 @@ def plot_dataframe(
     hue: Optional[str] = None,
     dpi: float = 300,
     exclude_x: Optional[Union[str, List[str]]] = None,
-    figsize_row: Tuple[float, float] = (12, 6),
+    figsize: Tuple[float, float] = (16, 6),
     filt: Optional[Dict[str, Any]] = {},
     fontsize: float = DEFAULT_FONT_SIZE,
     fontsize_label: Optional[float] = None,
@@ -1710,9 +1750,9 @@ def plot_dataframe(
     else:
         if n_rows > 1:
             gridspec_kw = { 'hspace': hspace }
-            _, axs = plt.subplots(n_rows, 1, constrained_layout=True, dpi=dpi, figsize=(figsize_row[0], n_rows * figsize_row[1]), gridspec_kw=gridspec_kw, sharex=True, sharey=share_y)
+            _, axs = plt.subplots(n_rows, 1, constrained_layout=True, dpi=dpi, figsize=(figsize[0], n_rows * figsize[1]), gridspec_kw=gridspec_kw, sharex=True, sharey=share_y)
         else:
-            plt.figure(dpi=dpi, figsize=figsize_row)
+            plt.figure(dpi=dpi, figsize=figsize)
             axs = [plt.gca()]
 
     # Get hue order/colour/labels.
@@ -2402,7 +2442,7 @@ def plot_registrations(
     centre: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, List[str]]] = None,
     crop_margin: float = 100,
-    fixed_pat_ids: Optional[PatientIDs] = None,
+    fixed_pat_ids: Optional[PatientIDs] = 'all',
     fixed_study_id: StudyID = 'study_1',
     idx: Optional[Union[int, float, List[Union[int, float]]]] = None,
     labels: Literal['included', 'excluded', 'all'] = 'all',
@@ -2421,8 +2461,6 @@ def plot_registrations(
         fixed_pat_ids = set.list_patients(splits=splits)
         moving_pat_ids = fixed_pat_ids
     else:
-        if fixed_pat_ids is None:
-            raise ValueError("Must provide 'fixed_pat_ids' or 'splits' to plot registrations.")
         fixed_pat_ids = arg_to_list(fixed_pat_ids, PatientID, literals={ 'all': set.list_patients })
         if moving_pat_ids is None:
             moving_pat_ids = fixed_pat_ids
@@ -2463,11 +2501,11 @@ def plot_registrations(
             ct_data = study.ct_data
             ct_datas.append(ct_data)
             if landmarks is not None:
-                landmark_data = study.landmark_data(landmarks=landmarks, use_image_coords=True)
+                landmark_data = study.landmark_data(landmarks=landmarks, use_patient_coords=False)
             else:
                 landmark_data = None
             if regions is not None:
-                region_data = study.region_data(labels=labels, regions=regions, regions_ignore_missing=True)
+                region_data = study.region_data(labels=labels, regions=regions)
             else:
                 region_data = None
             sizes.append(study.ct_size)
@@ -2516,7 +2554,7 @@ def plot_registrations(
             crops.append(ocrop)
 
         # Load registered data.
-        moved_data, transform, moved_region_data, moved_landmark_data = load_reg_fn(dataset, p, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=regions, regions_ignore_missing=True, use_image_coords=True) 
+        moved_data, transform, moved_region_data, moved_landmark_data = load_reg_fn(dataset, p, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=regions, use_patient_coords=False) 
 
         # Load 'moved_centre' data if not already in 'moved_region_data'.
         centre = centres_broad[2]
@@ -2685,6 +2723,9 @@ def plot_registrations_matrix(
             moving_offset=moving_offsets[i],
             moving_region_data=moving_region_datas[i],
             moving_spacing=moving_spacings[i],
+            show_fixed=show_fixed,
+            show_grid=show_grid,
+            show_moving=show_moving,
             transform=transforms[i],
         )
         plot_registration(fixed_pat_ids[i], fixed_study_ids[i], moving_pat_ids[i], moving_study_ids[i], **okwargs, **kwargs)
@@ -2837,7 +2878,7 @@ def plot_registration(
 
         show_figure = True
     else:
-        assert len(axs) == n_rows * n_cols
+        assert len(axs) == n_rows * n_cols, f"Expected {n_rows * n_cols} axes, but got {len(axs)}."
         show_figure = False
 
     # Set latex as text compiler.
@@ -2878,39 +2919,43 @@ def plot_registration(
         moving_grid = __create_grid(moving_data.shape, moving_spacing, include=include)
         moving_idx = __convert_float_idx(moving_idx, moving_data.shape, view)
         if show_moving:
-            grid_slice = __get_mpl_slice(moving_grid, moving_idx, view)
-            aspect = __get_mpl_aspect(view, moving_spacing)
-            origin = __get_mpl_origin(view)
+            grid_slice, _ = __get_slice(moving_grid, moving_idx, view)
+            aspect = __get_aspect(view, moving_spacing)
+            origin = __get_origin(view)
             axs[n_cols].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         # Plot moved grid.
         moved_idx = __convert_float_idx(moved_idx, moved_data.shape, view)
         if transform_format == 'itk':
-            moved_grid = itk_transform_image(moving_grid, moving_spacing, moving_offset, fixed_data.shape, fixed_spacing, fixed_offset, transform)
+            # When ITK loads nifti images, it reversed direction/offset for x/y axes.
+            # This is an issue as our code doesn't use directions, it assumes a positive direction matrix.
+            # I don't know how to reverse x/y axes with ITK transforms, so we have to do it with 
+            # images before applying the transform.
+            moved_grid = itk_transform_image(moving_grid, transform, fixed_data.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
         elif transform_format == 'sitk':
-            moved_grid = sitk_transform_image(moving_grid, transform, fixed_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing)
-        grid_slice = __get_mpl_slice(moved_grid, moving_idx, view)
-        aspect = __get_mpl_aspect(view, fixed_spacing)
-        origin = __get_mpl_origin(view)
+            moved_grid = sitk_transform_image(moving_grid, transform, fixed_data.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+        grid_slice, _ = __get_slice(moved_grid, moving_idx, view)
+        aspect = __get_aspect(view, fixed_spacing)
+        origin = __get_origin(view)
         axs[2 * n_cols - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
-    if show_region_overlay:
-        # Plot fixed/moved regions.
-        aspect = __get_mpl_aspect(view, fixed_spacing)
-        okwargs = dict(
-            alpha=alpha_region,
-            crop=fixed_crop,
-            view=view,
-        )
-        f_idx = __convert_float_idx(fixed_idx, fixed_data.shape, view)
-        background = __get_mpl_slice(np.zeros(shape=fixed_data.shape), f_idx, view)
-        if fixed_crop is not None:
-            background = crop(background, __reverse_box_coords_2D(fixed_crop))
-        axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_mpl_origin(view))
-        if fixed_region_data is not None:
-            __plot_region_data(fixed_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
-        if moved_region_data is not None:
-            __plot_region_data(moved_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
+        if show_region_overlay:
+            # Plot fixed/moved regions.
+            aspect = __get_aspect(view, fixed_spacing)
+            okwargs = dict(
+                alpha=alpha_region,
+                crop=fixed_crop,
+                view=view,
+            )
+            f_idx = __convert_float_idx(fixed_idx, fixed_data.shape, view)
+            background, _ = __get_slice(np.zeros(shape=fixed_data.shape), f_idx, view)
+            if fixed_crop is not None:
+                background = crop(background, __reverse_box_coords_2D(fixed_crop))
+            axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=__get_origin(view))
+            if fixed_region_data is not None:
+                __plot_region_data(fixed_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
+            if moved_region_data is not None:
+                __plot_region_data(moved_region_data, axs[2 * n_cols - 2], f_idx, aspect, **okwargs)
 
     if show_figure:
         plt.show()
@@ -3018,6 +3063,17 @@ def __format_p_vals(
         p_vals_f.append(p_f)
     return p_vals_f
 
+def __get_view_xy(
+    data: Union[ImageSpacing3D, Point3D],
+    view: Axis) -> Tuple[float, float]:
+    if view == 0:
+        res = (data[1], data[2])
+    elif view == 1:
+        res = (data[0], data[2])
+    elif view == 2:
+        res = (data[0], data[1])
+    return res
+
 def __get_styles(
     series: pd.Series,
     exclude_cols: Optional[List[str]] = None) -> List[str]:
@@ -3050,26 +3106,6 @@ def __get_styles(
             styles.append(f'background-color: {colour}')
 
     return styles
-
-def __get_view_size(
-    view: Axis,
-    size: ImageSize3D) -> ImageSize2D:
-    if view == 0:
-        return (size[1], size[2])
-    elif view == 1:
-        return (size[0], size[2])
-    elif view == 2:
-        return (size[0], size[1])
-
-def __get_view_spacing(
-    view: Axis,
-    spacing: ImageSpacing3D) -> ImageSpacing2D:
-    if view == 0:
-        return (spacing[1], spacing[2])
-    elif view == 1:
-        return (spacing[0], spacing[2])
-    elif view == 2:
-        return (spacing[0], spacing[1])
 
 def __set_axes_limits(
     parent_ax: mpl.axes.Axes,

@@ -7,7 +7,7 @@ from mymi import logging
 from mymi.processing import one_hot_encode
 from mymi.transforms import crop, resample
 from mymi.typing import *
-from mymi.utils import load_nifti, save_as_nifti
+from mymi.utils import load_nifti, save_nifti
 
 def convert_predictions_to_nifti_single_region(
     dataset: str,
@@ -46,7 +46,7 @@ def convert_predictions_to_nifti_single_region(
         # Save image.
         filepath = os.path.join(set.path, 'data', 'predictions', pat_id, 'study_0', 'regions', 'series_1', region, 'nnunet.nii.gz')
         label = label.argmax(0).astype(np.bool_)
-        save_as_nifti(label, orig_spacing, orig_offset, filepath)
+        save_nifti(label, orig_spacing, orig_offset, filepath)
 
 def convert_predictions_to_nifti_multi_region(
     dataset: str,
@@ -85,4 +85,4 @@ def convert_predictions_to_nifti_multi_region(
             filepath = os.path.join(set.path, 'data', 'predictions', p, 'study_0', 'regions', 'series_1', r, 'nnunet-multi.nii.gz')
             channel = i + 1 
             rlabel = label[channel].astype(np.bool_)
-            save_as_nifti(rlabel, orig_spacing, orig_offset, filepath)
+            save_nifti(rlabel, orig_spacing, orig_offset, filepath)
