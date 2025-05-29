@@ -207,6 +207,18 @@ class NiftiDataset(Dataset):
         proc_df = self.processed_labels[self.processed_labels['patient-id'] == str(id)] if self.processed_labels is not None else None
 
         return NiftiPatient(self, id, ct_from=self.__ct_from, dicom_index=dicom_index, excluded_labels=exc_df, processed_labels=proc_df, region_map=self.__region_map, **kwargs)
+
+    def write_region(
+        self,
+        data: LabelImage,
+        pat_id: PatientID,
+        study_id: StudyID,
+        series_id: SeriesID,
+        region: str,
+        spacing: Spacing3D,
+        offset: Point3D) -> None:
+        filepath = os.path.join(self.__path, 'data', 'patients', pat_id, study_id, 'regions', series_id, f'{region}.nii.gz')
+        save_nifti(data, filepath, spacing=spacing, offset=offset)
     
     def __load_dicom_index(self) -> None:
         filepath = os.path.join(config.directories.datasets, 'dicom', self.__name, 'index-nifti.csv')

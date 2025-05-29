@@ -5,8 +5,8 @@ from tqdm import tqdm
 
 from mymi.datasets import NiftiDataset
 from mymi.datasets.nifti import recreate
-from mymi.geometry import get_centre_of_mass_mm, get_extent
-from mymi.transforms import crop_or_pad_mm, resample, sitk_transform_points
+from mymi.geometry import get_centre_of_mass, get_foreground_extent
+from mymi.transforms import crop_or_pad, resample, sitk_transform_points
 from mymi.utils import *
 
 def create_corrfield_preprocessed_dataset() -> None:
@@ -31,8 +31,8 @@ def create_corrfield_preprocessed_dataset() -> None:
         moving_lms = moving_study.landmark_data()
 
         # Translate moving image to align lung mask COMs.
-        fixed_com = get_centre_of_mass_mm(fixed_lung_rs)
-        moving_com = get_centre_of_mass_mm(moving_lung_rs)
+        fixed_com = get_centre_of_mass(fixed_lung_rs)
+        moving_com = get_centre_of_mass(moving_lung_rs)
         trans_mm = np.array(moving_com) - fixed_com
         trans_mm = tuple(trans_mm.astype(np.float64))
         transform = sitk.TranslationTransform(3)
@@ -42,14 +42,14 @@ def create_corrfield_preprocessed_dataset() -> None:
 
         # Crop to 10mm surrounding fixed lung mask.
         margin = 10
-        ext_min, ext_max = get_extent(fixed_lung_rs)
+        ext_min, ext_max = get_foreground_extent(fixed_lung_rs)
         ext_min = tuple(np.array(ext_min) - margin)
         ext_max = tuple(np.array(ext_max) + margin)
         crop_mm = (ext_min, ext_max)
-        fixed_ct_cp = crop_or_pad_mm(fixed_ct_rs, crop_mm)
-        fixed_lung_cp = crop_or_pad_mm(fixed_lung_rs, crop_mm)
-        moving_ct_cp = crop_or_pad_mm(moving_ct_tr, crop_mm)
-        moving_lung_cp = crop_or_pad_mm(moving_lung_tr, crop_mm)
+        fixed_ct_cp = crop_or_pad(fixed_ct_rs, crop_mm)
+        fixed_lung_cp = crop_or_pad(fixed_lung_rs, crop_mm)
+        moving_ct_cp = crop_or_pad(moving_ct_tr, crop_mm)
+        moving_lung_cp = crop_or_pad(moving_lung_tr, crop_mm)
 
         # Save images.
         pat_path = os.path.join(new_set.path, 'data', 'patients', p)

@@ -154,7 +154,7 @@ class NiftiStudy:
 
     def list_data(
         self,
-        modality: Modality) -> List[str]:
+        modality: Modality) -> List[SeriesID]:
         if modality == 'CT':
             filepath = os.path.join(self.__path, 'ct')
             if os.path.exists(filepath):

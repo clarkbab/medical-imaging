@@ -152,7 +152,7 @@ class RtStructFile(DicomFile):
         self,
         token: str = 'Marker') -> List[str]:
         lms = self.list_regions(landmarks_token=None)
-        lms = [int(l) for l in lms if token in l]
+        lms = [l for l in lms if token in l]
         return lms
 
     def list_regions(

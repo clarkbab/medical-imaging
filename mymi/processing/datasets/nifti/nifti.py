@@ -12,7 +12,7 @@ from scipy.ndimage import binary_dilation
 import shutil
 from time import time
 from tqdm import tqdm
-from typing import Dict, Literal, List, Optional, Tuple, Union
+from typing import *
 
 from mymi import config
 from mymi import datasets as ds
@@ -27,10 +27,29 @@ from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
 from mymi.transforms import centre_crop_or_pad_vox, centre_crop_or_pad_vox, crop, resample
-from mymi.typing import ImageSizeMM3D, Size3D, Spacing3D, ModelName, PatientID, Region, Regions
-from mymi.utils import append_row, arg_to_list, load_files_csv, save_files_csv
+from mymi.typing import *
+from mymi.utils import *
 
 from ...processing import write_flag
+
+def combine_labels(
+    dataset: str,
+    pat_ids: PatientIDs,
+    study_ids: StudyIDs,
+    regions: Regions,
+    output_region: Region,
+    series_id: SeriesID = 'series_1') -> None:
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients(pat_ids=pat_ids)
+    print(pat_ids)
+    study_ids = arg_to_list(study_ids, StudyID, broadcast=len(pat_ids))
+    print(study_ids)
+    for p, s in tqdm(zip(pat_ids, study_ids), total=len(pat_ids)):
+        study = set.patient(p).study(s)
+        series = study.data(series_id, modality='REGIONS')
+        series_regions = series.data(regions=regions)
+        label = np.clip(np.stack([v for v in series_regions.values()]).sum(axis=0), 0, 1)
+        set.write_region(label, p, s, series_id, output_region, study.ct_spacing, study.ct_offset)
 
 def convert_replan_to_nnunet_ref_model(
     regions: Regions,

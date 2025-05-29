@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
+import sys
 from time import perf_counter
 from typing import *
 
@@ -61,6 +62,9 @@ def escape_filepath(f: str) -> str:
 
 def is_generic(t: Any) -> bool:
     return get_origin(t) is not None
+
+def is_windows() -> bool:
+    return 'win' in sys.platform
 
 def isinstance_generic(a: Any, t: Any) -> bool:
     # Checks if 'a' is of type 't' for generic (e.g. List[], Dict[]) and
