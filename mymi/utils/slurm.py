@@ -145,7 +145,7 @@ def create_slurm_grid(
     # --params a,b --values "[[1, 2],[3, 4]]"   N x M = 2 x 2
     params = arg_to_list(params, str)
     n_params = len(params)
-    values = arg_to_list(values, Union[int, float], length=n_params)    # If single value, broadcast to length of number of params.
+    values = arg_to_list(values, Union[int, float], broadcast=n_params)    # If single value, broadcast to length of number of params.
     # List of lists could be passed directly - do nothing.
     # This handles cases where a single list is passed. 
     # This could either be a single run, multiple params, or multiple runs, single param. How do we know which is which?

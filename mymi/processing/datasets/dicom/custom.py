@@ -1,13 +1,13 @@
 import os
 from tqdm import tqdm
-from typing import List, Optional
+from typing import *
 
 from mymi.datasets import DicomDataset, NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import sitk_transform_image, sitk_transform_points, velocity_load_transform
-from mymi.typing import Landmarks, Regions
-from mymi.utils import save_nifti, save_files_csv, save_sitk_transform
+from mymi.transforms import save_sitk_transform, sitk_transform_image, sitk_transform_points, velocity_load_transform
+from mymi.typing import *
+from mymi.utils import *
 
 def convert_velocity_predictions_to_nifti(
     dataset: str,
@@ -53,7 +53,7 @@ def convert_velocity_predictions_to_nifti(
             # Save moved CT.
             modelname = f'VELOCITY-{t}'
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, modelname, 'ct', 'series_0.nii.gz')
-            save_nifti(moved_ct, fixed_spacing, fixed_offset, filepath)
+            save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Save warp.
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, modelname, 'dvf', 'series_0.hdf5')
@@ -68,7 +68,7 @@ def convert_velocity_predictions_to_nifti(
                     moving_region = moving_study.region_data(regions=r)[r]
                     moved_region = sitk_transform_image(moving_region, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, modelname, 'regions', 'series_1', f'{r}.nii.gz')
-                    save_nifti(moved_region, fixed_spacing, fixed_offset, filepath)
+                    save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Move landmarks.
             # We move 'fixed' to 'moving' for TRE calculation to avoid finding inverse of potentially

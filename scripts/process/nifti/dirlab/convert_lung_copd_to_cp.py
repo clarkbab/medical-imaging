@@ -1,0 +1,3 @@
+from mymi.processing.datasets.nifti import create_corrfield_preprocessed_dataset
+
+create_corrfield_preprocessed_dataset()

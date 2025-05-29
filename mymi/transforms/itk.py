@@ -16,13 +16,13 @@ def load_itk_transform(
 def itk_transform_image(
     data: np.ndarray,
     transform: itk.Transform,
-    output_size: ImageSize3D,
+    output_size: Size3D,
     fill: Union[float, Literal['min']] = 'min',
     offset: Point3D = (0, 0, 0),
     output_offset: Point3D = (0, 0, 0),
-    output_spacing: ImageSpacing3D = (1, 1, 1), 
-    spacing: ImageSpacing3D = (1, 1, 1),
-    reverse_xy: bool = False) -> Tuple[Image, ImageSpacing3D, Point3D]:
+    output_spacing: Spacing3D = (1, 1, 1), 
+    spacing: Spacing3D = (1, 1, 1),
+    reverse_xy: bool = False) -> Tuple[Image, Spacing3D, Point3D]:
     # Load moving image.
     moving_itk = to_itk_image(data, spacing, offset)
 
@@ -55,8 +55,8 @@ def itk_transform_image(
 
 def itk_transform_points(
     fixed_points: np.ndarray,
-    fixed_spacing: ImageSpacing3D,
-    moving_spacing: ImageSpacing3D,
+    fixed_spacing: Spacing3D,
+    moving_spacing: Spacing3D,
     fixed_offset: Point3D,
     moving_offset: Point3D,
     transform: itk.Transform,

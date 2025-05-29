@@ -5,11 +5,7 @@ from mymi.predictions.datasets.nifti import load_registration as lr, load_segmen
 from mymi.typing import *
 from mymi.utils import *
 
-from ..plotting import plot_dataset_histogram as pdh, plot_patient_histograms as pph, plot_patients as pp, plot_registrations as pr, plot_segmenter_predictions as plot_segmenter_predictions_base
-
-@delegates(pdh)
-def plot_dataset_histogram(*args, **kwargs) -> None:
-    pdh(NiftiDataset, *args, **kwargs)
+from ..plotting import plot_patient_histograms as pph, plot_patients as pp, plot_registrations as pr, plot_segmenter_predictions as plot_segmenter_predictions_base
 
 @delegates(pp)
 def plot_patients(*args, **kwargs) -> None:

@@ -3,37 +3,53 @@ from typing import *
 
 from mymi.typing import *
 
-def extent(a: np.ndarray) -> Optional[Union[Box2D, Box3D]]:
-    # Get OAR extent.
-    if a.sum() > 0:
-        non_zero = np.argwhere(a != 0).astype(int)
+def get_extent(
+    image: Image,
+    offset: Optional[Point3D] = None,
+    spacing: Optional[Spacing3D] = None,
+    use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:
+    if use_patient_coords:
+        assert spacing is not None
+        assert offset is not None
+
+    # Get voxel extent.
+    n_dims = len(image.shape)
+    extent_vox = ((0,) * n_dims, image.shape)
+    if not use_patient_coords:
+        return extent_vox
+
+    # Get mm extent.
+    extent_min_vox, extent_max_vox = extent_vox
+    extent_min_mm = tuple(np.array(extent_min_vox) * spacing + offset)
+    extent_max_mm = tuple(np.array(extent_max_vox) * spacing + offset)
+    extent_mm = extent_min_mm, extent_max_mm
+    return extent_mm
+
+def get_foreground_extent(
+    image: LabelImage,
+    offset: Optional[Point3D] = None,
+    spacing: Optional[Spacing3D] = None,
+    use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:
+    # Get voxel extent.
+    if image.sum() > 0:
+        non_zero = np.argwhere(image != 0).astype(int)
         min = tuple(non_zero.min(axis=0))
         max = tuple(non_zero.max(axis=0))
-        box = (min, max)
+        extent_vox = (min, max)
+        if not use_patient_coords:
+            return extent_vox
     else:
-        box = None
+        return None
 
-    return box
-
-def extent_mm(
-    a: np.ndarray,
-    spacing: ImageSpacing3D,
-    offset: Voxel) -> Optional[Union[Box2D, Box3D]]:
-    if a.dtype != np.bool_:
-        raise ValueError(f"'extent_mm' expected a boolean array, got '{a.dtype}'.")
-
-    # Get OAR extent.
-    if a.sum() > 0:
-        non_zero = np.argwhere(a != 0).astype(int)
-        min = non_zero.min(axis=0)
-        max = non_zero.max(axis=0)
-        min_mm = min * spacing + offset
-        max_mm = max * spacing + offset
-        box_mm = (min_mm, max_mm)
-    else:
-        box_mm = None
-
-    return box_mm
+    # Get mm extent.
+    if use_patient_coords:
+        assert spacing is not None
+        assert offset is not None
+    extent_min_vx, extent_max_vx = extent_vox
+    extent_min_mm = tuple(np.array(extent_min_vx) * spacing + offset)
+    extent_max_mm = tuple(np.array(extent_max_vx) * spacing + offset)
+    extent_mm = extent_min_mm, extent_max_mm
+    return extent_mm
 
 def extent_edge_voxel(
     a: np.ndarray,
@@ -58,7 +74,7 @@ def extent_edge_voxel(
     max_voxel = tuple(axis_voxels[len(axis_voxels) // 2])
     return max_voxel
 
-def extent_width(a: np.ndarray) -> Optional[Union[ImageSize2D, ImageSize3D]]:
+def extent_width(a: np.ndarray) -> Optional[Union[Size2D, Size3D]]:
     if a.dtype != np.bool_:
         raise ValueError(f"'extent_width' expected a boolean array, got '{a.dtype}'.")
 

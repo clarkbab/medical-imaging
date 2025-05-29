@@ -66,8 +66,17 @@ def load_yaml(filepath: str) -> Any:
 def save_csv(
     data: pd.DataFrame,
     filepath: str,
-    index: bool = False) -> None:
-    data.to_csv(filepath, index=index)
+    index: bool = False,
+    overwrite: bool = False) -> None:
+    if os.path.exists(filepath):
+        if overwrite:
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            data.to_csv(filepath, index=index)
+        else:
+            raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
+    else:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        data.to_csv(filepath, index=index)
 
 def save_files_csv(
     data: pd.DataFrame,
@@ -77,15 +86,14 @@ def save_files_csv(
     overwrite: bool = True) -> None:
     filepath = os.path.join(config.directories.files, *path)
     assert filepath.split('.')[-1] == 'csv'
-    dirpath = os.path.dirname(filepath)
     if os.path.exists(filepath):
         if overwrite:
-            os.makedirs(dirpath, exist_ok=True)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
             data.to_csv(filepath, header=header, index=index)
         else:
             raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
     else:
-        os.makedirs(dirpath, exist_ok=True)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         data.to_csv(filepath, header=header, index=index)
 
 def save_json(

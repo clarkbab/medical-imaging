@@ -7,7 +7,7 @@ from mymi.typing import *
 
 from .utils import transpose_image
 
-def from_sitk_image(img: sitk.Image) -> Tuple[Image, ImageSpacing3D, Point3D]:
+def from_sitk_image(img: sitk.Image) -> Tuple[Image, Spacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -26,29 +26,10 @@ def load_sitk_image(filepath: str) -> sitk.Image:
     img = sitk.ReadImage(filepath)
     return img
 
-def load_sitk_transform(
-    filepath: str) -> sitk.Transform:
-    transform = sitk.ReadTransform(filepath)
-
-    # Cast to correct type.
-    t = transform.GetTransformEnum()
-    if t == sitk.sitkDisplacementField:
-        transform = sitk.DisplacementFieldTransform(transform)
-    elif t == sitk.sitkEuler:
-        transform = sitk.Euler3DTransform(transform)
-
-    return transform
-
-def save_sitk_transform(
-    transform: sitk.Transform,
-    filepath: str) -> None:
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    sitk.WriteTransform(transform, filepath)
-
 def to_sitk_image(
-    data: Image,   # We use LPS coordinates - the same as SimpleITK!
-    spacing: ImageSpacing3D,
-    offset: Point3D,
+    data: Union[Image, VectorImage],   # We use LPS coordinates - the same as SimpleITK!
+    spacing: Spacing3D = (1, 1, 1),
+    offset: Point3D = (0, 0, 0),
     vector: bool = False) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:
@@ -76,9 +57,9 @@ def to_sitk_image(
     return img
 
 def dvf_to_sitk_transform(
-    dvf: Image,   # (3, X, Y, Z)
-    spacing: ImageSpacing3D,
-    offset: Point3D) -> sitk.Transform:
+    dvf: VectorImage,   # (3, X, Y, Z)
+    spacing: Spacing3D = (1, 1, 1),
+    offset: Point3D = (0, 0, 0)) -> sitk.Transform:
     dvf = dvf.astype(np.float64)
     assert dvf.shape[0] == 3
     dvf_sitk = to_sitk_image(dvf, spacing, offset, vector=True)

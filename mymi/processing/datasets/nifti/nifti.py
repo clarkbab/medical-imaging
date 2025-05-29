@@ -22,14 +22,12 @@ from mymi.datasets.training import TrainingDataset, exists as exists_training
 from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
 from mymi.geometry import extent, centre_of_extent
-from mymi.loaders import Loader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
-from mymi.reporting.loaders import load_loader_manifest
-from mymi.transforms import centre_crop_or_pad, centre_crop_or_pad, crop, resample, top_crop_or_pad
-from mymi.typing import ImageSizeMM3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, Region, Regions
+from mymi.transforms import centre_crop_or_pad_vox, centre_crop_or_pad_vox, crop, resample
+from mymi.typing import ImageSizeMM3D, Size3D, Spacing3D, ModelName, PatientID, Region, Regions
 from mymi.utils import append_row, arg_to_list, load_files_csv, save_files_csv
 
 from ...processing import write_flag
@@ -38,7 +36,7 @@ def convert_replan_to_nnunet_ref_model(
     regions: Regions,
     n_regions: int,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
+    crop: Optional[Size3D] = None,
     crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
@@ -212,7 +210,7 @@ def convert_replan_to_nnunet_ref_model(
 def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
+    crop: Optional[Size3D] = None,
     crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
@@ -221,7 +219,7 @@ def convert_replan_to_training(
     recreate_dataset: bool = True,
     region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = regions_to_list(region)
 
@@ -421,7 +419,7 @@ def convert_replan_to_training(
 def convert_population_lens_crop_to_training(
     dataset: str,
     create_data: bool = True,
-    crop: Optional[ImageSize3D] = None,
+    crop: Optional[Size3D] = None,
     crop_method: Literal['low', 'uniform'] = 'low',
     crop_mm: Optional[ImageSizeMM3D] = None,
     dest_dataset: Optional[str] = None,
@@ -431,7 +429,7 @@ def convert_population_lens_crop_to_training(
     recreate_dataset: bool = True,
     region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting NIFTI dataset to TRAINING', ('dataset', 'region'), (dataset, region))
     regions = regions_to_list(region)
 
@@ -1017,142 +1015,6 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     # Save index.
     if anonymise:
         save_files_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
-
-def convert_segmenter_predictions_to_dicom_from_loader(
-    datasets: Union[str, List[str]],
-    region: str,
-    localiser: ModelName,
-    segmenter: ModelName,
-    n_folds: Optional[int] = None,
-    test_fold: Optional[int] = None,
-    use_loader_manifest: bool = False,
-    use_model_manifest: bool = False) -> None:
-    # Get unique name.
-    localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
-    segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
-    logging.info(f"Converting segmenter predictions to DICOM for '{datasets}', region '{region}', localiser '{localiser}', segmenter '{segmenter}', with {n_folds}-fold CV using test fold '{test_fold}'.")
-
-    # Build test loader.
-    if use_loader_manifest:
-        man_df = load_loader_manifest(datasets, region, n_folds=n_folds, test_fold=test_fold)
-        samples = man_df[['dataset', 'patient-id']].to_numpy()
-    else:
-        _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
-        test_dataset = test_loader.dataset
-        samples = [test_dataset.__get_item(i) for i in range(len(test_dataset))]
-
-    # RTSTRUCT info.
-    default_rt_info = {
-        'label': 'PMCC-AI-HN',
-        'institution-name': 'PMCC-AI-HN'
-    }
-
-    # Create prediction RTSTRUCTs.
-    for dataset, pat_id_nifti in tqdm(samples):
-        # Get ROI ID from DICOM dataset.
-        nifti_set = NiftiDataset(dataset)
-        pat_id_dicom = nifti_set.patient(pat_id_nifti).patient_id
-        set_dicom = DicomDataset(dataset)
-        patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
-        info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
-        region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
-
-        # Create RTSTRUCT.
-        cts = patient_dicom.get_cts()
-        rtstruct_pred = RtStructConverter.create_rtstruct(cts, default_rt_info)
-
-        # Load prediction.
-        # pred = load_patient_segmenter_prediction(dataset, pat_id_nifti, localiser, segmenter)
-        
-        # Add ROI.
-        roi_data = ROIData(
-            colour=list(to_255(getattr(RegionColours, region))),
-            data=pred,
-            name=region,
-            number=region_map_gt[region]        # Patient should always have region (right?) - we created the loaders based on patient regions.
-        )
-        RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
-
-        # Save prediction.
-        # Get localiser checkpoint and raise error if multiple.
-        # Hack - clean up when/if path limits are removed.
-        if config.environ('PETER_MAC_HACK') == 'True':
-            base_path = 'S:\\ImageStore\\HN_AI_Contourer\\short\\dicom'
-            if dataset == 'PMCC-HN-TEST':
-                pred_path = os.path.join(base_path, 'test')
-            elif dataset == 'PMCC-HN-TRAIN':
-                pred_path = os.path.join(base_path, 'train')
-        else:
-            pred_path = os.path.join(nifti_set.path, 'predictions', 'segmenter')
-        filepath = os.path.join(pred_path, *localiser, *segmenter, f'{pat_id_dicom}.dcm')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        rtstruct_pred.save_as(filepath)
-
-def combine_segmenter_predictions_from_all_patients(
-    dataset: Union[str, List[str]],
-    n_pats: int,
-    model_type: str = 'clinical') -> None:
-    datasets = arg_to_list(dataset, str)
-    logging.arg_log("Combining (NIFTI) segmenter predictions from 'all-patients.csv'", ('dataset', 'n_pats', 'model_type'), (datasets, n_pats, model_type))
-
-    # Load 'all-patients.csv'.
-    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
-    df = df.astype({ 'patient-id': str })
-    df = df.head(n_pats)
-
-    cols = {
-        'region': str,
-        'model': str
-    }
-
-    for _, (dataset, pat_id) in tqdm(df.iterrows()):
-        index_df = pd.DataFrame(columns=cols.keys())
-
-        for region in RegionNames:
-            localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
-
-            # Find fold that didn't use this patient for training.
-            for test_fold in range(5):
-                man_df = load_loader_manifest(datasets, region, test_fold=test_fold)
-                man_df = man_df[(man_df.loader == 'test') & (man_df['origin-dataset'] == dataset) & (man_df['origin-patient-id'] == pat_id)]
-                if len(man_df) == 1:
-                    break
-            
-            # Select segmenter that didn't use this patient for training.
-            if len(man_df) == 1:
-                # Patient was excluded when training model for 'test_fold'.
-                segmenter = (f'segmenter-{region}-v2', f'{model_type}-fold-{test_fold}-samples-None', 'best')
-            elif len(man_df) == 0:
-                # This patient region wasn't used for training any models, let's just use the model of the first fold.
-                segmenter = (f'segmenter-{region}-v2', f'{model_type}-fold-0-samples-None', 'best') 
-            else:
-                raise ValueError(f"Found multiple matches in loader manifest for test fold '{test_fold}', dataset '{dataset}', patient '{pat_id}' and region '{region}'.")
-
-            # Add index row.
-            data = {
-                'region': region,
-                'model': f'{model_type}-fold-{test_fold}-samples-None'
-            }
-            index_df = append_row(index_df, data)
-
-            # Load/create segmenter prediction.
-            try:
-                pred = load_segmenter_predictions(dataset, pat_id, localiser, segmenter)
-            except ValueError as e:
-                logging.info(str(e))
-                create_localiser_prediction(dataset, pat_id, localiser)
-                create_segmenter_prediction(dataset, pat_id, localiser, segmenter)
-                pred = load_segmenter_predictions(dataset, pat_id, localiser, segmenter)
-
-            # Copy prediction to new location.
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, f'{region}.npz')
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            np.savez_compressed(filepath, data=pred)
-
-        # Save patient index.
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, 'index.csv')
-        index_df.to_csv(filepath, index=False)
 
 def __destroy_flag(
     dataset: 'Dataset',

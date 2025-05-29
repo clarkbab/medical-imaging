@@ -11,12 +11,12 @@ from mymi.predictions.datasets.nrrd import load_localiser_prediction
 from mymi.processing import write_flag
 from mymi.transforms import crop_mm_3D
 from mymi.typing import *
-from mymi.utils import save_nifti
+from mymi.utils import *
 
 def convert_to_brain_crop(
     dataset: str,
     dest_dataset: str,
-    margins_mm: BoxMM3D = [(50, 100, 120), (50, 0, 30)]) -> None:
+    margins_mm: Point3DBox = [(50, 100, 120), (50, 0, 30)]) -> None:
     logging.arg_log(f'Converting NRRD dataset to brain crop', ('dataset', 'dest_dataset', margins_mm), (dataset, dest_dataset, margins_mm))
 
     # Create the dataset.
@@ -44,14 +44,14 @@ def convert_to_brain_crop(
         ct_data = crop_mm_3D(ct_data, spacing, offset, crop_mm)
         filepath = os.path.join(dest_set.path, 'data', 'patients', p, 'study_0', 'ct', f'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath))
-        save_nifti(ct_data, spacing, offset, filepath)
+        save_nifti(ct_data, filepath, spacing=spacing, offset=offset)
 
         # Apply crop to regions.
         region_data = pat.region_data()
         for r, d in region_data.items():
             d = crop_mm_3D(d, spacing, offset, crop_mm)
             filepath = os.path.join(dest_set.path, 'data', 'patients', p, 'study_0', 'regions', 'series_1', f'{r}.nii.gz')
-            save_nifti(d, spacing, offset, filepath)
+            save_nifti(d, filepath, spacing=spacing, offset=offset)
 
     # Indicate success.
     write_flag(dest_set, f'__CONVERTED_FROM_NRRD_{dataset}_BRAIN_CROP__')

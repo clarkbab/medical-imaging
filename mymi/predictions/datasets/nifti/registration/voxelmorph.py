@@ -11,7 +11,6 @@ sys.path.append(VXM_PATH)
 
 from mymi import config
 from mymi.datasets.nifti import NiftiDataset
-from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import dvf_to_sitk_transform, resample, sitk_create_affine_transform, sitk_transform_image, sitk_transform_points
 from mymi.typing import *
@@ -21,7 +20,7 @@ def create_voxelmorph_predictions(
     dataset: str,
     model: str,
     modelname: str,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
@@ -48,11 +47,11 @@ def create_voxelmorph_predictions(
                 fixed_ct = fixed_study.ct_data
                 fixed_ct_resampled = resample(fixed_ct, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                 fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
-                save_nifti(fixed_ct_resampled, model_spacing, fixed_study.ct_offset, fixed_path)
+                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, offset=fixed_study.ct_offset)
                 moving_ct = moving_study.ct_data
                 moving_ct_resampled = resample(moving_ct, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                 moving_path = os.path.join(temp_dir, 'moving.nii.gz')
-                save_nifti(moving_ct_resampled, model_spacing, moving_study.ct_offset, moving_path)
+                save_nifti(moving_ct_resampled, moving_path, spacing=model_spacing, offset=moving_study.ct_offset)
 
                 # Create output paths.
                 moved_path = os.path.join(temp_dir, 'moved.npz')
@@ -95,7 +94,7 @@ def create_voxelmorph_predictions(
                 moved_ct = sitk_transform_image(moving_ct, transform, fixed_ct.shape, fill=0, offset=moving_study.ct_offset, output_spacing=fixed_study.ct_spacing, output_offset=fixed_study.ct_offset, spacing=moving_study.ct_spacing)
                 # moved_ct = load_numpy(moved_path, keys='vol')
                 moved_path = os.path.join(pred_base_path, 'ct', f'{modelname}.nii.gz')
-                save_nifti(moved_ct, fixed_study.ct_spacing, fixed_study.ct_offset, moved_path)
+                save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
         if regions is not None:
             transform = load_sitk_transform(transform_path)
@@ -110,7 +109,7 @@ def create_voxelmorph_predictions(
                 moved_label = sitk_transform_image(moving_label, transform, fixed_study.ct_size, offset=moving_study.ct_offset, output_spacing=fixed_study.ct_spacing, output_offset=fixed_study.ct_offset, spacing=moving_study.ct_spacing)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
-                save_nifti(moved_label, fixed_study.ct_spacing, fixed_study.ct_offset, moved_path)
+                save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
         
         if landmarks is not None:
             if not fixed_study.has_landmarks(pat_landmarks):

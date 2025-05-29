@@ -30,13 +30,13 @@ def convert_old_pmcc_hn() -> None:
             data, spacing, offset = load_nifti(filepath)
             filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            save_nifti(data, spacing, offset, filepath)
+            save_nifti(data, filepath, spacing=spacing, offset=offset)
             
             filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{moving_id}.nii.gz')
             data, spacing, offset = load_nifti(filepath)
             filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            save_nifti(data, spacing, offset, filepath)
+            save_nifti(data, filepath, spacing=spacing, offset=offset)
             
             # Copy region data.
             for r in regions:
@@ -45,14 +45,14 @@ def convert_old_pmcc_hn() -> None:
                     data, spacing, offset = load_nifti(filepath)
                     filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', f'{r}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    save_nifti(data, spacing, offset, filepath)
+                    save_nifti(data, filepath, spacing=spacing, offset=offset)
                     
                 filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{moving_id}.nii.gz')
                 if os.path.exists(filepath):
                     data, spacing, offset = load_nifti(filepath)
                     filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', f'{r}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    save_nifti(data, spacing, offset, filepath)
+                    save_nifti(data, filepath, spacing=spacing, offset=offset)
 
 def convert_old_replan() -> None:
     oset = NiftiDataset('PMCC-HN-REPLAN-OLD')
@@ -78,13 +78,13 @@ def convert_old_replan() -> None:
         data, spacing, offset = load_nifti(filepath)
         filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(data, spacing, offset, filepath)
+        save_nifti(data, filepath, spacing=spacing, offset=offset)
         
         filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{moving_id}.nii.gz')
         data, spacing, offset = load_nifti(filepath)
         filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(data, spacing, offset, filepath)
+        save_nifti(data, filepath, spacing=spacing, offset=offset)
         
         # Copy region data.
         for r in regions:
@@ -93,11 +93,11 @@ def convert_old_replan() -> None:
                 data, spacing, offset = load_nifti(filepath)
                 filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', f'{r}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                save_nifti(data, spacing, offset, filepath)
+                save_nifti(data, filepath, spacing=spacing, offset=offset)
                 
             filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{moving_id}.nii.gz')
             if os.path.exists(filepath):
                 data, spacing, offset = load_nifti(filepath)
                 filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', f'{r}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                save_nifti(data, spacing, offset, filepath)
+                save_nifti(data, filepath, spacing=spacing, offset=offset)

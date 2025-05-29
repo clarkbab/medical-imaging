@@ -24,8 +24,8 @@ def load_sitk_transform(
 def sitk_create_affine_transform(
     offset: Optional[Point3D] = (0, 0, 0),
     output_offset: Optional[Point3D] = (0, 0, 0),
-    output_spacing: Optional[ImageSpacing3D] = (1, 1, 1),
-    spacing: Optional[ImageSpacing3D] = (1, 1, 1)) -> sitk.AffineTransform:
+    output_spacing: Optional[Spacing3D] = (1, 1, 1),
+    spacing: Optional[Spacing3D] = (1, 1, 1)) -> sitk.AffineTransform:
 
     # Create transform.
     transform = sitk.AffineTransform(3)
@@ -48,12 +48,12 @@ def sitk_save_transform(
 def __spatial_sitk_transform_image(
     data: np.ndarray,
     transform: sitk.Transform,
-    output_size: ImageSize3D,
+    output_size: Size3D,
     fill: Union[float, Literal['min']] = 'min',
     offset: Point3D = (0, 0, 0),
     output_offset: Point3D = (0, 0, 0),
-    output_spacing: ImageSpacing3D = (1, 1, 1), 
-    spacing: ImageSpacing3D = (1, 1, 1)) -> Tuple[Image, ImageSpacing3D, Point3D]:
+    output_spacing: Spacing3D = (1, 1, 1), 
+    spacing: Spacing3D = (1, 1, 1)) -> Tuple[Image, Spacing3D, Point3D]:
     # Load moving image.
     moving_sitk = to_sitk_image(data, spacing, offset)
 
@@ -92,11 +92,13 @@ def sitk_transform_image(
     return handle_non_spatial_dims(__spatial_sitk_transform_image, data, *args, **kwargs)
 
 def sitk_transform_points(
-    points: np.ndarray,     # N x 3
-    transform: sitk.Transform) -> np.ndarray:
-    if isinstance(points, pd.DataFrame):
-        points = points.to_numpy()  # Iterating over 'points' produces indices when using dataframes.
-    assert points.shape[1] == 3
+    points: Union[Points2D, Points3D, LandmarkData],
+    transform: sitk.Transform) -> Union[Points2D, Points3D, LandmarkData]:
+    is_landmarks = True if isinstance(points, LandmarkData) else False
+    if is_landmarks:
+        lms = points.copy()
+        points = points[list(range(3))].to_numpy()
+    assert points.shape[1] in (2, 3)
     points = points.astype(np.float64)  # sitk expects double.
     
     # Apply transform to points.
@@ -106,4 +108,31 @@ def sitk_transform_points(
         points_t.append(p_t)
     points_t = np.vstack(points_t)
 
-    return points_t
+    if is_landmarks:
+        lms[list(range(3))] = points_t
+        output = lms
+    else:
+        output = points_t
+
+    return output
+
+def load_sitk_transform(
+    filepath: str) -> sitk.Transform:
+    transform = sitk.ReadTransform(filepath)
+
+    # Cast to correct type.
+    t = transform.GetTransformEnum()
+    if t == sitk.sitkDisplacementField:
+        transform = sitk.DisplacementFieldTransform(transform)
+    elif t == sitk.sitkEuler:
+        transform = sitk.Euler3DTransform(transform)
+
+    return transform
+
+def save_sitk_transform(
+    transform: sitk.Transform,
+    filepath: str) -> None:
+    dirname = os.path.dirname(filepath)
+    if dirname != '':
+        os.makedirs(dirname, exist_ok=True)
+    sitk.WriteTransform(transform, filepath)

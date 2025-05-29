@@ -189,8 +189,8 @@ class RtStructConverter:
     def _get_mask_slice(
         cls,
         points: np.ndarray,
-        size: typing.ImageSize2D,
-        spacing: typing.ImageSpacing2D,
+        size: typing.Size2D,
+        spacing: typing.Spacing2D,
         offset: typing.Point2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.

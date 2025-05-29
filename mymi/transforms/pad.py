@@ -7,36 +7,9 @@ from mymi.utils import *
 
 from .shared import handle_non_spatial_dims
 
-def centre_pad(
+def __spatial_pad_vox(
     data: Image,
-    *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_centre_pad, data, *args, **kwargs)
-
-def pad(
-    data: Image,
-    *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_pad, data, *args, **kwargs)
-
-def __spatial_centre_pad(
-    data: Image,
-    size: ImageSize3D,
-    **kwargs) -> Image:
-    # Determine padding amounts.
-    to_pad = np.array(size) - data.shape
-    box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
-    box_max = box_min + size
-    bounding_box = (box_min, box_max)
-
-    # Perform padding.
-    output = __spatial_pad(data, bounding_box, **kwargs)
-
-    return output
-
-def __spatial_pad(
-    data: Image,
-    bounding_box: Union[Box2D, Box3D],
+    bounding_box: Union[PixelBox, VoxelBox],
     fill: Union[float, Literal['min']] = 'min') -> Image:
     n_dims = len(data.shape)
     assert n_dims in (2, 3)
@@ -66,3 +39,32 @@ def __spatial_pad(
         data = torch.nn.functional.pad(data, padding, value=fill)
 
     return data
+
+@delegates(__spatial_pad_vox)
+def pad(
+    data: Image,
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_pad_vox, data, *args, **kwargs)
+
+def __spatial_centre_pad_vox(
+    data: Image,
+    size: Size3D,
+    **kwargs) -> Image:
+    # Determine padding amounts.
+    to_pad = np.array(size) - data.shape
+    box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
+    box_max = box_min + size
+    bounding_box = (box_min, box_max)
+
+    # Perform padding.
+    output = __spatial_pad_vox(data, bounding_box, **kwargs)
+
+    return output
+
+@delegates(__spatial_centre_pad_vox)
+def centre_pad(
+    data: Image,
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_centre_pad_vox, data, *args, **kwargs)

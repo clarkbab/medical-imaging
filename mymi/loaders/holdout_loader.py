@@ -85,7 +85,7 @@ class TrainingSet(Dataset):
         pad_threshold: Optional[float] = None,
         preload_samples: bool = True,
         regions: Optional[Regions] = 'all',
-        spacing: Optional[ImageSpacing3D] = None,
+        spacing: Optional[Spacing3D] = None,
         transform: torchio.transforms.Transform = None) -> None:
         self.__landmarks = landmarks
         self.__label_types = split.dataset.label_types

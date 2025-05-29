@@ -1,14 +1,13 @@
 from collections.abc import Iterable, Sequence as CSequence
 from GPUtil import getGPUs
 import hashlib
-import inspect
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 from pynvml.smi import nvidia_smi
-from time import perf_counter, time
+from time import perf_counter
 from typing import *
 
 from mymi import config
@@ -214,37 +213,33 @@ def arg_assert_present(
 
 def arg_to_list(
     arg: Optional[Any],
-    arg_type: Union[Any, Tuple[Any]],
-    length: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
+    arg_types: Union[Any, List[Any]],
+    broadcast: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
     literals: Dict[str, Tuple[Any]] = {},
     out_type: Optional[Any] = None) -> List[Any]:
-    # Allow multiple types in 'arg_type'.
-    # E.g. patient ID can be str/int, colours can be str/tuple.
-    if type(arg_type) is tuple:
-        # if out_type is None:
-        #     raise ValueError(f"Must specify 'out_type' when multiple input types are used ({arg_type}).")
-        arg_types = arg_type
-    else:
-        arg_types = (arg_type,)
+    # Convert arg types to list.
+    if not isinstance(arg_types, list) and not isinstance(arg_types, tuple):
+        arg_types = [arg_types]
     
     # Check literal matches.
     literal_types = (int, str) 
-    if type(arg) in literal_types and arg in literals:
-        arg = literals[arg]
-        # If arg is a function, run it now. This means the function
-        # is not evaluated every time 'arg_to_list' is called, only when
-        # the arg matches the appropriate literal (e.g. 'all').
-        if callable(arg):
-            arg = arg()
+    for t in literal_types:
+        if isinstance(arg, t) and arg in literals:
+            arg = literals[arg]
+            # If arg is a function, run it now. This means the function
+            # is not evaluated every time 'arg_to_list' is called, only when
+            # the arg matches the appropriate literal (e.g. 'all').
+            if isinstance(arg, Callable):
+                arg = arg()
 
-        return arg
+            return arg
 
     # Check types.
     matched = False
-    for a in arg_types:
-        if isinstance_generic(arg, a):
+    for t in arg_types:
+        if isinstance_generic(arg, t):
             matched = True
-            arg = [arg] * length
+            arg = [arg] * broadcast
             break
         
     # Convert to output type.
@@ -344,9 +339,10 @@ def transpose_image(
     data: np.ndarray,
     vector: bool = False) -> np.ndarray:
     # Transposes spatial coordinates, whilst maintaining vector dimension as first dim.
+    if vector and data.shape[0] != 3:
+        raise ValueError(f"Expected vector dimension first, got {data.shape}.")
     data = np.transpose(data)
     if vector:
-        assert data.shape[-1] == 3
         data = np.moveaxis(data, -1, 0)
     return data
 

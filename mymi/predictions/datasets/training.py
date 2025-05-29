@@ -16,8 +16,8 @@ def get_sample_localiser_prediction(
     dataset: str,
     sample_idx: str,
     localiser: pl.LightningModule,
-    loc_size: typing.ImageSize3D,
-    loc_spacing: typing.ImageSpacing3D,
+    loc_size: typing.Size3D,
+    loc_spacing: typing.Spacing3D,
     device: Optional[torch.device] = None) -> None:
     # Load data.
     set = ds.get(dataset, 'training')

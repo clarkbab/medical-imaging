@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
@@ -26,16 +27,20 @@ class CtNiftiData(NiftiData):
     def data(self) -> CtImage:
         return self.__data
 
-    @property
     @ensure_loaded
-    def extrema(self) -> Point3D:
-        extrema = tuple(np.array(self.fov) + self.__offset)
-        return extrema
+    def extent(
+        self,
+        use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
+        return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
 
     @property
+    @delegates(extent)
     @ensure_loaded
-    def fov(self) -> ImageFOV3D:
-        fov = tuple((np.array(self.__data.shape) - 1) * self.__spacing)
+    def fov(
+        self,
+        **kwargs) -> Union[ImageSizeMM3D, Size3D]:
+        ext_min, ext_max = self.extent(**kwargs)
+        fov = tuple(np.array(ext_max) - ext_min)
         return fov
 
     @property

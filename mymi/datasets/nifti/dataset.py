@@ -155,7 +155,19 @@ class NiftiDataset(Dataset):
 
         # Filter by 'pat_ids'.
         if pat_ids != 'all':
-            pat_ids = arg_to_list(pat_ids, PatientID)
+            # Check for special group format.
+            if isinstance(pat_ids, str):
+                regexp = r'^group:(\d+):(\d+)$'
+                match = re.match(regexp, pat_ids)
+                if match:
+                    group = int(match.group(1))
+                    num_groups = int(match.group(2))
+                    group_size = int(np.ceil(len(res_pat_ids) / num_groups))
+                    pat_ids = res_pat_ids[group * group_size:(group + 1) * group_size]
+                else:
+                    pat_ids = arg_to_list(pat_ids, PatientID)
+            else:
+                pat_ids = arg_to_list(pat_ids, PatientID)
             res_pat_ids = [p for p in res_pat_ids if p in pat_ids] 
 
         return res_pat_ids

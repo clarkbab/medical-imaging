@@ -8,8 +8,8 @@ from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import sitk_save_transform
 from mymi.transforms.dataset.nifti import rigid_registration
-from mymi.typing import Landmarks, Regions
-from mymi.utils import save_nifti, save_files_csv
+from mymi.typing import *
+from mymi.utils import *
 
 from ...processing import write_flag
 
@@ -56,12 +56,12 @@ def create_registered_dataset(
         fixed_offset = fixed_study.ct_offset
         moved_study = dest_set.patient(p, check_path=False).study(moving_study_id, check_path=False)
         filepath = os.path.join(moved_study.path, 'ct', 'series_0.nii.gz')
-        save_nifti(moved_ct, fixed_spacing, fixed_offset, filepath)
+        save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         if moved_region_data is not None:
             for r, moved_r in moved_region_data.items():
                 filepath = os.path.join(moved_study.path, 'regions', 'series_1', f'{r}.nii.gz')
-                save_nifti(moved_r, fixed_spacing, fixed_offset, filepath)
+                save_nifti(moved_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
         if moved_landmark_data is not None:
@@ -80,14 +80,14 @@ def create_registered_dataset(
         # if pad_value is not None:
         #     fixed_ct[moved_ct == pad_value] = pad_value
         filepath = os.path.join(dest_fixed_study.path, 'ct', 'series_1.nii.gz')
-        save_nifti(fixed_ct, fixed_spacing, fixed_offset, filepath)
+        save_nifti(fixed_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         if regions is not None:
             fixed_region_data = fixed_study.region_data(regions=regions, regions_ignore_missing=True)
             if fixed_region_data is not None:
                 for r, fixed_r in fixed_region_data.items():
                     filepath = os.path.join(dest_fixed_study.path, 'regions', 'series_1', f'{r}.nii.gz')
-                    save_nifti(fixed_r, fixed_spacing, fixed_offset, filepath)
+                    save_nifti(fixed_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         if landmarks is not None:
             fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)

@@ -4,7 +4,7 @@ from typing import *
 
 from mymi.typing import *
 
-def from_itk_image(img: itk.Image) -> Tuple[Image, ImageSpacing3D, Point3D]:
+def from_itk_image(img: itk.Image) -> Tuple[Image, Spacing3D, Point3D]:
     data = itk.GetArrayFromImage(img)
     # ITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -23,7 +23,7 @@ def load_itk_image(filepath: str) -> itk.Image:
 
 def to_itk_image(
     data: Image,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     offset: Point3D,
     vector: bool = False,
     reverse_xy: bool = False) -> itk.Image:

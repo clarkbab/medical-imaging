@@ -3,6 +3,7 @@ import pandas as pd
 from time import time
 from typing import *
 
+from .io import save_csv
 from .pandas import append_row
 
 # Time for each 'recorded' event is stored in a row of the CSV.
@@ -31,5 +32,6 @@ class Timer:
                 self.__df = append_row(self.__df, data)
 
     def save(self, filepath):
-        self.__df.astype(self.__cols).to_csv(filepath, index=False)
+        df = self.__df.astype(self.__cols)
+        save_csv(df, filepath, overwrite=True)
  

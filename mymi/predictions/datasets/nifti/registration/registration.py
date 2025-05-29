@@ -11,7 +11,7 @@ from mymi.datasets import NiftiDataset
 from mymi.models import load_model
 from mymi.models.architectures import RegMod
 from mymi.regions import regions_to_list
-from mymi.transforms import crop, load_itk_transform, resample, load_sitk_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import crop, resample, load_sitk_transform, save_sitk_transform, sitk_transform_image, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -21,7 +21,7 @@ def create_patient_registration(
     module: torch.nn.Module,
     project: str,
     model_name: str,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     device: Optional[torch.device] = None,
     fixed_study_id: StudyID = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
@@ -90,7 +90,7 @@ def create_patient_registration(
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-    save_nifti(ct_moved, fixed_spacing, fixed_offset, filepath)
+    save_nifti(ct_moved, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
     # Save DVF.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
@@ -105,7 +105,7 @@ def create_patient_registration(
                 moved_label = sitk_transform_image(moving_label, sitk_transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
                 moved_label = crop(moved_label, crop_box)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-                save_nifti(moved_label, fixed_spacing, fixed_offset, filepath)
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
     # Move landmarks.
     if landmarks is not None:
@@ -119,7 +119,47 @@ def create_patient_registration(
             landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
             moved_landmark_data = moved_landmark_data[landmark_cols]
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
-            save_files_csv(moved_landmark_data, filepath)
+            save_csv(moved_landmark_data, filepath)
+
+def delete_patient_registration(
+    dataset: str,
+    fixed_pat_id: PatientID,
+    model_name: str,
+    fixed_study_id: StudyID = 'study_1',
+    landmarks: Optional[Landmarks] = 'all',
+    moving_pat_id: Optional[PatientID] = None,
+    moving_study_id: StudyID = 'study_0',
+    regions: Optional[Regions] = 'all') -> None:
+
+    # Remove moved CT.
+    set = NiftiDataset(dataset)
+    fixed_pat = set.patient(fixed_pat_id)
+    fixed_study = fixed_pat.study(fixed_study_id)
+    moving_pat_id = fixed_pat_id if moving_pat_id is None else moving_pat_id
+    moving_pat = set.patient(moving_pat_id)
+    moving_study = moving_pat.study(moving_study_id)
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    # Remove transform.
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    # Remove region data.
+    if regions is not None:
+        moving_regions = moving_study.list_regions(regions=regions)
+        for r in moving_regions:
+            filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', r, f'{model_name}.nii.gz')
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+    # Move landmarks.
+    if landmarks is not None:
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
 def create_patient_identity_registration(
     dataset: str,
@@ -153,7 +193,7 @@ def create_patient_identity_registration(
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-    save_nifti(moved_ct, fixed_spacing, fixed_offset, filepath)
+    save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
     # Save transform.
     transform = sitk.Transform(3, sitk.sitkIdentity)
@@ -168,7 +208,7 @@ def create_patient_identity_registration(
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-                save_nifti(moved_label, fixed_spacing, fixed_offset, filepath)
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
     # Move landmarks.
     if landmarks is not None:
@@ -181,15 +221,16 @@ def create_patient_identity_registration(
             landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
             moved_landmark_data = moved_landmark_data[landmark_cols]
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
-            save_files_csv(moved_landmark_data, filepath)
+            save_csv(moved_landmark_data, filepath)
 
-def create_dataset_registrations(
+def create_registrations(
     dataset: str,
     project: str,
     model: str,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     module: torch.nn.Module = RegMod,
-    splits: Optional[Splits] = None,
+    pat_ids: PatientIDs = 'all',
+    splits: Splits = 'all',
     use_timing: bool = True,
     **kwargs) -> None:
 
@@ -203,7 +244,7 @@ def create_dataset_registrations(
 
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(splits=splits)
+    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
 
     # Make predictions.
     for p in tqdm(pat_ids):
@@ -225,6 +266,19 @@ def create_dataset_registrations(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
+def delete_registrations(
+    dataset: str,
+    model: str,
+    splits: Splits = 'all',
+    **kwargs) -> None:
+    # Get patients.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients(splits=splits)
+
+    # Remove predictions.
+    for p in tqdm(pat_ids):
+        delete_patient_registration(dataset, p, model, **kwargs)
+
 def load_registration(
     dataset: str,
     fixed_pat_id: PatientID,
@@ -233,6 +287,7 @@ def load_registration(
     landmarks: Optional[Landmarks] = 'all',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
+    raise_error: bool = True,
     regions: Optional[Regions] = 'all',
     use_patient_coords: bool = True) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionData], Optional[Landmarks]]:
     # Load moved CT.
@@ -241,7 +296,10 @@ def load_registration(
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'ct', f'{model}.nii.gz')
     if not os.path.exists(filepath):
-        raise ValueError(f"CT registration not found at '{filepath}'.")
+        if raise_error:
+            raise ValueError(f"CT registration not found at '{filepath}'.")
+        else:
+            return None
     moved_ct, _, _ = load_nifti(filepath)
 
     # Load transform.

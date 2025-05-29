@@ -49,11 +49,11 @@ class TrainingSample:
         return tuple(origin)
 
     @property
-    def size(self) -> ImageSize3D:
+    def size(self) -> Size3D:
         return self.input.shape
 
     @property
-    def spacing(self) -> ImageSpacing3D:
+    def spacing(self) -> Spacing3D:
         return self.__split.dataset.spacing
 
     @property

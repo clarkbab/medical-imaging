@@ -11,7 +11,7 @@ def snr(
     image: np.ndarray,
     label: np.ndarray,
     brain_label: np.ndarray,
-    spacing: typing.ImageSpacing3D,
+    spacing: typing.Spacing3D,
     d: float = 3) -> float:
     if image.shape != label.shape or image.shape != brain_label.shape:
         raise ValueError(f"Metric 'snr' expects images of equal shape. Got '{image.shape}', '{label.shape}', and '{brain_label.shape}'.")

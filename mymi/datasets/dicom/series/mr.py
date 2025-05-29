@@ -79,13 +79,13 @@ class MrSeries(DicomSeries):
         return self.__paths
 
     @property
-    def size(self) -> ImageSpacing3D:
+    def size(self) -> Spacing3D:
         if self.__size is None:
             self.__load_data()
         return self.__size
 
     @property
-    def spacing(self) -> ImageSpacing3D:
+    def spacing(self) -> Spacing3D:
         if self.__spacing is None:
             self.__load_data()
         return self.__spacing

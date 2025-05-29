@@ -1,4 +1,4 @@
-from mymi.transforms.crop import crop_foreground
+from mymi.transforms.crop import crop_foreground_vox
 import nibabel as nib
 import numpy as np
 import os
@@ -11,7 +11,6 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 from mymi import config
 from mymi.datasets import NiftiDataset
 from mymi.geometry import get_box, centre_of_extent
-from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import distances, dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
@@ -56,8 +55,8 @@ def get_nnunet_multi_segmenter_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground(pred, crop)
-            label = crop_foreground(label, crop)
+            pred = crop_foreground_vox(pred, crop)
+            label = crop_foreground_vox(label, crop)
 
         # Dice.
         metrics = {}
@@ -125,8 +124,8 @@ def get_nnunet_single_region_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground(pred, crop)
-            label = crop_foreground(label, crop)
+            pred = crop_foreground_vox(pred, crop)
+            label = crop_foreground_vox(label, crop)
 
         # Dice.
         metrics = {}

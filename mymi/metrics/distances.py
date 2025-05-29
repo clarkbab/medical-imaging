@@ -9,7 +9,7 @@ from mymi.utils import arg_to_list
 def distances(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     tol: Union[int, float, List[Union[int, float]]] = []) -> Dict[str, float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
@@ -31,7 +31,7 @@ def distances(
 
 def apl(
     surf_dists: Tuple[np.ndarray, np.array],
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     tol: float,
     unit: Literal['mm', 'voxels'] = 'mm') -> float:
     b_to_a_surf_dists = surf_dists[1]   # Only look at dists from 'GT' back to 'pred'. 
@@ -45,7 +45,7 @@ def apl(
 def extent_centre_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: ImageSpacing3D) -> Tuple[float, float, float]:
+    spacing: Spacing3D) -> Tuple[float, float, float]:
     """
     returns: the maximum distance between extent centres for each axis.
     args:
@@ -70,7 +70,7 @@ def extent_centre_distance(
 def extent_distance(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: ImageSpacing3D) -> Tuple[float, float, float]:
+    spacing: Spacing3D) -> Tuple[float, float, float]:
     """
     returns: the maximum distance between extent boundaries for each axis.
     args:
@@ -123,7 +123,7 @@ def get_encaps_dist_vox(
 def get_encaps_dist_mm(
     a: np.ndarray,
     b: np.ndarray,
-    spacing: ImageSpacing3D) -> Tuple[int, int, int]:
+    spacing: Spacing3D) -> Tuple[int, int, int]:
     """
     returns: an asymmetric distance measuring the encapsulation of b by a along each axis.
         A negative distance implies encapsulation.

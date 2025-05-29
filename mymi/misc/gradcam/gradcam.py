@@ -11,18 +11,18 @@ from mymi import logging
 from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop, centre_pad, crop, pad, resample
-from mymi.typing import ImageSpacing3D, ModelName, Regions
+from mymi.typing import Spacing3D, ModelName, Regions
 from mymi.utils import arg_to_list
 
 def get_segmenter_heatmap(
     input: np.ndarray,
-    input_spacing: ImageSpacing3D,
+    input_spacing: Spacing3D,
     model: Union[pl.LightningModule, ModelName],
     model_region: Regions,
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     target_region: str,
     layer: Union[str, List[str]],
-    layer_spacing: Union[ImageSpacing3D, List[ImageSpacing3D]],
+    layer_spacing: Union[Spacing3D, List[Spacing3D]],
     brain_label: Optional[np.ndarray] = None,
     device: torch.device = torch.device('cpu'),
     heatmap_fill: float = -1,

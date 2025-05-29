@@ -108,7 +108,7 @@ class TrainingDataset(Dataset):
         raise ValueError(f"Unknown sample ID '{id}'.")
     
     @property
-    def spacing(self) -> ImageSpacing3D:
+    def spacing(self) -> Spacing3D:
         return self.params['spacing']
 
     @property

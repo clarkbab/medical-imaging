@@ -6,7 +6,6 @@ from typing import *
 
 from mymi.datasets import NiftiDataset
 from mymi.metrics import dice, distances, tre
-from mymi import logging
 from mymi.predictions.datasets.nifti import load_registration
 from mymi.regions import regions_to_list
 from mymi.typing import *
@@ -54,7 +53,10 @@ def get_registration_landmarks_evaluation(
     model: str) -> List[Dict[str, float]]:
 
     # Load moved (predicted) region data.
-    _, _, _, moved_landmarks = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, landmarks=landmarks)
+    res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False)
+    if res is None:
+        return {}
+    _, _, _, moved_landmarks = res
 
     # Load moving landmarks.
     set = NiftiDataset(dataset)
@@ -82,7 +84,10 @@ def get_registration_region_evaluation(
     model: str) -> List[Dict[str, float]]:
 
     # Load moved (predicted) region data.
-    _, _, moved_region_data, _ = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, regions=region)
+    res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False, regions=region)
+    if res is None:
+        return {}
+    _, _, moved_region_data, _ = res
 
     # Load fixed region data.
     fixed_study = NiftiDataset(dataset).patient(fixed_pat_id).study(fixed_study_id)
@@ -101,8 +106,8 @@ def get_registration_region_evaluation(
 
     #     # Crop pred/label foreground voxels.
     #     crop = ((0, 0, z_min), label.shape)
-    #     pred = crop_foreground(pred, crop)
-    #     label = crop_foreground(label, crop)
+    #     pred = crop_foreground_vox(pred, crop)
+    #     label = crop_foreground_vox(label, crop)
 
     # Dice.
     metrics = {}
@@ -130,62 +135,64 @@ def get_registration_region_evaluation(
     
 def create_registrations_evaluation(
     dataset: str,
-    model: str,
+    models: Union[str, List[str]],
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
     regions: Optional[Regions] = 'all',
-    splits: Optional[Splits] = None) -> None:
-    logging.arg_log('Evaluating NIFTI registration', ('dataset', 'model', 'landmarks', 'region'), (dataset, model, landmarks, regions))
+    splits: Optional[Splits] = 'all') -> None:
+    models = arg_to_list(models, str)
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients(splits=splits)
-    if regions is not None:
-        regions = regions_to_list(regions, literals={ 'all': set.list_regions })
 
-        cols = {
-            'dataset': str,
-            'fixed-patient-id': str,
-            'fixed-study-id': str,
-            'moving-patient-id': str,
-            'moving-study-id': str,
-            'region': str,
-            'model': str,
-            'metric': str,
-            'value': float
-        }
-        df = pd.DataFrame(columns=cols.keys())
+    for m in models:
+        if regions is not None:
+            regions = regions_to_list(regions, literals={ 'all': set.list_regions })
 
-        for r in tqdm(regions):
-            for p in tqdm(pat_ids, leave=False):
-                # Skip if either moving/fixed study is missing the region.
-                moving_study = set.patient(p).study(moving_study_id)
-                fixed_study = set.patient(p).study(fixed_study_id)
-                if not moving_study.has_regions(r) or not fixed_study.has_regions(r):
-                    continue
+            cols = {
+                'dataset': str,
+                'fixed-patient-id': str,
+                'fixed-study-id': str,
+                'moving-patient-id': str,
+                'moving-study-id': str,
+                'region': str,
+                'model': str,
+                'metric': str,
+                'value': float
+            }
+            df = pd.DataFrame(columns=cols.keys())
 
-                # Get metrics per region.
-                metrics = get_registration_region_evaluation(dataset, p, fixed_study_id, p, moving_study_id, r, model)
-                for m, v in metrics.items():
-                    data = {
-                        'dataset': dataset,
-                        'fixed-patient-id': p,
-                        'fixed-study-id': fixed_study_id,
-                        'moving-patient-id': p,
-                        'moving-study-id': moving_study_id,
-                        'region': r,
-                        'model': model,
-                        'metric': m,
-                        'value': v
-                    }
-                    df = append_row(df, data)
+            for r in tqdm(regions):
+                for p in tqdm(pat_ids, leave=False):
+                    # Skip if either moving/fixed study is missing the region.
+                    moving_study = set.patient(p).study(moving_study_id)
+                    fixed_study = set.patient(p).study(fixed_study_id)
+                    if not moving_study.has_regions(r) or not fixed_study.has_regions(r):
+                        continue
 
-        if len(df) > 0:
-            # Save evaluation.
-            df = df.astype(cols)
-            filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'regions.csv')
-            save_files_csv(df, filepath, overwrite=True)
+                    # Get metrics per region.
+                    metrics = get_registration_region_evaluation(dataset, p, fixed_study_id, p, moving_study_id, r, m)
+                    for met, v in metrics.items():
+                        data = {
+                            'dataset': dataset,
+                            'fixed-patient-id': p,
+                            'fixed-study-id': fixed_study_id,
+                            'moving-patient-id': p,
+                            'moving-study-id': moving_study_id,
+                            'region': r,
+                            'model': m,
+                            'metric': met,
+                            'value': v
+                        }
+                        df = append_row(df, data)
+
+            if len(df) > 0:
+                # Save evaluation.
+                df = df.astype(cols)
+                filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'regions.csv')
+                save_csv(df, filepath, overwrite=True)
 
     if landmarks is not None:
         cols = {
@@ -211,16 +218,16 @@ def create_registrations_evaluation(
                 continue
 
             # Get metrics per region.
-            metrics = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmarks, model)
-            for m, v in metrics.items():
+            metrics = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmarks, m)
+            for met, v in metrics.items():
                 data = {
                     'dataset': dataset,
                     'fixed-patient-id': p,
                     'fixed-study-id': fixed_study_id,
                     'moving-patient-id': p,
                     'moving-study-id': moving_study_id,
-                    'model': model,
-                    'metric': m,
+                    'model': m,
+                    'metric': met,
                     'value': v
                 }
                 df = append_row(df, data)
@@ -228,5 +235,5 @@ def create_registrations_evaluation(
         if len(df) > 0:
             # Save evaluation.
             df = df.astype(cols)
-            filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', model, 'landmarks.csv')
+            filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'landmarks.csv')
             save_files_csv(df, filepath, overwrite=True)

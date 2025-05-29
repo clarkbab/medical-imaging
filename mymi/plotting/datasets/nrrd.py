@@ -13,20 +13,11 @@ from ..plotting import plot_patients_matrix
 MODEL_SELECT_PATTERN = r'^model:([0-9]+)$'
 MODEL_SELECT_PATTERN_MULTI = r'^model(:([0-9]+))?:([a-zA-Z_]+)$'
 
-def plot_dataset_histogram(
-    dataset: str,
-    n_patients: int = 10) -> None:
-    set = NrrdDataset(dataset)
-    pat_ids = set.list_patients()
-    pat_ids = pat_ids[:n_patients]
-    ct_datas = [set.patient(pat_id).ct_data for pat_id in pat_ids]
-    plot_histogram(ct_datas)
-
 def plot_patients(
     dataset: str,
     pat_ids: PatientIDs,
     centre: Optional[str] = None,
-    crop: Optional[Union[str, Box2D]] = None,
+    crop: Optional[Union[str, PixelBox]] = None,
     landmarks: Optional[Landmarks] = None,
     region_labels: Dict[str, str] = {},
     regions: Optional[Regions] = None,
@@ -121,7 +112,7 @@ def plot_heatmap(
     region: str,
     layer: int,
     centre: Optional[str] = None,
-    crop: Optional[Union[str, Box2D]] = None,
+    crop: Optional[Union[str, PixelBox]] = None,
     **kwargs) -> None:
     # Load data.
     set = NrrdDataset(dataset)

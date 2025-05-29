@@ -9,14 +9,13 @@ from torchio import LabelMap, ScalarImage, Subject
 from tqdm import tqdm
 from typing import Callable, List, Optional, Tuple, Union
 
-from mymi.typing import ImageSpacing3D, Region, Regions
+from mymi.typing import Spacing3D, Region, Regions
 from mymi import datasets as ds
 from mymi.datasets.training import TrainingDataset
-from mymi.geometry import get_centre
 from mymi import logging
 from torchio.transforms import Transform
 from mymi.regions import regions_to_list
-from mymi.transforms import centre_crop_or_pad
+from mymi.transforms import centre_crop_or_pad_vox
 from mymi.utils import arg_to_list
 
 from .random_sampler import RandomSampler
@@ -40,14 +39,14 @@ def collate_fn(batch) -> List[Tensor]:
     for desc, input, label, mask, weight in batch:
         descs.append(desc)
         input_cs = []
-        for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad' hasn't been written.
-            input_c = centre_crop_or_pad(input[c], max_size)
+        for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad_vox, hasn't been written.
+            input_c = centre_crop_or_pad_vox(input[c], max_size)
             input_cs.append(input_c)
         input = np.stack(input_cs, axis=0)
         inputs.append(input)
         label_cs = []
         for c in range(len(label)): 
-            label_c = centre_crop_or_pad(label[c], max_size)
+            label_c = centre_crop_or_pad_vox(label[c], max_size)
             label_cs.append(label_c)
         label = np.stack(label_cs, axis=0)
         labels.append(label)
@@ -455,7 +454,7 @@ class TrainingSet(Dataset):
         load_origin: bool = False,
         preload_data: bool = False,
         random_seed: float = 0,
-        spacing: Optional[ImageSpacing3D] = None,
+        spacing: Optional[Spacing3D] = None,
         transform: torchio.transforms.Transform = None):
         self.__class_weights = class_weights
         self.__data_hook = data_hook

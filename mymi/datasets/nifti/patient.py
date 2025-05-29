@@ -36,15 +36,24 @@ class NiftiPatient:
             raise ValueError(f"Patient '{self}' not found. Filepath: '{self.__path}'.")
 
     @property
-    def ct_data(self) -> np.ndarray:
-        return self.default_study.ct_data
-
-    @property
     def ct_affine(self) -> np.ndarray:
         return self.default_study.ct_affine
 
     @property
-    def ct_offset(self) -> Voxel:
+    def ct_data(self) -> Optional[Image]:
+        return self.default_study.ct_data
+
+    def ct_extent(
+        self,
+        **kwargs) -> Optional[Union[ImageSizeMM3D, Size3D]]:
+        return self.default_study.ct_extent(**kwargs)
+
+    @property
+    def ct_fov(self) -> Optional[ImageFOV3D]:
+        return self.default_study.ct_fov
+
+    @property
+    def ct_offset(self) -> Optional[Point3D]:
         return self.default_study.ct_offset
 
     @property
@@ -52,11 +61,11 @@ class NiftiPatient:
         return self.default_study.ct_path
 
     @property
-    def ct_size(self) -> np.ndarray:
+    def ct_size(self) -> Optional[Size3D]:
         return self.default_study.ct_size
 
     @property
-    def ct_spacing(self) -> ImageSpacing3D:
+    def ct_spacing(self) -> Optional[Spacing3D]:
         return self.default_study.ct_spacing
     
     @property

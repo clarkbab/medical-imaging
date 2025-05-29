@@ -55,14 +55,14 @@ class DicomStudy:
         return def_ct.offset
 
     @property
-    def ct_size(self) -> Optional[ImageSize3D]:
+    def ct_size(self) -> Optional[Size3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None
         return def_ct.size
 
     @property
-    def ct_spacing(self) -> Optional[ImageSpacing3D]:
+    def ct_spacing(self) -> Optional[Spacing3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None
@@ -178,14 +178,14 @@ class DicomStudy:
         return def_mr.offset
 
     @property
-    def mr_size(self) -> Optional[ImageSize3D]:
+    def mr_size(self) -> Optional[Size3D]:
         def_mr = self.default_mr
         if def_mr is None:
             return None
         return def_mr.size
 
     @property
-    def mr_spacing(self) -> Optional[ImageSpacing3D]:
+    def mr_spacing(self) -> Optional[Spacing3D]:
         def_mr = self.default_mr
         if def_mr is None:
             return None

@@ -24,7 +24,7 @@ def convert_to_registration_training_holdout(
     norm_stdev: Optional[float] = None,
     regions: Optional[Regions] = 'all',
     size_factor: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     logging.arg_log('Converting NIFTI dataset to registration holdout TRAINING', ('dataset', 'spacing', 'regions', 'landmarks'), (dataset, spacing, regions, landmarks))
     start = time()
@@ -275,7 +275,7 @@ def convert_to_segmentation_training_holdout(
     norm_stdev: Optional[float] = None,
     regions: Optional[Regions] = 'all',
     size_factor: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     start = time()
     logging.arg_log('Converting NIFTI dataset to holdout TRAINING', ('dataset', 'spacing', 'regions'), (dataset, spacing, regions))

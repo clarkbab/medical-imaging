@@ -14,7 +14,6 @@ from uuid import uuid1
 from mymi import config
 from mymi.datasets.nrrd import NrrdDataset
 from mymi.geometry import extent, centre_of_extent, extent_width_mm
-from mymi.loaders import Loader
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
 from mymi.models.lightning_modules import Localiser
@@ -494,80 +493,6 @@ def load_ct_summary(dataset: str) -> pd.DataFrame:
     if not os.path.exists(filepath):
         raise ValueError(f"CT summary report doesn't exist for dataset '{dataset}'. Filepath: {filepath}.")
     return pd.read_csv(filepath)
-
-def create_segmenter_prediction_figures(
-    dataset: Union[str, List[str]],
-    region: str,
-    localiser: Union[ModelName, List[ModelName]],
-    segmenter: Union[ModelName, List[ModelName]],
-    n_folds: Optional[int] = 5,
-    test_fold: Optional[int] = None,
-    view: Union[Axis, List[Axis]] = list(range(3))) -> None:
-    datasets = arg_to_list(dataset, str)
-    views = arg_to_list(view, str)
-    logging.info(f"Creating segmenter prediction figures for datasets '{datasets}', region '{region}', test fold '{test_fold}', localiser '{localiser}', segmenter '{segmenter}' and view '{view}'.")
-
-    # Create test loader.
-    _, _, test_loader = Loader.build_loaders(datasets, region, n_folds=n_folds, test_fold=test_fold)
-
-    # Set PDF margins.
-    img_t_margin = 35
-    img_l_margin = 5
-    img_width = 150
-    img_height = 200
-
-    # Create PDF.
-    pdf = FPDF()
-    pdf.set_section_title_styles(
-        TitleStyle(
-            font_family='Times',
-            font_style='B',
-            font_size_pt=24,
-            color=0,
-            t_margin=3,
-            l_margin=12,
-            b_margin=0
-        ),
-        TitleStyle(
-            font_family='Times',
-            font_style='B',
-            font_size_pt=18,
-            color=0,
-            t_margin=16,
-            l_margin=12,
-            b_margin=0
-        )
-    ) 
-
-    # Make predictions.
-    for pat_desc_b in tqdm(iter(test_loader)):
-        if type(pat_desc_b) == torch.Tensor:
-            pat_desc_b = pat_desc_b.tolist()
-        for pat_desc in pat_desc_b:
-            dataset, pat_id = pat_desc.split(':')
-
-            # Add patient.
-            pdf.add_page()
-            pdf.start_section(f'{dataset} - {pat_id}')
-
-            # Create images.
-            img_coords = (
-                (img_l_margin, img_t_margin),
-                (img_l_margin + img_width, img_t_margin),
-                (img_l_margin, img_t_margin + img_height)
-            )
-            for view, page_coord in zip(views, img_coords):
-                # Add image to report.
-                filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                plot_segmenter_predictions(dataset, pat_id, localiser, segmenter, centre=region, crop=region, savepath=filepath, show=False, show_legend=False, view=view)
-                pdf.image(filepath, *page_coord, w=img_width, h=img_height)
-                os.remove(filepath)
-
-    # Save PDF.
-    # We have to 'encode' localisers/segmenters because they could be a list of models.
-    filepath = os.path.join(config.directories.reports, 'prediction-figures', 'segmenter', encode(datasets), region, encode(localiser), encode(segmenter), f'figures-fold-{test_fold}.pdf') 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    pdf.output(filepath, 'F')
 
 def create_region_figures(
     dataset: str,

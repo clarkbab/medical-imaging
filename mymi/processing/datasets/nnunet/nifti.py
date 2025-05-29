@@ -7,13 +7,13 @@ from mymi import logging
 from mymi.processing import one_hot_encode
 from mymi.transforms import crop, resample
 from mymi.typing import *
-from mymi.utils import load_nifti, save_nifti
+from mymi.utils import *
 
 def convert_predictions_to_nifti_single_region(
     dataset: str,
     dataset_id: int,
     region: Region,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting from nnU-Net single-region predictions to NIFTI', ('dataset',), (dataset,))
 
     # Load predictions.
@@ -46,13 +46,13 @@ def convert_predictions_to_nifti_single_region(
         # Save image.
         filepath = os.path.join(set.path, 'data', 'predictions', pat_id, 'study_0', 'regions', 'series_1', region, 'nnunet.nii.gz')
         label = label.argmax(0).astype(np.bool_)
-        save_nifti(label, orig_spacing, orig_offset, filepath)
+        save_nifti(label, filepath, spacing=orig_spacing, offset=orig_offset)
 
 def convert_predictions_to_nifti_multi_region(
     dataset: str,
     dataset_id: int,
     regions: Regions,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log('Converting from nnU-Net single-region predictions to NIFTI', ('dataset',), (dataset,))
 
     # Load predictions.
@@ -85,4 +85,4 @@ def convert_predictions_to_nifti_multi_region(
             filepath = os.path.join(set.path, 'data', 'predictions', p, 'study_0', 'regions', 'series_1', r, 'nnunet-multi.nii.gz')
             channel = i + 1 
             rlabel = label[channel].astype(np.bool_)
-            save_nifti(rlabel, orig_spacing, orig_offset, filepath)
+            save_nifti(rlabel, filepath, spacing=orig_spacing, offset=orig_offset)

@@ -63,11 +63,11 @@ class RtDoseFile(DicomFile):
         return self.__series
 
     @property
-    def size(self) -> ImageSize3D:
+    def size(self) -> Size3D:
         return self.data.shape
 
     @property
-    def spacing(self) -> ImageSpacing3D:
+    def spacing(self) -> Spacing3D:
         if not self.__loaded_data:
             self.__load_rtdose_data()
             self.__loaded_data = True

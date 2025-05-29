@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_dataset_registrations
+from mymi.predictions.datasets.nifti import create_registrations
 from mymi.utils import grid_arg
 
 loss_lambda = grid_arg('loss_lambda', 0.02)
@@ -11,4 +11,4 @@ kwargs = dict(
     splits='test',
 )
 
-create_dataset_registrations(dataset, project, model, model_spacing, **kwargs)
+create_registrations(dataset, project, model, model_spacing, **kwargs)

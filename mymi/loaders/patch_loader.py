@@ -23,7 +23,7 @@ class PatchLoader:
         n_workers: int = 1,
         p_foreground: float = 1,
         shuffle: bool = True,
-        spacing: typing.ImageSpacing3D = None,
+        spacing: typing.Spacing3D = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None) -> torch.utils.data.DataLoader:
         if type(partitions) == TrainingPartition:
@@ -43,7 +43,7 @@ class LoaderDataset(Dataset):
         half_precision: bool = True,
         n_samples: Optional[int] = None,
         p_foreground: float = 1,
-        spacing: typing.ImageSpacing3D = None,
+        spacing: typing.Spacing3D = None,
         transform: torchio.transforms.Transform = None):
         self._half_precision = half_precision
         self._p_foreground = p_foreground
@@ -164,8 +164,8 @@ class LoaderDataset(Dataset):
         centre = fg_voxels[fg_voxel_idx]
 
         # Extract patch around centre.
-        input = point_crop_or_pad(input, self._patch_size, centre, fill=input.min())        
-        label = point_crop_or_pad(label, self._patch_size, centre)
+        input = point_crop_or_pad_vox(input, self._patch_size, centre, fill=input.min())        
+        label = point_crop_or_pad_vox(label, self._patch_size, centre)
 
         return input, label
 
@@ -177,7 +177,7 @@ class LoaderDataset(Dataset):
         centre = tuple(map(np.random.randint, self._patch_size))
 
         # Extract patch around centre.
-        input = point_crop_or_pad(input, self._patch_size, centre, fill=input.min())        
-        label = point_crop_or_pad(label, self._patch_size, centre)
+        input = point_crop_or_pad_vox(input, self._patch_size, centre, fill=input.min())        
+        label = point_crop_or_pad_vox(label, self._patch_size, centre)
 
         return input, label

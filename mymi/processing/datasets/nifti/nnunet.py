@@ -1,6 +1,5 @@
 import json
 import os
-import nibabel as nib
 import shutil
 from tqdm import tqdm
 from typing import *
@@ -9,10 +8,9 @@ from mymi import config
 from mymi.datasets import NiftiDataset
 from mymi.loaders import get_holdout_split
 from mymi import logging
-from mymi.processing import one_hot_encode
-from mymi.transforms import crop, resample
+from mymi.transforms import resample
 from mymi.typing import *
-from mymi.utils import load_nifti, save_nifti
+from mymi.utils import *
 
 # This is nnU-Net's v1 data format.
 def convert_to_nnunet_single_region_v1(
@@ -23,7 +21,7 @@ def convert_to_nnunet_single_region_v1(
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
-    spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     logging.arg_log('Converting NIFTI dataset to single-region NNUNET (v1)', ('dataset', 'region'), (dataset, region))
 
@@ -81,7 +79,7 @@ def convert_to_nnunet_single_region_v1(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, filepath, spacing=spacing)
 
             # Resample label.
             if spacing is not None:
@@ -89,7 +87,7 @@ def convert_to_nnunet_single_region_v1(
 
             # Save data.
             filepath = os.path.join(labelspath, f'{p}.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, filepath, spacing=spacing)
 
     # Create 'dataset.json'.
     train_items = [{ "image": f"./imagesTr/{p}.nii.gz", "label": f"./labelsTr/{p}.nii.gz"} for p in t]
@@ -118,7 +116,7 @@ def convert_to_nnunet_multi_region(
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
-    spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     logging.arg_log('Converting NIFTI dataset to multi-region NNUNET', ('dataset',), (dataset,))
 
@@ -170,7 +168,7 @@ def convert_to_nnunet_multi_region(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, filepath, spacing=spacing)
 
             # Resample label.
             if spacing is not None:
@@ -183,7 +181,7 @@ def convert_to_nnunet_multi_region(
                 region_class = regions.index(r) + 1
                 label[d == 1] = region_class
             filepath = os.path.join(labelspath, f'{p}.nii.gz')
-            save_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, filepath, spacing=spacing)
 
     # Create 'dataset.json'.
     dataset_json = {
@@ -210,7 +208,7 @@ def convert_to_nnunet_single_region(
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
-    spacing: Optional[ImageSpacing3D] = None,
+    spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     logging.arg_log('Converting NIFTI dataset to single-region NNUNET', ('dataset', 'region'), (dataset, region))
 
@@ -268,7 +266,7 @@ def convert_to_nnunet_single_region(
 
             # Save input data.
             filepath = os.path.join(path, f'{p}_0000.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_nifti(ct_data, spacing, (0, 0, 0), filepath)
+            save_nifti(ct_data, filepath, spacing=spacing)
 
             # Resample label.
             if spacing is not None:
@@ -276,7 +274,7 @@ def convert_to_nnunet_single_region(
 
             # Save label data.
             filepath = os.path.join(labelspath, f'{p}.nii.gz')   # '0000' indicates a single channel (CT only).
-            save_nifti(label, spacing, (0, 0, 0), filepath)
+            save_nifti(label, filepath, spacing=spacing)
 
             # Increment training numbers.
             if p in t:

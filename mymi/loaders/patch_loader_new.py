@@ -21,7 +21,7 @@ class PatchLoader:
         n_train: Optional[int] = None,
         n_workers: int = 1,
         random_seed: int = 42,
-        spacing: typing.ImageSpacing3D = None,
+        spacing: typing.Spacing3D = None,
         test_fold: Optional[int] = None,
         transform: torchio.transforms.Transform = None,
         p_val: float = .2) -> Union[Tuple[DataLoader, DataLoader], Tuple[DataLoader, DataLoader, DataLoader]]:
@@ -97,7 +97,7 @@ class TrainingDataset(Dataset):
         region: str,
         samples: List[Tuple[int, int]],
         half_precision: bool = True,
-        spacing: typing.ImageSpacing3D = None,
+        spacing: typing.Spacing3D = None,
         transform: torchio.transforms.Transform = None):
         self._datasets = datasets
         self._half_precision = half_precision

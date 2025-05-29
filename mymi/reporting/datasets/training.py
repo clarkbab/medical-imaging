@@ -11,7 +11,6 @@ from uuid import uuid1
 from mymi import config
 from mymi.datasets import TrainingDataset
 from mymi.geometry import extent, centre_of_extent
-from mymi.loaders import Loader
 from mymi import logging
 from mymi.processing import get_object, one_hot_encode
 from mymi.plotting.dataset.training import plot_patient

@@ -6,7 +6,7 @@ from mymi import typing
 
 def volume(
     a: np.ndarray,
-    spacing: typing.ImageSpacing3D) -> float:
+    spacing: typing.Spacing3D) -> float:
     if a.dtype != np.bool_:
         raise ValueError(f"Metric 'volume' expects boolean array. Got '{a.dtype}'.")
 

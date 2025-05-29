@@ -83,5 +83,6 @@ class RegionNiftiData(NiftiData):
     def region_path(
         self,
         region: Region) -> str:
+        assert self.has_regions(region)
         return os.path.join(self.__path, f'{region}.nii.gz')
     

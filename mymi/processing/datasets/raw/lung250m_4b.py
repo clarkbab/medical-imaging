@@ -33,7 +33,7 @@ def convert_lung250m_4b_to_nifti() -> None:
     test_df = pd.DataFrame(np.transpose([test_ids, ['test'] * len(test_ids)]), columns=['patient-id', 'split'])
     df = pd.concat((train_df, val_df, test_df), axis=0)
     filepath = os.path.join(set.path, 'holdout-split.csv')
-    save_files_csv(df, filepath)
+    save_csv(df, filepath)
 
     # Load manual landmarks.
     filepath = os.path.join(rset.path, 'lms_validation.pth')
@@ -57,7 +57,7 @@ def convert_lung250m_4b_to_nifti() -> None:
         offset = (0, 0, 0)      # Set this to zero as it doesn't really matter.
         filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(ct_data, fixed_spacing, offset, filepath)
+        save_nifti(ct_data, filepath, spacing=fixed_spacing, offset=offset)
 
         # Copy moving image data.
         filepath = os.path.join(rset.path, f'images{split}', f'{p}_{moving_suffix}.nii.gz')
@@ -69,37 +69,37 @@ def convert_lung250m_4b_to_nifti() -> None:
         offset = (0, 0, 0)      # Set this to zero as it doesn't really matter.
         filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(ct_data, moving_spacing, offset, filepath)
+        save_nifti(ct_data, filepath, spacing=moving_spacing, offset=offset)
 
         # Copy lung masks.
         filepath = os.path.join(rset.path, f'masks{split}', f'{p}_{fixed_suffix}.nii.gz')
         lung_data, lung_spacing, lung_offset = load_nifti(filepath)
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(lung_data, lung_spacing, lung_offset, destpath)
+        save_nifti(lung_data, destpath, spacing=lung_spacing, offset=lung_offset)
 
         filepath = os.path.join(rset.path, f'masks{split}', f'{p}_{moving_suffix}.nii.gz')
         lung_data, lung_spacing, lung_offset = load_nifti(filepath)
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(lung_data, lung_spacing, lung_offset, destpath)
+        save_nifti(lung_data, destpath, spacing=lung_spacing, offset=lung_offset)
 
         # Copy artery/vein segmentations - guessing arteries are first...
         filepath = os.path.join(rset.path, f'seg{split}', f'{p}_{fixed_suffix}.nii.gz')
         seg_data, seg_spacing, seg_offset = load_nifti(filepath)
         artery_data = seg_data == 1
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Arteries.nii.gz')
-        save_nifti(artery_data, seg_spacing, seg_offset, destpath)
+        save_nifti(artery_data, destpath, spacing=seg_spacing, offset=seg_offset)
         vein_data = seg_data == 2
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Veins.nii.gz')
-        save_nifti(vein_data, seg_spacing, seg_offset, destpath)
+        save_nifti(vein_data, destpath, spacing=seg_spacing, offset=seg_offset)
 
         filepath = os.path.join(rset.path, f'seg{split}', f'{p}_{moving_suffix}.nii.gz')
         seg_data, seg_spacing, seg_offset = load_nifti(filepath)
         artery_data = seg_data == 1
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Arteries.nii.gz')
-        save_nifti(artery_data, seg_spacing, seg_offset, destpath)
+        save_nifti(artery_data, destpath, spacing=seg_spacing, offset=seg_offset)
         vein_data = seg_data == 2
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Veins.nii.gz')
-        save_nifti(vein_data, seg_spacing, seg_offset, destpath)
+        save_nifti(vein_data, destpath, spacing=seg_spacing, offset=seg_offset)
 
         # Copy landmarks.
         if split == 'Tr':
@@ -134,6 +134,6 @@ def convert_lung250m_4b_to_nifti() -> None:
 
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'landmarks', 'series_1.csv')
-            save_files_csv(fixed_points, filepath, header=True, index=False)
+            save_csv(fixed_points, filepath, header=True, index=False)
             filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'landmarks', 'series_1.csv')
-            save_files_csv(moving_points, filepath, header=True, index=False)
+            save_csv(moving_points, filepath, header=True, index=False)

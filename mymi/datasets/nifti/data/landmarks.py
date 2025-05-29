@@ -31,6 +31,7 @@ class LandmarkNiftiData(NiftiData):
 
     def data(
         self,
+        data_only: bool = False,
         landmarks: Landmarks = 'all',
         use_patient_coords: bool = True,
         **kwargs) -> LandmarkData:
@@ -63,7 +64,10 @@ class LandmarkNiftiData(NiftiData):
         if 'study-id' not in lm_df.columns:
             lm_df.insert(1, 'study-id', self.study.id)
 
-        return lm_df
+        if data_only:
+            return lm_df[range(3)].to_numpy().astype(np.float32)
+        else:
+            return lm_df
     
     # Returns 'True' if has at least one of the passed 'regions'.
     def has_landmarks(

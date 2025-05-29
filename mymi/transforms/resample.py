@@ -10,13 +10,15 @@ from mymi.utils import *
 from .shared import handle_non_spatial_dims
 
 def __spatial_resample(
-    data: np.ndarray,
+    data: Image,
+    fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Point3D] = None,
     output_offset: Optional[Point3D] = None,
-    output_size: Optional[ImageSize3D] = None,
-    output_spacing: Optional[ImageSpacing3D] = None,
+    output_size: Optional[Size3D] = None,
+    output_spacing: Optional[Spacing3D] = None,
     return_transform: bool = False,
-    spacing: Optional[ImageSpacing3D] = None) -> Union[np.ndarray, Tuple[np.ndarray, sitk.Transform]]:
+    spacing: Optional[Spacing3D] = None,
+    transform: Optional[sitk.Transform] = None) -> Union[Image, Tuple[Image, sitk.Transform]]:
     """
     output_offset: 
         - if None, will take on value of 'offset'.
@@ -33,83 +35,79 @@ def __spatial_resample(
     n_dims = len(data.shape)
     assert n_dims in (2, 3)
 
-    # Convert to SimpleITK ordering (z, y, x).
-    if offset is not None:
-        offset = tuple(reversed(offset))
-    if output_offset is not None:
-        output_offset = tuple(reversed(output_offset))
-    if output_spacing is not None:
-        output_spacing = tuple(reversed(output_spacing))
-    if output_size is not None:
-        output_size = tuple(reversed(output_size))
-    if spacing is not None:
-        spacing = tuple(reversed(spacing))
-
-    # Convert datatypes.
+    # Convert to sitk datatypes.
+    is_boolean = data.dtype == bool
+    if is_boolean:
+        data = data.astype(np.uint8) 
     if spacing is not None:
         spacing = tuple(float(s) for s in spacing)
     if output_spacing is not None:
         output_spacing = tuple(float(s) for s in output_spacing)
 
-    # Convert boolean data to sitk-friendly type.
-    boolean = data.dtype == bool
-    if boolean:
-        data = data.astype('uint8') 
-
     # Create 'sitk' image and set parameters.
-    image = sitk.GetImageFromArray(data)
-    if offset is not None:
-        image.SetOrigin(offset)
+    kwargs = {}
     if spacing is not None:
-        image.SetSpacing(spacing)
+        kwargs['spacing'] = spacing
+    if offset is not None:
+        kwargs['offset'] = offset
+    img = to_sitk_image(data, **kwargs)
 
     # Create resample filter.
-    resample = sitk.ResampleImageFilter()
-    resample.SetDefaultPixelValue(float(data.min()))
-    if boolean:
-        resample.SetInterpolator(sitk.sitkNearestNeighbor)
+    filter = sitk.ResampleImageFilter()
+    if fill == 'min':
+        fill = float(data.min())
+    filter.SetDefaultPixelValue(fill)
+    if is_boolean:
+        filter.SetInterpolator(sitk.sitkNearestNeighbor)
     if output_offset is not None:
-        resample.SetOutputOrigin(output_offset)
+        filter.SetOutputOrigin(output_offset)
     else:
-        resample.SetOutputOrigin(image.GetOrigin())
+        filter.SetOutputOrigin(img.GetOrigin())
     if output_spacing is not None:
-        resample.SetOutputSpacing(output_spacing)
+        filter.SetOutputSpacing(output_spacing)
     else:
-        resample.SetOutputSpacing(image.GetSpacing())
+        filter.SetOutputSpacing(img.GetSpacing())
     if output_size is not None:
-        resample.SetSize(output_size)
+        filter.SetSize(output_size)
     else:
-        scaling = np.array(image.GetSpacing()) / resample.GetOutputSpacing()
+        # Choose output size that maintains the image field-of-view.
+        size_factor = np.array(img.GetSpacing()) / filter.GetOutputSpacing()
 
         # Magic formula is: n_new = f * (n - 1) + 1
-        size = tuple(int(np.ceil(f * (n - 1) + 1)) for f, n in zip(scaling, image.GetSize()))
-        resample.SetSize(size)
+        # I think I worked this out by trial and error, but what's going on here is:
+        # (n - 1) is the number of intervals between voxels (voxel fov), multiplied by the size
+        # factor gives the "voxel fov" of the new image. Plus one to get number of voxels.
+        # E.g. downsampling by a factor of 2, from 5 voxels: f = 0.5, 0.5 * (5 - 1) + 1 = 3.
+        size = tuple(int(np.ceil(f * (s - 1) + 1)) for f, s in zip(size_factor, img.GetSize()))
+        filter.SetSize(size)
+    if transform is not None:
+        filter.SetTransform(transform)
 
     # Perform resampling.
-    image = resample.Execute(image)
+    img = filter.Execute(img)
 
     # Get output data.
-    output = sitk.GetArrayFromImage(image)
+    image, _, _ = from_sitk_image(img)
 
     # Convert back to boolean.
-    if boolean:
-        output = output.astype(bool)
+    if is_boolean:
+        image = image.astype(bool)
 
     if return_transform:
-        return output, resample.GetTransform()
+        return image, filter.GetTransform()
     else:
-        return output
+        return image
 
 @delegates(__spatial_resample)
 def resample(
-    data: np.ndarray,
-    *args, **kwargs) -> np.ndarray:
+    data: Images,
+    *args, **kwargs) -> Images:
     return handle_non_spatial_dims(__spatial_resample, data, *args, **kwargs)
 
 def resample_box_3D(
-    bounding_box: Box3D,
-    spacing: ImageSpacing3D,
-    new_spacing: ImageSpacing3D) -> Box3D:
+    bounding_box: VoxelBox,
+    spacing: Spacing3D,
+    new_spacing: Spacing3D) -> VoxelBox:
     """
     returns: a bounding box in resampled coordinates.
     args:
@@ -138,8 +136,8 @@ def resample_landmarks(
     landmarks: pd.DataFrame,
     offset: Point3D = (0, 0, 0),
     output_offset: Point3D = (0, 0, 0),
-    output_spacing: ImageSpacing3D = (1, 1, 1),
-    spacing: ImageSpacing3D = (1, 1, 1)) -> pd.DataFrame:
+    output_spacing: Spacing3D = (1, 1, 1),
+    spacing: Spacing3D = (1, 1, 1)) -> pd.DataFrame:
     raise MemoryError("You forgot that this function makes no sense. Landmarks are not images, they're points in physical space.")
 
     # Transform landmarks.

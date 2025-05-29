@@ -39,11 +39,13 @@ class NiftiStudy:
         return def_ct.data
 
     @property
-    def ct_extrema(self) -> Optional[Point3D]:
+    def ct_extent(
+        self,
+        **kwargs) -> Optional[Point3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None
-        return def_ct.extrema
+        return def_ct.extent(**kwargs)
 
     @property
     def ct_fov(self) -> Optional[ImageFOV3D]:
@@ -64,14 +66,14 @@ class NiftiStudy:
         return self.default_ct.path
 
     @property
-    def ct_size(self) -> Optional[ImageSize3D]:
+    def ct_size(self) -> Optional[Size3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None
         return def_ct.size
 
     @property
-    def ct_spacing(self) -> Optional[ImageSpacing3D]:
+    def ct_spacing(self) -> Optional[Spacing3D]:
         def_ct = self.default_ct
         if def_ct is None:
             return None

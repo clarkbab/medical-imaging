@@ -18,14 +18,14 @@ from mymi.datasets.training import create as create_training, exists as exists_t
 from mymi.geometry import extent
 from mymi import logging
 from mymi.regions import regions_to_list, to_255
-from mymi.transforms import crop_foreground, resample
+from mymi.transforms import crop_foreground_vox, resample
 from mymi.typing import *
 from mymi.utils import *
 
 def convert_brain_crop_to_training(
     set: 'Dataset',
     create_data: bool = True,
-    crop_mm: Optional[Union[BoxMM3D, ImageSizeMM3D]] = None,
+    crop_mm: Optional[Union[Point3DBox, ImageSizeMM3D]] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -33,7 +33,7 @@ def convert_brain_crop_to_training(
     recreate_dataset: bool = True,
     region: Optional[Regions] = None,
     round_dp: Optional[int] = None,
-    spacing: Optional[ImageSpacing3D] = None) -> None:
+    spacing: Optional[Spacing3D] = None) -> None:
     logging.arg_log(f'Converting {set.type.name} dataset to TRAINING', ('dataset', 'region'), (set, region))
     regions = regions_to_list(region)
 
@@ -552,7 +552,7 @@ def fill_border_padding(
                 
     crop = (tuple(crop_min), tuple(crop_max)) 
     logging.info(f'Border padding {crop} with values {fill}.')
-    data = crop_foreground(data, crop, fill=fill)
+    data = crop_foreground_vox(data, crop, fill=fill)
     return data
 
 def fill_contiguous_padding(

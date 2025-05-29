@@ -1,10 +1,16 @@
 import numpy as np
-from typing import Optional, Union
+import scipy
+from typing import *
 
-from mymi.typing import ImageSize2D, ImageSize3D, Pixel, Voxel
+from mymi.typing import *
 
-def get_centre(a: np.ndarray) -> Optional[Union[Pixel, Voxel]]:
-    return get_centre_from_size(a.shape)
-
-def get_centre_from_size(s: Union[ImageSize2D, ImageSize3D]) -> Optional[Union[Pixel, Voxel]]:
-    return tuple([int(np.floor(si / 2)) - 1 for si in s])
+def get_centre_of_mass(
+    a: Image,
+    offset: Optional[Union[Point2D, Point3D]] = None,
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None, 
+    use_patient_coords: bool = True) -> Union[Point2D, Point3D]:
+    com = scipy.ndimage.center_of_mass(a)
+    com = tuple([int(np.round(c)) for c in com])
+    if use_patient_coords:
+        com = tuple(np.array(com) * spacing + offset)
+    return com

@@ -1,8 +1,8 @@
-from mymi.predictions.datasets.nifti import create_dataset_registrations
+from mymi.predictions.datasets.nifti import create_registrations
 
 dataset = "DIRLAB-LUNG-COPD"
 project = "IMREG"
 model = 'identity'
 model_spacing = None
 
-create_dataset_registrations(dataset, project, model, model_spacing)
+create_registrations(dataset, project, model, model_spacing)

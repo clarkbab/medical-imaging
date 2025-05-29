@@ -4,11 +4,45 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import handle_non_spatial_dims
+from .shared import *
 
-def __spatial_centre_crop(
+def __spatial_crop(
+    image: Image,
+    bounding_box: Union[Point2DBox, Point3DBox],
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    offset: Optional[Union[Point2D, Point3D]] = None,
+    use_patient_coords: bool = True) -> Image:
+    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
+    assert_box_width(bounding_box)
+
+    # Convert box to voxel coordinates.
+    if use_patient_coords:
+        min_mm, max_mm = bounding_box
+        min = tuple(np.round((np.array(min_mm) - offset) / spacing).astype(int))
+        max = tuple(np.round((np.array(max_mm) - offset) / spacing).astype(int))
+    else:
+        min, max = bounding_box
+
+    # Perform cropping.
+    min, max = bounding_box
+    size = np.array(image.shape)
+    crop_min = np.array(min).clip(0)
+    crop_max = (size - max).clip(0)
+    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
+    image = image[slices]
+
+    return image
+
+@delegates(__spatial_crop)
+def crop(
     data: Image,
-    size: Union[ImageSize2D, ImageSize3D]) -> Image:
+    *args, **kwargs) -> Image:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
+
+def __spatial_centre_crop_vox(
+    data: Image,
+    size: Union[Size2D, Size3D]) -> Image:
     n_dims = len(data.shape)
     assert n_dims in (2, 3)
 
@@ -19,88 +53,23 @@ def __spatial_centre_crop(
     bounding_box = (box_min, box_max)
 
     # Perform crop or padding.
-    output = __spatial_crop(data, bounding_box)
+    output = __spatial_crop_vox(data, bounding_box)
 
     return output
 
-@delegates(__spatial_centre_crop)
-def centre_crop(
+@delegates(__spatial_centre_crop_vox)
+def centre_crop_vox(
     data: Image,
     *args, **kwargs) -> Image:
     assert_image(data)
-    return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
+    return handle_non_spatial_dims(__spatial_centre_crop_vox, data, *args, **kwargs)
 
-def __spatial_crop(
-    data: Image,
-    bounding_box: Union[Box2D, Box3D]) -> Image:
+def __spatial_crop_foreground_vox(
+    data: LabelImage,
+    bounding_box: Union[PixelBox, VoxelBox],
+    fill: Union[float, Literal['min']] = 'min') -> LabelImage:
     __assert_dims(data, (2, 3))
-    bounding_box = __replace_box_none(bounding_box, data.shape)
-    __assert_box_width(bounding_box)
-
-    # Perform cropping.
-    min, max = bounding_box
-    size = np.array(data.shape)
-    crop_min = np.array(min).clip(0)
-    crop_max = (size - max).clip(0)
-    slices = tuple(slice(min, s - max) for min, max, s in zip(crop_min, crop_max, size))
-    data = data[slices]
-
-    return data
-
-@delegates(__spatial_crop)
-def crop(
-    data: Image,
-    *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
-
-def crop_mm_3D(
-    data: np.ndarray,
-    spacing: ImageSpacing3D,
-    offset: Point3D,
-    bounding_box: Box3D) -> np.ndarray:
-    assert len(data.shape) == 3, f"Input 'data' must have dimension 3."
-    assert len(bounding_box[0]) == 3, f"Input 'bounding_box' must have dimension 3."
-    assert len(bounding_box[1]) == 3, f"Input 'bounding_box' must have dimension 3."
-
-    # Replace 'None' values.
-    min, max = bounding_box
-    min, max = list(min), list(max)
-    for i in range(3):
-        if min[i] is None:
-            min[i] = offset[i]
-        if max[i] is None:
-            max[i] = data.shape[i] * spacing[i] + offset[i]
-    min, max = tuple(min), tuple(max)
-
-    # Check box width.
-    for min_i, max_i in zip(min, max):
-        width = max_i - min_i
-        if width <= 0:
-            raise ValueError(f"Crop width must be positive, got '{bounding_box}'.")
-
-    # Convert crop to voxels.
-    min = (np.array(min) - offset) / spacing
-    min = tuple(np.round(min, 0).astype(int))
-    max = (np.array(max) - offset) / spacing
-    max = tuple(np.round(max, 0).astype(int))
-
-    # Crop the crop box to min/max allowed values.
-    min = np.clip(min, a_min=0, a_max=data.shape)
-    max = np.clip(max, a_min=0, a_max=data.shape)
-
-    # Perform cropping.
-    slices = tuple(slice(mn, mx) for mn, mx in zip(min, max))
-    data = data[slices]
-
-    return data
-
-def __spatial_crop_foreground(
-    data: np.ndarray,
-    bounding_box: Box3D,
-    fill: Union[float, Literal['min']] = 'min') -> np.ndarray:
-    __assert_dims(data, (2, 3))
-    bounding_box = __replace_box_none(bounding_box, data.shape)
+    bounding_box = replace_box_none_vox(bounding_box, data.shape)
     __assert_box_width(bounding_box)
 
     if fill == 'min':
@@ -123,15 +92,37 @@ def __spatial_crop_foreground(
 
     return cropped
 
-@delegates(__spatial_crop_foreground)
-def crop_foreground(
-    data: np.ndarray,
-    *args, **kwargs) -> np.ndarray:
-    return handle_non_spatial_dims(__spatial_crop_foreground, data, *args, **kwargs)
+@delegates(__spatial_crop_foreground_vox)
+def crop_foreground_vox(
+    data: LabelImage,
+    *args, **kwargs) -> LabelImage:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_crop_foreground_vox, data, *args, **kwargs)
+
+def __spatial_crop_foreground_mm(
+    data: LabelImage,
+    bounding_box: Union[PixelBox, VoxelBox],
+    spacing: Union[Spacing2D, Spacing3D],
+    offset: Union[Point2D, Point3D],
+    **kwargs) -> LabelImage:
+    bounding_box = replace_box_none_mm(bounding_box, data.shape, spacing, offset)
+    # Convert box to voxel coordinates.
+    min_mm, max_mm = bounding_box
+    min_vox = np.round((np.array(min_mm) - offset) / spacing)
+    max_vox = np.round((np.array(max_mm) - offset) / spacing)
+
+    return __spatial_crop_foreground_vox(data, (min_vox, max_vox), **kwargs)
+
+@delegates(__spatial_crop_foreground_mm)
+def crop_foreground_mm(
+    data: LabelImage,
+    *args, **kwargs) -> LabelImage:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_crop_foreground_mm, data, *args, **kwargs)
 
 def crop_point(
     point: Union[Pixel, Voxel],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
+    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -152,7 +143,7 @@ def crop_point(
 
 def crop_or_pad_point(
     point: Union[Pixel, Voxel],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
+    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -172,8 +163,8 @@ def crop_or_pad_point(
     return point
 
 def crop_or_pad_box(
-    box: Union[Box2D, Box3D],
-    crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
+    box: Union[PixelBox, VoxelBox],
+    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[PixelBox, VoxelBox]]:
     __assert_is_box(box)
     __assert_is_box(crop)
 
@@ -190,14 +181,6 @@ def crop_or_pad_box(
 
     return box
 
-def __assert_box_width(bounding_box: Union[Box2D, Box3D]) -> None:
-    # Check box width.
-    min, max = bounding_box
-    for min_i, max_i in zip(min, max):
-        width = max_i - min_i
-        if width <= 0:
-            raise ValueError(f"Box width must be positive, got '{bounding_box}'.")
-
 def __assert_dims(
     data: np.ndarray,
     dims: Tuple[int]) -> None:
@@ -205,23 +188,8 @@ def __assert_dims(
     if n_dims not in dims:
         raise ValueError(f"Data should have dims={dims}, got {n_dims}.")
 
-def __assert_is_box(box: Union[Box2D, Box3D]) -> None:
+def __assert_is_box(box: Union[PixelBox, VoxelBox]) -> None:
     min, max = box
     if not np.all(list(mx >= mn for mn, mx in zip(min, max))):
         raise ValueError(f"Invalid box '{box}'.")
-    
-def __replace_box_none(
-    bounding_box: Union[Box2D, Box3D],
-    data_size: Union[ImageSize2D, ImageSize3D]) -> Tuple[Box2D, Box3D]:
-    # Replace 'None' values.
-    n_dims = len(data_size)
-    min, max = bounding_box
-    min, max = list(min), list(max)
-    for i in range(n_dims):
-        if min[i] is None:
-            min[i] = 0
-        if max[i] is None:
-            max[i] = data_size[i]
-    min, max = tuple(min), tuple(max)
-    return min, max
 

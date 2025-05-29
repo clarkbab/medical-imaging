@@ -1,4 +1,4 @@
-from mymi.transforms.crop import crop_foreground
+from mymi.transforms.crop import crop_foreground_vox
 import numpy as np
 import os
 import pandas as pd
@@ -9,7 +9,6 @@ from typing import Dict, List, Literal, Optional, Union
 from mymi import config
 from mymi.datasets import NrrdDataset
 from mymi.geometry import get_box, centre_of_extent, extent_mm
-from mymi.loaders import Loader, MultiLoader
 from mymi.metrics import dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter

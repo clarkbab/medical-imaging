@@ -9,7 +9,7 @@ from mymi.typing import *
 
 def get_ct_stats(
     ct: np.ndarray,
-    spacing: ImageSpacing3D) -> List[Dict[str, Any]]:
+    spacing: Spacing3D) -> List[Dict[str, Any]]:
     # Extract required stats.
     size = ct.shape
     fov = np.array(size) * spacing
@@ -29,7 +29,7 @@ def get_ct_stats(
 def get_region_stats(
     ct_data: CtImage,
     region_data: RegionLabel,
-    spacing: ImageSpacing3D,
+    spacing: Spacing3D,
     offset: Voxel,
     brain_data: Optional[RegionLabel] = None) -> List[Dict[str, Any]]:
 

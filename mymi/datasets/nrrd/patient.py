@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 
-from mymi.typing import ImageSpacing3D, Landmarks, PatientID, Landmark, Region, Voxel, StudyID
+from mymi.typing import Spacing3D, Landmarks, PatientID, Landmark, Region, Voxel, StudyID
 
 from .study import NrrdStudy
 
@@ -54,7 +54,7 @@ class NrrdPatient:
         return self.default_study.ct_size
 
     @property
-    def ct_spacing(self) -> ImageSpacing3D:
+    def ct_spacing(self) -> Spacing3D:
         return self.default_study.ct_spacing
     
     @property

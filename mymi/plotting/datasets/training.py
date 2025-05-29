@@ -6,35 +6,6 @@ from mymi.utils import *
 
 from ..plotting import *
 
-def plot_dataset_histogram(
-    datasets: Union[str, List[str]],
-    n_samples: Optional[int] = None,
-    sample_ids: Optional[PatientIDs] = [],
-    split_id: Optional[Split] = None,
-    **kwargs) -> None:
-    datasets = arg_to_list(datasets, str)
-    _, axs = plt.subplots(1, len(datasets), figsize=(12 * len(datasets), 6), sharex=True, squeeze=False)
-
-    for d, ax in zip(datasets, axs[0]):
-        set = TrainingDataset(d)
-        if split_id is None:
-            split = set.split(set.list_splits()[0])
-        else:
-            split = set.split(split_id)
-
-        # Filter on sample IDs.
-        sids = sample_ids
-        if n_samples is not None:
-            sids = split.list_samples()
-            sids = sids[:n_samples]
-
-        inputs = [split.sample(s).input for s in sids]
-        inputs = np.concatenate([i.flatten() for i in inputs])
-
-        plot_histogram(inputs, ax=ax, title=d, **kwargs)
-
-    plt.show()
-
 def plot_samples(
     dataset: str,
     split_ids: Splits = 'all',

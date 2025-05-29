@@ -17,14 +17,14 @@ from mymi.models.lightning_modules import MultiSegmenter, Segmenter
 from mymi.processing import largest_cc_4D
 from mymi.regions import to_255, RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
-from mymi.typing import Box3D, ImageSize3D, ImageSpacing3D, ModelName, PatientID, Regions
+from mymi.typing import VoxelBox, Size3D, Spacing3D, ModelName, PatientID, Regions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
 
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],
     region: Regions,
     model: Union[ModelName, pl.LightningModule],
-    model_spacing: ImageSpacing3D,
+    model_spacing: Spacing3D,
     restart_pat_id: Optional[PatientID] = None,
     use_timing: bool = True,
     **kwargs: Dict[str, Any]) -> None:
