@@ -1,6 +1,6 @@
 from .custom import *
 from .dicom import *
-from .dirlab import *
+from .lung import *
 from .nifti import *
 from .nnunet import *
 from .old import *
