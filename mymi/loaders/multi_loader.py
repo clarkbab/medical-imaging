@@ -15,7 +15,7 @@ from mymi.datasets.training import TrainingDataset
 from mymi import logging
 from torchio.transforms import Transform
 from mymi.regions import regions_to_list
-from mymi.transforms import centre_crop_or_pad_vox
+from mymi.transforms import centre_crop_or_pad
 from mymi.utils import arg_to_list
 
 from .random_sampler import RandomSampler
@@ -39,14 +39,14 @@ def collate_fn(batch) -> List[Tensor]:
     for desc, input, label, mask, weight in batch:
         descs.append(desc)
         input_cs = []
-        for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad_vox, hasn't been written.
-            input_c = centre_crop_or_pad_vox(input[c], max_size)
+        for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad, hasn't been written.
+            input_c = centre_crop_or_pad(input[c], max_size, use_patient_coords=False)
             input_cs.append(input_c)
         input = np.stack(input_cs, axis=0)
         inputs.append(input)
         label_cs = []
         for c in range(len(label)): 
-            label_c = centre_crop_or_pad_vox(label[c], max_size)
+            label_c = centre_crop_or_pad(label[c], max_size, use_patient_coords=False)
             label_cs.append(label_c)
         label = np.stack(label_cs, axis=0)
         labels.append(label)

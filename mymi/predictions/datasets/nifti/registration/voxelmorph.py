@@ -11,8 +11,9 @@ sys.path.append(VXM_PATH)
 
 from mymi import config
 from mymi.datasets.nifti import NiftiDataset
+from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import dvf_to_sitk_transform, resample, sitk_create_affine_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import dvf_to_sitk_transform, resample, create_sitk_affine_transform, load_sitk_transform, save_sitk_transform, sitk_transform_image, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -24,12 +25,13 @@ def create_voxelmorph_predictions(
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
+    pat_ids: PatientIDs = 'all',
     register_ct: bool = True,
     regions: Optional[Regions] = 'all',
     splits: Optional[Splits] = None) -> None:
     model_path = os.path.join(config.directories.models, 'voxelmorph', model)
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(splits=splits)
+    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
 
     for p in tqdm(pat_ids):
         print(p)
@@ -68,7 +70,7 @@ def create_voxelmorph_predictions(
                     '--moved', moved_path,
                     '--warp', dvf_path,
                 ]
-                print(command)
+                logging.info(command)
                 subprocess.run(command)
                 print('VoxelMorph finished.')
                 print(moved_path)
@@ -76,7 +78,7 @@ def create_voxelmorph_predictions(
                 # Load, resample, save DVF.
                 # Transform goes from fixed -> moving image.
                 model_offset = (0, 0, 0)
-                to_model_t = sitk_create_affine_transform(offset=fixed_study.ct_offset, output_offset=model_offset)
+                to_model_t = create_sitk_affine_transform(offset=fixed_study.ct_offset, output_offset=model_offset)
                 dvf = np.load(dvf_path)['vol']
                 save_numpy(dvf, 'dvf.npz')
                 assert dvf.shape[0] == 3
@@ -85,7 +87,7 @@ def create_voxelmorph_predictions(
                 dvf = dvf * np.array(model_spacing)  # Convert to mm.
                 dvf = np.moveaxis(dvf, -1, 0)
                 dvf_t = dvf_to_sitk_transform(dvf, model_spacing, model_offset)
-                to_image_t = sitk_create_affine_transform(offset=model_offset, output_offset=moving_study.ct_offset)
+                to_image_t = create_sitk_affine_transform(offset=model_offset, output_offset=moving_study.ct_offset)
                 transforms = [to_image_t, dvf_t, to_model_t]    # Reverse order.
                 transform = sitk.CompositeTransform(transforms)
                 save_sitk_transform(transform, transform_path)

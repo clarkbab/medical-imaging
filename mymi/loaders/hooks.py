@@ -16,11 +16,11 @@ def centre_crop(crop_mm: Tuple[float, float, float]) -> Callable:
 
         # Crop input.
         crop = tuple(np.round(np.array(crop_mm) / spacing).astype(int))
-        input = centre_crop_or_pad_vox(input, crop)
+        input = centre_crop_or_pad(input, crop, use_patient_coords=False)
 
         # Crop labels.
         for r in labels.keys():
-            labels[r] = centre_crop_or_pad_vox(labels[r], crop)
+            labels[r] = centre_crop_or_pad(labels[r], crop, use_patient_coords=False)
 
         return input, labels
     return crop_fn

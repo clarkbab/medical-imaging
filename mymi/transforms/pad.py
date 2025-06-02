@@ -2,69 +2,79 @@ import numpy as np
 import torch
 from typing import *
 
+from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import handle_non_spatial_dims
+from .shared import assert_box_width, handle_non_spatial_dims
 
-def __spatial_pad_vox(
-    data: Image,
+def __spatial_pad(
+    image: Image,
     bounding_box: Union[PixelBox, VoxelBox],
-    fill: Union[float, Literal['min']] = 'min') -> Image:
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
-    fill = data.min() if fill == 'min' else fill
+    fill: Union[float, Literal['min']] = 'min',
+    offset: Optional[Union[Point2D, Point3D]] = None,
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    use_patient_coords: bool = True) -> Image:
+    assert_box_width(bounding_box)
+    fill = image.min() if fill == 'min' else fill
     if isinstance(fill, torch.Tensor):
         fill = fill.item()
 
-    # Check width of padding box.
-    min, max = bounding_box
-    n_dims = len(data.shape)
-    for i in range(n_dims):
-        width = max[i] - min[i]
-        if width <= 0:
-            raise ValueError(f"Pad width must be positive, got '{bounding_box}'.")
+    # Convert box to voxel coordinates.
+    if use_patient_coords:
+        min_mm, max_mm = bounding_box
+        min = tuple(np.round((np.array(min_mm) - offset) / spacing).astype(int))
+        max = tuple(np.round((np.array(max_mm) - offset) / spacing).astype(int))
+    else:
+        min, max = bounding_box
 
     # Perform padding - clip if padding is less than zero.
-    size = np.array(data.shape)
+    size = np.array(image.shape)
     pad_min = (-np.array(min)).clip(0)
     pad_max = (max - size).clip(0)
     padding = tuple(zip(pad_min, pad_max))
 
-    if isinstance(data, np.ndarray):
-        data = np.pad(data, padding, constant_values=fill)
-    elif isinstance(data, torch.Tensor):
+    if isinstance(image, np.ndarray):
+        image = np.pad(image, padding, constant_values=fill)
+    elif isinstance(image, torch.Tensor):
         padding = list(reversed(padding))  # torch 'pad' operates from back to front.
         padding = tuple(torch.tensor(padding).flatten())
-        data = torch.nn.functional.pad(data, padding, value=fill)
+        image = torch.nn.functional.pad(image, padding, value=fill)
 
-    return data
+    return image
 
-@delegates(__spatial_pad_vox)
+@delegates(__spatial_pad)
 def pad(
-    data: Image,
+    image: Image,
     *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_pad_vox, data, *args, **kwargs)
+    assert_image(image)
+    return handle_non_spatial_dims(__spatial_pad, image, *args, **kwargs)
 
-def __spatial_centre_pad_vox(
-    data: Image,
-    size: Size3D,
+def __spatial_centre_pad(
+    image: Image,
+    size: Union[Size2D, Size3D, ImageFOV2D, ImageFOV3D],
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    use_patient_coords: bool = True,
     **kwargs) -> Image:
+    # Convert size to voxels if necessary.
+    if use_patient_coords:
+        assert spacing is not None
+        size = tuple((np.array(size) / spacing).astype(int))
+
     # Determine padding amounts.
-    to_pad = np.array(size) - data.shape
+    to_pad = np.array(size) - image.shape
     box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
     box_max = box_min + size
     bounding_box = (box_min, box_max)
 
     # Perform padding.
-    output = __spatial_pad_vox(data, bounding_box, **kwargs)
+    output = __spatial_pad(image, bounding_box, use_patient_coords=False, **kwargs)
 
     return output
 
-@delegates(__spatial_centre_pad_vox)
+@delegates(__spatial_centre_pad)
 def centre_pad(
-    data: Image,
+    image: Image,
     *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_centre_pad_vox, data, *args, **kwargs)
+    assert_image(image)
+    return handle_non_spatial_dims(__spatial_centre_pad, image, *args, **kwargs)

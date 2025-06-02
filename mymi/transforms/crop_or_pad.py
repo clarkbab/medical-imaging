@@ -56,32 +56,37 @@ def __spatial_crop_or_pad(
 
 @delegates(__spatial_crop_or_pad)
 def crop_or_pad(
-    data: Image,
+    image: Image,
     *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_crop_or_pad, data, *args, **kwargs)
+    assert_image(image)
+    return handle_non_spatial_dims(__spatial_crop_or_pad, image, *args, **kwargs)
 
-def __spatial_centre_crop_or_pad_vox(
-    data: Image,
-    size: Size3D,
-    fill: Union[float, Literal['min']] = 'min') -> Image:
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
+def __spatial_centre_crop_or_pad(
+    image: Image,
+    size: Union[Size2D, Size3D, ImageFOV2D, ImageFOV3D],
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    use_patient_coords: bool = True,
+    **kwargs) -> Image:
+
+    # Convert size to voxels if necessary.
+    if use_patient_coords:
+        assert spacing is not None
+        size = tuple((np.array(size) / spacing).astype(int))
 
     # Determine cropping/padding amounts.
-    to_crop = data.shape - np.array(size)
+    to_crop = image.shape - np.array(size)
     box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
     box_max = box_min + size
     bounding_box = (box_min, box_max)
 
     # Perform crop or padding.
-    output = __spatial_crop_or_pad(data, bounding_box, fill=fill)
+    output = __spatial_crop_or_pad(image, bounding_box, use_patient_coords=False, **kwargs)
 
     return output
 
-@delegates(__spatial_centre_crop_or_pad_vox)
-def centre_crop_or_pad_vox(
-    data: Image,
+@delegates(__spatial_centre_crop_or_pad)
+def centre_crop_or_pad(
+    image: Image,
     *args, **kwargs) -> Image:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_centre_crop_or_pad_vox, data, *args, **kwargs)
+    assert_image(image)
+    return handle_non_spatial_dims(__spatial_centre_crop_or_pad, image, *args, **kwargs)

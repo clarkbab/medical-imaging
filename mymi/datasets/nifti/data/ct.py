@@ -34,7 +34,6 @@ class CtNiftiData(NiftiData):
         return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
 
     @property
-    @delegates(extent)
     @ensure_loaded
     def fov(
         self,

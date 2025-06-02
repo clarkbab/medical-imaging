@@ -134,7 +134,8 @@ def plot_images(
     spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
     use_patient_coords: bool = False,
     views: Union[int, Sequence[int]] = 'all',
-    window: Optional[Union[str, Tuple[float, float]]] = None) -> None:
+    window: Optional[Union[str, Tuple[float, float]]] = None,
+    **kwargs) -> None:
     data = arg_to_list(data, Image)
     labels = arg_to_list(labels, [LabelImage, None], broadcast=len(data))
     landmarks = arg_to_list(landmarks, [LandmarkData, None], broadcast=len(data))
@@ -184,7 +185,15 @@ def plot_nifti(
     filepath: str,
     **kwargs) -> None:
     data, spacing, offset = load_nifti(filepath)
-    print(spacing, offset)
+    plot_images(data, offsets=offset, spacings=spacing, **kwargs)
+
+@delegates(load_numpy, plot_images)
+def plot_numpy(
+    filepath: str,
+    spacing: Optional[Spacing3D] = (1, 1, 1),
+    offset: Optional[Point3D] = (0, 0, 0),
+    **kwargs) -> None:
+    data = load_numpy(filepath, **kwargs)
     plot_images(data, offsets=offset, spacings=spacing, **kwargs)
 
 def __plot_region_data(
@@ -3304,7 +3313,7 @@ def get_window(
         data_width = data_max - data_min
         f = 0.1
         if data_width < f * width:
-            logging.warning(f"Image data range ({data_min}, {data_max}) is less than {f} * window range ({vmin}, {vmax}). You may be looking at grey - use a custom window (level, width).")
+            logging.warning(f"Image data range ({data_min}, {data_max}) is less than {f} * window range ({width}). You may be looking at grey - use a custom window (level, width).")
 
     vmin = level - (width / 2)
     vmax = level + (width / 2)

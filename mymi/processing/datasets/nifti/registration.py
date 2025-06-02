@@ -6,7 +6,7 @@ from typing import *
 from mymi.datasets.nifti import NiftiDataset, recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import sitk_save_transform
+from mymi.transforms import save_sitk_transform
 from mymi.transforms.dataset.nifti import rigid_registration
 from mymi.typing import *
 from mymi.utils import *
@@ -72,7 +72,7 @@ def create_registered_dataset(
         # TRE is typically calculated in the moving image space. 
         dest_fixed_study = dest_set.patient(p, check_path=False).study(fixed_study_id, check_path=False)
         filepath = os.path.join(dest_fixed_study.path, 'dvf', 'series_0.tfm')
-        sitk_save_transform(transform, filepath)
+        save_sitk_transform(transform, filepath)
 
         # Add fixed data.
         # # Moved CT will have introduced 'padding' values, that should not be matched to "real" intensities.

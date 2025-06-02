@@ -26,7 +26,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list, to_255
-from mymi.transforms import centre_crop_or_pad_vox, centre_crop_or_pad_vox, crop, resample
+from mymi.transforms import resample
 from mymi.typing import *
 from mymi.utils import *
 

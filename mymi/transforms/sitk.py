@@ -21,7 +21,7 @@ def load_sitk_transform(
     transform = sitk.ReadTransform(filepath)
     return transform
 
-def sitk_create_affine_transform(
+def create_sitk_affine_transform(
     offset: Optional[Point3D] = (0, 0, 0),
     output_offset: Optional[Point3D] = (0, 0, 0),
     output_spacing: Optional[Spacing3D] = (1, 1, 1),
@@ -39,7 +39,7 @@ def sitk_create_affine_transform(
 
     return transform
 
-def sitk_save_transform(
+def save_sitk_transform(
     transform: sitk.Transform,
     filepath: str) -> None:
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
