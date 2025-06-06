@@ -4,6 +4,7 @@ import os
 import re
 from typing import *
 
+from mymi import logging
 from mymi.typing import *
 
 from .utils import arg_to_list
@@ -178,3 +179,104 @@ def grid_arg(
     args = parser.parse_args()
     arg = getattr(args, name)
     return arg
+
+PMCC_CPU_PARTITIONS =[
+    'rhel_long',
+    'rhel_short',
+]
+PMCC_GPU_PARTITIONS = [
+    'rhel_gpu',
+]
+
+def create_slurm_pmcc(
+    file: str,
+    array: Optional[str] = None,
+    memory: int = 128,
+    mode: Literal['cpu', 'gpu'] = 'gpu',
+    partitions: str = 'rhel_gpu',
+    queue: bool = True,
+    suffix: str = '',
+    time: timedelta = 'days:14',
+    **kwargs) -> None:
+    # Handle arguments.
+    if partitions == 'go-fishing':
+        partitions = PMCC_GPU_PARTITIONS
+    else:
+        partitions = partitions.split(',')  # Fire won't interpret as a list.
+
+    # Check partitions.
+    for p in partitions:
+        if p not in PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS:
+            raise ValueError(f"Partition {p} not recognised. Must be one of {PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS}.")
+
+    # Set the mode based on requested partitions.
+    p0 = partitions[0]
+    if p0 in PMCC_CPU_PARTITIONS:
+        mode = 'cpu'
+    elif p0 in PMCC_GPU_PARTITIONS:
+        mode = 'gpu' 
+
+    # Check consistent mode.
+    for p in partitions:
+        if (mode == 'cpu' and p not in PMCC_CPU_PARTITIONS) or (mode == 'gpu' and p not in PMCC_GPU_PARTITIONS):
+            raise ValueError(f"Partitions should be either CPU or GPU, not both.")
+
+    # Parse time string.
+    if isinstance(time, str):
+        match = re.match(r'(days:(\d+))?:?(hours:(\d+))?', time)
+        days = int(match.group(2)) if match.group(2) is not None else 0
+        hours = int(match.group(4)) if match.group(4) is not None else 0
+        time = timedelta(days=days, hours=hours)
+
+    for p in partitions:
+        # Handle partition specifics.
+        qos = ''
+        p_memory = memory
+        p_time = time
+        if p == 'rhel_short':
+            max_time = timedelta(days=1)
+        elif p == 'rhel_long' or p == 'rhel_gpu':
+            max_time = timedelta(days=14)
+        if p_time > max_time:
+            logging.info(f"Partition '{p}' time limit exceeded. Setting time to {max_time}.")
+            p_time = max_time
+
+        # Convert time.
+        days = p_time.days
+        hours, remainder = divmod(p_time.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        # Convert kwargs.
+        kwarg_str = ''
+        for k, v in kwargs.items():
+            kwarg_str += f'--{k} "{v}" '
+
+        # Create content.
+        content = f"""\
+#!/bin/bash
+#SBATCH --partition {p}
+#SBATCH --mem {p_memory}G
+#SBATCH --time {days}-{hours:02}:{minutes:02}:{seconds:02}
+
+source ~/.bash_profile
+
+python {file} {kwarg_str}
+"""
+
+        # Write to file.
+        p_file = file.replace('.py', '')
+        suffix = f'-{suffix}' if suffix != '' else ''
+        filepath = f'{p_file}-{p}{suffix}.slurm'
+        print(f"Writing to {filepath}.")
+        with open(filepath, 'w') as f:
+            f.write(content)
+
+        # Queue job.
+        if queue:
+            command = f'sbatch '
+            if array is not None:
+                command += f'--array={array} '
+            command += f'{filepath}'
+
+            print(f"Queueing job with command: {command}")
+            os.system(command)
