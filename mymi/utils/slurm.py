@@ -180,7 +180,8 @@ def grid_arg(
     arg = getattr(args, name)
     return arg
 
-PMCC_CPU_PARTITIONS =[
+PMCC_CPU_PARTITIONS = [
+    'debug',
     'rhel_long',
     'rhel_short',
 ]
@@ -235,7 +236,7 @@ def create_slurm_pmcc(
         p_time = time
         if p == 'rhel_short':
             max_time = timedelta(days=1)
-        elif p == 'rhel_long' or p == 'rhel_gpu':
+        elif p in ('debug', 'rhel_long', 'rhel_gpu'):
             max_time = timedelta(days=14)
         if p_time > max_time:
             logging.info(f"Partition '{p}' time limit exceeded. Setting time to {max_time}.")

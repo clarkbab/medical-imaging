@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from pynvml.smi import nvidia_smi
+from pynvml_utils import nvidia_smi
 import sys
 from time import perf_counter
 from typing import *
