@@ -51,6 +51,10 @@ def get_registration_landmarks_evaluation(
     moving_study_id: str,
     landmarks: Landmarks,
     model: str) -> List[Dict[str, float]]:
+    print(dataset)
+    print(fixed_pat_id)
+    print(landmarks)
+    print(model)
 
     # Load moved (predicted) region data.
     res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False)
@@ -64,7 +68,8 @@ def get_registration_landmarks_evaluation(
     moving_landmarks = moving_study.landmark_data(landmarks=landmarks)
 
     # Get shared landmarks.
-    merged_df = moving_landmarks.merge(moved_landmarks, on=['patient-id', 'landmark-id'], how='inner', suffixes=['_moving', '_moved'])
+    # merged_df = moving_landmarks.merge(moved_landmarks, on=['patient-id', 'landmark-id'], how='inner', suffixes=['_moving', '_moved'])
+    merged_df = moving_landmarks.merge(moved_landmarks, on=['landmark-id'], how='inner', suffixes=['_moving', '_moved'])
     moving_cols = [f'{c}_moving' for c in range(3)]
     moving_data = merged_df[moving_cols].to_numpy()
     moved_cols = [f'{c}_moved' for c in range(3)]
@@ -236,4 +241,4 @@ def create_registrations_evaluation(
             # Save evaluation.
             df = df.astype(cols)
             filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'landmarks.csv')
-            save_files_csv(df, filepath, overwrite=True)
+            save_csv(df, filepath, overwrite=True)

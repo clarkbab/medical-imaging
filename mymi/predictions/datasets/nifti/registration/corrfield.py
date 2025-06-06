@@ -126,17 +126,27 @@ def create_corrfield_predictions(
                     cf_path = os.path.join(pred_base, 'corrfield')
                 os.makedirs(cf_path, exist_ok=True)
                 cf_out_path = os.path.join(cf_path, 'corrfield')
-                command = [
-                    'corrfield',
-                    '-F', fixed_path,
-                    '-M', moving_path,
-                    '-m', fixed_label_path,
-                    '-O', cf_out_path,
-                ]
+                if is_windows():
+                    command = [
+                        'python', r'C:\Users\ClarkBrett\OneDrive - Peter Mac\code\corrfield\corrfield\corrfield',
+                        '-F', fixed_path,
+                        '-M', moving_path,
+                        '-m', fixed_label_path,
+                        '-O', cf_out_path,
+                    ]
+                else:
+                    command = [
+                        'corrfield',
+                        '-F', fixed_path,
+                        '-M', moving_path,
+                        '-m', fixed_label_path,
+                        '-O', cf_out_path,
+                    ]
                 logging.info(command)
                 subprocess.run(command)
 
                 cf_dvf_path = os.path.join(cf_path, 'corrfield.nii.gz')
+                print(cf_dvf_path)
                 if not os.path.exists(cf_dvf_path):
                     logging.info(f"Corrfield failed for patient {p}.")
                     continue

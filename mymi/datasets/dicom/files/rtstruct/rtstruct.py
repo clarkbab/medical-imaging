@@ -114,6 +114,7 @@ class RtStructFile(DicomFile):
 
     def landmark_data(
         self,
+        data_only: bool = False,
         landmarks: Landmarks = 'all',
         token: str = 'Marker',
         use_patient_coords: bool = True,
@@ -146,7 +147,10 @@ class RtStructFile(DicomFile):
         # Dicom/Nifti dataset types.
         lm_df = lm_df.sort_values(['patient-id', 'study-id', 'landmark-id'])
 
-        return lm_df
+        if data_only:
+            return lm_df[range(3)].to_numpy().astype(np.float32)
+        else:
+            return lm_df
 
     def list_landmarks(
         self,

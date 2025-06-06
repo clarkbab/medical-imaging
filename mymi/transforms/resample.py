@@ -18,22 +18,8 @@ def __spatial_resample(
     output_spacing: Optional[Spacing3D] = None,
     return_transform: bool = False,
     spacing: Optional[Spacing3D] = None,
-    transform: Optional[sitk.Transform] = None) -> Union[Image, Tuple[Image, sitk.Transform]]:
-    """
-    output_offset: 
-        - if None, will take on value of 'offset'.
-        - if specified, will result in translation of the resulting image (cropping/padding).
-    output_size:
-        - if None, will take on dimensions of 'data'.
-        - if None, will be calculated as a scaling of the 'data' dimensions, where the scaling is determined
-            by the ratio of 'spacing' to 'output_spacing'. This ensures, that all image information is preserved
-            when doing a spatial resampling.
-    output_spacing:
-        - if None, will take on value of 'spacing'.
-        - if specified, will change the spatial resolution of the image.
-    """
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
+    transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
+    ) -> Union[Image, Tuple[Image, sitk.Transform]]:
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -102,6 +88,7 @@ def __spatial_resample(
 def resample(
     data: Images,
     *args, **kwargs) -> Images:
+    assert_image(data)
     return handle_non_spatial_dims(__spatial_resample, data, *args, **kwargs)
 
 def resample_box_3D(

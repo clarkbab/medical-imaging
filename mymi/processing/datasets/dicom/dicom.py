@@ -178,8 +178,10 @@ def convert_to_nifti(
                 # Create landmarks.
                 lm_df = series.landmark_data()
                 if lm_df is not None:
+                    lm_df['patient-id'] = nifti_pat_id
+                    lm_df['study-id'] = nifti_study_id
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'landmarks', f'{nifti_series_id}.csv')
-                    save_files_csv(lm_df, filepath)
+                    save_csv(lm_df, filepath)
 
             # Convert RTDOSE series.
             rtdose_series_ids = study.list_series('RTDOSE')
@@ -203,7 +205,7 @@ def convert_to_nifti(
     if len(index_df) > 0:
         index_df = index_df.astype(cols)
     filepath = os.path.join(nifti_set.path, 'index.csv')
-    save_files_csv(index_df, filepath)
+    save_csv(index_df, filepath)
 
     # Save indexing time.
     end = time()

@@ -67,7 +67,7 @@ def save_csv(
     data: pd.DataFrame,
     filepath: str,
     index: bool = False,
-    overwrite: bool = False) -> None:
+    overwrite: bool = True) -> None:
     if os.path.exists(filepath):
         if overwrite:
             os.makedirs(os.path.dirname(filepath), exist_ok=True)

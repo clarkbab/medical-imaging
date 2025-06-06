@@ -129,7 +129,7 @@ def plot_images(
     figsize: Tuple[float, float] = (16, 6),
     idx: Union[int, float] = 0.5,
     labels: Optional[Union[LabelImage, List[Optional[LabelImage]]]] = None,
-    landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,
+    landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,    # Should be in image coordinates.
     offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
     spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
     use_patient_coords: bool = False,
@@ -161,24 +161,27 @@ def plot_images(
             vmin, vmax = get_window(window, d)
             col_ax.imshow(image, aspect=aspect, cmap='gray', origin=origin, vmin=vmin, vmax=vmax)
             col_ax.set_title(f'{get_view_name(v)} view, slice {view_idx}')
-            if l is not None:
+            if l is not None:   # Plot landmarks.
                 cmap = ListedColormap(((1, 1, 1, 0), palette[i]))
                 label_image, _ = __get_slice(l, idx, v)
                 col_ax.imshow(label_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
                 col_ax.contour(label_image, colors=[palette[i]], levels=[.5], linestyles='solid')
-            if use_patient_coords:
-                spacings = __get_view_xy(s, v)
-                offsets = __get_view_xy(o, v)
-                _, x_tick_labels = col_ax.get_xticks(), col_ax.get_xticklabels()
-                x_tick_labels = [float(l.get_text().replace('−', '-')) for l in x_tick_labels]
-                x_tick_labels = np.array(spacings[0]) * x_tick_labels + offsets[0]
-                col_ax.set_xticklabels(x_tick_labels)
-                _, y_tick_labels = col_ax.get_yticks(), col_ax.get_yticklabels()
-                y_tick_labels = [float(l.get_text().replace('−', '-')) for l in y_tick_labels]
-                y_tick_labels = np.array(spacings[1]) * y_tick_labels + offsets[1]
-                col_ax.set_yticklabels(y_tick_labels)
+            if use_patient_coords:  # Change axis tick labels to show patient coordinates.
+                size_x, size_y = __get_view_xy(d.shape, v)
+                sx, sy = __get_view_xy(s, v)
+                ox, oy = __get_view_xy(o, v)
+                x_tick_spacing = np.unique(np.diff(col_ax.get_xticks()))[0]
+                x_ticks = np.arange(0, size_x, x_tick_spacing)
+                x_ticklabels = x_ticks * sx + ox
+                col_ax.set_xticks(x_ticks)
+                col_ax.set_xticklabels(x_ticklabels)
+                y_tick_spacing = np.unique(np.diff(col_ax.get_yticks()))[0]
+                y_ticks = np.arange(0, size_y, y_tick_spacing)
+                y_ticklabels = y_ticks * sy + oy
+                col_ax.set_yticks(y_ticks)
+                col_ax.set_yticklabels(y_ticklabels)
             if lm is not None:
-                __plot_landmark_data(lm, col_ax, view_idx, d.shape, v, offset=o)
+                __plot_landmark_data(lm, col_ax, view_idx, d.shape, v)
 
 @delegates(plot_images)
 def plot_nifti(
@@ -3237,16 +3240,12 @@ def __plot_landmark_data(
     colour: str = 'yellow',
     fontsize: float = 12,
     n_landmarks: Optional[int] = None,
-    offset: Point3D = (0, 0, 0),    # If the view window is offset, we need to shift landmarks.
     show_landmark_ids: bool = False,
     show_landmark_dists: bool = True,
     zorder: float = 1,
     **kwargs) -> None:
     idx = __convert_float_idx(idx, size, view)
     landmark_data = landmark_data.copy()
-    # Adjust for offset.
-    lm_data = landmark_data[list(range(3))].to_numpy() - offset
-    landmark_data[list(range(3))] = lm_data
 
     # Take subset of n closest landmarks landmarks.
     landmark_data['dist'] = np.abs(landmark_data[view] - idx)

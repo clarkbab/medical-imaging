@@ -2,6 +2,8 @@ import ast
 import inspect
 from typing import *
 
+from .utils import is_windows
+
 class CallVisitor(ast.NodeVisitor):
     def __init__(
         self,
@@ -41,6 +43,9 @@ def get_inner_args(
     return visitor.args, visitor.kwargs
 
 def delegates(*inner_fns: Callable) -> Callable:
+    if is_windows():
+        return lambda f: f
+
     def change_outer_fn_sig(outer_fn: Callable) -> Any:
         # Load params.
         outer_sig = inspect.signature(outer_fn)

@@ -164,9 +164,9 @@ def delete_patient_registration(
 def create_patient_identity_registration(
     dataset: str,
     fixed_pat_id: PatientID,
-    model_name: str,
     fixed_study_id: StudyID = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
+    model_name: str = 'identity',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
     regions: Optional[Regions] = 'all',
@@ -182,14 +182,15 @@ def create_patient_identity_registration(
     fixed_ct = fixed_study.ct_data
     fixed_size = fixed_ct.shape
     fixed_spacing = fixed_study.ct_spacing
-    fixed_offset = fixed_study.ct_offset
     moving_ct = moving_study.ct_data
     moving_spacing = moving_study.ct_spacing
-    moving_offset = moving_study.ct_offset
-    assert moving_spacing == fixed_spacing, "Fixed and moving images should have same spacing - initial rigid registration."
+    # assert moving_spacing == fixed_spacing, "Fixed and moving images should have same spacing - initial rigid registration."
 
     # Resample moving to moved.
-    moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+    # Don't use stored offsets, these could be very different between fixed and moving images. Just align image centres.
+    fixed_offset = tuple(-np.array(fixed_study.ct_fov) / 2)
+    moving_offset = tuple(-np.array(moving_study.ct_fov) / 2)
+    moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
@@ -206,7 +207,7 @@ def create_patient_identity_registration(
         if moving_region_data is not None:
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
                 save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
@@ -256,7 +257,7 @@ def create_registrations(
 
         with timer.record(data, enabled=use_timing):
             if model == 'identity':
-                create_patient_identity_registration(dataset, p, model, **kwargs)
+                create_patient_identity_registration(dataset, p, **kwargs)
             else:
                 create_patient_registration(dataset, p, module, project, model, model_spacing, **kwargs)
 
