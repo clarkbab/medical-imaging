@@ -102,7 +102,7 @@ def create_voxelmorph_predictions(
                 save_sitk_transform(transform, transform_path)
 
                 # Move image manually using transform - only requires one resampling.
-                moved_ct = sitk_transform_image(moving_ct, transform, fixed_ct.shape, fill=0, offset=moving_study.ct_offset, output_spacing=fixed_study.ct_spacing, output_offset=fixed_study.ct_offset, spacing=moving_study.ct_spacing)
+                moved_ct = resample(moving_ct, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 # moved_ct = load_numpy(moved_path, keys='vol')
                 moved_path = os.path.join(pred_base_path, 'ct', f'{modelname}.nii.gz')
                 save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
@@ -117,7 +117,7 @@ def create_voxelmorph_predictions(
 
                 # Create moved region label.
                 moving_label = moving_study.region_data(regions=r)[r]
-                moved_label = sitk_transform_image(moving_label, transform, fixed_study.ct_size, offset=moving_study.ct_offset, output_spacing=fixed_study.ct_spacing, output_offset=fixed_study.ct_offset, spacing=moving_study.ct_spacing)
+                moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
                 save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)

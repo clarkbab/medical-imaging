@@ -5,7 +5,7 @@ from mymi.datasets import NiftiDataset
 from mymi.typing import *
 
 from ..registration import rigid_image_registration
-from ..sitk import sitk_transform_image, sitk_transform_points
+from ..sitk import resample, sitk_transform_points
 
 def rigid_registration(
     dataset: str,
@@ -47,7 +47,7 @@ def rigid_registration(
             moved_region_data = {}
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = sitk_transform_image(moving_label, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 moved_region_data[region] = moved_label
 
     # Move landmarks.

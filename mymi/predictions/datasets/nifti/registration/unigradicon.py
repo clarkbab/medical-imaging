@@ -8,7 +8,7 @@ from typing import *
 from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import load_itk_transform, load_sitk_transform, save_sitk_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import load_itk_transform, load_sitk_transform, resample, save_sitk_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -86,7 +86,7 @@ def create_unigradicon_predictions(
                 moving_ct = moving_study.ct_data
                 moving_spacing = moving_study.ct_spacing
                 moving_offset = moving_study.ct_offset
-                moved_ct = sitk_transform_image(moving_ct, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+                moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 save_nifti(moved_ct, moved_path, spacing=fixed_spacing, offset=fixed_offset)
 
             # Register regions.
@@ -106,7 +106,7 @@ def create_unigradicon_predictions(
                     transform = load_sitk_transform(transform_path)
 
                     # Perform transform.
-                    moved_label = sitk_transform_image(moving_label, transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+                    moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     moved_label_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(moved_label_path), exist_ok=True)
                     save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, offset=fixed_offset)

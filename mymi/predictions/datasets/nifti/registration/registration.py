@@ -11,7 +11,7 @@ from mymi.datasets import NiftiDataset
 from mymi.models import load_model
 from mymi.models.architectures import RegMod
 from mymi.regions import regions_to_list
-from mymi.transforms import crop, resample, load_sitk_transform, save_sitk_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import crop, resample, load_sitk_transform, save_sitk_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -85,8 +85,7 @@ def create_patient_registration(
     # Use resampled DVF to transform moving -> fixed CT using one resample. Otherwise, CT will have
     # been resampled 3 times: moving (original) -> moving (model) -> moved (model) -> moved(original).
     sitk_transform = dvf_to_sitk_transform(dvf, fixed_spacing, fixed_offset)
-    ct_moved = sitk_transform_image(moving_ct, sitk_transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
-    ct_moved = crop(ct_moved, crop_box)   # Resampling rounds *up* to nearest number of voxels, cropping may be necessary to obtain original image size.
+    ct_moved = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
@@ -102,8 +101,7 @@ def create_patient_registration(
         if moving_region_data is not None:
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = sitk_transform_image(moving_label, sitk_transform, fixed_ct.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
-                moved_label = crop(moved_label, crop_box)
+                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
                 save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
 

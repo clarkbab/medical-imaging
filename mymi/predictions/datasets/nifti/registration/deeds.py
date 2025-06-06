@@ -8,7 +8,7 @@ from mymi.datasets import NiftiDataset
 from mymi.geometry import get_centre_of_mass, get_foreground_extent
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import crop_or_pad, dvf_to_sitk_transform, resample, save_sitk_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import crop_or_pad, dvf_to_sitk_transform, resample, save_sitk_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -161,7 +161,7 @@ def create_deeds_predictions(
                 save_sitk_transform(transform, filepath)
 
                 # Create moved image.
-                moved_ct = sitk_transform_image(moving_study.ct_data, transform, fixed_study.ct_size, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing)
+                moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(pred_base, 'ct', f'{model}.nii.gz')
                 save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
@@ -170,7 +170,7 @@ def create_deeds_predictions(
                     for r in pat_regions:
                         # Perform transform.
                         moving_label = moving_study.region_data(r)[r]
-                        moved_label = sitk_transform_image(moving_label, transform,fixed_study.ct_size, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing)
+                        moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                         filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
                         save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)

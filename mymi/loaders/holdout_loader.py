@@ -12,7 +12,7 @@ from mymi import datasets as ds
 from mymi.datasets.training import TrainingDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import sitk_transform_image, sitk_transform_points
+from mymi.transforms import resample, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
@@ -81,7 +81,7 @@ class TrainingSet(Dataset):
         normalise: bool = True,
         normalise_by_channel: bool = False,
         norm_params: Optional[Dict[str, float]] = None,
-        pad_fill: Optional[float] = None,
+        pad_fill: Union[float, Literal['min']] = 'min',
         pad_threshold: Optional[float] = None,
         preload_samples: bool = True,
         regions: Optional[Regions] = 'all',
@@ -162,8 +162,9 @@ class TrainingSet(Dataset):
                 input = sample.input
 
                 # Replace padding if necessary.
-                if self.__pad_threshold is not None and self.__pad_fill is not None:
-                    input[input < self.__pad_threshold] = self.__pad_fill
+                if self.__pad_threshold is not None:
+                    fill = self.__pad_fill if self.__pad_fill != 'min' else np.min(input[input >= self.__pad_threshold])
+                    input[input < self.__pad_threshold] = fill
                 self.__inputs.append(input)
 
                 # Add preloaded labels and masks (multiple allowed per sample, e.g. labels and landmarks).
@@ -209,8 +210,9 @@ class TrainingSet(Dataset):
             input = sample.input
 
             # Replace padding values.
-            if self.__pad_threshold is not None and self.__pad_fill is not None:
-                input[input < self.__pad_threshold] = self.__pad_fill
+            if self.__pad_threshold is not None:
+                fill = self.__pad_fill if self.__pad_fill != 'min' else np.min(input[input >= self.__pad_threshold])
+                input[input < self.__pad_threshold] = fill
 
             # Load multiple outputs.
             labels = []
@@ -237,17 +239,12 @@ class TrainingSet(Dataset):
             transform_f, transform_b, _ = self.__transform.get_concrete_transform()
 
             # Transform input.
-            spatial_shape = input.shape
-            if len(spatial_shape) == 4:
-                # We only want spatial shape for 'sitk_transform_image' - exclude channels.
-                spatial_shape = spatial_shape[1:]
-            fill = self.__pad_fill if self.__pad_fill is not None else 'min'
-            input = sitk_transform_image(input, transform_b, spatial_shape, fill=fill, output_spacing=self.__spacing, spacing=self.__spacing)
+            input = resample(input, fill=self.__pad_fill, spacing=self.__spacing, transform=transform_b)
 
             # Transform labels.
             for i, l in enumerate(self.__label_types):
                 if l in ('image', 'regions'):
-                    labels[i] = sitk_transform_image(labels[i], transform_b, spatial_shape, fill=0, output_spacing=self.__spacing, spacing=self.__spacing)
+                    labels[i] = resample(labels[i], fill=0, spacing=self.__spacing, transform=transform_b)
                 elif l == 'landmarks':
                     label = sitk_transform_points(labels[i], transform_f)
 

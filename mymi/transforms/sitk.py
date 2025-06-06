@@ -45,53 +45,6 @@ def save_sitk_transform(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     sitk.WriteTransform(transform, filepath)
 
-def __spatial_sitk_transform_image(
-    data: np.ndarray,
-    transform: sitk.Transform,
-    output_size: Size3D,
-    fill: Union[float, Literal['min']] = 'min',
-    offset: Point3D = (0, 0, 0),
-    output_offset: Point3D = (0, 0, 0),
-    output_spacing: Spacing3D = (1, 1, 1), 
-    spacing: Spacing3D = (1, 1, 1)) -> Tuple[Image, Spacing3D, Point3D]:
-    # Load moving image.
-    moving_sitk = to_sitk_image(data, spacing, offset)
-
-    # Get interpolation method.
-    if data.dtype == bool:
-        interpolator = sitk.sitkNearestNeighbor
-    else:
-        interpolator = sitk.sitkLinear
-
-    # Determine default value.
-    if fill == 'min':
-        default_value = float(data.min())
-        if data.dtype == bool:
-            default_value = int(default_value)
-    else:
-        default_value = fill
-
-    # Apply transform.
-    kwargs = dict(
-        defaultPixelValue=default_value,
-        interpolator=interpolator,
-        outputOrigin=output_offset,
-        outputSpacing=output_spacing,
-        size=output_size,
-        transform=transform,
-    )
-    moved_sitk = sitk.Resample(moving_sitk, **kwargs)
-    moved, _, _ = from_sitk_image(moved_sitk)
-    return moved
-
-@delegates(__spatial_sitk_transform_image)
-def sitk_transform_image(
-    data: Image,
-    *args, **kwargs) -> Image:
-    raise ValueError("Use resample instead")
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_sitk_transform_image, data, *args, **kwargs)
-
 def sitk_transform_points(
     points: Union[Points2D, Points3D, LandmarkData],
     transform: sitk.Transform) -> Union[Points2D, Points3D, LandmarkData]:

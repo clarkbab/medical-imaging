@@ -28,7 +28,7 @@ from mymi import logging
 from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
-from mymi.transforms import crop_or_pad_box, crop_point, crop, itk_transform_image, sitk_transform_image
+from mymi.transforms import crop_or_pad_box, crop_point, crop, itk_transform_image, resample
 from mymi.typing import *
 from mymi.utils import *
 
@@ -2990,7 +2990,7 @@ def plot_registration(
             # images before applying the transform.
             moved_grid = itk_transform_image(moving_grid, transform, fixed_data.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
         elif transform_format == 'sitk':
-            moved_grid = sitk_transform_image(moving_grid, transform, fixed_data.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+            moved_grid = resample(moving_grid, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
         grid_slice, _ = __get_slice(moved_grid, moving_idx, view)
         aspect = __get_aspect(view, fixed_spacing)
         origin = __get_origin(view)
