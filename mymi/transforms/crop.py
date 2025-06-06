@@ -40,29 +40,35 @@ def crop(
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
 
-def __spatial_centre_crop_vox(
+def __spatial_centre_crop(
     data: Image,
-    size: Union[Size2D, Size3D]) -> Image:
-    n_dims = len(data.shape)
-    assert n_dims in (2, 3)
+    size: Union[ImageFOV2D, ImageFOV3D, Size2D, Size3D],
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    use_patient_coords: bool = True) -> Image:
 
     # Determine cropping/padding amounts.
-    to_crop = data.shape - np.array(size)
-    box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)
+    if use_patient_coords:
+        assert spacing is not None
+        fov_mm = np.array(size) * spacing
+        to_crop_mm = fov_mm - size
+        to_crop_vox = np.round(to_crop_mm / spacing).astype(int)
+    else:
+        to_crop_vox = data.shape - np.array(size)
+    box_min = np.sign(to_crop_vox) * np.ceil(np.abs(to_crop_vox / 2)).astype(int)
     box_max = box_min + size
     bounding_box = (box_min, box_max)
 
     # Perform crop or padding.
-    output = __spatial_crop_vox(data, bounding_box)
+    output = __spatial_crop(data, bounding_box, use_patient_coords=False)
 
     return output
 
-@delegates(__spatial_centre_crop_vox)
-def centre_crop_vox(
+@delegates(__spatial_centre_crop)
+def centre_crop(
     data: Image,
     *args, **kwargs) -> Image:
     assert_image(data)
-    return handle_non_spatial_dims(__spatial_centre_crop_vox, data, *args, **kwargs)
+    return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
 def __spatial_crop_foreground_vox(
     data: LabelImage,

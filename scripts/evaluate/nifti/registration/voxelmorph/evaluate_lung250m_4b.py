@@ -1,7 +1,7 @@
 from mymi.evaluations.datasets.nifti import create_registrations_evaluation
 
-dataset = 'L2R-LUNG-CT'
-model = 'voxelmorph-L2R-LUNG-CT-222-dynamic-2000'
+dataset = 'LUNG250M-4B'
+model = 'voxelmorph-LUNG250M-4B-222-dynamic-2000'
 kwargs = dict(
     splits='test',
 )

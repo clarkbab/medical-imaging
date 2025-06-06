@@ -88,6 +88,7 @@ def __spatial_sitk_transform_image(
 def sitk_transform_image(
     data: Image,
     *args, **kwargs) -> Image:
+    raise ValueError("Use resample instead")
     assert_image(data)
     return handle_non_spatial_dims(__spatial_sitk_transform_image, data, *args, **kwargs)
 

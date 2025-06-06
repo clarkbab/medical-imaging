@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from scipy.ndimage.measurements import label as label_objects
 from tqdm import tqdm
-from typing import List, Optional, Union
+from typing import *
 from uuid import uuid1
 
 from mymi import config
@@ -13,10 +13,8 @@ from mymi.datasets import TrainingDataset
 from mymi.geometry import extent, centre_of_extent
 from mymi import logging
 from mymi.processing import get_object, one_hot_encode
-from mymi.plotting.dataset.training import plot_patient
-from mymi.regions import regions_to_list
-from mymi.typing import Regions
-from mymi.utils import append_row, arg_to_list, encode
+from mymi.typing import *
+from mymi.utils import *
 
 def create_ct_figures_report(
     dataset: str,
@@ -123,7 +121,7 @@ def get_ct_summary(dataset: str) -> pd.DataFrame:
         spacing = sample.spacing
 
         # Calculate FOV.
-        fov = np.array(size) * spacing
+        fov = sample.fov
 
         for axis in range(len(size)):
             data = {

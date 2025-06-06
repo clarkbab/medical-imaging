@@ -19,6 +19,17 @@ class TrainingSample:
         # Define paths.
         self.__input_path = os.path.join(self.split.path, 'inputs', f"{self.__id:03}.npz")
 
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__input'):
+                self.__input = load_numpy(self.__input_path)
+            return fn(self, *args, **kwargs)
+        return wrapper
+
+    @property
+    def fov(self) -> ImageFOV3D:
+        return tuple(np.array(self.size) * self.spacing)
+
     @property
     def id(self) -> str:
         return self.__id
@@ -31,9 +42,9 @@ class TrainingSample:
         return self.__index
 
     @property
+    @ensure_loaded
     def input(self) -> np.ndarray:
-        input = np.load(self.__input_path)['data']
-        return input
+        return self.__input
 
     @property
     def input_path(self) -> str:
@@ -49,8 +60,13 @@ class TrainingSample:
         return tuple(origin)
 
     @property
+    @ensure_loaded
     def size(self) -> Size3D:
-        return self.input.shape
+        n_dims = len(self.__input.shape)
+        if n_dims == 4:
+            return self.__input.shape[1:]  # Exclude batch dimension.
+        else:
+            return self.__input.shape
 
     @property
     def spacing(self) -> Spacing3D:

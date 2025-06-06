@@ -13,7 +13,7 @@ from mymi import config
 from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import dvf_to_sitk_transform, resample, create_sitk_affine_transform, load_sitk_transform, save_sitk_transform, sitk_transform_image, sitk_transform_points
+from mymi.transforms import *
 from mymi.typing import *
 from mymi.utils import *
 
@@ -25,6 +25,7 @@ def create_voxelmorph_predictions(
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
+    pad_shape: Optional[Size3D] = None,
     pat_ids: PatientIDs = 'all',
     register_ct: bool = True,
     regions: Optional[Regions] = 'all',
@@ -48,14 +49,20 @@ def create_voxelmorph_predictions(
                 # Resample images to model spacing.
                 fixed_ct = fixed_study.ct_data
                 fixed_ct_resampled = resample(fixed_ct, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
-                fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
-                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, offset=fixed_study.ct_offset)
                 moving_ct = moving_study.ct_data
                 moving_ct_resampled = resample(moving_ct, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
+
+                # Pad images if required.
+                if pad_shape is not None:
+                    resampled_size = fixed_ct_resampled.shape
+                    fixed_ct_resampled = centre_pad(fixed_ct_resampled, pad_shape, fill=-2000, use_patient_coords=False)
+                    moving_ct_resampled = centre_pad(moving_ct_resampled, pad_shape, fill=-2000, use_patient_coords=False)
+
+                # Save files for 'voxelmorph'.
+                fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
+                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, offset=fixed_study.ct_offset)
                 moving_path = os.path.join(temp_dir, 'moving.nii.gz')
                 save_nifti(moving_ct_resampled, moving_path, spacing=model_spacing, offset=moving_study.ct_offset)
-
-                # Create output paths.
                 moved_path = os.path.join(temp_dir, 'moved.npz')
                 dvf_path = os.path.join(temp_dir, 'dvf.npz')
 
@@ -80,6 +87,8 @@ def create_voxelmorph_predictions(
                 model_offset = (0, 0, 0)
                 to_model_t = create_sitk_affine_transform(offset=fixed_study.ct_offset, output_offset=model_offset)
                 dvf = np.load(dvf_path)['vol']
+                if pad_shape is not None:
+                    dvf = centre_crop(dvf, resampled_size, use_patient_coords=False)
                 save_numpy(dvf, 'dvf.npz')
                 assert dvf.shape[0] == 3
                 # VXM DVF is on the scale of image voxels in the image - need to convert to mm.

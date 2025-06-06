@@ -1,14 +1,15 @@
 from mymi.predictions.datasets.nifti.registration import create_voxelmorph_predictions
 
 dataset = 'LUNG250M-4B'
-model = 'LUNG250M-4B-222/1500.pt'
-model_name = 'LUNG250M-4B-222'
+model = 'LUNG250M-4B-222-dynamic-2000'
+full_model = f'{model}/1500.pt'
+model_name = f'voxelmorph-{model}'
 model_spacing = (2, 2, 2)
 kwargs = dict(
-    register_ct=True,
     landmarks='all',
+    # pat_ids='021',
     regions='all',
     splits='test',
 )
 
-create_voxelmorph_predictions(dataset, model, model_name, model_spacing, **kwargs)
+create_voxelmorph_predictions(dataset, full_model, model_name, model_spacing, **kwargs)
