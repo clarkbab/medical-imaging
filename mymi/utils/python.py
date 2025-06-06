@@ -1,8 +1,26 @@
 import ast
 import inspect
+import sys
 from typing import *
 
 from .utils import is_windows
+
+def python_version(gte: Optional[str] = None) -> Union[Tuple[int, int, int], bool]:
+    info = sys.version_info
+    if gte is not None:
+        res = [int(x) for x in gte.split('.')]
+        if len(res) == 1:
+            gte_major, gte_minor, gte_micro = res[0], -1, -1
+        elif len(res) == 2:
+            gte_major, gte_minor, gte_micro = res[0], res[1], -1
+        elif len(res) == 3:
+            gte_major, gte_minor, gte_micro = res[0], res[1], res[2]
+        if info.major > gte_major or (info.major == gte_major and info.minor > gte_minor) or (info.major == gte_major and info.minor == gte_minor and info.micro >= gte_micro):
+            return True
+        else:
+            return False
+    version = (info.major, info.minor, info.micro)
+    return version
 
 class CallVisitor(ast.NodeVisitor):
     def __init__(
@@ -43,7 +61,8 @@ def get_inner_args(
     return visitor.args, visitor.kwargs
 
 def delegates(*inner_fns: Callable) -> Callable:
-    if is_windows():
+    if is_windows() or not python_version(gte='3.9'):
+        # Ast unparse is not available in Python < 3.9.
         return lambda f: f
 
     def change_outer_fn_sig(outer_fn: Callable) -> Any:
