@@ -231,7 +231,6 @@ def create_slurm_pmcc(
 
     for p in partitions:
         # Handle partition specifics.
-        qos = ''
         p_memory = memory
         p_time = time
         if p == 'rhel_short':
@@ -252,11 +251,17 @@ def create_slurm_pmcc(
         for k, v in kwargs.items():
             kwarg_str += f'--{k} "{v}" '
 
+        # Manage resources.
+        g_res = """
+#SBATCH --gres gpu:1""" if mode == 'gpu' else ''
+        c_res = """
+#SBATCH --cpus-per-gpu 1""" if mode == 'gpu' else ''
+
         # Create content.
         content = f"""\
 #!/bin/bash
 #SBATCH --partition {p}
-#SBATCH --mem {p_memory}G
+#SBATCH --mem {p_memory}G{g_res}{c_res}
 #SBATCH --time {days}-{hours:02}:{minutes:02}:{seconds:02}
 
 source ~/.bash_profile

@@ -180,14 +180,14 @@ def create_patient_identity_registration(
     fixed_ct = fixed_study.ct_data
     fixed_size = fixed_ct.shape
     fixed_spacing = fixed_study.ct_spacing
+    fixed_offset = fixed_study.ct_offset
     moving_ct = moving_study.ct_data
     moving_spacing = moving_study.ct_spacing
-    # assert moving_spacing == fixed_spacing, "Fixed and moving images should have same spacing - initial rigid registration."
+    moving_offset = moving_study.ct_offset
+    if moving_spacing != fixed_spacing or moving_offset != fixed_offset:
+        raise ValueError("Fixed and moving images should have same spacing and offset - initial rigid registration.")
 
     # Resample moving to moved.
-    # Don't use stored offsets, these could be very different between fixed and moving images. Just align image centres.
-    fixed_offset = tuple(-np.array(fixed_study.ct_fov) / 2)
-    moving_offset = tuple(-np.array(moving_study.ct_fov) / 2)
     moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
 
     # Save moved CT.
