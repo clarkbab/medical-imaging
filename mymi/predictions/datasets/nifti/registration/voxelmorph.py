@@ -5,7 +5,7 @@ import tempfile
 from tqdm import tqdm
 from typing import *
 
-VXM_PATH="/home/baclark/code/voxelmorph"
+VXM_PATH = os.path.join(os.environ['CODE'], 'voxelmorph')
 os.environ['VXM_BACKEND'] = 'pytorch'
 sys.path.append(VXM_PATH)
 

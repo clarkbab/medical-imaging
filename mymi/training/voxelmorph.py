@@ -1,9 +1,12 @@
 import os
 import shutil
 import subprocess
+import sys
 from typing import *
 
-VXM_PATH = "/home/baclark/code/voxelmorph"
+VXM_PATH = os.path.join(os.environ['CODE'], 'voxelmorph')
+os.environ['VXM_BACKEND'] = 'pytorch'
+sys.path.append(VXM_PATH)
 
 from mymi import config
 from mymi.datasets import TrainingDataset

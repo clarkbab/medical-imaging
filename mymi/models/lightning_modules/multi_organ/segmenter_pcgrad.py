@@ -5,7 +5,7 @@ import sys
 import torch
 from typing import *
 
-pcgrad_path = '/home/baclark/code/Pytorch-PCGrad'
+pcgrad_path = os.path.join(os.environ['CODE'], 'Pytorch-PCGrad')
 sys.path.append(pcgrad_path)
 from pcgrad import PCGrad
 
