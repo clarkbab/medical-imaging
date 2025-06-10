@@ -5,7 +5,8 @@ from mymi.datasets import NiftiDataset
 from mymi.typing import *
 
 from ..registration import rigid_image_registration
-from ..sitk import resample, sitk_transform_points
+from ..resample import resample
+from ..sitk import sitk_transform_points
 
 def rigid_registration(
     dataset: str,

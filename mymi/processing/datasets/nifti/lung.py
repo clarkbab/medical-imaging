@@ -50,21 +50,29 @@ def create_preprocessed_lung_dataset(
         moving_ct_cp = crop_or_pad(moving_ct_rs, crop_moving_mm, spacing=spacing, offset=moving_study.ct_offset)
         moving_lung_cp = crop_or_pad(moving_lung_rs, crop_moving_mm, spacing=spacing, offset=moving_study.ct_offset)
 
+        # Move landmarks due to crop (and saving image data with offset=0).
+        fixed_lms_data = fixed_lms[list(range(3))]
+        fixed_lms_data = fixed_lms_data - fixed_study.ct_offset - ext_min 
+        fixed_lms[list(range(3))] = fixed_lms_data
+        moving_lms_data = moving_lms[list(range(3))]
+        moving_lms_data = moving_lms_data - trans_mm - ext_min
+        moving_lms[list(range(3))] = moving_lms_data
+
         # Clamp intensity values.
         fixed_ct_cp = np.clip(fixed_ct_cp, a_min=hu_range[0], a_max=hu_range[1])
         moving_ct_cp = np.clip(moving_ct_cp, a_min=hu_range[0], a_max=hu_range[1])
 
-        # Save images.
+        # Save images and landmarks.
         pat_path = os.path.join(new_set.path, 'data', 'patients', p)
         filepath = os.path.join(pat_path, 'study_1', 'ct', 'series_0.nii.gz')
-        save_nifti(fixed_ct_cp, filepath, offset=crop_fixed_mm[0], spacing=spacing)
+        save_nifti(fixed_ct_cp, filepath, spacing=spacing)
         filepath = os.path.join(pat_path, 'study_1', 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(fixed_lung_cp, filepath, offset=crop_fixed_mm[0], spacing=spacing)
+        save_nifti(fixed_lung_cp, filepath, spacing=spacing)
         filepath = os.path.join(pat_path, 'study_1', 'landmarks', 'series_1.csv')
         save_csv(fixed_lms, filepath, overwrite=True)
         filepath = os.path.join(pat_path, 'study_0', 'ct', 'series_0.nii.gz')
-        save_nifti(moving_ct_cp, filepath, offset=crop_moving_mm[0], spacing=spacing)
+        save_nifti(moving_ct_cp, filepath, spacing=spacing)
         filepath = os.path.join(pat_path, 'study_0', 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(moving_lung_cp, filepath, offset=crop_moving_mm[0], spacing=spacing)
+        save_nifti(moving_lung_cp, filepath, spacing=spacing)
         filepath = os.path.join(pat_path, 'study_0', 'landmarks', 'series_1.csv')
         save_csv(moving_lms, filepath, overwrite=True)
