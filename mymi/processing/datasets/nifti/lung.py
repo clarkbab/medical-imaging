@@ -40,11 +40,13 @@ def create_preprocessed_lung_dataset(
         trans_mm = np.array(moving_com) - fixed_com
 
         # Crop to 10mm surrounding fixed lung mask.
-        ext_min, ext_max = get_foreground_extent(fixed_lung_rs, spacing=spacing, offset=fixed_study.ct_offset)
-        ext_min = tuple(np.array(ext_min) - margin)
-        ext_max = tuple(np.array(ext_max) + margin)
-        crop_fixed_mm = (ext_min, ext_max)
-        crop_moving_mm = (tuple(trans_mm + ext_min), tuple(trans_mm + ext_max))
+        fixed_ext_min, fixed_ext_max = get_foreground_extent(fixed_lung_rs, spacing=spacing, offset=fixed_study.ct_offset)
+        fixed_ext_min = tuple(np.array(fixed_ext_min) - margin)
+        fixed_ext_max = tuple(np.array(fixed_ext_max) + margin)
+        crop_fixed_mm = (fixed_ext_min, fixed_ext_max)
+        moving_ext_min = tuple(trans_mm + fixed_ext_min)
+        moving_ext_max = tuple(trans_mm + fixed_ext_max)
+        crop_moving_mm = (moving_ext_min, moving_ext_max)
         fixed_ct_cp = crop_or_pad(fixed_ct_rs, crop_fixed_mm, spacing=spacing, offset=fixed_study.ct_offset)
         fixed_lung_cp = crop_or_pad(fixed_lung_rs, crop_fixed_mm, spacing=spacing, offset=fixed_study.ct_offset)
         moving_ct_cp = crop_or_pad(moving_ct_rs, crop_moving_mm, spacing=spacing, offset=moving_study.ct_offset)
@@ -52,10 +54,10 @@ def create_preprocessed_lung_dataset(
 
         # Move landmarks due to crop (and saving image data with offset=0).
         fixed_lms_data = fixed_lms[list(range(3))]
-        fixed_lms_data = fixed_lms_data - fixed_study.ct_offset - ext_min 
+        fixed_lms_data = fixed_lms_data - fixed_ext_min
         fixed_lms[list(range(3))] = fixed_lms_data
         moving_lms_data = moving_lms[list(range(3))]
-        moving_lms_data = moving_lms_data - trans_mm - ext_min
+        moving_lms_data = moving_lms_data - moving_ext_min
         moving_lms[list(range(3))] = moving_lms_data
 
         # Clamp intensity values.
