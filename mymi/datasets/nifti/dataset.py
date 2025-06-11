@@ -115,6 +115,7 @@ class NiftiDataset(Dataset):
 
     def list_patients(
         self,
+        exclude: Optional[PatientIDs] = None,
         pat_ids: PatientIDs = 'all',    # Saves on filtering code elsewhere.
         regions: Regions = 'all',
         splits: Splits = 'all') -> List[PatientID]:
@@ -169,6 +170,11 @@ class NiftiDataset(Dataset):
             else:
                 pat_ids = arg_to_list(pat_ids, PatientID)
             res_pat_ids = [p for p in res_pat_ids if p in pat_ids] 
+
+        # Filter by 'exclude'.
+        if exclude is not None:
+            exclude = arg_to_list(exclude, PatientID)
+            res_pat_ids = [p for p in res_pat_ids if p not in exclude]
 
         return res_pat_ids
 

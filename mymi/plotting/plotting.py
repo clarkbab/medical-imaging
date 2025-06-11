@@ -2503,6 +2503,8 @@ def plot_registrations(
     centre: Optional[Union[str, List[str]]] = None,
     crop: Optional[Union[str, List[str]]] = None,
     crop_margin: float = 100,
+    exclude_fixed_pat_ids: Optional[PatientIDs] = None,
+    exclude_moving_pat_ids: Optional[PatientIDs] = None,
     fixed_pat_ids: Optional[PatientIDs] = 'all',
     fixed_study_id: StudyID = 'study_1',
     idx: Optional[Union[int, float, List[Union[int, float]]]] = None,
@@ -2519,11 +2521,11 @@ def plot_registrations(
         plot_loaded(loadpath)
         return
     set = dataset_type(dataset)
-    fixed_pat_ids = set.list_patients(pat_ids=fixed_pat_ids, splits=splits)
+    fixed_pat_ids = set.list_patients(exclude=exclude_fixed_pat_ids, pat_ids=fixed_pat_ids, splits=splits)
     if moving_pat_ids is None:
         moving_pat_ids = fixed_pat_ids
     else:
-        moving_pat_ids = arg_to_list(moving_pat_ids, PatientID, literals={ 'all': set.list_patients })
+        moving_pat_ids = arg_to_list(moving_pat_ids, PatientID, literals={ 'all': set.list_patients(exclude=exclude_moving_pat_ids, splits=splits) })
         assert len(moving_pat_ids) == len(fixed_pat_ids)
 
     fixed_study_ids = arg_broadcast(fixed_study_id, len(fixed_pat_ids))
