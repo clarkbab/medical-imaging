@@ -129,7 +129,7 @@ def plot_images(
     figsize: Tuple[float, float] = (16, 6),
     idx: Union[int, float] = 0.5,
     labels: Optional[Union[LabelImage, List[Optional[LabelImage]]]] = None,
-    landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,    # Should be in image coordinates.
+    landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,    # Should be in patient coordinates.
     offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
     spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
     use_patient_coords: bool = False,
@@ -181,6 +181,8 @@ def plot_images(
                 col_ax.set_yticks(y_ticks)
                 col_ax.set_yticklabels(y_ticklabels)
             if lm is not None:
+                # Convert landmarks to image coordinates.
+                lm[list(range(3))] = (lm[list(range(3))] - o) / s
                 __plot_landmark_data(lm, col_ax, view_idx, d.shape, v)
 
 @delegates(plot_images)

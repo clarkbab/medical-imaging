@@ -20,8 +20,8 @@ def get_extent(
 
     # Get mm extent.
     extent_min_vox, extent_max_vox = extent_vox
-    extent_min_mm = tuple(np.array(extent_min_vox) * spacing + offset)
-    extent_max_mm = tuple(np.array(extent_max_vox) * spacing + offset)
+    extent_min_mm = tuple(float(e) for e in (np.array(extent_min_vox) * spacing + offset))
+    extent_max_mm = tuple(float(e) for e in (np.array(extent_max_vox) * spacing + offset))
     extent_mm = extent_min_mm, extent_max_mm
     return extent_mm
 
