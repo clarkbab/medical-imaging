@@ -141,16 +141,18 @@ def get_registration_region_evaluation(
 def create_registrations_evaluation(
     dataset: str,
     models: Union[str, List[str]],
+    exclude_pat_ids: Optional[PatientIDs] = None,
     fixed_study_id: str = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
     moving_study_id: str = 'study_0',
+    pat_ids: PatientIDs = 'all',
     regions: Optional[Regions] = 'all',
     splits: Optional[Splits] = 'all') -> None:
     models = arg_to_list(models, str)
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(splits=splits)
+    pat_ids = set.list_patients(exclude=exclude_pat_ids, pat_ids=pat_ids, splits=splits)
 
     for m in models:
         if regions is not None:
