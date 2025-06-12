@@ -9,6 +9,7 @@ from typing import *
 
 from mymi import config
 from mymi import logging
+from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 
@@ -118,25 +119,25 @@ class DicomDataset(Dataset):
 
     def list_patients(
         self,
-        regions: Optional[Regions] = None,
+        pat_ids: PatientIDs = 'all', 
+        regions: Regions = 'all',
         show_progress: bool = False,
         use_mapping: bool = True,
         use_patient_regions_report: bool = True) -> List[str]:
-        regions = arg_to_list(regions, str)
 
         # Use patient regions report to accelerate 'list_patients' if filtering on regions.
-        if regions is not None and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
+        if regions != 'all' and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
             logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
             df = self.__load_patient_regions_report(use_mapping=use_mapping)
             df = df[df['region'].isin(regions)]
-            pat_ids = list(sorted(df['patient-id'].unique()))
-            return pat_ids
+            ids = list(sorted(df['patient-id'].unique()))
+            return ids
 
         # Load patient IDs from index.
-        pat_ids = list(sorted(self.index['patient-id'].unique()))
+        ids = list(sorted(self.index['patient-id'].unique()))
 
         # Filter on 'regions'.
-        if regions is not None:
+        if regions != 'all':
             def filter_fn(pat_id):
                 pat_regions = self.patient(pat_id).list_regions(regions=regions, use_mapping=use_mapping)
                 if len(pat_regions) > 0:
@@ -144,10 +145,15 @@ class DicomDataset(Dataset):
                 else:
                     return False
             if show_progress:
-                pat_ids = tqdm(pat_ids)
-            pat_ids = list(filter(filter_fn, pat_ids))
+                ids = tqdm(ids)
+            ids = list(filter(filter_fn, ids))
 
-        return pat_ids
+        # Filter on 'pat_ids'.
+        if pat_ids != 'all':
+            pat_ids = arg_to_list(pat_ids, PatientID)
+            ids = [i for i in ids if i in pat_ids]
+
+        return ids
 
     def patient(
         self,
