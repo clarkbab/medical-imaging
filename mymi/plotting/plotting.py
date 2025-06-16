@@ -2450,7 +2450,6 @@ def plot_dataframe(
         plt.savefig(savepath, bbox_inches='tight', dpi=dpi, pad_inches=save_pad_inches)
         logging.info(f"Saved plot to '{savepath}'.")
 
-
 def plot_patient_histograms(
     dataset_type: Dataset,
     dataset: str,
@@ -2468,16 +2467,18 @@ def plot_patient_histograms(
     study_idses = []
     for p in pat_ids:
         pat = set.patient(p)
-        study_ids = pat.list_studies(study_ids=study_ids)
-        study_idses.append(study_ids)
-        if len(study_ids) > n_cols:
-            n_cols = len(study_ids)
+        ids = pat.list_studies(study_ids=study_ids)
+        study_idses.append(ids)
+        if len(ids) > n_cols:
+            n_cols = len(ids)
     
     _, axs = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), squeeze=False)
     if show_progress:
         logging.info("Plotting patient histograms...")
-    for row_axs, p, ss in tqdm(zip(axs, pat_ids, study_idses), disable=not show_progress, total=len(pat_ids)):
+    for i, p in tqdm(enumerate(pat_ids), disable=not show_progress):
         pat = set.patient(p)
+        row_axs = axs[i]
+        ss = study_idses[i]
         for col_ax, s in zip(row_axs, ss):
             study = pat.study(s)
             ct_data = study.ct_data.flatten()

@@ -281,10 +281,17 @@ class DicomPatient:
     def list_landmarks(self, *args, **kwargs):
         return self.default_rtstruct.list_landmarks(*args, **kwargs)
 
-    def list_studies(self) -> List[StudyID]:
+    def list_studies(
+        self,
+        study_ids: StudyIDs = 'all') -> List[StudyID]:
         # Sort studies by date/time - oldest first.
-        study_ids = list(self.__index.sort_values(['study-date', 'study-time'])['study-id'].unique())
-        return study_ids
+        ids = list(self.__index.sort_values(['study-date', 'study-time'])['study-id'].unique())
+        
+        # Filter by 'study_ids'.
+        if study_ids != 'all':
+            ids = [i for i in ids if i in study_ids]
+
+        return ids
 
     def list_regions(self, *args, **kwargs):
         return self.default_rtstruct.list_regions(*args, **kwargs)
