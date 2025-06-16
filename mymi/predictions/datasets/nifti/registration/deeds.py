@@ -1,4 +1,3 @@
-from deeds import registration
 import os
 import subprocess
 import tempfile
