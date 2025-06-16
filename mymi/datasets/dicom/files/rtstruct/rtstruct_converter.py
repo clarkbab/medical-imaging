@@ -6,11 +6,11 @@ import pydicom as dcm
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTATION_UID
 import skimage as ski
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import *
 
-from mymi.regions import to_255
-from mymi import typing
 from mymi import logging
+from mymi.regions import to_255
+from mymi.typing import *
 
 from ...dicom import DATE_FORMAT, TIME_FORMAT
 
@@ -26,7 +26,7 @@ class LandmarkData:
 
 @dataclass
 class ROIData:
-    colour: typing.Colour
+    colour: Colour
     data: np.ndarray
     name: str
     number: Optional[int] = None
@@ -111,28 +111,13 @@ class RtStructConverter:
         return landmark
 
     @classmethod
-    def get_roi_contour(
+    def get_region_data(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         name: str,
-        ref_cts: Sequence[dcm.dataset.FileDataset]) -> np.ndarray:
-        """
-        returns: an np.ndarray of mask data.
-        args:
-            rtstruct: the RTSTRUCT dicom.
-            name: the ROI name.
-            ref_cts: the reference CT dicoms.
-        raises:
-            ValueError: if name not found in ROIs, or no 'ContourSequence' data found.
-        """
-        # Get necessary values from CT.
-        offset = ref_cts[0].ImagePositionPatient
-        offset_2D = offset[:-1]
-        size_2D = ref_cts[0].pixel_array.shape
-        size = (*size_2D, len(ref_cts))
-        spacing_2D = ref_cts[0].PixelSpacing
-        spacing = (*spacing_2D, ref_cts[1].ImagePositionPatient[2] - ref_cts[0].ImagePositionPatient[2])
-
+        size: Size3D,
+        spacing: Spacing3D,
+        offset: Point3D) -> RegionData:
         # Load the contour data.
         roi_infos = rtstruct.StructureSetROISequence
         roi_contours = rtstruct.ROIContourSequence
@@ -172,6 +157,7 @@ class RtStructConverter:
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.
+            size_2D, spacing_2D, offset_2D = list(size)[:2], list(spacing)[:2], list(offset)[:2]
             slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, offset_2D)
 
             # Get z index of slice.
@@ -189,9 +175,9 @@ class RtStructConverter:
     def _get_mask_slice(
         cls,
         points: np.ndarray,
-        size: typing.Size2D,
-        spacing: typing.Spacing2D,
-        offset: typing.Point2D) -> np.ndarray:
+        size: Size2D,
+        spacing: Spacing2D,
+        offset: Point2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:
@@ -645,7 +631,8 @@ class RtStructConverter:
                 # OpenCV adds intermediate dimension - for some reason?
                 c = c.squeeze(1)
 
-                # OpenCV returns (y, x) points, so flip.
+                # Change in v4.11?
+                # # OpenCV returns (y, x) points, so flip.
                 c = np.flip(c, axis=1)
                 contours_coords[i] = c
 

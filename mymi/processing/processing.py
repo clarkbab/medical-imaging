@@ -435,12 +435,12 @@ def convert_to_dicom(
                     ct_dicom.PatientPosition = 'HFS'
                     ct_dicom.PixelData = np.transpose(ct_data_rescaled[:, :, i]).tobytes()
                     ct_dicom.PixelRepresentation = 0
-                    ct_dicom.PixelSpacing = [abs(spacing[0]), abs(spacing[1])]
+                    ct_dicom.PixelSpacing = [float(abs(spacing[0])), float(abs(spacing[1]))]
                     ct_dicom.RescaleIntercept = rescale_intercept
                     ct_dicom.RescaleSlope = rescale_slope
                     ct_dicom.Rows, ct_dicom.Columns = ct_size[1], ct_size[0]
                     ct_dicom.SamplesPerPixel = 1
-                    ct_dicom.SliceThickness = abs(spacing[2])
+                    ct_dicom.SliceThickness = float(abs(spacing[2]))
 
                     if convert_ct:
                         filepath = os.path.join(destset.path, 'data', 'raw', 'patients', p_mapped, s, 'ct', d, f'{i:03d}.dcm')

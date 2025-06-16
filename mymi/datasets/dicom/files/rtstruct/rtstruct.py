@@ -299,15 +299,16 @@ class RtStructFile(DicomFile):
 
         # Get region data.
         data = {}
+
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
             for unmapped_region, mapped_region in rtstruct_regions:
-                rdata = RtStructConverter.get_roi_contour(rtstruct, unmapped_region, cts)
+                rdata = RtStructConverter.get_region_data(rtstruct, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[mapped_region] = rdata
         else:
             # Load and store region using unmapped name.
             for r in rtstruct_regions:
-                rdata = RtStructConverter.get_roi_contour(rtstruct, r, cts)
+                rdata = RtStructConverter.get_region_data(rtstruct, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[r] = rdata
 
         # Sort dict keys.
