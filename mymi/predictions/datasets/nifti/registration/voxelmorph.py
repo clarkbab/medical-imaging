@@ -29,7 +29,7 @@ def create_voxelmorph_predictions(
     pat_ids: PatientIDs = 'all',
     register_ct: bool = True,
     regions: Optional[Regions] = 'all',
-    splits: Optional[Splits] = None) -> None:
+    splits: Splits = 'all') -> None:
     model_path = os.path.join(config.directories.models, 'voxelmorph', model)
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
