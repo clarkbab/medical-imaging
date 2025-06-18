@@ -1,4 +1,4 @@
-from mymi.processing.datasets.nifti import create_preprocessed_lung_dataset
+from mymi.processing.datasets.nifti import create_corrfield_preprocessed_dataset
 
 dataset = 'PMCC-REIRRAD'
 new_dataset = 'PMCC-REIRRAD-CP'
@@ -7,4 +7,4 @@ kwargs = dict(
     # pat_ids='pat_0',
 )
 
-create_preprocessed_lung_dataset(dataset, new_dataset, **kwargs)
+create_corrfield_preprocessed_dataset(dataset, new_dataset, **kwargs)

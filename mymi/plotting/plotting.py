@@ -40,7 +40,7 @@ class AltHyp(Enum):
     TWO_SIDED = 2
 
 def plot_histogram(
-    data: Image,
+    data: Union[Image, str],
     ax: Optional[mpl.axes.Axes] = None,
     diff: Optional[Image] = None,
     fontsize: float = DEFAULT_FONT_SIZE,
@@ -48,6 +48,9 @@ def plot_histogram(
     title: Optional[str] = None,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
     # Handle arguments.
+    if isinstance(data, str):
+        if data.endswith('.nii.gz'):
+            data, _, _ = load_nifti(data)
     if ax is None:
         ax = plt.gca()
         show = True
@@ -106,7 +109,7 @@ def plot_histograms(
     diffs: Optional[Union[Image, List[Image]]] = None,
     figsize: Tuple[float, float] = (6, 4),
     **kwargs) -> None:
-    datas = arg_to_list(datas, Image)
+    datas = arg_to_list(datas, (Image, str))
     diffs = arg_to_list(diffs, (Image, None), broadcast=len(datas))
     assert len(diffs) == len(datas)
     figsize = (len(datas) * figsize[0], figsize[1])
@@ -127,19 +130,23 @@ def plot_histograms(
 def plot_images(
     data: Union[Image, List[Image]],
     figsize: Tuple[float, float] = (16, 6),
-    idx: Union[int, float] = 0.5,
+    idxs: Union[int, float, List[Union[int, float]]] = 0.5,
     labels: Optional[Union[LabelImage, List[Optional[LabelImage]]]] = None,
     landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,    # Should be in patient coordinates.
     offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
+    points: Optional[Union[Point3D, List[Point3D]]] = None,
     spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
+    transpose: bool = False,
     use_patient_coords: bool = False,
     views: Union[int, Sequence[int]] = 'all',
     window: Optional[Union[str, Tuple[float, float]]] = None,
     **kwargs) -> None:
     data = arg_to_list(data, Image)
+    idxs = arg_to_list(idxs, (int, float), broadcast=len(data))
     labels = arg_to_list(labels, [LabelImage, None], broadcast=len(data))
     landmarks = arg_to_list(landmarks, [LandmarkData, None], broadcast=len(data))
     offsets = arg_to_list(offsets, Point3D, broadcast=len(data))
+    points = arg_to_list(points, [Point3D, None], broadcast=len(data))
     spacings = arg_to_list(spacings, Spacing3D, broadcast=len(data))
     assert len(labels) == len(data)
     assert len(landmarks) == len(data)
@@ -147,8 +154,9 @@ def plot_images(
     assert len(spacings) == len(data)
     palette = sns.color_palette('colorblind', len(labels))
     views = arg_to_list(views, int, literals={ 'all': list(range(3)) })
-    _, axs = plt.subplots(len(data), len(views), figsize=(figsize[0], len(data) * figsize[1]), squeeze=False)
-    for i, (row_axs, d, l, lm, o, s) in enumerate(zip(axs, data, labels, landmarks, offsets, spacings)):
+    n_rows, n_cols = (len(views), len(data)) if transpose else (len(data), len(views))
+    _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], len(data) * figsize[1]), squeeze=False)
+    for i, (row_axs, d, idx, l, lm, o, s, p) in enumerate(zip(axs, data, idxs, labels, landmarks, offsets, spacings, points)):
         # Rescale RGB image to range [0, 1).
         n_dims = len(d.shape)
         if n_dims == 4:
@@ -173,23 +181,37 @@ def plot_images(
                 x_tick_spacing = np.unique(np.diff(col_ax.get_xticks()))[0]
                 x_ticks = np.arange(0, size_x, x_tick_spacing)
                 x_ticklabels = x_ticks * sx + ox
+                x_ticklabels = [f'{l:.1f}' for l in x_ticklabels]
                 col_ax.set_xticks(x_ticks)
                 col_ax.set_xticklabels(x_ticklabels)
                 y_tick_spacing = np.unique(np.diff(col_ax.get_yticks()))[0]
                 y_ticks = np.arange(0, size_y, y_tick_spacing)
                 y_ticklabels = y_ticks * sy + oy
+                y_ticklabels = [f'{l:.1f}' for l in y_ticklabels]
                 col_ax.set_yticks(y_ticks)
                 col_ax.set_yticklabels(y_ticklabels)
+                view_loc = view_idx * s[v] + o[v]
+                col_ax.set_title(f'{get_view_name(v)} view, slice {view_idx} ({view_loc:.1f}mm)')
             if lm is not None:
                 # Convert landmarks to image coordinates.
-                lm[list(range(3))] = (lm[list(range(3))] - o) / s
-                __plot_landmark_data(lm, col_ax, view_idx, d.shape, v)
+                lmv = lm.copy()  # Stop overwriting of passed data.
+                lmv[list(range(3))] = (lmv[list(range(3))] - o) / s
+                __plot_landmark_data(lmv, col_ax, view_idx, d.shape, v)
+            if p is not None:
+                # Convert point to image coordinates.
+                pv = (np.array(p) - o) / s
+                px, py = __get_view_xy(pv, v)
+                col_ax.scatter(px, py, c='yellow', s=20, zorder=1)
 
 @delegates(plot_images)
 def plot_nifti(
     filepath: str,
+    spacing: Optional[Spacing3D] = None,
+    offset: Optional[Point3D] = None,
     **kwargs) -> None:
-    data, spacing, offset = load_nifti(filepath)
+    data, nspacing, noffset = load_nifti(filepath)
+    spacing = nspacing if spacing is None else spacing
+    offset = noffset if offset is None else offset
     plot_images(data, offsets=offset, spacings=spacing, **kwargs)
 
 @delegates(load_numpy, plot_images)
@@ -628,6 +650,7 @@ def plot_patients(
     loaded_series_ids = []
     datas = []
     spacings = []
+    offsets = []
     region_datas = []
     landmark_datas = []
     centre_datas = []
@@ -653,6 +676,7 @@ def plot_patients(
         row_study_ids = []
         row_datas = []
         row_spacings = []
+        row_offsets = []
         row_region_datas = []
         row_landmark_datas = []
         row_centre_datas = []
@@ -682,11 +706,12 @@ def plot_patients(
                 series = study.series(ss) if hasattr(study, 'series') else study.data(ss)
                 row_datas.append(series.data)
                 row_spacings.append(series.spacing)
+                row_offsets.append(series.offset)
                 # Whist the image data belongs to the series (e.g. CT/MR), the region/landmark data belongs to the study
                 # and is currently taken from the latest RTSTRUCT in the study.
                 rdata = study.region_data(regions=regions, **kwargs) if regions is not None else None
                 row_region_datas.append(rdata)
-                ldata = study.landmark_data(landmarks=landmarks, use_patient_coords=False, **kwargs) if landmarks is not None else None
+                ldata = study.landmark_data(landmarks=landmarks, use_patient_coords=False) if landmarks is not None else None
                 row_landmark_datas.append(ldata)
 
                 # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
@@ -719,6 +744,7 @@ def plot_patients(
         loaded_series_ids.append(row_series_ids)
         datas.append(row_datas)
         spacings.append(row_spacings)
+        offsets.append(row_offsets)
         region_datas.append(row_region_datas)
         landmark_datas.append(row_landmark_datas)
         centre_datas.append(row_centre_datas)
@@ -730,6 +756,7 @@ def plot_patients(
         crops=crop_datas,
         datas=datas,
         landmark_datas=landmark_datas,
+        offsets=offsets,
         region_datas=region_datas,
         series_ids=loaded_series_ids,
         show_progress=show_progress,
@@ -747,6 +774,7 @@ def plot_patients_matrix(
     datas: Optional[Union[Image, List[Image], List[Union[Image, List[Image]]]]] = None,
     figsize: Tuple[int, int] = (46, 12),    # In cm.
     landmark_datas: Optional[Union[Landmarks, List[Landmarks], List[Union[Landmarks, List[Landmarks]]]]] = None,
+    offsets: Union[Point3D, List[Point3D], List[Union[Point3D, List[Point3D]]]] = None,
     region_datas: Optional[Union[RegionData, List[RegionData], List[Union[RegionData, List[RegionData]]]]] = None,
     savepath: Optional[str] = None,
     series_ids: Union[StudyID, Sequence[StudyID], List[Union[StudyID, Sequence[StudyID]]]] = None,
@@ -796,6 +824,7 @@ def plot_patients_matrix(
             view_idx = j // n_series_max
             data = datas[i][series_idx] if isinstance(datas[i], list) else datas[i]
             spacing = spacings[i][series_idx] if isinstance(spacings[i], list) else spacings[i]
+            offset = offsets[i][series_idx] if isinstance(offsets[i], list) else offsets[i]
             region_data = region_datas[i][series_idx] if isinstance(region_datas[i], list) else region_datas[i]
             landmark_data = landmark_datas[i][series_idx] if isinstance(landmark_datas[i], list) else landmark_datas[i]
             crop = crops[i][series_idx] if isinstance(crops[i], list) else crops[i]
@@ -812,6 +841,7 @@ def plot_patients_matrix(
                 crop=crop,
                 data=data,
                 landmark_data=landmark_data,
+                offset=offset,
                 region_data=region_data,
                 view=view,
                 **kwargs)
@@ -859,6 +889,7 @@ def plot_patient(
     linewidth: float = 0.5,
     linewidth_legend: float = 8,
     norm: Optional[Tuple[float, float]] = None,
+    offset: Optional[Point3D] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     region_data: Optional[RegionData] = None,            # All data passed to 'region_data' is plotted.
     savepath: Optional[str] = None,
@@ -876,11 +907,13 @@ def plot_patient(
     show_y_ticks: bool = True,
     title: Optional[str] = None,
     transform: torchio.transforms.Transform = None,
+    use_patient_coords: bool = False,
     view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     window_mask: Optional[Tuple[float, float]] = None,
     **kwargs) -> None:
-    __assert_idx(centre, extent_of, idx)
+    if idx is None and centre is None and extent_of is None:
+        idx = 0.5    # Default to middle of volume.
     __assert_view(view)
 
     if ax is None:
@@ -1000,7 +1033,10 @@ def plot_patient(
         elif view == 2:
             spacing_x = spacing[0]
 
-        ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm]')
+        if use_patient_coords:
+            ax.set_xlabel('mm')
+        else:
+            ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm]')
 
     if show_y_label:
         # Add 'y-axis' label.
@@ -1010,7 +1046,11 @@ def plot_patient(
             spacing_y = spacing[2]
         elif view == 2:
             spacing_y = spacing[1]
-        ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm]')
+
+        if use_patient_coords:
+            ax.set_ylabel('mm')
+        else:
+            ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm]')
 
     if region_data is not None:
         # Plot regions.
@@ -1098,6 +1138,24 @@ def plot_patient(
         ax.get_xaxis().set_ticks([])
     if not show_y_ticks:
         ax.get_yaxis().set_ticks([])
+
+    # Adjust axis tick labels.
+    if use_patient_coords:
+        size_x, size_y = __get_view_xy(data.shape, view)
+        sx, sy = __get_view_xy(spacing, view)
+        ox, oy = __get_view_xy(offset, view)
+        x_tick_spacing = np.unique(np.diff(ax.get_xticks()))[0]
+        x_ticks = np.arange(0, size_x, x_tick_spacing)
+        x_ticklabels = x_ticks * sx + ox
+        x_ticklabels = [f'{l:.1f}' for l in x_ticklabels]
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticklabels)
+        y_tick_spacing = np.unique(np.diff(ax.get_yticks()))[0]
+        y_ticks = np.arange(0, size_y, y_tick_spacing)
+        y_ticklabels = y_ticks * sy + oy
+        y_ticklabels = [f'{l:.1f}' for l in y_ticklabels]
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels(y_ticklabels)
 
     if show_title:
         # Add title.

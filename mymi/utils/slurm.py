@@ -19,19 +19,24 @@ GPU_PARTITIONS = [
     'gpu-a100-short',
     'feit-gpu-a100',
 ]
+DEFAULT_CPU = 'sapphire'
+DEFAULT_GPU = 'gpu-h100'
 
 def create_slurm(
     file: str,
     array: Optional[str] = None,
     memory: int = 128,
     mode: Literal['cpu', 'gpu'] = 'gpu',
-    partitions: str = 'gpu-h100',
+    partitions: Optional[str] = None,
     queue: bool = True,
     suffix: str = '',
     time: timedelta = 'days:7',
     **kwargs) -> None:
     # Handle arguments.
-    if partitions == 'go-fishing':
+    if partitions is None:
+        # Set the partitions based on mode.
+        partitions = [DEFAULT_CPU] if mode == 'cpu' else [DEFAULT_GPU]
+    elif partitions == 'go-fishing':
         partitions = GPU_PARTITIONS
     else:
         partitions = partitions.split(',')  # Fire won't interpret as a list.
@@ -203,6 +208,7 @@ def create_slurm_pmcc(
     **kwargs) -> None:
     # Handle arguments.
     if partitions is None:
+        # Set the partitions based on mode.
         partitions = [DEFAULT_CPU] if mode == 'cpu' else [DEFAULT_GPU]
     elif partitions == 'go-fishing':
         partitions = PMCC_GPU_PARTITIONS

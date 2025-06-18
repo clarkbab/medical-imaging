@@ -256,6 +256,8 @@ def create_registrations(
         with timer.record(data, enabled=use_timing):
             if model == 'identity':
                 create_patient_identity_registration(dataset, p, **kwargs)
+            elif model == 'vxmpp-identity':
+                create_patient_vxmpp_identity_registration(dataset, p, **kwargs)
             else:
                 create_patient_registration(dataset, p, module, project, model, model_spacing, **kwargs)
 
@@ -396,3 +398,73 @@ def load_registered_landmarks(
         landmarks.insert(1, 'study-id', moving_study_id)
 
     return landmarks
+
+def create_patient_vxmpp_identity_registration(
+    dataset: str,
+    fixed_pat_id: PatientID,
+    fixed_study_id: StudyID = 'study_1',
+    landmarks: Optional[Landmarks] = 'all',
+    model_name: str = 'vxmpp-identity',
+    moving_pat_id: Optional[PatientID] = None,
+    moving_study_id: StudyID = 'study_0',
+    regions: Optional[Regions] = 'all',
+    regions_ignore_missing: bool = True) -> None:
+
+    # Load data.
+    set = NiftiDataset(dataset)
+    regions = regions_to_list(regions, literals={ 'all': set.list_regions })
+    fixed_pat = set.patient(fixed_pat_id)
+    moving_pat = set.patient(moving_pat_id) if moving_pat_id is not None else fixed_pat
+    fixed_study = fixed_pat.study(fixed_study_id)
+    moving_study = moving_pat.study(moving_study_id)
+    fixed_ct = fixed_study.ct_data
+    fixed_size = fixed_ct.shape
+    fixed_spacing = fixed_study.ct_spacing
+    fixed_offset = fixed_study.ct_offset
+    moving_ct = moving_study.ct_data
+    moving_size = moving_ct.shape
+    moving_spacing = moving_study.ct_spacing
+    moving_offset = moving_study.ct_offset
+    if fixed_size != moving_size:
+        raise ValueError("Fixed and moving images should have same size.")
+
+    # Handle different image spacings.
+    transform = sitk.AffineTransform(3)
+    scaling = np.array(moving_study.ct_fov) / np.array(fixed_study.ct_fov)
+    matrix = np.diag(scaling)
+    transform.SetMatrix(list(matrix.flatten()))
+
+    # Resample moving to moved.
+    moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+
+    # Save moved CT.
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
+    save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+
+    # Save transform.
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
+    save_sitk_transform(transform, filepath)
+
+    # Move region data.
+    if regions is not None:
+        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_data is not None:
+            for region, moving_label in moving_region_data.items():
+                # Apply registration transform.
+                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
+
+    # Move landmarks.
+    if landmarks is not None:
+        fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
+        if fixed_landmark_data is not None:
+            # Use fixed landmarks as moved landmarks.
+            fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
+            moved_landmark_data = fixed_landmark_data.copy()
+            moved_points = sitk_transform_points(fixed_points, transform)
+            moved_landmark_data[list(range(3))] = moved_points
+            landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
+            moved_landmark_data = moved_landmark_data[landmark_cols]
+            filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
+            save_csv(moved_landmark_data, filepath)

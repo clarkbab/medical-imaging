@@ -25,6 +25,8 @@ def __spatial_resample(
     is_boolean = data.dtype == bool
     if is_boolean:
         data = data.astype(np.uint8) 
+    if output_offset is not None:
+        output_offset = tuple(float(o) for o in output_offset)
     if spacing is not None:
         spacing = tuple(float(s) for s in spacing)
     if output_spacing is not None:

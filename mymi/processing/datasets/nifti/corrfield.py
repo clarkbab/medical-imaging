@@ -9,7 +9,7 @@ from mymi.geometry import get_centre_of_mass, get_foreground_extent
 from mymi.transforms import crop_or_pad, resample, sitk_transform_points
 from mymi.utils import *
 
-def create_preprocessed_lung_dataset(
+def create_corrfield_preprocessed_dataset(
     dataset: str,
     new_dataset: str,
     hu_range: Tuple[float, float] = (-2000, 2000),
