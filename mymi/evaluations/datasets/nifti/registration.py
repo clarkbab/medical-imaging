@@ -50,11 +50,7 @@ def get_registration_landmarks_evaluation(
     moving_pat_id: PatientID,
     moving_study_id: str,
     landmarks: Landmarks,
-    model: str) -> List[Dict[str, float]]:
-    print(dataset)
-    print(fixed_pat_id)
-    print(landmarks)
-    print(model)
+    model: str) -> Tuple[List[str], List[float]]:
 
     # Load moved (predicted) region data.
     res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False)
@@ -75,9 +71,10 @@ def get_registration_landmarks_evaluation(
     moved_cols = [f'{c}_moved' for c in range(3)]
     moved_data = merged_df[moved_cols].to_numpy()
 
-    tre_metrics = tre(moving_data, moved_data)
+    landmark_ids = merged_df['landmark-id'].tolist()
+    tres = tre(moving_data, moved_data)
 
-    return tre_metrics
+    return landmark_ids, tres
 
 def get_registration_region_evaluation(
     dataset: str,
@@ -206,6 +203,7 @@ def create_registrations_evaluation(
             'dataset': str,
             'fixed-patient-id': str,
             'fixed-study-id': str,
+            'landmark-id': str,
             'moving-patient-id': str,
             'moving-study-id': str,
             'model': str,
@@ -225,17 +223,18 @@ def create_registrations_evaluation(
                 continue
 
             # Get metrics per region.
-            metrics = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmarks, m)
-            for met, v in metrics.items():
+            lm_ids, tres = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmarks, m)
+            for l, t in zip(lm_ids, tres):
                 data = {
                     'dataset': dataset,
                     'fixed-patient-id': p,
                     'fixed-study-id': fixed_study_id,
+                    'landmark-id': l,
                     'moving-patient-id': p,
                     'moving-study-id': moving_study_id,
                     'model': m,
-                    'metric': met,
-                    'value': v
+                    'metric': 'tre',
+                    'value': t
                 }
                 df = append_row(df, data)
 

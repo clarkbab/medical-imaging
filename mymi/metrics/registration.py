@@ -20,7 +20,7 @@ def ncc(
 
 def tre(    # a, b contain coordinates in mm, spacing not required.
     a: np.ndarray,  
-    b: np.ndarray) -> Dict[str, float]:
+    b: np.ndarray) -> List[float]:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
@@ -29,13 +29,5 @@ def tre(    # a, b contain coordinates in mm, spacing not required.
     for ai, bi in zip(a, b):
         tre = np.linalg.norm(bi - ai)
         tres.append(tre)
-
-    stats = {
-        'tre-mean': np.mean(tres),
-        'tre-min': np.min(tres),
-        'tre-max': np.max(tres),
-        'tre-median': np.median(tres),
-        'tre-95': np.quantile(tres, 0.95)
-    }
     
-    return stats
+    return tres
