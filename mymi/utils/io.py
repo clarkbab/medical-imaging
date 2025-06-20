@@ -12,13 +12,16 @@ def load_csv(
     map_cols: Dict[str, str] = {},
     map_types: Dict[str, Any] = {},
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
-    if not os.path.exists(filepath):
+    if filepath.startswith('files:'):
+        filepath = os.path.join(config.directories.files, filepath[6:])
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+    else:
         if exists_only:
             return False
         else:
             raise ValueError(f"CSV at filepath '{filepath}' not found.")
-    elif exists_only:
-        return True
 
     # Load CSV.
     map_types['patient-id'] = str
@@ -68,6 +71,8 @@ def save_csv(
     filepath: str,
     index: bool = False,
     overwrite: bool = True) -> None:
+    if filepath.startswith('files:'):
+        filepath = os.path.join(config.directories.files, filepath[6:])
     if os.path.exists(filepath):
         if overwrite:
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
