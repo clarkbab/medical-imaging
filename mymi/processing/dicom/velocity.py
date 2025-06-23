@@ -13,9 +13,9 @@ def convert_velocity_predictions_to_nifti(
     dataset: str,
     fixed_study_id: str = 'study_1',
     moving_study_id: str = 'study_0',
-    landmarks: Optional[Landmarks] = None,
+    landmarks: Optional[Landmarks] = 'all',
     pat_prefix: Optional[str] = None,
-    regions: Optional[Regions] = None,
+    regions: Optional[Regions] = 'all',
     transform_types: List[str] = ['dmp', 'edmp']) -> None:
     dicom_set = DicomDataset(dataset)
     nifti_set = NiftiDataset(dataset)
@@ -59,14 +59,13 @@ def convert_velocity_predictions_to_nifti(
 
             # Move regions.
             if regions is not None:
-                regions = regions_to_list(regions, literals={ 'all', moving_study.list_regions })
+                regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
                 for r in regions:
                     if not moving_study.has_regions(r):
                         continue
                     moving_region = moving_study.region_data(regions=r)[r]
                     moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, model, 'regions', r, f'{model}.nii.gz')
-                    print(filepath)
+                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Move landmarks.
