@@ -70,10 +70,11 @@ def velocity_load_transform(
     # and then taking the transpose to get (x, y, z).
     image = np.array(image)
     image = np.reshape(image, (*reversed(size), 3))
+    image = np.moveaxis(image, -1, 0)
     image = transpose_image(image, vector=True)
 
     # Create transform.
     # The 'offset' is not stored in the '.bdf' file, so we need to use the fixed image offset.
-    image = to_sitk_image(image, spacing, fixed_offset, vector=True)
+    image = to_sitk_image(image, spacing=spacing, offset=fixed_offset, vector=True)
     transform = sitk.DisplacementFieldTransform(image)
     return transform

@@ -1,1 +1,2 @@
-from .dicom import convert_to_nifti
+from .dicom import *
+from .velocity import *
