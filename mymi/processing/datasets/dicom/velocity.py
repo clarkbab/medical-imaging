@@ -50,11 +50,11 @@ def convert_velocity_predictions_to_nifti(
             moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 
             # Save moved CT.
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, model, 'ct', 'series_0.nii.gz')
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'ct', f'{model}.nii.gz')
             save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Save warp.
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, model, 'dvf', 'series_0.hdf5')
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'dvf', f'{model}.hdf5')
             save_sitk_transform(transform, filepath)
 
             # Move regions.
@@ -65,7 +65,8 @@ def convert_velocity_predictions_to_nifti(
                         continue
                     moving_region = moving_study.region_data(regions=r)[r]
                     moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, model, 'regions', 'series_1', f'{r}.nii.gz')
+                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, model, 'regions', r, f'{model}.nii.gz')
+                    print(filepath)
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Move landmarks.
@@ -77,5 +78,5 @@ def convert_velocity_predictions_to_nifti(
             lm_df[list(range(3))] = lm_data_t
             # These are redundant columns, and shouldn't be stored on disk. They should be added at load time.
             lm_df = lm_df.drop(columns=['patient-id', 'study-id'])
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, moving_study_id, p_dest, fixed_study_id, model, 'landmarks', 'series_1.csv')
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'landmarks', f'{model}.csv')
             save_files_csv(lm_df, filepath, overwrite=True)
