@@ -133,6 +133,7 @@ def plot_images(
     idxs: Union[int, float, List[Union[int, float]]] = 0.5,
     labels: Optional[Union[LabelImage, List[Optional[LabelImage]]]] = None,
     landmarks: Optional[Union[LandmarkData, List[LandmarkData]]] = None,    # Should be in patient coordinates.
+    modality: Literal['ct', 'dose'] = 'ct',
     offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
     points: Optional[Union[Point3D, List[Point3D]]] = None,
     spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
@@ -167,7 +168,11 @@ def plot_images(
             aspect = __get_aspect(v, s)
             origin = __get_origin(v)
             vmin, vmax = get_window(window, d)
-            col_ax.imshow(image, aspect=aspect, cmap='gray', origin=origin, vmin=vmin, vmax=vmax)
+            if modality == 'ct':
+                cmap='gray'
+            elif modality == 'dose':
+                cmap='viridis'
+            col_ax.imshow(image, aspect=aspect, cmap=cmap, origin=origin, vmin=vmin, vmax=vmax)
             col_ax.set_title(f'{get_view_name(v)} view, slice {view_idx}')
             if l is not None:   # Plot landmarks.
                 cmap = ListedColormap(((1, 1, 1, 0), palette[i]))

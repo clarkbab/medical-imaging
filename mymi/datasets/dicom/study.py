@@ -293,7 +293,7 @@ class DicomStudy:
             def_rtplan_series = self.series(def_rtplan_series_id, 'RTPLAN')
             self.__default_rtplan = def_rtplan_series.rtplan(def_rtplan_sop_id)
 
-        elif self.__index_policy['rtplan']['no-ref-rtstruct']['only'] == 'at-least-one-rtstruct':
+        else:
             # Choose first RTPLAN from study.
             rtplan_series_ids = self.list_series('RTPLAN')
             if len(rtplan_series_ids) > 0:

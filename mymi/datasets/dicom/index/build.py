@@ -155,6 +155,9 @@ def build_index(
                     }
 
                 # Add index entry.
+                # Make 'filepath' relative to dataset path.
+                filepath = filepath.replace(dataset_path, '')
+                filepath = filepath.lstrip(os.sep)  # Remove leading separator if exists.
                 data_index = sop_id
                 data = {
                     'dataset': dataset,
@@ -167,7 +170,7 @@ def build_index(
                     'series-time': series_time,
                     'modality': modality,
                     'mod-spec': mod_spec,
-                    'filepath': filepath.replace(dataset_path, ''),     # Make filepaths relative to allow copying of dataset to new locations.
+                    'filepath': filepath,
                 }
                 index = append_row(index, data, index=data_index)
     
@@ -326,20 +329,20 @@ def build_index(
         error_index = append_dataframe(error_index, no_ref_rtstruct)
         index = index.drop(no_ref_rtstruct_idx)
 
-    elif 'in-study' in policy['rtplan']['no-ref-rtstruct']:
+    else:
+        # If no-ref-rtstruct is allowed, RTPLANs must have an RTSTRUCT in the study.
+        logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID') and with no RTSTRUCT in the study.")
+
         # Add study's RSTRUCT series count info to RTPLAN table.
         study_rtstruct_series_count = index[index['modality'] == 'RTSTRUCT'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtstruct-count' })
         no_ref_rtstruct = no_ref_rtstruct.reset_index().merge(study_rtstruct_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
 
-        if policy['rtplan']['no-ref-rtstruct']['in-study'] == ['>=1']:
-            logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID') and with no RTSTRUCT in the study.")
-
-            # Remove RTPLANs with no RTSTRUCT in study.
-            no_rtstruct_series_idx = no_ref_rtstruct[no_ref_rtstruct['rtstruct-count'].isna()].index
-            no_rtstruct_series = index.loc[no_rtstruct_series_idx]
-            no_rtstruct_series['error'] = 'NO-REF-RTSTRUCT:IN-STUDY:>=1'
-            error_index = append_dataframe(error_index, no_rtstruct_series)
-            index = index.drop(no_rtstruct_series_idx)
+        # Remove RTPLANs with no RTSTRUCT in study.
+        no_rtstruct_series_idx = no_ref_rtstruct[no_ref_rtstruct['rtstruct-count'].isna()].index
+        no_rtstruct_series = index.loc[no_rtstruct_series_idx]
+        no_rtstruct_series['error'] = 'NO-REF-RTSTRUCT:NO-RTSTRUCT-IN-STUDY'
+        error_index = append_dataframe(error_index, no_rtstruct_series)
+        index = index.drop(no_rtstruct_series_idx)
 
     # Remove RTDOSE series based on policy regarding referenced RTPLAN series.
     # 'no-ref-rtplan': {
