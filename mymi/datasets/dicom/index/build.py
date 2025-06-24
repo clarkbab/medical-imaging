@@ -321,12 +321,12 @@ def build_index(
     if not policy['rtplan']['no-ref-rtstruct']['allow']:
         logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID').")
 
-        # Discard RTPLANs without references RTSTRUCT.
+        # Discard RTPLANs without reference RTSTRUCTs.
         no_ref_rtstruct['error'] = 'NO-REF-RTSTRUCT'
         error_index = append_dataframe(error_index, no_ref_rtstruct)
         index = index.drop(no_ref_rtstruct_idx)
 
-    else:
+    elif 'in-study' in policy['rtplan']['no-ref-rtstruct']:
         # Add study's RSTRUCT series count info to RTPLAN table.
         study_rtstruct_series_count = index[index['modality'] == 'RTSTRUCT'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtstruct-count' })
         no_ref_rtstruct = no_ref_rtstruct.reset_index().merge(study_rtstruct_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
