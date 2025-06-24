@@ -10,7 +10,7 @@ from mymi.datasets import NiftiDataset
 from mymi.loaders import get_holdout_split
 from mymi.metrics import dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
-from mymi.predictions.datasets.nifti import load_segmenter_predictions
+from mymi.predictions.nifti import load_segmenter_predictions
 from mymi import logging
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import *

@@ -83,24 +83,6 @@ def save_csv(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         data.to_csv(filepath, index=index)
 
-def save_files_csv(
-    data: pd.DataFrame,
-    *path: List[str],
-    index: bool = False,
-    header: bool = True,
-    overwrite: bool = True) -> None:
-    filepath = os.path.join(config.directories.files, *path)
-    assert filepath.split('.')[-1] == 'csv'
-    if os.path.exists(filepath):
-        if overwrite:
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            data.to_csv(filepath, header=header, index=index)
-        else:
-            raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
-    else:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        data.to_csv(filepath, header=header, index=index)
-
 def save_json(
     data: Any,
     filepath: str) -> None:

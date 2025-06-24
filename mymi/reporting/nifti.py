@@ -17,7 +17,7 @@ from mymi.datasets import DicomDataset, NiftiDataset
 from mymi.geometry import extent, centre_of_extent, extent_width_mm
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
-from mymi.plotting.datasets.nifti import plot_patients
+from mymi.plotting.nifti import plot_patients
 from mymi.processing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
 from mymi.typing import *

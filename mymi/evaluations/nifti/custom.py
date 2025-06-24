@@ -14,7 +14,7 @@ from mymi.geometry import get_box, centre_of_extent
 from mymi.metrics import distances, dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
-from mymi.predictions.datasets.nifti import get_institutional_localiser, load_multi_segmenter_prediction_dict, load_segmenter_predictions
+from mymi.predictions.nifti import get_institutional_localiser, load_multi_segmenter_prediction_dict, load_segmenter_predictions
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import ModelName, Region, Regions
 from mymi.utils import append_row, arg_to_list, encode

@@ -38,7 +38,6 @@ class NiftiStudy:
             return None
         return def_ct.data
 
-    @property
     def ct_extent(
         self,
         **kwargs) -> Optional[Point3D]:

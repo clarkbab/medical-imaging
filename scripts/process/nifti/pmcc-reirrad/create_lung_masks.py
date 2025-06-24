@@ -1,4 +1,4 @@
-from mymi.processing.datasets.nifti import combine_labels
+from mymi.processing.nifti import combine_labels
 
 dataset = 'PMCC-REIRRAD'
 pat_ids = ['pat_4', 'pat_9']

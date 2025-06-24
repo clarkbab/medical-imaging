@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_registrations
+from mymi.predictions.nifti import create_registrations
 from mymi.utils import grid_arg
 
 loss_lambda = grid_arg('loss_lambda', 0.02)

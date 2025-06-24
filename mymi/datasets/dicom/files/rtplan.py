@@ -1,7 +1,7 @@
+import os
 import pandas as pd
 import pydicom as dcm
 from pydicom.dataset import FileDataset
-
 from .files import DicomFile, SOPInstanceUID
 
 class RtPlanFile(DicomFile):
@@ -17,7 +17,7 @@ class RtPlanFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]
         self.__verify_index()
-        self.__path = self.__index.iloc[0]['filepath']
+        self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__self.__index.iloc[0]['filepath'])
 
     @property
     def description(self) -> str:

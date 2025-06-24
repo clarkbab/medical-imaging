@@ -1,6 +1,6 @@
-from .corrfield import *
 from .custom import *
 from .dicom import *
+from .lung import *
 from .nifti import *
 from .nnunet import *
 from .old import *

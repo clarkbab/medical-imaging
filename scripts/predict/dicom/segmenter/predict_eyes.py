@@ -10,7 +10,7 @@ from mymi import config
 from mymi.datasets import DicomDataset
 from mymi.datasets.dicom import ROIData, RtStructConverter
 from mymi import logging
-from mymi.predictions.datasets.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
+from mymi.predictions.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
 
 # Set path to data.
 # This file (__file__) runs at '_internal/predict_eyes.py'. Is it unzipped from 'base_library.zip'?

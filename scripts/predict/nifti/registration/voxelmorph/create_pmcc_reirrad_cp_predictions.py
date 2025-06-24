@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti.registration import create_voxelmorph_predictions
+from mymi.predictions.nifti.registration import create_voxelmorph_predictions
 
 dataset = 'PMCC-REIRRAD-CP'
 model = 'LUNG250M-4B-222-dynamic-2000'

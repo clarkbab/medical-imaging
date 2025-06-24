@@ -167,7 +167,7 @@ def build_index(
                     'series-time': series_time,
                     'modality': modality,
                     'mod-spec': mod_spec,
-                    'filepath': filepath,
+                    'filepath': filepath.replace(dataset_path, ''),     # Make filepaths relative to allow copying of dataset to new locations.
                 }
                 index = append_row(index, data, index=data_index)
     

@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_registrations
+from mymi.predictions.nifti import create_registrations
 
 dataset = "L2R-LUNG-CT"
 project = "IMREG"

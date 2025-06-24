@@ -1,9 +1,9 @@
 from mymi.predictions.nifti import create_totalseg_predictions
 
-dataset = 'DIRLAB-LUNG-COPD'
+dataset = 'POPI'
 kwargs = dict(
     combine_regions={
-        'lung': 'Lung'
+        'lung': 'Lungs'
     },
     # remove_task_regions={
     #     'total': 'all',

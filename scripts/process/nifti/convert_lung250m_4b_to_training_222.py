@@ -1,4 +1,4 @@
-from mymi.processing.datasets.nifti import convert_to_registration_training_holdout
+from mymi.processing.nifti import convert_to_registration_training_holdout
 
 dataset = 'LUNG250M-4B'
 dest_dataset = 'LUNG250M-4B-222'

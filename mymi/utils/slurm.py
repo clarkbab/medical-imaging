@@ -193,8 +193,8 @@ PMCC_CPU_PARTITIONS = [
 PMCC_GPU_PARTITIONS = [
     'rhel_gpu',
 ]
-DEFAULT_CPU = 'rhel_short'
-DEFAULT_GPU = 'rhel_gpu'
+PMCC_DEFAULT_CPU = 'rhel_short'
+PMCC_DEFAULT_GPU = 'rhel_gpu'
 
 def create_slurm_pmcc(
     file: str,
@@ -209,7 +209,7 @@ def create_slurm_pmcc(
     # Handle arguments.
     if partitions is None:
         # Set the partitions based on mode.
-        partitions = [DEFAULT_CPU] if mode == 'cpu' else [DEFAULT_GPU]
+        partitions = [PMCC_DEFAULT_CPU] if mode == 'cpu' else [PMCC_DEFAULT_GPU]
     elif partitions == 'go-fishing':
         partitions = PMCC_GPU_PARTITIONS
     else:

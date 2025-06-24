@@ -5,6 +5,6 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.predictions.datasets.nrrd import create_segmenter_predictions
+from mymi.predictions.nrrd import create_segmenter_predictions
 
 fire.Fire(create_segmenter_predictions)

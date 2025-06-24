@@ -223,6 +223,19 @@ def plot_numpy(
     data = load_numpy(filepath, **kwargs)
     plot_images(data, offsets=offset, spacings=spacing, **kwargs)
 
+def sitk_plot_image(
+    filepath: str,
+    spacing: Optional[Spacing3D] = None,
+    offset: Optional[Point3D] = None,
+    **kwargs) -> None:
+    data, lspacing, loffset = sitk_load_image(filepath)
+    if spacing is None:
+        spacing = lspacing
+    if offset is None:
+        offset = loffset
+    plot_images(data, offsets=offset, spacings=spacing, **kwargs)
+
+
 def __plot_region_data(
     data: RegionData,
     ax: mpl.axes.Axes,

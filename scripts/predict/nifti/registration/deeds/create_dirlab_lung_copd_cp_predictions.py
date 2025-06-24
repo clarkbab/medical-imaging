@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_deeds_predictions
+from mymi.predictions.nifti import create_deeds_predictions
 
 dataset = 'DIRLAB-LUNG-COPD-CP'
 kwargs = dict(

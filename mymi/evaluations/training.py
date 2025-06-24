@@ -10,7 +10,7 @@ from mymi import datasets as ds
 from mymi.metrics import dice, distances
 from mymi.models.lightning_modules import Localiser, Segmenter
 from mymi import logging
-from mymi.predictions.datasets.training import get_localiser_prediction
+from mymi.predictions.training import get_localiser_prediction
 from mymi import typing
 
 def evaluate_localiser_predictions(

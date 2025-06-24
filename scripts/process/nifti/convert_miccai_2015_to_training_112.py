@@ -1,4 +1,4 @@
-from mymi.processing.datasets.nifti import convert_to_segmentation_training_holdout
+from mymi.processing.nifti import convert_to_segmentation_training_holdout
 
 dataset = 'MICCAI-CROP'
 dest_dataset = 'MICCAI-112'

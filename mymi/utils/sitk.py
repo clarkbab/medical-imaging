@@ -1,5 +1,4 @@
 import numpy as np
-import os
 import SimpleITK as sitk
 from typing import *
 
@@ -7,24 +6,34 @@ from mymi.typing import *
 
 from .utils import transpose_image
 
-def from_sitk_image(img: sitk.Image) -> Tuple[Image, Spacing3D, Point3D]:
+def from_sitk_image(
+    img: sitk.Image,
+    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[Image, Spacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
     offset = list(img.GetOrigin())
-    # ITK assumes loaded nifti data is using RAS coordinates, so they set negative offsets
-    # and directions. For all images we write to nifti, they'll be in LPS, so undo ITK changes.
-    # The image data is not flipped by ITK.
-    offset = list(img.GetOrigin())
-    offset[0], offset[1] = -offset[0], -offset[1]
+    if img_type == 'mhd':
+        pass
+    elif img_type == 'nii':
+        # ITK assumes loaded nifti data is using RAS coordinates, so they set negative offsets
+        # and directions. For all images we write to nifti, they'll be in LPS, so undo ITK changes.
+        # The image data is not flipped by ITK.
+        offset[0], offset[1] = -offset[0], -offset[1]
     offset = tuple(offset)
     return data, spacing, offset
 
-def load_sitk_image(filepath: str) -> sitk.Image:
+def sitk_load_image(filepath: str) -> Tuple[Image, Spacing3D, Point3D]:
+    if filepath.endswith('.mhd'):
+        img_type = 'mhd'
+    elif filepath.endswith('.nii.gz') or filepath.endswith('.nii'):
+        img_type = 'nii'
+    else:
+        raise ValueError(f'Unsupported file type: {filepath}.')
     img = sitk.ReadImage(filepath)
-    return img
+    return from_sitk_image(img, img_type=img_type)
 
 def to_sitk_image(
     data: Union[Image, VectorImage],   # We use LPS coordinates - the same as SimpleITK!

@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_registrations
+from mymi.predictions.nifti import create_registrations
 
 dataset = "DIRLAB-LUNG-COPD-VXMPP"
 project = "IMREG"

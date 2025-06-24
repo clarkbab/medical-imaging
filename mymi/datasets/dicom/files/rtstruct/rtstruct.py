@@ -1,5 +1,6 @@
 import collections
 import numpy as np
+import os
 import pandas as pd
 import pydicom as dcm
 from typing import *
@@ -32,7 +33,7 @@ class RtStructFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]
         self.__verify_index()
-        self.__path = self.__index.iloc[0]['filepath']
+        self.__path = os.path.join(self.__series.study.patient.dataset, self.__index.iloc[0]['filepath'])
 
         # Get policies.
         self.__index_policy = self.__series.index_policy

@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_voxelmorph_pp_predictions
+from mymi.predictions.nifti import create_voxelmorph_pp_predictions
 
 dataset = 'DIRLAB-LUNG-COPD'
 kwargs = dict(

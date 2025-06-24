@@ -1,7 +1,7 @@
 from typing import *
 
 from mymi.datasets.nifti import NiftiDataset
-from mymi.predictions.datasets.nifti import load_registration as lr, load_segmenter_predictions
+from mymi.predictions.nifti import load_registration as lr, load_segmenter_predictions
 from mymi.typing import *
 from mymi.utils import *
 

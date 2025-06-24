@@ -1,3 +1,3 @@
-from mymi.processing.datasets.nifti import create_corrfield_preprocessed_dataset
+from mymi.processing.nifti import create_lung_preprocessed_dataset
 
-create_corrfield_preprocessed_dataset()
+create_lung_preprocessed_dataset()

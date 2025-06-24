@@ -1,7 +1,7 @@
 import os
 
 from mymi import config
-from mymi.plotting.datasets.nifti import plot_patient_histograms
+from mymi.plotting.nifti import plot_patient_histograms
 
 dataset = 'HANSEG'
 kwargs = dict(

@@ -6,7 +6,7 @@ from typing import *
 
 from mymi.datasets import NiftiDataset
 from mymi.metrics import dice, distances, tre
-from mymi.predictions.datasets.nifti import load_registration
+from mymi.predictions.nifti import load_registration
 from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *

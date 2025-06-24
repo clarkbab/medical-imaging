@@ -1,4 +1,4 @@
-from mymi.processing.datasets.nifti import create_vxmpp_preprocessed_dataset
+from mymi.processing.nifti import create_vxmpp_preprocessed_dataset
 
 dataset = 'DIRLAB-LUNG-COPD'
 new_dataset = 'DIRLAB-LUNG-COPD-VXMPP'

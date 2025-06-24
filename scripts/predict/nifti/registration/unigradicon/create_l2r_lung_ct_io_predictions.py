@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti import create_unigradicon_predictions
+from mymi.predictions.nifti import create_unigradicon_predictions
 
 dataset = 'L2R-LUNG-CT'
 model = 'unigradicon-io'

@@ -1,4 +1,4 @@
-from mymi.predictions.datasets.nifti.registration import create_corrfield_predictions
+from mymi.predictions.nifti.registration import create_corrfield_predictions
 
 dataset = 'L2R-LUNG-CT'
 kwargs = dict(

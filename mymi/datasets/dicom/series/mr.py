@@ -1,5 +1,6 @@
 from datetime import datetime
 import numpy as np
+import os
 import pandas as pd
 import pydicom as dcm
 from typing import *
@@ -35,8 +36,9 @@ class MrSeries(DicomSeries):
     @property
     def mr_files(self) -> List[dcm.FileDataset]:
         # Sort MRs by z position, smallest first.
-        filepaths = list(self.__index['filepath'])
-        mrs = [dcm.read_file(f, force=self.__force_dicom_read) for f in filepaths]
+        rel_filepaths = list(self.__index['filepath'])
+        abs_filepaths = [os.path.join(self.__study.patient.dataset.path, p) for p in rel_filepaths]
+        mrs = [dcm.read_file(f, force=self.__force_dicom_read) for f in abs_filepaths]
         mrs = list(sorted(mrs, key=lambda m: m.ImagePositionPatient[2]))
         return mrs
 

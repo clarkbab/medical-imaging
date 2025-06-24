@@ -1,7 +1,7 @@
 from mymi.processing.nifti import create_lung_preprocessed_dataset
 
-dataset = 'PMCC-REIRRAD'
-new_dataset = 'PMCC-REIRRAD-CP'
+dataset = 'POPI'
+new_dataset = 'POPI-PP'
 kwargs = dict(
     margin=20,
     # pat_ids='pat_0',

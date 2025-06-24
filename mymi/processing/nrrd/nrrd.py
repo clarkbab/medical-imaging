@@ -20,7 +20,7 @@ from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
 from mymi import logging
 from mymi.models import replace_ckpt_alias
-from mymi.predictions.datasets.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_predictions
+from mymi.predictions.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_predictions
 from mymi.regions import RegionColours, RegionList, RegionNames, to_255
 from mymi.regions import regions_to_list
 from mymi.transforms import crop, resample

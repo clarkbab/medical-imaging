@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import pandas as pd
 import pydicom as dcm
 from pydicom.dataset import FileDataset
@@ -26,7 +27,7 @@ class RtDoseFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]       # Double brackets ensure result is DataFrame not Series.
         self.__verify_index()
-        self.__path = self.__index.iloc[0]['filepath']
+        self.__path = os.path.join(self.__series.study.patient.dataset, self.__index.iloc[0]['filepath'])
 
     @property
     def data(self) -> DoseImage:

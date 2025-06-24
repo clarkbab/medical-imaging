@@ -7,7 +7,7 @@ from mymi.datasets.nifti import recreate as recreate_nifti
 from mymi.datasets.nrrd import NrrdDataset
 from mymi.geometry import extent_mm
 from mymi import logging
-from mymi.predictions.datasets.nrrd import load_localiser_prediction
+from mymi.predictions.nrrd import load_localiser_prediction
 from mymi.processing import write_flag
 from mymi.transforms import crop_mm_3D
 from mymi.typing import *
