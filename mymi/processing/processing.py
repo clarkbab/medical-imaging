@@ -11,8 +11,9 @@ from time import time
 from tqdm import tqdm
 from typing import *
 
+from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
 from mymi.datasets import DicomDataset, TrainingDataset
-from mymi.datasets.dicom import DATE_FORMAT as DICOM_DATE_FORMAT, ROIData, RtStructConverter, recreate as recreate_dicom, TIME_FORMAT as DICOM_TIME_FORMAT
+from mymi.datasets.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
 from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
 from mymi.geometry import extent
 from mymi import logging

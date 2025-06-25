@@ -53,10 +53,6 @@ class DicomStudy:
         return self.default_ct.spacing if self.default_ct is not None else None
 
     @property
-    def datetime(self) -> datetime:
-        return self.default_ct.study_datetime
-
-    @property
     def default_ct(self) -> Optional[CtSeries]:
         series_ids = self.list_series('CT')
         if len(series_ids) == 0:
@@ -98,10 +94,6 @@ class DicomStudy:
     @property
     def dose_data(self) -> Optional[DoseImage]:
         return self.default_rtdose.data if self.default_rtdose is not None else None 
-
-    @property
-    def first_ct(self):
-        return self.default_ct.first_ct
 
     @property
     def has_ct(self):

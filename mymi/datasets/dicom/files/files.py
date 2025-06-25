@@ -7,5 +7,5 @@ class DicomFile:
         return NotImplementedError("Child class must implement 'id'.")
 
     @property
-    def path(self) -> str:
-        raise NotImplementedError("Child class must implement 'path'.")
+    def filepath(self) -> str:
+        raise NotImplementedError("Child class must implement 'filepath'.")

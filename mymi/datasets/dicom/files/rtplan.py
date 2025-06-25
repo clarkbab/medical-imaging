@@ -20,7 +20,7 @@ class RtPlanFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]
         self.__verify_index()
-        self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
+        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
 
     @property
     def description(self) -> str:
@@ -31,8 +31,8 @@ class RtPlanFile(DicomFile):
         return self.__id
 
     @property
-    def path(self) -> str:
-        return self.__path
+    def filepath(self) -> str:
+        return self.__filepath
 
     @property
     def series(self) -> str:
@@ -44,13 +44,13 @@ class RtPlanFile(DicomFile):
 
     @property
     def dicom(self) -> FileDataset:
-        return dcm.read_file(self.__path)
+        return dcm.read_file(self.__filepath)
 
     def __str__(self) -> str:
         return self.__global_id
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"RtPlanFile '{self}' not found in index for series '{self.__series}'.")
+            raise ValueError(f"RtPlan '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RtPlanFiles found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RtPlans found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")

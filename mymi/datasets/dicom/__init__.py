@@ -5,7 +5,6 @@ from typing import List
 from mymi import config
 
 from .dataset import *
-from .dicom import *
 from .files import *
 from .index import *
 from .series import *

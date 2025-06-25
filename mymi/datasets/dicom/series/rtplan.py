@@ -23,13 +23,13 @@ class RtPlanSeries(DicomSeries):
         self.__index = index
 
     @property
-    def default_file(self) -> str:
+    def default_file(self) -> Optional[RtPlanFile]:
         # Choose most recent RTPLAN.
-        rtdose_ids = self.list_files()
-        if len(rtdose_ids) == 0:
+        rtplan_ids = self.list_files()
+        if len(rtplan_ids) == 0:
             return None
         else:
-            return self.rtdose(rtdose_ids[-1])
+            return self.rtplan(rtplan_ids[-1])
 
     @property
     def description(self) -> str:

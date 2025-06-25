@@ -23,7 +23,7 @@ class RtDoseSeries(DicomSeries):
         self.__index = index
 
     @property
-    def default_file(self) -> str:
+    def default_file(self) -> Optional[RtDoseFile]:
         # Choose most recent RTDOSE.
         rtdose_ids = self.list_files()
         if len(rtdose_ids) == 0:

@@ -31,7 +31,7 @@ class RtStructFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]
         self.__verify_index()
-        self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
+        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
 
         # Get policies.
         self.__index_policy = self.__series.index_policy
@@ -54,8 +54,8 @@ class RtStructFile(DicomFile):
         return self.__index_policy
 
     @property
-    def path(self) -> str:
-        return self.__path
+    def filepath(self) -> str:
+        return self.__filepath
 
     @property
     def ref_ct(self) -> str:
@@ -69,7 +69,7 @@ class RtStructFile(DicomFile):
 
     @property
     def dicom(self) -> dcm.dataset.FileDataset:
-        return dcm.read_file(self.__path)
+        return dcm.read_file(self.__filepath)
     
     @property
     def series(self) -> 'RtStructSeries':
@@ -234,9 +234,9 @@ class RtStructFile(DicomFile):
 
             if len(dup_regions) > 0:
                 if use_mapping and self.__region_map is not None:
-                    raise ValueError(f"Duplicate regions found for RtStructFile '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
+                    raise ValueError(f"Duplicate regions found for RtStruct '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
                 else:
-                    raise ValueError(f"Duplicate regions found for RtStructFile '{self}'. Duplicated regions: '{dup_regions}'")
+                    raise ValueError(f"Duplicate regions found for RtStruct '{self}'. Duplicated regions: '{dup_regions}'")
 
         # Sort regions.
         if use_mapping:
@@ -278,7 +278,7 @@ class RtStructFile(DicomFile):
         if not regions_ignore_missing:
             for r in regions:
                 if not r in rtstruct_regions:
-                    raise ValueError(f"Requested region '{r}' not present for RtStructFile '{self}'.")
+                    raise ValueError(f"Requested region '{r}' not present for RtStruct '{self}'.")
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
         # need these to load regions from RTSTRUCT dicom.
@@ -317,9 +317,9 @@ class RtStructFile(DicomFile):
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
-            raise ValueError(f"RtStructFile '{self}' not found in index for series '{self.__series}'.")
+            raise ValueError(f"RtStruct '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RtStructFiles found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RtStructs found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
     def __load_ref_ct(self) -> None:
         if not self.__index_policy['no-ref-ct']['allow']:

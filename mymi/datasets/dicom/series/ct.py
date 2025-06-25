@@ -5,11 +5,11 @@ import pandas as pd
 import pydicom as dcm
 from typing import *
 
+from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
 from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
-from ..dicom import DATE_FORMAT, TIME_FORMAT
 from .series import DicomSeries
 
 class CtSeries(DicomSeries):
@@ -30,6 +30,11 @@ class CtSeries(DicomSeries):
             raise ValueError(f"No CT series with ID '{id}' found in study '{study}'.")
         self.__index = index
 
+        # Save paths.
+        relpaths = list(self.__index['filepath'])
+        abspaths = [os.path.join(self.__study.patient.dataset.path, p) for p in relpaths]
+        self.__filepaths = abspaths
+
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
@@ -37,15 +42,13 @@ class CtSeries(DicomSeries):
             return fn(self, *args, **kwargs)
         return wrapper
     
-    # Should really return 'CT' file object IDs.
+    # Could return 'CTFile' objects - this would align with other series, but would create a lot of objects in memory.
     @property
-    def ct_files(self) -> List[dcm.FileDataset]:
+    def dicoms(self) -> List[dcm.FileDataset]:
         # Sort CTs by z position, smallest first.
-        rel_ct_paths = list(self.__index['filepath'])
-        abs_ct_paths = [os.path.join(self.__study.patient.dataset.path, p) for p in rel_ct_paths]
-        cts = [dcm.read_file(f, force=self.__force_dicom_read) for f in abs_ct_paths]
-        cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
-        return cts
+        ct_dicoms = [dcm.read_file(f, force=self.__force_dicom_read) for f in self.__filepaths]
+        ct_dicoms = list(sorted(ct_dicoms, key=lambda c: c.ImagePositionPatient[2]))
+        return ct_dicoms
 
     @property
     @ensure_loaded
@@ -61,6 +64,10 @@ class CtSeries(DicomSeries):
         self,
         use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
         return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
+
+    @property
+    def filepaths(self) -> List[str]:
+        return self.__filepaths
 
     @property
     @ensure_loaded
@@ -89,10 +96,6 @@ class CtSeries(DicomSeries):
         return self.__offset
 
     @property
-    def paths(self) -> str:
-        return self.__paths
-
-    @property
     @ensure_loaded
     def size(self) -> Size3D:
         return self.__data.shape
@@ -106,50 +109,39 @@ class CtSeries(DicomSeries):
     def study(self) -> str:
         return self.__study
 
-    @property
-    def study_datetime(self) -> datetime:
-        ct = self.ct_files[0]
-        datetime_str = f"{ct.StudyDate}:{ct.StudyTime}"
-        datetime_fmt = f"{DATE_FORMAT}:{TIME_FORMAT}"
-        return datetime.strptime(datetime_str, datetime_fmt)
-
-    @property
-    def first_ct(self) -> dcm.FileDataset:
-        return self.ct_files[0]
-
     def __load_data(self) -> None:
-        cts = self.ct_files
+        ct_dicoms = self.dicoms
 
         # Store offset.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
-        offset = cts[0].ImagePositionPatient    
+        offset = ct_dicoms[0].ImagePositionPatient    
         self.__offset = tuple(float(o) for o in offset)
 
         # Store size.
         # Indexing checked that CT slices had consisent x/y spacing in series.
         self.__size = (
-            cts[0].pixel_array.shape[1],
-            cts[0].pixel_array.shape[0],
-            len(cts)
+            ct_dicoms[0].pixel_array.shape[1],
+            ct_dicoms[0].pixel_array.shape[0],
+            len(ct_dicoms)
         )
 
         # Store spacing.
         # Indexing checked that CT slices were equally spaced in z-dimension.
         self.__spacing = (
-            float(cts[0].PixelSpacing[0]),
-            float(cts[0].PixelSpacing[1]),
-            float(np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2]))
+            float(ct_dicoms[0].PixelSpacing[0]),
+            float(ct_dicoms[0].PixelSpacing[1]),
+            float(np.abs(ct_dicoms[1].ImagePositionPatient[2] - ct_dicoms[0].ImagePositionPatient[2]))
         )
 
         # Store CT data.
         data = np.zeros(shape=self.__size)
-        for ct in cts:
+        for c in ct_dicoms:
             # Convert values to HU.
-            ct_data = np.transpose(ct.pixel_array)      # 'pixel_array' contains row-first image data.
-            ct_data = ct.RescaleSlope * ct_data + ct.RescaleIntercept
+            ct_data = np.transpose(c.pixel_array)      # 'pixel_array' contains row-first image data.
+            ct_data = c.RescaleSlope * ct_data + c.RescaleIntercept
 
             # Get z index.
-            z_offset =  ct.ImagePositionPatient[2] - self.__offset[2]
+            z_offset =  c.ImagePositionPatient[2] - self.__offset[2]
             z_idx = int(round(z_offset / self.__spacing[2]))
 
             # Add data.

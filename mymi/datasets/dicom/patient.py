@@ -238,10 +238,6 @@ class DicomPatient:
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
 
-    @property
-    def first_ct(self):
-        return self.default_rtstruct.ref_ct.first_ct
-
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)
 

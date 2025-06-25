@@ -8,11 +8,10 @@ from pydicom.uid import generate_uid, ImplicitVRLittleEndian, PYDICOM_IMPLEMENTA
 import skimage as ski
 from typing import *
 
+from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
 from mymi import logging
 from mymi.regions import to_255
 from mymi.typing import *
-
-from ...dicom import DATE_FORMAT, TIME_FORMAT
 
 CONTOUR_FORMATS = ['POINT', 'CLOSED_PLANAR']
 CONTOUR_METHOD = 'SKIMAGE'
@@ -310,8 +309,8 @@ class RtStructConverter:
 
         # Get date/time.
         dt = datetime.now()
-        date = dt.strftime(DATE_FORMAT)
-        time = dt.strftime(TIME_FORMAT)
+        date = dt.strftime(DICOM_DATE_FORMAT)
+        time = dt.strftime(DICOM_TIME_FORMAT)
 
         # Set other required fields.
         rtstruct.ContentDate = date
@@ -373,10 +372,10 @@ class RtStructConverter:
         rtstruct.StudyTime = ref_ct.StudyTime
 
         # Add series info.
-        rtstruct.SeriesDate = dt.strftime(DATE_FORMAT)
+        rtstruct.SeriesDate = dt.strftime(DICOM_DATE_FORMAT)
         rtstruct.SeriesInstanceUID = generate_uid()
         rtstruct.SeriesNumber = 0
-        rtstruct.SeriesTime = dt.strftime(TIME_FORMAT)
+        rtstruct.SeriesTime = dt.strftime(DICOM_TIME_FORMAT)
 
     @classmethod
     def __add_frames_of_reference(

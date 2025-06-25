@@ -26,7 +26,7 @@ class RtDoseFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]       # Double brackets ensure result is DataFrame not Series.
         self.__verify_index()
-        self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
+        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -58,8 +58,8 @@ class RtDoseFile(DicomFile):
         return self.__offset
 
     @property
-    def path(self) -> str:
-        return self.__path
+    def filepath(self) -> str:
+        return self.__filepath
 
     @property
     def series(self) -> str:
@@ -77,7 +77,7 @@ class RtDoseFile(DicomFile):
 
     @property
     def dicom(self) -> FileDataset:
-        return dcm.read_file(self.__path)
+        return dcm.read_file(self.__filepath)
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
