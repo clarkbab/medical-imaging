@@ -28,9 +28,10 @@ class MrSeries(DicomSeries):
 
         # Load index.
         index = self.__study.index
-        index = index[(index.modality == 'MR') & (index['series-id'] == id)]
+        index = index[(index.modality == 'MR') & (index['series-id'] == id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"No MR series with ID '{id}' found in study '{study}'.")
         self.__index = index
-        self.__verify_index()
     
     # Should really return 'MR' file object IDs.
     @property

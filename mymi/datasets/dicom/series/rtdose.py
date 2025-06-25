@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from ..files import RtDoseFile, SOPInstanceUID
+from ..files import RtDoseFile
 from .series import DicomSeries
 
 class RtDoseSeries(DicomSeries):
@@ -17,13 +17,15 @@ class RtDoseSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == 'RTDOSE') & (index['series-id'] == self.__id)]
-        self.__verify_index()
+        index = index[(index.modality == 'RTDOSE') & (index['series-id'] == self.__id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"No RTDOSE series with ID '{id}' found in study '{study}'.")
+        self.__index = index
 
     @property
-    def default_rtdose(self) -> str:
-        # Choose most recent RTSTRUCT.
-        rtdose_ids = self.list_rtdoses()
+    def default_file(self) -> str:
+        # Choose most recent RTDOSE.
+        rtdose_ids = self.list_files()
         if len(rtdose_ids) == 0:
             return None
         else:
@@ -33,17 +35,9 @@ class RtDoseSeries(DicomSeries):
     def description(self) -> str:
         return self.__global_id
 
-    def data(self, *args, **kwargs):
-        return self.default_rtdose.data(*args, **kwargs)
-
-    def offset(self, *args, **kwargs):
-        return self.default_rtdose.offset(*args, **kwargs)
-
-    def size(self, *args, **kwargs):
-        return self.default_rtdose.size(*args, **kwargs)
-
-    def spacing(self, *args, **kwargs):
-        return self.default_rtdose.spacing(*args, **kwargs)
+    @property
+    def data(self) -> DoseImage:
+        return self.default_file.data
 
     @property
     def id(self) -> SeriesID:
@@ -54,6 +48,18 @@ class RtDoseSeries(DicomSeries):
         return 'RTDOSE'
 
     @property
+    def offset(self) -> Point3D:
+        return self.default_file.offset
+
+    @property
+    def size(self) -> Size3D:
+        return self.default_file.size
+
+    @property
+    def spacing(self) -> Spacing3D:
+        return self.default_file.spacing
+
+    @property
     def study(self) -> str:
         return self.__study
 
@@ -61,22 +67,13 @@ class RtDoseSeries(DicomSeries):
     def index(self) -> pd.DataFrame:
         return self.__index
 
-    def list_rtdoses(self) -> List[SOPInstanceUID]:
+    def list_files(self) -> List[DicomSOPInstanceUID]:
         return list(sorted(self.__index.index))
 
     def rtdose(
         self,
-        id: SOPInstanceUID) -> RtDoseFile:
+        id: DicomSOPInstanceUID) -> RtDoseFile:
         return RtDoseFile(self, id)
-
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RtDoseSeries '{self}' not found in index for study '{self.__study}'.")
-
-    def __load_default_rtdose(self) -> None:
-        # Preference most recent RTDOSE.
-        def_rtdose_id = self.list_rtdoses()[-1]
-        self.__default_rtdose = self.rtdose(def_rtdose_id)
 
     def __str__(self) -> str:
         return self.__global_id

@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from ..files import RegionMap, RtStructFile, SOPInstanceUID
+from ..files import RegionMap, RtStructFile
 from .ct import CtSeries
 from .series import DicomSeries
 
@@ -22,17 +22,19 @@ class RtStructSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == self.__id)]
-        self.__verify_index()
+        index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == self.__id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"No RTSTRUCT series with ID '{id}' found in study '{study}'.")
+        self.__index = index
 
         # Get policies.
         self.__index_policy = self.__study.index_policy['rtstruct']
         self.__region_policy = self.__study.region_policy
 
     @property
-    def default_rtstruct(self) -> Optional[RtStructFile]:
+    def default_file(self) -> Optional[RtStructFile]:
         # Choose most recent RTSTRUCT.
-        rtstruct_ids = self.list_rtstructs()
+        rtstruct_ids = self.list_files()
         if len(rtstruct_ids) == 0:
             return None
         else:
@@ -60,7 +62,7 @@ class RtStructSeries(DicomSeries):
 
     @property
     def ref_ct(self) -> CtSeries:
-        return self.default_rtstruct.ref_ct
+        return self.default_file.ref_ct
 
     @property
     def region_policy(self) -> pd.DataFrame:
@@ -71,34 +73,30 @@ class RtStructSeries(DicomSeries):
         return self.__study
 
     def has_landmark(self, *args, **kwargs):
-        return self.default_rtstruct.has_landmark(*args, **kwargs)
+        return self.default_file.has_landmark(*args, **kwargs)
 
     def has_regions(self, *args, **kwargs):
-        return self.default_rtstruct.has_regions(*args, **kwargs)
+        return self.default_file.has_regions(*args, **kwargs)
 
     def landmark_data(self, *args, **kwargs):
-        return self.default_rtstruct.landmark_data(*args, **kwargs)
+        return self.default_file.landmark_data(*args, **kwargs)
 
     def list_landmarks(self, *args, **kwargs):
-        return self.default_rtstruct.list_landmarks(*args, **kwargs)
+        return self.default_file.list_landmarks(*args, **kwargs)
 
     def list_regions(self, *args, **kwargs):
-        return self.default_rtstruct.list_regions(*args, **kwargs)
+        return self.default_file.list_regions(*args, **kwargs)
 
-    def list_rtstructs(self) -> List[SOPInstanceUID]:
+    def list_files(self) -> List[DicomSOPInstanceUID]:
         return list(sorted(self.__index.index))
 
     def region_data(self, *args, **kwargs):
-        return self.default_rtstruct.region_data(*args, **kwargs)
+        return self.default_file.region_data(*args, **kwargs)
 
     def rtstruct(
         self,
-        id: SOPInstanceUID) -> RtStructFile:
+        id: DicomSOPInstanceUID) -> RtStructFile:
         return RtStructFile(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
-
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RtStructSeries '{self}' not found in index for study '{self.__study}'.")
 
     def __str__(self) -> str:
         return self.__global_id

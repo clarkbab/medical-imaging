@@ -3,13 +3,15 @@ import pandas as pd
 import pydicom as dcm
 from pydicom.dataset import FileDataset
 
-from .files import DicomFile, SOPInstanceUID
+from mymi.typing import *
+
+from .files import DicomFile
 
 class RtPlanFile(DicomFile):
     def __init__(
         self,
         series: 'RtPlanSeries',
-        id: SOPInstanceUID):
+        id: DicomSOPInstanceUID):
         self.__global_id = f"{series}:{id}"
         self.__id = id
         self.__series = series
@@ -25,7 +27,7 @@ class RtPlanFile(DicomFile):
         return self.__global_id
 
     @property
-    def id(self) -> SOPInstanceUID:
+    def id(self) -> DicomSOPInstanceUID:
         return self.__id
 
     @property
@@ -40,7 +42,8 @@ class RtPlanFile(DicomFile):
     def index(self) -> pd.DataFrame:
         return self.__index
 
-    def get_rtplan(self) -> FileDataset:
+    @property
+    def dicom(self) -> FileDataset:
         return dcm.read_file(self.__path)
 
     def __str__(self) -> str:
@@ -50,4 +53,4 @@ class RtPlanFile(DicomFile):
         if len(self.__index) == 0:
             raise ValueError(f"RtPlanFile '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RtPlanFiles found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RtPlanFiles found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")

@@ -16,9 +16,11 @@ duplicates:
 rtdose:
     no-ref-rtplan:
         allow: false
+        require-rtplan-in-study: true
 rtplan:
     no-ref-rtstruct:
         allow: false
+        require-rtstruct-in-study: true
 rtstruct:
     no-ref-ct:
         allow: false 

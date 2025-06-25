@@ -322,16 +322,16 @@ def build_index(
     no_ref_rtstruct = index.loc[no_ref_rtstruct_idx]
 
     if not policy['rtplan']['no-ref-rtstruct']['allow']:
-        logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID').")
+        logging.info(f"Removing RTPLAN DICOM files without a referenced RTSTRUCT ('RefRTSTRUCTSOPInstanceUID') in the index.")
 
         # Discard RTPLANs without reference RTSTRUCTs.
         no_ref_rtstruct['error'] = 'NO-REF-RTSTRUCT'
         error_index = append_dataframe(error_index, no_ref_rtstruct)
         index = index.drop(no_ref_rtstruct_idx)
 
-    else:
-        # If no-ref-rtstruct is allowed, RTPLANs must have an RTSTRUCT in the study.
-        logging.info(f"Removing RTPLAN DICOM files without RTSTRUCT in index (by 'RefRTSTRUCTSOPInstanceUID') and with no RTSTRUCT in the study.")
+    if policy['rtplan']['no-ref-rtstruct']['require-rtstruct-in-study']:
+        # No direct RTSTRUCT is required (referenced by RTPLAN), but there must be an RTSTRUCT in the study.
+        logging.info(f"Removing RTPLAN DICOM files without an RTSTRUCT with the same study ID in the index.")
 
         # Add study's RSTRUCT series count info to RTPLAN table.
         study_rtstruct_series_count = index[index['modality'] == 'RTSTRUCT'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtstruct-count' })
@@ -345,10 +345,6 @@ def build_index(
         index = index.drop(no_rtstruct_series_idx)
 
     # Remove RTDOSE series based on policy regarding referenced RTPLAN series.
-    # 'no-ref-rtplan': {
-    #   'allow': True/False,
-    #   'in-study': '1'/'>=1'
-    # }
     rtplan_sops = index[index['modality'] == 'RTPLAN'].index
     rtdose = index[index['modality'] == 'RTDOSE']
     ref_rtplan = rtdose['mod-spec'].apply(lambda m: m['RefRTPLANSOPInstanceUID']).isin(rtplan_sops)
@@ -357,27 +353,27 @@ def build_index(
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
     if not policy['rtdose']['no-ref-rtplan']['allow']:
-        logging.info(f"Removing RTDOSE DICOM files without RTPLAN in index (by 'RefRTPLANSOPInstanceUID').")
+        logging.info(f"Removing RTDOSE DICOM files without a referenced RTPLAN ('RefRTPLANSOPInstanceUID') in the index.")
 
         # Discard RTDOSEs with no referenced RTPLAN.
         no_ref_rtplan['error'] = 'NO-REF-RTPLAN'
         error_index = append_dataframe(error_index, no_ref_rtplan)
         index = index.drop(no_ref_rtplan_idx)
 
-    else:
+    if policy['rtdose']['no-ref-rtplan']['require-rtplan-in-study']:
+        # No direct RTPLAN is required (referenced by RTDOSE), but there must be an RTPLAN in the study.
+        logging.info(f"Removing RTDOSE DICOM files without an RTPLAN with the same study ID in the index.")
+
         # Add study's RTPLAN series count info to RTDOSE table.
         study_rtplan_series_count = index[index['modality'] == 'RTPLAN'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtplan-count' })
         no_ref_rtplan = no_ref_rtplan.reset_index().merge(study_rtplan_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
 
-        if policy['rtdose']['no-ref-rtplan']['in-study'] == ['>=1']:
-            logging.info(f"Removing RTDOSE DICOM files without RTPLAN in index (by 'RefRTPLANSOPInstanceUID') and with no RTPLAN in the study.")
-
-            # Remove RTDOSEs with no RTPLAN in the study.
-            no_rtplan_series_idx = no_ref_rtplan[no_ref_rtplan['rtplan-count'].isna()].index
-            no_rtplan_series = index.loc[no_rtplan_series_idx]
-            no_rtplan_series['error'] = 'NO-REF-RTPLAN:IN-STUDY:>=1'
-            error_index = append_dataframe(error_index, no_rtplan_series)
-            index = index.drop(no_rtplan_series_idx)
+        # Remove RTDOSEs with no RTPLAN in the study.
+        no_rtplan_series_idx = no_ref_rtplan[no_ref_rtplan['rtplan-count'].isna()].index
+        no_rtplan_series = index.loc[no_rtplan_series_idx]
+        no_rtplan_series['error'] = 'NO-REF-RTPLAN:NO-RTPLAN-IN-STUDY'
+        error_index = append_dataframe(error_index, no_rtplan_series)
+        index = index.drop(no_rtplan_series_idx)
 
     # Remove CT series that are not referenced by an RTSTRUCT series.
     if not policy['ct']['no-rtstruct']['allow']:

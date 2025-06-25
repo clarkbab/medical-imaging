@@ -11,7 +11,7 @@ from mymi.typing import *
 
 # Must import from series submodules to avoid circular import.
 from ...series.ct import CtSeries
-from ..files import DicomFile, SOPInstanceUID
+from ..files import DicomFile
 from .region_map import RegionMap
 from .rtstruct_converter import RtStructConverter
 
@@ -19,8 +19,7 @@ class RtStructFile(DicomFile):
     def __init__(
         self,
         series: 'RtStructSeries',
-        id: SOPInstanceUID,
-        region_dups: Optional[pd.DataFrame] = None,
+        id: DicomSOPInstanceUID,
         region_map: Optional[RegionMap] = None):
         self.__global_id = f"{series}:{id}"
         self.__id = id
@@ -43,7 +42,7 @@ class RtStructFile(DicomFile):
         return self.__global_id
 
     @property
-    def id(self) -> SOPInstanceUID:
+    def id(self) -> DicomSOPInstanceUID:
         return self.__id
 
     @property
@@ -69,7 +68,7 @@ class RtStructFile(DicomFile):
         return self.__region_policy
 
     @property
-    def rtstruct(self) -> dcm.dataset.FileDataset:
+    def dicom(self) -> dcm.dataset.FileDataset:
         return dcm.read_file(self.__path)
     
     @property
@@ -320,7 +319,7 @@ class RtStructFile(DicomFile):
         if len(self.__index) == 0:
             raise ValueError(f"RtStructFile '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RtStructFiles found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RtStructFiles found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
     def __load_ref_ct(self) -> None:
         if not self.__index_policy['no-ref-ct']['allow']:

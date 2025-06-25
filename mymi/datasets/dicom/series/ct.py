@@ -5,12 +5,12 @@ import pandas as pd
 import pydicom as dcm
 from typing import *
 
+from mymi.geometry import get_extent
 from mymi.typing import *
+from mymi.utils import *
 
 from ..dicom import DATE_FORMAT, TIME_FORMAT
 from .series import DicomSeries
-
-CLOSENESS_ABS_TOL = 1e-10;
 
 class CtSeries(DicomSeries):
     def __init__(
@@ -18,21 +18,24 @@ class CtSeries(DicomSeries):
         study: 'DicomStudy',
         id: SeriesID,
         force_dicom_read: bool = False) -> None:
-        self.__data = None          # Lazy-loaded.
         self.__force_dicom_read = force_dicom_read
-        self.__fov = None           # Lazy-loaded.
         self.__global_id = f"{study}:{id}"
-        self.__offset = None        # Lazy-loaded.
-        self.__size = None          # Lazy-loaded.
-        self.__spacing = None       # Lazy-loaded.
         self.__study = study
         self.__id = id
 
         # Load index.
         index = self.__study.index
-        index = index[(index.modality == 'CT') & (index['series-id'] == id)]
+        index = index[(index.modality == 'CT') & (index['series-id'] == id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"No CT series with ID '{id}' found in study '{study}'.")
         self.__index = index
-        self.__verify_index()
+
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__data'):
+                self.__load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
     
     # Should really return 'CT' file object IDs.
     @property
@@ -45,20 +48,28 @@ class CtSeries(DicomSeries):
         return cts
 
     @property
+    @ensure_loaded
     def data(self) -> np.ndarray:
-        if self.__data is None:
-            self.__load_data()
         return self.__data
 
     @property
     def description(self) -> str:
         return self.__global_id
 
+    @ensure_loaded
+    def extent(
+        self,
+        use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
+        return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
+
     @property
-    def fov(self) -> ImageSizeMM3D:
-        if self.__fov is None:
-            self.__load_data()
-        return self.__fov
+    @ensure_loaded
+    def fov(
+        self,
+        **kwargs) -> Union[ImageSizeMM3D, Size3D]:
+        ext_min, ext_max = self.extent(**kwargs)
+        fov = tuple(np.array(ext_max) - ext_min)
+        return fov
 
     @property
     def index(self) -> pd.DataFrame:
@@ -73,9 +84,8 @@ class CtSeries(DicomSeries):
         return 'CT'
 
     @property
+    @ensure_loaded
     def offset(self) -> Point3D:
-        if self.__offset is None:
-            self.__load_data()
         return self.__offset
 
     @property
@@ -83,15 +93,13 @@ class CtSeries(DicomSeries):
         return self.__paths
 
     @property
-    def size(self) -> Spacing3D:
-        if self.__size is None:
-            self.__load_data()
-        return self.__size
+    @ensure_loaded
+    def size(self) -> Size3D:
+        return self.__data.shape
 
     @property
+    @ensure_loaded
     def spacing(self) -> Spacing3D:
-        if self.__spacing is None:
-            self.__load_data()
         return self.__spacing
 
     @property
@@ -109,17 +117,13 @@ class CtSeries(DicomSeries):
     def first_ct(self) -> dcm.FileDataset:
         return self.ct_files[0]
 
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"CtSeries '{self}' not found in index for study '{self.__study}'.")
-
     def __load_data(self) -> None:
         cts = self.ct_files
 
         # Store offset.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
         offset = cts[0].ImagePositionPatient    
-        self.__offset = tuple(int(round(o)) for o in offset)
+        self.__offset = tuple(float(o) for o in offset)
 
         # Store size.
         # Indexing checked that CT slices had consisent x/y spacing in series.
@@ -134,11 +138,8 @@ class CtSeries(DicomSeries):
         self.__spacing = (
             float(cts[0].PixelSpacing[0]),
             float(cts[0].PixelSpacing[1]),
-            np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
+            float(np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2]))
         )
-
-        # Store field-of-view.
-        self.__fov = tuple(np.array(self.__spacing) * self.__size)
 
         # Store CT data.
         data = np.zeros(shape=self.__size)

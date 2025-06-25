@@ -6,17 +6,18 @@ from pydicom.dataset import FileDataset
 from typing import *
 
 from mymi import logging
+from mymi.constants import TOLERANCE_MM
 from mymi.transforms import resample
 from mymi.typing import *
 from mymi.utils import *
 
-from .files import DicomFile, SOPInstanceUID
+from .files import DicomFile
 
 class RtDoseFile(DicomFile):
     def __init__(
         self,
         series: 'RtDoseSeries',
-        id: SOPInstanceUID):
+        id: DicomSOPInstanceUID):
         self.__global_id = f"{series}:{id}"
         self.__id = id
         self.__series = series
@@ -44,7 +45,7 @@ class RtDoseFile(DicomFile):
         return self.__global_id
 
     @property
-    def id(self) -> SOPInstanceUID:
+    def id(self) -> DicomSOPInstanceUID:
         return self.__id
 
     @property
@@ -74,36 +75,38 @@ class RtDoseFile(DicomFile):
     def spacing(self) -> Spacing3D:
         return self.__spacing
 
-    def get_rtdose(self) -> FileDataset:
+    @property
+    def dicom(self) -> FileDataset:
         return dcm.read_file(self.__path)
 
     def __verify_index(self) -> None:
         if len(self.__index) == 0:
             raise ValueError(f"RTPLAN '{self}' not found in index for series '{self.__series}'.")
         elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RTPLANs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
+            raise ValueError(f"Multiple RTPLANs found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
     def __load_data(self) -> None:
-        rtdose = self.get_rtdose()
+        rtdose = self.dicom
 
         # Store offset.
-        offset = rtdose.ImagePositionPatient
-        self.__offset = tuple(int(s) for s in offset)
+        self.__offset = tuple(float(o) for o in rtdose.ImagePositionPatient)
 
         # Store spacing.
         spacing_x_y = rtdose.PixelSpacing 
-        z_diffs = np.unique(np.diff(rtdose.GridFrameOffsetVector))
+        z_diffs = np.diff(rtdose.GridFrameOffsetVector)
+        z_diffs = np.unique(round(z_diffs, TOLERANCE_MM))
         if len(z_diffs) != 1:
-            logging.warning(f"Slice z spacings for RtDoseFile {self} not equal, setting RtDoseFile data to 'None'.")
+            logging.warning(f"Slice z spacings for RtDoseFile {self} not equal, setting RtDoseFile data to 'None'. Got spacings: {z_diffs}.")
             self.__offset = None
             self.__spacing = None
             self.__data = None
             return
 
         spacing_z = z_diffs[0]
-        self.__spacing = tuple(np.append(spacing_x_y, spacing_z))
+        self.__spacing = tuple((float(s) for s in np.append(spacing_x_y, spacing_z)))
 
-        # Store dose data.
+        # Load data.
+        # Resample dose data to CT space.
         pat = self.__series.study.patient
         data = np.transpose(rtdose.pixel_array)
         data = rtdose.DoseGridScaling * data

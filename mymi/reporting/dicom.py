@@ -125,7 +125,7 @@ def get_patient_regions_report(
                 series_ids = study.list_series('RTSTRUCT')
                 for series_id in series_ids:
                     series = study.series(series_id, 'RTSTRUCT')
-                    rtstruct_ids = series.list_rtstructs()
+                    rtstruct_ids = series.list_rtstruct_files()
                     for rtstruct_id in rtstruct_ids:
                         rtstruct = series.rtstruct(rtstruct_id) 
                         pat_regions = rtstruct.list_regions(use_mapping=use_mapping)

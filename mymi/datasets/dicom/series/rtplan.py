@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from ..files import RtPlanFile, SOPInstanceUID
+from ..files import RtPlanFile
 from .series import DicomSeries
 
 class RtPlanSeries(DicomSeries):
@@ -17,14 +17,19 @@ class RtPlanSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        self.__index = index[(index.modality == 'RTPLAN') & (index['series-id'] == self.__id)]
-        self.__verify_index()
+        index = index[(index.modality == 'RTPLAN') & (index['series-id'] == self.__id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"No RTPLAN series with ID '{id}' found in study '{study}'.")
+        self.__index = index
 
     @property
-    def default_rtplan(self) -> str:
-        if self.__default_rtplan is None:
-            self.__load_default_rtplan()
-        return self.__default_rtplan
+    def default_file(self) -> str:
+        # Choose most recent RTPLAN.
+        rtdose_ids = self.list_files()
+        if len(rtdose_ids) == 0:
+            return None
+        else:
+            return self.rtdose(rtdose_ids[-1])
 
     @property
     def description(self) -> str:
@@ -46,22 +51,13 @@ class RtPlanSeries(DicomSeries):
     def index(self) -> pd.DataFrame:
         return self.__index
 
-    def list_rtplans(self) -> List[SOPInstanceUID]:
+    def list_files(self) -> List[DicomSOPInstanceUID]:
         return list(sorted(self.__index.index))
 
     def rtplan(
         self,
-        id: SOPInstanceUID) -> RtPlanFile:
+        id: DicomSOPInstanceUID) -> RtPlanFile:
         return RtPlanFile(self, id)
-
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RtPlanSeries '{self}' not found in index for study '{self.__study}'.")
-
-    def __load_default_rtplan(self) -> None:
-        # Preference most recent RTPLAN.
-        def_rtplan_id = self.list_rtplans()[-1]
-        self.__default_rtplan = self.rtplan(def_rtplan_id)
 
     def __str__(self) -> str:
         return self.__global_id

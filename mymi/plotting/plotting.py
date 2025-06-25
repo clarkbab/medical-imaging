@@ -658,7 +658,10 @@ def plot_patients(
 
     # Get patient IDs.
     set = dataset_type(dataset)
+    arg_pat_ids = pat_ids
     pat_ids = set.list_patients(pat_ids=pat_ids)
+    if len(pat_ids) == 0:
+        raise ValueError(f"No patients found for dataset '{dataset}' with IDs '{arg_pat_ids}'.")
 
     # Load all patient data.
     # This is the row-level data for 'plot_patients_matrix'.

@@ -33,7 +33,9 @@ class DicomPatient:
 
         # Get patient index.
         index = self.__dataset.index
-        index = index[index['patient-id'] == str(id)]
+        index = index[index['patient-id'] == str(id)].copy()
+        if len(index) == 0:
+            raise ValueError(f"Patient '{id}' not found in dataset '{dataset}'.")
         self.__index = index
 
         # Get policies.
@@ -239,9 +241,6 @@ class DicomPatient:
     @property
     def first_ct(self):
         return self.default_rtstruct.ref_ct.first_ct
-
-    def get_rtdose(self, *args, **kwargs):
-        return self.__default_rtdose_series.get_rtdose(*args, **kwargs)
 
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)

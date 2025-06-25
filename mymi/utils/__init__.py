@@ -2,6 +2,7 @@ from .assertions import *
 from .interval import *
 from .io import *
 from .itk import *
+from .maths import *
 from .nifti import *
 from .nrrd import *
 from .pandas import *
