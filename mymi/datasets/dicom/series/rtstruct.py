@@ -5,7 +5,7 @@ from mymi.typing import *
 
 from ..files import RegionMap, RtStructFile, SOPInstanceUID
 from .ct import CtSeries
-from .series import Modality, DicomSeries
+from .series import DicomSeries
 
 class RtStructSeries(DicomSeries):
     def __init__(
@@ -55,7 +55,7 @@ class RtStructSeries(DicomSeries):
         return self.__index_policy
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         return 'RTSTRUCT'
 
     @property

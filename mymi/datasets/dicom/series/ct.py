@@ -8,7 +8,7 @@ from typing import *
 from mymi.typing import *
 
 from ..dicom import DATE_FORMAT, TIME_FORMAT
-from .series import Modality, DicomSeries
+from .series import DicomSeries
 
 CLOSENESS_ABS_TOL = 1e-10;
 
@@ -69,7 +69,7 @@ class CtSeries(DicomSeries):
         return self.__id
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         return 'CT'
 
     @property

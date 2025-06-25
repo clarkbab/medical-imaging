@@ -1,5 +1,6 @@
 import collections
 import numpy as np
+import os
 import pandas as pd
 import pydicom as dcm
 from typing import *
@@ -10,7 +11,6 @@ from mymi.typing import *
 
 # Must import from series submodules to avoid circular import.
 from ...series.ct import CtSeries
-from ...series.series import Modality
 from ..files import DicomFile, SOPInstanceUID
 from .region_map import RegionMap
 from .rtstruct_converter import RtStructConverter
@@ -32,7 +32,7 @@ class RtStructFile(DicomFile):
         index = self.__series.index
         self.__index = index.loc[[self.__id]]
         self.__verify_index()
-        self.__path = self.__index.iloc[0]['filepath']
+        self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
 
         # Get policies.
         self.__index_policy = self.__series.index_policy

@@ -96,12 +96,8 @@ class NiftiPatient:
         return self.__dicom_index
 
     @property
-    def dose_data(self) -> np.ndarray:
-        return self.default_study.default_rtdose.data
-
-    @property
-    def has_dose(self) -> bool:
-        pass
+    def dose_data(self) -> Optional[DoseImage]:
+        return self.default_study.dose_data
 
     @property
     def id(self) -> str:

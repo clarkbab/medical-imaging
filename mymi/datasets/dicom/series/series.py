@@ -2,8 +2,6 @@ from typing import *
 
 from mymi.typing import *
 
-Modality = Literal['CT', 'MR', 'RTSTRUCT', 'RTPLAN', 'RTDOSE']
-
 # Abstract class.
 class DicomSeries:
     @property
@@ -11,7 +9,7 @@ class DicomSeries:
         raise NotImplementedError("Child class must implement 'id'.")
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         raise NotImplementedError("Child class must implement 'modality'.")
 
     @property

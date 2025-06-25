@@ -1,11 +1,10 @@
 import numpy as np
 import os
-import pandas as pd
-from typing import Dict, List, Optional
+from typing import *
 
-from mymi.typing import Size3D, Spacing3D, Landmarks, Landmark, Region, Point3D, SeriesID, StudyID
+from mymi.typing import *
 
-from .data import CtData, LandmarkData, Modality, NrrdData, RegionData
+from .data import *
 
 class NrrdStudy:
     def __init__(
@@ -85,7 +84,7 @@ class NrrdStudy:
     def has_data(
         self,
         id: str,
-        modality: Modality) -> bool:
+        modality: NrrdModality) -> bool:
         return id in self.list_data(modality)
 
     def has_landmark(self, *args, **kwargs) -> bool:
@@ -105,7 +104,7 @@ class NrrdStudy:
 
     def list_data(
         self,
-        modality: Modality) -> List[str]:
+        modality: NrrdModality) -> List[str]:
         if modality == 'CT':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'ct'))))
             data_ids = [s.replace('.nrrd', '') for s in data_ids]
@@ -130,7 +129,7 @@ class NrrdStudy:
     def data(
         self,
         id: str,
-        modality: Modality) -> NrrdData:
+        modality: NrrdModality) -> NrrdData:
         if modality == 'CT':
             data = CtData(self, id)
         elif modality == 'LANDMARKS':

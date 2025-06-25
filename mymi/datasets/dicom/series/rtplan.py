@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 
 from ..files import RtPlanFile, SOPInstanceUID
-from .series import Modality, DicomSeries
+from .series import DicomSeries
 
 class RtPlanSeries(DicomSeries):
     def __init__(
@@ -35,7 +35,7 @@ class RtPlanSeries(DicomSeries):
         return self.__id
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         return 'RTPLAN'
 
     @property

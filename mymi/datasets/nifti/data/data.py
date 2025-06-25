@@ -2,8 +2,6 @@ from typing import *
 
 from mymi.typing import *
 
-Modality = Literal['CT', 'DOSE', 'LANDMARKS', 'REGIONS']
-
 # Abstract class.
 class NiftiData:
     @property
@@ -11,7 +9,7 @@ class NiftiData:
         raise NotImplementedError("Child class must implement 'id'.")
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> NiftiModality:
         raise NotImplementedError("Child class must implement 'modality'.")
 
     @property

@@ -8,7 +8,7 @@ from typing import *
 from mymi.typing import *
 
 from ..dicom import DATE_FORMAT, TIME_FORMAT
-from .series import Modality, DicomSeries
+from .series import DicomSeries
 
 class MrSeries(DicomSeries):
     def __init__(
@@ -67,7 +67,7 @@ class MrSeries(DicomSeries):
         return self.__id
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         return 'MR'
 
     @property

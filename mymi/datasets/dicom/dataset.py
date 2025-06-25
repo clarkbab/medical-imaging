@@ -9,7 +9,6 @@ from typing import *
 
 from mymi import config
 from mymi import logging
-from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 

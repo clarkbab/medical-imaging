@@ -14,7 +14,6 @@ from mymi import logging
 from mymi.utils import *
 
 from ...shared import CT_FROM_REGEXP
-from ..series import Modality
 
 filepath = os.path.join(os.path.dirname(__file__), 'default-policy.yaml')
 DEFAULT_POLICY = load_yaml(filepath)
@@ -65,13 +64,14 @@ def build_index(
     # Create index.
     if ct_from is None:
         # Create index from scratch.
-        modalities = ('CT', 'MR', 'RTSTRUCT', 'RTPLAN', 'RTDOSE')
+        modalities = get_args(DicomModality)
         index_index = pd.Index(data=[], name=INDEX_INDEX_COL)
         index = pd.DataFrame(columns=INDEX_COLS.keys(), index=index_index)
     else:
         # Create index using 'ct_from' index as a starting point.
         logging.info(f"Using CT index from '{ct_from}'.")
-        modalities = ('RTSTRUCT', 'RTPLAN', 'RTDOSE')
+        modalities = list(get_args(DicomModality))
+        modalities.remove('CT')
 
         # Load 'ct_from' index - can't use DicomDataset API as it creates circular dependencies.
         filepath = os.path.join(config.directories.datasets, 'dicom', ct_from, 'index.csv')

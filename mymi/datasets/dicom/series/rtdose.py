@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 
 from ..files import RtDoseFile, SOPInstanceUID
-from .series import Modality, DicomSeries
+from .series import DicomSeries
 
 class RtDoseSeries(DicomSeries):
     def __init__(
@@ -22,20 +22,35 @@ class RtDoseSeries(DicomSeries):
 
     @property
     def default_rtdose(self) -> str:
-        if self.__default_rtdose is None:
-            self.__load_default_rtdose()
-        return self.__default_rtdose
+        # Choose most recent RTSTRUCT.
+        rtdose_ids = self.list_rtdoses()
+        if len(rtdose_ids) == 0:
+            return None
+        else:
+            return self.rtdose(rtdose_ids[-1])
 
     @property
     def description(self) -> str:
         return self.__global_id
+
+    def data(self, *args, **kwargs):
+        return self.default_rtdose.data(*args, **kwargs)
+
+    def offset(self, *args, **kwargs):
+        return self.default_rtdose.offset(*args, **kwargs)
+
+    def size(self, *args, **kwargs):
+        return self.default_rtdose.size(*args, **kwargs)
+
+    def spacing(self, *args, **kwargs):
+        return self.default_rtdose.spacing(*args, **kwargs)
 
     @property
     def id(self) -> SeriesID:
         return self.__id
 
     @property
-    def modality(self) -> Modality:
+    def modality(self) -> DicomModality:
         return 'RTDOSE'
 
     @property

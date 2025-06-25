@@ -26,57 +26,36 @@ class NiftiStudy:
 
     @property
     def ct_affine(self) -> Optional[np.ndarray]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.affine
+        return self.default_ct.affine if self.default_ct is not None else None
 
     @property
     def ct_data(self) -> Optional[CtImage]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.data
+        return self.default_ct.data if self.default_ct is not None else None
 
     def ct_extent(
         self,
         **kwargs) -> Optional[Point3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.extent(**kwargs)
+        return self.default_ct.extent(**kwargs) if self.default_ct is not None else None
 
     @property
     def ct_fov(self) -> Optional[ImageFOV3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.fov
+        return self.default_ct.fov if self.default_ct is not None else None
 
     @property
     def ct_offset(self) -> Optional[Point3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.offset
+        return self.default_ct.offset if self.default_ct is not None else None
 
     @property
-    def ct_path(self) -> str:
-        return self.default_ct.path
+    def ct_path(self) -> Optional[str]:
+        return self.default_ct.path if self.default_ct is not None else None
 
     @property
     def ct_size(self) -> Optional[Size3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.size
+        return self.default_ct.size if self.default_ct is not None else None
 
     @property
     def ct_spacing(self) -> Optional[Spacing3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.spacing
+        return self.default_ct.spacing if self.default_ct is not None else None
 
     @property
     def default_ct(self) -> Optional[CtNiftiData]:
@@ -85,6 +64,14 @@ class NiftiStudy:
             return None
         else:
             return CtNiftiData(self, data_ids[-1])
+
+    @property
+    def default_dose(self) -> Optional[CtNiftiData]:
+        data_ids = self.list_data('DOSE')
+        if len(data_ids) == 0:
+            return None
+        else:
+            return DoseNiftiData(self, data_ids[-1])
 
     @property
     def default_landmarks(self) -> Optional[LandmarkNiftiData]:
@@ -103,6 +90,14 @@ class NiftiStudy:
             return RegionNiftiData(self, data_ids[-1], region_map=self.__region_map)
 
     @property
+    def dose_data(self) -> Optional[DoseImage]:
+        return self.default_dose.data if self.default_dose is not None else None
+
+    @property
+    def dose_path(self) -> Optional[str]:
+        return self.default_dose.path if self.default_dose is not None else None
+
+    @property
     def id(self) -> str:
         return self.__id
 
@@ -117,7 +112,7 @@ class NiftiStudy:
     def has_data(
         self,
         id: str,
-        modality: Modality) -> bool:
+        modality: NiftiModality) -> bool:
         return id in self.list_data(modality)
 
     def has_landmarks(self, *args, **kwargs) -> bool:
@@ -153,7 +148,7 @@ class NiftiStudy:
 
     def list_data(
         self,
-        modality: Modality) -> List[SeriesID]:
+        modality: NiftiModality) -> List[SeriesID]:
         if modality == 'CT':
             filepath = os.path.join(self.__path, 'ct')
             if os.path.exists(filepath):
@@ -162,7 +157,12 @@ class NiftiStudy:
             else:
                 data_ids = []
         elif modality == 'DOSE':
-            pass
+            filepath = os.path.join(self.__path, 'dose')
+            if os.path.exists(filepath):
+                data_ids = list(sorted(os.listdir(filepath)))
+                data_ids = [s.replace('.nii.gz', '') for s in data_ids]
+            else:
+                data_ids = []
         elif modality == 'LANDMARKS':
             filepath  = os.path.join(self.__path, 'landmarks')
             if os.path.exists(filepath):
@@ -203,7 +203,7 @@ class NiftiStudy:
     def data(
         self,
         id: str,
-        modality: Optional[Modality] = None) -> NiftiData:
+        modality: Optional[NiftiModality] = None) -> NiftiData:
         if modality is None:
             modality = self.data_modality(id)
 
@@ -224,8 +224,8 @@ class NiftiStudy:
 
     def data_modality(
         self,
-        id: SeriesID) -> Modality:
-        modalities = ['CT', 'MR', 'LANDMARKS', 'REGIONS']
+        id: SeriesID) -> NiftiModality:
+        modalities = get_args(NiftiModality)
         for m in modalities:
             data_ids = self.list_data(m)
             if id in data_ids:

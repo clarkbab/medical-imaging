@@ -3,10 +3,12 @@ import os
 import pandas as pd
 import pydicom as dcm
 from pydicom.dataset import FileDataset
+from typing import *
 
 from mymi import logging
 from mymi.transforms import resample
 from mymi.typing import *
+from mymi.utils import *
 
 from .files import DicomFile, SOPInstanceUID
 
@@ -15,13 +17,9 @@ class RtDoseFile(DicomFile):
         self,
         series: 'RtDoseSeries',
         id: SOPInstanceUID):
-        self.__loaded_data = False
-        self.__data = None      # Lazy-loaded.
         self.__global_id = f"{series}:{id}"
-        self.__offset = None    # Lazy-loaded.
         self.__id = id
         self.__series = series
-        self.__spacing = None   # Lazy-loaded.
 
         # Get index.
         index = self.__series.index
@@ -29,11 +27,16 @@ class RtDoseFile(DicomFile):
         self.__verify_index()
         self.__path = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
 
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__data'):
+                self.__load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
+
     @property
+    @ensure_loaded
     def data(self) -> DoseImage:
-        if not self.__loaded_data:
-            self.__load_rtdose_data()
-            self.__loaded_data = True
         return self.__data
 
     @property
@@ -49,10 +52,8 @@ class RtDoseFile(DicomFile):
         return self.__index
 
     @property
+    @ensure_loaded
     def offset(self) -> Point3D:
-        if not self.__loaded_data:
-            self.__load_rtdose_data()
-            self.__loaded_data = True
         return self.__offset
 
     @property
@@ -64,14 +65,13 @@ class RtDoseFile(DicomFile):
         return self.__series
 
     @property
+    @ensure_loaded
     def size(self) -> Size3D:
-        return self.data.shape
+        return self.__data.shape
 
     @property
+    @ensure_loaded
     def spacing(self) -> Spacing3D:
-        if not self.__loaded_data:
-            self.__load_rtdose_data()
-            self.__loaded_data = True
         return self.__spacing
 
     def get_rtdose(self) -> FileDataset:
@@ -83,7 +83,7 @@ class RtDoseFile(DicomFile):
         elif len(self.__index) > 1:
             raise ValueError(f"Multiple RTPLANs found in index with SOPInstanceUID '{self.__id}' for series '{self.__series}'.")
 
-    def __load_rtdose_data(self) -> None:
+    def __load_data(self) -> None:
         rtdose = self.get_rtdose()
 
         # Store offset.

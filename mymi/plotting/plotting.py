@@ -21,8 +21,6 @@ from tqdm import tqdm
 from typing import *
 
 from mymi.datasets import Dataset
-from mymi.datasets.dicom import Modality as DicomModality
-from mymi.datasets.nifti import Modality as NiftiModality
 from mymi.geometry import get_box, extent, centre_of_extent
 from mymi import logging
 from mymi.processing import largest_cc_3D
@@ -647,7 +645,7 @@ def plot_patients(
     crop: Optional[Union[str, PixelBox]] = None,
     landmarks: Optional[Landmarks] = 'all',
     loadpaths: Union[str, List[str]] = [],
-    modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'series_ids'.
+    modality: Optional[Union[DicomModality, NiftiModality, NrrdModality]] = None,    # Can be used instead of 'series_ids'.
     region_labels: Dict[str, str] = {},
     regions: Optional[Regions] = 'all',
     series_ids: Optional[Union[SeriesID, List[SeriesID], Literal['all']]] = None,
@@ -667,6 +665,7 @@ def plot_patients(
     loaded_study_ids = []
     loaded_series_ids = []
     datas = []
+    dose_datas = []
     spacings = []
     offsets = []
     region_datas = []
@@ -693,6 +692,7 @@ def plot_patients(
         row_series_ids = []
         row_study_ids = []
         row_datas = []
+        row_dose_datas = []
         row_spacings = []
         row_offsets = []
         row_region_datas = []
@@ -731,6 +731,8 @@ def plot_patients(
                 row_region_datas.append(rdata)
                 ldata = study.landmark_data(landmarks=landmarks, use_patient_coords=False) if landmarks is not None else None
                 row_landmark_datas.append(ldata)
+                # Dose data belongs to the study and is taken from the latest RTDOSE in the study.
+                row_dose_datas.append(study.dose_data)
 
                 # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
                 c = None
@@ -761,6 +763,7 @@ def plot_patients(
         loaded_study_ids.append(row_study_ids)
         loaded_series_ids.append(row_series_ids)
         datas.append(row_datas)
+        dose_datas.append(row_dose_datas)
         spacings.append(row_spacings)
         offsets.append(row_offsets)
         region_datas.append(row_region_datas)
@@ -773,6 +776,7 @@ def plot_patients(
         centres=centre_datas,
         crops=crop_datas,
         datas=datas,
+        dose_datas=dose_datas,
         landmark_datas=landmark_datas,
         offsets=offsets,
         region_datas=region_datas,
@@ -790,6 +794,7 @@ def plot_patients_matrix(
     centres: Optional[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]], List[Union[Landmark, Region, Landmarks, RegionLabel, List[Union[Landmark, Region, Landmarks, RegionLabel]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, PixelBox, List[Union[str, np.ndarray, PixelBox]]]] = None,
     datas: Optional[Union[Image, List[Image], List[Union[Image, List[Image]]]]] = None,
+    dose_datas: Optional[Union[DoseImage, List[DoseImage], List[Union[DoseImage, List[DoseImage]]]]] = None,
     figsize: Tuple[int, int] = (46, 12),    # In cm.
     landmark_datas: Optional[Union[Landmarks, List[Landmarks], List[Union[Landmarks, List[Landmarks]]]]] = None,
     offsets: Union[Point3D, List[Point3D], List[Union[Point3D, List[Point3D]]]] = None,
@@ -798,7 +803,6 @@ def plot_patients_matrix(
     series_ids: Union[StudyID, Sequence[StudyID], List[Union[StudyID, Sequence[StudyID]]]] = None,
     show_progress: bool = False,
     spacings: Union[Spacing3D, List[Spacing3D], List[Union[Spacing3D, List[Spacing3D]]]] = None,
-    study_ids: Union[StudyID, Sequence[StudyID], List[Union[StudyID, Sequence[StudyID]]]] = None,
     views: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
     # Broadcast args to length of plot_ids.
@@ -808,6 +812,7 @@ def plot_patients_matrix(
     centres = arg_to_list(centres, (None, Landmark, Region, LandmarkData, RegionLabel), broadcast=n_rows)
     crops = arg_to_list(crops, (None, str, RegionLabel, PixelBox), broadcast=n_rows)
     datas = arg_to_list(datas, (None, Image), broadcast=n_rows)
+    dose_datas = arg_to_list(dose_datas, (None, DoseImage), broadcast=n_rows)
     landmark_datas = arg_to_list(landmark_datas, (None, LandmarkData), broadcast=n_rows)
     region_datas = arg_to_list(region_datas, (None, RegionData), broadcast=n_rows)
     views = arg_to_list(views, int, literals={ 'all': tuple(range(3)) })
@@ -841,6 +846,7 @@ def plot_patients_matrix(
             series_idx = j % n_series_max
             view_idx = j // n_series_max
             data = datas[i][series_idx] if isinstance(datas[i], list) else datas[i]
+            dose_data = dose_datas[i][series_idx] if isinstance(dose_datas[i], list) else dose_datas[i]
             spacing = spacings[i][series_idx] if isinstance(spacings[i], list) else spacings[i]
             offset = offsets[i][series_idx] if isinstance(offsets[i], list) else offsets[i]
             region_data = region_datas[i][series_idx] if isinstance(region_datas[i], list) else region_datas[i]
@@ -858,6 +864,7 @@ def plot_patients_matrix(
                 close_figure=False,
                 crop=crop,
                 data=data,
+                dose_data=dose_data,
                 landmark_data=landmark_data,
                 offset=offset,
                 region_data=region_data,
@@ -894,7 +901,7 @@ def plot_patient(
     dose_cmap: str = 'rainbow',
     dose_colourbar_pad: float = 0.05,
     dose_colourbar_size: float = 0.03,
-    dose_data: Optional[np.ndarray] = None,
+    dose_data: Optional[DoseImage] = None,
     escape_latex: bool = False,
     extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
     figsize: Tuple[float, float] = (36, 12),
@@ -913,7 +920,8 @@ def plot_patient(
     savepath: Optional[str] = None,
     show_axes: bool = True,
     show_ct: bool = True,
-    show_dose_bar: bool = True,
+    show_dose: bool = True,
+    show_dose_legend: bool = True,
     show_extent: bool = False,
     show_legend: bool = False,
     show_title: bool = True,
@@ -1134,20 +1142,19 @@ def plot_patient(
         ax.set_yticks(y_ticks, labels=y_tick_labels)
 
     # Plot dose data.
-    if dose_data is not None:
+    if show_dose and dose_data is not None:
         # Create colormap with varying alpha - so 0 Gray is transparent.
         mpl_cmap = plt.get_cmap(dose_cmap)
         cmap = mpl_cmap(np.arange(mpl_cmap.N))
 
         # Set alpha(0)=0, and then linear from dose_alpha_min to dose_alpha_max.
         cmap[0, -1] = 0 # '-1' is the alpha channel.
-        slope = (dose_alpha_max - dose_alpha_min) / (mpl_cmap.N - 1)
         cmap[1:, -1] = np.linspace(dose_alpha_min, dose_alpha_max, mpl_cmap.N - 1)
         cmap = ListedColormap(cmap)
 
-        axim = ax.imshow(dose_slice, aspect=aspect, cmap=cmap, origin=__get_origin(view))
-        if show_dose_bar:
-            cbar = plt.colorbar(axim, fraction=dose_colourbar_size, pad=dose_colourbar_pad)
+        imax = ax.imshow(dose_slice, aspect=aspect, cmap=cmap, origin=__get_origin(view))
+        if show_dose_legend:
+            cbar = plt.colorbar(imax, fraction=dose_colourbar_size, pad=dose_colourbar_pad)
             cbar.set_label(label='Dose [Gray]', size=fontsize)
             cbar.ax.tick_params(labelsize=fontsize)
 

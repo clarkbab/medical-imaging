@@ -5,13 +5,14 @@ import os
 import pandas as pd
 from pathlib import Path
 import re
+import shutil
 from time import time
 from typing import *
 from tqdm import tqdm
 
 from mymi.datasets.shared import CT_FROM_REGEXP
-from mymi.datasets.dicom import DicomDataset, Modality
-from mymi.datasets.nifti import recreate as recreate_nifti
+from mymi.datasets.dicom import DicomDataset
+from mymi.datasets.nifti import NiftiDataset, create as create_nifti, exists as exists_nifti, recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
@@ -33,15 +34,26 @@ def convert_to_nifti(
     anonymise_series: bool = True,
     anonymise_studies: bool = True,
     dest_dataset: Optional[str] = None,
+    recreate: bool = False,
     regions: Optional[Regions] = 'all') -> None:
     logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_studies', 'regions'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, regions))
     start = time()
 
     # Create NIFTI dataset.
     dicom_set = DicomDataset(dataset)
-    dest_dataset = dataset if dest_dataset is None else dest_dataset
-    nifti_set = recreate_nifti(dest_dataset)
     regions = regions_to_list(regions, literals={ 'all': dicom_set.list_regions })
+    dest_dataset = dataset if dest_dataset is None else dest_dataset
+    if exists_nifti(dest_dataset):
+        if recreate:
+            nifti_set = recreate_nifti(dest_dataset)
+        else:
+            nifti_set = NiftiDataset(dest_dataset)
+            # Remove 'patients' data to ensure there are no leftovers. Preserve other data, e.g. predictions, evaluations, etc.
+            filepath = os.path.join(nifti_set.path, 'data', 'patients')
+            if os.path.exists(filepath):
+                shutil.rmtree(filepath)
+    else:
+        nifti_set = create_nifti(dest_dataset)
 
     # Check '__ct_from_' for DICOM dataset.
     ct_from = None
@@ -196,10 +208,10 @@ def convert_to_nifti(
                     nifti_series_id = sr
 
                 # Create RTDOSE NIFTI.
-                data = series.dose_data
-                if data is not None:
-                    filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'rtdose', f'{nifti_series_id}.nii.gz')
-                    save_nifti(data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
+                dose_data = series.default_rtdose.data
+                if dose_data is not None:
+                    filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'dose', f'{nifti_series_id}.nii.gz')
+                    save_nifti(dose_data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
 
     # Save index.
     if len(index_df) > 0:

@@ -15,8 +15,6 @@ class DicomStudy:
         id: StudyID,
         region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None):
-        self.__default_rtdose = None        # Lazy-loaded.  
-        self.__default_rtplan = None        # Lazy-loaded. 
         self.__id = id
         self.__patient = patient
         self.__global_id = f"{patient}:{id}"
@@ -33,40 +31,32 @@ class DicomStudy:
         self.__index_policy = self.__patient.index_policy
         self.__region_policy = self.__patient.region_policy
 
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__default_rtdose'):
+                self.__load_default_rtplan_and_rtdose()
+            return fn(self, *args, **kwargs)
+        return wrapper
+
     @property
     def ct_data(self) -> Optional[CtImage]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.data
+        return self.default_ct.data if self.default_ct is not None else None
 
     @property
     def ct_fov(self) -> Optional[Point3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.fov
+        return self.default_ct.fov if self.default_ct is not None else None
 
     @property
     def ct_offset(self) -> Optional[Point3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.offset
+        return self.default_ct.offset if self.default_ct is not None else None
 
     @property
     def ct_size(self) -> Optional[Size3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.size
+        return self.default_ct.size if self.default_ct is not None else None 
 
     @property
     def ct_spacing(self) -> Optional[Spacing3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.spacing
+        return self.default_ct.spacing if self.default_ct is not None else None
 
     @property
     def datetime(self) -> datetime:
@@ -87,15 +77,15 @@ class DicomStudy:
         return self.series(series_ids[-1], 'MR')
 
     @property
+    @ensure_loaded
     def default_rtdose(self) -> RtDoseSeries:
-        if self.__default_rtdose is None:
-            self.__load_default_rtplan_and_rtdose()
+        # Why not 'list_series' here?
         return self.__default_rtdose
 
     @property
+    @ensure_loaded
     def default_rtplan(self) -> RtPlanSeries:
-        if self.__default_rtplan is None:
-            self.__load_default_rtplan_and_rtdose()
+        # Why not 'list_series' here?
         return self.__default_rtplan
     
     @property
@@ -111,26 +101,18 @@ class DicomStudy:
 
     @property
     def dose_data(self):
-        if self.default_rtdose is None:
-            return None
         return self.default_rtdose.data
 
     @property
     def dose_offset(self):
-        if self.default_rtdose is None:
-            return None
         return self.default_rtdose.offset
 
     @property
     def dose_size(self):
-        if self.default_rtdose is None:
-            return None
         return self.default_rtdose.size
 
     @property
     def dose_spacing(self):
-        if self.default_rtdose is None:
-            return None
         return self.default_rtdose.spacing
 
     @property
@@ -139,65 +121,7 @@ class DicomStudy:
 
     @property
     def has_ct(self):
-        if len(self.list_series('CT')) > 0:
-            return True
-        else:
-            return False
-
-    @property
-    def id(self) -> StudyID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
-
-    @property
-    def mr_data(self) -> Optional[MrImage]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.data
-
-    @property
-    def mr_fov(self) -> Optional[Point3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.fov
-
-    @property
-    def mr_offset(self) -> Optional[Point3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.offset
-
-    @property
-    def mr_size(self) -> Optional[Size3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.size
-
-    @property
-    def mr_spacing(self) -> Optional[Spacing3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.spacing
-
-    @property
-    def patient(self) -> str:
-        return self.__patient
-
-    @property
-    def region_policy(self) -> pd.DataFrame:
-        return self.__region_policy
+        return True if len(self.list_series('CT')) > 0 else False
 
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)
@@ -216,8 +140,8 @@ class DicomStudy:
 
     def list_series(
         self,
-        modalities: Optional[Union[Modality, Sequence[Modality]]] = None) -> List[SeriesID]:
-        modalities = arg_to_list(modalities, Modality)
+        modalities: Optional[Union[DicomModality, List[DicomModality]]] = None) -> List[SeriesID]:
+        modalities = arg_to_list(modalities, DicomModality)
         index = self.__index.copy()
         if modalities is not None:
             index = index[index.modality.isin(modalities)]
@@ -225,13 +149,53 @@ class DicomStudy:
         series_ids = list(index['series-id'].unique())
         return series_ids
 
+    @property
+    def id(self) -> StudyID:
+        return self.__id
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self.__index
+
+    @property
+    def index_policy(self) -> pd.DataFrame:
+        return self.__index_policy
+
+    @property
+    def mr_data(self) -> Optional[MrImage]:
+        return self.default_mr.data if self.default_mr is not None else None
+
+    @property
+    def mr_fov(self) -> Optional[Point3D]:
+        return self.default_mr.fov if self.default_mr is not None else None
+
+    @property
+    def mr_offset(self) -> Optional[Point3D]:
+        return self.default_mr.offset if self.default_mr is not None else None
+
+    @property
+    def mr_size(self) -> Optional[Size3D]:
+        return self.default_mr.size if self.default_mr is not None else None
+
+    @property
+    def mr_spacing(self) -> Optional[Spacing3D]:
+        return self.default_mr.spacing if self.default_mr is not None else None
+
+    @property
+    def patient(self) -> str:
+        return self.__patient
+
     def region_data(self, *args, **kwargs):
         return self.default_rtstruct.region_data(*args, **kwargs)
+
+    @property
+    def region_policy(self) -> pd.DataFrame:
+        return self.__region_policy
 
     def series(
         self,
         id: SeriesID,
-        modality: Optional[Modality] = None,
+        modality: Optional[DicomModality] = None,
         **kwargs: Dict) -> DicomSeries:
         if modality is None:
             modality = self.series_modality(id)
@@ -251,7 +215,7 @@ class DicomStudy:
 
     def series_modality(
         self,
-        id: SeriesID) -> Modality:
+        id: SeriesID) -> DicomModality:
         # Get modality from index.
         index = self.__index.copy()
         index = index[index['series-id'] == id]
