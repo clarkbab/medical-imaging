@@ -38,17 +38,16 @@ class DicomDataset(Dataset):
         self.__ct_from = DicomDataset(ct_from_name) if ct_from_name is not None else None
         self.__global_id = f"DICOM:{self.__name}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__name}"
 
-        self.__index = None             # Lazy-loaded.
-        self.__index_errors = None      # Lazy-loaded.
-        self.__index_policy = None      # Lazy-loaded.
-        self.__loaded_region_dups = False
-        self.__loaded_region_map = False
-        self.__region_dups = None       # Lazy-loaded.
-        self.__region_map = None        # Lazy-loaded.
-        self.__region_policy = None     # Lazy-loaded.
-
+        # (Re)-Trigger index build.
         if build_index:
             self.build_index()
+
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__index'):
+                self.__load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
 
     @property
     def ct_from(self) -> Optional['DicomDataset']:
@@ -59,27 +58,23 @@ class DicomDataset(Dataset):
         return self.__global_id
 
     @property
+    @ensure_loaded
     def index(self) -> pd.DataFrame:
-        if self.__index is None:
-            self.__load_index()
         return self.__index
 
     @property
+    @ensure_loaded
     def index_errors(self) -> pd.DataFrame:
-        if self.__index_errors is None:
-            self.__load_index()
         return self.__index_errors
 
     @property
+    @ensure_loaded
     def index_policy(self) -> Dict[str, Any]:
-        if self.__index_policy is None:
-            self.__load_index()
         return self.__index_policy
 
     @property
+    @ensure_loaded
     def region_policy(self) -> Dict[str, Any]:
-        if self.__region_policy is None:
-            self.__load_region_policy()
         return self.__region_policy
 
     @property
@@ -91,17 +86,8 @@ class DicomDataset(Dataset):
         return self.__path
 
     @property
-    def region_dups(self) -> pd.DataFrame:
-        if not self.__loaded_region_dups:
-            self.__load_region_dups()
-            self.__loaded_region_dups = True
-        return self.__region_dups
-
-    @property
+    @ensure_loaded
     def region_map(self) -> RegionMap:
-        if not self.__loaded_region_map:
-            self.__load_region_map()
-            self.__loaded_region_map = True
         return self.__region_map
 
     @property
@@ -116,6 +102,7 @@ class DicomDataset(Dataset):
         id: PatientID) -> bool:
         return id in self.list_patients()
 
+    @ensure_loaded
     def list_patients(
         self,
         pat_ids: PatientIDs = 'all', 
@@ -154,12 +141,14 @@ class DicomDataset(Dataset):
 
         return ids
 
+    @ensure_loaded
     def patient(
         self,
         id: PatientID,
         **kwargs: Dict) -> DicomPatient:
-        return DicomPatient(self, id, region_dups=self.region_dups, region_map=self.region_map, **kwargs)
+        return DicomPatient(self, id, region_map=self.region_map, **kwargs)
 
+    @ensure_loaded
     def list_regions(
         self,
         pat_id: Optional[PatientIDs] = None,
@@ -211,8 +200,8 @@ class DicomDataset(Dataset):
                 return False
         return fn
 
-    def __load_index(self) -> None:
-        # Trigger build if necessary.
+    def __load_data(self) -> None:
+        # Trigger index build if necessary.
         filepath = os.path.join(self.__path, 'index-policy.yaml')
         if not os.path.exists(filepath):
             self.build_index()
@@ -237,6 +226,21 @@ class DicomDataset(Dataset):
             logging.info(f"Index empty for dataset '{self}'.")
             self.__index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
 
+        # Load region map.
+        filepath = os.path.join(self.path, 'region-map.csv')
+        if os.path.exists(filepath):
+            self.__region_map = RegionMap.load(filepath)
+        else:
+            self.__region_map = None
+    
+        # Load region policy.
+        filepath = os.path.join(self.__path, 'region-policy.json')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                self.__region_policy = json.load(f)
+        else:
+            self.__region_policy = DEFAULT_REGION_POLICY
+
     # Copied from 'mymi/reporting/dataset/dicom.py' to avoid circular dependency.
     def __load_patient_regions_report(
         self,
@@ -254,28 +258,6 @@ class DicomDataset(Dataset):
                 return False
             else:
                 raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
-
-    def __load_region_dups(self) -> Optional[pd.DataFrame]:
-        filepath = os.path.join(self.__path, 'region-dups.csv')
-        if os.path.exists(filepath):
-            self.__region_dups = pd.read_csv(filepath)
-        else:
-            self.__region_dups = None
-
-    def __load_region_map(self) -> Optional[RegionMap]:
-        filepath = os.path.join(self.path, 'region-map.csv')
-        if os.path.exists(filepath):
-            self.__region_map = RegionMap.load(filepath)
-        else:
-            self.__region_map = None
-    
-    def __load_region_policy(self) -> Dict[str, Any]:
-        filepath = os.path.join(self.__path, 'region-policy.json')
-        if os.path.exists(filepath):
-            with open(filepath, 'r') as f:
-                self.__region_policy = json.load(f)
-        else:
-            self.__region_policy = DEFAULT_REGION_POLICY
 
     def __str__(self) -> str:
         return self.__global_id

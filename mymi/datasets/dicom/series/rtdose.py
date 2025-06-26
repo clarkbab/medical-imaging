@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from ..files import RtDoseFile
+from ..files import RtDoseFile, RtPlanFile
 from .series import DicomSeries
 
 class RtDoseSeries(DicomSeries):
@@ -22,14 +22,14 @@ class RtDoseSeries(DicomSeries):
             raise ValueError(f"No RTDOSE series with ID '{id}' found in study '{study}'.")
         self.__index = index
 
+        # Get policy.
+        self.__index_policy = self.__study.index_policy['rtdose']
+
     @property
-    def default_file(self) -> Optional[RtDoseFile]:
+    def default_file(self) -> RtDoseFile:
         # Choose most recent RTDOSE.
         rtdose_ids = self.list_files()
-        if len(rtdose_ids) == 0:
-            return None
-        else:
-            return self.rtdose(rtdose_ids[-1])
+        return self.file(rtdose_ids[-1])
 
     @property
     def description(self) -> str:
@@ -39,9 +39,25 @@ class RtDoseSeries(DicomSeries):
     def data(self) -> DoseImage:
         return self.default_file.data
 
+    def file(
+        self,
+        id: DicomSOPInstanceUID) -> RtDoseFile:
+        return RtDoseFile(self, id)
+
     @property
     def id(self) -> SeriesID:
         return self.__id
+
+    @property
+    def index(self) -> pd.DataFrame:
+        return self.__index
+
+    @property
+    def index_policy(self) -> pd.DataFrame:
+        return self.__index_policy
+
+    def list_files(self) -> List[DicomSOPInstanceUID]:
+        return list(sorted(self.__index.index))
 
     @property
     def modality(self) -> DicomModality:
@@ -50,6 +66,10 @@ class RtDoseSeries(DicomSeries):
     @property
     def offset(self) -> Point3D:
         return self.default_file.offset
+
+    @property
+    def ref_rtplan(self) -> RtPlanFile:
+        return self.default_file.ref_rtplan
 
     @property
     def size(self) -> Size3D:
@@ -62,18 +82,6 @@ class RtDoseSeries(DicomSeries):
     @property
     def study(self) -> str:
         return self.__study
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    def list_files(self) -> List[DicomSOPInstanceUID]:
-        return list(sorted(self.__index.index))
-
-    def rtdose(
-        self,
-        id: DicomSOPInstanceUID) -> RtDoseFile:
-        return RtDoseFile(self, id)
 
     def __str__(self) -> str:
         return self.__global_id

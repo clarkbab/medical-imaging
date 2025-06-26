@@ -13,12 +13,10 @@ class DicomStudy:
         self,
         patient: 'DicomPatient',
         id: StudyID,
-        region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None):
         self.__id = id
         self.__patient = patient
         self.__global_id = f"{patient}:{id}"
-        self.__region_dups = region_dups
         self.__region_map = region_map
 
         # Get index.
@@ -185,7 +183,7 @@ class DicomStudy:
         elif modality == 'RTPLAN':
             return RtPlanSeries(self, id, **kwargs)
         elif modality == 'RTSTRUCT':
-            return RtStructSeries(self, id, region_dups=self.__region_dups, region_map=self.__region_map, **kwargs)
+            return RtStructSeries(self, id, region_map=self.__region_map, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
 

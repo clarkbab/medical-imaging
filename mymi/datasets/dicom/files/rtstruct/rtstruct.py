@@ -5,9 +5,11 @@ import pandas as pd
 import pydicom as dcm
 from typing import *
 
+from mymi.constants import *
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
+from mymi.utils import *
 
 # Must import from series submodules to avoid circular import.
 from ...series.ct import CtSeries
@@ -23,23 +25,27 @@ class RtStructFile(DicomFile):
         region_map: Optional[RegionMap] = None):
         self.__global_id = f"{series}:{id}"
         self.__id = id
-        self.__ref_ct = None        # Lazy-loaded.
         self.__region_map = region_map
         self.__series = series
 
         # Get index.
-        index = self.__series.index
-        self.__index = index.loc[[self.__id]]
-        self.__verify_index()
-        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
+        self.__index = self.__series.index.loc[self.__id].copy()
+        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index['filepath'])
 
-        # Get policies.
-        self.__index_policy = self.__series.index_policy
-        self.__region_policy = self.__series.region_policy
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__ref_ct'):
+                self.__load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
 
     @property
     def description(self) -> str:
         return self.__global_id
+
+    @property
+    def dicom(self) -> dcm.dataset.FileDataset:
+        return dcm.read_file(self.__filepath)
 
     @property
     def id(self) -> DicomSOPInstanceUID:
@@ -50,26 +56,13 @@ class RtStructFile(DicomFile):
         return self.__index
 
     @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
-
-    @property
     def filepath(self) -> str:
         return self.__filepath
 
     @property
+    @ensure_loaded
     def ref_ct(self) -> str:
-        if self.__ref_ct is None:
-            self.__load_ref_ct()
         return self.__ref_ct
-
-    @property
-    def region_policy(self) -> pd.DataFrame:
-        return self.__region_policy
-
-    @property
-    def dicom(self) -> dcm.dataset.FileDataset:
-        return dcm.read_file(self.__filepath)
     
     @property
     def series(self) -> 'RtStructSeries':
@@ -79,14 +72,14 @@ class RtStructFile(DicomFile):
         self,
         use_mapping: bool = True) -> Dict[int, Dict[str, str]]:
         # Load RTSTRUCT dicom.
-        rtstruct = self.rtstruct
+        rtstruct_dicom = self.dicom
 
         # Get region IDs.
-        roi_info = RtStructConverter.get_roi_info(rtstruct)
+        roi_info = RtStructConverter.get_roi_info(rtstruct_dicom)
 
         # Filter names on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        roi_info = dict(filter(lambda i: RtStructConverter.has_roi_data(rtstruct, i[1]['name']), roi_info.items()))
+        roi_info = dict(filter(lambda i: RtStructConverter.has_roi_data(rtstruct_dicom, i[1]['name']), roi_info.items()))
 
         # Map to internal names.
         if use_mapping and self.__region_map:
@@ -119,10 +112,10 @@ class RtStructFile(DicomFile):
         use_patient_coords: bool = True,
         **kwargs) -> Optional[pd.DataFrame]:
         landmarks = regions_to_list(landmarks, literals={ 'all': lambda: self.list_landmarks(token=token) })
-        rtstruct = self.rtstruct
+        rtstruct_dicom = self.dicom
         lms = []
         for l in landmarks:
-            lm = RtStructConverter.get_roi_landmark(rtstruct, l)
+            lm = RtStructConverter.get_roi_landmark(rtstruct_dicom, l)
             if not use_patient_coords:
                 spacing = self.ref_ct.spacing
                 offset = self.ref_ct.offset
@@ -170,12 +163,12 @@ class RtStructFile(DicomFile):
             use_mapping = False
 
         # Get unmapped region names.
-        rtstruct = self.rtstruct
-        unmapped_regions = RtStructConverter.get_roi_names(rtstruct)
+        rtstruct_dicom = self.dicom
+        unmapped_regions = RtStructConverter.get_roi_names(rtstruct_dicom)
 
         # Filter regions on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        unmapped_regions = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct, r), unmapped_regions))
+        unmapped_regions = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct_dicom, r), unmapped_regions))
 
         # Map regions using 'region-map.csv'.
         if use_mapping:
@@ -222,7 +215,7 @@ class RtStructFile(DicomFile):
                 unmapped_regions = [r for r in unmapped_regions if r in regions]
 
         # Check for multiple regions.
-        if not self.__region_policy['duplicates']['allow']:
+        if not self.__series.region_policy['duplicates']['allow']:
             if use_mapping:
                 # Only check for duplicates on mapped regions.
                 names = [r[1] for r in mapped_regions]
@@ -290,11 +283,8 @@ class RtStructFile(DicomFile):
         else:
             rtstruct_regions = [r for r in rtstruct_regions if r in regions]
 
-        # Get reference CTs.
-        cts = self.ref_ct.ct_files
-
         # Load RTSTRUCT dicom.
-        rtstruct = self.rtstruct
+        rtstruct_dicom = self.dicom
 
         # Get region data.
         data = {}
@@ -302,12 +292,12 @@ class RtStructFile(DicomFile):
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
             for unmapped_region, mapped_region in rtstruct_regions:
-                rdata = RtStructConverter.get_region_data(rtstruct, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_data(rtstruct_dicom, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[mapped_region] = rdata
         else:
             # Load and store region using unmapped name.
             for r in rtstruct_regions:
-                rdata = RtStructConverter.get_region_data(rtstruct, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_data(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[r] = rdata
 
         # Sort dict keys.
@@ -315,23 +305,14 @@ class RtStructFile(DicomFile):
 
         return data
 
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RtStruct '{self}' not found in index for series '{self.__series}'.")
-        elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RtStructs found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
-
-    def __load_ref_ct(self) -> None:
-        if not self.__index_policy['no-ref-ct']['allow']:
-            # Get CT series referenced in RTSTRUCT DICOM.
-            rtstruct = self.rtstruct
-            ct_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
-
-        elif self.__index_policy['no-ref-ct']['only'] == 'at-least-one-ct' or self.__index_policy['no-ref-ct']['only'] == 'single-ct':
-            # Load first CT series in study.
-            ct_id = self.__series.study.list_series('CT')[-1]
-
-        self.__ref_ct = CtSeries(self.__series.study, ct_id)
+    def __load_data(self) -> None:
+        if not self.__series.index_policy['no-ref-ct']['allow']:
+            # Get referenced CT series from index.
+            ct_series_id = self.__index['mod-spec'][DICOM_RTSTRUCT_REF_CT_KEY]
+            self.__ref_ct = CtSeries(self.__series.study, ct_series_id)
+        else:
+            # Choose last CT series in study as "ref".
+            self.__ref_ct = self.__series.study.default_ct
 
     def __str__(self) -> str:
         return self.__global_id

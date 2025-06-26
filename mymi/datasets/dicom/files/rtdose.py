@@ -5,13 +5,15 @@ import pydicom as dcm
 from pydicom.dataset import FileDataset
 from typing import *
 
+from mymi.constants import *
 from mymi import logging
-from mymi.constants import TOLERANCE_MM
+from mymi.constants import *
 from mymi.transforms import resample
 from mymi.typing import *
 from mymi.utils import *
 
 from .files import DicomFile
+from .rtplan import RtPlanFile
 
 class RtDoseFile(DicomFile):
     def __init__(
@@ -23,10 +25,8 @@ class RtDoseFile(DicomFile):
         self.__series = series
 
         # Get index.
-        index = self.__series.index
-        self.__index = index.loc[[self.__id]]       # Double brackets ensure result is DataFrame not Series.
-        self.__verify_index()
-        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index.iloc[0]['filepath'])
+        self.__index = self.__series.index.loc[self.__id].copy()
+        self.__filepath = os.path.join(self.__series.study.patient.dataset.path, self.__index['filepath'])
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -45,6 +45,14 @@ class RtDoseFile(DicomFile):
         return self.__global_id
 
     @property
+    def dicom(self) -> FileDataset:
+        return dcm.read_file(self.__filepath)
+
+    @property
+    def filepath(self) -> str:
+        return self.__filepath
+
+    @property
     def id(self) -> DicomSOPInstanceUID:
         return self.__id
 
@@ -56,10 +64,6 @@ class RtDoseFile(DicomFile):
     @ensure_loaded
     def offset(self) -> Point3D:
         return self.__offset
-
-    @property
-    def filepath(self) -> str:
-        return self.__filepath
 
     @property
     def series(self) -> str:
@@ -75,25 +79,15 @@ class RtDoseFile(DicomFile):
     def spacing(self) -> Spacing3D:
         return self.__spacing
 
-    @property
-    def dicom(self) -> FileDataset:
-        return dcm.read_file(self.__filepath)
-
-    def __verify_index(self) -> None:
-        if len(self.__index) == 0:
-            raise ValueError(f"RTPLAN '{self}' not found in index for series '{self.__series}'.")
-        elif len(self.__index) > 1:
-            raise ValueError(f"Multiple RTPLANs found in index with DicomSOPInstanceUID '{self.__id}' for series '{self.__series}'.")
-
     def __load_data(self) -> None:
-        rtdose = self.dicom
+        rtdose_dicom = self.dicom
 
         # Store offset.
-        self.__offset = tuple(float(o) for o in rtdose.ImagePositionPatient)
+        self.__offset = tuple(float(o) for o in rtdose_dicom.ImagePositionPatient)
 
         # Store spacing.
-        spacing_x_y = rtdose.PixelSpacing 
-        z_diffs = np.diff(rtdose.GridFrameOffsetVector)
+        spacing_x_y = rtdose_dicom.PixelSpacing 
+        z_diffs = np.diff(rtdose_dicom.GridFrameOffsetVector)
         z_diffs = np.unique(round(z_diffs, TOLERANCE_MM))
         if len(z_diffs) != 1:
             logging.warning(f"Slice z spacings for RtDoseFile {self} not equal, setting RtDoseFile data to 'None'. Got spacings: {z_diffs}.")
@@ -108,8 +102,8 @@ class RtDoseFile(DicomFile):
         # Load data.
         # Resample dose data to CT space.
         pat = self.__series.study.patient
-        data = np.transpose(rtdose.pixel_array)
-        data = rtdose.DoseGridScaling * data
+        data = np.transpose(rtdose_dicom.pixel_array)
+        data = rtdose_dicom.DoseGridScaling * data
         kwargs = dict(
             offset=self.__offset,
             output_offset=pat.ct_offset,
@@ -118,6 +112,20 @@ class RtDoseFile(DicomFile):
             spacing=self.__spacing,
         )
         self.__data = resample(data, **kwargs)
+
+        # Load referenced RTPLAN.
+        if not self.__series.index_policy['no-ref-rtplan']['allow']:
+            # Get referenced RTPLAN series from index.
+            rtplan_file_id = self.__index['mod-spec'][DICOM_RTDOSE_REF_RTPLAN_KEY]
+            self.__ref_rtplan = RtPlanFile(self.__series.study, rtplan_file_id)
+        else:
+            # Choose study default RTPLAN as "ref".
+            self.__ref_rtplan = self.__series.study.default_rtplan.default_file
+
+    @property
+    @ensure_loaded
+    def ref_rtplan(self) -> 'RtPlanFile':
+        return self.__ref_rtplan
 
     def __str__(self) -> str:
         return self.__global_id

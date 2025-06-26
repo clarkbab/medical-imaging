@@ -10,6 +10,7 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import config
+from mymi.constants import *
 from mymi import logging
 from mymi.utils import *
 
@@ -143,15 +144,15 @@ def build_index(
                     }
                 elif modality == 'RTDOSE':
                     mod_spec = {
-                        'RefRTPLANSOPInstanceUID': dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                        DICOM_RTDOSE_REF_RTPLAN_KEY: dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
                     }
                 elif modality == 'RTPLAN':
                     mod_spec = {
-                        'RefRTSTRUCTSOPInstanceUID': dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
+                        DICOM_RTPLAN_REF_RTSTRUCT_KEY: dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
                     }
                 elif modality == 'RTSTRUCT':
                     mod_spec = {
-                        'RefCTSeriesInstanceUID': dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+                        DICOM_RTSTRUCT_REF_CT_KEY: dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
                     }
 
                 # Add index entry.
@@ -329,7 +330,7 @@ def build_index(
         error_index = append_dataframe(error_index, no_ref_rtstruct)
         index = index.drop(no_ref_rtstruct_idx)
 
-    if policy['rtplan']['no-ref-rtstruct']['require-rtstruct-in-study']:
+    elif policy['rtplan']['no-ref-rtstruct']['require-rtstruct-in-study']:
         # No direct RTSTRUCT is required (referenced by RTPLAN), but there must be an RTSTRUCT in the study.
         logging.info(f"Removing RTPLAN DICOM files without an RTSTRUCT with the same study ID in the index.")
 
@@ -347,20 +348,20 @@ def build_index(
     # Remove RTDOSE series based on policy regarding referenced RTPLAN series.
     rtplan_sops = index[index['modality'] == 'RTPLAN'].index
     rtdose = index[index['modality'] == 'RTDOSE']
-    ref_rtplan = rtdose['mod-spec'].apply(lambda m: m['RefRTPLANSOPInstanceUID']).isin(rtplan_sops)
+    ref_rtplan = rtdose['mod-spec'].apply(lambda m: m[DICOM_RTDOSE_REF_RTPLAN_KEY]).isin(rtplan_sops)
     no_ref_rtplan_idx = ref_rtplan[~ref_rtplan].index
     no_ref_rtplan = index.loc[no_ref_rtplan_idx]
 
     # Check that RTDOSE references RTPLAN SOP instance in index.
     if not policy['rtdose']['no-ref-rtplan']['allow']:
-        logging.info(f"Removing RTDOSE DICOM files without a referenced RTPLAN ('RefRTPLANSOPInstanceUID') in the index.")
+        logging.info(f"Removing RTDOSE DICOM files without a referenced RTPLAN ('{DICOM_RTDOSE_REF_RTPLAN_KEY}') in the index.")
 
         # Discard RTDOSEs with no referenced RTPLAN.
         no_ref_rtplan['error'] = 'NO-REF-RTPLAN'
         error_index = append_dataframe(error_index, no_ref_rtplan)
         index = index.drop(no_ref_rtplan_idx)
 
-    if policy['rtdose']['no-ref-rtplan']['require-rtplan-in-study']:
+    elif policy['rtdose']['no-ref-rtplan']['require-rtplan-in-study']:
         # No direct RTPLAN is required (referenced by RTDOSE), but there must be an RTPLAN in the study.
         logging.info(f"Removing RTDOSE DICOM files without an RTPLAN with the same study ID in the index.")
 

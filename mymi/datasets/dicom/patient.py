@@ -15,7 +15,6 @@ class DicomPatient:
         dataset: 'DicomDataset',
         id: PatientID,
         ct_from: Optional['DicomPatient'] = None,
-        region_dups: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None,
         trimmed: bool = False):
         if trimmed:
@@ -23,12 +22,8 @@ class DicomPatient:
         else:
             self.__global_id = f"{dataset} - {id}"
         self.__ct_from = ct_from
-        self.__default_rtdose = None        # Lazy-loaded.
-        self.__default_rtplan = None        # Lazy-loaded.
-        self.__default_rtstruct = None      # Lazy-loaded.
         self.__dataset = dataset
         self.__id = str(id)
-        self.__region_dups = region_dups
         self.__region_map = region_map
 
         # Get patient index.
@@ -99,38 +94,23 @@ class DicomPatient:
     
     @property
     def default_ct(self) -> Optional[CtSeries]:
-        def_study = self.default_study
-        if def_study is None:
-            return None
-        return def_study.default_ct
+        return self.default_study.default_ct if self.default_study is not None else None
     
     @property
     def default_mr(self) -> Optional[MrSeries]:
-        def_study = self.default_study
-        if def_study is None:
-            return None
-        return def_study.default_mr
+        return self.default_study.default_mr if self.default_study is not None else None
 
     @property
     def default_rtdose(self) -> Optional[RtDoseSeries]:
-        def_study = self.default_study
-        if def_study is None:
-            return None
-        return def_study.default_rtdose
+        return self.default_study.default_rtdose if self.default_study is not None else None
 
     @property
     def default_rtplan(self) -> Optional[RtPlanSeries]:
-        def_study = self.default_study
-        if def_study is None:
-            return None
-        return def_study.default_rtplan
+        return self.default_study.default_rtplan if self.default_study is not None else None
     
     @property
     def default_rtstruct(self) -> Optional[RtStructSeries]:
-        def_study = self.default_study
-        if def_study is None:
-            return None
-        return def_study.default_rtstruct
+        return self.default_study.default_rtstruct if self.default_study is not None else None
     
     @property
     def default_study(self) -> DicomStudy:
@@ -300,7 +280,7 @@ class DicomPatient:
     def study(
         self,
         id: StudyID) -> DicomStudy:
-        return DicomStudy(self, id, region_dups=self.__region_dups, region_map=self.__region_map)
+        return DicomStudy(self, id, region_map=self.__region_map)
 
     def __load_default_rtdose_and_rtplan(self) -> None:
         self.__default_rtplan = self.default_study.default_rtplan
