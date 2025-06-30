@@ -73,7 +73,7 @@ class CtSeries(DicomSeries):
     @ensure_loaded
     def fov(
         self,
-        **kwargs) -> Union[ImageSizeMM3D, Size3D]:
+        **kwargs) -> Union[FOV3D, Size3D]:
         ext_min, ext_max = self.extent(**kwargs)
         fov = tuple(np.array(ext_max) - ext_min)
         return fov

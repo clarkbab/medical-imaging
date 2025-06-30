@@ -52,7 +52,7 @@ def pad(
 
 def __spatial_centre_pad(
     image: Image,
-    size: Union[Size2D, Size3D, ImageFOV2D, ImageFOV3D],
+    size: Union[Size2D, Size3D, FOV2D, FOV3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True,
     **kwargs) -> Image:

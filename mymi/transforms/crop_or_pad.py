@@ -72,7 +72,7 @@ def crop_or_pad(
 @delegates(__spatial_crop_or_pad)
 def __spatial_centre_crop_or_pad(
     image: Image,
-    size: Union[Size2D, Size3D, ImageFOV2D, ImageFOV3D],
+    size: Union[Size2D, Size3D, FOV2D, FOV3D],
     offset: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,

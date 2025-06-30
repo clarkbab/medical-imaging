@@ -33,7 +33,7 @@ class NiftiPatient:
 
     def ct_extent(
         self,
-        **kwargs) -> Optional[Union[ImageSizeMM3D, Size3D]]:
+        **kwargs) -> Optional[Union[FOV3D, Size3D]]:
         return self.default_study.ct_extent(**kwargs)
     
     @property

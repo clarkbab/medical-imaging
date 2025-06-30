@@ -42,7 +42,7 @@ def crop(
 
 def __spatial_centre_crop(
     data: Image,
-    size: Union[ImageFOV2D, ImageFOV3D, Size2D, Size3D],
+    size: Union[FOV2D, FOV3D, Size2D, Size3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True) -> Image:
 

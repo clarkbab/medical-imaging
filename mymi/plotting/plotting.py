@@ -1206,7 +1206,11 @@ def plot_patient(
             n_slices = size[view]
             title = plot_id
             if show_title_idx:
-                title = f"{title}, {idx}/{n_slices - 1}"
+                if use_patient_coords:
+                    slice_mm = spacing[view] * idx + offset[view]
+                    title = f"{title}, {slice_mm:.1f}mm"
+                else:
+                    title = f"{title}, {idx}/{n_slices - 1}"
             if show_title_view:
                 title = f"{title} ({get_view_name(view)})"
 

@@ -1,10 +1,10 @@
 from mymi.processing.nifti import create_lung_preprocessed_dataset
 
 dataset = 'PMCC-REIRRAD'
-new_dataset = 'PMCC-REIRRAD-CP'
+dest_dataset = 'PMCC-REIRRAD-CP'
 kwargs = dict(
-    margin=20,
+    margin_mm=20,
     # pat_ids='pat_0',
 )
 
-create_lung_preprocessed_dataset(dataset, new_dataset, **kwargs)
+create_lung_preprocessed_dataset(dataset, dest_dataset, **kwargs)

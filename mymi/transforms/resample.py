@@ -3,7 +3,6 @@ import pandas as pd
 import SimpleITK as sitk
 from typing import *
 
-from mymi import logging
 from mymi.typing import *
 from mymi.utils import *
 
@@ -134,3 +133,75 @@ def resample_landmarks(
     landmarks[list(range(3))] = (landmarks[list(range(3))] - offset) * mult + output_offset
 
     return landmarks
+
+def __spatial_sample(
+    data: Image,
+    points: Union[Point3D, np.ndarray],
+    fill: Union[float, Literal['min']] = 'min',
+    offset: Optional[Point3D] = None,
+    sample_fov: FOV3D = (2, 2, 2),
+    sample_spacing: Spacing3D = (1, 1, 1),
+    spacing: Optional[Spacing3D] = None,
+    transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
+    **kwargs) -> Union[Image, Tuple[Image, sitk.Transform]]:
+
+    # Convert to sitk datatypes.
+    is_boolean = data.dtype == bool
+    if is_boolean:
+        data = data.astype(np.uint8) 
+    if spacing is not None:
+        spacing = tuple(float(s) for s in spacing)
+
+    # Create 'sitk' image and set parameters.
+    kwargs = {}
+    if spacing is not None:
+        kwargs['spacing'] = spacing
+    if offset is not None:
+        kwargs['offset'] = offset
+    img = to_sitk_image(data, **kwargs)
+
+    # Create resample filter.
+    filter = sitk.ResampleImageFilter()
+    if fill == 'min':
+        fill = float(data.min())
+    filter.SetDefaultPixelValue(fill)
+    if is_boolean:
+        filter.SetInterpolator(sitk.sitkNearestNeighbor)
+    if sample_fov == (0, 0, 0):
+        output_size = (1, 1, 1)    # Sample a single point.
+    else:
+        output_size = tuple(int(np.ceil(f / s)) for f, s in zip(sample_fov, sample_spacing))
+    filter.SetSize(output_size)
+    if transform is not None:
+        filter.SetTransform(transform)
+
+    # Convert points to list.
+    if isinstance(points, np.ndarray):
+        single_point = False
+    else:
+        points = [points]
+        single_point = True
+
+    # Perform resampling.
+    res = []
+    for p in points:
+        origin = tuple(np.array(p) - (np.array(sample_fov) / 2))
+        filter.SetOutputOrigin(origin)
+        rimg = filter.Execute(img)
+        r, _, _ = from_sitk_image(rimg)
+        r = r.mean()    # Take average of sample grid.
+        # r = bool(r) if is_boolean else float(r)
+        res.append(r)
+
+    # Convert based on input type.
+    if single_point:
+        res = res[0]
+
+    return res
+
+@delegates(__spatial_sample)
+def sample(
+    data: Images,
+    *args, **kwargs) -> Images:
+    assert_image(data)
+    return handle_non_spatial_dims(__spatial_sample, data, *args, **kwargs)

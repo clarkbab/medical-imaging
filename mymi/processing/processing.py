@@ -25,7 +25,7 @@ from mymi.utils import *
 def convert_brain_crop_to_training(
     set: 'Dataset',
     create_data: bool = True,
-    crop_mm: Optional[Union[Point3DBox, ImageSizeMM3D]] = None,
+    crop_mm: Optional[Union[Point3DBox, FOV3D]] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],

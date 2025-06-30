@@ -2,6 +2,7 @@ import numpy as np
 import os
 from typing import *
 
+from mymi.transforms import sample
 from mymi.typing import *
 from mymi.utils import *
 
@@ -30,6 +31,8 @@ class LandmarksNifti():
         self,
         data_only: bool = False,
         landmarks: Landmarks = 'all',
+        show_ct: bool = False,
+        show_dose: bool = False,
         use_patient_coords: bool = True,
         **kwargs) -> LandmarkData:
 
@@ -44,6 +47,20 @@ class LandmarksNifti():
         if landmarks != 'all':
             landmarks = self.list_landmarks(landmarks=landmarks)
             lm_df = lm_df[lm_df['landmark-id'].isin(landmarks)]
+
+        # Add sampled CT intensities.
+        if show_ct:
+            ct_image = self.__study.default_ct
+            lm_data = lm_df[list(range(3))].to_numpy()
+            ct_values = sample(ct_image.data, lm_data, spacing=ct_image.spacing, offset=ct_image.offset, **kwargs)
+            lm_df['ct'] = ct_values
+
+        # Add sampled dose intensities.
+        if show_dose:
+            dose_image = self.__study.default_dose
+            lm_data = lm_df[list(range(3))].to_numpy()
+            dose_values = sample(dose_image.data, lm_data, spacing=dose_image.spacing, offset=dose_image.offset, **kwargs)
+            lm_df['dose'] = dose_values
 
         # Convert to image coordinates.
         if not use_patient_coords:
