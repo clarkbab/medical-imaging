@@ -3,7 +3,28 @@ import inspect
 import sys
 from typing import *
 
-from .utils import is_windows
+from .utils import arg_to_list, is_windows
+
+def create_optional_properties(
+    locals: Dict[str, Any],
+    parents: Union[str, List[str]],
+    children: Union[str, List[str]],
+    child_prefix: str = '',     # Prefixs/suffixes are added to the called attributes.
+    child_suffix: str = '',
+    parent_prefix: str = '',
+    parent_suffix: str = '') -> Callable:
+    # Creates a property that first checks if the parent attribute is not None,
+    # before returning the child attribute.
+    parents = arg_to_list(parents, str)
+    children = arg_to_list(children, str)
+    for p in parents:
+        for c in children:
+            def prop_fn(self, p=p, c=c):    # Captures p and c in the closure.
+                def_mod = getattr(self, f'{parent_prefix}{p}{parent_suffix}')
+                if def_mod is not None:
+                    return getattr(def_mod, f'{child_prefix}{c}{child_suffix}')
+                return None
+            locals[f'{p}_{c}'] = property(prop_fn)
 
 def python_version(gte: Optional[str] = None) -> Union[Tuple[int, int, int], bool]:
     info = sys.version_info

@@ -46,7 +46,7 @@ def combine_labels(
     print(study_ids)
     for p, s in tqdm(zip(pat_ids, study_ids), total=len(pat_ids)):
         study = set.patient(p).study(s)
-        series = study.data(series_id, modality='REGIONS')
+        series = study.data(series_id, modality='regions')
         series_regions = series.data(regions=regions)
         label = np.clip(np.stack([v for v in series_regions.values()]).sum(axis=0), 0, 1)
         set.write_region(label, p, s, series_id, output_region, study.ct_spacing, study.ct_offset)
@@ -135,13 +135,13 @@ def convert_replan_to_nnunet_ref_model(
                 if '-0' in pat_id:
                     # Load registered data for pre-treatment scan.
                     pat_id_mt = pat_id.replace('-0', '-1')
-                    # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=regions, regions_ignore_missing=True)
+                    # input, region_images = load_patient_registration(dataset, pat_id_mt, pat_id, regions=regions, regions_ignore_missing=True)
                     input_spacing = set.patient(pat_id_mt).ct_spacing
                 else:
                     pat_id_mt = pat_id
                     input = pat.ct_data
                     input_spacing = pat.ct_spacing
-                    region_data = pat.region_data(regions=regions, regions_ignore_missing=True) 
+                    region_images = pat.region_images(regions=regions, regions_ignore_missing=True) 
 
                 # Resample input.
                 if spacing is not None:
@@ -202,7 +202,7 @@ def convert_replan_to_nnunet_ref_model(
                         continue
 
                 # Load label data.
-                label = region_data[r]
+                label = region_images[r]
 
                 # Resample label.
                 if spacing is not None:
@@ -323,13 +323,13 @@ def convert_replan_to_training(
             if '-0' in pat_id:
                 # Load registered data for pre-treatment scan.
                 pat_id_mt = pat_id.replace('-0', '-1')
-                # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, regions=region, regions_ignore_missing=True)
+                # input, region_images = load_patient_registration(dataset, pat_id_mt, pat_id, regions=region, regions_ignore_missing=True)
                 input_spacing = set.patient(pat_id_mt).ct_spacing
             else:
                 pat_id_mt = pat_id
                 input = pat.ct_data
                 input_spacing = pat.ct_spacing
-                region_data = pat.region_data(regions=region, regions_ignore_missing=True) 
+                region_images = pat.region_images(regions=region, regions_ignore_missing=True) 
 
             # Resample input.
             if spacing is not None:
@@ -377,7 +377,7 @@ def convert_replan_to_training(
                         continue
 
                 # Load label data.
-                label = region_data[region]
+                label = region_images[region]
 
                 # Resample label.
                 if spacing is not None:
@@ -533,13 +533,13 @@ def convert_population_lens_crop_to_training(
             if '-0' in pat_id:
                 # Load registered data for pre-treatment scan.
                 pat_id_mt = pat_id.replace('-0', '-1')
-                # input, region_data = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, regions_ignore_missing=True)
+                # input, region_images = load_patient_registration(dataset, pat_id_mt, pat_id, region=regions, regions_ignore_missing=True)
                 input_spacing = set.patient(pat_id_mt).ct_spacing
             else:
                 pat_id_mt = pat_id
                 input = pat.ct_data
                 input_spacing = pat.ct_spacing
-                region_data = pat.region_data(region=regions, regions_ignore_missing=True) 
+                region_images = pat.region_images(region=regions, regions_ignore_missing=True) 
 
             # Resample input.
             if spacing is not None:
@@ -564,8 +564,8 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_regions(region):
-                            region_data = pat.region_data(region=region)[region]
-                            region_extent = extent(region_data)
+                            region_images = pat.region_images(region=region)[region]
+                            region_extent = extent(region_images)
                             if region_extent[0][2] < min_z:
                                 min_z = region_extent[0][2]
                                 min_region = region
@@ -580,7 +580,7 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_regions(region):
-                            rdata = pat.region_data(region=region)[region]
+                            rdata = pat.region_images(region=region)[region]
                             extent_centre = centre_of_extent(rdata)
                             centre_z = extent_centre[2]
                             break
@@ -614,7 +614,7 @@ def convert_population_lens_crop_to_training(
                         continue
 
                 # Load label data.
-                label = region_data[region]
+                label = region_images[region]
 
                 # Resample label.
                 if spacing is not None:
@@ -717,14 +717,14 @@ def convert_replan_to_nnunet_bootstrap() -> None:
         nib.save(img, filepath)
 
         # Create region NIFTIs.
-        region_data = pat.region_data()
+        region_images = pat.region_images()
         for region in regions:
-            if region not in region_data:
+            if region not in region_images:
                 # Get 
                 # Load 'RM' model prediction.
                 model = ('segmenter-replan-112', 'n-folds')
             else:
-                data = region_data[region]
+                data = region_images[region]
 
             # Save NIFTI label.
             img = Nifti1Image(data.astype(np.int32), affine)
@@ -790,8 +790,8 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_regions(eye_region):
-                    region_data = pat.region_data(region=eye_region)[eye_region]
-                    region_extent = extent(region_data)
+                    region_images = pat.region_images(region=eye_region)[eye_region]
+                    region_extent = extent(region_images)
                     if region_extent[0][2] < min_z:
                         min_z = region_extent[0][2]
                         min_region = eye_region
@@ -821,7 +821,7 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_regions(eye_region):
-                    rdata = pat.region_data(region=eye_region)[eye_region]
+                    rdata = pat.region_images(region=eye_region)[eye_region]
                     extent_centre = centre_of_extent(rdata)
                     centre_z = extent_centre[2]
                     break
@@ -856,8 +856,8 @@ def convert_replan_to_lens_crop(
         nib.save(img, filepath)
 
         # Create region NIFTIs.
-        region_data = pat.region_data()
-        for region, data in region_data.items():
+        region_images = pat.region_images()
+        for region, data in region_images.items():
             if region not in regions:
                 continue
 
@@ -905,7 +905,7 @@ def create_excluded_brainstem(
             continue
 
         # Load label data.
-        data = pat.region_data(region=['Brain', 'Brainstem'])
+        data = pat.region_images(region=['Brain', 'Brainstem'])
 
         # Perform exclusion.
         brain_data = data['Brain'] & ~data['Brainstem']
@@ -1033,7 +1033,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     
     # Save index.
     if anonymise:
-        save_files_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
+        save_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
 
 def __destroy_flag(
     dataset: 'Dataset',

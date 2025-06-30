@@ -5,15 +5,15 @@ from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
-from .data import NiftiData
+from .images import NiftiImage
 
-class DoseNiftiData(NiftiData):
+class CtNiftiImage(NiftiImage):
     def __init__(
         self,
         study: 'NiftiStudy',
         id: SeriesID) -> None:
         self.__id = id
-        self.__path = os.path.join(study.path, 'dose', f'{id}.nii.gz')
+        self.__path = os.path.join(study.path, 'ct', f'{id}.nii.gz')
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -24,7 +24,7 @@ class DoseNiftiData(NiftiData):
 
     @property
     @ensure_loaded
-    def data(self) -> DoseImage:
+    def data(self) -> CtImage:
         return self.__data
 
     @ensure_loaded

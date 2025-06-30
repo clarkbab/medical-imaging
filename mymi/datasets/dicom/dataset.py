@@ -15,7 +15,7 @@ from mymi.utils import *
 from ..dataset import Dataset, DatasetType
 from ..shared import CT_FROM_REGEXP
 from .patient import DicomPatient
-from .index import INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index as build_index_fn
+from .index import INDEX_COLS, ERROR_INDEX_COLS, INDEX_INDEX_COL, build_index, exists as index_exists
 from .files.rtstruct import RegionMap, DEFAULT_POLICY as DEFAULT_REGION_POLICY
 
 Z_SPACING_ROUND_DP = 2
@@ -24,7 +24,7 @@ class DicomDataset(Dataset):
     def __init__(
         self,
         name: str,
-        build_index: bool = False) -> None:
+        rebuild_index: bool = False) -> None:
         # Create 'global ID'.
         self.__name = name
         self.__path = os.path.join(config.directories.datasets, 'dicom', self.__name)
@@ -38,9 +38,8 @@ class DicomDataset(Dataset):
         self.__ct_from = DicomDataset(ct_from_name) if ct_from_name is not None else None
         self.__global_id = f"DICOM:{self.__name}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__name}"
 
-        # (Re)-Trigger index build.
-        if build_index:
-            self.build_index()
+        if rebuild_index:
+            build_index(self.__name)
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -94,8 +93,8 @@ class DicomDataset(Dataset):
     def type(self) -> DatasetType:
         return self._type
 
-    def build_index(self) -> None:
-        build_index_fn(self.__name)
+    def rebuild_index(self) -> None:
+        build_index(self.__name)
 
     def has_patient(
         self,
@@ -202,11 +201,11 @@ class DicomDataset(Dataset):
 
     def __load_data(self) -> None:
         # Trigger index build if necessary.
-        filepath = os.path.join(self.__path, 'index-policy.yaml')
-        if not os.path.exists(filepath):
-            self.build_index()
+        if not index_exists(self.__name):
+            build_index(self.__name) 
 
         # Load index policy.
+        filepath = os.path.join(self.__path, 'index-policy.yaml')
         self.__index_policy = load_yaml(filepath)
 
         # Load index.

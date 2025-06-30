@@ -40,7 +40,7 @@ def create_registered_dataset(
     pat_ids = set.list_patients()
     for p in tqdm(pat_ids):
         # Perform rigid registration.
-        moved_ct, moved_region_data, moved_landmark_data, transform = rigid_registration(dataset, p, moving_study_id, p, fixed_study_id, fill=fill, landmarks=landmarks, regions=regions, regions_ignore_missing=True, **kwargs)
+        moved_ct, moved_region_images, moved_landmark_data, transform = rigid_registration(dataset, p, moving_study_id, p, fixed_study_id, fill=fill, landmarks=landmarks, regions=regions, regions_ignore_missing=True, **kwargs)
 
         # Don't do this - it messes up visualisation. Just do it during training/inference.
         # # Fill in padding values.
@@ -58,15 +58,15 @@ def create_registered_dataset(
         filepath = os.path.join(moved_study.path, 'ct', 'series_0.nii.gz')
         save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
-        if moved_region_data is not None:
-            for r, moved_r in moved_region_data.items():
+        if moved_region_images is not None:
+            for r, moved_r in moved_region_images.items():
                 filepath = os.path.join(moved_study.path, 'regions', 'series_1', f'{r}.nii.gz')
                 save_nifti(moved_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
         if moved_landmark_data is not None:
             filepath = os.path.join(moved_study.path, 'landmarks', 'series_1.csv')
-            save_files_csv(moved_landmark_data[landmark_cols], filepath)
+            save_csv(moved_landmark_data[landmark_cols], filepath)
 
         # Save transform - we'll need this to propagate fixed landmarks to non-registered moving images.
         # TRE is typically calculated in the moving image space. 
@@ -83,9 +83,9 @@ def create_registered_dataset(
         save_nifti(fixed_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
         if regions is not None:
-            fixed_region_data = fixed_study.region_data(regions=regions, regions_ignore_missing=True)
-            if fixed_region_data is not None:
-                for r, fixed_r in fixed_region_data.items():
+            fixed_region_images = fixed_study.region_images(regions=regions, regions_ignore_missing=True)
+            if fixed_region_images is not None:
+                for r, fixed_r in fixed_region_images.items():
                     filepath = os.path.join(dest_fixed_study.path, 'regions', 'series_1', f'{r}.nii.gz')
                     save_nifti(fixed_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
@@ -93,4 +93,4 @@ def create_registered_dataset(
             fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
             if fixed_landmark_data is not None:
                 filepath = os.path.join(dest_fixed_study.path, 'landmarks', 'series_1.csv')
-                save_files_csv(fixed_landmark_data[landmark_cols], filepath)
+                save_csv(fixed_landmark_data[landmark_cols], filepath)

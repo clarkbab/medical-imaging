@@ -26,10 +26,6 @@ class NrrdStudy:
         return self.default_ct.data
 
     @property
-    def ct_affine(self) -> np.ndarray:
-        return self.default_ct.affine
-
-    @property
     def ct_offset(self) -> Point3D:
         return self.default_ct.offset
 
@@ -47,7 +43,7 @@ class NrrdStudy:
 
     @property
     def default_ct(self) -> Optional[CtData]:
-        data_ids = self.list_data('CT')
+        data_ids = self.list_data('ct')
         if len(data_ids) == 0:
             return None
         else:
@@ -55,19 +51,19 @@ class NrrdStudy:
 
     @property
     def default_landmarks(self) -> Optional[LandmarkData]:
-        data_ids = self.list_data('LANDMARKS')
+        data_ids = self.list_data('landmarks')
         if len(data_ids) == 0:
             return None
         else:
             return LandmarkData(self, data_ids[-1])
 
     @property
-    def default_regions(self) -> Optional[RegionData]:
-        data_ids = self.list_data('REGIONS')
+    def default_regions(self) -> Optional[RegionImage]:
+        data_ids = self.list_data('regions')
         if len(data_ids) == 0:
             return None
         else:
-            return RegionData(self, data_ids[-1], region_map=self.__region_map)
+            return RegionImage(self, data_ids[-1], region_map=self.__region_map)
 
     @property
     def id(self) -> str:
@@ -105,22 +101,22 @@ class NrrdStudy:
     def list_data(
         self,
         modality: NrrdModality) -> List[str]:
-        if modality == 'CT':
+        if modality == 'ct':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'ct'))))
             data_ids = [s.replace('.nrrd', '') for s in data_ids]
-        elif modality == 'LANDMARKS':
+        elif modality == 'landmarks':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'landmarks'))))
             data_ids = [s.replace('.csv', '') for s in data_ids]
-        elif modality == 'REGIONS':
+        elif modality == 'regions':
             data_ids = list(sorted(os.listdir(os.path.join(self.__path, 'regions'))))
-        elif modality == 'DOSE':
+        elif modality == 'dose':
             pass
         else:
             raise ValueError(f"Modality '{modality}' not recognised.")
     
         return data_ids
 
-    def region_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
+    def region_images(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
         return self.default_regions.data(*args, **kwargs)
 
     def region_path(self, *args, **kwargs) -> str:
@@ -130,13 +126,13 @@ class NrrdStudy:
         self,
         id: str,
         modality: NrrdModality) -> NrrdData:
-        if modality == 'CT':
+        if modality == 'ct':
             data = CtData(self, id)
-        elif modality == 'LANDMARKS':
+        elif modality == 'landmarks':
             data = LandmarkData(self, id)
-        elif modality == 'REGIONS':
-            data = RegionData(self, id, region_map=self.__region_map)
-        elif modality == 'DOSE':
+        elif modality == 'regions':
+            data = RegionImage(self, id, region_map=self.__region_map)
+        elif modality == 'dose':
             pass
 
         return data

@@ -24,7 +24,7 @@ class MrSeries(DicomSeries):
 
         # Load index.
         index = self.__study.index
-        index = index[(index.modality == 'MR') & (index['series-id'] == id)].copy()
+        index = index[(index.modality == 'mr') & (index['series-id'] == id)].copy()
         if len(index) == 0:
             raise ValueError(f"No MR series with ID '{id}' found in study '{study}'.")
         self.__index = index
@@ -86,7 +86,7 @@ class MrSeries(DicomSeries):
 
     @property
     def modality(self) -> DicomModality:
-        return 'MR'
+        return 'mr'
 
     @property
     @ensure_loaded

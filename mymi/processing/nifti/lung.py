@@ -1,23 +1,37 @@
 import numpy as np
 import os
+import shutil
 from tqdm import tqdm
 
 from mymi.datasets import NiftiDataset
-from mymi.datasets.nifti import recreate
+from mymi.datasets.nifti import create, exists, recreate as recreate_nifti
 from mymi.geometry import get_centre_of_mass, get_foreground_extent
 from mymi.transforms import crop_or_pad, resample
 from mymi.utils import *
 
 def create_lung_preprocessed_dataset(
     dataset: str,
-    new_dataset: str,
+    dest_dataset: str,
     hu_range: Tuple[float, float] = (-2000, 2000),
     lung_region: Region = 'Lungs',
     margin: float = 10,
     pat_ids: PatientIDs = 'all',
+    recreate: bool = False,
     spacing: Spacing3D = (1, 1, 1)) -> None:
+    
+    # Load patients.
     set = NiftiDataset(dataset)
-    new_set = recreate(new_dataset)
+    if exists(dest_dataset):
+        if recreate:
+            dest_set = recreate_nifti(dest_dataset)
+        else:
+            dest_set = NiftiDataset(dest_dataset)
+            # Remove 'patients' data to ensure there are no leftovers. Preserve other data, e.g. predictions, evaluations, etc.
+            filepath = os.path.join(dest_set.path, 'data', 'patients')
+            if os.path.exists(filepath):
+                shutil.rmtree(filepath)
+    else:
+        dest_set = create(dest_dataset)
     pat_ids = set.list_patients(pat_ids=pat_ids)
 
     for p in tqdm(pat_ids):
@@ -27,9 +41,9 @@ def create_lung_preprocessed_dataset(
 
         # Resample data.
         fixed_ct_rs = resample(fixed_study.ct_data, output_spacing=spacing, spacing=fixed_study.ct_spacing)
-        fixed_lung_rs = resample(fixed_study.region_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
+        fixed_lung_rs = resample(fixed_study.region_images(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
         moving_ct_rs = resample(moving_study.ct_data, output_spacing=spacing, spacing=moving_study.ct_spacing)
-        moving_lung_rs = resample(moving_study.region_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
+        moving_lung_rs = resample(moving_study.region_images(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
         fixed_lms = fixed_study.landmark_data()
         moving_lms = moving_study.landmark_data()
 
@@ -64,7 +78,7 @@ def create_lung_preprocessed_dataset(
         moving_ct_cp = np.clip(moving_ct_cp, a_min=hu_range[0], a_max=hu_range[1])
 
         # Save images and landmarks.
-        pat_path = os.path.join(new_set.path, 'data', 'patients', p)
+        pat_path = os.path.join(dest_set.path, 'data', 'patients', p)
         filepath = os.path.join(pat_path, 'study_1', 'ct', 'series_0.nii.gz')
         save_nifti(fixed_ct_cp, filepath, spacing=spacing)
         filepath = os.path.join(pat_path, 'study_1', 'regions', 'series_1', 'Lungs.nii.gz')

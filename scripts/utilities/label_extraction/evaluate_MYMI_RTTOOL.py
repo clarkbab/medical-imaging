@@ -61,8 +61,8 @@ for pat in tqdm(pats):
         }
 
         # Get labels.
-        mymi_label = mymi_patient.region_data(region=region)[region]
-        label = patient.region_data(region=region)[region]
+        mymi_label = mymi_patient.region_images(region=region)[region]
+        label = patient.region_images(region=region)[region]
         
         # Get DSC.
         data['metric'] = 'dice'

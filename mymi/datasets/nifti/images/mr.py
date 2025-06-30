@@ -4,9 +4,9 @@ import os
 from mymi.typing import *
 from mymi.utils import *
 
-from .data import NiftiData
+from .images import NiftiImage
 
-class MrNiftiData(NiftiData):
+class MrNiftiImage(NiftiImage):
     def __init__(
         self,
         study: 'NiftiStudy',

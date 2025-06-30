@@ -97,9 +97,9 @@ def create_patient_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_data is not None:
-            for region, moving_label in moving_region_data.items():
+        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_images is not None:
+            for region, moving_label in moving_region_images.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
@@ -201,9 +201,9 @@ def create_patient_identity_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_data is not None:
-            for region, moving_label in moving_region_data.items():
+        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_images is not None:
+            for region, moving_label in moving_region_images.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
@@ -290,7 +290,7 @@ def load_registration(
     moving_study_id: StudyID = 'study_0',
     raise_error: bool = True,
     regions: Optional[Regions] = 'all',
-    use_patient_coords: bool = True) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionData], Optional[Landmarks]]:
+    use_patient_coords: bool = True) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionImage], Optional[Landmarks]]:
     # Load moved CT.
     if moving_pat_id is None:
         moving_pat_id = fixed_pat_id
@@ -318,14 +318,14 @@ def load_registration(
         # Load moved regions.
         moving_study = set.patient(moving_pat_id).study(moving_study_id)
         regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
-        moved_region_data = {}
+        moved_region_images = {}
         for r in regions:
             rdata = load_registered_region(dataset, fixed_pat_id, model, r, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id)
             if rdata is None:
                 continue
-            moved_region_data[r] = rdata
+            moved_region_images[r] = rdata
     else:
-        moved_region_data = None
+        moved_region_images = None
 
     if landmarks is not None:
         # Load landmarks - moved from fixed to moving space (reversed).
@@ -342,7 +342,7 @@ def load_registration(
     else:
         moved_landmark_data = None
             
-    return moved_ct, transform, moved_region_data, moved_landmark_data
+    return moved_ct, transform, moved_region_images, moved_landmark_data
 
 def load_registered_region(
     dataset: str,
@@ -447,9 +447,9 @@ def create_patient_vxmpp_identity_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_data is not None:
-            for region, moving_label in moving_region_data.items():
+        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_images is not None:
+            for region, moving_label in moving_region_images.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')

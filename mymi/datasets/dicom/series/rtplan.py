@@ -17,7 +17,7 @@ class RtPlanSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        index = index[(index.modality == 'RTPLAN') & (index['series-id'] == self.__id)].copy()
+        index = index[(index.modality == 'rtplan') & (index['series-id'] == self.__id)].copy()
         if len(index) == 0:
             raise ValueError(f"No RTPLAN series with ID '{id}' found in study '{study}'.")
         self.__index = index
@@ -57,7 +57,7 @@ class RtPlanSeries(DicomSeries):
 
     @property
     def modality(self) -> DicomModality:
-        return 'RTPLAN'
+        return 'rtplan'
 
     @property
     def ref_rtstruct(self) -> RtStructFile:

@@ -17,7 +17,7 @@ def rigid_registration(
     landmarks: Optional[Landmarks] = None,
     regions: Optional[Regions] = None,
     regions_ignore_missing: bool = False,
-    **kwargs) -> Tuple[CtImage, Optional[RegionData], Optional[LandmarkData], sitk.Transform]:
+    **kwargs) -> Tuple[CtImage, Optional[RegionImage], Optional[LandmarkData], sitk.Transform]:
 
     # Load CT data.
     set = NiftiDataset(dataset)
@@ -41,15 +41,15 @@ def rigid_registration(
     moved_ct, transform = rigid_image_registration(moving_ct, moving_spacing, moving_offset, fixed_ct, fixed_spacing, fixed_offset, **kwargs)
 
     # Move region data.
-    moved_region_data = None
+    moved_region_images = None
     if regions is not None:
-        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_data is not None:
-            moved_region_data = {}
-            for region, moving_label in moving_region_data.items():
+        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_images is not None:
+            moved_region_images = {}
+            for region, moving_label in moving_region_images.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                moved_region_data[region] = moved_label
+                moved_region_images[region] = moved_label
 
     # Move landmarks.
     moved_landmark_data = None
@@ -63,4 +63,4 @@ def rigid_registration(
             moved_points = sitk_transform_points(moving_points, inv_transform)
             moved_landmark_data[list(range(3))] = moved_points
 
-    return moved_ct, moved_region_data, moved_landmark_data, transform
+    return moved_ct, moved_region_images, moved_landmark_data, transform

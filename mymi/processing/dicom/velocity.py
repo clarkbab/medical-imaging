@@ -63,7 +63,7 @@ def convert_velocity_predictions_to_nifti(
                 for r in regions:
                     if not moving_study.has_regions(r):
                         continue
-                    moving_region = moving_study.region_data(regions=r)[r]
+                    moving_region = moving_study.region_images(regions=r)[r]
                     moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
@@ -78,4 +78,4 @@ def convert_velocity_predictions_to_nifti(
             # These are redundant columns, and shouldn't be stored on disk. They should be added at load time.
             lm_df = lm_df.drop(columns=['patient-id', 'study-id'])
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'landmarks', f'{model}.csv')
-            save_files_csv(lm_df, filepath, overwrite=True)
+            save_csv(lm_df, filepath, overwrite=True)

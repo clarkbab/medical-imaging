@@ -67,7 +67,7 @@ def convert_to_nnunet_single_region_v1(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.region_data(regions=region)[region]
+            label = study.region_images(regions=region)[region]
 
             # Normalise CT data.
             if normalise:
@@ -156,7 +156,7 @@ def convert_to_nnunet_multi_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            region_data = study.region_data()
+            region_images = study.region_images()
 
             # Normalise CT data.
             if normalise:
@@ -172,12 +172,12 @@ def convert_to_nnunet_multi_region(
 
             # Resample label.
             if spacing is not None:
-                for r, d in region_data.items():
-                    region_data[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
+                for r, d in region_images.items():
+                    region_images[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
 
             # Save label data.
             label = np.zeros(ct_data.shape, dtype=np.int32)
-            for r, d in region_data.items():
+            for r, d in region_images.items():
                 region_class = regions.index(r) + 1
                 label[d == 1] = region_class
             filepath = os.path.join(labelspath, f'{p}.nii.gz')
@@ -254,7 +254,7 @@ def convert_to_nnunet_single_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.region_data(regions=region)[region]
+            label = study.region_images(regions=region)[region]
 
             # Normalise CT data.
             if normalise:

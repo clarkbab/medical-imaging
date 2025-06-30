@@ -50,67 +50,12 @@ class DicomPatient:
         return self.get_cts()[0].PatientBirthDate
 
     @property
-    def ct_data(self) -> Optional[CtImage]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.data
-
-    @property
-    def ct_fov(self) -> Optional[ImageSizeMM3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.fov
-
-    @property
     def ct_from(self) -> str:
         return self.__ct_from
 
     @property
-    def ct_offset(self) -> Optional[Point3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.offset
-
-    @property
-    def ct_size(self) -> Optional[Size3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.size
-
-    @property
-    def ct_spacing(self) -> Optional[Spacing3D]:
-        def_ct = self.default_ct
-        if def_ct is None:
-            return None
-        return def_ct.spacing
-
-    @property
     def dataset(self) -> str:
         return self.__dataset
-    
-    @property
-    def default_ct(self) -> Optional[CtSeries]:
-        return self.default_study.default_ct if self.default_study is not None else None
-    
-    @property
-    def default_mr(self) -> Optional[MrSeries]:
-        return self.default_study.default_mr if self.default_study is not None else None
-
-    @property
-    def default_rtdose(self) -> Optional[RtDoseSeries]:
-        return self.default_study.default_rtdose if self.default_study is not None else None
-
-    @property
-    def default_rtplan(self) -> Optional[RtPlanSeries]:
-        return self.default_study.default_rtplan if self.default_study is not None else None
-    
-    @property
-    def default_rtstruct(self) -> Optional[RtStructSeries]:
-        return self.default_study.default_rtstruct if self.default_study is not None else None
     
     @property
     def default_study(self) -> DicomStudy:
@@ -123,34 +68,6 @@ class DicomPatient:
         return self.__global_id
 
     @property
-    def dose_data(self):
-        if self.default_rtdose is not None:
-            return self.default_rtdose.data
-        else:
-            return None
-
-    @property
-    def dose_offset(self):
-        if self.default_rtdose is not None:
-            return self.default_rtdose.offset
-        else:
-            return None
-
-    @property
-    def dose_size(self):
-        if self.default_rtdose is not None:
-            return self.default_rtdose.size
-        else:
-            return None
-
-    @property
-    def dose_spacing(self):
-        if self.default_rtdose is not None:
-            return self.default_rtdose.spacing
-        else:
-            return None
-
-    @property
     def id(self) -> str:
         return self.__id
 
@@ -161,38 +78,6 @@ class DicomPatient:
     @property
     def index_policy(self) -> pd.DataFrame:
         return self.__index_policy
-
-    @property
-    def id(self) -> str:
-        return self.__id
-
-    @property
-    def mr_fov(self) -> Optional[ImageSizeMM3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.fov
-
-    @property
-    def mr_offset(self) -> Optional[Point3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.offset
-
-    @property
-    def mr_size(self) -> Optional[Size3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.size
-
-    @property
-    def mr_spacing(self) -> Optional[Spacing3D]:
-        def_mr = self.default_mr
-        if def_mr is None:
-            return None
-        return def_mr.spacing
 
     @property
     def name(self) -> str:
@@ -209,10 +94,6 @@ class DicomPatient:
     @property
     def size(self) -> str:
         return getattr(self.get_cts()[0], 'PatientSize', '')
-
-    @property
-    def study_date(self) -> datetime:
-        return self.default_rtstruct.ref_ct.study_date
 
     @property
     def weight(self) -> str:
@@ -271,8 +152,8 @@ class DicomPatient:
     def list_regions(self, *args, **kwargs):
         return self.default_rtstruct.list_regions(*args, **kwargs)
 
-    def region_data(self, *args, **kwargs):
-        return self.default_rtstruct.region_data(*args, **kwargs)
+    def region_images(self, *args, **kwargs):
+        return self.default_rtstruct.region_images(*args, **kwargs)
 
     def region_summary(self, *args, **kwargs):
         return self.default_rtstruct.region_summary(*args, **kwargs)
@@ -282,9 +163,23 @@ class DicomPatient:
         id: StudyID) -> DicomStudy:
         return DicomStudy(self, id, region_map=self.__region_map)
 
-    def __load_default_rtdose_and_rtplan(self) -> None:
-        self.__default_rtplan = self.default_study.default_rtplan
-        self.__default_rtdose = self.default_study.default_rtdose
-
     def __str__(self) -> str:
         return self.__global_id
+
+# Add 'has_{mod}' properties.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomPatient, f'has_{m}', property(lambda self, m=m: getattr(self, f'default_{m}') is not None))
+
+# Add default properties.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
+
+# Add image property shortcuts.
+mods = ['ct', 'mr', 'rtdose']
+props = ['data', 'fov', 'offset', 'size', 'spacing']
+for m in mods:
+    for p in props:
+        setattr(DicomPatient, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(getattr(self, f'default_{m}'), p) if getattr(self, f'default_{m}') is not None else None))
+ 

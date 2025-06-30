@@ -122,9 +122,9 @@ def get_patient_regions_report(
             study_ids = pat.list_studies()
             for study_id in study_ids:
                 study = pat.study(study_id)
-                series_ids = study.list_series('RTSTRUCT')
+                series_ids = study.list_series('rtstruct')
                 for series_id in series_ids:
-                    series = study.series(series_id, 'RTSTRUCT')
+                    series = study.series(series_id, 'rtstruct')
                     rtstruct_ids = series.list_rtstruct_files()
                     for rtstruct_id in rtstruct_ids:
                         rtstruct = series.rtstruct(rtstruct_id) 
@@ -266,7 +266,7 @@ def get_region_summary(
 
         # Get region data.
         pat_regions = set.patient(pat).list_regions(whitelist=regions)
-        rs_data = set.patient(pat).region_data(region=pat_regions)
+        rs_data = set.patient(pat).region_images(region=pat_regions)
 
         # Add extents for all regions.
         for r in rs_data.keys():

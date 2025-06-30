@@ -116,7 +116,7 @@ def create_voxelmorph_predictions(
                     continue
 
                 # Create moved region label.
-                moving_label = moving_study.region_data(regions=r)[r]
+                moving_label = moving_study.region_images(regions=r)[r]
                 moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)

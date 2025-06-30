@@ -2,13 +2,10 @@ import numpy as np
 import os
 from typing import *
 
-from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 
-from .data import NiftiData
-
-class LandmarkNiftiData(NiftiData):
+class LandmarksNifti():
     def __init__(
         self,
         study: 'NiftiStudy',

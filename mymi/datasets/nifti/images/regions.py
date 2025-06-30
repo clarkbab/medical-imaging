@@ -6,9 +6,9 @@ from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 
-from .data import NiftiData
+from .images import NiftiImage
 
-class RegionNiftiData(NiftiData):
+class RegionNiftiImage(NiftiImage):
     def __init__(
         self,
         study: 'NiftiStudy',
@@ -26,7 +26,7 @@ class RegionNiftiData(NiftiData):
     def data(
         self,
         regions: Regions = 'all',
-        **kwargs) -> RegionData:
+        **kwargs) -> RegionImage:
         regions = regions_to_list(regions, literals={ 'all': self.list_regions })
 
         rd = {}

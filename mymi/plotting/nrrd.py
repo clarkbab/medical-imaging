@@ -31,7 +31,7 @@ def plot_patients(
     plot_ids = []
     ct_datas = []
     spacings = []
-    region_datas = []
+    region_imagess = []
     landmark_datas = []
     dose_datas = []
     centres = []
@@ -55,9 +55,9 @@ def plot_patients(
 
         # Load region data.
         if regions is not None:
-            region_data = study.region_data(regions=regions, **kwargs)
+            region_images = study.region_images(regions=regions, **kwargs)
         else:
-            region_data = None
+            region_images = None
 
         # Load landmarks.
         if landmarks is not None:
@@ -70,27 +70,27 @@ def plot_patients(
         dose_data = study.dose_data if show_dose else None
         dose_datas.append(dose_data)
 
-        # If 'centre' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+        # If 'centre' isn't in 'landmark_data' or 'region_images', pass it to base plotter as np.ndarray, or pd.DataFrame.
         if centre is not None:
             if isinstance(centre, str):
                 if study.has_landmark(centre) and landmark_data is not None and centre not in landmark_data['landmark-id']:
                     centre = study.landmark_data(landmarks=centre)
-                elif study.has_regions(centre) and region_data is not None and centre not in region_data:
-                    centre = study.region_data(regions=centre)[centre]
+                elif study.has_regions(centre) and region_images is not None and centre not in region_images:
+                    centre = study.region_images(regions=centre)[centre]
 
-        # If 'crop' isn't in 'landmark_data' or 'region_data', pass it to base plotter as np.ndarray, or pd.DataFrame.
+        # If 'crop' isn't in 'landmark_data' or 'region_images', pass it to base plotter as np.ndarray, or pd.DataFrame.
         if crop is not None:
             if isinstance(crop, str):
                 if study.has_landmark(crop) and landmark_data is not None and crop not in landmark_data['landmark-id']:
                     crop = study.landmark_data(landmarks=crop)
-                elif study.has_regions(crop) and region_data is not None and crop not in region_data:
-                    crop = study.region_data(regions=crop)[crop]
+                elif study.has_regions(crop) and region_images is not None and crop not in region_images:
+                    crop = study.region_images(regions=crop)[crop]
 
         # Apply region labels.
         # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
         # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
-        region_data, centre, crop = apply_region_labels(region_labels, region_data, centre, crop)
-        region_datas.append(region_data)
+        region_images, centre, crop = apply_region_labels(region_labels, region_images, centre, crop)
+        region_imagess.append(region_images)
         centres.append(centre)
         crops.append(crop)
 
@@ -101,7 +101,7 @@ def plot_patients(
         ct_datas=ct_datas,
         dose_datas=dose_datas,
         landmark_datas=landmark_datas,
-        region_datas=region_datas
+        region_imagess=region_imagess
     )
     plot_patients_matrix(plot_ids, spacings, **okwargs, **kwargs)
 
@@ -118,17 +118,17 @@ def plot_heatmap(
     set = NrrdDataset(dataset)
     pat = set.patient(pat_id)
     ct_data = pat.ct_data
-    region_data = pat.region_data(region=region)
+    region_images = pat.region_images(region=region)
     spacing = pat.ct_spacing
 
     # Load heatmap.
     heatmap = load_multi_segmenter_heatmap(dataset, pat_id, model, region, layer)
 
     if centre is not None:
-        centre = pat.region_data(region=centre)[centre]
+        centre = pat.region_images(region=centre)[centre]
 
     if type(crop) == str:
-        crop = pat.region_data(region=crop)[crop]
+        crop = pat.region_images(region=crop)[crop]
     
     # Plot.
-    plot_heatmap_base(heatmap, spacing, centre=centre, crop=crop, ct_data=ct_data, region_data=region_data, **kwargs)
+    plot_heatmap_base(heatmap, spacing, centre=centre, crop=crop, ct_data=ct_data, region_images=region_images, **kwargs)

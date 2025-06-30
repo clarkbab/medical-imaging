@@ -31,71 +31,51 @@ class DicomStudy:
         self.__region_policy = self.__patient.region_policy
 
     @property
-    def ct_data(self) -> Optional[CtImage]:
-        return self.default_ct.data if self.default_ct is not None else None
-
-    @property
-    def ct_fov(self) -> Optional[Point3D]:
-        return self.default_ct.fov if self.default_ct is not None else None
-
-    @property
-    def ct_offset(self) -> Optional[Point3D]:
-        return self.default_ct.offset if self.default_ct is not None else None
-
-    @property
-    def ct_size(self) -> Optional[Size3D]:
-        return self.default_ct.size if self.default_ct is not None else None 
-
-    @property
-    def ct_spacing(self) -> Optional[Spacing3D]:
-        return self.default_ct.spacing if self.default_ct is not None else None
-
-    @property
     def default_ct(self) -> Optional[CtSeries]:
-        series_ids = self.list_series('CT')
+        series_ids = self.list_series('ct')
         if len(series_ids) == 0:
             return None
-        return self.series(series_ids[-1], 'CT')
+        return self.series(series_ids[-1], 'ct')
 
     @property
     def default_mr(self) -> Optional[MrSeries]:
-        series_ids = self.list_series('MR')
+        series_ids = self.list_series('mr')
         if len(series_ids) == 0:
             return None
-        return self.series(series_ids[-1], 'MR')
+        return self.series(series_ids[-1], 'mr')
 
     @property
     def default_rtdose(self) -> Optional[RtDoseSeries]:
-        series_ids = self.list_series('RTDOSE')
+        series_ids = self.list_series('rtdose')
         if len(series_ids) == 0:
             return None
-        return self.series(series_ids[-1], 'RTDOSE')
+        return self.series(series_ids[-1], 'rtdose')
 
     @property
     def default_rtplan(self) -> Optional[RtPlanSeries]:
-        series_ids = self.list_series('RTPLAN')
+        series_ids = self.list_series('rtplan')
         if len(series_ids) == 0:
             return None
-        return self.series(series_ids[-1], 'RTPLAN')
+        return self.series(series_ids[-1], 'rtplan')
     
     @property
     def default_rtstruct(self) -> Optional[RtStructSeries]:
-        series_ids = self.list_series('RTSTRUCT')
+        series_ids = self.list_series('rtstruct')
         if len(series_ids) == 0:
             return None
-        return self.series(series_ids[-1], 'RTSTRUCT')
+        return self.series(series_ids[-1], 'rtstruct')
 
     @property
     def description(self) -> str:
         return self.__global_id
 
     @property
-    def dose_data(self) -> Optional[DoseImage]:
-        return self.default_rtdose.data if self.default_rtdose is not None else None 
+    def has_ct(self):
+        return True if len(self.list_series('ct')) > 0 else False
 
     @property
-    def has_ct(self):
-        return True if len(self.list_series('CT')) > 0 else False
+    def has_rtdose(self):
+        return True if len(self.list_series('rtdose')) > 0 else False
 
     def has_landmark(self, *args, **kwargs):
         return self.default_rtstruct.has_landmark(*args, **kwargs)
@@ -136,31 +116,11 @@ class DicomStudy:
         return self.__index_policy
 
     @property
-    def mr_data(self) -> Optional[MrImage]:
-        return self.default_mr.data if self.default_mr is not None else None
-
-    @property
-    def mr_fov(self) -> Optional[Point3D]:
-        return self.default_mr.fov if self.default_mr is not None else None
-
-    @property
-    def mr_offset(self) -> Optional[Point3D]:
-        return self.default_mr.offset if self.default_mr is not None else None
-
-    @property
-    def mr_size(self) -> Optional[Size3D]:
-        return self.default_mr.size if self.default_mr is not None else None
-
-    @property
-    def mr_spacing(self) -> Optional[Spacing3D]:
-        return self.default_mr.spacing if self.default_mr is not None else None
-
-    @property
     def patient(self) -> str:
         return self.__patient
 
-    def region_data(self, *args, **kwargs):
-        return self.default_rtstruct.region_data(*args, **kwargs)
+    def region_images(self, *args, **kwargs):
+        return self.default_rtstruct.region_images(*args, **kwargs)
 
     @property
     def region_policy(self) -> pd.DataFrame:
@@ -174,15 +134,15 @@ class DicomStudy:
         if modality is None:
             modality = self.series_modality(id)
 
-        if modality == 'CT':
+        if modality == 'ct':
             return CtSeries(self, id, **kwargs)
-        elif modality == 'MR':
+        elif modality == 'mr':
             return MrSeries(self, id, **kwargs)
-        elif modality == 'RTDOSE':
+        elif modality == 'rtdose':
             return RtDoseSeries(self, id, **kwargs)
-        elif modality == 'RTPLAN':
+        elif modality == 'rtplan':
             return RtPlanSeries(self, id, **kwargs)
-        elif modality == 'RTSTRUCT':
+        elif modality == 'rtstruct':
             return RtStructSeries(self, id, region_map=self.__region_map, **kwargs)
         else:
             raise ValueError(f"Unrecognised DICOM modality '{modality}'.")
@@ -200,3 +160,15 @@ class DicomStudy:
 
     def __str__(self) -> str:
         return self.__global_id
+
+# Add 'has_{mod}' properties.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomStudy, f'has_{m}', property(lambda self, m=m: getattr(self, f'default_{m}') is not None))
+
+# Add image property shortcuts.
+mods = ['ct', 'mr', 'rtdose']
+props = ['data', 'fov', 'offset', 'size', 'spacing']
+for m in mods:
+    for p in props:
+        setattr(DicomStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(getattr(self, f'default_{m}'), p) if getattr(self, f'default_{m}') is not None else None))

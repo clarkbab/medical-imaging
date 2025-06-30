@@ -480,7 +480,7 @@ class Segmenter(pl.LightningModule):
     def on_after_backward(self) -> None:
         if self.__save_training_metrics and self.__interval_matches(self.__metrics_save_interval):
             filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'training-metrics.csv')
-            save_files_csv(self.__training_metrics, filepath)
+            save_csv(self.__training_metrics, filepath)
 
     def save_loss(
         self,

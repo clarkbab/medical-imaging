@@ -8,7 +8,7 @@ from mymi.utils import load_nrrd
 
 from .data import NrrdData
 
-class RegionData(NrrdData):
+class RegionImage(NrrdData):
     def __init__(
         self,
         study: 'NrrdStudy',

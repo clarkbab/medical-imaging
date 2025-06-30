@@ -110,13 +110,13 @@ class RtStructConverter:
         return landmark
 
     @classmethod
-    def get_region_data(
+    def get_region_images(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         name: str,
         size: Size3D,
         spacing: Spacing3D,
-        offset: Point3D) -> RegionData:
+        offset: Point3D) -> RegionImage:
         # Load the contour data.
         roi_infos = rtstruct.StructureSetROISequence
         roi_contours = rtstruct.ROIContourSequence
@@ -319,9 +319,9 @@ class RtStructConverter:
         rtstruct.InstanceCreationTime = time
         if 'institution' in info:
             rtstruct.InstitutionName = info['institution']
-        rtstruct.Modality = 'RTSTRUCT'
+        rtstruct.Modality = 'rtstruct'
         rtstruct.SpecificCharacterSet = 'ISO_IR 100'
-        rtstruct.StructureSetLabel = info['label'] if 'label' in info else 'RTSTRUCT'
+        rtstruct.StructureSetLabel = info['label'] if 'label' in info else 'rtstruct'
         rtstruct.StructureSetDate = date
         rtstruct.StructureSetTime = time
 

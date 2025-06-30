@@ -80,9 +80,17 @@ class RtDoseFile(DicomFile):
         return self.__spacing
 
     def __load_data(self) -> None:
-        rtdose_dicom = self.dicom
+        # Load referenced RTPLAN.
+        if not self.__series.index_policy['no-ref-rtplan']['allow']:
+            # Get referenced RTPLAN series from index.
+            rtplan_file_id = self.__index['mod-spec'][DICOM_RTDOSE_REF_RTPLAN_KEY]
+            self.__ref_rtplan = RtPlanFile(self.__series.study, rtplan_file_id)
+        else:
+            # Choose study default RTPLAN as "ref".
+            self.__ref_rtplan = self.__series.study.default_rtplan.default_file if self.__series.study.default_rtplan is not None else None
 
         # Store offset.
+        rtdose_dicom = self.dicom
         self.__offset = tuple(float(o) for o in rtdose_dicom.ImagePositionPatient)
 
         # Store spacing.
@@ -100,27 +108,9 @@ class RtDoseFile(DicomFile):
         self.__spacing = tuple((float(s) for s in np.append(spacing_x_y, spacing_z)))
 
         # Load data.
-        # Resample dose data to CT space.
-        pat = self.__series.study.patient
         data = np.transpose(rtdose_dicom.pixel_array)
         data = rtdose_dicom.DoseGridScaling * data
-        kwargs = dict(
-            offset=self.__offset,
-            output_offset=pat.ct_offset,
-            output_size=pat.ct_size,
-            output_spacing=pat.ct_spacing,
-            spacing=self.__spacing,
-        )
-        self.__data = resample(data, **kwargs)
-
-        # Load referenced RTPLAN.
-        if not self.__series.index_policy['no-ref-rtplan']['allow']:
-            # Get referenced RTPLAN series from index.
-            rtplan_file_id = self.__index['mod-spec'][DICOM_RTDOSE_REF_RTPLAN_KEY]
-            self.__ref_rtplan = RtPlanFile(self.__series.study, rtplan_file_id)
-        else:
-            # Choose study default RTPLAN as "ref".
-            self.__ref_rtplan = self.__series.study.default_rtplan.default_file
+        self.__data = data
 
     @property
     @ensure_loaded

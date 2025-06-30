@@ -44,14 +44,14 @@ def get_region_overlap_summary(
             continue
 
         # Load region data.
-        region_data = pat.region_data(labels='all')
+        region_images = pat.region_images(labels='all')
 
         # Calculate overlap for other regions.
-        for r in region_data.keys():
+        for r in region_images.keys():
             if r == region:
                 continue
 
-            n_overlap = (region_data[region] & region_data[r]).sum()
+            n_overlap = (region_images[region] & region_images[r]).sum()
             data = {
                 'dataset': dataset,
                 'patient-id': pat_id,
@@ -85,7 +85,7 @@ def get_region_summary(
         pat = set.patient(pat_id)
         ct_data = pat.ct_data
         spacing = pat.ct_spacing
-        label = pat.region_data(labels=labels, regions=region)[region]
+        label = pat.region_images(labels=labels, regions=region)[region]
 
         data = {
             'dataset': dataset,
@@ -117,7 +117,7 @@ def get_region_summary(
         # Add intensity metrics.
         if pat.has_regions('Brain'):
             data['metric'] = 'snr-brain'
-            brain_label = pat.region_data(regions='Brain')['Brain']
+            brain_label = pat.region_images(regions='Brain')['Brain']
             data['value'] = snr(ct_data, label, brain_label, spacing)
             df = append_row(df, data)
         data['metric'] = 'mean-intensity'
@@ -203,15 +203,15 @@ def create_region_contrast_report(
         if not pat.has_regions(region):
             continue
         ct_data = pat.ct_data
-        region_data = pat.region_data(region=region)[region]
+        region_images = pat.region_images(region=region)[region]
 
         # Get OAR label and margin label.
-        region_data_margin = np.logical_xor(binary_dilation(region_data, iterations=3), region_data)
+        region_images_margin = np.logical_xor(binary_dilation(region_images, iterations=3), region_images)
 
         # Get OAR and margin HU values.
-        hu_oar = ct_data[np.nonzero(region_data)]
+        hu_oar = ct_data[np.nonzero(region_images)]
         hu_oar_mean = hu_oar.mean()
-        hu_margin = ct_data[np.nonzero(region_data_margin)]
+        hu_margin = ct_data[np.nonzero(region_images_margin)]
         hu_margin_mean = hu_margin.mean()
 
         # Calculate contrast-to-noise (CNR) ratio.
@@ -221,7 +221,7 @@ def create_region_contrast_report(
 
         # Calculate region noise.
         if pat.has_regions(noise_region):
-            noise_data = pat.region_data(region=noise_region)[noise_region]
+            noise_data = pat.region_images(region=noise_region)[noise_region]
             noise_data_eroded = binary_erosion(noise_data, iterations=3)
             if noise_data_eroded.sum() == 0:
                 raise ValueError(f"Eroded noise data for region '{noise_region}' is empty, choose a larger region.")
@@ -1049,7 +1049,7 @@ def get_object_summary(
     pat = NiftiDataset(dataset).patient(pat_id)
 
     spacing = pat.ct_spacing
-    label = pat.region_data(region=region)[region]
+    label = pat.region_images(region=region)[region]
     objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     

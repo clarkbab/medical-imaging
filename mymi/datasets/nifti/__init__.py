@@ -4,7 +4,7 @@ from typing import List
 
 from mymi import config
 
-from .data import *
+from .images import *
 from .dataset import *
 
 def list() -> List[str]:

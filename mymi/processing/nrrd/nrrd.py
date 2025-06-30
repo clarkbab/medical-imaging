@@ -25,7 +25,7 @@ from mymi.regions import RegionColours, RegionList, RegionNames, to_255
 from mymi.regions import regions_to_list
 from mymi.transforms import crop, resample
 from mymi import typing
-from mymi.utils import append_row, arg_to_list, load_files_csv, save_files_csv
+from mymi.utils import append_row, arg_to_list, load_files_csv, save_csv
 
 from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
@@ -110,7 +110,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
                 continue
 
             # Load label data.
-            label = patient.region_data(region=region)[region]
+            label = patient.region_images(region=region)[region]
 
             # Crop label.
             # Perform before resampling as AnatomyNet crop values use the original spacing.
@@ -178,7 +178,7 @@ def create_excluded_brainstem(
             continue
 
         # Load label data.
-        data = pat.region_data(region=['Brain', 'Brainstem'])
+        data = pat.region_images(region=['Brain', 'Brainstem'])
 
         # Perform exclusion.
         brain_data = data['Brain'] & ~data['Brainstem']
@@ -343,4 +343,4 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
     
     # Save index.
     if anonymise:
-        save_files_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
+        save_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')

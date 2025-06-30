@@ -9,7 +9,12 @@ from ..plotting import plot_patient_histograms as pph, plot_patients as pp, plot
 
 @delegates(pp)
 def plot_patients(*args, **kwargs) -> None:
-    pp(NiftiDataset, *args, **kwargs)
+    nifti_fns = {
+        'default_dose': lambda study: study.default_dose,
+        'has_dose': lambda study: study.has_dose,
+        'image': lambda study, id: study.image(id),
+    }
+    pp(NiftiDataset, nifti_fns, *args, **kwargs)
 
 @delegates(pph)
 def plot_patient_histograms(*args, **kwargs) -> None:
@@ -35,7 +40,7 @@ def plot_segmenter_predictions(
     study = set.patient(pat_id).study(study_id)
     ct_data = study.ct_data
     spacing = study.ct_spacing
-    region_data = study.region_data(regions=regions)
+    region_images = study.region_images(regions=regions)
 
     # Load predictions.
     pred_data = load_segmenter_predictions(dataset, pat_id, model, regions=regions_model, study_id=study_id)
@@ -43,20 +48,20 @@ def plot_segmenter_predictions(
     # Only handle centre of ground truth - not pred.
     if isinstance(centre, str):
         assert isinstance(centre, str)
-        if region_data is None or centre not in region_data:
-            centre = study.region_data(regions=centre)[centre]
+        if region_images is None or centre not in region_images:
+            centre = study.region_images(regions=centre)[centre]
 
     if isinstance(crop, str):
         assert isinstance(crop, str)
-        if region_data is None or crop not in region_data:
-            crop = study.region_data(regions=crop)[crop]
+        if region_images is None or crop not in region_images:
+            crop = study.region_images(regions=crop)[crop]
     
     # Plot.
     okwargs = dict(
         centre=centre,
         crop=crop,
         ct_data=ct_data,
-        region_data=region_data,
+        region_images=region_images,
         **kwargs
     )
     plot_segmenter_predictions_base(pat_id, spacing, pred_data, **okwargs)

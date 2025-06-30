@@ -3,7 +3,7 @@ from typing import *
 from mymi.typing import *
 
 # Abstract class.
-class NiftiData:
+class NiftiImage:
     @property
     def id(self) -> SeriesID:
         raise NotImplementedError("Child class must implement 'id'.")

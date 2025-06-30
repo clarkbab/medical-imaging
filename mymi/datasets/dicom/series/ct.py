@@ -25,7 +25,7 @@ class CtSeries(DicomSeries):
 
         # Load index.
         index = self.__study.index
-        index = index[(index.modality == 'CT') & (index['series-id'] == id)].copy()
+        index = index[(index.modality == 'ct') & (index['series-id'] == id)].copy()
         if len(index) == 0:
             raise ValueError(f"No CT series with ID '{id}' found in study '{study}'.")
         self.__index = index
@@ -88,7 +88,7 @@ class CtSeries(DicomSeries):
 
     @property
     def modality(self) -> DicomModality:
-        return 'CT'
+        return 'ct'
 
     @property
     @ensure_loaded

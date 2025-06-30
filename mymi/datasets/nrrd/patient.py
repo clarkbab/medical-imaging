@@ -38,10 +38,6 @@ class NrrdPatient:
         return self.default_study.ct_data
 
     @property
-    def ct_affine(self) -> np.ndarray:
-        return self.default_study.ct_affine
-
-    @property
     def ct_offset(self) -> Voxel:
         return self.default_study.ct_offset
 
@@ -82,10 +78,6 @@ class NrrdPatient:
         return self.default_study.default_rtdose.data
 
     @property
-    def has_dose(self) -> bool:
-        pass
-
-    @property
     def id(self) -> str:
         return self.__id
 
@@ -124,8 +116,8 @@ class NrrdPatient:
         # as they're sorted during DICOM -> NRRD conversion.
         return list(sorted(os.listdir(self.__path)))
 
-    def region_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
-        return self.default_study.region_data(*args, **kwargs)
+    def region_images(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
+        return self.default_study.region_images(*args, **kwargs)
 
     def study(
         self,

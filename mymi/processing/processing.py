@@ -169,7 +169,7 @@ def convert_brain_crop_to_training(
                         continue
 
                 # Load label data.
-                label = patient.region_data(region=region)[region]
+                label = patient.region_images(region=region)[region]
 
                 # Resample data.
                 if spacing is not None:
@@ -327,12 +327,12 @@ def convert_to_dicom(
             ct_dicoms = []
 
             # Convert CT series.
-            data_ids = study.list_data('CT')
+            data_ids = study.list_data('ct')
             if len(data_ids) > 1:
                 raise ValueError(f"Code only handles studies with a single CT series. See 'ct_dicoms' above.")
             for d in data_ids:
                 # Load data.
-                ct_series = study.data(d, 'CT')
+                ct_series = study.data(d, 'ct')
                 ct_data = ct_series.data
                 spacing = ct_series.spacing
                 offset = ct_series.offset
@@ -400,7 +400,7 @@ def convert_to_dicom(
                     ct_dicom.InstanceCreationTime = time
                     ct_dicom.InstitutionName = 'PMCC'
                     ct_dicom.Manufacturer = 'PMCC'
-                    ct_dicom.Modality = 'CT'
+                    ct_dicom.Modality = 'ct'
                     ct_dicom.SpecificCharacterSet = 'ISO_IR 100'
 
                     # Add patient info.
@@ -450,21 +450,21 @@ def convert_to_dicom(
 
             # Convert regions to RTSTRUCT.
             regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-            landmark_data_ids = study.list_data('LANDMARKS')
-            region_data_ids = study.list_data('REGIONS')
-            data_ids = np.union1d(landmark_data_ids, region_data_ids)
+            landmark_data_ids = study.list_data('landmarks')
+            region_images_ids = study.list_data('regions')
+            data_ids = np.union1d(landmark_data_ids, region_images_ids)
             for d in data_ids:
                 # Create RTSTRUCT info.
                 rt_info = {
                     'institution': 'PMCC',
-                    'label': 'RTSTRUCT'
+                    'label': 'rtstruct'
                 }
 
                 # Create RTSTRUCT dicom.
                 rtstruct = RtStructConverter.create_rtstruct(ct_dicoms, rt_info)
 
-                if convert_regions and study.has_data(d, 'REGIONS'):
-                    rt_series = study.data(d, 'REGIONS')
+                if convert_regions and study.has_data(d, 'regions'):
+                    rt_series = study.data(d, 'regions')
                     # Add 'ROI' data for each region.
                     palette = matplotlib.cm.tab20
                     logging.info('rtstruct building')
@@ -473,16 +473,16 @@ def convert_to_dicom(
                             continue
 
                         # Add 'ROI' data.
-                        region_data = rt_series.data(regions=r)[r]
+                        region_images = rt_series.data(regions=r)[r]
                         roi_data = ROIData(
                             colour=list(to_255(palette(i))),
-                            data=region_data,
+                            data=region_images,
                             name=r,
                         )
                         RtStructConverter.add_roi_contour(rtstruct, roi_data, ct_dicoms)
 
-                if convert_landmarks and study.has_data(d, 'LANDMARKS'):
-                        lm_series = study.data(d, 'LANDMARKS')
+                if convert_landmarks and study.has_data(d, 'landmarks'):
+                        lm_series = study.data(d, 'landmarks')
                         lm_df = lm_series.data(landmarks=landmarks)
                         lm_names = list(lm_df['landmark-id'])
                         if landmarks_prefix is not None:

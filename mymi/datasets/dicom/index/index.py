@@ -72,14 +72,14 @@ def build_index(
         # Create index using 'ct_from' index as a starting point.
         logging.info(f"Using CT index from '{ct_from}'.")
         modalities = list(get_args(DicomModality))
-        modalities.remove('CT')
+        modalities.remove('ct')
 
         # Load 'ct_from' index - can't use DicomDataset API as it creates circular dependencies.
         filepath = os.path.join(config.directories.datasets, 'dicom', ct_from, 'index.csv')
         if not os.path.exists(filepath):
             raise ValueError(f"Index for 'ct_from={ct_from}' dataset doesn't exist. Filepath: '{filepath}'.")
         index = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
-        index = index[index['modality'] == 'CT']
+        index = index[index['modality'] == 'ct']
         index['mod-spec'] = index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
 
     # Crawl folders to find all DICOM files.
@@ -107,7 +107,7 @@ def build_index(
                     continue
 
                 # Get modality.
-                modality = dicom.Modality
+                modality = dicom.Modality.lower()
                 if not modality in modalities:
                     continue
 
@@ -131,7 +131,7 @@ def build_index(
                 sop_id = dicom.SOPInstanceUID
 
                 # Get modality-specific info.
-                if modality == 'CT' or modality == 'MR':
+                if modality == 'ct' or modality == 'mr':
                     if not hasattr(dicom, 'ImageOrientationPatient'):
                         logging.error(f"No 'ImageOrientationPatient' found for {modality} dicom '{filepath}'.")
                         continue
@@ -142,15 +142,15 @@ def build_index(
                         'InstanceNumber': dicom.InstanceNumber,
                         'PixelSpacing': dicom.PixelSpacing
                     }
-                elif modality == 'RTDOSE':
+                elif modality == 'rtdose':
                     mod_spec = {
                         DICOM_RTDOSE_REF_RTPLAN_KEY: dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
                     }
-                elif modality == 'RTPLAN':
+                elif modality == 'rtplan':
                     mod_spec = {
                         DICOM_RTPLAN_REF_RTSTRUCT_KEY: dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
                     }
-                elif modality == 'RTSTRUCT':
+                elif modality == 'rtstruct':
                     mod_spec = {
                         DICOM_RTSTRUCT_REF_CT_KEY: dicom.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
                     }
@@ -196,7 +196,7 @@ def build_index(
     if ct_from is None and not policy['ct']['slice']['non-standard-orientation']['allow']:
         logging.info(f"Removing CT DICOM files with rotated orientation (by 'ImageOrientationPatient').")
 
-        ct = index[index['modality'] == 'CT']
+        ct = index[index['modality'] == 'ct']
         def standard_orientation(m: Dict) -> bool:
             orient = m['ImageOrientationPatient']
             return orient == [1, 0, 0, 0, 1, 0]
@@ -211,7 +211,7 @@ def build_index(
     if ct_from is None and not policy['ct']['slice']['inconsistent-spacing']['allow']:
         logging.info(f"Removing CT DICOM files with inconsistent x/y spacing (by 'PixelSpacing').")
 
-        ct = index[index['modality'] == 'CT']
+        ct = index[index['modality'] == 'ct']
         def consistent_xy_spacing(series: pd.Series) -> bool:
             pos = series.apply(lambda m: pd.Series(m['PixelSpacing']))
             pos = pos.drop_duplicates()
@@ -228,7 +228,7 @@ def build_index(
     if ct_from is None and not policy['ct']['slices']['inconsistent-position']['allow']:
         logging.info(f"Removing CT DICOM files with inconsistent x/y position (by 'ImagePositionPatient').")
 
-        ct = index[index['modality'] == 'CT']
+        ct = index[index['modality'] == 'ct']
         def consistent_xy_position(series: pd.Series) -> bool:
             pos = series.apply(lambda m: pd.Series(m['ImagePositionPatient'][:2]))
             pos = pos.drop_duplicates()
@@ -244,7 +244,7 @@ def build_index(
     if ct_from is None and not policy['ct']['slices']['inconsistent-spacing']['allow']:
         logging.info(f"Removing CT DICOM files with inconsistent z spacing (by 'ImagePositionPatient').")
 
-        ct = index[index['modality'] == 'CT']
+        ct = index[index['modality'] == 'ct']
         def consistent_z_position(series: pd.Series) -> bool:
             z_locs = series.apply(lambda m: m['ImagePositionPatient'][2]).sort_values()
             z_diffs = z_locs.diff().dropna().round(3)
@@ -262,8 +262,8 @@ def build_index(
     #   'allow': True/False,
     #   'in-study': '1'/'>=1'
     # }
-    ct_series = index[index['modality'] == 'CT']['series-id'].unique()
-    rtstruct_series = index[index['modality'] == 'RTSTRUCT']
+    ct_series = index[index['modality'] == 'ct']['series-id'].unique()
+    rtstruct_series = index[index['modality'] == 'rtstruct']
     ref_ct = rtstruct_series['mod-spec'].apply(lambda m: m['RefCTSeriesInstanceUID']).isin(ct_series)
     no_ref_ct_idx = ref_ct[~ref_ct].index
     no_ref_ct = index.loc[no_ref_ct_idx]
@@ -281,7 +281,7 @@ def build_index(
 
     else:
         # Add study's CT series count info to RTSTRUCT table.
-        study_ct_series_count = index[index['modality'] == 'CT'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'ct-count' })
+        study_ct_series_count = index[index['modality'] == 'ct'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'ct-count' })
         no_ref_ct = no_ref_ct.reset_index().merge(study_ct_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
 
         if policy['rtstruct']['no-ref-ct']['in-study'] == '>=1':
@@ -316,8 +316,8 @@ def build_index(
     #   'allow': True/False,
     #   'in-study': '1'/'>=1'
     # }
-    rtstruct_sops = index[index['modality'] == 'RTSTRUCT'].index
-    rtplan = index[index['modality'] == 'RTPLAN']
+    rtstruct_sops = index[index['modality'] == 'rtstruct'].index
+    rtplan = index[index['modality'] == 'rtplan']
     ref_rtstruct = rtplan['mod-spec'].apply(lambda m: m['RefRTSTRUCTSOPInstanceUID']).isin(rtstruct_sops)
     no_ref_rtstruct_idx = ref_rtstruct[~ref_rtstruct].index
     no_ref_rtstruct = index.loc[no_ref_rtstruct_idx]
@@ -335,7 +335,7 @@ def build_index(
         logging.info(f"Removing RTPLAN DICOM files without an RTSTRUCT with the same study ID in the index.")
 
         # Add study's RSTRUCT series count info to RTPLAN table.
-        study_rtstruct_series_count = index[index['modality'] == 'RTSTRUCT'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtstruct-count' })
+        study_rtstruct_series_count = index[index['modality'] == 'rtstruct'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtstruct-count' })
         no_ref_rtstruct = no_ref_rtstruct.reset_index().merge(study_rtstruct_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
 
         # Remove RTPLANs with no RTSTRUCT in study.
@@ -346,8 +346,8 @@ def build_index(
         index = index.drop(no_rtstruct_series_idx)
 
     # Remove RTDOSE series based on policy regarding referenced RTPLAN series.
-    rtplan_sops = index[index['modality'] == 'RTPLAN'].index
-    rtdose = index[index['modality'] == 'RTDOSE']
+    rtplan_sops = index[index['modality'] == 'rtplan'].index
+    rtdose = index[index['modality'] == 'rtdose']
     ref_rtplan = rtdose['mod-spec'].apply(lambda m: m[DICOM_RTDOSE_REF_RTPLAN_KEY]).isin(rtplan_sops)
     no_ref_rtplan_idx = ref_rtplan[~ref_rtplan].index
     no_ref_rtplan = index.loc[no_ref_rtplan_idx]
@@ -366,7 +366,7 @@ def build_index(
         logging.info(f"Removing RTDOSE DICOM files without an RTPLAN with the same study ID in the index.")
 
         # Add study's RTPLAN series count info to RTDOSE table.
-        study_rtplan_series_count = index[index['modality'] == 'RTPLAN'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtplan-count' })
+        study_rtplan_series_count = index[index['modality'] == 'rtplan'][['study-id', 'series-id']].drop_duplicates().groupby('study-id').count().rename(columns={ 'series-id': 'rtplan-count' })
         no_ref_rtplan = no_ref_rtplan.reset_index().merge(study_rtplan_series_count, how='left', on='study-id').set_index(INDEX_INDEX_COL)
 
         # Remove RTDOSEs with no RTPLAN in the study.
@@ -378,8 +378,8 @@ def build_index(
 
     # Remove CT series that are not referenced by an RTSTRUCT series.
     if not policy['ct']['no-rtstruct']['allow']:
-        ct_series_ids = index[index['modality'] == 'CT']['series-id'].unique()
-        rtstruct_series = index[index['modality'] == 'RTSTRUCT']
+        ct_series_ids = index[index['modality'] == 'ct']['series-id'].unique()
+        rtstruct_series = index[index['modality'] == 'rtstruct']
         ref_ct_series_ids = list(rtstruct_series['mod-spec'].apply(lambda m: m['RefCTSeriesInstanceUID']))
         exclude_series_ids = [i for i in ct_series_ids if i not in ref_ct_series_ids]
         excl_df = index[index['series-id'].isin(exclude_series_ids)]
@@ -390,7 +390,7 @@ def build_index(
     # Remove studies without RTSTRUCT series.
     if not policy['study']['no-rtstruct']['allow']:
         logging.info(f"Removing series without RTSTRUCT DICOM.")
-        excl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'RTSTRUCT' not in s.unique())
+        excl_rows = index.groupby('study-id')['modality'].transform(lambda s: 'rtstruct' not in s.unique())
         excl_df = index[excl_rows]
         excl_df['error'] = 'STUDY-NO-RTSTRUCT'
         error_index = append_dataframe(error_index, excl_df)
@@ -411,5 +411,13 @@ def build_index(
     # Save indexing time.
     end = time()
     mins = int(np.ceil((end - start) / 60))
-    filepath = os.path.join(dataset_path, f'__INDEXING_TIME_MINS_{mins}__')
+    filepath = os.path.join(dataset_path, f'__INDEXING_COMPLETE_{mins}_MINS__')
     Path(filepath).touch()
+
+def exists(dataset: str) -> bool:
+    dataset_path = os.path.join(config.directories.datasets, 'dicom', dataset) 
+    files = os.listdir(dataset_path)
+    for f in files:
+        if f.startswith('__INDEXING_COMPLETE_'):
+            return True
+    return False

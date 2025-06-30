@@ -111,9 +111,9 @@ def convert_to_nifti(
             anon_series_id = 0
             if ct_from is None:
                 # Convert CT series.
-                ct_series_ids = study.list_series('CT')
+                ct_series_ids = study.list_series('ct')
                 for sr in ct_series_ids:
-                    series = study.series(sr, 'CT')
+                    series = study.series(sr, 'ct')
                     
                     # Get Nifti series ID.
                     if anonymise_series:
@@ -140,9 +140,9 @@ def convert_to_nifti(
                     index_df = append_row(index_df, data)
 
                 # Convert MR series.
-                mr_series_ids = study.list_series('MR')
+                mr_series_ids = study.list_series('mr')
                 for sr in mr_series_ids:
-                    series = study.series(sr, 'MR')
+                    series = study.series(sr, 'mr')
                     
                     # Get Nifti series ID.
                     if anonymise_series:
@@ -169,9 +169,9 @@ def convert_to_nifti(
                     index_df = append_row(index_df, data)
 
             # Convert RTSTRUCT series.
-            rtstruct_series_ids = study.list_series('RTSTRUCT')
+            rtstruct_series_ids = study.list_series('rtstruct')
             for sr in rtstruct_series_ids:
-                series = study.series(sr, 'RTSTRUCT')
+                series = study.series(sr, 'rtstruct')
 
                 # Get Nifti series ID.
                 if anonymise_series:
@@ -182,8 +182,8 @@ def convert_to_nifti(
 
                 # Create region NIFTIs.
                 ref_ct = series.ref_ct
-                region_data = series.region_data(regions=regions, regions_ignore_missing=True)
-                for r, data in region_data.items():
+                region_images = series.region_images(regions=regions, regions_ignore_missing=True)
+                for r, data in region_images.items():
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'regions', nifti_series_id, f'{r}.nii.gz')
                     save_nifti(data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
 
@@ -196,9 +196,9 @@ def convert_to_nifti(
                     save_csv(lm_df, filepath)
 
             # Convert RTDOSE series.
-            rtdose_series_ids = study.list_series('RTDOSE')
+            rtdose_series_ids = study.list_series('rtdose')
             for sr in rtdose_series_ids:
-                series = study.series(sr, 'RTDOSE')
+                rtdose_series = study.series(sr, 'rtdose')
 
                 # Get Nifti series ID.
                 if anonymise_series:
@@ -208,10 +208,8 @@ def convert_to_nifti(
                     nifti_series_id = sr
 
                 # Create RTDOSE NIFTI.
-                dose_data = series.default_rtdose.data
-                if dose_data is not None:
-                    filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'dose', f'{nifti_series_id}.nii.gz')
-                    save_nifti(dose_data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
+                filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'dose', f'{nifti_series_id}.nii.gz')
+                save_nifti(rtdose_series.data, filepath, spacing=rtdose_series.spacing, offset=rtdose_series.offset)
 
     # Save index.
     if len(index_df) > 0:
@@ -292,8 +290,8 @@ def convert_to_nifti_replan(
             nib.save(img, filepath)
 
             # Create region NIFTIs for study.
-            region_data = study.region_data(regions=regions, regions_ignore_missing=True)
-            for region, data in region_data.items():
+            region_images = study.region_images(regions=regions, regions_ignore_missing=True)
+            for region, data in region_images.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'regions', region, f'{nifti_id}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)

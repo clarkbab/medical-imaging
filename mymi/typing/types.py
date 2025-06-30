@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
-from typing import Dict, List, Literal, Sequence, Tuple, Union
+from typing import *
 
 Axis = Literal[0, 1, 2]
 AxisName = Literal['sagittal', 'coronal', 'axial']
@@ -18,7 +18,7 @@ Points3D = np.ndarray
 Channel = int
 Channels = Union[Channel, Sequence[Channel], Literal['all']]
 Colour = Union[str, Tuple[float, float, float]]
-DicomModality = Literal['CT', 'MR', 'RTDOSE', 'RTPLAN', 'RTSTRUCT']
+DicomModality = Literal['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 DicomSOPInstanceUID = str
 Image = Union[np.ndarray, torch.Tensor]      # An image with dimensions (2, 3, 4, or 5).
 Image2D = Union[np.ndarray, torch.Tensor]
@@ -45,15 +45,15 @@ LandmarkData = pd.DataFrame
 ModelCheckpoint = Union[str, Literal['best', 'last']]
 ModelName = Tuple[str, str]
 MrImage = Image
-NiftiModality = Literal['CT', 'MR', 'DOSE', 'LANDMARKS', 'REGION']
-NrrdModality = Literal['CT', 'MR', 'DOSE', 'LANDMARKS', 'REGION']
+NiftiModality = Literal['ct', 'dose', 'mr', 'regions']
+NrrdModality = NiftiModality
 Number = Union[int, float]
 PatientID = str
 PatientIDs = Union[PatientID, Sequence[PatientID], Literal['all']]
 Region = str
 Regions = Union[Region, Sequence[Region], Literal['all']]
 RegionLabel = LabelImage
-RegionData = Dict[Region, RegionLabel]
+RegionImage = Dict[Region, RegionLabel]
 SampleID = int
 SampleIDs = Union[SampleID, Sequence[SampleID], Literal['all']]
 SeriesID = str

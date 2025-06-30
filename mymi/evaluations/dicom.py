@@ -14,7 +14,7 @@ from mymi import logging
 from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi import typing
-from mymi.utils import append_row, encode, load_files_csv, save_files_csv
+from mymi.utils import append_row, encode, load_files_csv, save_csv
 
 def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],
@@ -137,7 +137,7 @@ def create_dose_evaluation(
 
     # Write evaluation.
     df = df.astype(cols)
-    save_files_csv(df, 'dose-evals', output_file, overwrite=True)
+    save_csv(df, 'dose-evals', output_file, overwrite=True)
 
 def evaluate_model(
     dataset: str,
@@ -173,7 +173,7 @@ def evaluate_model(
     for pat in tqdm(pats):
         # Get pred/ground truth.
         pred = get_two(set, pat, localiser, segmenter, device=device)
-        label = set.patient(pat).region_data()[region]
+        label = set.patient(pat).region_images()[region]
 
         # Add metrics.
         dsc_data = {

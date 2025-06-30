@@ -100,7 +100,7 @@ def create_unigradicon_predictions(
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
                     fixed_offset = fixed_study.ct_offset
-                    moving_label = moving_study.region_data(r)[r]
+                    moving_label = moving_study.region_images(r)[r]
                     moving_spacing = moving_study.ct_spacing
                     moving_offset = moving_study.ct_offset
                     transform = load_sitk_transform(transform_path)

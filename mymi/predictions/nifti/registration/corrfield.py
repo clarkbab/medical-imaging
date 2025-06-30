@@ -65,11 +65,11 @@ def create_corrfield_predictions(
                         # Resample to isotropic spacing.
                         fixed_data = fixed_study.ct_data
                         fixed_data = resample(fixed_data, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
-                        fixed_label = fixed_study.region_data(regions=lung_region)[lung_region]
+                        fixed_label = fixed_study.region_images(regions=lung_region)[lung_region]
                         fixed_label = resample(fixed_label, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                         moving_data = moving_study.ct_data
                         moving_data = resample(moving_data, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
-                        moving_label = moving_study.region_data(regions=lung_region)[lung_region]
+                        moving_label = moving_study.region_images(regions=lung_region)[lung_region]
                         moving_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                     else:
                         model_spacing = fixed_study.ct_spacing
@@ -178,7 +178,7 @@ def create_corrfield_predictions(
                     pat_regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
                     for r in pat_regions:
                         # Perform transform.
-                        moving_label = moving_study.region_data(r)[r]
+                        moving_label = moving_study.region_images(r)[r]
                         moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                         filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)

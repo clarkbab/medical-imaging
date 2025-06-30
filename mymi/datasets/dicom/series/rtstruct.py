@@ -20,7 +20,7 @@ class RtStructSeries(DicomSeries):
 
         # Get index.
         index = self.__study.index
-        index = index[(index.modality == 'RTSTRUCT') & (index['series-id'] == self.__id)].copy()
+        index = index[(index.modality == 'rtstruct') & (index['series-id'] == self.__id)].copy()
         if len(index) == 0:
             raise ValueError(f"No RTSTRUCT series with ID '{id}' found in study '{study}'.")
         self.__index = index
@@ -76,14 +76,14 @@ class RtStructSeries(DicomSeries):
 
     @property
     def modality(self) -> DicomModality:
-        return 'RTSTRUCT'
+        return 'rtstruct'
 
     @property
     def ref_ct(self) -> CtSeries:
         return self.default_file.ref_ct
 
-    def region_data(self, *args, **kwargs):
-        return self.default_file.region_data(*args, **kwargs)
+    def region_images(self, *args, **kwargs):
+        return self.default_file.region_images(*args, **kwargs)
 
     @property
     def region_policy(self) -> pd.DataFrame:

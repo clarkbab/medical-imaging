@@ -61,7 +61,7 @@ class RtStructFile(DicomFile):
 
     @property
     @ensure_loaded
-    def ref_ct(self) -> str:
+    def ref_ct(self) -> CtSeries:
         return self.__ref_ct
     
     @property
@@ -254,7 +254,7 @@ class RtStructFile(DicomFile):
         else:
             return unmapped_regions
 
-    def region_data(
+    def region_images(
         self,
         regions: Regions = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
         regions_ignore_missing: bool = False,
@@ -292,12 +292,12 @@ class RtStructFile(DicomFile):
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
             for unmapped_region, mapped_region in rtstruct_regions:
-                rdata = RtStructConverter.get_region_data(rtstruct_dicom, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_images(rtstruct_dicom, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[mapped_region] = rdata
         else:
             # Load and store region using unmapped name.
             for r in rtstruct_regions:
-                rdata = RtStructConverter.get_region_data(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_images(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[r] = rdata
 
         # Sort dict keys.

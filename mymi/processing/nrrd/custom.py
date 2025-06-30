@@ -47,8 +47,8 @@ def convert_to_brain_crop(
         save_nifti(ct_data, filepath, spacing=spacing, offset=offset)
 
         # Apply crop to regions.
-        region_data = pat.region_data()
-        for r, d in region_data.items():
+        region_images = pat.region_images()
+        for r, d in region_images.items():
             d = crop_mm_3D(d, spacing, offset, crop_mm)
             filepath = os.path.join(dest_set.path, 'data', 'patients', p, 'study_0', 'regions', 'series_1', f'{r}.nii.gz')
             save_nifti(d, filepath, spacing=spacing, offset=offset)

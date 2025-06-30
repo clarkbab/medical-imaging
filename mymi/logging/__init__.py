@@ -2,8 +2,6 @@ from colorlog import ColoredFormatter
 import logging as python_logging
 from typing import *
 
-from mymi.utils import *
-
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LEVEL_MAP = {
     10: 'DEBUG',
@@ -68,7 +66,6 @@ def arg_log(
     action: str,
     arg_names: Union[str, List[str]],
     arg_vals: Union[Any, List[Any]]) -> None:
-    arg_assert_lengths((arg_names, arg_vals)) 
     message = action + ' with ' + ', '.join([f"{arg_name}={arg_val}" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
     info(message)
 
