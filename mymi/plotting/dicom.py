@@ -4,9 +4,9 @@ from ..plotting import plot_patients as pp, plot_patient_histograms as pph
 
 def plot_patients(*args, **kwargs) -> None:
     dicom_fns = {
-        'default_dose': lambda study: study.default_rtdose,
+        'ct_image': lambda study, series_id: study.series(series_id),
+        'dose_image': lambda study: study.default_rtdose,
         'has_dose': lambda study: study.has_rtdose,
-        'image': lambda study, id: study.series(id),
     }
     pp(DicomDataset, dicom_fns, *args, **kwargs)
 

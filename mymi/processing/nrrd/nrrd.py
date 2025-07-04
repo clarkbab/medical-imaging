@@ -21,11 +21,10 @@ from mymi.datasets.training import recreate as recreate_training
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.predictions.nrrd import create_localiser_prediction, create_segmenter_prediction, load_localiser_prediction, load_segmenter_predictions
-from mymi.regions import RegionColours, RegionList, RegionNames, to_255
-from mymi.regions import regions_to_list
+from mymi.regions import RegionColours, RegionList, RegionNames
 from mymi.transforms import crop, resample
-from mymi import typing
-from mymi.utils import append_row, arg_to_list, load_files_csv, save_csv
+from mymi.typing import *
+from mymi.utils import *
 
 from ...processing import convert_to_dicom as convert_to_dicom_base, write_flag
 
@@ -110,7 +109,7 @@ def convert_miccai_2015_to_manual_crop_training(crop_margin: float = 10) -> None
                 continue
 
             # Load label data.
-            label = patient.region_images(region=region)[region]
+            label = patient.regions_data(region=region)[region]
 
             # Crop label.
             # Perform before resampling as AnatomyNet crop values use the original spacing.
@@ -178,7 +177,7 @@ def create_excluded_brainstem(
             continue
 
         # Load label data.
-        data = pat.region_images(region=['Brain', 'Brainstem'])
+        data = pat.regions_data(region=['Brain', 'Brainstem'])
 
         # Perform exclusion.
         brain_data = data['Brain'] & ~data['Brainstem']
@@ -298,7 +297,7 @@ def convert_segmenter_predictions_to_dicom_from_all_patients(
 
             # Add ROI data.
             roi_data = ROIData(
-                colour=list(to_255(getattr(RegionColours, region))),
+                colour=list(to_rgb_255(getattr(RegionColours, region))),
                 data=pred,
                 name=region,
                 number=roi_number

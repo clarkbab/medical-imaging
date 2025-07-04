@@ -50,20 +50,20 @@ class NrrdStudy:
             return CtData(self, data_ids[-1])
 
     @property
-    def default_landmarks(self) -> Optional[LandmarkData]:
+    def default_landmarks(self) -> Optional[LandmarksData]:
         data_ids = self.list_data('landmarks')
         if len(data_ids) == 0:
             return None
         else:
-            return LandmarkData(self, data_ids[-1])
+            return LandmarksData(self, data_ids[-1])
 
     @property
-    def default_regions(self) -> Optional[RegionImage]:
+    def default_regions(self) -> Optional[RegionsData]:
         data_ids = self.list_data('regions')
         if len(data_ids) == 0:
             return None
         else:
-            return RegionImage(self, data_ids[-1], region_map=self.__region_map)
+            return RegionsData(self, data_ids[-1], region_map=self.__region_map)
 
     @property
     def id(self) -> str:
@@ -83,20 +83,8 @@ class NrrdStudy:
         modality: NrrdModality) -> bool:
         return id in self.list_data(modality)
 
-    def has_landmark(self, *args, **kwargs) -> bool:
-        return self.default_landmarks.has_landmark(*args, **kwargs)
-
-    def has_regions(self, *args, **kwargs) -> bool:
-        return self.default_regions.has_regions(*args, **kwargs)
-
-    def landmark_data(self, *args, **kwargs) -> Landmarks:
+    def landmarks_data(self, *args, **kwargs) -> Landmarks:
         return self.default_landmarks.data(*args, **kwargs)
-
-    def list_landmarks(self, *args, **kwargs) -> List[Landmark]:
-        return self.default_landmarks.list_landmarks(*args, **kwargs)
-
-    def list_regions(self, *args, **kwargs) -> List[Region]:
-        return self.default_regions.list_regions(*args, **kwargs)
 
     def list_data(
         self,
@@ -116,7 +104,7 @@ class NrrdStudy:
     
         return data_ids
 
-    def region_images(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
+    def regions_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
         return self.default_regions.data(*args, **kwargs)
 
     def region_path(self, *args, **kwargs) -> str:
@@ -129,9 +117,9 @@ class NrrdStudy:
         if modality == 'ct':
             data = CtData(self, id)
         elif modality == 'landmarks':
-            data = LandmarkData(self, id)
+            data = LandmarksData(self, id)
         elif modality == 'regions':
-            data = RegionImage(self, id, region_map=self.__region_map)
+            data = RegionsData(self, id, region_map=self.__region_map)
         elif modality == 'dose':
             pass
 

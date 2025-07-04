@@ -32,7 +32,11 @@ def create_lung_preprocessed_dataset(
                 shutil.rmtree(filepath)
     else:
         dest_set = create(dest_dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids)
+    srcpath = os.path.join(set.path, 'index.csv')
+    if os.path.exists(srcpath):
+        destpath = os.path.join(dest_set.path, 'index.csv')
+        shutil.copyfile(srcpath, destpath)
+    pat_ids = set.list_patients(ids=pat_ids)
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)
@@ -43,13 +47,13 @@ def create_lung_preprocessed_dataset(
         fixed_ct_rs = resample(fixed_study.ct_data, output_spacing=spacing, spacing=fixed_study.ct_spacing)
         if fixed_study.has_dose:
             fixed_dose_rs = resample(fixed_study.dose_data, output_spacing=spacing, spacing=fixed_study.dose_spacing)
-        fixed_lung_rs = resample(fixed_study.region_images(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
+        fixed_lung_rs = resample(fixed_study.regions_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
         moving_ct_rs = resample(moving_study.ct_data, output_spacing=spacing, spacing=moving_study.ct_spacing)
         if moving_study.has_dose:
             moving_dose_rs = resample(moving_study.dose_data, output_spacing=spacing, spacing=moving_study.dose_spacing)
-        moving_lung_rs = resample(moving_study.region_images(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
-        fixed_lms = fixed_study.landmark_data()
-        moving_lms = moving_study.landmark_data()
+        moving_lung_rs = resample(moving_study.regions_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
+        fixed_lms = fixed_study.landmarks_data()
+        moving_lms = moving_study.landmarks_data()
 
         # Get COM vector (fixed -> moving).
         fixed_com = get_centre_of_mass(fixed_lung_rs, spacing=spacing, offset=fixed_study.ct_offset)

@@ -60,7 +60,7 @@ def plot_samples(
         centres=centreses,
         datas=inputses,
         landmark_datas=None,
-        region_imagess=None,
+        region_datas=None,
         series_ids=series_idses,
         spacings=[spacing] * n_rows,
     )

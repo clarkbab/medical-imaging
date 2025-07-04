@@ -9,7 +9,7 @@ from mymi.utils import *
 from .shared import handle_non_spatial_dims
 
 def __spatial_resample(
-    data: Image,
+    data: ImageData3D,
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Point3D] = None,
     output_offset: Optional[Point3D] = None,
@@ -18,7 +18,7 @@ def __spatial_resample(
     return_transform: bool = False,
     spacing: Optional[Spacing3D] = None,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    ) -> Union[Image, Tuple[Image, sitk.Transform]]:
+    ) -> Union[ImageData3D, Tuple[ImageData3D, sitk.Transform]]:
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -87,8 +87,8 @@ def __spatial_resample(
 
 @delegates(__spatial_resample)
 def resample(
-    data: Images,
-    *args, **kwargs) -> Images:
+    data: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_resample, data, *args, **kwargs)
 
@@ -135,15 +135,15 @@ def resample_landmarks(
     return landmarks
 
 def __spatial_sample(
-    data: Image,
+    data: ImageData3D,
     points: Union[Point3D, np.ndarray],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Point3D] = None,
-    sample_fov: FOV3D = (2, 2, 2),
+    sample_fov: FOV3D = (0, 0, 0),  # Defaults to point sample.
     sample_spacing: Spacing3D = (1, 1, 1),
     spacing: Optional[Spacing3D] = None,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    **kwargs) -> Union[Image, Tuple[Image, sitk.Transform]]:
+    **kwargs) -> Union[ImageData3D, Tuple[ImageData3D, sitk.Transform]]:
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -201,7 +201,7 @@ def __spatial_sample(
 
 @delegates(__spatial_sample)
 def sample(
-    data: Images,
-    *args, **kwargs) -> Images:
+    data: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_sample, data, *args, **kwargs)

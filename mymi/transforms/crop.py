@@ -7,11 +7,11 @@ from mymi.utils import *
 from .shared import *
 
 def __spatial_crop(
-    image: Image,
+    image: ImageData3D,
     bounding_box: Union[Point2DBox, Point3DBox],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     offset: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> Image:
+    use_patient_coords: bool = True) -> ImageData3D:
     bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
@@ -35,16 +35,16 @@ def __spatial_crop(
 
 @delegates(__spatial_crop)
 def crop(
-    data: Image,
-    *args, **kwargs) -> Image:
+    data: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
 
 def __spatial_centre_crop(
-    data: Image,
+    data: ImageData3D,
     size: Union[FOV2D, FOV3D, Size2D, Size3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> Image:
+    use_patient_coords: bool = True) -> ImageData3D:
 
     # Determine cropping/padding amounts.
     if use_patient_coords:
@@ -65,15 +65,15 @@ def __spatial_centre_crop(
 
 @delegates(__spatial_centre_crop)
 def centre_crop(
-    data: Image,
-    *args, **kwargs) -> Image:
+    data: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
 def __spatial_crop_foreground_vox(
-    data: LabelImage,
+    data: LabelData3D,
     bounding_box: Union[PixelBox, VoxelBox],
-    fill: Union[float, Literal['min']] = 'min') -> LabelImage:
+    fill: Union[float, Literal['min']] = 'min') -> LabelData3D:
     __assert_dims(data, (2, 3))
     bounding_box = replace_box_none_vox(bounding_box, data.shape)
     __assert_box_width(bounding_box)
@@ -100,17 +100,17 @@ def __spatial_crop_foreground_vox(
 
 @delegates(__spatial_crop_foreground_vox)
 def crop_foreground_vox(
-    data: LabelImage,
-    *args, **kwargs) -> LabelImage:
+    data: LabelData,
+    *args, **kwargs) -> LabelData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop_foreground_vox, data, *args, **kwargs)
 
 def __spatial_crop_foreground_mm(
-    data: LabelImage,
+    data: LabelData3D,
     bounding_box: Union[PixelBox, VoxelBox],
     spacing: Union[Spacing2D, Spacing3D],
     offset: Union[Point2D, Point3D],
-    **kwargs) -> LabelImage:
+    **kwargs) -> LabelData3D:
     bounding_box = replace_box_none_mm(bounding_box, data.shape, spacing, offset)
     # Convert box to voxel coordinates.
     min_mm, max_mm = bounding_box
@@ -121,10 +121,19 @@ def __spatial_crop_foreground_mm(
 
 @delegates(__spatial_crop_foreground_mm)
 def crop_foreground_mm(
-    data: LabelImage,
-    *args, **kwargs) -> LabelImage:
+    data: LabelData,
+    *args, **kwargs) -> LabelData:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop_foreground_mm, data, *args, **kwargs)
+
+def crop_landmarks(
+    landmarks_data: Union[LandmarksData, LandmarksVoxelData],
+    crop: Union[VoxelBox, Point3DBox]) -> Union[LandmarksData, LandmarksVoxelData]:
+    landmarks_data = landmarks_data.copy()
+    lm_data = landmarks_to_data(landmarks_data)
+    lm_data = lm_data - crop[0]
+    landmarks_data[list(range(3))] = lm_data
+    return landmarks_data
 
 def crop_point(
     point: Union[Pixel, Voxel],

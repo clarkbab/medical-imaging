@@ -97,16 +97,6 @@ class NrrdDataset(Dataset):
         pat_id: PatientID) -> bool:
         return pat_id in self.list_patients()
 
-    def list_landmarks(self) -> List[str]:
-        # Load each patient.
-        landmarks = []
-        pat_ids = self.list_patients()
-        for pat_id in pat_ids:
-            pat_landmarks = self.patient(pat_id).list_landmarks()
-            landmarks += pat_landmarks
-        landmarks = list(sorted([str(r) for r in np.unique(landmarks)]))
-        return landmarks
-
     def list_patients(
         self,
         regions: Optional[Regions] = None) -> List[PatientID]:
@@ -131,16 +121,6 @@ class NrrdDataset(Dataset):
             pat_ids = list(filter(filter_fn, pat_ids))
 
         return pat_ids
-
-    def list_regions(self) -> List[str]:
-        # Load each patient.
-        regions = []
-        pat_ids = self.list_patients()
-        for pat_id in pat_ids:
-            pat_regions = self.patient(pat_id).list_regions()
-            regions += pat_regions
-        regions = list(sorted([str(r) for r in np.unique(regions)]))
-        return regions
 
     def patient(
         self,

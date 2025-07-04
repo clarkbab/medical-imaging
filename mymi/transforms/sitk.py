@@ -46,9 +46,9 @@ def save_sitk_transform(
     sitk.WriteTransform(transform, filepath)
 
 def sitk_transform_points(
-    points: Union[Points2D, Points3D, LandmarkData],
-    transform: sitk.Transform) -> Union[Points2D, Points3D, LandmarkData]:
-    is_landmarks = True if isinstance(points, LandmarkData) else False
+    points: Union[Points2D, Points3D, LandmarksData],
+    transform: sitk.Transform) -> Union[Points2D, Points3D, LandmarksData]:
+    is_landmarks = True if isinstance(points, LandmarksData) else False
     if is_landmarks:
         lms = points.copy()
         points = points[list(range(3))].to_numpy()

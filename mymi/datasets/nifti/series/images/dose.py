@@ -7,24 +7,25 @@ from mymi.utils import *
 
 from .images import NiftiImage
 
-class DoseNiftiImage(NiftiImage):
+class DoseImage(NiftiImage):
     def __init__(
         self,
         study: 'NiftiStudy',
         id: SeriesID) -> None:
         self.__id = id
-        self.__path = os.path.join(study.path, 'dose', f'{id}.nii.gz')
+        self.__global_id = f'{study}:{id}'
+        self.__filepath = os.path.join(study.path, 'dose', f'{id}.nii.gz')
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
-                self.__data, self.__spacing, self.__offset = load_nifti(self.__path)
+                self.__data, self.__spacing, self.__offset = load_nifti(self.__filepath)
             return fn(self, *args, **kwargs)
         return wrapper
 
     @property
     @ensure_loaded
-    def data(self) -> DoseImage:
+    def data(self) -> DoseData:
         return self.__data
 
     @ensure_loaded
@@ -43,25 +44,21 @@ class DoseNiftiImage(NiftiImage):
         return fov
 
     @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
     @ensure_loaded
     def offset(self) -> Point3D:
         return self.__offset
 
     @property
-    def path(self) -> str:
-        return self.__path
-
-    @property
     @ensure_loaded
-    def size(self) -> np.ndarray:
+    def size(self) -> Size3D:
         return self.__data.shape
 
     @property
     @ensure_loaded
-    def spacing(self) -> np.ndarray:
+    def spacing(self) -> Spacing3D:
         return self.__spacing
 
+# Add properties.
+props = ['filepath', 'global_id', 'id']
+for p in props:
+    setattr(DoseImage, p, property(lambda self, p=p: getattr(self, f'_{DoseImage.__name__}__{p}')))

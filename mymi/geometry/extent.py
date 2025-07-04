@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 
 def get_extent(
-    image: Image,
+    image: ImageData3D,
     offset: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
     use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:
@@ -26,7 +26,7 @@ def get_extent(
     return extent_mm
 
 def get_foreground_extent(
-    image: LabelImage,
+    image: LabelData3D,
     offset: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
     use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:

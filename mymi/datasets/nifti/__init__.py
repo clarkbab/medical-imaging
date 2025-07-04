@@ -4,8 +4,8 @@ from typing import List
 
 from mymi import config
 
-from .images import *
 from .dataset import *
+from .series import *
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'nifti')

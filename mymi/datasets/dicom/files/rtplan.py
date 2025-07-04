@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 import pydicom as dcm
-from pydicom.dataset import FileDataset
 from typing import *
 
 from mymi.constants import *
@@ -32,24 +31,8 @@ class RtPlanFile(DicomFile):
         return wrapper
 
     @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def dicom(self) -> FileDataset:
+    def dicom(self) -> RtPlanDicom:
         return dcm.read_file(self.__filepath)
-
-    @property
-    def filepath(self) -> str:
-        return self.__filepath
-
-    @property
-    def id(self) -> DicomSOPInstanceUID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
 
     def __load_data(self) -> None:
         if not self.__series.index_policy['no-ref-rtstruct']['allow']:
@@ -65,9 +48,7 @@ class RtPlanFile(DicomFile):
     def ref_rtstruct(self) -> 'RtStructFile':
         return self.__ref_rtstruct
 
-    @property
-    def series(self) -> str:
-        return self.__series
-
-    def __str__(self) -> str:
-        return self.__global_id
+# Add properties.
+props = ['filepath', 'global_id', 'id', 'index', 'series']
+for p in props:
+    setattr(RtPlanFile, p, property(lambda self, p=p: getattr(self, f'_{RtPlanFile.__name__}__{p}')))

@@ -92,7 +92,7 @@ def build_index(
         else:
             raise ValueError(f"Temporary index doesn't exist for dataset '{dataset}' at filepath '{temp_filepath}'.")
     else:
-        data_path = os.path.join(dataset_path, 'data', 'raw')
+        data_path = os.path.join(dataset_path, 'data', 'patients')
         if not os.path.exists(data_path):
             raise ValueError(f"No 'data/raw' folder found for dataset '{dataset}'.")
 
@@ -143,9 +143,13 @@ def build_index(
                         'PixelSpacing': dicom.PixelSpacing
                     }
                 elif modality == 'rtdose':
-                    mod_spec = {
-                        DICOM_RTDOSE_REF_RTPLAN_KEY: dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
-                    }
+                    # This key is conditionally required.
+                    if hasattr(dicom, 'ReferencedRTPlanSequence') and len(dicom.ReferencedRTPlanSequence) > 0:
+                        mod_spec = {
+                            DICOM_RTDOSE_REF_RTPLAN_KEY: dicom.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+                        }
+                    else:
+                        mod_spec = {}
                 elif modality == 'rtplan':
                     mod_spec = {
                         DICOM_RTPLAN_REF_RTSTRUCT_KEY: dicom.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
@@ -348,7 +352,7 @@ def build_index(
     # Remove RTDOSE series based on policy regarding referenced RTPLAN series.
     rtplan_sops = index[index['modality'] == 'rtplan'].index
     rtdose = index[index['modality'] == 'rtdose']
-    ref_rtplan = rtdose['mod-spec'].apply(lambda m: m[DICOM_RTDOSE_REF_RTPLAN_KEY]).isin(rtplan_sops)
+    ref_rtplan = rtdose['mod-spec'].apply(lambda m: DICOM_RTDOSE_REF_RTPLAN_KEY in m and m[DICOM_RTDOSE_REF_RTPLAN_KEY]).isin(rtplan_sops)
     no_ref_rtplan_idx = ref_rtplan[~ref_rtplan].index
     no_ref_rtplan = index.loc[no_ref_rtplan_idx]
 

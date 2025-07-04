@@ -856,7 +856,7 @@ def load_segmenter_predictions(
     # Load predictions.
     set = NiftiDataset(dataset)
     regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-    region_images = {}
+    region_data = {}
     for r in regions:
         filepath = os.path.join(set.path, 'data', 'predictions', pat_id, study_id, 'regions', series_id, r, f'{model}.nii.gz')
         if not os.path.exists(filepath):
@@ -865,12 +865,12 @@ def load_segmenter_predictions(
             else:
                 raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
         data, _, _ = load_nifti(filepath)
-        region_images[r] = data
+        region_data[r] = data
     
     if exists_only:
         return True
 
-    return region_images
+    return region_data
 
 def load_segmenter_predictions_timings(
     datasets: Union[str, List[str]],
@@ -912,7 +912,7 @@ def load_moved_data(
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
     model: str,
-    regions: Optional[Regions] = 'all') -> Tuple[CtImage, RegionImage]:
+    regions: Optional[Regions] = 'all') -> Tuple[CtData, RegionsData]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     basepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)

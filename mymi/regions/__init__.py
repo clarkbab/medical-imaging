@@ -2,7 +2,7 @@ from typing import List
 
 from mymi import typing
 
-from .colours import to_255, RegionColours
+from .colours import RegionColours
 from .dose_constraints import get_dose_constraint
 from .limits import RegionLimits, truncate_spine
 from .list import RegionList, regions_to_list

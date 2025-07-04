@@ -266,7 +266,7 @@ def get_region_summary(
 
         # Get region data.
         pat_regions = set.patient(pat).list_regions(whitelist=regions)
-        rs_data = set.patient(pat).region_images(region=pat_regions)
+        rs_data = set.patient(pat).regions_data(region=pat_regions)
 
         # Add extents for all regions.
         for r in rs_data.keys():

@@ -7,7 +7,7 @@ from mymi.typing import *
 from .python import delegates
 from .utils import arg_to_list
 
-def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[Image, Spacing3D, Point3D]:
+def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageData3D, Spacing3D, Point3D]:
     data = img.get_fdata()
     affine = img.affine
     spacing = (float(affine[0][0]), float(affine[1][1]), float(affine[2][2]))
@@ -17,14 +17,14 @@ def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[Image, Spacing3D, Point3D]:
 @delegates(from_nifti)
 def load_nifti(
     filepath: str,
-    **kwargs) -> Tuple[Image, Spacing3D, Point3D]:
+    **kwargs) -> Tuple[ImageData3D, Spacing3D, Point3D]:
     assert filepath.endswith('.nii') or filepath.endswith('.nii.gz'), "Filepath must end with .nii or .nii.gz"
     img = nib.load(filepath)
     return from_nifti(img, **kwargs)
 
 def load_numpy(
     filepath: str,
-    keys: Union[str, List[str]] = 'data') -> Union[Image, List[Image]]:
+    keys: Union[str, List[str]] = 'data') -> Union[ImageData3D, List[ImageData3D]]:
     assert filepath.endswith('.npz'), "Filepath must end with .npz"
     keys = arg_to_list(keys, str)
     data = np.load(filepath)
@@ -33,7 +33,7 @@ def load_numpy(
     return items
 
 def to_nifti(
-    data: Image,
+    data: ImageData3D,
     spacing: Spacing3D,
     offset: Point3D) -> nib.nifti1.Nifti1Image:
     # Convert data types.
@@ -50,7 +50,7 @@ def to_nifti(
     return nib.nifti1.Nifti1Image(data, affine)
 
 def save_nifti(
-    data: Image,
+    data: ImageData3D,
     filepath: str,
     spacing: Spacing3D = (1, 1, 1),
     offset: Point3D = (0, 0, 0)) -> None:
@@ -62,7 +62,7 @@ def save_nifti(
     nib.save(img, filepath)
 
 def save_numpy(
-    data: Image,
+    data: ImageData3D,
     filepath: str) -> None:
     assert filepath.endswith('.npz'), "Filepath must end with .npz"
     np.savez_compressed(filepath, data=data)

@@ -23,7 +23,8 @@ def create_corrfield_predictions(
     regions: Optional[Regions] = 'all',
     save_as_labels: bool = False,
     splits: Splits = 'all',
-    use_timing: bool = True) -> None:
+    use_timing: bool = True,
+    warp_dose: bool = True) -> None:
 
     # Create timing table.
     if use_timing:
@@ -36,7 +37,7 @@ def create_corrfield_predictions(
 
     # Load patient IDs.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(ids=pat_ids, splits=splits)
 
     for p in tqdm(pat_ids):
         print(p)
@@ -65,11 +66,11 @@ def create_corrfield_predictions(
                         # Resample to isotropic spacing.
                         fixed_data = fixed_study.ct_data
                         fixed_data = resample(fixed_data, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
-                        fixed_label = fixed_study.region_images(regions=lung_region)[lung_region]
+                        fixed_label = fixed_study.regions_data(regions=lung_region)[lung_region]
                         fixed_label = resample(fixed_label, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                         moving_data = moving_study.ct_data
                         moving_data = resample(moving_data, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
-                        moving_label = moving_study.region_images(regions=lung_region)[lung_region]
+                        moving_label = moving_study.regions_data(regions=lung_region)[lung_region]
                         moving_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                     else:
                         model_spacing = fixed_study.ct_spacing
@@ -108,9 +109,9 @@ def create_corrfield_predictions(
                     moving_path = os.path.join(temp_dir, 'moving.nii.gz')
                     save_nifti(moving_data, moving_path, spacing=model_spacing, offset=moving_study.ct_offset)
                 else:
-                    fixed_path = fixed_study.ct_path
-                    moving_path = moving_study.ct_path
-                    fixed_label_path = fixed_study.region_path(lung_region)
+                    fixed_path = fixed_study.default_ct.filepath
+                    moving_path = moving_study.default_ct.filepath
+                    fixed_label_path = fixed_study.default_regions.filepath(lung_region)
                     model_spacing = fixed_study.ct_spacing
 
                 # Make total seg prediction.
@@ -178,14 +179,14 @@ def create_corrfield_predictions(
                     pat_regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
                     for r in pat_regions:
                         # Perform transform.
-                        moving_label = moving_study.region_images(r)[r]
+                        moving_label = moving_study.regions_data(r)[r]
                         moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                         filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
                         save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
                 if landmarks is not None:
-                    fixed_lms_df = fixed_study.landmark_data(landmarks=landmarks)
+                    fixed_lms_df = fixed_study.landmarks_data(landmarks=landmarks)
                     if fixed_lms_df is not None:
                         fixed_lms = fixed_lms_df[list(range(3))].to_numpy()
                         moved_lms = sitk_transform_points(fixed_lms, transform)
@@ -196,6 +197,14 @@ def create_corrfield_predictions(
                         filepath = os.path.join(pred_base, 'landmarks', f'{model}.csv')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
                         save_csv(moved_lms_df, filepath, overwrite=True)
+
+
+                # Move dose.
+                if warp_dose and moving_study.has_dose:
+                    moving_dose = moving_study.dose_data
+                    moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
+                    save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
     # Save timing data.
     if use_timing:

@@ -2,6 +2,7 @@ from datetime import datetime
 import pandas as pd
 from typing import *
 
+from mymi.constants import *
 from mymi.typing import *
 from mymi.utils import *
 
@@ -26,71 +27,37 @@ class DicomStudy:
             raise ValueError(f"Study '{id}' not found for patient '{patient}'.")
         self.__index = index
 
+        # Get study error index.
+        error_index = self.__patient.error_index
+        error_index = error_index[error_index['study-id'] == id].copy()
+        self.__error_index = error_index
+
         # Get policies.
         self.__index_policy = self.__patient.index_policy
         self.__region_policy = self.__patient.region_policy
 
     @property
-    def default_ct(self) -> Optional[CtSeries]:
-        series_ids = self.list_series('ct')
-        if len(series_ids) == 0:
-            return None
-        return self.series(series_ids[-1], 'ct')
+    def date(self) -> datetime:
+        date_str = str(self.__index['study-date'].iloc[0])
+        dt = datetime.strptime(date_str, DICOM_DATE_FORMAT)
+        return dt
 
-    @property
-    def default_mr(self) -> Optional[MrSeries]:
-        series_ids = self.list_series('mr')
-        if len(series_ids) == 0:
-            return None
-        return self.series(series_ids[-1], 'mr')
-
-    @property
-    def default_rtdose(self) -> Optional[RtDoseSeries]:
-        series_ids = self.list_series('rtdose')
-        if len(series_ids) == 0:
-            return None
-        return self.series(series_ids[-1], 'rtdose')
-
-    @property
-    def default_rtplan(self) -> Optional[RtPlanSeries]:
-        series_ids = self.list_series('rtplan')
-        if len(series_ids) == 0:
-            return None
-        return self.series(series_ids[-1], 'rtplan')
-    
-    @property
-    def default_rtstruct(self) -> Optional[RtStructSeries]:
-        series_ids = self.list_series('rtstruct')
-        if len(series_ids) == 0:
-            return None
-        return self.series(series_ids[-1], 'rtstruct')
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def has_ct(self):
-        return True if len(self.list_series('ct')) > 0 else False
-
-    @property
-    def has_rtdose(self):
-        return True if len(self.list_series('rtdose')) > 0 else False
-
-    def has_landmark(self, *args, **kwargs):
-        return self.default_rtstruct.has_landmark(*args, **kwargs)
-
-    def has_regions(self, *args, **kwargs):
-        return self.default_rtstruct.has_regions(*args, **kwargs)
-
-    def landmark_data(self, *args, **kwargs):
-        return self.default_rtstruct.landmark_data(*args, **kwargs)
-
-    def list_landmarks(self, *args, **kwargs):
-        return self.default_rtstruct.list_landmarks(*args, **kwargs)
-
-    def list_regions(self, *args, **kwargs):
-        return self.default_rtstruct.list_regions(*args, **kwargs)
+    def default_series(
+        self,
+        modality: DicomModality) -> Optional[DicomSeries]:
+        series_ids = self.list_series(modality)
+        if modality == 'ct':
+            return CtSeries(self, series_ids[-1]) if len(series_ids) > 0 else None
+        elif modality == 'mr':
+            return MrSeries(self, series_ids[-1]) if len(series_ids) > 0 else None
+        elif modality == 'rtdose':
+            return RtDoseSeries(self, series_ids[-1]) if len(series_ids) > 0 else None
+        elif modality == 'rtplan':
+            return RtPlanSeries(self, series_ids[-1]) if len(series_ids) > 0 else None
+        elif modality == 'rtstruct':
+            return RtStructSeries(self, series_ids[-1], region_map=self.__region_map) if len(series_ids) > 0 else None
+        else:
+            raise ValueError(f"Unrecognised modality '{modality}'.")
 
     def list_series(
         self,
@@ -102,29 +69,6 @@ class DicomStudy:
         index = index.sort_values(['series-date', 'series-time'], ascending=[True, True])
         series_ids = list(index['series-id'].unique())
         return series_ids
-
-    @property
-    def id(self) -> StudyID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
-
-    @property
-    def patient(self) -> str:
-        return self.__patient
-
-    def region_images(self, *args, **kwargs):
-        return self.default_rtstruct.region_images(*args, **kwargs)
-
-    @property
-    def region_policy(self) -> pd.DataFrame:
-        return self.__region_policy
 
     def series(
         self,
@@ -161,14 +105,31 @@ class DicomStudy:
     def __str__(self) -> str:
         return self.__global_id
 
+# Add properties.
+props = ['error_index', 'global_id', 'id', 'index', 'index_policy', 'patient', 'region_map', 'region_policy']
+for p in props:
+    setattr(DicomStudy, p, property(lambda self, p=p: getattr(self, f'_{DicomStudy.__name__}__{p}')))
+
 # Add 'has_{mod}' properties.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 for m in mods:
-    setattr(DicomStudy, f'has_{m}', property(lambda self, m=m: getattr(self, f'default_{m}') is not None))
+    setattr(DicomStudy, f'has_{m}', property(lambda self, m=m: self.default_series(m) is not None))
 
-# Add image property shortcuts.
+# Add 'default_{mod}' properties.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomStudy, f'default_{m}', property(lambda self, m=m: self.default_series(m)))
+
+# Add image property shortcuts from 'default_series(mod)' methods.
 mods = ['ct', 'mr', 'rtdose']
 props = ['data', 'fov', 'offset', 'size', 'spacing']
 for m in mods:
     for p in props:
-        setattr(DicomStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(getattr(self, f'default_{m}'), p) if getattr(self, f'default_{m}') is not None else None))
+        setattr(DicomStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_series(m), p) if self.default_series(m) is not None else None))
+
+# Add landmark/region method shortcuts from 'default_rtstruct'.
+mods = ['landmark', 'region']
+for m in mods:
+    setattr(DicomStudy, f'has_{m}s', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'has_{m}s')(*args, **kwargs) if self.default_rtstruct is not None else False)
+    setattr(DicomStudy, f'list_{m}s', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'list_{m}s')(*args, **kwargs) if self.default_rtstruct is not None else [])
+    setattr(DicomStudy, f'{m}s_data', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'{m}s_data')(*args, **kwargs) if self.default_rtstruct is not None else None)

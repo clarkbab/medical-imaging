@@ -15,9 +15,9 @@ def assert_box_width(box: Union[PixelBox, VoxelBox]) -> None:
 
 def handle_non_spatial_dims(
     spatial_fn: Callable,
-    data: Images,
-    *args, **kwargs) -> Images:
-    datas = arg_to_list(data, Image)
+    data: ImageData,
+    *args, **kwargs) -> ImageData:
+    datas = arg_to_list(data, ImageData)
     outputs = []
     for data in datas:
         n_dims = len(data.shape)
@@ -57,8 +57,8 @@ def handle_non_spatial_dims(
     return outputs
 
 def stack(
-    data: List[Image],
-    axis: int = 0) -> Image:
+    data: List[ImageData],
+    axis: int = 0) -> ImageData:
     if isinstance(data[0], np.ndarray):
         data = np.stack(data, axis=axis)
     elif isinstance(data[0], torch.Tensor):

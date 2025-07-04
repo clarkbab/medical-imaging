@@ -50,22 +50,14 @@ class MrSeries(DicomSeries):
 
     @property
     @ensure_loaded
-    def data(self) -> MrImage:
+    def data(self) -> MrData:
         return self.__data
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
 
     @ensure_loaded
     def extent(
         self,
         use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
         return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
-
-    @property
-    def filepaths(self) -> List[str]:
-        return self.__filepaths
 
     @property
     @ensure_loaded
@@ -75,14 +67,6 @@ class MrSeries(DicomSeries):
         ext_min, ext_max = self.extent(**kwargs)
         fov = tuple(np.array(ext_max) - ext_min)
         return fov
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def id(self) -> SeriesID:
-        return self.__id
 
     @property
     def modality(self) -> DicomModality:
@@ -102,10 +86,6 @@ class MrSeries(DicomSeries):
     @ensure_loaded
     def spacing(self) -> Spacing3D:
         return self.__spacing
-
-    @property
-    def study(self) -> str:
-        return self.__study
 
     def __load_data(self) -> None:
         mr_dicoms = self.dicoms
@@ -142,7 +122,10 @@ class MrSeries(DicomSeries):
 
             # Add data.
             data[:, :, z_idx] = mr_data
+
         self.__data = data
 
-    def __str__(self) -> str:
-        return self.__global_id
+# Add properties.
+props = ['filepaths', 'global_id', 'id', 'index', 'index_policy', 'study']
+for p in props:
+    setattr(MrSeries, p, property(lambda self, p=p: getattr(self, f'_{MrSeries.__name__}__{p}')))

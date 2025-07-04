@@ -10,8 +10,6 @@ from mymi.reporting import load_training_metrics
 from mymi.typing import *
 from mymi.utils import *
 
-from .plotting import sanitise_label
-
 GRADIENT_METRICS = [
     # 'gradient-output-mean',
     # 'gradient-output-std',
@@ -208,7 +206,7 @@ def plot_training_metrics(
                 else:
                     y_label = mj
                     label = mod
-                plot_metric(mode, mj, axs[row], colour=colour, label=sanitise_label(label, max_length=label_length), module=mod)
+                plot_metric(mode, mj, axs[row], colour=colour, label=label, module=mod)
 
         if show_metric_label and show_module_label:
             y_label = ''

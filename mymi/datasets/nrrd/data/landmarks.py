@@ -8,7 +8,7 @@ from mymi.utils import arg_to_list, load_files_csv, load_nrrd
 
 from .data import NrrdData
 
-class LandmarkData(NrrdData):
+class LandmarksData(NrrdData):
     def __init__(
         self,
         study: 'NrrdStudy',
@@ -68,16 +68,4 @@ class LandmarkData(NrrdData):
             return True
         else:
             return False
-
-    def list_landmarks(
-        self,
-        # Only the landmarks in 'landmarks' should be returned.
-        # Saves us from performing filtering code elsewhere many times.
-        landmarks: Optional[Landmarks] = 'all') -> List[Landmark]:
-
-        # Get landmark names.
-        lm_df = self.data(landmarks=landmarks)
-        lms = list(lm_df['landmark-id'])
-
-        return lms
     

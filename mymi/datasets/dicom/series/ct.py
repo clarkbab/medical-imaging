@@ -44,7 +44,7 @@ class CtSeries(DicomSeries):
     
     # Could return 'CTFile' objects - this would align with other series, but would create a lot of objects in memory.
     @property
-    def dicoms(self) -> List[dcm.FileDataset]:
+    def dicoms(self) -> List[CtDicom]:
         # Sort CTs by z position, smallest first.
         ct_dicoms = [dcm.read_file(f, force=self.__force_dicom_read) for f in self.__filepaths]
         ct_dicoms = list(sorted(ct_dicoms, key=lambda c: c.ImagePositionPatient[2]))
@@ -54,10 +54,6 @@ class CtSeries(DicomSeries):
     @ensure_loaded
     def data(self) -> np.ndarray:
         return self.__data
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
 
     @ensure_loaded
     def extent(
@@ -148,5 +144,7 @@ class CtSeries(DicomSeries):
             data[:, :, z_idx] = ct_data
         self.__data = data
 
-    def __str__(self) -> str:
-        return self.__global_id
+# Add properties.
+props = ['filepaths', 'global_id', 'id', 'index', 'index_policy', 'study']
+for p in props:
+    setattr(CtSeries, p, property(lambda self, p=p: getattr(self, f'_{CtSeries.__name__}__{p}')))

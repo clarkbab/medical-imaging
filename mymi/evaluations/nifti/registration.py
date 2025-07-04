@@ -56,12 +56,12 @@ def get_registration_landmarks_evaluation(
     res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False)
     if res is None:
         return {}
-    _, _, _, moved_landmarks = res
+    _, _, _, moved_landmarks, _ = res
 
     # Load moving landmarks.
     set = NiftiDataset(dataset)
     moving_study = set.patient(moving_pat_id).study(moving_study_id)
-    moving_landmarks = moving_study.landmark_data(landmarks=landmarks)
+    moving_landmarks = moving_study.landmarks_data(landmarks=landmarks)
 
     # Get shared landmarks.
     # merged_df = moving_landmarks.merge(moved_landmarks, on=['patient-id', 'landmark-id'], how='inner', suffixes=['_moving', '_moved'])
@@ -89,16 +89,16 @@ def get_registration_region_evaluation(
     res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False, regions=region)
     if res is None:
         return {}
-    _, _, moved_region_images, _ = res
+    _, _, moved_region_data, _, _ = res
 
     # Load fixed region data.
     fixed_study = NiftiDataset(dataset).patient(fixed_pat_id).study(fixed_study_id)
     fixed_spacing = fixed_study.ct_spacing
-    fixed_region_images = fixed_study.region_images(regions=region)
+    fixed_region_data = fixed_study.regions_data(regions=region)
 
     # Get labels.
-    pred = moved_region_images[region]
-    gt = fixed_region_images[region]
+    pred = moved_region_data[region]
+    gt = fixed_region_data[region]
 
     # # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
     # if region == 'SpinalCord':

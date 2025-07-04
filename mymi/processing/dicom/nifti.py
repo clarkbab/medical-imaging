@@ -18,7 +18,7 @@ from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 
-from ...processing import write_flag
+from ..processing import write_flag
 
 ERROR_COLS = {
     'error': str
@@ -182,13 +182,13 @@ def convert_to_nifti(
 
                 # Create region NIFTIs.
                 ref_ct = series.ref_ct
-                region_images = series.region_images(regions=regions, regions_ignore_missing=True)
-                for r, data in region_images.items():
+                region_data = series.regions_data(regions=regions, regions_ignore_missing=True)
+                for r, data in region_data.items():
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', nifti_pat_id, nifti_study_id, 'regions', nifti_series_id, f'{r}.nii.gz')
                     save_nifti(data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
 
                 # Create landmarks.
-                lm_df = series.landmark_data()
+                lm_df = series.landmarks_data()
                 if lm_df is not None:
                     lm_df['patient-id'] = nifti_pat_id
                     lm_df['study-id'] = nifti_study_id
@@ -290,8 +290,8 @@ def convert_to_nifti_replan(
             nib.save(img, filepath)
 
             # Create region NIFTIs for study.
-            region_images = study.region_images(regions=regions, regions_ignore_missing=True)
-            for region, data in region_images.items():
+            region_data = study.regions_data(regions=regions, regions_ignore_missing=True)
+            for region, data in region_data.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'regions', region, f'{nifti_id}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)

@@ -40,33 +40,13 @@ class RtStructFile(DicomFile):
         return wrapper
 
     @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def dicom(self) -> dcm.dataset.FileDataset:
+    def dicom(self) -> CtDicom:
         return dcm.read_file(self.__filepath)
-
-    @property
-    def id(self) -> DicomSOPInstanceUID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def filepath(self) -> str:
-        return self.__filepath
 
     @property
     @ensure_loaded
     def ref_ct(self) -> CtSeries:
         return self.__ref_ct
-    
-    @property
-    def series(self) -> 'RtStructSeries':
-        return self.__series
 
     def get_region_info(
         self,
@@ -92,135 +72,145 @@ class RtStructFile(DicomFile):
 
         return roi_info
 
-    def has_landmark(
+    def has_landmarks(
         self,
-        landmark: Landmark,
-        token: str = 'Marker') -> bool:
-        return landmark in self.list_landmarks(token=token)
+        landmark_ids: LandmarkIDs = 'all',
+        any: bool = False,
+        **kwargs) -> bool:
+        real_ids = self.list_landmarks(landmark_ids=landmark_ids, **kwargs)
+        req_ids = regions_to_list(landmark_ids)
+        n_overlap = len(np.intersect1d(real_ids, req_ids))
+        return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def has_regions(
         self,
-        region: Region,
-        use_mapping: bool = True) -> bool:
-        return region in self.list_regions(regions=region, use_mapping=use_mapping)
+        region_ids: RegionIDs,
+        any: bool = False,
+        **kwargs) -> bool:
+        real_ids = self.list_regions(region_ids=region_ids, **kwargs)
+        req_ids = regions_to_list(region_ids)
+        n_overlap = len(np.intersect1d(real_ids, req_ids))
+        return n_overlap > 0 if any else n_overlap == len(req_ids)
 
-    def landmark_data(
+    def landmarks_data(
         self,
         data_only: bool = False,
-        landmarks: Landmarks = 'all',
+        landmark_ids: LandmarkIDs = 'all',
         token: str = 'Marker',
         use_patient_coords: bool = True,
-        **kwargs) -> Optional[pd.DataFrame]:
-        landmarks = regions_to_list(landmarks, literals={ 'all': lambda: self.list_landmarks(token=token) })
+        **kwargs) -> Optional[Union[LandmarksData, LandmarksVoxelData, Points3D, Voxels]]:
+        # Load landmarks.
+        landmarks = self.list_landmarks(landmark_ids=landmark_ids, token=token)
         rtstruct_dicom = self.dicom
         lms = []
         for l in landmarks:
             lm = RtStructConverter.get_roi_landmark(rtstruct_dicom, l)
-            if not use_patient_coords:
-                spacing = self.ref_ct.spacing
-                offset = self.ref_ct.offset
-                lm = (lm - offset) / spacing
-                lm = lm.round()
-                lm = lm.astype(np.uint32)
             lms.append(lm)
         if len(lms) == 0:
             return None
+        
+        # Convert to DataFrame.
         lms = np.vstack(lms)
-        lm_df = pd.DataFrame(lms, index=landmarks).reset_index()
-        lm_df = lm_df.rename(columns={ 'index': 'landmark-id' })
+        landmarks_data = pd.DataFrame(lms, index=landmarks).reset_index()
+        landmarks_data = landmarks_data.rename(columns={ 'index': 'landmark-id' })
+        if not use_patient_coords:
+            landmarks_data = landmarks_to_image_coords(landmarks_data, self.ref_ct.spacing, self.ref_ct.offset)
 
         # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
-        if 'patient-id' not in lm_df.columns:
-            lm_df.insert(0, 'patient-id', self.__series.study.patient.id)
-        if 'study-id' not in lm_df.columns:
-            lm_df.insert(1, 'study-id', self.__series.study.id)
+        if 'patient-id' not in landmarks_data.columns:
+            landmarks_data.insert(0, 'patient-id', self.__series.study.patient.id)
+        if 'study-id' not in landmarks_data.columns:
+            landmarks_data.insert(1, 'study-id', self.__series.study.id)
+        if 'series-id' not in landmarks_data.columns:
+            landmarks_data.insert(2, 'series-id', self.__series.id)
 
         # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
         # Dicom/Nifti dataset types.
-        lm_df = lm_df.sort_values(['patient-id', 'study-id', 'landmark-id'])
+        landmarks_data = landmarks_data.sort_values(['patient-id', 'study-id', 'series-id', 'landmark-id'])
 
         if data_only:
-            return lm_df[range(3)].to_numpy().astype(np.float32)
+            return landmarks_data[range(3)].to_numpy().astype(float)
         else:
-            return lm_df
+            return landmarks_data
 
     def list_landmarks(
         self,
-        token: str = 'Marker') -> List[str]:
-        lms = self.list_regions(landmarks_token=None)
-        lms = [l for l in lms if token in l]
-        return lms
+        landmark_ids: Landmarks = 'all', 
+        token: str = 'Marker') -> List[LandmarkID]:
+        ids = self.list_regions(landmarks_token=None)
+        ids = [l for l in ids if token in l]
+        if landmark_ids != 'all':
+            ids = [i for i in ids if i in regions_to_list(landmark_ids)]
+        return ids
 
     def list_regions(
         self,
-        # Only the regions in 'regions' should be returned, saves us from performing filtering code elsewhere.
         landmarks_token: Optional[str] = 'Marker',
-        regions: Optional[Regions] = 'all',
+        region_ids: RegionIDs = 'all',
         return_unmapped: bool = False,
-        use_mapping: bool = True) -> Union[List[Region], Tuple[List[Region], List[Region]]]:
+        use_mapping: bool = True) -> Union[List[RegionID], Tuple[List[RegionID], List[RegionID]]]:
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
             use_mapping = False
 
         # Get unmapped region names.
         rtstruct_dicom = self.dicom
-        unmapped_regions = RtStructConverter.get_roi_names(rtstruct_dicom)
+        unmapped_ids = RtStructConverter.get_roi_names(rtstruct_dicom)
 
         # Filter regions on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        unmapped_regions = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct_dicom, r), unmapped_regions))
+        unmapped_ids = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct_dicom, r), unmapped_ids))
 
         # Map regions using 'region-map.csv'.
         if use_mapping:
             pat_id = self.__series.study.patient.id
             study_id = self.__series.study.id
             # Store as ('unmapped region', 'mapped region', 'priority').
-            mapped_regions = []
-            for unmapped_region in unmapped_regions:
-                mapped_region, priority = self.__region_map.to_internal(unmapped_region, pat_id=pat_id, study_id=study_id)
+            mapped_ids = []
+            for unmapped_id in unmapped_ids:
+                mapped_id, priority = self.__region_map.to_internal(unmapped_id, pat_id=pat_id, study_id=study_id)
                 # Don't map regions that would map to an existing region name.
-                if mapped_region != unmapped_region and mapped_region in unmapped_regions:
-                    logging.warning(f"Mapped region '{mapped_region}' (mapped from '{unmapped_region}') already found in unmapped regions for '{self}'. Skipping.")
-                    mapped_regions.append((unmapped_region, mapped_region, priority))
+                if mapped_id != unmapped_id and mapped_id in unmapped_ids:
+                    logging.warning(f"Mapped RegionID '{mapped_id}' (mapped from '{unmapped_id}') already found in unmapped regions for '{self}'. Skipping.")
+                    mapped_ids.append((unmapped_id, mapped_id, priority))
 
                 # Don't map regions that are already present in 'new_regions'.
-                elif mapped_region in mapped_regions:
-                    raise ValueError(f"Mapped region '{mapped_region}' (mapped from '{unmapped_region}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
+                elif mapped_id in mapped_ids:
+                    raise ValueError(f"Mapped RegionID '{mapped_id}' (mapped from '{unmapped_id}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
 
                 # Map region.
                 else:
-                    mapped_regions.append((unmapped_region, mapped_region, priority))
+                    mapped_ids.append((unmapped_id, mapped_id, priority))
 
             # If multiple unmapped regions map to the same region, then choose to map the one with
             # higher priorty.
-            for i in range(len(mapped_regions)):
-                unmapped_region, mapped_region, priority = mapped_regions[i]
-                for _, mr, p in mapped_regions:
+            for i in range(len(mapped_ids)):
+                unmapped_id, mapped_id, priority = mapped_ids[i]
+                for _, mr, p in mapped_ids:
                     # If another mapped region exists with a higher priority, then set this region
                     # back to its unmapped form.
-                    if mr == mapped_region and p > priority:
-                        mapped_regions[i] = (unmapped_region, unmapped_region, priority)
+                    if mr == mapped_id and p > priority:
+                        mapped_ids[i] = (unmapped_id, unmapped_id, priority)
 
             # Remove priority.
-            mapped_regions = [r[:-1] for r in mapped_regions]
+            mapped_ids = [r[:-1] for r in mapped_ids]
 
-        # Filter on 'regions'. If region mapping is used (i.e. mapped_regions != None),
+        # Filter on 'regions'. If region mapping is used (i.e. mapped_ids != None),
         # this will try to match mapped names, otherwise it will map unmapped names.
-        if regions != 'all':
-            regions = regions_to_list(regions)
-
+        if region_ids != 'all':
+            region_ids = regions_to_list(region_ids)
             if use_mapping:
-                mapped_regions = [r for r in mapped_regions if r[1] in regions]
+                mapped_ids = [r for r in mapped_ids if r[1] in region_ids]
             else:
-                unmapped_regions = [r for r in unmapped_regions if r in regions]
+                unmapped_ids = [r for r in unmapped_ids if r in region_ids]
 
         # Check for multiple regions.
         if not self.__series.region_policy['duplicates']['allow']:
             if use_mapping:
                 # Only check for duplicates on mapped regions.
-                names = [r[1] for r in mapped_regions]
+                names = [r[1] for r in mapped_ids]
             else:
-                names = unmapped_regions
+                names = unmapped_ids
 
             # Get duplicated regions.
             dup_regions = [r for r in names if names.count(r) > 1]
@@ -233,55 +223,55 @@ class RtStructFile(DicomFile):
 
         # Sort regions.
         if use_mapping:
-            mapped_regions = list(sorted(mapped_regions, key=lambda r: r[1]))
+            mapped_ids = list(sorted(mapped_ids, key=lambda r: r[1]))
         else:
-            unmapped_regions = list(sorted(unmapped_regions))
+            unmapped_ids = list(sorted(unmapped_ids))
 
         # Filter landmarks.
         if landmarks_token is not None:
             if use_mapping:
-                mapped_regions = list(filter(lambda r: landmarks_token not in r[1], mapped_regions))
+                mapped_ids = list(filter(lambda r: landmarks_token not in r[1], mapped_ids))
             else:
-                unmapped_regions = list(filter(lambda r: landmarks_token not in r, unmapped_regions))
+                unmapped_ids = list(filter(lambda r: landmarks_token not in r, unmapped_ids))
 
         # Choose return type when using mapping.
         if use_mapping:
             if return_unmapped:
-                return mapped_regions
+                return mapped_ids
             else:
-                mapped_regions = [r[1] for r in mapped_regions]
-                return mapped_regions
+                mapped_ids = [r[1] for r in mapped_ids]
+                return mapped_ids
         else:
-            return unmapped_regions
+            return unmapped_ids
 
-    def region_images(
+    def regions_data(
         self,
-        regions: Regions = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
-        regions_ignore_missing: bool = False,
+        region_ids: RegionIDs = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
+        regions_ignore_missing: bool = True,
         use_mapping: bool = True,
-        **kwargs) -> OrderedDict:
+        **kwargs) -> RegionsData:
 
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
             use_mapping = False
 
-        # Check that RTSTRUCT has requested 'regions'.
-        regions = regions_to_list(regions, literals={ 'all': self.list_regions })
-        rtstruct_regions = self.list_regions(regions=regions, use_mapping=use_mapping)
+        # Check that RTSTRUCT has requested 'region_ids'.
+        region_ids = regions_to_list(region_ids, literals={ 'all': self.list_regions })
+        rtstruct_region_ids = self.list_regions(region_ids=region_ids, use_mapping=use_mapping)
         if not regions_ignore_missing:
-            for r in regions:
-                if not r in rtstruct_regions:
-                    raise ValueError(f"Requested region '{r}' not present for RtStruct '{self}'.")
+            for r in region_ids:
+                if not r in rtstruct_region_ids:
+                    raise ValueError(f"Requested RegionID '{r}' not present for RtStruct '{self}'.")
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
         # need these to load regions from RTSTRUCT dicom.
-        rtstruct_regions = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
+        rtstruct_region_ids = self.list_regions(return_unmapped=True, use_mapping=use_mapping)
 
         # Filter on requested regions.
         if use_mapping:
-            rtstruct_regions = [r for r in rtstruct_regions if r[1] in regions]
+            rtstruct_region_ids = [r for r in rtstruct_region_ids if r[1] in region_ids]
         else:
-            rtstruct_regions = [r for r in rtstruct_regions if r in regions]
+            rtstruct_region_ids = [r for r in rtstruct_region_ids if r in region_ids]
 
         # Load RTSTRUCT dicom.
         rtstruct_dicom = self.dicom
@@ -291,13 +281,13 @@ class RtStructFile(DicomFile):
 
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
-            for unmapped_region, mapped_region in rtstruct_regions:
-                rdata = RtStructConverter.get_region_images(rtstruct_dicom, unmapped_region, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
-                data[mapped_region] = rdata
+            for unmapped_id, mapped_id in rtstruct_region_ids:
+                rdata = RtStructConverter.get_regions_data(rtstruct_dicom, unmapped_id, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                data[mapped_id] = rdata
         else:
             # Load and store region using unmapped name.
-            for r in rtstruct_regions:
-                rdata = RtStructConverter.get_region_images(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+            for r in rtstruct_region_ids:
+                rdata = RtStructConverter.get_regions_data(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[r] = rdata
 
         # Sort dict keys.
@@ -314,5 +304,7 @@ class RtStructFile(DicomFile):
             # Choose last CT series in study as "ref".
             self.__ref_ct = self.__series.study.default_ct
 
-    def __str__(self) -> str:
-        return self.__global_id
+# Add properties.
+props = ['filepath', 'global_id', 'id', 'index', 'series']
+for p in props:
+    setattr(RtStructFile, p, property(lambda self, p=p: getattr(self, f'_{RtStructFile.__name__}__{p}')))

@@ -100,7 +100,7 @@ def create_unigradicon_predictions(
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
                     fixed_offset = fixed_study.ct_offset
-                    moving_label = moving_study.region_images(r)[r]
+                    moving_label = moving_study.regions_data(r)[r]
                     moving_spacing = moving_study.ct_spacing
                     moving_offset = moving_study.ct_offset
                     transform = load_sitk_transform(transform_path)
@@ -130,7 +130,7 @@ def create_unigradicon_predictions(
             if landmarks is not None:
                 transform = load_sitk_transform(transform_path)
                 if fixed_study.has_landmarks(landmarks=landmarks):
-                    fixed_lm_df = fixed_study.landmark_data(landmarks=landmarks)
+                    fixed_lm_df = fixed_study.landmarks_data(landmarks=landmarks)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)
                     if np.allclose(lm_data_t, lm_data):

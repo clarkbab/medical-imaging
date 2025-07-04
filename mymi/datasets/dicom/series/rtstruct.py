@@ -44,35 +44,11 @@ class RtStructSeries(DicomSeries):
         id: DicomSOPInstanceUID) -> RtStructFile:
         return RtStructFile(self, id, region_map=self.__region_map)
 
-    def has_landmark(self, *args, **kwargs):
-        return self.default_file.has_landmark(*args, **kwargs)
-
-    def has_regions(self, *args, **kwargs):
-        return self.default_file.has_regions(*args, **kwargs)
-
-    @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
-
-    def landmark_data(self, *args, **kwargs):
-        return self.default_file.landmark_data(*args, **kwargs)
+    def landmarks_data(self, *args, **kwargs):
+        return self.default_file.landmarks_data(*args, **kwargs)
 
     def list_files(self) -> List[DicomSOPInstanceUID]:
         return list(sorted(self.__index.index))
-
-    def list_landmarks(self, *args, **kwargs):
-        return self.default_file.list_landmarks(*args, **kwargs)
-
-    def list_regions(self, *args, **kwargs):
-        return self.default_file.list_regions(*args, **kwargs)
 
     @property
     def modality(self) -> DicomModality:
@@ -82,16 +58,21 @@ class RtStructSeries(DicomSeries):
     def ref_ct(self) -> CtSeries:
         return self.default_file.ref_ct
 
-    def region_images(self, *args, **kwargs):
-        return self.default_file.region_images(*args, **kwargs)
+    def regions_data(self, *args, **kwargs):
+        return self.default_file.regions_data(*args, **kwargs)
 
-    @property
-    def region_policy(self) -> pd.DataFrame:
-        return self.__region_policy
+# Add properties.
+props = ['global_id', 'id', 'index', 'index_policy', 'region_map', 'region_policy', 'study']
+for p in props:
+    setattr(RtStructSeries, p, property(lambda self, p=p: getattr(self, f'_{RtStructSeries.__name__}__{p}')))
 
-    @property
-    def study(self) -> str:
-        return self.__study
+# Add property shortcuts from 'default_file'.
+props = ['filepath', 'ref_ct']
+for p in props:
+    setattr(RtStructSeries, p, property(lambda self, p=p: getattr(self.default_file, p) if self.default_file is not None else None))
 
-    def __str__(self) -> str:
-        return self.__global_id
+# Add landmark/region method shortcuts from 'default_file'.
+mods = ['landmark', 'region']
+for m in mods:
+    setattr(RtStructSeries, f'list_{m}s', lambda self, *args, m=m, **kwargs: getattr(self.default_file, f'list_{m}s')(*args, **kwargs) if self.default_file is not None else [])
+    setattr(RtStructSeries, f'has_{m}s', lambda self, *args, m=m, **kwargs: getattr(self.default_file, f'has_{m}s')(*args, **kwargs) if self.default_file is not None else False)

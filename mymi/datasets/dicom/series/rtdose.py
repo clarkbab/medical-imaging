@@ -31,30 +31,10 @@ class RtDoseSeries(DicomSeries):
         rtdose_ids = self.list_files()
         return self.file(rtdose_ids[-1])
 
-    @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def data(self) -> DoseImage:
-        return self.default_file.data
-
     def file(
         self,
         id: DicomSOPInstanceUID) -> RtDoseFile:
         return RtDoseFile(self, id)
-
-    @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
 
     def list_files(self) -> List[DicomSOPInstanceUID]:
         return list(sorted(self.__index.index))
@@ -63,25 +43,12 @@ class RtDoseSeries(DicomSeries):
     def modality(self) -> DicomModality:
         return 'rtdose'
 
-    @property
-    def offset(self) -> Point3D:
-        return self.default_file.offset
+# Add properties.
+props = ['global_id', 'id', 'index', 'index_policy', 'study']
+for p in props:
+    setattr(RtDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{RtDoseSeries.__name__}__{p}')))
 
-    @property
-    def ref_rtplan(self) -> RtPlanFile:
-        return self.default_file.ref_rtplan
-
-    @property
-    def size(self) -> Size3D:
-        return self.default_file.size
-
-    @property
-    def spacing(self) -> Spacing3D:
-        return self.default_file.spacing
-
-    @property
-    def study(self) -> str:
-        return self.__study
-
-    def __str__(self) -> str:
-        return self.__global_id
+# Add property shortcuts from 'default_file'.
+props = ['data', 'filepath', 'fov', 'offset', 'ref_rtplan', 'size', 'spacing']
+for p in props:
+    setattr(RtDoseSeries, p, property(lambda self, p=p: getattr(self.default_file, p) if self.default_file is not None else None))

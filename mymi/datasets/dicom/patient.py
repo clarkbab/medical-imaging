@@ -15,15 +15,11 @@ class DicomPatient:
         dataset: 'DicomDataset',
         id: PatientID,
         ct_from: Optional['DicomPatient'] = None,
-        region_map: Optional[RegionMap] = None,
-        trimmed: bool = False):
-        if trimmed:
-            self.__global_id = f"{dataset} - {id} (trimmed)"
-        else:
-            self.__global_id = f"{dataset} - {id}"
+        region_map: Optional[RegionMap] = None) -> None:
+        self.__id = str(id)
+        self.__global_id = f'{dataset}:{id}'
         self.__ct_from = ct_from
         self.__dataset = dataset
-        self.__id = str(id)
         self.__region_map = region_map
 
         # Get patient index.
@@ -32,6 +28,11 @@ class DicomPatient:
         if len(index) == 0:
             raise ValueError(f"Patient '{id}' not found in dataset '{dataset}'.")
         self.__index = index
+
+        # Get patient error index.
+        error_index = self.__dataset.error_index
+        error_index = error_index[error_index['patient-id'] == str(id)].copy()
+        self.__error_index = error_index
 
         # Get policies.
         self.__index_policy = self.__dataset.index_policy
@@ -48,44 +49,18 @@ class DicomPatient:
     @property
     def birth_date(self) -> str:
         return self.get_cts()[0].PatientBirthDate
-
-    @property
-    def ct_from(self) -> str:
-        return self.__ct_from
-
-    @property
-    def dataset(self) -> str:
-        return self.__dataset
     
     @property
-    def default_study(self) -> DicomStudy:
-        # Choose the most recent study.
-        study_id = self.list_studies()[-1]
-        return self.study(study_id)
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def id(self) -> str:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def index_policy(self) -> pd.DataFrame:
-        return self.__index_policy
+    def default_study(self) -> Optional[DicomStudy]:
+        study_ids = self.list_studies()
+        if len(study_ids) > 0:
+            return self.study(study_ids[-1])
+        else:
+            return None
 
     @property
     def name(self) -> str:
         return self.get_cts()[0].PatientName
-
-    @property
-    def region_policy(self) -> pd.DataFrame:
-        return self.__region_policy
 
     @property
     def sex(self) -> str:
@@ -98,12 +73,6 @@ class DicomPatient:
     @property
     def weight(self) -> str:
         return getattr(self.get_cts()[0], 'PatientWeight', '')
-
-    def has_landmark(self, *args, **kwargs):
-        return self.default_rtstruct.has_landmark(*args, **kwargs)
-
-    def has_regions(self, *args, **kwargs):
-        return self.default_rtstruct.has_regions(*args, **kwargs)
 
     def info(self) -> pd.DataFrame:
         # Define dataframe structure.
@@ -131,12 +100,6 @@ class DicomPatient:
 
         return df
 
-    def landmark_data(self, *args, **kwargs):
-        return self.default_rtstruct.landmark_data(*args, **kwargs)
-
-    def list_landmarks(self, *args, **kwargs):
-        return self.default_rtstruct.list_landmarks(*args, **kwargs)
-
     def list_studies(
         self,
         study_ids: StudyIDs = 'all') -> List[StudyID]:
@@ -149,37 +112,47 @@ class DicomPatient:
 
         return ids
 
-    def list_regions(self, *args, **kwargs):
-        return self.default_rtstruct.list_regions(*args, **kwargs)
-
-    def region_images(self, *args, **kwargs):
-        return self.default_rtstruct.region_images(*args, **kwargs)
-
-    def region_summary(self, *args, **kwargs):
-        return self.default_rtstruct.region_summary(*args, **kwargs)
-
     def study(
         self,
         id: StudyID) -> DicomStudy:
+        if id.startswith('idx:'):
+            idx = int(id.split(':')[1])
+            study_ids = self.list_studies()
+            if idx > len(study_ids) - 1:
+                raise ValueError(f"Index {idx} out of range for patient with {len(study_ids)} studies.")
+            id = study_ids[idx]
         return DicomStudy(self, id, region_map=self.__region_map)
 
     def __str__(self) -> str:
         return self.__global_id
+    
+# Add properties.
+props = ['ct_from', 'dataset', 'error_index', 'global_id', 'id', 'index', 'index_policy', 'path', 'region_map', 'region_policy']
+for p in props:
+    setattr(DicomPatient, p, property(lambda self, p=p: getattr(self, f'_{DicomPatient.__name__}__{p}')))
 
-# Add 'has_{mod}' properties.
-mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
-for m in mods:
-    setattr(DicomPatient, f'has_{m}', property(lambda self, m=m: getattr(self, f'default_{m}') is not None))
-
-# Add default properties.
+# Add 'default_{mod}' property shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 for m in mods:
     setattr(DicomPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
 
-# Add image property shortcuts.
+# Add 'has_{mod}' property shortcuts from 'default_study'.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
+
+# Add image property shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'rtdose']
 props = ['data', 'fov', 'offset', 'size', 'spacing']
 for m in mods:
+    n = 'dose' if m == 'rtdose' else m  # Rename 'rtdose' to 'dose'.
     for p in props:
-        setattr(DicomPatient, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(getattr(self, f'default_{m}'), p) if getattr(self, f'default_{m}') is not None else None))
+        setattr(DicomPatient, f'{n}_{p}', property(lambda self, m=m, n=n, p=p: getattr(self.default_study, f'{n}_{p}') if default_study is not None else None))
+
+# Add landmark/region method shortcuts from 'default_study'.
+mods = ['landmark', 'region']
+for m in mods:
+    setattr(DicomPatient, f'has_{m}_ids', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m}_ids')(*args, **kwargs) if self.default_study is not None else False)
+    setattr(DicomPatient, f'list_{m}_ids', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'list_{m}_ids')(*args, **kwargs) if self.default_study is not None else [])
+    setattr(DicomPatient, f'{m}s_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m}s_data')(*args, **kwargs) if self.default_study is not None else None)
  

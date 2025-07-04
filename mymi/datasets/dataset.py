@@ -1,9 +1,8 @@
 from enum import Enum
 
 class Dataset:
-    @property
-    def description(self):
-        raise ValueError('Should be overridden')
+    def __str__(self) -> str:
+        return self.global_id
 
 class DatasetType(Enum):
     DICOM = 0

@@ -15,7 +15,7 @@ from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import MultiSegmenter, Segmenter
 from mymi.processing import largest_cc_4D
-from mymi.regions import to_255, RegionColours, regions_to_list
+from mymi.regions import RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
 from mymi.typing import VoxelBox, Size3D, Spacing3D, ModelName, PatientID, Regions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
@@ -126,7 +126,7 @@ def create_dataset(
 
         # Create ROI data.
         roi_data = ROIData(
-            colour=list(to_255(RegionColours.Parotid_L)),
+            colour=list(to_rgb_255(RegionColours.Parotid_L)),
             data=seg,
             name='Parotid_L'
         )
@@ -168,7 +168,7 @@ def load_segmenter_predictions(
     # Extract data.
     preds = []
     for region in regions:
-        pred = RtStructConverter.get_region_images(rtstruct, name_map[region], ref_cts)
+        pred = RtStructConverter.get_regions_data(rtstruct, name_map[region], ref_cts)
         preds.append(pred)
     
     # Determine return type.

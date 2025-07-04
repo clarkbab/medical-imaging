@@ -26,11 +26,11 @@ def get_segmenter_patient_evaluation(
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    region_images = pat.region_images(**kwargs)
+    region_data = pat.regions_data(**kwargs)
 
     metrics = []
     for r, pred in pred_data.items():
-        label = region_images[r]
+        label = region_data[r]
 
         # Dice.
         metrics.append((r, 'dice', dice(pred, label)))

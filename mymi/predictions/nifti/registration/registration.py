@@ -30,7 +30,8 @@ def create_patient_registration(
     pad_threshold: Optional[float] = -1024,
     replace_padding: Optional[float] = -1024,
     regions: Optional[Regions] = 'all',
-    regions_ignore_missing: bool = True) -> None:
+    regions_ignore_missing: bool = True,
+    warp_dose: bool = True) -> None:
     # Load model.
     model, device, ckpt_info = load_model(module, project, model_name, ckpt='best', state='eval')
     norm_params = ckpt_info['norm-params']
@@ -97,9 +98,9 @@ def create_patient_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_images is not None:
-            for region, moving_label in moving_region_images.items():
+        moving_region_data = moving_study.regions_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_data is not None:
+            for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
@@ -107,7 +108,7 @@ def create_patient_registration(
 
     # Move landmarks.
     if landmarks is not None:
-        fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
+        fixed_landmark_data = fixed_study.landmarks_data(landmarks=landmarks)
         if fixed_landmark_data is not None:
             # Move landmarks from fixed -> moving spacing - we can't always invert DVF transforms.
             fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
@@ -118,6 +119,13 @@ def create_patient_registration(
             moved_landmark_data = moved_landmark_data[landmark_cols]
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
             save_csv(moved_landmark_data, filepath)
+
+    # Move dose.
+    if warp_dose and moving_study.has_dose:
+        moving_dose = moving_study.dose_data
+        moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dose', f'{model_name}.nii.gz')
+        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
 def delete_patient_registration(
     dataset: str,
@@ -201,9 +209,9 @@ def create_patient_identity_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_images is not None:
-            for region, moving_label in moving_region_images.items():
+        moving_region_data = moving_study.regions_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_data is not None:
+            for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
@@ -211,7 +219,7 @@ def create_patient_identity_registration(
 
     # Move landmarks.
     if landmarks is not None:
-        fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
+        fixed_landmark_data = fixed_study.landmarks_data(landmarks=landmarks)
         if fixed_landmark_data is not None:
             # Use fixed landmarks as moved landmarks.
             fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
@@ -243,7 +251,7 @@ def create_registrations(
 
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(ids=pat_ids, splits=splits)
 
     # Make predictions.
     for p in tqdm(pat_ids):
@@ -286,16 +294,19 @@ def load_registration(
     model: str,
     fixed_study_id: StudyID = 'study_1',
     landmarks: Optional[Landmarks] = 'all',
+    load_dose: bool = True,
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
     raise_error: bool = True,
     regions: Optional[Regions] = 'all',
-    use_patient_coords: bool = True) -> Tuple[CtImage, Union[itk.Transform, sitk.Transform], Optional[RegionImage], Optional[Landmarks]]:
+    use_patient_coords: bool = True) -> Tuple[sitk.Transform, CtData, Optional[RegionsData], Optional[LandmarksData], Optional[DoseData]]:
     # Load moved CT.
     if moving_pat_id is None:
         moving_pat_id = fixed_pat_id
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'ct', f'{model}.nii.gz')
+    fixed_study = set.patient(fixed_pat_id).study(fixed_study_id)
+    moving_study = set.patient(moving_pat_id).study(moving_study_id)
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study.id, moving_pat_id, moving_study.id, 'ct', f'{model}.nii.gz')
     if not os.path.exists(filepath):
         if raise_error:
             raise ValueError(f"CT registration not found at '{filepath}'.")
@@ -306,7 +317,7 @@ def load_registration(
     # Load transform.
     suffixes = ['.hdf5', '.nii', '.nii.gz']
     transform = None
-    base_path = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'dvf')
+    base_path = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study.id, moving_pat_id, moving_study.id, 'dvf')
     for s in suffixes:
         filepath = os.path.join(base_path, f'{model}{s}')
         if os.path.exists(filepath):
@@ -316,20 +327,19 @@ def load_registration(
 
     if regions is not None:
         # Load moved regions.
-        moving_study = set.patient(moving_pat_id).study(moving_study_id)
         regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
-        moved_region_images = {}
+        moved_region_data = {}
         for r in regions:
-            rdata = load_registered_region(dataset, fixed_pat_id, model, r, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id)
+            rdata = load_registered_region(dataset, fixed_pat_id, model, r, fixed_study_id=fixed_study.id, moving_pat_id=moving_pat_id, moving_study_id=moving_study.id)
             if rdata is None:
                 continue
-            moved_region_images[r] = rdata
+            moved_region_data[r] = rdata
     else:
-        moved_region_images = None
+        moved_region_data = None
 
     if landmarks is not None:
         # Load landmarks - moved from fixed to moving space (reversed).
-        moved_landmark_data = load_registered_landmarks(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, use_patient_coords=use_patient_coords)
+        moved_landmark_data = load_registered_landmarks(dataset, fixed_pat_id, model, fixed_study_id=fixed_study.id, moving_pat_id=moving_pat_id, moving_study_id=moving_study.id, use_patient_coords=use_patient_coords)
         if moved_landmark_data is not None:
             all_landmarks = list(sorted(moved_landmark_data['landmark-id'].unique()))
 
@@ -341,24 +351,27 @@ def load_registration(
             moved_landmark_data = moved_landmark_data[moved_landmark_data['landmark-id'].isin(landmarks)]
     else:
         moved_landmark_data = None
-            
-    return moved_ct, transform, moved_region_images, moved_landmark_data
 
-def load_registered_region(
+    if load_dose and moving_study.has_dose:
+        moved_dose_data = load_registered_dose(dataset, fixed_pat_id, model, fixed_study_id=fixed_study.id, moving_pat_id=moving_pat_id, moving_study_id=moving_study.id)
+    else:
+        moved_dose_data = None
+            
+    return transform, moved_ct, moved_region_data, moved_landmark_data, moved_dose_data
+
+def load_registered_dose(
     dataset: str,
     fixed_pat_id: PatientID,
     model: str,
-    region: Region,
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
-    moving_study_id: StudyID = 'study_0') -> Optional[RegionLabel]:
+    moving_study_id: StudyID = 'study_0') -> Optional[RegionData]:
     moving_pat_id = moving_pat_id if moving_pat_id is not None else fixed_pat_id
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'regions', region, f'{model}.nii.gz')
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'dose', f'{model}.nii.gz')
     if not os.path.exists(filepath):
         return None
     data, _, _ = load_nifti(filepath)
-    data = data.astype(np.bool_)
     return data
 
 # These are registered to moving space!
@@ -398,6 +411,23 @@ def load_registered_landmarks(
         landmarks.insert(1, 'study-id', moving_study_id)
 
     return landmarks
+
+def load_registered_region(
+    dataset: str,
+    fixed_pat_id: PatientID,
+    model: str,
+    region: Region,
+    fixed_study_id: StudyID = 'study_1',
+    moving_pat_id: Optional[PatientID] = None,
+    moving_study_id: StudyID = 'study_0') -> Optional[RegionData]:
+    moving_pat_id = moving_pat_id if moving_pat_id is not None else fixed_pat_id
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'regions', region, f'{model}.nii.gz')
+    if not os.path.exists(filepath):
+        return None
+    data, _, _ = load_nifti(filepath)
+    data = data.astype(np.bool_)
+    return data
 
 def create_patient_vxmpp_identity_registration(
     dataset: str,
@@ -447,9 +477,9 @@ def create_patient_vxmpp_identity_registration(
 
     # Move region data.
     if regions is not None:
-        moving_region_images = moving_study.region_images(regions=regions, regions_ignore_missing=regions_ignore_missing)
-        if moving_region_images is not None:
-            for region, moving_label in moving_region_images.items():
+        moving_region_data = moving_study.regions_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        if moving_region_data is not None:
+            for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
                 moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
@@ -457,7 +487,7 @@ def create_patient_vxmpp_identity_registration(
 
     # Move landmarks.
     if landmarks is not None:
-        fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
+        fixed_landmark_data = fixed_study.landmarks_data(landmarks=landmarks)
         if fixed_landmark_data is not None:
             # Use fixed landmarks as moved landmarks.
             fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
@@ -468,3 +498,75 @@ def create_patient_vxmpp_identity_registration(
             moved_landmark_data = moved_landmark_data[landmark_cols]
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
             save_csv(moved_landmark_data, filepath)
+
+def warp_patient_data(
+    dataset: str,
+    fixed_pat_id: PatientID,
+    model_name: str,
+    fixed_study_id: StudyID = 'study_1',
+    landmarks: Optional[Landmarks] = 'all',
+    moving_pat_id: Optional[PatientID] = None,
+    moving_study_id: StudyID = 'study_0',
+    regions: Optional[Regions] = 'all',
+    warp_ct: bool = True,
+    warp_dose: bool = True,
+    **kwargs) -> None:
+
+    # Load transform.
+    set = NiftiDataset(dataset)
+    fixed_pat = set.patient(fixed_pat_id)
+    fixed_study = fixed_pat.study(fixed_study_id)
+    moving_pat = set.patient(moving_pat_id) if moving_pat_id is not None else fixed_pat
+    moving_study = moving_pat.study(moving_study_id)
+    filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
+    transform = load_sitk_transform(filepath)
+
+    # Move CT data.
+    if warp_ct and moving_study.has_ct:
+        moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
+        save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+
+    # Move region data.
+    if regions is not None and moving_study.has_regions(regions=regions):
+        moving_region_data = moving_study.regions_data(regions=regions)
+        for region, moving_label in moving_region_data.items():
+            # Apply registration transform.
+            moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+            filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
+            save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+
+    # Move landmarks.
+    if landmarks is not None and fixed_study.has_landmarks(landmarks=landmarks):
+        fixed_landmark_data = fixed_study.landmarks_data(landmarks=landmarks)
+        fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
+        moved_landmark_data = fixed_landmark_data.copy()
+        moved_points = sitk_transform_points(fixed_points, transform)
+        moved_landmark_data[list(range(3))] = moved_points
+        landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
+        moved_landmark_data = moved_landmark_data[landmark_cols]
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'landmarks', f'{model_name}.csv')
+        save_csv(moved_landmark_data, filepath)
+
+    # Move dose.
+    if warp_dose and moving_study.has_dose:
+        moving_dose = moving_study.dose_data
+        moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dose', f'{model_name}.nii.gz')
+        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+            
+def warp_patients_data(
+    dataset: str,
+    model: str,
+    pat_ids: PatientIDs = 'all',
+    splits: Splits = 'all',
+    **kwargs) -> None:
+
+    # Get patients.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients(ids=pat_ids, splits=splits)
+
+    # Make predictions.
+    for p in tqdm(pat_ids):
+        warp_patient_data(dataset, p, model, **kwargs)
+    

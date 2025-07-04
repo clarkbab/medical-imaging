@@ -27,7 +27,7 @@ def create_voxelmorph_pp_predictions(
     regions: Optional[Regions] = 'all',
     splits: Splits = 'all') -> None:
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(ids=pat_ids, splits=splits)
 
     for p in tqdm(pat_ids):
         print(p)
@@ -44,10 +44,10 @@ def create_voxelmorph_pp_predictions(
                 # Load data.
                 fixed_ct = fixed_study.ct_data
                 fixed_spacing = fixed_study.ct_spacing
-                fixed_lung = fixed_study.region_images(regions=lung_region)[lung_region]
+                fixed_lung = fixed_study.regions_data(regions=lung_region)[lung_region]
                 moving_ct = moving_study.ct_data
                 moving_spacing = moving_study.ct_spacing
-                moving_lung = moving_study.region_images(regions=lung_region)[lung_region]
+                moving_lung = moving_study.regions_data(regions=lung_region)[lung_region]
 
                 # Resample to required spacing.
                 vxm_fixed_spacing = (1.75, 1.25, 1.75)
@@ -144,7 +144,7 @@ def create_voxelmorph_pp_predictions(
                     continue
 
                 # Create moved region label.
-                moving_label = moving_study.region_images(regions=r)[r]
+                moving_label = moving_study.regions_data(regions=r)[r]
                 moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'voxelmorph-pp.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
@@ -156,7 +156,7 @@ def create_voxelmorph_pp_predictions(
 
             # Load transform and fixed landmarks.
             transform = load_sitk_transform(transform_path)
-            fixed_lms = fixed_study.landmark_data(landmarks=pat_landmarks)
+            fixed_lms = fixed_study.landmarks_data(landmarks=pat_landmarks)
 
             # Transform landmarks.
             fixed_lm_data = fixed_lms[list(range(3))]

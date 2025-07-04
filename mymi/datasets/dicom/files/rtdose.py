@@ -2,7 +2,6 @@ import numpy as np
 import os
 import pandas as pd
 import pydicom as dcm
-from pydicom.dataset import FileDataset
 from typing import *
 
 from mymi.constants import *
@@ -37,37 +36,17 @@ class RtDoseFile(DicomFile):
 
     @property
     @ensure_loaded
-    def data(self) -> DoseImage:
+    def data(self) -> DoseData:
         return self.__data
 
     @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
-    def dicom(self) -> FileDataset:
+    def dicom(self) -> RtDoseDicom:
         return dcm.read_file(self.__filepath)
-
-    @property
-    def filepath(self) -> str:
-        return self.__filepath
-
-    @property
-    def id(self) -> DicomSOPInstanceUID:
-        return self.__id
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
 
     @property
     @ensure_loaded
     def offset(self) -> Point3D:
         return self.__offset
-
-    @property
-    def series(self) -> str:
-        return self.__series
 
     @property
     @ensure_loaded
@@ -117,5 +96,7 @@ class RtDoseFile(DicomFile):
     def ref_rtplan(self) -> 'RtPlanFile':
         return self.__ref_rtplan
 
-    def __str__(self) -> str:
-        return self.__global_id
+# Add properties.
+props = ['filepath', 'global_id', 'id', 'index', 'series']
+for p in props:
+    setattr(RtDoseFile, p, property(lambda self, p=p: getattr(self, f'_{RtDoseFile.__name__}__{p}')))

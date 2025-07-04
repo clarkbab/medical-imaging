@@ -1,4 +1,4 @@
-from ast import literal_eval
+import ast
 import json
 import numpy as np
 import os
@@ -23,23 +23,23 @@ Z_SPACING_ROUND_DP = 2
 class DicomDataset(Dataset):
     def __init__(
         self,
-        name: str,
+        id: str,
         rebuild_index: bool = False) -> None:
         # Create 'global ID'.
-        self.__name = name
-        self.__path = os.path.join(config.directories.datasets, 'dicom', self.__name)
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset 'DICOM: {self.__name}' not found. Filepath: {self.__path}.")
-        ct_from_name = None
+        self.__id = id
+        self.__path = os.path.join(config.directories.datasets, 'dicom', self.__id)
+        ct_from_id = None
         for f in os.listdir(self.__path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
-                ct_from_name = match.group(1)
-        self.__ct_from = DicomDataset(ct_from_name) if ct_from_name is not None else None
-        self.__global_id = f"DICOM:{self.__name}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__name}"
+                ct_from_id = match.group(1)
+        self.__ct_from = DicomDataset(ct_from_id) if ct_from_id is not None else None
+        self.__global_id = f"DICOM:{self.__id}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__id}"
+        if not os.path.exists(self.__path):
+            raise ValueError(f"Dataset '{self}' not found. Filepath: {self.__path}.")
 
         if rebuild_index:
-            build_index(self.__name)
+            build_index(self.__id)
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -49,22 +49,14 @@ class DicomDataset(Dataset):
         return wrapper
 
     @property
-    def ct_from(self) -> Optional['DicomDataset']:
-        return self.__ct_from
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
-
-    @property
     @ensure_loaded
     def index(self) -> pd.DataFrame:
         return self.__index
 
     @property
     @ensure_loaded
-    def index_errors(self) -> pd.DataFrame:
-        return self.__index_errors
+    def error_index(self) -> pd.DataFrame:
+        return self.__error_index
 
     @property
     @ensure_loaded
@@ -77,24 +69,12 @@ class DicomDataset(Dataset):
         return self.__region_policy
 
     @property
-    def name(self) -> str:
-        return self.__name
-
-    @property
-    def path(self) -> str:
-        return self.__path
-
-    @property
     @ensure_loaded
     def region_map(self) -> RegionMap:
         return self.__region_map
 
-    @property
-    def type(self) -> DatasetType:
-        return self._type
-
     def rebuild_index(self) -> None:
-        build_index(self.__name)
+        build_index(self.__id)
 
     def has_patient(
         self,
@@ -105,27 +85,27 @@ class DicomDataset(Dataset):
     def list_patients(
         self,
         pat_ids: PatientIDs = 'all', 
-        regions: Regions = 'all',
+        region_ids: RegionIDs = 'all',
         show_progress: bool = False,
         use_mapping: bool = True,
         use_patient_regions_report: bool = True) -> List[str]:
 
         # Use patient regions report to accelerate 'list_patients' if filtering on regions.
-        if regions != 'all' and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
+        if region_ids != 'all' and use_patient_regions_report and self.__load_patient_regions_report(exists_only=True, use_mapping=use_mapping):
             logging.info(f"Using patient regions report to accelerate 'list_patients' (filtered by region).")
             df = self.__load_patient_regions_report(use_mapping=use_mapping)
-            df = df[df['region'].isin(regions)]
+            df = df[df['region'].isin(region_ids)]
             ids = list(sorted(df['patient-id'].unique()))
             return ids
 
         # Load patient IDs from index.
         ids = list(sorted(self.index['patient-id'].unique()))
 
-        # Filter on 'regions'.
-        if regions != 'all':
-            def filter_fn(pat_id):
-                pat_regions = self.patient(pat_id).list_regions(regions=regions, use_mapping=use_mapping)
-                if len(pat_regions) > 0:
+        # Filter on 'region_ids'.
+        if region_ids != 'all':
+            def filter_fn(p: PatientID) -> bool:
+                pat_region_ids = self.patient(p).list_regions(region_ids=region_ids, use_mapping=use_mapping)
+                if len(pat_region_ids) > 0:
                     return True
                 else:
                     return False
@@ -135,8 +115,7 @@ class DicomDataset(Dataset):
 
         # Filter on 'pat_ids'.
         if pat_ids != 'all':
-            pat_ids = arg_to_list(pat_ids, PatientID)
-            ids = [i for i in ids if i in pat_ids]
+            ids = [i for i in ids if i in arg_to_list(pat_ids, PatientID)]
 
         return ids
 
@@ -150,59 +129,24 @@ class DicomDataset(Dataset):
     @ensure_loaded
     def list_regions(
         self,
-        pat_id: Optional[PatientIDs] = None,
+        pat_ids: PatientIDs = 'all',
         use_mapping: bool = True) -> pd.DataFrame:
         # Load all patients.
-        pats = self.list_patients()
-
-        # Filter on 'pat_ids'.
-        if pat_id is not None:
-            pat_ids = arg_to_list(pat_id, PatientID)
-            def filter_fn(pat_id):
-                if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
-                    ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
-                    return True
-                else:
-                    return False
-            pats = list(filter(self.__filter_patient_by_pat_ids(pat_ids), pats))
+        pat_ids = self.list_patients(pat_ids=pat_ids)
 
         # Get patient regions.
-        regions = []
-        for pat in tqdm(pats):
-            pat_regions = self.patient(pat).list_regions(use_mapping=use_mapping)
-            regions += pat_regions
+        ids = []
+        for p in tqdm(pat_ids):
+            pat_region_ids = self.patient(p).list_regions(use_mapping=use_mapping)
+            ids += pat_region_ids
+        ids = list(np.unique(ids))
 
-        return list(np.unique(regions))
-
-    def __filter_patient_by_pat_ids(
-        self,
-        pat_ids: Union[str, List[str]]) -> Callable[[str], bool]:
-        def fn(id):
-            if ((isinstance(pat_ids, str) and (pat_ids == 'all' or id == pat_ids)) or
-                ((isinstance(pat_ids, list) or isinstance(pat_ids, np.ndarray) or isinstance(pat_ids, tuple)) and id in pat_ids)):
-                return True
-            else:
-                return False
-        return fn
-
-    def __filter_patient_by_region(
-        self,
-        region: Regions,
-        use_mapping: bool = True) -> Callable[[str], bool]:
-        regions = arg_to_list(region, str)
-
-        def fn(pat_id):
-            pat_regions = self.patient(pat_id).list_regions(regions=regions, use_mapping=use_mapping)
-            if len(pat_regions) > 0:
-                return True
-            else:
-                return False
-        return fn
+        return ids
 
     def __load_data(self) -> None:
         # Trigger index build if necessary.
-        if not index_exists(self.__name):
-            build_index(self.__name) 
+        if not index_exists(self.__id):
+            build_index(self.__id) 
 
         # Load index policy.
         filepath = os.path.join(self.__path, 'index-policy.yaml')
@@ -212,7 +156,7 @@ class DicomDataset(Dataset):
         filepath = os.path.join(self.__path, 'index.csv')
         try:
             self.__index = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
-            self.__index['mod-spec'] = self.__index['mod-spec'].apply(lambda m: literal_eval(m))      # Convert str to dict.
+            self.__index['mod-spec'] = self.__index['mod-spec'].apply(lambda m: ast.literal_eval(m))      # Convert str to dict.
         except pd.errors.EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
             self.__index = pd.DataFrame(columns=INDEX_COLS.keys())
@@ -220,10 +164,10 @@ class DicomDataset(Dataset):
         # Load index errors.
         try:
             filepath = os.path.join(self.__path, 'index-errors.csv')
-            self.__index_errors = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
+            self.__error_index = pd.read_csv(filepath, dtype={ 'patient-id': str }, index_col=INDEX_INDEX_COL)
         except pd.errors.EmptyDataError:
             logging.info(f"Index empty for dataset '{self}'.")
-            self.__index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
+            self.__error_index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
 
         # Load region map.
         filepath = os.path.join(self.path, 'region-map.csv')
@@ -257,6 +201,8 @@ class DicomDataset(Dataset):
                 return False
             else:
                 raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
-
-    def __str__(self) -> str:
-        return self.__global_id
+    
+# Add properties.
+props = ['ct_from', 'global_id', 'id', 'path']
+for p in props:
+    setattr(DicomDataset, p, property(lambda self, p=p: getattr(self, f'_{DicomDataset.__name__}__{p}')))

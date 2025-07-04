@@ -20,7 +20,7 @@ def create_totalseg_predictions(
 
     # Load patient IDs.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(ids=pat_ids, splits=splits)
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)

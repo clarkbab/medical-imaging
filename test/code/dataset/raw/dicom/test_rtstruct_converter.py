@@ -10,7 +10,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi.datasets.raw.dicom import ROIData, RtStructConverter
-from mymi.regions import to_255, RegionColours
+from mymi.regions import to_rgb_255, RegionColours
 
 class TestRtStructConverter(TestCase):
     def test_bidirectional_conversion(self):
@@ -21,12 +21,12 @@ class TestRtStructConverter(TestCase):
         # Perform bidirectional conversion.
         rtstruct = RtStructConverter.create_rtstruct(cts)
         roi_data = ROIData(
-            colour=list(to_255(RegionColours.Parotid_L)),
+            colour=list(to_rgb_255(RegionColours.Parotid_L)),
             data=before,
             name='sample'
         )
         RtStructConverter.add_roi_contour(rtstruct, roi_data, cts)
-        after = RtStructConverter.get_region_images(rtstruct, 'sample', cts)
+        after = RtStructConverter.get_regions_data(rtstruct, 'sample', cts)
 
         # Assert that conversion doesn't alter the segmentation.
         np.testing.assert_array_equal(before, after)

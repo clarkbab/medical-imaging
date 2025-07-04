@@ -27,19 +27,19 @@ def get_ct_stats(
     return stats
 
 def get_region_stats(
-    ct_data: CtImage,
-    region_images: RegionLabel,
+    ct_data: CtData,
+    region_data: RegionData,
     spacing: Spacing3D,
     offset: Voxel,
-    brain_data: Optional[RegionLabel] = None) -> List[Dict[str, Any]]:
+    brain_data: Optional[RegionData] = None) -> List[Dict[str, Any]]:
 
     stats = []
 
     # Add 'min/max' extent metrics.
     data = {}
-    min_extent_vox = np.argwhere(region_images).min(axis=0)
+    min_extent_vox = np.argwhere(region_data).min(axis=0)
     min_extent_mm = min_extent_vox * spacing + offset
-    max_extent_vox = np.argwhere(region_images).max(axis=0)
+    max_extent_vox = np.argwhere(region_data).max(axis=0)
     max_extent_mm = max_extent_vox * spacing + offset
     for axis, min, max in zip(('x', 'y', 'z'), min_extent_mm, max_extent_mm):
         data['metric'] = f'min-extent-mm-{axis}'
@@ -51,24 +51,24 @@ def get_region_stats(
 
     # Add 'connected' metrics.
     data['metric'] = 'connected'
-    lcc_region_images = largest_cc_3D(region_images)
-    data['value'] = 1 if lcc_region_images.sum() == region_images.sum() else 0
+    lcc_region_data = largest_cc_3D(region_data)
+    data['value'] = 1 if lcc_region_data.sum() == region_data.sum() else 0
     stats.append(data.copy())
     data['metric'] = 'connected-largest-p'
-    data['value'] = lcc_region_images.sum() / region_images.sum()
+    data['value'] = lcc_region_data.sum() / region_data.sum()
     stats.append(data.copy())
 
     # Add intensity metrics.
     if brain_data is not None:
         data['metric'] = 'snr-brain'
-        data['value'] = snr(ct_data, region_images, brain_data, spacing)
+        data['value'] = snr(ct_data, region_data, brain_data, spacing)
         stats.append(data.copy())
     data['metric'] = 'mean-intensity'
-    data['value'] = mean_intensity(ct_data, region_images)
+    data['value'] = mean_intensity(ct_data, region_data)
     stats.append(data.copy())
 
     # Add OAR extent.
-    ext_width_mm = extent_width_mm(region_images, spacing)
+    ext_width_mm = extent_width_mm(region_data, spacing)
     if ext_width_mm is None:
         ext_width_mm = (0, 0, 0)
     data['metric'] = 'extent-mm-x'
@@ -82,7 +82,7 @@ def get_region_stats(
     stats.append(data.copy())
 
     # Add extent of largest connected component.
-    ext = extent(lcc_region_images)
+    ext = extent(lcc_region_data)
     if ext:
         min, max = ext
         extent_vox = np.array(max) - min
@@ -102,7 +102,7 @@ def get_region_stats(
     # Add volume.
     vox_volume = reduce(np.multiply, spacing)
     data['metric'] = 'volume-mm3'
-    data['value'] = vox_volume * region_images.sum() 
+    data['value'] = vox_volume * region_data.sum() 
     stats.append(data.copy())
 
     return stats

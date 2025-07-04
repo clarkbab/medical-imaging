@@ -7,24 +7,25 @@ from mymi.utils import *
 
 from .images import NiftiImage
 
-class CtNiftiImage(NiftiImage):
+class CtImage(NiftiImage):
     def __init__(
         self,
         study: 'NiftiStudy',
         id: SeriesID) -> None:
         self.__id = id
-        self.__path = os.path.join(study.path, 'ct', f'{id}.nii.gz')
+        self.__global_id = f'{study}:{id}'
+        self.__filepath = os.path.join(study.path, 'ct', f'{id}.nii.gz')
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
-                self.__data, self.__spacing, self.__offset = load_nifti(self.__path)
+                self.__data, self.__spacing, self.__offset = load_nifti(self.__filepath)
             return fn(self, *args, **kwargs)
         return wrapper
 
     @property
     @ensure_loaded
-    def data(self) -> CtImage:
+    def data(self) -> CtData:
         return self.__data
 
     @ensure_loaded
@@ -43,17 +44,9 @@ class CtNiftiImage(NiftiImage):
         return fov
 
     @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
     @ensure_loaded
     def offset(self) -> Point3D:
         return self.__offset
-
-    @property
-    def path(self) -> str:
-        return self.__path
 
     @property
     @ensure_loaded
@@ -65,3 +58,7 @@ class CtNiftiImage(NiftiImage):
     def spacing(self) -> np.ndarray:
         return self.__spacing
 
+# Add properties.
+props = ['filepath', 'global_id', 'id']
+for p in props:
+    setattr(CtImage, p, property(lambda self, p=p: getattr(self, f'_{CtImage.__name__}__{p}')))

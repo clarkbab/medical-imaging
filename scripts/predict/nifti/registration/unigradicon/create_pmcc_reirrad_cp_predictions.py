@@ -1,4 +1,4 @@
-from mymi.predictions.nifti import create_unigradicon_predictions
+from mymi.predictions.nifti import create_unigradicon_predictions, warp_patients_data
 
 dataset = 'PMCC-REIRRAD-CP'
 model = 'unigradicon'
@@ -8,4 +8,5 @@ kwargs = dict(
     regions='all',
     use_io=False,
 )
-create_unigradicon_predictions(dataset, model, **kwargs)
+# create_unigradicon_predictions(dataset, model, **kwargs)
+warp_patients_data(dataset, model, **kwargs)

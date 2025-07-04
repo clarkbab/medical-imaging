@@ -12,14 +12,15 @@ from mymi.utils import *
 def convert_velocity_predictions_to_nifti(
     dataset: str,
     fixed_study_id: str = 'study_1',
-    moving_study_id: str = 'study_0',
     landmarks: Optional[Landmarks] = 'all',
+    moving_study_id: str = 'study_0',
+    pat_ids: PatientIDs = 'all',
     pat_prefix: Optional[str] = None,
     regions: Optional[Regions] = 'all',
     transform_types: List[str] = ['dmp', 'edmp']) -> None:
     dicom_set = DicomDataset(dataset)
     nifti_set = NiftiDataset(dataset)
-    pat_ids = dicom_set.list_patients()
+    pat_ids = dicom_set.list_patients(ids=pat_ids)
     for p in tqdm(pat_ids):
         # Remove prefix.
         if pat_prefix is not None:
@@ -63,7 +64,7 @@ def convert_velocity_predictions_to_nifti(
                 for r in regions:
                     if not moving_study.has_regions(r):
                         continue
-                    moving_region = moving_study.region_images(regions=r)[r]
+                    moving_region = moving_study.regions_data(regions=r)[r]
                     moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
@@ -71,7 +72,7 @@ def convert_velocity_predictions_to_nifti(
             # Move landmarks.
             # We move 'fixed' to 'moving' for TRE calculation to avoid finding inverse of potentially
             # non-invertible transform
-            lm_df = fixed_study.landmark_data(landamrks=landmarks)
+            lm_df = fixed_study.landmarks_data(landamrks=landmarks)
             lm_data = lm_df[list(range(3))].to_numpy()
             lm_data_t = sitk_transform_points(lm_data, transform) 
             lm_df[list(range(3))] = lm_data_t

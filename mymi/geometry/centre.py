@@ -5,7 +5,7 @@ from typing import *
 from mymi.typing import *
 
 def get_centre_of_mass(
-    a: Image,
+    a: Union[ImageData2D, ImageData3D],
     offset: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None, 
     use_patient_coords: bool = True) -> Union[Point2D, Point3D]:

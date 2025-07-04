@@ -10,15 +10,15 @@ from typing import *
 
 from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
 from mymi import logging
-from mymi.regions import to_255
 from mymi.typing import *
+from mymi.utils import *
 
 CONTOUR_FORMATS = ['POINT', 'CLOSED_PLANAR']
 CONTOUR_METHOD = 'SKIMAGE'
 # CONTOUR_METHOD = 'OPENCV'
 
 @dataclass
-class LandmarkData:
+class LandmarksData:
     data: Tuple[float]
     name: str
     number: Optional[int] = None
@@ -110,13 +110,13 @@ class RtStructConverter:
         return landmark
 
     @classmethod
-    def get_region_images(
+    def get_regions_data(
         cls,
         rtstruct: dcm.dataset.FileDataset,
         name: str,
         size: Size3D,
         spacing: Spacing3D,
-        offset: Point3D) -> RegionImage:
+        offset: Point3D) -> RegionsData:
         # Load the contour data.
         roi_infos = rtstruct.StructureSetROISequence
         roi_contours = rtstruct.ROIContourSequence
@@ -501,7 +501,7 @@ class RtStructConverter:
         # Add the contour data.
         roi_contour = Dataset()
         roi_contour.ReferencedROINumber = number
-        roi_contour.ROIDisplayColor = list(to_255((1, 1, 0)))   # Yellow.
+        roi_contour.ROIDisplayColor = list(to_rgb_255((1, 1, 0)))   # Yellow.
         roi_contour.ContourSequence = dcm.sequence.Sequence()
         contour = Dataset()
         contour.NumberOfContourPoints = 1

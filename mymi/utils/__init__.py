@@ -2,10 +2,12 @@ from .assertions import *
 from .interval import *
 from .io import *
 from .itk import *
+from .landmarks import *
 from .maths import *
 from .nifti import *
 from .nrrd import *
 from .pandas import *
+from .plotting import *
 from .python import *
 from .sitk import *
 from .slurm import *

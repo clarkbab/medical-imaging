@@ -173,7 +173,7 @@ def evaluate_model(
     for pat in tqdm(pats):
         # Get pred/ground truth.
         pred = get_two(set, pat, localiser, segmenter, device=device)
-        label = set.patient(pat).region_images()[region]
+        label = set.patient(pat).regions_data()[region]
 
         # Add metrics.
         dsc_data = {

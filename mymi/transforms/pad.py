@@ -9,12 +9,12 @@ from mymi.utils import *
 from .shared import assert_box_width, handle_non_spatial_dims
 
 def __spatial_pad(
-    image: Image,
+    image: ImageData3D,
     bounding_box: Union[PixelBox, VoxelBox],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> Image:
+    use_patient_coords: bool = True) -> ImageData3D:
     assert_box_width(bounding_box)
     fill = image.min() if fill == 'min' else fill
     if isinstance(fill, torch.Tensor):
@@ -45,17 +45,17 @@ def __spatial_pad(
 
 @delegates(__spatial_pad)
 def pad(
-    image: Image,
-    *args, **kwargs) -> Image:
+    image: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(image)
     return handle_non_spatial_dims(__spatial_pad, image, *args, **kwargs)
 
 def __spatial_centre_pad(
-    image: Image,
+    image: ImageData3D,
     size: Union[Size2D, Size3D, FOV2D, FOV3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True,
-    **kwargs) -> Image:
+    **kwargs) -> ImageData3D:
     # Convert size to voxels if necessary.
     if use_patient_coords:
         assert spacing is not None
@@ -74,7 +74,7 @@ def __spatial_centre_pad(
 
 @delegates(__spatial_centre_pad)
 def centre_pad(
-    image: Image,
-    *args, **kwargs) -> Image:
+    image: ImageData,
+    *args, **kwargs) -> ImageData:
     assert_image(image)
     return handle_non_spatial_dims(__spatial_centre_pad, image, *args, **kwargs)

@@ -25,13 +25,3 @@ class RegionColours:
     SpinalCord = palette_tab20b(18)
     Submandibular_L = palette_tab20(12)
     Submandibular_R = palette_tab20(13)
-
-def to_255(colour: typing.Colour) -> Tuple[int, int, int]:
-    """
-    returns: a colour in RGB (0-255) scale.
-    args:
-        colour: the colour in RGB (0-1) scale.
-    """
-    # Convert colour scale.
-    colour = tuple((255 * np.array(colour)).astype(int))
-    return colour

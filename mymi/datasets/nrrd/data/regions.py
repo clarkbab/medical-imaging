@@ -8,7 +8,7 @@ from mymi.utils import load_nrrd
 
 from .data import NrrdData
 
-class RegionImage(NrrdData):
+class RegionsData(NrrdData):
     def __init__(
         self,
         study: 'NrrdStudy',
@@ -52,30 +52,6 @@ class RegionImage(NrrdData):
             return True
         else:
             return False
-
-    def list_regions(
-        self,
-        # Only the regions in 'regions' should be returned.
-        # Saves us from performing filtering code elsewhere many times.
-        regions: Optional[Regions] = None) -> List[Region]:
-        regions = regions_to_list(regions)
-
-        # Load regions from filenames.
-        rs = os.listdir(self.__path)
-        rs = [r.replace('.nrrd', '') for r in rs]
-
-        # Apply region mapping.
-        if self.__region_map is not None:
-            rs = [self.__region_map[r] if r in self.__region_map else r for r in rs]
-
-        # Filter on 'only'.
-        if regions is not None:
-            rs = [r for r in rs if r in regions]
-
-        # Sort regions.
-        rs = list(sorted(rs))
-
-        return rs
 
     def region_path(
         self,

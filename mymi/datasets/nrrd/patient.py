@@ -95,20 +95,8 @@ class NrrdPatient:
     def has_data(self, *args, **kwargs) -> bool:
         return self.default_study.has_data(*args, **kwargs)
 
-    def has_landmark(self, *args, **kwargs) -> bool:
-        return self.default_study.has_landmark(*args, **kwargs)
-
-    def has_regions(self, *args, **kwargs) -> bool:
-        return self.default_study.has_regions(*args, **kwargs)
-
-    def landmark_data(self, *args, **kwargs) -> Landmarks:
-        return self.default_study.landmark_data(*args, **kwargs)
-
-    def list_landmarks(self, *args, **kwargs) -> List[Landmark]:
-        return self.default_study.list_landmarks(*args, **kwargs)
-
-    def list_regions(self, *args, **kwargs) -> List[Region]:
-        return self.default_study.list_regions(*args, **kwargs)
+    def landmarks_data(self, *args, **kwargs) -> Landmarks:
+        return self.default_study.landmarks_data(*args, **kwargs)
 
     def list_studies(self) -> List[StudyID]:
         # Might have to deal with sorting at some point for 'default_study'.
@@ -116,8 +104,8 @@ class NrrdPatient:
         # as they're sorted during DICOM -> NRRD conversion.
         return list(sorted(os.listdir(self.__path)))
 
-    def region_images(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
-        return self.default_study.region_images(*args, **kwargs)
+    def regions_data(self, *args, **kwargs) -> Dict[Region, np.ndarray]:
+        return self.default_study.regions_data(*args, **kwargs)
 
     def study(
         self,

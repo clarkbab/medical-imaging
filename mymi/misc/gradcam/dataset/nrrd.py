@@ -69,7 +69,7 @@ def get_heatmap(
     patient = set.patient(pat_id)
     input = patient.ct_data
     input_spacing = patient.ct_spacing
-    label = patient.region_images(region=region)[region]
+    label = patient.regions_data(region=region)[region]
 
     # Call base method.
     return get_multi_segmenter_heatmap_base(input, input_spacing, label, model, model_region, model_spacing, region, layer, layer_spacing, device=device, **kwargs)
