@@ -124,7 +124,7 @@ class DicomDataset(Dataset):
         self,
         id: PatientID,
         **kwargs: Dict) -> DicomPatient:
-        return DicomPatient(self, id, region_map=self.region_map, **kwargs)
+        return DicomPatient(self, id, region_map=self.__region_map, **kwargs)
 
     @ensure_loaded
     def list_regions(
@@ -170,8 +170,10 @@ class DicomDataset(Dataset):
             self.__error_index = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
 
         # Load region map.
-        filepath = os.path.join(self.path, 'region-map.csv')
+        filepath = os.path.join(self.path, 'region-map.yaml')
+        print(filepath)
         if os.path.exists(filepath):
+            print('loading dataset')
             self.__region_map = RegionMap.load(filepath)
         else:
             self.__region_map = None

@@ -48,30 +48,6 @@ class RtStructFile(DicomFile):
     def ref_ct(self) -> CtSeries:
         return self.__ref_ct
 
-    def get_region_info(
-        self,
-        use_mapping: bool = True) -> Dict[int, Dict[str, str]]:
-        # Load RTSTRUCT dicom.
-        rtstruct_dicom = self.dicom
-
-        # Get region IDs.
-        roi_info = RtStructConverter.get_roi_info(rtstruct_dicom)
-
-        # Filter names on those for which data can be obtained, e.g. some may not have
-        # 'ContourData' and shouldn't be included.
-        roi_info = dict(filter(lambda i: RtStructConverter.has_roi_data(rtstruct_dicom, i[1]['name']), roi_info.items()))
-
-        # Map to internal names.
-        if use_mapping and self.__region_map:
-            pat_id = self.__series.study.patient.id
-            study_id = self.__series.study.id
-            def map_name(info):
-                info['name'], _ = self.__region_map.to_internal(info['name'], pat_id=pat_id, study_id=study_id)
-                return info
-            roi_info = dict((id, map_name(info)) for id, info in roi_info.items())
-
-        return roi_info
-
     def has_landmarks(
         self,
         landmark_ids: LandmarkIDs = 'all',
@@ -155,67 +131,68 @@ class RtStructFile(DicomFile):
 
         # Get unmapped region names.
         rtstruct_dicom = self.dicom
-        unmapped_ids = RtStructConverter.get_roi_names(rtstruct_dicom)
+        ids = RtStructConverter.get_roi_names(rtstruct_dicom)
 
         # Filter regions on those for which data can be obtained, e.g. some may not have
         # 'ContourData' and shouldn't be included.
-        unmapped_ids = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct_dicom, r), unmapped_ids))
+        ids = list(filter(lambda r: RtStructConverter.has_roi_data(rtstruct_dicom, r), ids))
 
         # Map regions using 'region-map.csv'.
         if use_mapping:
             pat_id = self.__series.study.patient.id
             study_id = self.__series.study.id
-            # Store as ('unmapped region', 'mapped region', 'priority').
+            ids = []   # We need to return these so 'region_data' can load from rtstruct.
             mapped_ids = []
-            for unmapped_id in unmapped_ids:
-                mapped_id, priority = self.__region_map.to_internal(unmapped_id, pat_id=pat_id, study_id=study_id)
-                # Don't map regions that would map to an existing region name.
-                if mapped_id != unmapped_id and mapped_id in unmapped_ids:
-                    logging.warning(f"Mapped RegionID '{mapped_id}' (mapped from '{unmapped_id}') already found in unmapped regions for '{self}'. Skipping.")
-                    mapped_ids.append((unmapped_id, mapped_id, priority))
-
-                # Don't map regions that are already present in 'new_regions'.
-                elif mapped_id in mapped_ids:
-                    raise ValueError(f"Mapped RegionID '{mapped_id}' (mapped from '{unmapped_id}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
-
+            for i in ids:
                 # Map region.
+                mapped_id, _ = self.__region_map.to_internal(i, pat_id=pat_id, study_id=study_id)
+
+                if mapped_id == i:
+                    # No mapping occurred.
+                    mapped_ids.append(i)
+                    ids.append(i)
+                elif mapped_id in ids:
+                    # Mapped region would clash with an existing region in the rtstruct.
+                    logging.warning(f"Mapped region '{mapped_id}' (mapped from '{i}') already found in unmapped regions for '{self}'. Skipping.")
+                    continue
+                # # Don't map regions that are already present in 'new_regions'.
+                # elif mapped_id in mapped_ids:
+                #     raise ValueError(f"Mapped region '{mapped_id}' (mapped from '{i}') already found in mapped regions for '{self}'. Set 'priority' in region map.")
+                # Allow multiple regions to be mapped to the same region (e.g. Chestwall_L/R -> Chestwall)
+                # and combine these regions into one super-region.
+                elif mapped_id in mapped_ids:
+                    # Add this to the existing list of unmapped ids for this mapped_id.
+                    idx = mapped_ids.index(mapped_id)
+                    new_ids = arg_to_list(ids[idx], RegionID) + i
+                    ids[idx] = new_ids
                 else:
-                    mapped_ids.append((unmapped_id, mapped_id, priority))
+                    # Mapping without issues and tissues.
+                    ids.append(i)
+                    mapped_ids.append(mapped_id)
 
-            # If multiple unmapped regions map to the same region, then choose to map the one with
-            # higher priorty.
-            for i in range(len(mapped_ids)):
-                unmapped_id, mapped_id, priority = mapped_ids[i]
-                for _, mr, p in mapped_ids:
-                    # If another mapped region exists with a higher priority, then set this region
-                    # back to its unmapped form.
-                    if mr == mapped_id and p > priority:
-                        mapped_ids[i] = (unmapped_id, unmapped_id, priority)
-
-            # Remove priority.
-            mapped_ids = [r[:-1] for r in mapped_ids]
-
-        # Filter on 'regions'. If region mapping is used (i.e. mapped_ids != None),
+        # Filter on 'region_ids'. If region mapping is used (i.e. mapped_regions != None),
         # this will try to match mapped names, otherwise it will map unmapped names.
         if region_ids != 'all':
             region_ids = regions_to_list(region_ids)
             if use_mapping:
-                mapped_ids = [r for r in mapped_ids if r[1] in region_ids]
+                retain_idxs = [i for i, r in enumerate(mapped_ids) if r in region_ids]
+                ids = [j for i, j in enumerate(ids) if i in retain_idxs]
+                mapped_ids = [j for i, j in enumerate(mapped_ids) if i in retain_idxs]
             else:
-                unmapped_ids = [r for r in unmapped_ids if r in region_ids]
+                ids = [r for r in ids if r in region_ids]
 
         # Check for multiple regions.
         if not self.__series.region_policy['duplicates']['allow']:
+            # Only check for duplicates on mapped regions.
             if use_mapping:
-                # Only check for duplicates on mapped regions.
-                names = [r[1] for r in mapped_ids]
+                names = [r[1] for r in mapped_region_ids]
             else:
-                names = unmapped_ids
+                names = unmapped_region_ids
 
             # Get duplicated regions.
-            dup_regions = [r for r in names if names.count(r) > 1]
+            dup_region_ids = [r for r in names if names.count(r) > 1]
 
-            if len(dup_regions) > 0:
+            if len(dup_region_ids) > 0:
                 if use_mapping and self.__region_map is not None:
                     raise ValueError(f"Duplicate regions found for RtStruct '{self}', perhaps a 'region-map.csv' issue? Duplicated regions: '{dup_regions}'")
                 else:
@@ -246,8 +223,8 @@ class RtStructFile(DicomFile):
 
     def regions_data(
         self,
-        region_ids: RegionIDs = 'all',    # Request specific region/s, otherwise get all region data. Specific regions must exist.
-        regions_ignore_missing: bool = True,
+        region_ids: RegionID = 'all',
+        regions_ignore_missing: bool = False,
         use_mapping: bool = True,
         **kwargs) -> RegionsData:
 
@@ -261,7 +238,7 @@ class RtStructFile(DicomFile):
         if not regions_ignore_missing:
             for r in region_ids:
                 if not r in rtstruct_region_ids:
-                    raise ValueError(f"Requested RegionID '{r}' not present for RtStruct '{self}'.")
+                    raise ValueError(f"Requested region '{r}' not present for RtStruct '{self}'.")
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll
         # need these to load regions from RTSTRUCT dicom.
@@ -281,13 +258,13 @@ class RtStructFile(DicomFile):
 
         if use_mapping:
             # Load region using unmapped name, store using mapped name.
-            for unmapped_id, mapped_id in rtstruct_region_ids:
-                rdata = RtStructConverter.get_regions_data(rtstruct_dicom, unmapped_id, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
-                data[mapped_id] = rdata
+            for unmapped_region_id, mapped_region_id in rtstruct_region_ids:
+                rdata = RtStructConverter.get_region_data(rtstruct_dicom, unmapped_region_id, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                data[mapped_region_id] = rdata
         else:
             # Load and store region using unmapped name.
             for r in rtstruct_region_ids:
-                rdata = RtStructConverter.get_regions_data(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_data(rtstruct_dicom, r, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
                 data[r] = rdata
 
         # Sort dict keys.
