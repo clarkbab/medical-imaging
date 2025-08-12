@@ -1,4 +1,3 @@
-from mymi.transforms.crop import crop_foreground_vox
 import nibabel as nib
 import numpy as np
 import os
@@ -10,12 +9,13 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from mymi import config
 from mymi.datasets import NiftiDataset
-from mymi.geometry import get_box, centre_of_extent
+from mymi.geometry import get_box
 from mymi.metrics import distances, dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
 from mymi import logging
 from mymi.predictions.nifti import get_institutional_localiser, load_multi_segmenter_prediction_dict, load_segmenter_predictions
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
+from mymi.transforms import crop_foreground
 from mymi.typing import ModelName, Region, Regions
 from mymi.utils import append_row, arg_to_list, encode
 
@@ -45,7 +45,7 @@ def get_nnunet_multi_segmenter_evaluation(
             continue
         
         # Load label.
-        label = pat.regions_data(region=region)[region]
+        label = pat.region_data(region=region)[region]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
@@ -55,8 +55,8 @@ def get_nnunet_multi_segmenter_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_vox(pred, crop)
-            label = crop_foreground_vox(label, crop)
+            pred = crop_foreground(pred, crop, use_patient_coords=False)
+            label = crop_foreground(label, crop, use_patient_coords=False)
 
         # Dice.
         metrics = {}
@@ -114,7 +114,7 @@ def get_nnunet_single_region_evaluation(
             continue
         
         # Load label.
-        label = pat.regions_data(region=region)[region]
+        label = pat.region_data(region=region)[region]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
@@ -124,8 +124,8 @@ def get_nnunet_single_region_evaluation(
 
             # Crop pred/label foreground voxels.
             crop = ((0, 0, z_min), label.shape)
-            pred = crop_foreground_vox(pred, crop)
-            label = crop_foreground_vox(label, crop)
+            pred = crop_foreground(pred, crop, use_patient_coords=False)
+            label = crop_foreground(label, crop, use_patient_coords=False)
 
         # Dice.
         metrics = {}

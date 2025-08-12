@@ -6,4 +6,5 @@ from .nnunet import *
 from .old import *
 from .registration import *
 from .training import *
+from .unigradicon import *
 from .voxelmorph_pp import *

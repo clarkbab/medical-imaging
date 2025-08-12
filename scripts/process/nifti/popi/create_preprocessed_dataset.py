@@ -1,4 +1,4 @@
-from mymi.processing.nifti import create_lung_preprocessed_dataset
+from mymi.processing.nifti import convert_to_lung_preprocessed_dataset
 
 dataset = 'POPI'
 new_dataset = 'POPI-PP'
@@ -7,4 +7,4 @@ kwargs = dict(
     # pat_ids='pat_0',
 )
 
-create_lung_preprocessed_dataset(dataset, new_dataset, **kwargs)
+convert_to_lung_preprocessed_dataset(dataset, new_dataset, **kwargs)

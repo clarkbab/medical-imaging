@@ -1,6 +1,5 @@
 ct:
-    no-rtstruct:
-        allow: false
+    from: {}
     slice:
         inconsistent-spacing:
             allow: false
@@ -13,18 +12,34 @@ ct:
             allow: false
 duplicates:
     allow: false
+mr:
+    from: {}
+patient:
+    n-studies: None
 rtdose:
+    from: {}
     no-ref-rtplan:
-        allow: false
+        allow: true
         require-rtplan-in-study: true
 rtplan:
+    from: {}
     no-ref-rtstruct:
-        allow: false
+        allow: true
         require-rtstruct-in-study: true
 rtstruct:
+    from: {}
     no-ref-ct:
-        allow: false 
+        allow: true 
+        require-ct-in-study: false
 study:
     map-ids: {}
+    no-ct:
+        allow: true
+    no-mr:
+        allow: true
+    no-rtdose:
+        allow: true
+    no-rtplan:
+        allow: true
     no-rtstruct:
-        allow: false
+        allow: true

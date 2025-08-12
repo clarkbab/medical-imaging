@@ -4,127 +4,133 @@ from typing import *
 
 from mymi.typing import *
 
+from ..mixins import IndexMixin
+from ..region_map import RegionMap
 from .series import *
 
-class NiftiStudy:
+class NiftiStudy(IndexMixin):
     def __init__(
         self,
-        patient: 'NiftiPatient',
+        dataset_id: DatasetID,
+        pat_id: PatientID,
         id: StudyID,
+        path: DirPath,
         check_path: bool = True,
         index: Optional[pd.DataFrame] = None,
-        region_map: Optional[Dict[str, str]] = None) -> None:
-        self.__global_id = f'{patient}:{id}'
+        region_map: Optional[RegionMap] = None) -> None:
+        self.__dataset_id = dataset_id
+        self.__global_id = f'NIFTI:{dataset_id}:{pat_id}:{id}'
         self.__id = id
-        self.__index = index
-        self.__path = os.path.join(patient.path, id)
-        self.__patient = patient
+        self._index = index
+        self.__path = path
+        self.__pat_id = pat_id
         self.__region_map = region_map
 
-        # Check that study ID exists.
-        self.__path = os.path.join(patient.path, self.__id)
-        if check_path and not os.path.exists(self.__path):
-            raise ValueError(f"Study '{self}' not found. Filepath: '{self.__path}'.")
-
-    def ct(
+    def series(
         self,
-        id: SeriesID) -> CtImage:
-        return CtImage(self, id)
-
-    def ct_extent(
-        self,
-        **kwargs) -> Optional[Point3D]:
-        return self.default_ct.extent(**kwargs) if self.default_ct is not None else None
-
-    def default_series(
-        self,
-        modality: NiftiModality) -> Optional[SeriesID]:
-        series_ids = self.list_series(modality)
+        id: NiftiSeriesID,
+        modality: NiftiModality) -> Union[NiftiImageSeries, LandmarksSeries]:
+        image_extensions = ['.nii', '.nii.gz', '.nrrd']
         if modality == 'ct':
-            return CtImage(self, series_ids[-1]) if len(series_ids) > 0 else None
+            id = handle_idx_prefix(id, lambda: self.list_series('ct'))
+            for e in image_extensions:
+                filepath = os.path.join(self.__path, 'ct', f'{id}{e}')
+                if os.path.exists(filepath):
+                    return CtImageSeries(self.__dataset_id, self.__pat_id, self.__id, id, filepath)
+            raise ValueError(f"No CtImageSeries '{id}' for study '{self}'.")
         elif modality == 'dose':
-            return DoseImage(self, series_ids[-1]) if len(series_ids) > 0 else None
+            id = handle_idx_prefix(id, lambda: self.list_series('dose'))
+            for e in image_extensions:
+                filepath = os.path.join(self.__path, 'dose', f'{id}{e}')
+                if os.path.exists(filepath):
+                    return DoseImageSeries(self.__dataset_id, self.__pat_id, self.__id, id, filepath)
+            raise ValueError(f"No DoseImageSeries '{id}' for study '{self}'.")
         elif modality == 'landmarks':
-            return LandmarksSeries(self, series_ids[-1]) if len(series_ids) > 0 else None
+            id = handle_idx_prefix(id, lambda: self.list_series('landmarks'))
+            filepath = os.path.join(self.__path, 'landmarks', f'{id}.csv')
+            if os.path.exists(filepath):
+                ref_ct = self.default_series('ct')
+                ref_dose = self.default_series('dose')
+                return LandmarksSeries(self.__dataset_id, self.__pat_id, self.__id, id, filepath, ref_ct=ref_ct, ref_dose=ref_dose)
+            else:
+                raise ValueError(f"No LandmarksSeries '{id}' for study '{self}'.")
         elif modality == 'mr':
-            return MrImage(self, series_ids[-1]) if len(series_ids) > 0 else None
+            id = handle_idx_prefix(id, lambda: self.list_series('mr'))
+            for e in image_extensions:
+                filepath = os.path.join(self.__path, 'mr', f'{id}{e}')
+                if os.path.exists(filepath):
+                    return MrImageSeries(self.__dataset_id, self.__pat_id, self.__id, id, filepath)
+            raise ValueError(f"No MrImageSeries '{id}' for study '{self}'.")
         elif modality == 'regions':
-            return RegionsImage(self, series_ids[-1], region_map=self.__region_map) if len(series_ids) > 0 else None
+            id = handle_idx_prefix(id, lambda: self.list_series('regions'))
+            dirpath = os.path.join(self.__path, 'regions', str(id))
+            if os.path.exists(dirpath):
+                return RegionsImageSeries(self.__dataset_id, self.__pat_id, self.__id, id, dirpath, region_map=self.__region_map)
+            else:
+                raise ValueError(f"No RegionsImageSeries '{id}' for study '{self}'.")
         else:
             raise ValueError(f"Unknown modality '{modality}'.")
 
-    def dose(
+    def default_series(
         self,
-        id: SeriesID) -> DoseImage:
-        return DoseImage(self, id)
+        modality: NiftiModality) -> Optional[NiftiSeries]:
+        series_ids = self.list_series(modality)
+        if len(series_ids) > 1:
+            logging.warning(f"More than one '{modality}' series found for '{self}', defaulting to latest.")
+        return self.series(series_ids[-1], modality) if len(series_ids) > 0 else None
 
     def has_series(
         self,
-        id: SeriesID,
+        id: NiftiSeriesID,
         modality: NiftiModality) -> bool:
         return id in self.list_series(modality)
 
     def list_series(
         self,
-        modality: NiftiModality) -> List[SeriesID]:
+        modality: NiftiModality) -> List[NiftiSeriesID]:
+        image_extensions = ['.nii', '.nii.gz', '.nrrd']
         if modality == 'ct':
-            filepath = os.path.join(self.__path, 'ct')
-            ct_ids = list(sorted(f.replace('.nii.gz', '') for f in os.listdir(filepath))) if os.path.exists(filepath) else []
+            dirpath = os.path.join(self.__path, 'ct')
+            ct_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+            ct_ids = [i.replace(e, '') for i in ct_ids for e in image_extensions if i.endswith(e)]
             return ct_ids
         elif modality == 'dose':
-            filepath = os.path.join(self.__path, 'dose')
-            dose_ids = list(sorted(f.replace('.nii.gz', '') for f in os.listdir(filepath))) if os.path.exists(filepath) else []
+            dirpath = os.path.join(self.__path, 'dose')
+            dose_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+            dose_ids = [i.replace(e, '') for i in dose_ids for e in image_extensions if i.endswith(e)]
             return dose_ids
         elif modality == 'landmarks':
-            filepath = os.path.join(self.__path, 'landmarks')
-            landmarks_ids = list(sorted(f.replace('.csv', '') for f in os.listdir(filepath))) if os.path.exists(filepath) else []
+            dirpath = os.path.join(self.__path, 'landmarks')
+            landmarks_ids = list(sorted(f.replace('.csv', '') for f in os.listdir(dirpath))) if os.path.exists(dirpath) else []
             return landmarks_ids
         elif modality == 'mr':
-            filepath = os.path.join(self.__path, 'mr')
-            mr_ids = list(sorted(f.replace('.nii.gz', '') for f in os.listdir(filepath))) if os.path.exists(filepath) else []
+            dirpath = os.path.join(self.__path, 'mr')
+            mr_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+            mr_ids = [i.replace(e, '') for i in mr_ids for e in image_extensions if i.endswith(e)]
             return mr_ids
         elif modality == 'regions':
-            filepath = os.path.join(self.__path, 'regions')
-            regions_ids = list(sorted(f.replace('.nii.gz', '') for f in os.listdir(filepath))) if os.path.exists(filepath) else []
+            dirpath = os.path.join(self.__path, 'regions')
+            regions_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
             return regions_ids
         else:
             raise ValueError(f"Unknown modality '{modality}'.")
 
     @property
     def origin(self) -> Dict[str, str]:
-        if self.__index is None:
+        if self._index is None:
             raise ValueError(f"No 'index.csv' provided for dataset '{self.__patient.dataset}'.")
-        info = self.__index.iloc[0].to_dict()
+        info = self._index.iloc[0].to_dict()
         info = {k: info[k] for k in ['dicom-dataset', 'dicom-patient-id', 'dicom-study-id']}
         return info
 
-    def regions(
-        self,
-        id: SeriesID) -> RegionsImage:
-        return RegionsImage(self, id, region_map=self.__region_map)
-
-    def series(
-        self,
-        id: SeriesID,
-        modality: NiftiModality) -> Union[NiftiImage, LandmarksSeries]:
-        if modality == 'ct':
-            return self.ct(id)
-        elif modality == 'dose':
-            return self.dose(id)
-        elif modality == 'landmarks':
-            return LandmarksSeries(self, id)
-        elif modality == 'mr':
-            return MrImage(self, id)
-        elif modality == 'regions':
-            return RegionsImage(self, id, region_map=self.__region_map)
-        else:
-            raise ValueError(f"Unknown modality '{modality}'.")
+    def __repr__(self) -> str:
+        return str(self)
 
     def __str__(self) -> str:
         return self.__global_id
 
 # Add properties.
-props = ['global_id', 'id', 'index', 'path', 'patient']
+props = ['global_id', 'id', 'path', 'patient']
 for p in props:
     setattr(NiftiStudy, p, property(lambda self, p=p: getattr(self, f'_{NiftiStudy.__name__}__{p}')))
     
@@ -146,10 +152,15 @@ props = ['data', 'fov', 'offset', 'size', 'spacing']
 for m in mods:
     for p in props:
         setattr(NiftiStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_series(m), p) if self.default_series(m) is not None else None))
+    
+# Add image filepath shortcuts from 'default_series(mod)'
+mods = ['ct', 'mr', 'dose']
+for m in mods:
+    setattr(NiftiStudy, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_series(m), 'filepath') if self.default_series(m) is not None else None))
 
 # Add landmark/region method shortcuts from 'default_series(mod)'.
 mods = ['landmarks', 'regions']
 for m in mods:
     setattr(NiftiStudy, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_series(m), f'list_{m}')(*args, **kwargs) if self.default_series(m) is not None else [])
     setattr(NiftiStudy, f'has_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_series(m), f'has_{m}')(*args, **kwargs) if self.default_series(m) is not None else False)
-    setattr(NiftiStudy, f'{m}_data', lambda self, *args, m=m, **kwargs: self.default_series(m).data(*args, **kwargs) if self.default_series(m) is not None else None)
+    setattr(NiftiStudy, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: self.default_series(m).data(*args, **kwargs) if self.default_series(m) is not None else None)

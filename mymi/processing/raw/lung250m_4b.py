@@ -32,7 +32,7 @@ def convert_lung250m_4b_to_nifti() -> None:
     val_df = pd.DataFrame(np.transpose([val_ids, ['validate'] * len(val_ids)]), columns=['patient-id', 'split'])
     test_df = pd.DataFrame(np.transpose([test_ids, ['test'] * len(test_ids)]), columns=['patient-id', 'split'])
     df = pd.concat((train_df, val_df, test_df), axis=0)
-    filepath = os.path.join(set.path, 'holdout-split.csv')
+    filepath = os.path.join(set.path, 'splits.csv')
     save_csv(df, filepath)
 
     # Load manual landmarks.

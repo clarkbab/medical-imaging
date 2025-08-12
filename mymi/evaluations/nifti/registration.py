@@ -8,6 +8,7 @@ from mymi.datasets import NiftiDataset
 from mymi.metrics import dice, distances, tre
 from mymi.predictions.nifti import load_registration
 from mymi.regions import regions_to_list
+from mymi.transforms import sample
 from mymi.typing import *
 from mymi.utils import *
     
@@ -49,32 +50,59 @@ def get_registration_landmarks_evaluation(
     fixed_study_id: str,
     moving_pat_id: PatientID,
     moving_study_id: str,
-    landmarks: Landmarks,
-    model: str) -> Tuple[List[str], List[float]]:
+    landmark_ids: LandmarkIDs,
+    model: str) -> Tuple[Optional[List[str]], Optional[List[float]], Optional[List[float]]]:
+    set = NiftiDataset(dataset)
+    fixed_pat = set.patient(fixed_pat_id)
+    fixed_study = fixed_pat.study(fixed_study_id)
+    moving_pat = set.patient(moving_pat_id)
+    moving_study = moving_pat.study(moving_study_id)
 
     # Load moved (predicted) region data.
-    res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, landmarks=landmarks, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False)
-    if res is None:
-        return {}
-    _, _, _, moved_landmarks, _ = res
+    _, _, _, moved_landmarks, moved_dose = load_registration(dataset, fixed_pat.id, model, fixed_study_id=fixed_study.id, landmark_ids=landmark_ids, moving_pat_id=moving_pat.id, moving_study_id=moving_study.id)
 
-    # Load moving landmarks.
-    set = NiftiDataset(dataset)
-    moving_study = set.patient(moving_pat_id).study(moving_study_id)
-    moving_landmarks = moving_study.landmarks_data(landmarks=landmarks)
+    if moved_landmarks is not None:
+        # Load moving landmarks.
+        moving_landmarks = moving_study.landmark_data(landmark_ids=landmark_ids, sample_dose=moving_study.has_dose)
 
-    # Get shared landmarks.
-    # merged_df = moving_landmarks.merge(moved_landmarks, on=['patient-id', 'landmark-id'], how='inner', suffixes=['_moving', '_moved'])
-    merged_df = moving_landmarks.merge(moved_landmarks, on=['landmark-id'], how='inner', suffixes=['_moving', '_moved'])
-    moving_cols = [f'{c}_moving' for c in range(3)]
-    moving_data = merged_df[moving_cols].to_numpy()
-    moved_cols = [f'{c}_moved' for c in range(3)]
-    moved_data = merged_df[moved_cols].to_numpy()
+        # Merge on landmark IDs.
+        merged_df = moving_landmarks.merge(moved_landmarks, on=['landmark-id'], how='inner', suffixes=['_moving', '_moved'])
+        moving_cols = [f'{c}_moving' for c in range(3)]
+        moving_data = merged_df[moving_cols].to_numpy()
+        moved_cols = [f'{c}_moved' for c in range(3)]
+        moved_data = merged_df[moved_cols].to_numpy()
 
-    landmark_ids = merged_df['landmark-id'].tolist()
-    tres = tre(moving_data, moved_data)
+        # Calculate TRE.
+        tres = tre(moving_data, moved_data)
 
-    return landmark_ids, tres
+        # Store landmark IDs.
+        landmark_ids = merged_df['landmark-id'].tolist()
+    else:
+        tres = None
+
+    # Calculate dose error - between moving dose at landmarks and moved dose at landmarks.
+    if moving_study.has_dose is not None and moved_landmarks is not None:
+        # # Sample moved dose at fixed landmarks.
+        # fixed_landmarks = fixed_study.landmark_data(landmark_ids=landmark_ids)
+        # fixed_landmarks = sample(moved_dose, fixed_landmarks, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        # dose_errors = np.abs(fixed_landmarks['sample'] - moving_landmarks['dose']).tolist()
+
+        # Rather than moving the dose (resampling) and then sampling at fixed landmarks (2x samplings),
+        # we can just move the fixed landmarks and sample the moving dose (1x sampling).
+        moving_landmarks = moving_study.landmark_data(landmark_ids=landmark_ids, sample_dose=True)
+        moved_landmarks = sample(moving_study.dose_data, moved_landmarks, spacing=moving_study.dose_spacing, offset=moving_study.dose_offset, landmarks_col='dose')
+        assert np.all(moving_landmarks['landmark-id'].values == moved_landmarks['landmark-id'].values)
+        dose_errors = list((moved_landmarks['dose'] - moving_landmarks['dose']).values)
+
+        # Store landmark IDs.
+        landmark_ids = moving_landmarks['landmark-id'].tolist()
+    else:
+        dose_errors = None
+
+    if moved_landmarks is None and moved_dose is None:
+        landmark_ids = None
+
+    return landmark_ids, tres, dose_errors
 
 def get_registration_region_evaluation(
     dataset: str,
@@ -82,23 +110,25 @@ def get_registration_region_evaluation(
     fixed_study_id: str,
     moving_pat_id: PatientID,
     moving_study_id: str,
-    region: Region,
+    region_id: RegionID,
     model: str) -> List[Dict[str, float]]:
+    set = NiftiDataset(dataset)
+    fixed_pat = set.patient(fixed_pat_id)
+    fixed_study = fixed_pat.study(fixed_study_id)
+    moving_pat = set.patient(moving_pat_id)
+    moving_study = moving_pat.study(moving_study_id)
 
     # Load moved (predicted) region data.
-    res = load_registration(dataset, fixed_pat_id, model, fixed_study_id=fixed_study_id, moving_pat_id=moving_pat_id, moving_study_id=moving_study_id, raise_error=False, regions=region)
-    if res is None:
+    _, _, moved_region_data, _, _ = load_registration(dataset, fixed_pat.id, model, fixed_study_id=fixed_study.id, moving_pat_id=moving_pat.id, moving_study_id=moving_study_id, raise_error=False, region_ids=region_id)
+    if region_id not in moved_region_data:
         return {}
-    _, _, moved_region_data, _, _ = res
 
     # Load fixed region data.
-    fixed_study = NiftiDataset(dataset).patient(fixed_pat_id).study(fixed_study_id)
-    fixed_spacing = fixed_study.ct_spacing
-    fixed_region_data = fixed_study.regions_data(regions=region)
+    fixed_region_data = fixed_study.region_data(region_ids=region_id)
 
     # Get labels.
-    pred = moved_region_data[region]
-    gt = fixed_region_data[region]
+    pred = moved_region_data[region_id]
+    gt = fixed_region_data[region_id]
 
     # # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
     # if region == 'SpinalCord':
@@ -108,8 +138,8 @@ def get_registration_region_evaluation(
 
     #     # Crop pred/label foreground voxels.
     #     crop = ((0, 0, z_min), label.shape)
-    #     pred = crop_foreground_vox(pred, crop)
-    #     label = crop_foreground_vox(label, crop)
+    #     pred = crop_foreground(pred, crop, use_patient_coords=False)
+    #     label = crop_foreground(label, crop, use_patient_coords=False)
 
     # Dice.
     metrics = {}
@@ -129,31 +159,33 @@ def get_registration_region_evaluation(
         #     metrics[metric] = value
 
         # Add 'deepmind' comparison.
-        dists = distances(pred, gt, fixed_spacing)
+        dists = distances(pred, gt, fixed_study.ct_spacing)
         for m, v in dists.items():
             metrics[m] = v
 
     return metrics
     
-def create_registrations_evaluation(
+def create_registration_evaluations(
     dataset: str,
-    models: Union[str, List[str]],
+    models: ModelIDs,
     exclude_pat_ids: Optional[PatientIDs] = None,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmark_ids: Optional[LandmarkIDs] = 'all',
     moving_study_id: str = 'study_0',
     pat_ids: PatientIDs = 'all',
-    regions: Optional[Regions] = 'all',
+    region_ids: Optional[RegionIDs] = 'all',
     splits: Optional[Splits] = 'all') -> None:
-    models = arg_to_list(models, str)
+    models = arg_to_list(models, ModelID)
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients(exclude=exclude_pat_ids, pat_ids=pat_ids, splits=splits)
 
+    # Evaluate registered regions.
+    region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
     for m in models:
-        if regions is not None:
-            regions = regions_to_list(regions, literals={ 'all': set.list_regions })
+        if region_ids is not None:
+            logging.info(f"Evaluating region registrations for dataset '{dataset}' with model '{m}'...")
 
             cols = {
                 'dataset': str,
@@ -161,15 +193,15 @@ def create_registrations_evaluation(
                 'fixed-study-id': str,
                 'moving-patient-id': str,
                 'moving-study-id': str,
-                'region': str,
+                'region-id': str,
                 'model': str,
                 'metric': str,
                 'value': float
             }
             df = pd.DataFrame(columns=cols.keys())
 
-            for r in tqdm(regions):
-                for p in tqdm(pat_ids, leave=False):
+            for p in tqdm(pat_ids):
+                for r in tqdm(region_ids, leave=False):
                     # Skip if either moving/fixed study is missing the region.
                     moving_study = set.patient(p).study(moving_study_id)
                     fixed_study = set.patient(p).study(fixed_study_id)
@@ -185,7 +217,7 @@ def create_registrations_evaluation(
                             'fixed-study-id': fixed_study_id,
                             'moving-patient-id': p,
                             'moving-study-id': moving_study_id,
-                            'region': r,
+                            'region-id': r,
                             'model': m,
                             'metric': met,
                             'value': v
@@ -198,48 +230,66 @@ def create_registrations_evaluation(
                 filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'regions.csv')
                 save_csv(df, filepath, overwrite=True)
 
-    if landmarks is not None:
-        cols = {
-            'dataset': str,
-            'fixed-patient-id': str,
-            'fixed-study-id': str,
-            'landmark-id': str,
-            'moving-patient-id': str,
-            'moving-study-id': str,
-            'model': str,
-            'metric': str,
-            'value': float
-        }
+        if landmark_ids is not None:
+            logging.info(f"Evaluating landmark registrations for dataset '{dataset}' with model '{m}'...")
 
-        # Create dataframe.
-        # Must have a single dataframe for all landmarks, as some patients have 300 landmarks!
-        df = pd.DataFrame(columns=cols.keys())
+            cols = {
+                'dataset': str,
+                'fixed-patient-id': str,
+                'fixed-study-id': str,
+                'landmark-id': str,
+                'moving-patient-id': str,
+                'moving-study-id': str,
+                'model': str,
+                'metric': str,
+                'value': float
+            }
 
-        for p in tqdm(pat_ids, leave=False):
-            # Skip if either moving/fixed study is missing the landmarks.
-            moving_study = set.patient(p).study(moving_study_id)
-            fixed_study = set.patient(p).study(fixed_study_id)
-            if not moving_study.has_landmarks(landmarks) or not fixed_study.has_landmarks(landmarks):
-                continue
+            # Create dataframe.
+            # Must have a single dataframe for all landmarks, as some patients have 300 landmarks!
+            df = pd.DataFrame(columns=cols.keys())
 
-            # Get metrics per region.
-            lm_ids, tres = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmarks, m)
-            for l, t in zip(lm_ids, tres):
-                data = {
-                    'dataset': dataset,
-                    'fixed-patient-id': p,
-                    'fixed-study-id': fixed_study_id,
-                    'landmark-id': l,
-                    'moving-patient-id': p,
-                    'moving-study-id': moving_study_id,
-                    'model': m,
-                    'metric': 'tre',
-                    'value': t
-                }
-                df = append_row(df, data)
+            for p in tqdm(pat_ids):
+                # Skip if either moving/fixed study is missing the landmarks.
+                moving_study = set.patient(p).study(moving_study_id)
+                fixed_study = set.patient(p).study(fixed_study_id)
+                if not moving_study.has_landmarks(landmark_ids, any=True) or not fixed_study.has_landmarks(landmark_ids, any=True):
+                    continue
 
-        if len(df) > 0:
-            # Save evaluation.
-            df = df.astype(cols)
-            filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'landmarks.csv')
-            save_csv(df, filepath, overwrite=True)
+                # Get metrics per region.
+                lm_ids, tres, dose_errors = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmark_ids, m)
+                if tres is not None:
+                    for l, t in zip(lm_ids, tres):
+                        data = {
+                            'dataset': dataset,
+                            'fixed-patient-id': p,
+                            'fixed-study-id': fixed_study_id,
+                            'landmark-id': l,
+                            'moving-patient-id': p,
+                            'moving-study-id': moving_study_id,
+                            'model': m,
+                            'metric': 'tre',
+                            'value': t
+                        }
+                        df = append_row(df, data)
+
+                if dose_errors is not None:
+                    for l, e in zip(lm_ids, dose_errors):
+                        data = {
+                            'dataset': dataset,
+                            'fixed-patient-id': p,
+                            'fixed-study-id': fixed_study_id,
+                            'landmark-id': l,
+                            'moving-patient-id': p,
+                            'moving-study-id': moving_study_id,
+                            'model': m,
+                            'metric': 'dose-error',
+                            'value': e
+                        }
+                        df = append_row(df, data)
+
+            if len(df) > 0:
+                # Save evaluation.
+                df = df.astype(cols)
+                filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'landmarks.csv')
+                save_csv(df, filepath, overwrite=True)

@@ -1,0 +1,34 @@
+[GLOBAL]
+fixed={fixed_path}
+moving={moving_path}
+image_out={moved_path}
+xform_out={transform_path}
+
+[STAGE]
+xform=bspline
+# optimisation algorithm
+optim=lbfgsb
+metric=mse
+regularization=analytic
+regularization-lambda=1
+pgtol=0.001
+# B-spline grid spacing (in mm)
+grid_spac=128 128 128
+res=32 32 32
+max_its=1000
+
+[STAGE]
+grid_spac=64 64 64
+res=16 16 16
+
+[STAGE]
+grid_spac=32 32 32
+res=8 8 8
+
+[STAGE]
+grid_spac=16 16 16
+res=4 4 4
+
+[STAGE]
+grid_spac=8 8 8
+res=2 2 2

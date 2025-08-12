@@ -5,8 +5,6 @@ from .dicom import DicomDataset
 from .dicom import list as list_dicom
 from .nifti import NiftiDataset
 from .nifti import list as list_nifti
-from .nrrd import NrrdDataset
-from .nrrd import list as list_nrrd
 from .raw import RawDataset
 from .raw import list as list_raw
 from .training import TrainingDataset
@@ -20,8 +18,6 @@ def list(type_str: str) -> List[str]:
         return list_dicom()
     elif type == DatasetType.NIFTI:
         return list_nifti()
-    elif type == DatasetType.NRRD:
-        return list_nrrd()
     elif type == DatasetType.RAW:
         return list_raw()
     elif type == DatasetType.TRAINING:
@@ -42,8 +38,6 @@ def get(
             return DicomDataset(name, **kwargs)
         elif type == DatasetType.NIFTI:
             return NiftiDataset(name, **kwargs)
-        elif type == DatasetType.NRRD:
-            return NrrdDataset(name, **kwargs)
         elif type == DatasetType.RAW:
             return RawDataset(name, **kwargs)
         elif type == DatasetType.TRAINING:
@@ -56,15 +50,10 @@ def get(
         if name in proc_ds:
             return TrainingDataset(name, **kwargs)
 
-        # Preference 2a: NIFTI.
+        # Preference 2: NIFTI.
         nifti_ds = list_nifti()
         if name in nifti_ds:
             return NiftiDataset(name, **kwargs)
-
-        # Preference 2b: NRRD.
-        nrrd_ds = list_nrrd()
-        if name in nrrd_ds:
-            return NrrdDataset(name, **kwargs)
 
         # Preference 3: DICOM.
         dicom_ds = list_dicom()
@@ -85,15 +74,10 @@ def default() -> Optional[Dataset]:
     if len(proc_ds) != 0:
         return get(proc_ds[0])
 
-    # Preference 2a: NIFTI.
+    # Preference 2: NIFTI.
     nifti_ds = list_nifti()
     if len(nifti_ds) != 0:
         return get(nifti_ds[0])
-
-    # Preference 2b: NRRD.
-    nrrd_ds = list_nrrd()
-    if len(nrrd_ds) != 0:
-        return get(nrrd_ds[0])
 
     # Preference 3: DICOM.
     dicom_ds = list_dicom()
@@ -147,7 +131,7 @@ def region_summary(*args, **kwargs):
 def trimmed_errors(*args, **kwargs):
     return ds.trimmed_errors(*args, **kwargs)
 
-# NIFTI/NrrdDataset API.
+# NIFTIDataset API.
 
 def list_patients(*args, **kwargs):
     return ds.list_patients(*args, **kwargs)

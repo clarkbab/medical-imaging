@@ -7,5 +7,6 @@ from .pad import *
 from .registration import *
 from .resample import *
 from .sitk import *
+from .transforms import *
 from .translate import *
 from .velocity import *

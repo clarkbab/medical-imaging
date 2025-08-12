@@ -1,15 +1,14 @@
 import numpy as np
 from typing import *
 
-from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import *
+from .transforms import assert_box_width
 
 def __spatial_crop_or_pad(
     image: ImageData3D,
-    bounding_box: Union[Point2DBox, Point3DBox],
+    bounding_box: Union[BoxMM2D, BoxMM3D],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
@@ -31,7 +30,7 @@ def __spatial_crop_or_pad(
     if return_inverse:
         # Calculate the inverse bounding box.
         if use_patient_coords:
-            inv_box = get_extent(image, spacing=spacing, offset=offset)
+            inv_box = extent(image, spacing=spacing, offset=offset)
         else:
             inv_min = tuple(-np.array(min))
             new_spatial_size = np.array(max) - min
@@ -71,13 +70,13 @@ def crop_or_pad(
 
 @delegates(__spatial_crop_or_pad)
 def __spatial_centre_crop_or_pad(
-    image: ImageData3D,
-    size: Union[Size2D, Size3D, FOV2D, FOV3D],
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    image: ImageData,
+    size: Union[Size, SizeMM],
+    offset: Optional[Point] = None,
     return_inverse: bool = False,
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    spacing: Optional[Spacing] = None,
     use_patient_coords: bool = True,
-    **kwargs) -> ImageData3D:
+    **kwargs) -> ImageData:
 
     # Determine cropping/padding amounts.
     n_dims = len(image.shape)
@@ -119,7 +118,7 @@ def centre_crop_or_pad(
 
 def crop_or_pad_landmarks(
     landmarks: LandmarksData,    # Should use patient coords, landmarks in image coords are only used for plotting.
-    bounding_box: Union[Point3DBox, VoxelBox],
+    bounding_box: Union[BoxMM3D, Box3D],
     offset: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
     use_patient_coords: bool = True) -> LandmarksData:

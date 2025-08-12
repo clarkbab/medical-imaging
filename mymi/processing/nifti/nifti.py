@@ -18,10 +18,11 @@ from mymi import config
 from mymi import datasets as ds
 from mymi.datasets import DicomDataset, NiftiDataset
 from mymi.datasets.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
+from mymi.datasets.nifti import create_region
 from mymi.datasets.training import TrainingDataset, exists as exists_training
 from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
-from mymi.geometry import extent, centre_of_extent
+from mymi.geometry import extent, fov_centre
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
@@ -36,25 +37,27 @@ def combine_labels(
     dataset: str,
     pat_ids: PatientIDs,
     study_ids: StudyIDs,
-    regions: Regions,
-    output_region: Region,
-    series_id: SeriesID = 'series_1') -> None:
+    region_ids: RegionID,
+    output_region_id: RegionID,
+    data_id: NiftiSeriesID = 'series_1',
+    dry_run: bool = True) -> None:
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(ids=pat_ids)
-    study_ids = arg_to_list(study_ids, StudyID, broadcast=len(pat_ids))
-    for p, s in tqdm(zip(pat_ids, study_ids), total=len(pat_ids)):
-        study = set.patient(p).study(s)
-        image = study.regions(series_id)
-        region_data = image.data(regions=regions)
-        label = np.clip(np.stack([v for v in region_data.values()]).sum(axis=0), 0, 1).astype(bool)
-        set.write_region(label, p, s, series_id, output_region, study.ct_spacing, study.ct_offset)
+    pat_ids = set.list_patients(pat_ids=pat_ids)
+    for p in tqdm(pat_ids):
+        pat = set.patient(p)
+        pat_study_ids = arg_to_list(study_ids, StudyID, literals={ 'all': pat.list_studies })
+        for s in tqdm(pat_study_ids, leave=False):
+            study = pat.study(s)
+            region_data = study.data(data_id, 'regions').data(region_ids=region_ids)
+            label = np.clip(np.stack([v for v in region_data.values()]).sum(axis=0), 0, 1).astype(bool)
+            create_region(dataset, p, s, data_id, output_region_id, label, study.ct_spacing, study.ct_offset, dry_run=dry_run)
 
 def convert_replan_to_nnunet_ref_model(
     regions: Regions,
     n_regions: int,
     create_data: bool = True,
     crop: Optional[Size3D] = None,
-    crop_mm: Optional[FOV3D] = None,
+    crop_mm: Optional[Fov3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -139,7 +142,7 @@ def convert_replan_to_nnunet_ref_model(
                     pat_id_mt = pat_id
                     input = pat.ct_data
                     input_spacing = pat.ct_spacing
-                    region_data = pat.regions_data(regions=regions, regions_ignore_missing=True) 
+                    region_data = pat.region_data(regions=regions, regions_ignore_missing=True) 
 
                 # Resample input.
                 if spacing is not None:
@@ -228,7 +231,7 @@ def convert_replan_to_training(
     dataset: str,
     create_data: bool = True,
     crop: Optional[Size3D] = None,
-    crop_mm: Optional[FOV3D] = None,
+    crop_mm: Optional[Fov3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -327,7 +330,7 @@ def convert_replan_to_training(
                 pat_id_mt = pat_id
                 input = pat.ct_data
                 input_spacing = pat.ct_spacing
-                region_data = pat.regions_data(regions=region, regions_ignore_missing=True) 
+                region_data = pat.region_data(regions=region, regions_ignore_missing=True) 
 
             # Resample input.
             if spacing is not None:
@@ -438,7 +441,7 @@ def convert_population_lens_crop_to_training(
     create_data: bool = True,
     crop: Optional[Size3D] = None,
     crop_method: Literal['low', 'uniform'] = 'low',
-    crop_mm: Optional[FOV3D] = None,
+    crop_mm: Optional[Fov3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -537,7 +540,7 @@ def convert_population_lens_crop_to_training(
                 pat_id_mt = pat_id
                 input = pat.ct_data
                 input_spacing = pat.ct_spacing
-                region_data = pat.regions_data(region=regions, regions_ignore_missing=True) 
+                region_data = pat.region_data(region=regions, regions_ignore_missing=True) 
 
             # Resample input.
             if spacing is not None:
@@ -562,7 +565,7 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_regions(region):
-                            region_data = pat.regions_data(region=region)[region]
+                            region_data = pat.region_data(region=region)[region]
                             region_extent = extent(region_data)
                             if region_extent[0][2] < min_z:
                                 min_z = region_extent[0][2]
@@ -578,8 +581,8 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_regions(region):
-                            rdata = pat.regions_data(region=region)[region]
-                            extent_centre = centre_of_extent(rdata)
+                            rdata = pat.region_data(region=region)[region]
+                            extent_centre = fov_centre(rdata)
                             centre_z = extent_centre[2]
                             break
 
@@ -715,7 +718,7 @@ def convert_replan_to_nnunet_bootstrap() -> None:
         nib.save(img, filepath)
 
         # Create region NIFTIs.
-        region_data = pat.regions_data()
+        region_data = pat.region_data()
         for region in regions:
             if region not in region_data:
                 # Get 
@@ -788,7 +791,7 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_regions(eye_region):
-                    region_data = pat.regions_data(region=eye_region)[eye_region]
+                    region_data = pat.region_data(region=eye_region)[eye_region]
                     region_extent = extent(region_data)
                     if region_extent[0][2] < min_z:
                         min_z = region_extent[0][2]
@@ -819,8 +822,8 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_regions(eye_region):
-                    rdata = pat.regions_data(region=eye_region)[eye_region]
-                    extent_centre = centre_of_extent(rdata)
+                    rdata = pat.region_data(region=eye_region)[eye_region]
+                    extent_centre = fov_centre(rdata)
                     centre_z = extent_centre[2]
                     break
 
@@ -854,7 +857,7 @@ def convert_replan_to_lens_crop(
         nib.save(img, filepath)
 
         # Create region NIFTIs.
-        region_data = pat.regions_data()
+        region_data = pat.region_data()
         for region, data in region_data.items():
             if region not in regions:
                 continue
@@ -903,7 +906,7 @@ def create_excluded_brainstem(
             continue
 
         # Load label data.
-        data = pat.regions_data(region=['Brain', 'Brainstem'])
+        data = pat.region_data(region=['Brain', 'Brainstem'])
 
         # Perform exclusion.
         brain_data = data['Brain'] & ~data['Brainstem']
@@ -929,109 +932,6 @@ def create_excluded_brainstem(
     # Save index.
     filepath = os.path.join(dest_set.path, 'excl-index.csv')
     df.to_csv(filepath, index=False)
-
-def convert_segmenter_predictions_to_dicom_from_all_patients(
-    n_pats: int,
-    anonymise: bool = True) -> None:
-    logging.arg_log('Converting segmenter predictions to DICOM', ('n_pats', 'anonymise'), (n_pats, anonymise))
-
-    # Load 'all-patients.csv'.
-    df = load_files_csv('transfer-learning', 'data', 'all-patients.csv')
-    df = df.astype({ 'patient-id': str })
-    df = df.head(n_pats)
-
-    # RTSTRUCT info.
-    default_rt_info = {
-        'label': 'PMCC-AI-HN',
-        'institution-name': 'PMCC-AI-HN'
-    }
-
-    # Create index.
-    if anonymise:
-        cols = {
-            'patient-id': str,
-            'anon-id': str
-        }
-        index_df = pd.DataFrame(columns=cols.keys())
-
-    for i, (dataset, pat_id) in tqdm(df.iterrows()):
-        # Get ROI ID from DICOM dataset.
-        nifti_set = NiftiDataset(dataset)
-        pat_id_dicom = nifti_set.patient(pat_id).patient_id
-        set_dicom = DicomDataset(dataset)
-        patient_dicom = set_dicom.patient(pat_id_dicom)
-        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
-        info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
-        region_map_gt = dict((set_dicom.to_internal(data['name']), id) for id, data in info_gt.items())
-
-        # Create RTSTRUCT.
-        cts = patient_dicom.get_cts()
-        rtstruct_pred = RtStructConverter.create_rtstruct(cts, default_rt_info)
-        frame_of_reference_uid = rtstruct_gt.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
-
-        for region in RegionNames:
-            # Load prediction.
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'nifti', dataset, pat_id, f'{region}.npz')
-            pred = np.load(filepath)['data']
-            
-            # Match ROI number to ground truth, otherwise assign next available integer.
-            if region not in region_map_gt:
-                for j in range(1, 1000):
-                    if j not in region_map_gt.values():
-                        region_map_gt[region] = j
-                        break
-                    elif j == 999:
-                        raise ValueError(f'Unlikely')
-            roi_number = region_map_gt[region]
-
-            # Add ROI data.
-            roi_data = ROIData(
-                colour=list(to_rgb_255(getattr(RegionColours, region))),
-                data=pred,
-                name=region,
-                number=roi_number
-            )
-            RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
-
-        # Add index row.
-        if anonymise:
-            anon_id = f'PMCC_AI_HN_{i + 1:03}'
-            data = {
-                'patient-id': pat_id,
-                'anon-id': anon_id
-            }
-            index_df = append_row(index_df, data)
-
-        # Save pred RTSTRUCT.
-        pat_id_folder = anon_id if anonymise else pat_id_dicom
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct', 'pred.dcm')
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        if anonymise:
-            rtstruct_pred.PatientID = anon_id
-            rtstruct_pred.PatientName = anon_id
-        rtstruct_pred.save_as(filepath)
-
-        # Copy CTs.
-        for j, path in enumerate(patient_dicom.default_rtstruct.ref_ct.paths):
-            ct = dcm.read_file(path)
-            if anonymise:
-                ct.PatientID = anon_id
-                ct.PatientName = anon_id
-            filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'ct', f'{j}.dcm')
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            ct.save_as(filepath)
-
-        # Copy ground truth RTSTRUCT.
-        rtstruct_gt = patient_dicom.default_rtstruct.rtstruct
-        if anonymise:
-            rtstruct_gt.PatientID = anon_id
-            rtstruct_gt.PatientName = anon_id
-        filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'predictions', 'dicom', pat_id_folder, 'rtstruct', 'gt.dcm')
-        rtstruct_gt.save_as(filepath)
-    
-    # Save index.
-    if anonymise:
-        save_csv(index_df, 'transfer-learning', 'data', 'predictions', 'dicom', 'index.csv')
 
 def __destroy_flag(
     dataset: 'Dataset',

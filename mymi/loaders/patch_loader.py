@@ -6,7 +6,7 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import List, Optional, Union
 
 from mymi.datasets import TrainingDataset
-from mymi.geometry import centre_of_extent
+from mymi.geometry import fov_centre
 from mymi.regions import get_region_patch_size
 from mymi.transforms import point_crop_or_pad
 from mymi import typing

@@ -1,5 +1,6 @@
 from .corrfield import *
 from .deeds import *
+from .plastimatch import *
 from .registration import *
 from .unigradicon import *
 from .voxelmorph import *

@@ -43,7 +43,7 @@ def rigid_registration(
     # Move region data.
     moved_region_data = None
     if regions is not None:
-        moving_region_data = moving_study.regions_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
+        moving_region_data = moving_study.region_data(regions=regions, regions_ignore_missing=regions_ignore_missing)
         if moving_region_data is not None:
             moved_region_data = {}
             for region, moving_label in moving_region_data.items():
@@ -54,7 +54,7 @@ def rigid_registration(
     # Move landmarks.
     moved_landmark_data = None
     if landmarks is not None:
-        moving_landmark_data = moving_study.landmarks_data(landmarks=landmarks)
+        moving_landmark_data = moving_study.landmark_data(landmarks=landmarks)
         if moving_landmark_data is not None:
             moving_points = moving_landmark_data[list(range(3))].to_numpy()
             moved_landmark_data = moving_landmark_data.copy()

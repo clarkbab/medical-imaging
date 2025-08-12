@@ -95,18 +95,18 @@ def convert_to_registration_training_holdout(
             fixed_ct = fixed_study.ct_data
             fixed_spacing = fixed_study.ct_spacing
             if landmarks is not None:
-                fixed_landmarks = fixed_study.landmarks_data(landmarks=landmarks)
+                fixed_landmarks = fixed_study.landmark_data(landmarks=landmarks)
             if regions is not None:
-                fixed_region_data = fixed_study.regions_data(regions=regions)
+                fixed_region_data = fixed_study.region_data(regions=regions)
             
             # Load moving data.
             moving_study = pat.study(moving_study_id)
             moving_ct = moving_study.ct_data
             assert moving_study.ct_spacing == fixed_spacing   # Images are pre-registered.
             if landmarks is not None:
-                moving_landmarks = moving_study.landmarks_data(landmarks=landmarks)
+                moving_landmarks = moving_study.landmark_data(landmarks=landmarks)
             if regions is not None:
-                moving_region_data = moving_study.regions_data(regions=regions)
+                moving_region_data = moving_study.region_data(regions=regions)
 
             # # Normalise CT data. - Let the dataloader do this so we don't have to manually
             # calculate for each training dataset. For example, values will differ depending on 
@@ -339,7 +339,7 @@ def convert_to_segmentation_training_holdout(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            region_data = study.regions_data(regions=regions)
+            region_data = study.region_data(regions=regions)
 
             # Normalise CT data.
             if normalise:

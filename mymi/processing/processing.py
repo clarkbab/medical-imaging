@@ -15,14 +15,14 @@ from mymi.datasets.training import create as create_training, exists as exists_t
 from mymi.geometry import extent
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import crop_foreground_vox, resample
+from mymi.transforms import crop_foreground, resample
 from mymi.typing import *
 from mymi.utils import *
 
 def convert_brain_crop_to_training(
     set: 'Dataset',
     create_data: bool = True,
-    crop_mm: Optional[Union[Point3DBox, FOV3D]] = None,
+    crop_mm: Optional[BoxMM3D] = None,
     dest_dataset: Optional[str] = None,
     dilate_iter: int = 3,
     dilate_regions: List[str] = [],
@@ -166,7 +166,7 @@ def convert_brain_crop_to_training(
                         continue
 
                 # Load label data.
-                label = patient.regions_data(region=region)[region]
+                label = patient.region_data(region=region)[region]
 
                 # Resample data.
                 if spacing is not None:
@@ -324,7 +324,7 @@ def fill_border_padding(
                 
     crop = (tuple(crop_min), tuple(crop_max)) 
     logging.info(f'Border padding {crop} with values {fill}.')
-    data = crop_foreground_vox(data, crop, fill=fill)
+    data = crop_foreground(data, crop, fill=fill, use_patient_coords=False)
     return data
 
 def fill_contiguous_padding(

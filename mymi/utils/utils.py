@@ -60,6 +60,29 @@ def escape_filepath(f: str) -> str:
         f = os.path.join(config.directories.files, f)
     return f
 
+def get_axis_name(
+    view: int,
+    abbreviate: bool = False) -> str:
+    if view == 0:
+        return 'sag.' if abbreviate else 'sagittal'
+    elif view == 1:
+        return 'cor.' if abbreviate else 'coronal'
+    elif view == 2:
+        return 'ax.' if abbreviate else 'axial'
+
+def handle_idx_prefix(
+    id: str,
+    list_ids: Callable) -> id:
+    if id.startswith('idx:'):
+        idx = int(id.split(':')[1])
+        ids = list_ids() 
+        if idx > len(ids) - 1:
+            print(ids)
+            raise ValueError(f"Index {idx} out of range ({len(ids)} items).")
+        id = ids[idx]
+
+    return id
+
 def is_generic(t: Any) -> bool:
     return get_origin(t) is not None
 
@@ -349,13 +372,3 @@ def transpose_image(
     if vector:
         data = np.moveaxis(data, -1, 0)
     return data
-
-def get_view_name(
-    view: int,
-    abbreviate: bool = True) -> str:
-    if view == 0:
-        return 'sag.' if abbreviate else 'sagittal'
-    elif view == 1:
-        return 'cor.' if abbreviate else 'coronal'
-    elif view == 2:
-        return 'ax.' if abbreviate else 'axial'

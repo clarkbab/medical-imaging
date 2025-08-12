@@ -7,28 +7,26 @@ from mymi.typing import *
 from mymi.utils import *
 
 from .series import NiftiSeries
+from .images import CtImageSeries, DoseImageSeries
 
 class LandmarksSeries(NiftiSeries):
     def __init__(
         self,
-        study: 'NiftiStudy',
-        id: SeriesID) -> None:
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
+        id: NiftiSeriesID,
+        filepath: FilePath,
+        ref_ct: Optional[CtImageSeries] = None,
+        ref_dose: Optional[DoseImageSeries] = None) -> None:
+        self.__dataset_id = dataset_id
+        self.__filepath = filepath
+        self._global_id = f'NIFTI:{dataset_id}:{pat_id}:{study_id}:{id}'
         self.__id = id
-        self.__global_id = f'{study}:{id}'
-        self.__filepath = os.path.join(study.path, 'landmarks', f'{id}.csv')
-        self.__study = study
-
-    @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
-    def path(self) -> str:
-        return self.__path
-
-    @property
-    def study(self) -> str:
-        return self.__study
+        self.__pat_id = pat_id
+        self.__ref_ct = ref_ct
+        self.__ref_dose = ref_dose
+        self.__study_id = study_id
 
     def data(
         self,
@@ -40,59 +38,66 @@ class LandmarksSeries(NiftiSeries):
         **kwargs) -> Union[LandmarksData, LandmarksVoxelData, Points3D, Voxels]:
 
         # Load landmarks.
-        landmarks_data = load_csv(self.__filepath)
-        landmarks_data = landmarks_data.rename(columns={ '0': 0, '1': 1, '2': 2 })
+        landmark_data = load_csv(self.__filepath)
+        landmark_data = landmark_data.rename(columns={ '0': 0, '1': 1, '2': 2 })
         if not use_patient_coords:
-            landmarks_data = landmarks_to_image_coords(landmarks_data, self.__study.ct_spacing, self.__study.ct_offset)
+            if self.__ref_ct is None:
+                raise ValueError(f"Cannot convert landmarks to image coordinates without 'ref_ct'.")
+            landmark_data = landmarks_to_image_coords(landmark_data, self.__ref_ct.spacing, self.__ref_ct.offset)
 
         # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
         # Dicom/Nifti dataset types.
-        landmarks_data = landmarks_data.sort_values('landmark-id')
+        landmark_data = landmark_data.sort_values('landmark-id')
 
         if landmark_ids != 'all':
             landmark_ids = self.list_landmarks(landmark_ids=landmark_ids)
-            landmarks_data = landmarks_data[landmarks_data['landmark-id'].isin(landmark_ids)]
+            landmark_data = landmark_data[landmark_data['landmark-id'].isin(landmark_ids)]
 
         # Add sampled CT intensities.
         if sample_ct:
-            ct_image = self.__study.default_ct
-            ct_values = sample(ct_image.data, landmarks_to_data(landmarks_data), spacing=ct_image.spacing, offset=ct_image.offset, **kwargs)
-            landmarks_data['ct'] = ct_values
+            if self.__ref_ct is None:
+                raise ValueError(f"Cannot sample CT intensities without 'ref_ct'.")
+            ct_values = sample(self.__ref_ct.data, landmarks_to_data(landmark_data), spacing=self.__ref_ct.spacing, offset=self.__ref_ct.offset, **kwargs)
+            landmark_data['ct-data-id'] = self.__ref_ct.id
+            landmark_data['ct'] = ct_values
 
         # Add sampled dose intensities.
         if sample_dose:
-            dose_image = self.__study.default_dose
-            dose_values = sample(dose_image.data, landmarks_to_data(landmarks_data), spacing=dose_image.spacing, offset=dose_image.offset, **kwargs)
-            landmarks_data['dose'] = dose_values
+            if self.__ref_dose is None:
+                raise ValueError(f"Cannot sample dose intensities without 'ref_dose'.")
+            dose_values = sample(self.__ref_dose.data, landmarks_to_data(landmark_data), spacing=self.__ref_dose.spacing, offset=self.__ref_dose.offset, **kwargs)
+            landmark_data['dose-data-id'] = self.__ref_dose.id
+            landmark_data['dose'] = dose_values
 
         # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
-        if 'patient-id' not in landmarks_data.columns:
-            landmarks_data.insert(0, 'patient-id', self.study.patient.id)
-        if 'study-id' not in landmarks_data.columns:
-            landmarks_data.insert(1, 'study-id', self.study.id)
-        if 'series-id' not in landmarks_data.columns:
-            landmarks_data.insert(1, 'series-id', self.__id)
+        if 'patient-id' not in landmark_data.columns:
+            landmark_data.insert(0, 'patient-id', self.__pat_id)
+        if 'study-id' not in landmark_data.columns:
+            landmark_data.insert(1, 'study-id', self.__study_id)
+        if 'data-id' not in landmark_data.columns:
+            landmark_data.insert(2, 'data-id', self.__id)
 
         if data_only:
-            return landmarks_data[range(3)].to_numpy().astype(np.float32)
+            return landmark_data[range(3)].to_numpy().astype(np.float32)
         else:
-            return landmarks_data
-    
+            return landmark_data
+
     def has_landmarks(
         self,
-        landmark_ids: LandmarkIDs,
-        any: bool = False) -> bool:
-        real_ids = self.list_landmarks(landmark_ids=landmark_ids)
-        req_ids = arg_to_list(landmark_ids, LandmarkID)
-        n_overlap = len(np.intersect1d(real_ids, req_ids))
-        return n_overlap > 0 if any else n_overlap == len(req_ids)
+        landmark_ids: LandmarkIDs = 'all',
+        any: bool = False,
+        **kwargs) -> bool:
+        all_ids = self.list_landmarks(**kwargs)
+        landmark_ids = arg_to_list(landmark_ids, LandmarkID, literals={ 'all': all_ids })
+        n_overlap = len(np.intersect1d(landmark_ids, all_ids))
+        return n_overlap > 0 if any else n_overlap == len(landmark_ids)
 
     def list_landmarks(
         self,
         landmark_ids: LandmarkIDs = 'all') -> List[LandmarkID]:
         # Load landmark IDs.
-        landmarks_data = load_csv(self.__filepath)
-        ids = list(sorted(landmarks_data['landmark-id']))
+        landmark_data = load_csv(self.__filepath)
+        ids = list(sorted(landmark_data['landmark-id']))
 
         if landmark_ids == 'all':
             return ids
@@ -106,7 +111,4 @@ class LandmarksSeries(NiftiSeries):
             ids = [i for i in ids if i in landmark_ids]
 
         return ids
-
-    def __str__(self) -> str:
-        return self.__global_id
     

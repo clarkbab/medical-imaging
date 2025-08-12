@@ -2,6 +2,7 @@ import numpy as np
 from typing import *
 
 from mymi.typing import *
+from mymi.utils import *
 
 def ncc(
     a: np.ndarray,
@@ -18,9 +19,13 @@ def ncc(
 
     return result
 
-def tre(    # a, b contain coordinates in mm, spacing not required.
-    a: np.ndarray,  
-    b: np.ndarray) -> List[float]:
+def tre(
+    a: Union[LandmarksData, Points3D],
+    b: Union[LandmarksData, Points3D]) -> List[float]:
+    if isinstance(a, LandmarksData):
+        a = landmarks_to_data(a)
+    if isinstance(b, LandmarksData):
+        b = landmarks_to_data(b)
     if a.shape != b.shape:
         raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 

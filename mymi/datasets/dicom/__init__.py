@@ -5,9 +5,9 @@ from typing import List
 from mymi import config
 
 from .dataset import *
-from .files import *
 from .index import *
 from .series import *
+from .utils import *
 
 def list() -> List[str]:
     path = os.path.join(config.directories.datasets, 'dicom')

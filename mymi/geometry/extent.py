@@ -3,53 +3,108 @@ from typing import *
 
 from mymi.typing import *
 
-def get_extent(
-    image: ImageData3D,
-    offset: Optional[Point3D] = None,
-    spacing: Optional[Spacing3D] = None,
-    use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:
-    if use_patient_coords:
-        assert spacing is not None
-        assert offset is not None
-
-    # Get voxel extent.
-    n_dims = len(image.shape)
-    extent_vox = ((0,) * n_dims, image.shape)
-    if not use_patient_coords:
-        return extent_vox
-
-    # Get mm extent.
-    extent_min_vox, extent_max_vox = extent_vox
-    extent_min_mm = tuple(float(e) for e in (np.array(extent_min_vox) * spacing + offset))
-    extent_max_mm = tuple(float(e) for e in (np.array(extent_max_vox) * spacing + offset))
-    extent_mm = extent_min_mm, extent_max_mm
-    return extent_mm
-
-def get_foreground_extent(
-    image: LabelData3D,
-    offset: Optional[Point3D] = None,
-    spacing: Optional[Spacing3D] = None,
-    use_patient_coords: bool = True) -> Optional[Union[PixelBox, VoxelBox]]:
-    # Get voxel extent.
-    if image.sum() > 0:
-        non_zero = np.argwhere(image != 0).astype(int)
-        min = tuple(non_zero.min(axis=0))
-        max = tuple(non_zero.max(axis=0))
-        extent_vox = (min, max)
+def foreground_fov(
+    data: LabelData,
+    offset: Optional[Point] = None,
+    spacing: Optional[Spacing] = None,
+    use_patient_coords: bool = True) -> Optional[Box]:
+    # Get fov of foreground objects.
+    if data.sum() > 0:
+        non_zero = np.argwhere(data != 0).astype(int)
+        fov_vox = tuple(non_zero.min(axis=0)), tuple(non_zero.max(axis=0))
         if not use_patient_coords:
-            return extent_vox
+            return fov_vox
     else:
         return None
 
-    # Get mm extent.
+    # Get fov in mm.
     if use_patient_coords:
         assert spacing is not None
         assert offset is not None
-    extent_min_vx, extent_max_vx = extent_vox
-    extent_min_mm = tuple(np.array(extent_min_vx) * spacing + offset)
-    extent_max_mm = tuple(np.array(extent_max_vx) * spacing + offset)
-    extent_mm = extent_min_mm, extent_max_mm
-    return extent_mm
+    fov_min_vox, fov_max_vox = fov_vox
+    fov_min_mm = tuple(np.array(fov_min_vox) * spacing + offset)
+    fov_max_mm = tuple(np.array(fov_max_vox) * spacing + offset)
+    fov_mm = fov_min_mm, fov_max_mm
+    return fov_mm
+
+def foreground_fov_centre(
+    data: LabelData,
+    use_patient_coords: bool = True,
+    **kwargs) -> Optional[Union[Pixel, Voxel]]:
+    fov_box = foreground_fov(data, use_patient_coords=True, **kwargs)
+    if fov_box is not None:
+        fov_c = np.floor(np.array(fov_box).sum(axis=0) / 2).astype(int)
+        if not use_patient_coords:
+            fov_c = fov_c.astype(int)
+        fov_c = tuple(fov_c)
+        return fov_c
+    else:
+        return None
+
+def foreground_fov_width(
+    data: LabelData,
+    offset: Optional[Point] = None,
+    spacing: Optional[Spacing] = None,
+    use_patient_coords: bool = True) -> Optional[Size]:
+    # Get foreground fov.
+    fov_fg = foreground_fov(data, use_patient_coords=use_patient_coords, offset=offset, spacing=spacing)
+    if fov_fg is not None:
+        min, max = fov_fg
+        fov_w = tuple(np.array(max) - min)
+        return fov_w
+    else:
+        return None
+
+def fov(
+    data: LabelData,
+    offset: Optional[Point] = None,
+    spacing: Optional[Spacing] = None,
+    raise_error: bool = True,
+    use_patient_coords: bool = True) -> Box:
+    if data.sum() == 0:
+        raise ValueError("Input data is empty, cannot compute fov.") if raise_error else None    
+    if use_patient_coords:
+        assert spacing is not None
+        assert offset is not None
+
+    # Get fov in voxels.
+    n_dims = len(data.shape)
+    fov_vox = ((0,) * n_dims, data.shape)
+    if not use_patient_coords:
+        return fov_vox
+
+    # Get fov in mm.
+    fov_min_vox, fov_max_vox = fov_vox
+    fov_min_mm = tuple(float(e) for e in (np.array(fov_min_vox) * spacing + offset))
+    fov_max_mm = tuple(float(e) for e in (np.array(fov_max_vox) * spacing + offset))
+    fov_mm = fov_min_mm, fov_max_mm
+
+    return fov_mm
+
+def fov_centre(
+    data: LabelData,
+    use_patient_coords: bool = True,
+    **kwargs) -> Union[Pixel, Voxel]:
+    fov_box = fov(data, use_patient_coords=True, **kwargs)
+    if fov_box is not None:
+        fov_c = np.floor(np.array(fov_box).sum(axis=0) / 2).astype(int)
+        if not use_patient_coords:
+            fov_c = fov_c.astype(int)
+        fov_c = tuple(fov_c)
+        return fov_c
+    else:
+        return None
+
+def fov_width(
+    data: LabelData,
+    **kwargs) -> Size:
+    fov_d = fov(data, **kwargs)
+    if fov_d is not None:
+        min, max = fov_d
+        fov_w = tuple(np.array(max) - min)
+        return fov_w
+    else:
+        return None
 
 def extent_edge_voxel(
     a: np.ndarray,
@@ -73,46 +128,3 @@ def extent_edge_voxel(
     axis_voxels = axis_voxels[np.argsort(axis_voxels[:, view_axis])]
     max_voxel = tuple(axis_voxels[len(axis_voxels) // 2])
     return max_voxel
-
-def extent_width(a: np.ndarray) -> Optional[Union[Size2D, Size3D]]:
-    if a.dtype != np.bool_:
-        raise ValueError(f"'extent_width' expected a boolean array, got '{a.dtype}'.")
-
-    # Get OAR extent.
-    ext = extent(a)
-    if ext:
-        min, max = ext
-        width = tuple(np.array(max) - min)
-        return width
-    else:
-        return None
-
-def extent_width_mm(
-    a: np.ndarray,
-    spacing: Tuple[float, float, float]) -> Optional[Union[Tuple[float, float], Tuple[float, float, float]]]:
-    if a.dtype != np.bool_:
-        raise ValueError(f"'extent_width_mm' expected a boolean array, got '{a.dtype}'.")
-
-    # Get OAR extent in mm.
-    ext_width_vox = extent_width(a)
-    if ext_width_vox is None:
-        return None
-    ext_width = tuple(np.array(ext_width_vox) * spacing)
-    return ext_width
-
-def centre_of_extent(
-    a: np.ndarray,
-    smoothed_label: bool = False) -> Optional[Union[Pixel, Voxel]]:
-    if smoothed_label:
-        a = np.round(a)
-
-    # Get extent.
-    ext = extent(a)
-
-    if ext:
-        # Find the extent centre.
-        centre = tuple(np.floor(np.array(ext).sum(axis=0) / 2).astype(int))
-    else:
-        return None
-
-    return centre

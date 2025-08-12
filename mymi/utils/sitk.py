@@ -15,7 +15,7 @@ def from_sitk_image(
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
     offset = list(img.GetOrigin())
-    if img_type == 'mhd':
+    if img_type == 'mha':
         pass
     elif img_type == 'nii':
         # ITK assumes loaded nifti data is using RAS coordinates, so they set negative offsets
@@ -25,20 +25,10 @@ def from_sitk_image(
     offset = tuple(offset)
     return data, spacing, offset
 
-def sitk_load_image(filepath: str) -> Tuple[ImageData3D, Spacing3D, Point3D]:
-    if filepath.endswith('.mhd'):
-        img_type = 'mhd'
-    elif filepath.endswith('.nii.gz') or filepath.endswith('.nii'):
-        img_type = 'nii'
-    else:
-        raise ValueError(f'Unsupported file type: {filepath}.')
-    img = sitk.ReadImage(filepath)
-    return from_sitk_image(img, img_type=img_type)
-
 def to_sitk_image(
     data: Union[ImageData3D, VectorData],   # We use LPS coordinates - the same as SimpleITK!
-    spacing: Spacing3D = (1, 1, 1),
-    offset: Point3D = (0, 0, 0),
+    spacing: Spacing3D,
+    offset: Point3D,
     vector: bool = False) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:

@@ -325,33 +325,27 @@ class RegionList(list, Enum):
     assert len(PMCC) == len(PMCC_CVG_THRESHOLDS) == len(PMCC_INVERSE_VOLUMES) == len(PMCC_SHORT)
 
 # Behaves like 'arg_to_list', but also handles special 'RL:<region list>' format.
-def regions_to_list(regions: Regions, **kwargs) -> Regions:
-    if regions is None:
+def regions_to_list(region_ids: RegionIDs, **kwargs) -> RegionIDs:
+    if region_ids is None:
         return None
 
-    # Get regions from "region list".
-    if isinstance(regions, str) and regions.startswith('RL:'): 
-        rl_name = regions.split(':')[-1]
-        if hasattr(RegionList, rl_name):
-            regions = list(getattr(RegionList, rl_name))
+    region_ids = arg_to_list(region_ids, RegionID, **kwargs)
+    rs = []
+    for r in region_ids:
+        if r.startswith('rl:'): 
+            # Expand str to list of regions.
+            rl_name = r.split(':')[-1]
+            if hasattr(RegionList, rl_name):
+                r = list(getattr(RegionList, rl_name))
+            else:
+                filepath = os.path.join(config.directories.files, 'regions-lists', f'{rl_name}.csv')
+                if not os.path.exists(filepath):
+                    raise ValueError(f"Region list '{rl_name}' not found. Filepath: {filepath}")
+                df = pd.read_csv(filepath, header=None)
+                r = list(sorted(df[0]))
+            rs += r
         else:
-            filepath = os.path.join(config.directories.config, 'region-lists', f'{rl_name}.csv')
-            if not os.path.exists(filepath):
-                raise ValueError(f"Region list '{rl_name}' not found.")
-            df = pd.read_csv(filepath, header=None)
-            regions = list(sorted(df[0]))
-    else:
-        regions = arg_to_list(regions, str, **kwargs)
+            rs.append(r)
 
-    # # Expand any special region names. Allows for grouping of regions, e.g. ribs.
-    # if regions is not None:
-    #     expanded_regions = [] 
-    #     for r in regions:
-    #         if r in EXPANDED_REGION_MAP:
-    #             expanded_regions += EXPANDED_REGION_MAP[r]
-    #         else:
-    #             expanded_regions.append(r)
-    #     regions = expanded_regions
-
-    return regions
+    return rs
     

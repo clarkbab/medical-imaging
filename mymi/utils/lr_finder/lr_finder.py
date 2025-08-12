@@ -15,8 +15,6 @@ from mymi.regions import regions_to_list
 from mymi.typing import Regions
 from mymi.utils import arg_to_list
 
-DEFAULT_FONT_SIZE = 8
-
 def load_data(
     model_name: str,
     run_name: str) -> Dict[str, np.ndarray]:
@@ -65,7 +63,7 @@ def plot(
     run_name: Union[str, List[Union[str, List[str]]]],
     ax: Optional[Axes] = None,
     figsize: Tuple[float, float] = (12, 12),
-    fontsize: float = DEFAULT_FONT_SIZE,
+    fontsize: float = 12,
     fontsize_label: Optional[float] = None,
     fontsize_tick_label: Optional[float] = None,
     fontsize_legend: Optional[float] = None,

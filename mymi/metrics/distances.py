@@ -2,7 +2,7 @@ import numpy as np
 from surface_distance import *
 from typing import *
 
-from mymi.geometry import extent, centre_of_extent
+from mymi.geometry import extent, fov_centre
 from mymi.typing import *
 from mymi.utils import arg_to_list
 
@@ -59,8 +59,8 @@ def extent_centre_distance(
         raise ValueError(f"Metric 'extent_centre_distance' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
 
     # Calculate extent centres.
-    a_cent = centre_of_extent(a)
-    b_cent = centre_of_extent(b)
+    a_cent = fov_centre(a)
+    b_cent = fov_centre(b)
 
     # Get distance between centres.
     dists = np.abs(np.array(b_cent) - np.array(a_cent))    

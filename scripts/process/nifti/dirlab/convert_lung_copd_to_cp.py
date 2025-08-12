@@ -1,3 +1,3 @@
-from mymi.processing.nifti import create_lung_preprocessed_dataset
+from mymi.processing.nifti import convert_to_lung_preprocessed_dataset
 
-create_lung_preprocessed_dataset()
+convert_to_lung_preprocessed_dataset()

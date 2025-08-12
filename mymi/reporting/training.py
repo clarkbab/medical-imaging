@@ -10,7 +10,7 @@ from uuid import uuid1
 
 from mymi import config
 from mymi.datasets import TrainingDataset
-from mymi.geometry import extent, centre_of_extent
+from mymi.geometry import extent, fov_centre
 from mymi import logging
 from mymi.processing import get_object, one_hot_encode
 from mymi.typing import *
@@ -350,7 +350,7 @@ def get_object_summary(
         data['extent-width-vox'] = str(width)
         
         # Get centre of extent.
-        extent_centre = centre_of_extent(obj)
+        extent_centre = fov_centre(obj)
         data['extent-centre-vox'] = str(extent_centre)
 
         # Add volume.

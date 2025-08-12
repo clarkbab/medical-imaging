@@ -67,7 +67,7 @@ def convert_to_nnunet_single_region_v1(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.regions_data(regions=region)[region]
+            label = study.region_data(regions=region)[region]
 
             # Normalise CT data.
             if normalise:
@@ -156,7 +156,7 @@ def convert_to_nnunet_multi_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            region_data = study.regions_data()
+            region_data = study.region_data()
 
             # Normalise CT data.
             if normalise:
@@ -254,7 +254,7 @@ def convert_to_nnunet_single_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.regions_data(regions=region)[region]
+            label = study.region_data(regions=region)[region]
 
             # Normalise CT data.
             if normalise:

@@ -5,8 +5,9 @@ import pandas as pd
 import pydicom as dcm
 from typing import *
 
+from mymi import config
 from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
-from mymi.geometry import get_extent
+from mymi.geometry import fov
 from mymi.typing import *
 from mymi.utils import *
 
@@ -15,25 +16,23 @@ from .series import DicomSeries
 class CtSeries(DicomSeries):
     def __init__(
         self,
-        study: 'DicomStudy',
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
         id: SeriesID,
-        force_dicom_read: bool = False) -> None:
-        self.__force_dicom_read = force_dicom_read
-        self.__global_id = f"{study}:{id}"
-        self.__study = study
-        self.__id = id
-
-        # Load index.
-        index = self.__study.index
-        index = index[(index.modality == 'ct') & (index['series-id'] == id)].copy()
-        if len(index) == 0:
-            raise ValueError(f"No CT series with ID '{id}' found in study '{study}'.")
-        self.__index = index
-
-        # Save paths.
-        relpaths = list(self.__index['filepath'])
-        abspaths = [os.path.join(self.__study.patient.dataset.path, p) for p in relpaths]
+        index: pd.DataFrame,
+        index_policy: Dict[str, Any]) -> None:
+        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
+        relpaths = list(index['filepath'])
+        abspaths = [os.path.join(datasetpath, p) for p in relpaths]
+        self.__dataset_id = dataset_id
         self.__filepaths = abspaths
+        self.__id = id
+        self.__index = index
+        self.__index_policy = index_policy
+        self.__modality = 'ct'
+        self.__pat_id = pat_id
+        self.__study_id = study_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -46,7 +45,7 @@ class CtSeries(DicomSeries):
     @property
     def dicoms(self) -> List[CtDicom]:
         # Sort CTs by z position, smallest first.
-        ct_dicoms = [dcm.read_file(f, force=self.__force_dicom_read) for f in self.__filepaths]
+        ct_dicoms = [dcm.read_file(f, force=False) for f in self.__filepaths]
         ct_dicoms = list(sorted(ct_dicoms, key=lambda c: c.ImagePositionPatient[2]))
         return ct_dicoms
 
@@ -56,35 +55,14 @@ class CtSeries(DicomSeries):
         return self.__data
 
     @ensure_loaded
-    def extent(
+    def fov(
         self,
-        use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
-        return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
+        **kwargs) -> Fov3D:
+        return fov(self.__data, spacing=self.__spacing, offset=self.__offset, **kwargs)
 
     @property
     def filepaths(self) -> List[str]:
         return self.__filepaths
-
-    @property
-    @ensure_loaded
-    def fov(
-        self,
-        **kwargs) -> Union[FOV3D, Size3D]:
-        ext_min, ext_max = self.extent(**kwargs)
-        fov = tuple(np.array(ext_max) - ext_min)
-        return fov
-
-    @property
-    def index(self) -> pd.DataFrame:
-        return self.__index
-
-    @property
-    def id(self) -> SeriesID:
-        return self.__id
-
-    @property
-    def modality(self) -> DicomModality:
-        return 'ct'
 
     @property
     @ensure_loaded
@@ -100,10 +78,6 @@ class CtSeries(DicomSeries):
     @ensure_loaded
     def spacing(self) -> Spacing3D:
         return self.__spacing
-
-    @property
-    def study(self) -> str:
-        return self.__study
 
     def __load_data(self) -> None:
         ct_dicoms = self.dicoms
@@ -145,6 +119,6 @@ class CtSeries(DicomSeries):
         self.__data = data
 
 # Add properties.
-props = ['filepaths', 'global_id', 'id', 'index', 'index_policy', 'study']
+props = ['dataset_id', 'filepaths', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'study_id']
 for p in props:
     setattr(CtSeries, p, property(lambda self, p=p: getattr(self, f'_{CtSeries.__name__}__{p}')))

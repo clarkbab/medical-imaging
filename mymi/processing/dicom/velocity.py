@@ -5,7 +5,7 @@ from typing import *
 from mymi.datasets import DicomDataset, NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import resample, save_sitk_transform, sitk_transform_points, velocity_load_transform
+from mymi.transforms import resample, sitk_save_transform, sitk_transform_points, velocity_load_transform
 from mymi.typing import *
 from mymi.utils import *
 
@@ -51,12 +51,12 @@ def convert_velocity_predictions_to_nifti(
             moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 
             # Save moved CT.
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'ct', f'{model}.nii.gz')
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'ct', f'{model}.nii.gz')
             save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Save warp.
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'dvf', f'{model}.hdf5')
-            save_sitk_transform(transform, filepath)
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'dvf', f'{model}.hdf5')
+            sitk_save_transform(transform, filepath)
 
             # Move regions.
             if regions is not None:
@@ -64,19 +64,19 @@ def convert_velocity_predictions_to_nifti(
                 for r in regions:
                     if not moving_study.has_regions(r):
                         continue
-                    moving_region = moving_study.regions_data(regions=r)[r]
+                    moving_region = moving_study.region_data(regions=r)[r]
                     moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
+                    filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
 
             # Move landmarks.
             # We move 'fixed' to 'moving' for TRE calculation to avoid finding inverse of potentially
             # non-invertible transform
-            lm_df = fixed_study.landmarks_data(landamrks=landmarks)
+            lm_df = fixed_study.landmark_data(landamrks=landmarks)
             lm_data = lm_df[list(range(3))].to_numpy()
             lm_data_t = sitk_transform_points(lm_data, transform) 
             lm_df[list(range(3))] = lm_data_t
             # These are redundant columns, and shouldn't be stored on disk. They should be added at load time.
             lm_df = lm_df.drop(columns=['patient-id', 'study-id'])
-            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', p_dest, fixed_study_id, p_dest, moving_study_id, 'landmarks', f'{model}.csv')
+            filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'landmarks', f'{model}.csv')
             save_csv(lm_df, filepath, overwrite=True)

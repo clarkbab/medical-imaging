@@ -10,7 +10,7 @@ from typing import *
 
 from mymi import config
 from mymi.datasets import NiftiDataset, TrainingDataset
-from mymi.geometry import get_box, extent, centre_of_extent
+from mymi.geometry import get_box, extent, fov_centre
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -27,7 +27,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
     model_region: Regions,
     model_spacing: Spacing3D,
     device: torch.device = torch.device('cpu'),
-    crop_mm: Optional[VoxelBox] = None,
+    crop_mm: Optional[Box3D] = None,
     crop_type: str = 'brain',
     **kwargs) -> np.ndarray:
     model_regions = arg_to_list(model_region, str)
@@ -139,7 +139,7 @@ def get_multi_segmenter_prediction(
     model_region: Regions,
     model_spacing: Spacing3D,
     device: torch.device = torch.device('cpu'),
-    crop_mm: Optional[VoxelBox] = None,
+    crop_mm: Optional[Box3D] = None,
     crop_type: str = 'brain',
     **kwargs) -> np.ndarray:
     model_regions = arg_to_list(model_region, str)
@@ -915,7 +915,7 @@ def load_moved_data(
     regions: Optional[Regions] = 'all') -> Tuple[CtData, RegionsData]:
     # Load moved CT.
     set = NiftiDataset(dataset)
-    basepath = os.path.join(set.path, 'data', 'predictions', 'registration', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)
+    basepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)
     filepath = os.path.join(basepath, 'ct.nii.gz')
     moved_ct, _, _ = load_nifti(filepath)
 

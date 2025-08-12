@@ -82,18 +82,18 @@ for p in pat_ids:
 
         # Move CT.
         src = os.path.join(predpath, m, 'ct', f'{p}-0.nii.gz')
-        dest = os.path.join(datapath, 'predictions', 'registration', p, 'study_0', p, 'study_1', m, 'ct', 'series_0.nii.gz')
+        dest = os.path.join(datapath, 'predictions', 'registration', 'patients', p, 'study_0', p, 'study_1', m, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(src, dest)
 
         # Move transform.
         src = os.path.join(predpath, m, 'ct', f'{p}-0_warp.{warp_ext}')
-        dest = os.path.join(datapath, 'predictions', 'registration', p, 'study_0', p, 'study_1', m, 'dvf', f'series_0.{warp_ext}')
+        dest = os.path.join(datapath, 'predictions', 'registration', 'patients', p, 'study_0', p, 'study_1', m, 'dvf', f'series_0.{warp_ext}')
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(src, dest)
 
         # Move landmarks.
         src = os.path.join(predpath, m, 'landmarks', f'{p}-0.csv')
-        dest = os.path.join(datapath, 'predictions', 'registration', p, 'study_0', p, 'study_1', m, 'landmarks', 'series_1.csv')
+        dest = os.path.join(datapath, 'predictions', 'registration', 'patients', p, 'study_0', p, 'study_1', m, 'landmarks', 'series_1.csv')
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(src, dest)

@@ -17,7 +17,7 @@ from mymi.models.lightning_modules import MultiSegmenter, Segmenter
 from mymi.processing import largest_cc_4D
 from mymi.regions import RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
-from mymi.typing import VoxelBox, Size3D, Spacing3D, ModelName, PatientID, Regions
+from mymi.typing import Box3D, Size3D, Spacing3D, ModelName, PatientID, Regions
 from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
 
 def create_all_multi_segmenter_predictions(
@@ -126,7 +126,7 @@ def create_dataset(
 
         # Create ROI data.
         roi_data = ROIData(
-            colour=list(to_rgb_255(RegionColours.Parotid_L)),
+            colour=list(np.array(RegionColours.Parotid_L) * 255),   # To 8-bit colours.
             data=seg,
             name='Parotid_L'
         )
@@ -168,7 +168,7 @@ def load_segmenter_predictions(
     # Extract data.
     preds = []
     for region in regions:
-        pred = RtStructConverter.get_regions_data(rtstruct, name_map[region], ref_cts)
+        pred = RtStructConverter.get_region_data(rtstruct, name_map[region], ref_cts)
         preds.append(pred)
     
     # Determine return type.

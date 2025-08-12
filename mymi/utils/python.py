@@ -26,6 +26,16 @@ def create_optional_properties(
                 return None
             locals[f'{p}_{c}'] = property(prop_fn)
 
+def filter_lists(
+    lists: List[List[Any]],
+    filt_fn: Callable) -> List[List[Any]]:
+    n_elements = len(lists[0])
+    for l in lists:
+        if len(l) != n_elements:
+            raise ValueError('All lists must have the same length.')
+    lists = map(list, zip(*[i for i in list(zip(*lists)) if filt_fn(i)]))
+    return lists
+
 def python_version(gte: Optional[str] = None) -> Union[Tuple[int, int, int], bool]:
     info = sys.version_info
     if gte is not None:
@@ -131,3 +141,13 @@ def delegates(*inner_fns: Callable) -> Callable:
 def has_private_attr(obj, attr_name):
     attr_name = f"_{obj.__class__.__name__}{attr_name}"
     return hasattr(obj, attr_name)
+
+def sort_lists(
+    lists: List[List[Any]],
+    sort_fn: Callable) -> List[List[Any]]:
+    n_elements = len(lists[0])
+    for l in lists:
+        if len(l) != n_elements:
+            raise ValueError('All lists must have the same length.')
+    lists = map(list, zip(*sorted(zip(*lists), key=sort_fn)))
+    return lists

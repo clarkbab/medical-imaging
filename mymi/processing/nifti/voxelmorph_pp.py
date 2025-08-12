@@ -24,12 +24,12 @@ def create_vxmpp_preprocessed_dataset(
         pat = set.patient(p)
         fixed_study = pat.study('study_1')
         fixed_ct = fixed_study.ct_data
-        fixed_lung = fixed_study.regions_data(regions=lung_region)[lung_region]
-        fixed_lms = fixed_study.landmarks_data()
+        fixed_lung = fixed_study.region_data(regions=lung_region)[lung_region]
+        fixed_lms = fixed_study.landmark_data()
         moving_study = pat.study('study_0')
         moving_ct = moving_study.ct_data
-        moving_lung = moving_study.regions_data(regions=lung_region)[lung_region]
-        moving_lms = moving_study.landmarks_data()
+        moving_lung = moving_study.region_data(regions=lung_region)[lung_region]
+        moving_lms = moving_study.landmark_data()
 
         # Resample to required spacing.
         vxm_fixed_spacing = (1.75, 1.25, 1.75)

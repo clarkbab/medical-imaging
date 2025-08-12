@@ -27,10 +27,6 @@ class TrainingSample:
         return wrapper
 
     @property
-    def fov(self) -> FOV3D:
-        return tuple(np.array(self.size) * self.spacing)
-
-    @property
     def id(self) -> str:
         return self.__id
 

@@ -4,21 +4,31 @@ import os
 from mymi.typing import *
 from mymi.utils import *
 
-from .images import NiftiImage
+from .images import NiftiImageSeries
 
-class MrImage(NiftiImage):
+class MrImageSeries(NiftiImageSeries):
     def __init__(
         self,
-        study: 'NiftiStudy',
-        id: SeriesID) -> None:
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
+        id: SeriesID,
+        filepath: FilePath) -> None:
+        self.__dataset_id = dataset_id
+        self.__filepath = filepath
+        self._global_id = f'NIFTI:{dataset_id}:{pat_id}:{study_id}:{id}'
         self.__id = id
-        self.__global_id = f'{study}:{id}'
-        self.__filepath = os.path.join(study.path, 'mr', f'{id}.nii.gz')
+        self.__pat_id = pat_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
-                self.__data, self.__spacing, self.__offset = load_nifti(self.__filepath)
+                if self.__filepath.endswith('.nii') or self.__filepath.endswith('.nii.gz'):
+                    self.__data, self.__spacing, self.__offset = load_nifti(self.__filepath)
+                elif self.__filepath.endswith('.nrrd'):
+                    self.__data, self.__spacing, self.__offset = load_nrrd(self.__filepath)
+                else:
+                    raise ValueError(f'Unsupported file format: {self.__filepath}')
             return fn(self, *args, **kwargs)
         return wrapper
 
@@ -43,6 +53,6 @@ class MrImage(NiftiImage):
         return self.__spacing
 
 # Add properties.
-props = ['filepath', 'global_id', 'id']
+props = ['filepath', 'id']
 for p in props:
-    setattr(MrImage, p, property(lambda self, p=p: getattr(self, f'_{MrImage.__name__}__{p}')))
+    setattr(MrImageSeries, p, property(lambda self, p=p: getattr(self, f'_{MrImageSeries.__name__}__{p}')))

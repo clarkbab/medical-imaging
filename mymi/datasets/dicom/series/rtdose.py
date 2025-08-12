@@ -1,54 +1,69 @@
+import os
 import pandas as pd
 from typing import *
 
+from mymi import config
+from mymi.constants import *
 from mymi.typing import *
+from mymi.utils import *
 
-from ..files import RtDoseFile, RtPlanFile
+from .rtplan import RtPlanSeries
 from .series import DicomSeries
 
 class RtDoseSeries(DicomSeries):
     def __init__(
         self,
-        study: 'DicomStudy',
-        id: SeriesID) -> None:
-        self.__global_id = f"{study}:{id}"
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
+        id: SeriesID,
+        index: pd.Series,
+        index_policy: Dict[str, Any]) -> None:
+        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
+        self.__dataset_id = dataset_id
+        self.__filepath = os.path.join(datasetpath, index['filepath'])
         self.__id = id
-        self.__study = study
-
-        # Get index.
-        index = self.__study.index
-        index = index[(index.modality == 'rtdose') & (index['series-id'] == self.__id)].copy()
-        if len(index) == 0:
-            raise ValueError(f"No RTDOSE series with ID '{id}' found in study '{study}'.")
         self.__index = index
+        self.__index_policy = index_policy
+        self.__modality = 'rtdose'
+        self.__pat_id = pat_id
+        self.__study_id = study_id
 
-        # Get policy.
-        self.__index_policy = self.__study.index_policy['rtdose']
-
-    @property
-    def default_file(self) -> RtDoseFile:
-        # Choose most recent RTDOSE.
-        rtdose_ids = self.list_files()
-        return self.file(rtdose_ids[-1])
-
-    def file(
-        self,
-        id: DicomSOPInstanceUID) -> RtDoseFile:
-        return RtDoseFile(self, id)
-
-    def list_files(self) -> List[DicomSOPInstanceUID]:
-        return list(sorted(self.__index.index))
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not has_private_attr(self, '__data'):
+                self.__load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
 
     @property
-    def modality(self) -> DicomModality:
-        return 'rtdose'
+    @ensure_loaded
+    def data(self) -> DoseData:
+        return self.__data
+
+    @property
+    def dicom(self) -> RtDoseDicom:
+        return dcm.read_file(self.__filepath)
+
+    @property
+    @ensure_loaded
+    def offset(self) -> Point3D:
+        return self.__offset
+
+    @property
+    @ensure_loaded
+    def size(self) -> Size3D:
+        return self.__data.shape
+
+    @property
+    @ensure_loaded
+    def spacing(self) -> Spacing3D:
+        return self.__spacing
+
+    def __load_data(self) -> None:
+        self.__data, self.__spacing, self.__offset = from_rtdose_dicom(self.dicom)
 
 # Add properties.
-props = ['global_id', 'id', 'index', 'index_policy', 'study']
+props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtplan', 'study_id']
 for p in props:
     setattr(RtDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{RtDoseSeries.__name__}__{p}')))
-
-# Add property shortcuts from 'default_file'.
-props = ['data', 'filepath', 'fov', 'offset', 'ref_rtplan', 'size', 'spacing']
-for p in props:
-    setattr(RtDoseSeries, p, property(lambda self, p=p: getattr(self.default_file, p) if self.default_file is not None else None))

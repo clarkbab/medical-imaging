@@ -2,15 +2,15 @@ import numpy as np
 import torch
 from typing import *
 
-from mymi.geometry import get_extent
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import assert_box_width, handle_non_spatial_dims
+from .transforms import assert_box_width
 
+@alias_kwargs(('use_patient_coords', 'upc'))
 def __spatial_pad(
     image: ImageData3D,
-    bounding_box: Union[PixelBox, VoxelBox],
+    bounding_box: Union[Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
@@ -51,11 +51,11 @@ def pad(
     return handle_non_spatial_dims(__spatial_pad, image, *args, **kwargs)
 
 def __spatial_centre_pad(
-    image: ImageData3D,
-    size: Union[Size2D, Size3D, FOV2D, FOV3D],
+    image: ImageData,
+    size: Union[Size, SizeMM],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True,
-    **kwargs) -> ImageData3D:
+    **kwargs) -> ImageData:
     # Convert size to voxels if necessary.
     if use_patient_coords:
         assert spacing is not None

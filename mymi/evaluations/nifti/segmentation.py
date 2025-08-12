@@ -26,7 +26,7 @@ def get_segmenter_patient_evaluation(
     set = NiftiDataset(dataset)
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
-    region_data = pat.regions_data(**kwargs)
+    region_data = pat.region_data(**kwargs)
 
     metrics = []
     for r, pred in pred_data.items():

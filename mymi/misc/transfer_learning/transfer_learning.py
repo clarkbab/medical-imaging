@@ -18,7 +18,6 @@ from mymi.metrics import higher_is_better
 from mymi.regions import RegionNames
 from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_to_list, encode
 
-DEFAULT_FONT_SIZE = 8
 DEFAULT_MAX_NFEV = int(1e6)
 DEFAULT_METRIC_LEGEND_LOCS = {
     'dice': 'lower right',
@@ -572,7 +571,7 @@ def megaplot(
     metric: Union[str, List[str], np.ndarray],
     stat: Union[str, List[str]],
     figsize: Optional[Tuple[float, float]] = None,
-    fontsize: float = DEFAULT_FONT_SIZE,
+    fontsize: float = 12,
     fontsize_tick_label: Optional[float] = None,
     height_ratios: Optional[List[float]] = None,
     hspace_grid: float = 0.25,
@@ -660,7 +659,7 @@ def plot_bootstrap_fit(
     diff_hspace: Optional[float] = 0.05,
     diff_marker: str = 's',
     figsize: Tuple[float, float] = (8, 6),
-    fontsize: float = DEFAULT_FONT_SIZE,
+    fontsize: float = 12,
     fontsize_label: Optional[float] = None,
     fontsize_tick_label: Optional[float] = None,
     fontweight: Literal['normal', 'bold'] = 'normal',

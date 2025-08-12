@@ -4,11 +4,11 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import *
+from .transforms import assert_box_width
 
 def __spatial_crop(
     image: ImageData3D,
-    bounding_box: Union[Point2DBox, Point3DBox],
+    bounding_box: Union[BoxMM2D, BoxMM3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     offset: Optional[Union[Point2D, Point3D]] = None,
     use_patient_coords: bool = True) -> ImageData3D:
@@ -41,10 +41,10 @@ def crop(
     return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
 
 def __spatial_centre_crop(
-    data: ImageData3D,
-    size: Union[FOV2D, FOV3D, Size2D, Size3D],
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageData3D:
+    data: ImageData,
+    size: Union[Size, SizeMM],
+    spacing: Optional[Spacing] = None,
+    use_patient_coords: bool = True) -> ImageData:
 
     # Determine cropping/padding amounts.
     if use_patient_coords:
@@ -70,13 +70,21 @@ def centre_crop(
     assert_image(data)
     return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
-def __spatial_crop_foreground_vox(
+def __spatial_crop_foreground(
     data: LabelData3D,
-    bounding_box: Union[PixelBox, VoxelBox],
-    fill: Union[float, Literal['min']] = 'min') -> LabelData3D:
-    __assert_dims(data, (2, 3))
-    bounding_box = replace_box_none_vox(bounding_box, data.shape)
-    __assert_box_width(bounding_box)
+    bounding_box: Union[BoxMM2D, BoxMM3D, Box2D, Box3D],
+    fill: Union[float, Literal['min']] = 'min',
+    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
+    offset: Optional[Union[Point2D, Point3D]] = None,
+    use_patient_coords: bool = True) -> LabelData3D:
+    bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
+    assert_box_width(bounding_box)
+
+    # Convert box to voxel coordinates.
+    min, max = bounding_box
+    if use_patient_coords:
+        min = np.round((np.array(min) - offset) / spacing)
+        max = np.round((np.array(max) - offset) / spacing)
 
     if fill == 'min':
         fill = np.min(data)
@@ -84,7 +92,6 @@ def __spatial_crop_foreground_vox(
     ct_size = cropped.shape
 
     # Crop upper bound.
-    min, max = bounding_box
     for a in range(len(ct_size)):
         index = [slice(None)] * len(ct_size)
         index[a] = slice(0, min[a])
@@ -98,46 +105,25 @@ def __spatial_crop_foreground_vox(
 
     return cropped
 
-@delegates(__spatial_crop_foreground_vox)
-def crop_foreground_vox(
+@delegates(__spatial_crop_foreground)
+def crop_foreground(
     data: LabelData,
     *args, **kwargs) -> LabelData:
     assert_image(data)
-    return handle_non_spatial_dims(__spatial_crop_foreground_vox, data, *args, **kwargs)
-
-def __spatial_crop_foreground_mm(
-    data: LabelData3D,
-    bounding_box: Union[PixelBox, VoxelBox],
-    spacing: Union[Spacing2D, Spacing3D],
-    offset: Union[Point2D, Point3D],
-    **kwargs) -> LabelData3D:
-    bounding_box = replace_box_none_mm(bounding_box, data.shape, spacing, offset)
-    # Convert box to voxel coordinates.
-    min_mm, max_mm = bounding_box
-    min_vox = np.round((np.array(min_mm) - offset) / spacing)
-    max_vox = np.round((np.array(max_mm) - offset) / spacing)
-
-    return __spatial_crop_foreground_vox(data, (min_vox, max_vox), **kwargs)
-
-@delegates(__spatial_crop_foreground_mm)
-def crop_foreground_mm(
-    data: LabelData,
-    *args, **kwargs) -> LabelData:
-    assert_image(data)
-    return handle_non_spatial_dims(__spatial_crop_foreground_mm, data, *args, **kwargs)
+    return handle_non_spatial_dims(__spatial_crop_foreground, data, *args, **kwargs)
 
 def crop_landmarks(
-    landmarks_data: Union[LandmarksData, LandmarksVoxelData],
-    crop: Union[VoxelBox, Point3DBox]) -> Union[LandmarksData, LandmarksVoxelData]:
-    landmarks_data = landmarks_data.copy()
-    lm_data = landmarks_to_data(landmarks_data)
+    landmark_data: Union[LandmarksData, LandmarksVoxelData],
+    crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksData, LandmarksVoxelData]:
+    landmark_data = landmark_data.copy()
+    lm_data = landmarks_to_data(landmark_data)
     lm_data = lm_data - crop[0]
-    landmarks_data[list(range(3))] = lm_data
-    return landmarks_data
+    landmark_data[list(range(3))] = lm_data
+    return landmark_data
 
 def crop_point(
     point: Union[Pixel, Voxel],
-    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[Pixel, Voxel]]:
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -158,7 +144,7 @@ def crop_point(
 
 def crop_or_pad_point(
     point: Union[Pixel, Voxel],
-    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[Pixel, Voxel]]:
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Pixel, Voxel]]:
     # Check dimensions.
     assert len(point) == len(crop[0]) and len(point) == len(crop[1])
 
@@ -178,8 +164,8 @@ def crop_or_pad_point(
     return point
 
 def crop_or_pad_box(
-    box: Union[PixelBox, VoxelBox],
-    crop: Union[PixelBox, VoxelBox]) -> Optional[Union[PixelBox, VoxelBox]]:
+    box: Union[Box2D, Box3D],
+    crop: Union[Box2D, Box3D]) -> Optional[Union[Box2D, Box3D]]:
     __assert_is_box(box)
     __assert_is_box(crop)
 
@@ -203,7 +189,7 @@ def __assert_dims(
     if n_dims not in dims:
         raise ValueError(f"Data should have dims={dims}, got {n_dims}.")
 
-def __assert_is_box(box: Union[PixelBox, VoxelBox]) -> None:
+def __assert_is_box(box: Union[Box2D, Box3D]) -> None:
     min, max = box
     if not np.all(list(mx >= mn for mn, mx in zip(min, max))):
         raise ValueError(f"Invalid box '{box}'.")

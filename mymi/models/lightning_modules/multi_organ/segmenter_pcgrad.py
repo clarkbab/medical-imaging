@@ -10,7 +10,7 @@ sys.path.append(pcgrad_path)
 from pcgrad import PCGrad
 
 from mymi import config
-from mymi.geometry import centre_of_extent
+from mymi.geometry import fov_centre
 from mymi import logging
 from mymi.losses import *
 from mymi.metrics import *
@@ -446,7 +446,7 @@ class SegmenterPCGrad(pl.LightningModule):
                         y_hat_vol, x_vol, y_vol = y_hat[i, c], x[i, 0], y[i, c]
 
                         # Get centre of extent of ground truth.
-                        centre = centre_of_extent(y_vol)
+                        centre = fov_centre(y_vol)
                         if centre is None:
                             # Presumably data augmentation has pushed the label out of view.
                             continue

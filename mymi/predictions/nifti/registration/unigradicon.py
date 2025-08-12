@@ -8,20 +8,22 @@ from typing import *
 from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.transforms import load_itk_transform, load_sitk_transform, resample, save_sitk_transform, sitk_transform_points
+from mymi.transforms import load_itk_transform, sitk_load_transform, resample, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils import *
 
-def create_unigradicon_predictions(
+def create_unigradicon_finetuned_predictions(
     dataset: str,
     model: str,
-    register_ct: bool = True,
-    landmarks: Optional[Landmarks] = 'all',
-    regions: Optional[Regions] = 'all',
+    create_moved_dose: bool = True,
+    create_moved_ct: bool = True,
+    landmark_ids: Optional[LandmarkIDs] = 'all',
+    pat_ids: PatientIDs = 'all',
+    region_ids: Optional[RegionIDs] = 'all',
     splits: Optional[Split] = 'all',
     use_io: bool = False,
     use_timing: bool = True) -> None:
-    logging.arg_log('Making UniGradICON predictions', ('dataset', 'model', 'regions'), (dataset, model, regions))
+    logging.arg_log('Making UniGradICON (fine-tuned) predictions', ('dataset', 'model', 'region_ids'), (dataset, model, region_ids))
 
     # Create timing table.
     if use_timing:
@@ -34,7 +36,7 @@ def create_unigradicon_predictions(
 
     # Load patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(splits=splits)
+    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
 
     for p in tqdm(pat_ids):
         # Timing table data.
@@ -52,20 +54,20 @@ def create_unigradicon_predictions(
             fixed_pat = set.patient(fixed_pat_id)
             moving_study = moving_pat.study(moving_study_id)
             fixed_study = fixed_pat.study(fixed_study_id)
-            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id)
+            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id)
             moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
             transform_path = os.path.join(reg_path, 'dvf', f'{model}.hdf5')
 
             # Register CT images.
-            if register_ct:
+            if create_moved_ct:
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
                 os.makedirs(os.path.dirname(transform_path), exist_ok=True)
                 io_iterations = 50 if use_io else None
                 command = [
                     'unigradicon-register',
-                    '--moving', moving_study.ct_path,
+                    '--moving', moving_study.ct_filepath,
                     '--moving_modality', 'ct',
-                    '--fixed', fixed_study.ct_path,
+                    '--fixed', fixed_study.ct_filepath,
                     '--fixed_modality', 'ct',
                     '--warped_moving_out', moved_path,
                     '--transform_out', transform_path,
@@ -77,7 +79,7 @@ def create_unigradicon_predictions(
                 # Convert transform to sitk.
                 t_itk = load_itk_transform(transform_path)[0]
                 transform = convert_transform_to_sitk(t_itk)
-                save_sitk_transform(transform, transform_path)
+                sitk_save_transform(transform, transform_path)
 
                 # Apply transform to moving CT.
                 fixed_ct = fixed_study.ct_data
@@ -90,9 +92,9 @@ def create_unigradicon_predictions(
                 save_nifti(moved_ct, moved_path, spacing=fixed_spacing, offset=fixed_offset)
 
             # Register regions.
-            if regions is not None:
-                regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-                for r in regions:
+            if region_ids is not None:
+                region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
+                for r in region_ids:
                     if not moving_study.has_regions(r):
                         continue
 
@@ -100,10 +102,10 @@ def create_unigradicon_predictions(
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
                     fixed_offset = fixed_study.ct_offset
-                    moving_label = moving_study.regions_data(r)[r]
+                    moving_label = moving_study.region_data(region_ids=r)[r]
                     moving_spacing = moving_study.ct_spacing
                     moving_offset = moving_study.ct_offset
-                    transform = load_sitk_transform(transform_path)
+                    transform = sitk_load_transform(transform_path)
 
                     # Perform transform.
                     moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
@@ -127,10 +129,10 @@ def create_unigradicon_predictions(
                     # subprocess.run(command)
 
             # Transform any fixed landmarks back to moving space.
-            if landmarks is not None:
-                transform = load_sitk_transform(transform_path)
-                if fixed_study.has_landmarks(landmarks=landmarks):
-                    fixed_lm_df = fixed_study.landmarks_data(landmarks=landmarks)
+            if landmark_ids is not None:
+                transform = sitk_load_transform(transform_path)
+                if fixed_study.has_landmarks(landmark_ids=landmark_ids):
+                    fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)
                     if np.allclose(lm_data_t, lm_data):
@@ -141,6 +143,157 @@ def create_unigradicon_predictions(
                     # Save transformed points.
                     filepath = os.path.join(reg_path, 'landmarks', f'{model}.csv')
                     save_csv(moving_lm_df, filepath, overwrite=True)
+                    
+            # Move dose.
+            if create_moved_dose and moving_study.has_dose:
+                moving_dose = moving_study.dose_data
+                moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
+                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+
+    # Save timing data.
+    if use_timing:
+        filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'timing', f'{model}.csv')
+        timer.save(filepath)
+
+def create_unigradicon_predictions(
+    dataset: str,
+    model: str,
+    create_moved_dose: bool = True,
+    create_moved_ct: bool = True,
+    landmark_ids: Optional[LandmarkIDs] = 'all',
+    pat_ids: PatientIDs = 'all',
+    region_ids: Optional[RegionIDs] = 'all',
+    splits: Optional[Split] = 'all',
+    use_io: bool = False,
+    use_timing: bool = True) -> None:
+    logging.arg_log('Making UniGradICON predictions', ('dataset', 'model', 'region_ids'), (dataset, model, region_ids))
+
+    # Create timing table.
+    if use_timing:
+        cols = {
+            'dataset': str,
+            'patient-id': str,
+            'device': str
+        }
+        timer = Timer(cols)
+
+    # Load patients.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+
+    for p in tqdm(pat_ids):
+        # Timing table data.
+        data = {
+            'dataset': dataset,
+            'patient-id': p,
+            'device': 'cuda',
+        }
+        with timer.record(data, enabled=use_timing):
+            # Load details.
+            moving_pat_id, moving_study_id = p, 'study_0'
+            fixed_pat_id, fixed_study_id = p, 'study_1'
+            # moving/fixed_series_id = 'series_0' implicit.
+            moving_pat = set.patient(moving_pat_id)
+            fixed_pat = set.patient(fixed_pat_id)
+            moving_study = moving_pat.study(moving_study_id)
+            fixed_study = fixed_pat.study(fixed_study_id)
+            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id)
+            moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
+            transform_path = os.path.join(reg_path, 'dvf', f'{model}.hdf5')
+
+            # Register CT images.
+            if create_moved_ct:
+                os.makedirs(os.path.dirname(moved_path), exist_ok=True)
+                os.makedirs(os.path.dirname(transform_path), exist_ok=True)
+                io_iterations = 50 if use_io else None
+                command = [
+                    'unigradicon-register',
+                    '--moving', moving_study.ct_filepath,
+                    '--moving_modality', 'ct',
+                    '--fixed', fixed_study.ct_filepath,
+                    '--fixed_modality', 'ct',
+                    '--warped_moving_out', moved_path,
+                    '--transform_out', transform_path,
+                    '--io_iterations', str(io_iterations)
+                ]
+                logging.info(command)
+                subprocess.run(command)
+
+                # Convert transform to sitk.
+                t_itk = load_itk_transform(transform_path)[0]
+                transform = convert_transform_to_sitk(t_itk)
+                sitk_save_transform(transform, transform_path)
+
+                # Apply transform to moving CT.
+                fixed_ct = fixed_study.ct_data
+                fixed_spacing = fixed_study.ct_spacing
+                fixed_offset = fixed_study.ct_offset
+                moving_ct = moving_study.ct_data
+                moving_spacing = moving_study.ct_spacing
+                moving_offset = moving_study.ct_offset
+                moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, offset=fixed_offset)
+
+            # Register regions.
+            if region_ids is not None:
+                region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
+                for r in region_ids:
+                    if not moving_study.has_regions(r):
+                        continue
+
+                    # Load data.
+                    fixed_ct = fixed_study.ct_data
+                    fixed_spacing = fixed_study.ct_spacing
+                    fixed_offset = fixed_study.ct_offset
+                    moving_label = moving_study.region_data(region_ids=r)[r]
+                    moving_spacing = moving_study.ct_spacing
+                    moving_offset = moving_study.ct_offset
+                    transform = sitk_load_transform(transform_path)
+
+                    # Perform transform.
+                    moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                    moved_label_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
+                    os.makedirs(os.path.dirname(moved_label_path), exist_ok=True)
+                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, offset=fixed_offset)
+
+                    # # Perform region warp.
+                    # moving_region_path = moving_study.region_path(r)
+                    # moved_region_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
+                    # os.makedirs(os.path.dirname(moved_region_path), exist_ok=True)
+                    # command = [
+                    #     'unigradicon-warp',
+                    #     '--moving', moving_region_path,
+                    #     '--fixed', fixed_study.ct_path,
+                    #     '--transform', transform_path,
+                    #     '--warped_moving_out', moved_region_path,
+                    #     '--nearest_neighbor'
+                    # ]
+                    # logging.info(command)
+                    # subprocess.run(command)
+
+            # Transform any fixed landmarks back to moving space.
+            if landmark_ids is not None:
+                transform = sitk_load_transform(transform_path)
+                if fixed_study.has_landmarks(landmark_ids=landmark_ids):
+                    fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
+                    lm_data = fixed_lm_df[list(range(3))].to_numpy()
+                    lm_data_t = sitk_transform_points(lm_data, transform)
+                    if np.allclose(lm_data_t, lm_data):
+                        logging.warning(f"Moved points are very similar to fixed points - identity transform?")
+                    moving_lm_df = fixed_lm_df.copy()
+                    moving_lm_df[list(range(3))] = lm_data_t
+
+                    # Save transformed points.
+                    filepath = os.path.join(reg_path, 'landmarks', f'{model}.csv')
+                    save_csv(moving_lm_df, filepath, overwrite=True)
+                    
+            # Move dose.
+            if create_moved_dose and moving_study.has_dose:
+                moving_dose = moving_study.dose_data
+                moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
+                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
     # Save timing data.
     if use_timing:

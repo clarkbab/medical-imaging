@@ -16,7 +16,7 @@ def get_custom_holdout_split(
     **kwargs) -> Union[Tuple[List[PatientID], List[PatientID], List[PatientID]], bool]:
     # Loads train/validate/test for 'split.csv' file.
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'holdout-split.csv')
+    filepath = os.path.join(set.path, 'splits.csv')
     if not os.path.exists(filepath):
         if exists_only:
             return False
@@ -26,7 +26,7 @@ def get_custom_holdout_split(
         return True
 
     # Load split file.
-    logging.info(f"Loading custom split 'holdout-split.csv'.")
+    logging.info(f"Loading custom split 'splits.csv'.")
     df = load_csv(filepath)
     
     # Get splits.

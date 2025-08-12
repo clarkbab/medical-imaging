@@ -1,4 +1,4 @@
-from mymi.evaluations.datasets.nifti import create_registrations_evaluation
+from mymi.evaluations.datasets.nifti import create_registration_evaluations
 
 dataset = 'DIRLAB-LUNG-COPD'
 model ='deeds'
@@ -6,4 +6,4 @@ kwargs = dict(
     # splits='test',
 )
 
-create_registrations_evaluation(dataset, model, **kwargs)
+create_registration_evaluations(dataset, model, **kwargs)

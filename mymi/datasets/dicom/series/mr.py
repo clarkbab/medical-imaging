@@ -4,8 +4,9 @@ import pandas as pd
 import pydicom as dcm
 from typing import *
 
+from mymi import config
 from mymi.constants import DICOM_DATE_FORMAT, DICOM_TIME_FORMAT
-from mymi.geometry import get_extent
+from mymi.geometry import fov
 from mymi.typing import *
 from mymi.utils import *
 
@@ -14,25 +15,23 @@ from .series import DicomSeries
 class MrSeries(DicomSeries):
     def __init__(
         self,
-        study: 'DicomStudy',
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
         id: SeriesID,
-        force_dicom_read: bool = False) -> None:
-        self.__force_dicom_read = force_dicom_read
-        self.__global_id = f"{study}:{id}"
-        self.__study = study
-        self.__id = id
-
-        # Load index.
-        index = self.__study.index
-        index = index[(index.modality == 'mr') & (index['series-id'] == id)].copy()
-        if len(index) == 0:
-            raise ValueError(f"No MR series with ID '{id}' found in study '{study}'.")
-        self.__index = index
-
-        # Save paths.
-        relpaths = list(self.__index['filepath'])
-        abspaths = [os.path.join(self.__study.patient.dataset.path, p) for p in relpaths]
+        index: pd.DataFrame,
+        index_policy: Dict[str, Any]) -> None:
+        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
+        relpaths = list(index['filepath'])
+        abspaths = [os.path.join(datasetpath, p) for p in relpaths]
+        self.__dataset_id = dataset_id
         self.__filepaths = abspaths
+        self.__id = id
+        self.__index = index
+        self.__index_policy = index_policy
+        self.__modality = 'mr'
+        self.__pat_id = pat_id
+        self.__study_id = study_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -44,7 +43,7 @@ class MrSeries(DicomSeries):
     @property
     def dicoms(self) -> List[dcm.FileDataset]:
         # Sort MRs by z position, smallest first.
-        mr_dicoms = [dcm.read_file(f, force=self.__force_dicom_read) for f in self.__filepaths]
+        mr_dicoms = [dcm.read_file(f, force=False) for f in self.__filepaths]
         mr_dicoms = list(sorted(mr_dicoms, key=lambda m: m.ImagePositionPatient[2]))
         return mr_dicoms
 
@@ -54,23 +53,10 @@ class MrSeries(DicomSeries):
         return self.__data
 
     @ensure_loaded
-    def extent(
-        self,
-        use_patient_coords: bool = True) -> Union[Point3D, Voxel]:
-        return get_extent(self.__data, spacing=self.__spacing, offset=self.__offset, use_patient_coords=use_patient_coords)
-
-    @property
-    @ensure_loaded
     def fov(
         self,
-        **kwargs) -> Union[FOV3D, Size3D]:
-        ext_min, ext_max = self.extent(**kwargs)
-        fov = tuple(np.array(ext_max) - ext_min)
-        return fov
-
-    @property
-    def modality(self) -> DicomModality:
-        return 'mr'
+        **kwargs) -> Fov3D:
+        return fov(self.__data, spacing=self.__spacing, offset=self.__offset, **kwargs)
 
     @property
     @ensure_loaded
@@ -126,6 +112,6 @@ class MrSeries(DicomSeries):
         self.__data = data
 
 # Add properties.
-props = ['filepaths', 'global_id', 'id', 'index', 'index_policy', 'study']
+props = ['dataset_id', 'filepaths', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'study_id']
 for p in props:
     setattr(MrSeries, p, property(lambda self, p=p: getattr(self, f'_{MrSeries.__name__}__{p}')))

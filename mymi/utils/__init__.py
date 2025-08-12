@@ -1,4 +1,7 @@
 from .assertions import *
+from .colours import *
+from .decorators import *
+from .dicom import *
 from .interval import *
 from .io import *
 from .itk import *
@@ -6,6 +9,7 @@ from .landmarks import *
 from .maths import *
 from .nifti import *
 from .nrrd import *
+from .numpy import *
 from .pandas import *
 from .plotting import *
 from .python import *

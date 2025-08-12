@@ -10,27 +10,22 @@ from mymi import logging
 from mymi.typing import *
 from mymi.utils import *
 
-from .ct import to_ct_dicoms
-from .rtdose import to_rtdose_dicom
-from .rtstruct import to_rtstruct_dicom
-
 def convert_to_dicom(
-    set: 'Dataset',
+    dataset: 'Dataset',
+    dataset_fns: Dict[str, Callable],
     convert_ct: bool = True,
     convert_dose: bool = True,
-    convert_landmarks: bool = True,
-    convert_regions: bool = True,
     dest_dataset: Optional[str] = None,
     landmark_ids: LandmarkIDs = 'all',
     landmarks_prefix: Optional[str] = 'Marker',
     pat_ids: PatientIDs = 'all',
-    pat_id_map: Optional[Dict[PatientID, PatientID]] = None,
     pat_prefix: Optional[str] = None,
     recreate_dataset: bool = False,
+    recreate_patients: bool = True,
     region_ids: RegionIDs = 'all') -> None:
 
     # Create destination folder.
-    dest_dataset = set.id if dest_dataset is None else dest_dataset
+    dest_dataset = dataset.id if dest_dataset is None else dest_dataset
     if recreate_dataset:
         destset = recreate_dicom(dest_dataset)
     else:
@@ -38,18 +33,17 @@ def convert_to_dicom(
 
     # Remove old patients data.
     base_path = os.path.join(destset.path, 'data', 'patients')
-    if os.path.exists(base_path):
+    if recreate_patients and os.path.exists(base_path):
         shutil.rmtree(base_path)
     
     # Load patients.
-    pat_ids = set.list_patients(pat_ids=pat_ids)
+    pat_ids = dataset.list_patients(pat_ids=pat_ids)
 
     for p in tqdm(pat_ids):
         logging.info(p)
         # Map patient ID and apply prefix.
-        pat = set.patient(p)
-        p_mapped = pat_id_map[p] if pat_id_map is not None and p in pat_id_map else p
-        p_mapped = f'{pat_prefix}{p_mapped}' if pat_prefix is not None else p_mapped
+        pat = dataset.patient(p)
+        p_mapped = pat.origin['dicom-patient-id'] if pat.origin is not None else p
 
         study_ids = pat.list_studies()
         for s in study_ids:
@@ -61,12 +55,12 @@ def convert_to_dicom(
             ct_dicoms = None
 
             # Convert CT series.
-            ct_series_ids = study.list_series('ct')
+            ct_series_ids = dataset_fns['list_series'](study, 'ct')
             if len(ct_series_ids) > 1:
                 raise ValueError(f"Code only handles studies with a single CT series. See 'ct_dicoms' above.")
             ct_series_id = ct_series_ids[0]
             # Load data.
-            ct_series = study.ct(ct_series_id)
+            ct_series = dataset_fns['series'](study, ct_series_id, 'ct')
             ct_dicoms = to_ct_dicoms(ct_series.data, ct_series.spacing, ct_series.offset, p_mapped, s)
             for i, d in enumerate(ct_dicoms):
                 if convert_ct:
@@ -75,12 +69,14 @@ def convert_to_dicom(
                     d.save_as(filepath)
 
             # Convert regions to RTSTRUCT.
-            if (convert_landmarks and study.has_landmarks_series) or (convert_regions and study.has_regions_series):
-                all_series_ids = list(np.unique(study.list_series('landmarks') + study.list_series('regions')))
+            # Don't convert landmarks as these should be in 'moving' space.
+            if region_ids is not None and study.has_region_data:
+                all_series_ids = list(np.unique(dataset_fns['list_series'](study, 'landmarks') + dataset_fns['list_series'](study, 'regions')))
                 for ss in all_series_ids:
-                    lm_data = study.series(ss, 'landmarks').data() if convert_landmarks and study.has_series(ss, 'landmarks') else None
-                    r_data = study.series(ss, 'regions').data() if convert_regions and study.has_series(ss, 'regions') else None
-                    rtstruct_dicom = to_rtstruct_dicom(ct_dicoms, landmarks_data=lm_data, regions_data=r_data)
+                    lm_data = dataset_fns['series'](study, ss, 'landmarks').data() if convert_landmarks and dataset_fns['has_series'](study, ss, 'landmarks') else None
+                    r_data = dataset_fns['series'](study, ss, 'regions').data() if convert_regions and dataset_fns['has_series'](study, ss, 'regions') else None
+                    # rtstruct_dicom = to_rtstruct_dicom(ct_dicoms, landmark_data=lm_data, region_data=r_data)
+                    rtstruct_dicom = to_rtstruct_dicom(ct_dicoms, region_data=r_data)
                     filepath = os.path.join(base_path, p_mapped, s, 'rtstruct', f'{ss}.dcm')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     if not os.path.exists(filepath):
@@ -105,9 +101,9 @@ def convert_to_dicom(
 
             # Convert dose to RTDOSE/RTPLAN.
             if convert_dose and study.has_dose:
-                dose_series_ids = study.list_series('dose')
+                dose_series_ids = dataset_fns['list_series'](study, 'dose')
                 for ss in dose_series_ids:
-                    dose_series = study.series(ss, 'dose')
+                    dose_series = dataset_fns['series'](study, ss, 'dose')
                     dose_dicom = to_rtdose_dicom(dose_series.data, dose_series.spacing, dose_series.offset, ct_dicoms[0])
                     filepath = os.path.join(base_path, p_mapped, s, 'rtdose', f'{ss}.dcm')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)

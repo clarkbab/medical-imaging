@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional
 
 from mymi.metrics import mean_intensity, snr
-from mymi.geometry import extent, extent_width_mm
+from mymi.geometry import extent, fov_width
 from mymi.processing import largest_cc_3D
 from mymi.typing import *
 
@@ -68,7 +68,7 @@ def get_region_stats(
     stats.append(data.copy())
 
     # Add OAR extent.
-    ext_width_mm = extent_width_mm(region_data, spacing)
+    ext_width_mm = fov_width(region_data, spacing=spacing)
     if ext_width_mm is None:
         ext_width_mm = (0, 0, 0)
     data['metric'] = 'extent-mm-x'

@@ -36,7 +36,7 @@ def create_voxelmorph_pp_predictions(
         pat_landmarks = arg_to_list(landmarks, Landmark, literals={ 'all': pat.list_landmarks })
         fixed_study = pat.study(fixed_study_id)
         moving_study = pat.study(moving_study_id)
-        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', p, fixed_study_id, p, moving_study_id)
+        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study_id, p, moving_study_id)
         transform_path = os.path.join(pred_base_path, 'dvf', f'voxelmorph-pp.hdf5')
         
         if register_ct:
@@ -44,10 +44,10 @@ def create_voxelmorph_pp_predictions(
                 # Load data.
                 fixed_ct = fixed_study.ct_data
                 fixed_spacing = fixed_study.ct_spacing
-                fixed_lung = fixed_study.regions_data(regions=lung_region)[lung_region]
+                fixed_lung = fixed_study.region_data(regions=lung_region)[lung_region]
                 moving_ct = moving_study.ct_data
                 moving_spacing = moving_study.ct_spacing
-                moving_lung = moving_study.regions_data(regions=lung_region)[lung_region]
+                moving_lung = moving_study.region_data(regions=lung_region)[lung_region]
 
                 # Resample to required spacing.
                 vxm_fixed_spacing = (1.75, 1.25, 1.75)
@@ -128,7 +128,7 @@ def create_voxelmorph_pp_predictions(
                 matrix = np.diag(1 / np.array(fixed_spacing))
                 fixed_br_trans.SetMatrix(list(matrix.flatten()))
                 transform.AddTransform(fixed_br_trans)
-                save_sitk_transform(transform, transform_path)
+                sitk_save_transform(transform, transform_path)
 
                 # Move image manually using transform - only requires one resampling.
                 moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
@@ -136,7 +136,7 @@ def create_voxelmorph_pp_predictions(
                 save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
         if regions is not None:
-            transform = load_sitk_transform(transform_path)
+            transform = sitk_load_transform(transform_path)
 
             # Load labels, apply transform and save. 
             for r in pat_regions:
@@ -144,7 +144,7 @@ def create_voxelmorph_pp_predictions(
                     continue
 
                 # Create moved region label.
-                moving_label = moving_study.regions_data(regions=r)[r]
+                moving_label = moving_study.region_data(regions=r)[r]
                 moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'voxelmorph-pp.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
@@ -155,8 +155,8 @@ def create_voxelmorph_pp_predictions(
                 continue
 
             # Load transform and fixed landmarks.
-            transform = load_sitk_transform(transform_path)
-            fixed_lms = fixed_study.landmarks_data(landmarks=pat_landmarks)
+            transform = sitk_load_transform(transform_path)
+            fixed_lms = fixed_study.landmark_data(landmarks=pat_landmarks)
 
             # Transform landmarks.
             fixed_lm_data = fixed_lms[list(range(3))]

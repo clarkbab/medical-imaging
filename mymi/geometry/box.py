@@ -4,7 +4,7 @@ from mymi import typing
 
 def get_box(
     centre: typing.Voxel,
-    size: typing.Size3D) -> typing.VoxelBox:
+    size: typing.Size3D) -> typing.Box3D:
     # Convert to box.
     size = np.array(size)
     lower_sub = np.ceil(size / 2).astype(int)

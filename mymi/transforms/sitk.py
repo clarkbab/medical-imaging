@@ -6,9 +6,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .shared import handle_non_spatial_dims
-
-def load_sitk_transform(
+def sitk_load_transform(
     filepath: str) -> sitk.Transform:
     if not os.path.exists(filepath):
         raise ValueError(f"SimpleITK transform not found at filepath: {filepath}.")
@@ -39,7 +37,7 @@ def create_sitk_affine_transform(
 
     return transform
 
-def save_sitk_transform(
+def sitk_save_transform(
     transform: sitk.Transform,
     filepath: str) -> None:
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -70,7 +68,7 @@ def sitk_transform_points(
 
     return output
 
-def load_sitk_transform(
+def sitk_load_transform(
     filepath: str) -> sitk.Transform:
     transform = sitk.ReadTransform(filepath)
 
@@ -83,7 +81,7 @@ def load_sitk_transform(
 
     return transform
 
-def save_sitk_transform(
+def sitk_save_transform(
     transform: sitk.Transform,
     filepath: str) -> None:
     dirname = os.path.dirname(filepath)

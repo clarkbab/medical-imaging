@@ -1,54 +1,37 @@
+import os
 import pandas as pd
 from typing import *
 
+from mymi import config
 from mymi.typing import *
 
-from ..files import RtPlanFile, RtStructFile
 from .series import DicomSeries
 
 class RtPlanSeries(DicomSeries):
     def __init__(
         self,
-        study: 'DicomStudy',
-        id: SeriesID) -> None:
-        self.__global_id = f"{study}:{id}"
+        dataset_id: DatasetID,
+        pat_id: PatientID,
+        study_id: StudyID,
+        id: SeriesID,
+        index: pd.Series,
+        index_policy: Dict[str, Any]) -> None:
+        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
+        self.__dataset_id = dataset_id
+        self.__filepath = os.path.join(datasetpath, index['filepath'])
         self.__id = id
-        self.__study = study
-
-        # Get index.
-        index = self.__study.index
-        index = index[(index.modality == 'rtplan') & (index['series-id'] == self.__id)].copy()
-        if len(index) == 0:
-            raise ValueError(f"No RTPLAN series with ID '{id}' found in study '{study}'.")
-        self.__index = index
-
-        # Get policy.
-        self.__index_policy = self.__study.index_policy['rtplan']
+        self._index = index
+        self._index_policy = index_policy
+        self.__modality = 'rtplan'
+        self.__pat_id = pat_id
+        self.__study_id = study_id
 
     @property
-    def default_file(self) -> RtPlanFile:
-        # Choose most recent RTPLAN.
-        rtplan_ids = self.list_files()
-        return self.file(rtplan_ids[-1])
-
-    def file(
-        self,
-        id: DicomSOPInstanceUID) -> RtPlanFile:
-        return RtPlanFile(self, id)
-
-    def list_files(self) -> List[DicomSOPInstanceUID]:
-        return list(sorted(self.__index.index))
-
-    @property
-    def modality(self) -> DicomModality:
-        return 'rtplan'
-
-    @property
-    def ref_rtstruct(self) -> RtStructFile:
-        return self.default_file.ref_rtstruct
+    def dicom(self) -> RtPlanDicom:
+        return dcm.read_file(self.__filepath)
 
 # Add properties.
-props = ['global_id', 'id', 'index', 'index_policy', 'study']
+props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtstruct', 'study_id']
 for p in props:
     setattr(RtPlanSeries, p, property(lambda self, p=p: getattr(self, f'_{RtPlanSeries.__name__}__{p}')))
 

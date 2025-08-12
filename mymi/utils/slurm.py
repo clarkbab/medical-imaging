@@ -25,10 +25,10 @@ DEFAULT_GPU = 'gpu-h100'
 def create_slurm(
     file: str,
     array: Optional[str] = None,
+    enqueue: bool = True,
     memory: int = 128,
     mode: Literal['cpu', 'gpu'] = 'gpu',
     partitions: Optional[str] = None,
-    queue: bool = True,
     suffix: str = '',
     time: timedelta = 'days:7',
     **kwargs) -> None:
@@ -128,7 +128,7 @@ python {file} {kwarg_str}
             f.write(content)
 
         # Queue job.
-        if queue:
+        if enqueue:
             command = f'sbatch '
             if array is not None:
                 command += f'--array={array} '
@@ -138,10 +138,21 @@ python {file} {kwarg_str}
             os.system(command)
 
 def create_slurm_grid(
+    create_slurm_fn,
     *args,
+    dry_run: bool = True,
     params: Union[str, Sequence[str]] = [],     # M params.
-    values: Union[int, float, Sequence[Union[int, float]], Sequence[Sequence[Union[int, float]]]] = [],     # N runs.
+    values: Union[float, int, str, List[Union[float, int, str]], List[List[Union[float, int, str]]]] = [],     # N runs.
     **kwargs) -> None:
+    # Shouldn't this work differently, it's not really a grid search? I.e. product of a,b values?
+    # E.g. --params a,b --values "[[1, 2],[3, 4]]" should produce four runs:
+    # a=1, b=3
+    # a=1, b=4
+    # a=2, b=3
+    # a=2, b=4
+    # Not two runs
+    # a=1, b=3
+    # a=2, b=4
     # Variations:
     # --params a --values 1                     N x M = 1 x 1
     # --params a --values 1,2                   N x M = 2 x 1
@@ -151,11 +162,11 @@ def create_slurm_grid(
     # --params a,b --values "[[1, 2],[3, 4]]"   N x M = 2 x 2
     params = arg_to_list(params, str)
     n_params = len(params)
-    values = arg_to_list(values, Union[int, float], broadcast=n_params)    # If single value, broadcast to length of number of params.
+    values = arg_to_list(values, Union[float, int, str], broadcast=n_params)    # If single value, broadcast to length of number of params.
     # List of lists could be passed directly - do nothing.
     # This handles cases where a single list is passed. 
     # This could either be a single run, multiple params, or multiple runs, single param. How do we know which is which?
-    values = arg_to_list(values, Sequence[Union[int, float]])           
+    values = arg_to_list(values, List[Union[float, int, str]])           
     if n_params == 1:
         # Transpose values if using a single param - multiple runs.
         values = list(map(list, zip(*values)))
@@ -174,13 +185,26 @@ def create_slurm_grid(
         param_vals = {}
         for j, p in enumerate(params):
             param_vals[p] = values[i][j]
-        create_slurm(*args, **param_vals, suffix=i, **kwargs)
+        if dry_run:
+            logging.info(f"Would call: {create_slurm_fn.__name__}({args}, {param_vals}, suffix={i}, {kwargs})")
+        else:
+            create_slurm_fn(*args, **param_vals, suffix=i, **kwargs)
+
+def create_slurm_grid_pmcc(*args, **kwargs) -> None:
+    create_slurm_grid(create_slurm_pmcc, *args, **kwargs)
+
+def create_slurm_grid_spartan(*args, **kwargs) -> None:
+    create_slurm_grid(create_slurm, *args, **kwargs)
 
 def grid_arg(
     name: str,
-    default: Union[int, float]) -> Union[int, float]:
+    arg_type: Optional[Union[float, int, str]] = None,
+    default: Optional[Union[float, int, str]] = None) -> Optional[Union[int, float]]:
     parser = argparse.ArgumentParser()
-    parser.add_argument(f'--{name}', type=type(default), default=default)
+    if arg_type is None and default is None:
+        raise ValueError("Must provide either arg_type or default value - to infer arg type.")
+    arg_type = arg_type or type(default)
+    parser.add_argument(f'--{name}', type=arg_type, default=default)
     args = parser.parse_args()
     arg = getattr(args, name)
     return arg
@@ -199,38 +223,50 @@ PMCC_DEFAULT_GPU = 'rhel_gpu'
 def create_slurm_pmcc(
     file: str,
     array: Optional[str] = None,
+    enqueue: bool = True,
     memory: int = 128,
-    mode: Literal['cpu', 'gpu'] = 'gpu',
+    mode: Optional[Literal['cpu', 'gpu']] = None,
     partitions: Optional[str] = None,
-    queue: bool = True,
     suffix: str = '',
     time: timedelta = 'days:14',
     **kwargs) -> None:
-    # Handle arguments.
+    if 'p' in kwargs or 'partition' in kwargs:
+        raise ValueError("Please use the 'partitions' argument to specify partitions, not 'p' or 'partition'.")
+
+    # Determine partitions and mode.
+    assert mode in (None, 'cpu', 'gpu'), f"Mode must be one of None, 'cpu', or 'gpu', not {mode}."
     if partitions is None:
-        # Set the partitions based on mode.
-        partitions = [PMCC_DEFAULT_CPU] if mode == 'cpu' else [PMCC_DEFAULT_GPU]
+        if mode is None:
+            # If both are None, default to CPU mode and default CPU partition.
+            mode = 'cpu'
+            partitions = [PMCC_DEFAULT_CPU]
+        else:
+            # If mode is specified, set partitions based on mode.
+            partitions = [PMCC_DEFAULT_CPU] if mode == 'cpu' else [PMCC_DEFAULT_GPU]
     elif partitions == 'go-fishing':
+        mode = 'gpu'
         partitions = PMCC_GPU_PARTITIONS
     else:
         partitions = partitions.split(',')  # Fire won't interpret as a list.
 
-    # Check partitions.
-    for p in partitions:
-        if p not in PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS:
-            raise ValueError(f"Partition {p} not recognised. Must be one of {PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS}.")
+        # Check partitions.
+        for p in partitions:
+            if p not in PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS:
+                raise ValueError(f"Partition {p} not recognised. Must be one of {PMCC_CPU_PARTITIONS + PMCC_GPU_PARTITIONS}.")
 
-    # Set the mode based on requested partitions.
-    p0 = partitions[0]
-    if p0 in PMCC_CPU_PARTITIONS:
-        mode = 'cpu'
-    elif p0 in PMCC_GPU_PARTITIONS:
-        mode = 'gpu' 
+        # Set the mode based on requested partitions.
+        p0 = partitions[0]
+        if p0 in PMCC_CPU_PARTITIONS:
+            mode = 'cpu'
+        elif p0 in PMCC_GPU_PARTITIONS:
+            mode = 'gpu' 
 
-    # Check consistent mode.
-    for p in partitions:
-        if (mode == 'cpu' and p not in PMCC_CPU_PARTITIONS) or (mode == 'gpu' and p not in PMCC_GPU_PARTITIONS):
-            raise ValueError(f"Partitions should be either CPU or GPU, not both.")
+        # Check consistent mode.
+        for p in partitions:
+            if (mode == 'cpu' and p not in PMCC_CPU_PARTITIONS) or (mode == 'gpu' and p not in PMCC_GPU_PARTITIONS):
+                raise ValueError(f"Partitions should be either CPU or GPU, not both.")
+
+    logging.info(f"Queuing job with mode '{mode}' and partitions {partitions}.")
 
     # Parse time string.
     if isinstance(time, str):
@@ -288,7 +324,7 @@ python {file} {kwarg_str}
             f.write(content)
 
         # Queue job.
-        if queue:
+        if enqueue:
             command = f'sbatch '
             if array is not None:
                 command += f'--array={array} '
