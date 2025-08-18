@@ -41,25 +41,25 @@ class RtStructSeries(DicomSeries):
 
     @property
     def dicom(self) -> CtDicom:
-        return dcm.read_file(self.__filepath)
+        return dcm.dcmread(self.__filepath)
 
-    def has_landmarks(
+    def has_landmark(
         self,
-        landmark_ids: LandmarkIDs = 'all',
+        landmark_ids: LandmarkIDs,
         any: bool = False,
         **kwargs) -> bool:
         all_ids = self.list_landmarks(**kwargs)
-        landmark_ids = arg_to_list(landmark_ids, LandmarkID, literals={ 'all': all_ids })
+        landmark_ids = arg_to_list(landmark_ids, LandmarkID)
         n_overlap = len(np.intersect1d(landmark_ids, all_ids))
         return n_overlap > 0 if any else n_overlap == len(landmark_ids)
 
-    def has_regions(
+    def has_region(
         self,
-        region_ids: RegionIDs = 'all',
+        region_ids: RegionIDs,
         any: bool = False,
         **kwargs) -> bool:
         all_ids = self.list_regions(**kwargs)
-        region_ids = arg_to_list(region_ids, RegionID, literals={ 'all': all_ids })
+        region_ids = arg_to_list(region_ids, RegionID)
         n_overlap = len(np.intersect1d(region_ids, all_ids))
         return n_overlap > 0 if any else n_overlap == len(region_ids)
 

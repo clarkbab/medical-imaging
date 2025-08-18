@@ -111,7 +111,7 @@ class TrainingSample:
             regions = regions_to_list(regions, literals={ 'all': all_regions })
             
             # Raise error if sample has no requested regions - the label will be full of zeros.
-            if not self.has_regions(regions):
+            if not self.has_region(regions):
                 raise ValueError(f"Sample {self.__id} has no regions {regions}.")
 
             # Extract requested 'regions'.
@@ -135,7 +135,7 @@ class TrainingSample:
 
         return label
 
-    def has_regions(
+    def has_region(
         self,
         regions: Regions,
         all: bool = False) -> bool:

@@ -170,7 +170,7 @@ for m in mods:
 # Add landmark/region method shortcuts from 'default_study'.
 mods = ['landmarks', 'regions']
 for m in mods:
-    setattr(DicomPatient, f'has_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m}')(*args, **kwargs) if self.default_study is not None else False)
+    setattr(DicomPatient, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m[:-1]}')(*args, **kwargs) if self.default_study is not None else False)
     setattr(DicomPatient, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'list_{m}')(*args, **kwargs) if self.default_study is not None else [])
     setattr(DicomPatient, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m[:-1]}_data')(*args, **kwargs) if self.default_study is not None else None)
  

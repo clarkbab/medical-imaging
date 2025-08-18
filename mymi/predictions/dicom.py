@@ -156,7 +156,7 @@ def load_segmenter_predictions(
 
     # Get region info.
     filepath = os.path.join(set.path, 'predictions', model, f'{pat_id}.dcm')
-    rtstruct = dcm.read_file(filepath)
+    rtstruct = dcm.dcmread(filepath)
     region_names = RtStructConverter.get_roi_names(rtstruct)
     def to_internal(name):
         if region_map is None:

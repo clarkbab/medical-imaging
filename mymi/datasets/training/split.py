@@ -44,7 +44,7 @@ class HoldoutSplit:
             return sample_ids
 
         # Return samples that have any of the passed regions.
-        sample_ids = [s for s in sample_ids if self.sample(s).has_regions(filter_regions, all=False)]
+        sample_ids = [s for s in sample_ids if self.sample(s).has_region(filter_regions, all=False)]
         return sample_ids
 
     def sample(

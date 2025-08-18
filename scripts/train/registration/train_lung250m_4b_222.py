@@ -2,7 +2,7 @@ from mymi.training import train_registration
 from mymi.utils import grid_arg
 
 # Overridden args.
-loss_lambda = grid_arg('loss_lambda', 0.02)
+loss_lambda = grid_arg('loss_lambda', float, 0.02)
  
 dataset = "LUNG250M-4B-222"
 project = "IMREG"

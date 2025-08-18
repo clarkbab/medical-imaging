@@ -4,8 +4,8 @@ from typing import *
 
 from mymi.typing import *
 
+from .arguments import arg_to_list
 from .python import delegates
-from .utils import arg_to_list
 
 def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageData3D, Spacing3D, Point3D]:
     data = img.get_fdata()

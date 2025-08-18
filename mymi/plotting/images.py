@@ -9,10 +9,10 @@ from mymi.utils import *
 from .plotting import get_aspect, get_origin, get_view_slice, get_view_xy, get_window, plot_landmark_data
 
 def plot_images(
-    data: Union[ImageData3D, List[ImageData3D]],
+    data: Union[DirPath, FilePath, ImageData3D, List[ImageData3D]],
     figsize: Tuple[float, float] = (16, 6),
     idxs: Union[int, float, List[Union[int, float]]] = 0.5,
-    labels: Optional[Union[LabelData3D, List[Optional[LabelData3D]]]] = None,
+    labels: Optional[Union[DirPath, FilePath, LabelData3D, List[Optional[LabelData3D]]]] = None,
     landmarks: Optional[Union[LandmarksData, List[LandmarksData]]] = None,    # Should be in patient coordinates.
     landmark_ids: LandmarkIDs = 'all',
     modality: Literal['ct', 'dose'] = 'ct',
@@ -24,22 +24,49 @@ def plot_images(
     views: Union[int, Sequence[int]] = 'all',
     window: Optional[Union[str, Tuple[float, float]]] = None,
     **kwargs) -> None:
+    if isinstance(data, (DirPath, FilePath)):
+        if os.path.isdir(data):
+            data, spacings, offsets = from_ct_dicoms(dirpath=data)
+        elif data.endswith('.nii') or data.endswith('.nii.gz'):
+            data, spacings, offsets = load_nifti(data)
+        elif data.endswith('.npy'):
+            data, spacings, offsets = load_numpy(data)
+        elif data.endswith('.nrrd'):
+            data, spacings, offsets = load_nrrd(data)
+        elif data.endswith('.mha') or data.endswith('.mhd'):
+            data, spacings, offsets = sitk_load_image(data)
+        else:
+            raise ValueError(f'Unsupported file type: {data}')
     data = arg_to_list(data, ImageData3D)
     idxs = arg_to_list(idxs, (int, float), broadcast=len(data))
+    # Assuming one main image only.
+    if isinstance(labels, (DirPath, FilePath)):
+        loaded_labels = []
+        if os.path.isdir(labels):
+            for f in os.listdir(labels):
+                if f.endswith('.nii') or f.endswith('.nii.gz'):
+                    label, _, _ = load_nifti(os.path.join(labels, f))
+                loaded_labels.append(label)
+        elif labels.endswith('.nii') or labels.endswith('.nii.gz'):
+            loaded_label, _, _ = load_nifti(labels)
+            loaded_labels.append(loaded_label)
+        labels = [loaded_labels]
     labels = arg_to_list(labels, [LabelData3D, None], broadcast=len(data))
     landmarks = arg_to_list(landmarks, [LandmarksData, None], broadcast=len(data))
     offsets = arg_to_list(offsets, Point3D, broadcast=len(data))
     points = arg_to_list(points, [Point3D, None], broadcast=len(data))
     spacings = arg_to_list(spacings, Spacing3D, broadcast=len(data))
-    assert len(labels) == len(data)
     assert len(landmarks) == len(data)
     assert len(offsets) == len(data)
     assert len(spacings) == len(data)
-    palette = sns.color_palette('colorblind', len(labels))
+    n_label_max = np.max([len(ls) if ls is not None else 0 for ls in labels])
+    palette = sns.color_palette('colorblind', n_label_max)
     views = arg_to_list(views, int, literals={ 'all': list(range(3)) })
     n_rows, n_cols = (len(views), len(data)) if transpose else (len(data), len(views))
     _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], len(data) * figsize[1]), squeeze=False)
-    for i, (row_axs, d, idx, l, lm, o, s, p) in enumerate(zip(axs, data, idxs, labels, landmarks, offsets, spacings, points)):
+    for i, (row_axs, d, idx, ls, lm, o, s, p) in enumerate(zip(axs, data, idxs, labels, landmarks, offsets, spacings, points)):
+        logging.info(f"Plotting image {i+1}/{len(data)}: with size={d.shape}, idx={idx}, offset={o}, spacing={s}.")
+
         # Rescale RGB image to range [0, 1).
         n_dims = len(d.shape)
         if n_dims == 4:
@@ -56,11 +83,13 @@ def plot_images(
                 cmap='viridis'
             col_ax.imshow(image, aspect=aspect, cmap=cmap, origin=origin, vmin=vmin, vmax=vmax)
             col_ax.set_title(f'{get_axis_name(v)} view, slice {view_idx}')
-            if l is not None:   # Plot labels.
-                cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), palette[i]))
-                label_image, _ = get_view_slice(l, idx, v)
-                col_ax.imshow(label_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
-                col_ax.contour(label_image, colors=[palette[i]], levels=[.5], linestyles='solid')
+            if ls is not None:   # Plot labels.
+                for j, l in enumerate(ls):
+                    cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), palette[j]))
+                    assert len(l.shape) == 3
+                    label_image, _ = get_view_slice(l, idx, v)
+                    col_ax.imshow(label_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
+                    col_ax.contour(label_image, colors=[palette[j]], levels=[.5], linestyles='solid')
             if use_patient_coords:  # Change axis tick labels to show patient coordinates.
                 size_x, size_y = get_view_xy(d.shape, v)
                 sx, sy = get_view_xy(s, v)

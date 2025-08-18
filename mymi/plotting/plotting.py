@@ -397,9 +397,10 @@ def plot_saved(
     filepaths = arg_to_list(filepaths, str)
     for f in filepaths:
         f = escape_filepath(f)
-        images = convert_from_path(f)
-        image = images[0]
-        plt.figure(figsize=(figwidth, figwidth * image.height / image.width))
+        # images = convert_from_path(f)
+        # image = images[0]
+        image = plt.imread(f)
+        plt.figure(figsize=(figwidth, figwidth * image.shape[0] / image.shape[1]))
         plt.axis('off')
         plt.imshow(image)
 

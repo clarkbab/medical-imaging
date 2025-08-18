@@ -147,7 +147,7 @@ def train_registration(
         model.eval()
         val_iter = iter(vl)
         epoch_val_losses = []
-        for desc, input, *labels in tqdm(val_iter, desc=f'Epoch {epoch}/{n_epochs} (val)', leave=False):
+        for desc, input, labels in tqdm(val_iter, desc=f'Epoch {epoch}/{n_epochs} (val)', leave=False):
             input = input.to(device)
             labels = [l.to(device) for l in labels]
 

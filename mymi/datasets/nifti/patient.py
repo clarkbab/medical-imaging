@@ -100,6 +100,12 @@ for m in mods:
     setattr(NiftiPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
     n = f'{m}_data' if m in ['landmarks', 'regions'] else m   # 'has_landmarks/regions' is reserved for LandmarkIDs.
     setattr(NiftiPatient, f'has_{n}', property(lambda self, m=m: getattr(self.default_study, f'has_{n}') if self.default_study is not None else None))
+    
+# Add image filepath shortcuts from 'default_study'.
+mods = ['ct', 'mr', 'dose']
+for m in mods:
+    setattr(NiftiPatient, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_study, f'{m}_filepath') if self.default_study is not None else None))
+setattr(NiftiPatient, 'region_filepaths', lambda self, region_id: self.default_study.region_filepaths(region_id) if self.default_study is not None else None)
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'dose', 'mr']
@@ -111,6 +117,6 @@ for m in mods:
 # Add landmark/region method shortcuts from 'default_study'.
 mods = ['landmarks', 'regions']
 for m in mods:
-    setattr(NiftiPatient, f'has_{m}', lambda self, m=m, **kwargs: getattr(self.default_study, f'has_{m}')(**kwargs) if self.default_study is not None else False)
+    setattr(NiftiPatient, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m[:-1]}')(*args, **kwargs) if self.default_study is not None else False)
     setattr(NiftiPatient, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'list_{m}')(*args, **kwargs) if self.default_study is not None else [])
     setattr(NiftiPatient, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m[:-1]}_data')(*args, **kwargs) if self.default_study is not None else None)

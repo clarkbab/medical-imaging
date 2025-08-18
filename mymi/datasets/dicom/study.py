@@ -183,6 +183,6 @@ for m in mods:
 # Add landmark/region method shortcuts from 'default_rtstruct'.
 mods = ['landmarks', 'regions']
 for m in mods:
-    setattr(DicomStudy, f'has_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'has_{m}')(*args, **kwargs) if self.default_rtstruct is not None else False)
+    setattr(DicomStudy, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'has_{m[:-1]}')(*args, **kwargs) if self.default_rtstruct is not None else False)
     setattr(DicomStudy, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'list_{m}')(*args, **kwargs) if self.default_rtstruct is not None else [])
     setattr(DicomStudy, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'{m[:-1]}_data')(*args, **kwargs) if self.default_rtstruct is not None else None)

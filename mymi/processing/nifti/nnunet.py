@@ -53,8 +53,8 @@ def convert_to_nnunet_single_region_v1(
     t += v
 
     # Filter patients without regions.
-    t = [p for p in t if set.patient(p).has_regions(region)]
-    tst = [p for p in tst if set.patient(p).has_regions(region)]
+    t = [p for p in t if set.patient(p).has_region(region)]
+    tst = [p for p in tst if set.patient(p).has_region(region)]
 
     # Write training/test patients.
     pat_ids = [t, tst]
@@ -248,7 +248,7 @@ def convert_to_nnunet_single_region(
         for p in tqdm(ps):
             # Load sample data.
             pat = set.patient(p)
-            if not pat.has_regions(region):
+            if not pat.has_region(region):
                 logging.info(f"Patient {p} missing region {region}.")
                 continue
             study = pat.default_study

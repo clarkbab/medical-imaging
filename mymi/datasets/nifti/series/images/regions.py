@@ -35,7 +35,7 @@ class RegionsImageSeries(NiftiImageSeries):
 
         rd = {}
         for r in region_ids:
-            if not self.has_regions(r):
+            if not self.has_region(r):
                 if regions_ignore_missing:
                     continue
                 else:
@@ -60,11 +60,11 @@ class RegionsImageSeries(NiftiImageSeries):
     def filepaths(
         self,
         region_id: RegionID) -> List[FilePath]:
-        if not self.has_regions(region_id):
+        if not self.has_region(region_id):
             raise ValueError(f'Region {region_id} not found in series {self.id}.')
-        # Region mapping is multi-to-one, so we could get multiple files on disk for the same region.
+        # Region mapping is many-to-one, so we could get multiple files on disk for the same mapped region.
         image_extensions = ['.nii', '.nii.gz', '.nrrd']
-        disk_ids = self.__region_map.inv_map_region(region_id) if self.__region_map is not None else region_id
+        disk_ids = self.__region_map.inv_map_region(region_id, disk_regions=self.list_regions(use_mapping=False)) if self.__region_map is not None else region_id
         disk_ids = arg_to_list(disk_ids, RegionID)
         # Check all possible file extensions.
         filepaths = [os.path.join(self.__path, f'{i}{e}') for i in disk_ids for e in image_extensions if os.path.exists(os.path.join(self.__path, f'{i}{e}'))]
@@ -72,26 +72,28 @@ class RegionsImageSeries(NiftiImageSeries):
             raise ValueError(f'No region filespaths found for region {region_id} in series {self}.')
         return filepaths
 
-    def has_regions(
+    def has_region(
         self,
-        region_ids: RegionIDs = 'all',
+        region_ids: RegionIDs,
         any: bool = False,
         **kwargs) -> bool:
         all_ids = self.list_regions(**kwargs)
-        region_ids = arg_to_list(region_ids, RegionID, literals={ 'all': all_ids })
+        region_ids = arg_to_list(region_ids, RegionID)
         n_overlap = len(np.intersect1d(region_ids, all_ids))
         return n_overlap > 0 if any else n_overlap == len(region_ids)
 
+    @alias_kwargs(('use_mapping', 'um'))
     def list_regions(
         self,
-        region_ids: Regions = 'all') -> List[Region]:
+        region_ids: RegionIDs = 'all',
+        use_mapping: bool = True) -> List[Region]:
         # Load regions from filenames.
         image_extensions = ['.nii', '.nii.gz', '.nrrd']
         ids = os.listdir(self.__path)
         ids = [i.replace(e, '') for i in ids for e in image_extensions if i.endswith(e)]
 
         # Apply region mapping.
-        if self.__region_map is not None:
+        if use_mapping and self.__region_map is not None:
             ids = [self.__region_map.map_region(i) if self.__region_map is not None else i for i in ids]
 
         # Filter on 'only'.

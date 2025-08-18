@@ -44,7 +44,7 @@ def generate_dataset_regions_report(
     for region in tqdm(regions):
         for pat in tqdm(pats, leave=False):
             # Skip if patient doesn't have region.
-            if not ds.patient(pat).has_regions(region):
+            if not ds.patient(pat).has_region(region):
                 continue
 
             # Add patient/region title.

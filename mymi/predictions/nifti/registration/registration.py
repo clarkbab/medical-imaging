@@ -537,7 +537,7 @@ def warp_patient_data(
         save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
     # Move region data.
-    if regions is not None and moving_study.has_regions(regions=regions):
+    if regions is not None and moving_study.has_region(regions=regions):
         moving_region_data = moving_study.region_data(regions=regions)
         for region, moving_label in moving_region_data.items():
             # Apply registration transform.
@@ -546,7 +546,7 @@ def warp_patient_data(
             save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
 
     # Move landmarks.
-    if landmarks is not None and fixed_study.has_landmarks(landmarks=landmarks):
+    if landmarks is not None and fixed_study.has_landmark(landmarks=landmarks):
         fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
         fixed_points = fixed_landmark_data[list(range(3))].to_numpy()
         moved_landmark_data = fixed_landmark_data.copy()

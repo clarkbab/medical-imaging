@@ -45,7 +45,7 @@ class CtSeries(DicomSeries):
     @property
     def dicoms(self) -> List[CtDicom]:
         # Sort CTs by z position, smallest first.
-        ct_dicoms = [dcm.read_file(f, force=False) for f in self.__filepaths]
+        ct_dicoms = [dcm.dcmread(f, force=False) for f in self.__filepaths]
         ct_dicoms = list(sorted(ct_dicoms, key=lambda c: c.ImagePositionPatient[2]))
         return ct_dicoms
 
@@ -80,43 +80,9 @@ class CtSeries(DicomSeries):
         return self.__spacing
 
     def __load_data(self) -> None:
-        ct_dicoms = self.dicoms
-
-        # Store offset.
-        # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
-        offset = ct_dicoms[0].ImagePositionPatient    
-        self.__offset = tuple(float(o) for o in offset)
-
-        # Store size.
-        # Indexing checked that CT slices had consisent x/y spacing in series.
-        self.__size = (
-            ct_dicoms[0].pixel_array.shape[1],
-            ct_dicoms[0].pixel_array.shape[0],
-            len(ct_dicoms)
-        )
-
-        # Store spacing.
-        # Indexing checked that CT slices were equally spaced in z-dimension.
-        self.__spacing = (
-            float(ct_dicoms[0].PixelSpacing[0]),
-            float(ct_dicoms[0].PixelSpacing[1]),
-            float(np.abs(ct_dicoms[1].ImagePositionPatient[2] - ct_dicoms[0].ImagePositionPatient[2]))
-        )
-
-        # Store CT data.
-        data = np.zeros(shape=self.__size)
-        for c in ct_dicoms:
-            # Convert values to HU.
-            ct_data = np.transpose(c.pixel_array)      # 'pixel_array' contains row-first image data.
-            ct_data = c.RescaleSlope * ct_data + c.RescaleIntercept
-
-            # Get z index.
-            z_offset =  c.ImagePositionPatient[2] - self.__offset[2]
-            z_idx = int(round(z_offset / self.__spacing[2]))
-
-            # Add data.
-            data[:, :, z_idx] = ct_data
-        self.__data = data
+        # Consistency is checked during indexing.
+        # TODO: Change 'check_consistency' to be more granular and set based on the index policy.
+        self.__data, self__spacing, self.__offset = from_ct_dicoms(self.dicoms, check_consistency=False)
 
 # Add properties.
 props = ['dataset_id', 'filepaths', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'study_id']

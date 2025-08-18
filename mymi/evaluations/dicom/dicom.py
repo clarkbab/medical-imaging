@@ -95,7 +95,7 @@ def create_dose_evaluation(
         for model in models:
             # Load model prediction.
             filepath = os.path.join(sets[row.dataset].path, 'predictions', model, f"{row['patient-id']}.dcm")
-            rtstruct = dcm.read_file(filepath)
+            rtstruct = dcm.dcmread(filepath)
             rtstructs.append(rtstruct)
             names.append(model)
             paths.append(filepath)

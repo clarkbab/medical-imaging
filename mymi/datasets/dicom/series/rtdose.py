@@ -43,7 +43,7 @@ class RtDoseSeries(DicomSeries):
 
     @property
     def dicom(self) -> RtDoseDicom:
-        return dcm.read_file(self.__filepath)
+        return dcm.dcmread(self.__filepath)
 
     @property
     @ensure_loaded

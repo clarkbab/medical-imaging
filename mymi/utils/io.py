@@ -9,10 +9,10 @@ import yaml
 from mymi import config
 from mymi.typing import *
 
+from .arguments import arg_to_list
 from .nifti import from_nifti
 from .python import delegates
 from .sitk import from_sitk_image, to_sitk_image
-from .utils import arg_to_list
 
 def load_csv(
     filepath: str,

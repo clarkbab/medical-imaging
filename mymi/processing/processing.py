@@ -156,7 +156,7 @@ def convert_brain_crop_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_regions(region):
+                if not set.patient(pat_id).has_region(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.

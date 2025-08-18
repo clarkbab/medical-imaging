@@ -18,8 +18,8 @@ def from_sitk_image(
     if img_type == 'mha':
         pass
     elif img_type == 'nii':
-        # ITK assumes loaded nifti data is using RAS coordinates, so they set negative offsets
-        # and directions. For all images we write to nifti, they'll be in LPS, so undo ITK changes.
+        # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative offsets
+        # and directions. For all images we write to nifti, they'll be in LPS+, so undo ITK changes.
         # The image data is not flipped by ITK.
         offset[0], offset[1] = -offset[0], -offset[1]
     offset = tuple(offset)

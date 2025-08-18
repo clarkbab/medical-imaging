@@ -41,6 +41,7 @@ DoseData = ImageData3D
 DoseDatas = Union[DoseData, List[DoseData]]
 Extrema = Literal[0, 1]
 FilePath = str
+FilePaths = Union[FilePath, List[FilePath]]
 Fov2D = BoxMM2D
 Fov3D = BoxMM3D
 Fov = Union[Fov2D, Fov3D]

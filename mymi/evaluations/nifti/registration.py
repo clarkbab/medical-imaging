@@ -205,7 +205,7 @@ def create_registration_evaluations(
                     # Skip if either moving/fixed study is missing the region.
                     moving_study = set.patient(p).study(moving_study_id)
                     fixed_study = set.patient(p).study(fixed_study_id)
-                    if not moving_study.has_regions(r) or not fixed_study.has_regions(r):
+                    if not moving_study.has_region(r) or not fixed_study.has_region(r):
                         continue
 
                     # Get metrics per region.
@@ -253,7 +253,7 @@ def create_registration_evaluations(
                 # Skip if either moving/fixed study is missing the landmarks.
                 moving_study = set.patient(p).study(moving_study_id)
                 fixed_study = set.patient(p).study(fixed_study_id)
-                if not moving_study.has_landmarks(landmark_ids, any=True) or not fixed_study.has_landmarks(landmark_ids, any=True):
+                if not moving_study.has_landmark(landmark_ids, any=True) or not fixed_study.has_landmark(landmark_ids, any=True):
                     continue
 
                 # Get metrics per region.

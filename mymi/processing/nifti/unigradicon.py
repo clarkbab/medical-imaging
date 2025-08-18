@@ -27,16 +27,24 @@ def convert_to_unigradicon_training(
         moving_ct = moving_study.ct_data
         output_spacing = np.array(moving_ct.shape) / ugi_size
         moving_ct_p = resample(moving_ct, output_size=ugi_size, output_spacing=output_spacing)
+        # UGI uses 'itk.imread' follwed by 'np.array(img)' to load training/inference data.
+        # 'itk.imread' expects '.nii' data to be in RAS+ coordinates and so sets negative 
+        # x/y directions/offsets, whilst leaving image data unchanged. AFAIK, UGI doesn't use
+        # directions/offsets, so it's presenting data in LPS+ coords. However 'np.array(img)'
+        # transposes axes, so the network actually sees SPL+ data. 
+        # Convert our fine-tuning data to match this format.
+        moving_ct_p = moving_ct_p.transpose()
         images.append(moving_ct_p)
 
         # Process fixed CT.
         fixed_ct = fixed_study.ct_data
         output_spacing = np.array(fixed_ct.shape) / ugi_size
         fixed_ct_p = resample(fixed_ct, output_size=ugi_size, output_spacing=output_spacing)
+        fixed_ct_p = fixed_ct_p.transpose()
         images.append(fixed_ct_p)
 
     # Save images as torch file.
     images = [torch.tensor(i)[None, None] for i in images]
-    filepath = os.path.join(config.directories.datasets, 'training', dataset, 'data', 'unigradicon', 'train-samples.pt')
+    filepath = os.path.join(config.directories.datasets, 'training', dataset, 'data', 'unigradicon', 'train-samples-spl.pt')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     torch.save(images, filepath)

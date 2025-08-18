@@ -104,9 +104,9 @@ def convert_replan_to_nnunet_ref_model(
         filepath = os.path.join(filepath, file, 'multi-loader-manifest.csv')
         df = pd.read_csv(filepath)
         train_pat_ids = list(df[df['loader'].isin(['train', 'validate'])]['origin-patient-id'])
-        train_pat_ids = [p for p in train_pat_ids if set.patient(p).has_regions(r)]
+        train_pat_ids = [p for p in train_pat_ids if set.patient(p).has_region(r)]
         test_pat_ids = list(df[df['loader'] == 'test']['origin-patient-id'])
-        test_pat_ids = [p for p in test_pat_ids if set.patient(p).has_regions(r)]
+        test_pat_ids = [p for p in test_pat_ids if set.patient(p).has_region(r)]
 
         # Create 'dataset.json'.
         dataset_json = {
@@ -193,7 +193,7 @@ def convert_replan_to_nnunet_ref_model(
 
                 # Skip if patient doesn't have region.
                 # This is a problem, as the missing label will be trained as "background".
-                if not set.patient(pat_id).has_regions(r):
+                if not set.patient(pat_id).has_region(r):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -368,7 +368,7 @@ def convert_replan_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_regions(region):
+                if not set.patient(pat_id).has_region(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -564,7 +564,7 @@ def convert_population_lens_crop_to_training(
                     min_region = None
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
-                        if pat.has_regions(region):
+                        if pat.has_region(region):
                             region_data = pat.region_data(region=region)[region]
                             region_extent = extent(region_data)
                             if region_extent[0][2] < min_z:
@@ -580,7 +580,7 @@ def convert_population_lens_crop_to_training(
                     centre_z = None
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
-                        if pat.has_regions(region):
+                        if pat.has_region(region):
                             rdata = pat.region_data(region=region)[region]
                             extent_centre = fov_centre(rdata)
                             centre_z = extent_centre[2]
@@ -605,7 +605,7 @@ def convert_population_lens_crop_to_training(
 
             for region in regions:
                 # Skip if patient doesn't have region.
-                if not set.patient(pat_id).has_regions(region):
+                if not set.patient(pat_id).has_region(region):
                     continue
 
                 # Skip if region in 'excluded-labels.csv'.
@@ -790,7 +790,7 @@ def convert_replan_to_lens_crop(
             min_region = None
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
-                if pat.has_regions(eye_region):
+                if pat.has_region(eye_region):
                     region_data = pat.region_data(region=eye_region)[eye_region]
                     region_extent = extent(region_data)
                     if region_extent[0][2] < min_z:
@@ -821,7 +821,7 @@ def convert_replan_to_lens_crop(
             centre_z = None
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
-                if pat.has_regions(eye_region):
+                if pat.has_region(eye_region):
                     rdata = pat.region_data(region=eye_region)[eye_region]
                     extent_centre = fov_centre(rdata)
                     centre_z = extent_centre[2]
@@ -902,7 +902,7 @@ def create_excluded_brainstem(
     for pat_id in tqdm(pat_ids):
         # Skip if no 'Brainstem'.
         pat = dest_set.patient(pat_id)
-        if not pat.has_regions('Brainstem'):
+        if not pat.has_region('Brainstem'):
             continue
 
         # Load label data.

@@ -1,11 +1,68 @@
 from datetime import datetime
+import numpy as np
+import os
 import pydicom as dcm
 
 from mymi.constants import *
 from mymi.typing import *
 
-def from_ct_dicoms(cts: List[CtDicom]) -> Tuple[CtData, Spacing3D, Point3D]:
-    pass
+def from_ct_dicoms(
+    cts: List[CtDicom] = [],
+    check_consistency: bool = True,
+    dirpath: Optional[str] = None) -> Tuple[CtData, Spacing3D, Point3D]:
+    # Load from dirpath if present.
+    if dirpath is not None:
+        cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
+
+    # Sort CTs by z position, smallest first.
+    cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
+
+    # Check CT consistency.
+    if check_consistency:
+        first_xy_pos = cts[0].ImagePositionPatient[:2]  # Use only x and y position.
+        first_z_diff = abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
+        last_z_pos = cts[0].ImagePositionPatient[2]
+        for c in cts[1:]:
+            xy_pos = c.ImagePositionPatient[:2]
+            if xy_pos != first_xy_pos:
+                raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_pos} != {first_xy_pos}.")
+            z_diff = abs(c.ImagePositionPatient[2] - last_z_pos)
+            if abs(z_diff - first_z_diff) > 1e-6:  # Allow for very small differences.
+                raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' z values: {z_diff} != {first_z_diff} (tol=1e-6).")
+            last_z_pos = c.ImagePositionPatient[2]
+
+    # Calculate offset.
+    # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
+    offset = cts[0].ImagePositionPatient
+    offset = tuple(float(o) for o in offset)
+
+    # Calculate size.
+    # Indexing checked that CT slices had consisent x/y spacing in series.
+    size = (
+        cts[0].pixel_array.shape[1],
+        cts[0].pixel_array.shape[0],
+        len(cts)
+    )
+
+    # Calculate spacing.
+    # Indexing checked that CT slices were equally spaced in z-dimension.
+    spacing = (
+        float(cts[0].PixelSpacing[0]),
+        float(cts[0].PixelSpacing[1]),
+        float(np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2]))
+    )
+
+    # Create CT data - sorted by z-position.
+    data = np.zeros(shape=size)
+    for i, c in enumerate(cts):
+        # Convert values to HU.
+        slice_data = np.transpose(c.pixel_array)      # 'pixel_array' contains row-first image data.
+        slice_data = c.RescaleSlope * slice_data + c.RescaleIntercept
+
+        # Add slice data.
+        data[:, :, i] = slice_data
+
+    return data, spacing, offset
 
 def to_ct_dicoms(
     data: CtData, 

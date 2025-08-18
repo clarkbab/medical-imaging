@@ -195,7 +195,7 @@ def convert_to_registration_training_holdout(
                     mask[channel] = True
 
                 # Add background if all foreground classes present. 
-                if pat.has_regions(regions, all=True):
+                if pat.has_region(regions, all=True):
                     label[0] = np.invert(label.any(axis=0))
                     mask[0] = True
 
@@ -218,7 +218,7 @@ def convert_to_registration_training_holdout(
                     mask[channel] = True
 
                 # Add background if all foreground classes present. 
-                if pat.has_regions(regions, all=True):
+                if pat.has_region(regions, all=True):
                     label[0] = np.invert(label.any(axis=0))
                     mask[0] = True
 
@@ -377,7 +377,7 @@ def convert_to_segmentation_training_holdout(
                 mask[channel] = True
 
             # Add background if all foreground classes present. 
-            if pat.has_regions(regions):
+            if pat.has_region(regions):
                 label[0] = np.invert(label.any(axis=0))
                 mask[0] = True
 

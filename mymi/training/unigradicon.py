@@ -22,7 +22,7 @@ def finetune_unigradicon(
 
     # Create image loader.
     set = TrainingDataset(dataset)
-    filepath = os.path.join(set.path, 'data', 'unigradicon', 'train-samples.pt')
+    filepath = os.path.join(set.path, 'data', 'unigradicon', 'train-samples-spl.pt')
     loaded_images = torch.load(filepath)
     def make_make_batch(images: List[torch.Tensor]):
         def make_batch() -> Tuple[torch.Tensor, torch.Tensor]:  # moving/fixed images.
@@ -32,7 +32,7 @@ def finetune_unigradicon(
             # Process images for network input.
             min_val, max_val = -1000, 1000
             moving, fixed = moving.clamp(min_val, max_val), fixed.clamp(min_val, max_val)
-            moving, fixed = (moving - min_val) / (max_val- min_val), (fixed - min_val) / (max_val - min_val)
+            moving, fixed = (moving - min_val) / (max_val - min_val), (fixed - min_val) / (max_val - min_val)
             moving, fixed = moving.float().cuda(), fixed.float().cuda()
             return moving, fixed
         return make_batch

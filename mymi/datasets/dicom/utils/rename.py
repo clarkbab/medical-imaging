@@ -25,7 +25,7 @@ def rename_dicom(
     dry_run: bool = True,
     pat_regexp: Optional[str] = None) -> None:
     # Get new patient ID.
-    dicom = dcm.read_file(filepath)
+    dicom = dcm.dcmread(filepath)
     old_pat_id = dicom.PatientID
     new_pat_id = get_new_pat_id(old_pat_id, rename_fn, pat_regexp=pat_regexp)
     if old_pat_id == new_pat_id:
@@ -47,13 +47,7 @@ def rename_patients(
     # Check if indexes are open and therefore can't be overwritten.
     dset = DicomDataset(dataset)
     files = ['index.csv', 'index-errors.csv']
-    for f in files:
-        filepath = os.path.join(dset.path, f)
-        if os.path.exists(filepath):
-            try:
-                open(filepath, 'a')     # 'w' was wiping the file?
-            except PermissionError:
-                raise PermissionError(f"Index file '{filepath}' is currently open and cannot be overwritten. Please close it before running indexing.")
+    assert_can_write(files)
 
     # Rename all DICOMs in the index.
     logging.info("Renaming all indexed dicoms.")

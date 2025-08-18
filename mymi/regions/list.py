@@ -338,7 +338,7 @@ def regions_to_list(region_ids: RegionIDs, **kwargs) -> RegionIDs:
             if hasattr(RegionList, rl_name):
                 r = list(getattr(RegionList, rl_name))
             else:
-                filepath = os.path.join(config.directories.files, 'regions-lists', f'{rl_name}.csv')
+                filepath = os.path.join(config.directories.config, 'region-lists', f'{rl_name}.csv')
                 if not os.path.exists(filepath):
                     raise ValueError(f"Region list '{rl_name}' not found. Filepath: {filepath}")
                 df = pd.read_csv(filepath, header=None)

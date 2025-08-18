@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .transforms import assert_box_width
+from .transforms import *
 
 def __spatial_crop(
     image: ImageData3D,
@@ -24,7 +24,6 @@ def __spatial_crop(
         min, max = bounding_box
 
     # Perform cropping.
-    min, max = bounding_box
     size = np.array(image.shape)
     crop_min = np.array(min).clip(0)
     crop_max = (size - max).clip(0)

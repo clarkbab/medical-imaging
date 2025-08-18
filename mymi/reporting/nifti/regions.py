@@ -5,11 +5,17 @@ from tqdm import tqdm
 from typing import *
 
 from mymi.datasets import NiftiDataset
-from mymi.geometry import foreground_fov_width, largest_cc
+from mymi.geometry import foreground_fov_width, foreground_fov, largest_cc
 from mymi.metrics import mean_intensity, snr
 from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
+
+def create_region_counts(dataset: DatasetID) -> None:
+    pr_df = get_region_counts(dataset)
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    save_csv(pr_df, filepath)
 
 def create_region_summary(
     dataset: str,
@@ -19,6 +25,9 @@ def create_region_summary(
     region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
 
     for region in tqdm(region_ids):
+        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        assert_can_write(filepath)
+
         # Check if there are patients with this region.
         n_pats = len(set.list_patients(region_ids=region_ids))
         if n_pats == 0:
@@ -30,9 +39,32 @@ def create_region_summary(
         df = get_region_summary(dataset, region, labels='all')
 
         # Save report.
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
+
+def get_region_counts(dataset: str) -> pd.DataFrame:
+    # List patients.
+    set = NiftiDataset(dataset)
+    pat_ids = set.list_patients()
+
+    # Create dataframe.
+    cols = {
+        'patient-id': str,
+        'region': str
+    }
+    df = pd.DataFrame(columns=cols.keys())
+
+    # Add rows.
+    for pat_id in tqdm(pat_ids):
+        pat_regions = set.patient(pat_id).list_regions()
+        for pat_region in pat_regions:
+            data = {
+                'patient-id': pat_id,
+                'region': pat_region
+            }
+            df = append_row(df, data)
+
+    return df
 
 def get_region_summary(
     dataset: str,
@@ -43,7 +75,6 @@ def get_region_summary(
     pat_ids = set.list_patients(region_ids=region)
 
     cols = {
-        'dataset': str,
         'patient-id': str,
         'metric': str,
         'value': float
@@ -57,9 +88,17 @@ def get_region_summary(
         label = pat.region_data(region_ids=region)[region]
 
         data = {
-            'dataset': dataset,
             'patient-id': pat_id,
         }
+
+        # Add OAR position.
+        fov_l = foreground_fov(label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        if fov_l is not None:
+            for i, a in enumerate(axes):
+                for j, e in enumerate(extrema):
+                    data['metric'] = f'fov-{e}-mm-{a}'
+                    data['value'] = fov_l[j][i]
+                    df = append_row(df, data)
 
         # Add OAR volume.
         data['metric'] = 'volume-mm3'
@@ -70,24 +109,35 @@ def get_region_summary(
         fov_w = foreground_fov_width(label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
         if fov_w is not None:
             for i, a in enumerate(axes):
-                data['metric'] = f'{region}-fov-width-mm-{a}'
+                data['metric'] = f'fov-width-mm-{a}'
                 data['value'] = fov_w[i]
                 df = append_row(df, data)
 
-        # Add 'connected' metrics.
+        # Add boolean for connectedness.
         data['metric'] = 'connected'
         lcc_label = largest_cc(label)
         data['value'] = 1 if lcc_label.sum() == label.sum() else 0
         df = append_row(df, data)
+
+        # Add volume of largest connected component as proportion of total foreground volume.
         data['metric'] = 'connected-largest-p'
         data['value'] = lcc_label.sum() / label.sum()
         df = append_row(df, data)
 
+        # Add position of largest connected component.
+        fov_l = foreground_fov(lcc_label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        if fov_l is not None:
+            for i, a in enumerate(axes):
+                for j, e in enumerate(extrema):
+                    data['metric'] = f'fov-{e}-mm-{a}'
+                    data['value'] = fov_l[j][i]
+                    df = append_row(df, data)
+
         # Add fov of largest connected component.
-        fov_width_lcc = fov(lcc_label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        fov_width_lcc = foreground_fov_width(lcc_label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
         if fov_width_lcc is not None:
             for i, a in enumerate(axes):
-                data['metric'] = f'connected-{region}-fov-mm-{a}'
+                data['metric'] = f'connected-fov-mm-{a}'
                 data['value'] = fov_width_lcc[i]
                 df = append_row(df, data)
 
@@ -96,6 +146,27 @@ def get_region_summary(
 
     return df
 
+def load_region_counts(
+    dataset: DatasetID,
+    region_ids: RegionIDs = 'all',
+    exists_only: bool = False) -> Union[pd.DataFrame, bool]:
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    if os.path.exists(filepath):
+        if exists_only:
+            return True
+        else:
+            df = load_csv(filepath)
+            if region_ids != 'all':
+                region_ids = regions_to_list(region_ids)
+                df = df[df['region'].isin(region_ids)]
+            return df
+    else:
+        if exists_only:
+            return False
+        else:
+            raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
+
 def load_region_summary(
     dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'included',
@@ -103,20 +174,14 @@ def load_region_summary(
     pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
-    region_ids = regions_to_list(region_ids)
 
     # Load summary.
     dfs = []
     for dataset in datasets:
-        # Get regions if 'None'.
         set = NiftiDataset(dataset)
-        exc_df = set.excluded_labels
-        if regions is None:
-            dataset_regions = set.list_regions()
-        else:
-            dataset_regions = regions
+        ds_region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
 
-        for region in dataset_regions:
+        for region in ds_region_ids:
             filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
             if not os.path.exists(filepath):
                 if raise_error:
@@ -125,21 +190,10 @@ def load_region_summary(
                     # Skip this region.
                     continue
 
-            # Add CSV.
+            # Load CSV.
             df = pd.read_csv(filepath, dtype={ 'patient-id': str })
-            df.insert(1, 'region', region)
-
-            # Filter by 'excluded-labels.csv'.
-            rexc_df = None if exc_df is None else exc_df[exc_df['region'] == region] 
-            if labels != 'all':
-                if rexc_df is None:
-                    raise ValueError(f"No 'excluded-labels.csv' specified for '{set}', should pass labels='all'.")
-            if labels == 'included':
-                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
-                df = df[df._merge == 'left_only'].drop(columns='_merge')
-            elif labels == 'excluded':
-                df = df.merge(rexc_df, on=['patient-id', 'region'], how='left', indicator=True)
-                df = df[df._merge == 'both'].drop(columns='_merge')
+            df.insert(0, 'dataset', dataset)
+            df.insert(2, 'region', region)
 
             # Add region summary.
             dfs.append(df)

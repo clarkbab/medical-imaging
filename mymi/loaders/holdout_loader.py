@@ -282,7 +282,7 @@ class TrainingSet(Dataset):
 
         # Handle return values. Can't pass None, as PyTorch doesn't recognise this
         # as a type.
-        return_vals = [desc, input, *labels]
+        return_vals = [desc, input, labels]
         if self.__regions is not None:
             return_vals += masks
 

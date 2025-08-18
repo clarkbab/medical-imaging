@@ -43,7 +43,7 @@ class MrSeries(DicomSeries):
     @property
     def dicoms(self) -> List[dcm.FileDataset]:
         # Sort MRs by z position, smallest first.
-        mr_dicoms = [dcm.read_file(f, force=False) for f in self.__filepaths]
+        mr_dicoms = [dcm.dcmread(f, force=False) for f in self.__filepaths]
         mr_dicoms = list(sorted(mr_dicoms, key=lambda m: m.ImagePositionPatient[2]))
         return mr_dicoms
 

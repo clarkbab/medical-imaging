@@ -50,13 +50,8 @@ def build_index(
 
     # Check if indexes are open and therefore can't be overwritten.
     files = ['index.csv', 'index-errors.csv']
-    for f in files:
-        filepath = os.path.join(dataset_path, f)
-        if os.path.exists(filepath):
-            try:
-                open(filepath, 'a')     # 'w' was wiping the file?
-            except PermissionError:
-                raise PermissionError(f"Index file '{filepath}' is currently open and cannot be overwritten. Please close it before running indexing.")
+    filepaths = [os.path.join(dataset_path, f) for f in files]
+    assert_can_write(filepaths)
 
     # Remove markers.
     files = os.listdir(dataset_path)
@@ -160,7 +155,7 @@ def build_index(
 
                 # Check if valid dicom file.
                 try:
-                    dicom = dcm.read_file(filepath, force=force_dicom_read, stop_before_pixels=True)
+                    dicom = dcm.dcmread(filepath, force=force_dicom_read, stop_before_pixels=True)
                 except dcm.errors.InvalidDicomError:
                     continue
 

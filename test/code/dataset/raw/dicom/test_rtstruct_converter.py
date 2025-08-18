@@ -34,7 +34,7 @@ class TestRtStructConverter(TestCase):
     def _load_cts(self) -> List[dcm.dataset.FileDataset]:
         path = os.path.join(root_dir, 'test', 'assets', 'dataset', 'raw', 'dicom', 'ct')
         filepaths = [os.path.join(path, f) for f in os.listdir(path)]
-        cts = [dcm.read_file(f) for f in filepaths]
+        cts = [dcm.dcmread(f) for f in filepaths]
         cts = sorted(cts, key=lambda ct: ct.ImagePositionPatient[2])    # Sort by 'z-position'.
         return cts
 

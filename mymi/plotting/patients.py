@@ -41,8 +41,8 @@ def plot_patient(
     isodoses: Union[float, List[float]] = [],
     landmark_data: Optional[LandmarksData] = None,     # All landmarks are plotted.
     landmark_data_other: Optional[LandmarksData] = None,     # Plotted as 'red' landmarks, e.g. from registration.
-    legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
-    legend_loc: Union[str, Tuple[float, float]] = 'upper right',
+    legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
+    legend_loc: Union[str, Tuple[float, float]] = 'upper left',
     legend_show_all_regions: bool = False,
     linewidth: float = 0.5,
     linewidth_legend: float = 8,
@@ -549,9 +549,9 @@ def plot_patients(
                     elif isinstance(centre, (LandmarkID, RegionID)):
                         # If data isn't in landmarks/region_data then pass the data as 'centre', otherwise 'centre' can reference 
                         # the data in 'landmarks/region_data'.
-                        if study.has_landmarks(centre):
+                        if study.has_landmark(centre):
                             c = study.landmark_data(landmark_ids=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
-                        elif study.has_regions(centre):
+                        elif study.has_region(centre):
                             c = study.region_data(region_ids=centre)[centre] if rdata is None or centre not in rdata else centre
                         else:
                             raise ValueError(f"Study {study} has no landmark/regions with ID '{centre}' for 'centre'.")
@@ -561,12 +561,12 @@ def plot_patients(
                 c = None
                 if crop is not None:
                     if isinstance(crop, str):
-                        if study.has_regions(crop):
+                        if study.has_region(crop):
                             if rdata is not None and crop in rdata:
                                 c = crop    # Pass string, it will be read from 'region_data' by 'plot_patient'.
                             else:
                                 c = study.region_data(region_ids=crop)[crop]  # Load RegionLabel.
-                        elif study.has_landmarks(crop):
+                        elif study.has_landmark(crop):
                             if lm_data is not None and crop in list(lm_data['landmark-id']):
                                 c = crop
                             else:
@@ -640,7 +640,7 @@ def plot_patients_matrix(
     study_ids: Union[StudyIDs, List[StudyIDs]] = None,
     views: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
-    # Broadcast args to length of plot_ids.
+    # Handle args.
     pat_ids = arg_to_list(pat_ids, PatientID)
     n_rows = len(pat_ids)
     study_ids = arg_to_list(study_ids, StudyID, broadcast=n_rows)
@@ -659,6 +659,8 @@ def plot_patients_matrix(
     views = arg_to_list(views, int, literals={ 'all': tuple(range(3)) })
     n_series_max = np.max([len(ss) for ss in series_ids])
     n_cols = len(views) * n_series_max
+    if savepath is not None and savepath.endswith('.pdf'):
+        raise ValueError(f"Use '.jpg' or '.png' for 'savepath', '.pdf' is tricky to load without 'poppler' installed.")
 
     # Convert figsize from cm to inches.
     figsize = figsize_to_inches(figsize)

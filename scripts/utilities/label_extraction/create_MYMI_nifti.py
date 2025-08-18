@@ -34,7 +34,7 @@ for pat in tqdm(pats):
 
     # Create labels.
     for region in regions:
-        if not patient.has_regions(region):
+        if not patient.has_region(region):
             logging.info(f"Patient '{patient}' doesn't have region '{region}'.")
             continue
 

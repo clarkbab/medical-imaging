@@ -95,7 +95,7 @@ def create_unigradicon_finetuned_predictions(
             if region_ids is not None:
                 region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
                 for r in region_ids:
-                    if not moving_study.has_regions(r):
+                    if not moving_study.has_region(r):
                         continue
 
                     # Load data.
@@ -131,7 +131,7 @@ def create_unigradicon_finetuned_predictions(
             # Transform any fixed landmarks back to moving space.
             if landmark_ids is not None:
                 transform = sitk_load_transform(transform_path)
-                if fixed_study.has_landmarks(landmark_ids=landmark_ids):
+                if fixed_study.has_landmark(landmark_ids=landmark_ids):
                     fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)
@@ -239,7 +239,7 @@ def create_unigradicon_predictions(
             if region_ids is not None:
                 region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
                 for r in region_ids:
-                    if not moving_study.has_regions(r):
+                    if not moving_study.has_region(r):
                         continue
 
                     # Load data.
@@ -275,7 +275,7 @@ def create_unigradicon_predictions(
             # Transform any fixed landmarks back to moving space.
             if landmark_ids is not None:
                 transform = sitk_load_transform(transform_path)
-                if fixed_study.has_landmarks(landmark_ids=landmark_ids):
+                if fixed_study.has_landmark(landmark_ids=landmark_ids):
                     fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)

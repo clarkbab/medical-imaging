@@ -28,7 +28,7 @@ class RtPlanSeries(DicomSeries):
 
     @property
     def dicom(self) -> RtPlanDicom:
-        return dcm.read_file(self.__filepath)
+        return dcm.dcmread(self.__filepath)
 
 # Add properties.
 props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtstruct', 'study_id']

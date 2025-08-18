@@ -3,7 +3,8 @@ import inspect
 import sys
 from typing import *
 
-from .utils import arg_to_list, is_windows
+from .arguments import arg_to_list
+from .utils import is_windows
 
 def create_optional_properties(
     locals: Dict[str, Any],

@@ -140,7 +140,7 @@ def create_voxelmorph_pp_predictions(
 
             # Load labels, apply transform and save. 
             for r in pat_regions:
-                if not moving_study.has_regions(r):
+                if not moving_study.has_region(r):
                     continue
 
                 # Create moved region label.
@@ -151,7 +151,7 @@ def create_voxelmorph_pp_predictions(
                 save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
         
         if landmarks is not None:
-            if not fixed_study.has_landmarks(pat_landmarks):
+            if not fixed_study.has_landmark(pat_landmarks):
                 continue
 
             # Load transform and fixed landmarks.

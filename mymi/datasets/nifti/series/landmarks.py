@@ -82,13 +82,13 @@ class LandmarksSeries(NiftiSeries):
         else:
             return landmark_data
 
-    def has_landmarks(
+    def has_landmark(
         self,
-        landmark_ids: LandmarkIDs = 'all',
+        landmark_ids: LandmarkIDs,
         any: bool = False,
         **kwargs) -> bool:
         all_ids = self.list_landmarks(**kwargs)
-        landmark_ids = arg_to_list(landmark_ids, LandmarkID, literals={ 'all': all_ids })
+        landmark_ids = arg_to_list(landmark_ids, LandmarkID)
         n_overlap = len(np.intersect1d(landmark_ids, all_ids))
         return n_overlap > 0 if any else n_overlap == len(landmark_ids)
 

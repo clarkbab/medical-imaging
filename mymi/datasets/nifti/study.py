@@ -145,6 +145,12 @@ for m in mods:
 mods = ['ct', 'dose', 'landmarks', 'mr', 'regions']
 for m in mods:
     setattr(NiftiStudy, f'default_{m}', property(lambda self, m=m: self.default_series(m)))
+    
+# Add image filepath shortcuts from 'default_series(mod)'
+mods = ['ct', 'mr', 'dose']
+for m in mods:
+    setattr(NiftiStudy, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_series(m), 'filepath') if self.default_series(m) is not None else None))
+setattr(NiftiStudy, 'region_filepaths', lambda self, region_id: self.default_series('regions').filepaths(region_id) if self.default_series('regions') is not None else None)
 
 # Add image property shortcuts from 'default_series(mod)'.
 mods = ['ct', 'mr', 'dose']
@@ -152,15 +158,10 @@ props = ['data', 'fov', 'offset', 'size', 'spacing']
 for m in mods:
     for p in props:
         setattr(NiftiStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_series(m), p) if self.default_series(m) is not None else None))
-    
-# Add image filepath shortcuts from 'default_series(mod)'
-mods = ['ct', 'mr', 'dose']
-for m in mods:
-    setattr(NiftiStudy, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_series(m), 'filepath') if self.default_series(m) is not None else None))
 
 # Add landmark/region method shortcuts from 'default_series(mod)'.
 mods = ['landmarks', 'regions']
 for m in mods:
+    setattr(NiftiStudy, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_series(m), f'has_{m[:-1]}')(*args, **kwargs) if self.default_series(m) is not None else False)
     setattr(NiftiStudy, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_series(m), f'list_{m}')(*args, **kwargs) if self.default_series(m) is not None else [])
-    setattr(NiftiStudy, f'has_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_series(m), f'has_{m}')(*args, **kwargs) if self.default_series(m) is not None else False)
     setattr(NiftiStudy, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: self.default_series(m).data(*args, **kwargs) if self.default_series(m) is not None else None)

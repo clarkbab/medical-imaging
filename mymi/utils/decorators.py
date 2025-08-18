@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from .utils import arg_to_list
+from .arguments import arg_to_list
 
 def alias_kwargs(aliases: Union[Tuple[str, str], List[Tuple[str, str]]]) -> Callable:
     aliases = arg_to_list(aliases, tuple)

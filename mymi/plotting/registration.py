@@ -119,9 +119,9 @@ def plot_registrations(
             if c is not None:
                 if isinstance(c, (LandmarkID, RegionID)):
                     # Load 'centre' data if not already in 'landmarks/region_data'.
-                    if study.has_landmarks(c):
+                    if study.has_landmark(c):
                         oc = study.landmark_data(landmark_ids=centre).iloc[0] if landmark_data is None or centre not in list(landmark_data['landmark-id']) else centre
-                    elif study.has_regions(centre):
+                    elif study.has_region(centre):
                         oc = study.region_data(region_ids=centre)[centre] if region_data is None or centre not in region_data else centre
                     else:
                         raise ValueError(f"Study {study} has no landmark/regions with ID '{centre}' for 'centre'.")

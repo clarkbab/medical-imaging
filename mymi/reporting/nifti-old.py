@@ -40,7 +40,7 @@ def get_region_overlap_summary(
 
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
-        if not pat.has_regions(region, labels='all'):
+        if not pat.has_region(region, labels='all'):
             continue
 
         # Load region data.
@@ -64,13 +64,6 @@ def get_region_overlap_summary(
     df = df.astype(cols)
 
     return df
-
-def create_region_counts(dataset: str) -> None:
-    pr_df = get_region_counts(dataset)
-    set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    pr_df.to_csv(filepath, index=False)
 
 def create_region_contrast_report(
     dataset: str,
@@ -98,7 +91,7 @@ def create_region_contrast_report(
     for pat_id in tqdm(pat_ids):
         # Load CT and region data.
         pat = set.patient(pat_id)
-        if not pat.has_regions(region):
+        if not pat.has_region(region):
             continue
         ct_data = pat.ct_data
         region_data = pat.region_data(region=region)[region]
@@ -118,7 +111,7 @@ def create_region_contrast_report(
         cnr = contrast / background_noise
 
         # Calculate region noise.
-        if pat.has_regions(noise_region):
+        if pat.has_region(noise_region):
             noise_data = pat.region_data(region=noise_region)[noise_region]
             noise_data_eroded = binary_erosion(noise_data, iterations=3)
             if noise_data_eroded.sum() == 0:
@@ -160,51 +153,6 @@ def create_region_overlap_summary(
     filepath = os.path.join(set.path, 'reports', 'region-overlap-summaries', f'{region}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
-
-def get_region_counts(dataset: str) -> DataFrame:
-    # List patients.
-    set = NiftiDataset(dataset)
-    pat_ids = set.list_patients()
-
-    # Create dataframe.
-    cols = {
-        'patient-id': str,
-        'region': str
-    }
-    df = DataFrame(columns=cols.keys())
-
-    # Add rows.
-    for pat_id in tqdm(pat_ids):
-        pat_regions = set.patient(pat_id).list_regions()
-        for pat_region in pat_regions:
-            data = {
-                'patient-id': pat_id,
-                'region': pat_region
-            }
-            df = append_row(df, data)
-
-    return df
-
-def load_region_counts(
-    dataset: str,
-    regions: Regions = 'all',
-    exists_only: bool = False) -> Union[DataFrame, bool]:
-    set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
-    if os.path.exists(filepath):
-        if exists_only:
-            return True
-        else:
-            df = pd.read_csv(filepath)
-            if regions != 'all':
-                regions = regions_to_list(regions)
-                df = df[df['region'].isin(regions)]
-            return df
-    else:
-        if exists_only:
-            return False
-        else:
-            raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
 def load_plan_labels_report(dataset: str) -> None:
     set = NiftiDataset(dataset)
@@ -500,7 +448,7 @@ def create_totalseg_prediction_figures(dataset: str) -> None:
         pat = set.patient(pat_id)
         centre = None
         for r in centre_regions:
-            if pat.has_regions(r):
+            if pat.has_region(r):
                 centre = r
                 break
         if centre is None:
