@@ -9,7 +9,7 @@ from mymi.utils import *
 from .transforms import assert_box_width
 
 def __spatial_resample(
-    data: Optional[ImageData3D] = None,
+    data: Optional[Union[ImageArray3D, ImageTensor3D]] = None,
     fill: Union[float, Literal['min']] = 'min',
     image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
     offset: Point3D = (0, 0, 0),
@@ -20,7 +20,7 @@ def __spatial_resample(
     return_transform: bool = False,
     spacing: Spacing3D = (1, 1, 1),
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    ) -> Union[ImageData3D, Tuple[ImageData3D, sitk.Transform]]:
+    ) -> Union[ImageArray3D, ImageTensor3D, Tuple[Union[ImageArray3D, ImageTensor3D], sitk.Transform]]:
     # Use 'image' and 'output_image' to get data/spacing/offset if provided.
     if data is None:
         if image is None:
@@ -29,6 +29,7 @@ def __spatial_resample(
             data = image.data
             spacing = image.spacing
             offset = image.offset
+    data_type = type(data)
     if output_image is not None:
         output_size = output_image.size
         output_spacing = output_image.spacing
@@ -85,9 +86,11 @@ def __spatial_resample(
     # Get output data.
     image, _, _ = from_sitk_image(img)
 
-    # Convert back to boolean.
+    # Manage types.
     if is_boolean:
         image = image.astype(bool)
+    if data_type is torch.Tensor:
+        image = torch.from_numpy(image)
 
     if return_transform:
         return image, filter.GetTransform()
@@ -96,8 +99,8 @@ def __spatial_resample(
 
 @delegates(__spatial_resample)
 def resample(
-    data: Optional[ImageData] = None,
-    **kwargs) -> ImageData:
+    data: Optional[Union[ImageArrays, ImageTensors]] = None,
+    **kwargs) -> ImageArray:
     return handle_non_spatial_dims(__spatial_resample, data, **kwargs) if data is not None else __spatial_resample(**kwargs)
 
 def resample_box_3D(
@@ -143,7 +146,7 @@ def resample_landmarks(
     return landmarks
 
 def __spatial_sample(
-    data: ImageData3D,
+    data: ImageArray3D,
     points: Union[LandmarksData, Point3D, Points3D],
     fill: Union[float, Literal['min']] = 'min',
     landmarks_col: str = 'sample',
@@ -152,7 +155,7 @@ def __spatial_sample(
     sample_spacing: Spacing3D = (1, 1, 1),
     spacing: Optional[Spacing3D] = None,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    **kwargs) -> Union[ImageData3D, Tuple[ImageData3D, sitk.Transform]]:
+    **kwargs) -> Union[ImageArray3D, Tuple[ImageArray3D, sitk.Transform]]:
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -217,7 +220,7 @@ def __spatial_sample(
 
 @delegates(__spatial_sample)
 def sample(
-    data: ImageData,
-    *args, **kwargs) -> ImageData:
+    data: ImageArray,
+    *args, **kwargs) -> ImageArray:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_sample, data, *args, **kwargs)

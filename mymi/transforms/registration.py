@@ -6,10 +6,10 @@ from mymi.typing import *
 from mymi.utils import *
 
 def rigid_image_registration(
-    moving_image: ImageData3D,
+    moving_image: ImageArray3D,
     moving_spacing: Spacing3D,
     moving_offset: Point3D,
-    fixed_image: ImageData3D,
+    fixed_image: ImageArray3D,
     fixed_spacing: Spacing3D,
     fixed_offset: Point3D,
     disable_x_axis_rotation: bool = False,
@@ -17,7 +17,7 @@ def rigid_image_registration(
     fill: Union[float, Literal['min']] = 'min',
     mask_window: Optional[Tuple[float]] = None,     # Only calculate registration metrics over values in this range.
     metric: Literal['mi', 'mse'] = 'mi',
-    show_progress: bool = False) -> Tuple[ImageData3D, sitk.Transform]:
+    show_progress: bool = False) -> Tuple[ImageArray3D, sitk.Transform]:
     # Convert to sitk images.
     fixed_size = fixed_image.shape
     fixed_sitk = to_sitk_image(fixed_image, fixed_spacing, fixed_offset)

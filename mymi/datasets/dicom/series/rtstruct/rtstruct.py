@@ -70,7 +70,7 @@ class RtStructSeries(DicomSeries):
         landmarks_regexp: str = LANDMARKS_REGEXP,
         show_ids: bool = True,
         use_patient_coords: bool = True,
-        **kwargs) -> Optional[Union[LandmarksData, LandmarksVoxelData, Points3D, Voxels]]:
+        **kwargs) -> Optional[Union[LandmarksData, LandmarksDataVox, Points3D, Voxels]]:
         # Load landmarks.
         landmarks = self.list_landmarks(landmark_ids=landmark_ids, landmarks_regexp=landmarks_regexp, **kwargs)
         rtstruct_dicom = self.dicom

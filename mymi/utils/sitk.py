@@ -8,7 +8,7 @@ from .utils import transpose_image
 
 def from_sitk_image(
     img: sitk.Image,
-    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[ImageData3D, Spacing3D, Point3D]:
+    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[ImageArray3D, Spacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -26,9 +26,9 @@ def from_sitk_image(
     return data, spacing, offset
 
 def to_sitk_image(
-    data: Union[ImageData3D, VectorData],   # We use LPS coordinates - the same as SimpleITK!
-    spacing: Spacing3D,
-    offset: Point3D,
+    data: Union[ImageArray, VectorImageArray],   # We use LPS coordinates - the same as SimpleITK!
+    spacing: Spacing,
+    offset: Point,
     vector: bool = False) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:
@@ -44,11 +44,12 @@ def to_sitk_image(
     # We can use 'copy' to reset the indexing to C-style and ensure that SimpleITK flips coordinates. If we
     # don't do this, code called before 'to_sitk' could affect the behaviour of 'GetImageFromArray', which
     # was very confusing for me.
-    data = data.copy()
+    data = data.copy() if isinstance(data, np.ndarray) else data.clone()
     if vector:
         assert data.shape[0] == 3
-        # Move our channels to last dim - for sitk.
-        data = np.moveaxis(data, 0, -1)
+        # Sitk expects vector dimension to be last.
+        moveaxis_fn = np.moveaxis if isinstance(data, np.ndarray) else torch.moveaxis
+        data = moveaxis_fn(data, 0, -1)
     img = sitk.GetImageFromArray(data, isVector=vector)
     img.SetSpacing(spacing)
     img.SetOrigin(offset)
@@ -56,7 +57,7 @@ def to_sitk_image(
     return img
 
 def dvf_to_sitk_transform(
-    dvf: VectorData,   # (3, X, Y, Z)
+    dvf: VectorImageArray,   # (3, X, Y, Z)
     spacing: Spacing3D = (1, 1, 1),
     offset: Point3D = (0, 0, 0)) -> sitk.Transform:
     dvf = dvf.astype(np.float64)

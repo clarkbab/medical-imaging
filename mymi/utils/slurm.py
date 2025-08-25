@@ -7,7 +7,7 @@ from typing import *
 from mymi import logging
 from mymi.typing import *
 
-from .arguments import arg_to_list
+from .args import arg_to_list
 
 CPU_PARTITIONS =[
     'cascade',

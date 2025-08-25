@@ -12,6 +12,7 @@ from time import perf_counter
 from typing import *
 
 from mymi import config
+from mymi import logging
 from mymi.typing import *
 
 def append_dataframe(df: pd.DataFrame, odf: pd.DataFrame) -> pd.DataFrame:
@@ -277,8 +278,8 @@ def reverse_xy(data: Union[Sequence, np.ndarray]) -> Union[Sequence, np.ndarray]
     return data
 
 def transpose_image(
-    data: np.ndarray,
-    vector: bool = False) -> np.ndarray:
+    data: Union[ImageArray, VectorImageArray],
+    vector: bool = False) -> Union[ImageArray, VectorImageArray]:
     # Transposes spatial coordinates, whilst maintaining vector dimension as first dim.
     if vector and data.shape[0] != 3:
         raise ValueError(f"Expected vector dimension first, got {data.shape}.")
@@ -286,3 +287,15 @@ def transpose_image(
     if vector:
         data = np.moveaxis(data, -1, 0)
     return data
+
+def with_dry_run(
+    dry_run: bool,
+    f: Callable,
+    msg: str = None) -> None:
+    if dry_run:
+        if msg is not None:
+            logging.info(f"Dry run: {msg}")
+    else:
+        f()
+        if msg is not None:
+            logging.info(msg)

@@ -7,11 +7,11 @@ from mymi.utils import *
 from .transforms import *
 
 def __spatial_crop(
-    image: ImageData3D,
+    image: ImageArray3D,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     offset: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> ImageData3D:
+    use_patient_coords: bool = True) -> ImageArray3D:
     bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
@@ -34,16 +34,16 @@ def __spatial_crop(
 
 @delegates(__spatial_crop)
 def crop(
-    data: ImageData,
-    *args, **kwargs) -> ImageData:
+    data: ImageArray,
+    *args, **kwargs) -> ImageArray:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop, data, *args, **kwargs)
 
 def __spatial_centre_crop(
-    data: ImageData,
+    data: ImageArray,
     size: Union[Size, SizeMM],
     spacing: Optional[Spacing] = None,
-    use_patient_coords: bool = True) -> ImageData:
+    use_patient_coords: bool = True) -> ImageArray:
 
     # Determine cropping/padding amounts.
     if use_patient_coords:
@@ -64,8 +64,8 @@ def __spatial_centre_crop(
 
 @delegates(__spatial_centre_crop)
 def centre_crop(
-    data: ImageData,
-    *args, **kwargs) -> ImageData:
+    data: ImageArray,
+    *args, **kwargs) -> ImageArray:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
@@ -112,8 +112,8 @@ def crop_foreground(
     return handle_non_spatial_dims(__spatial_crop_foreground, data, *args, **kwargs)
 
 def crop_landmarks(
-    landmark_data: Union[LandmarksData, LandmarksVoxelData],
-    crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksData, LandmarksVoxelData]:
+    landmark_data: Union[LandmarksData, LandmarksDataVox],
+    crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksData, LandmarksDataVox]:
     landmark_data = landmark_data.copy()
     lm_data = landmarks_to_data(landmark_data)
     lm_data = lm_data - crop[0]

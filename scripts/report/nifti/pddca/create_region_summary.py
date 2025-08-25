@@ -1,4 +1,4 @@
-from mymi.reporting.nifti import create_region_summary
+from mymi.reports.nifti import create_region_summary
 from mymi.utils import grid_arg
 
 dataset = 'PDDCA'

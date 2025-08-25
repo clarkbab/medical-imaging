@@ -10,7 +10,7 @@ from uuid import uuid1
 from mymi import config
 from mymi.datasets.training import TrainingDataset 
 from mymi.loaders import MultiLoader
-from mymi.loaders.augmentation import get_transforms
+from mymi.loaders.data_augmentation import get_transforms
 from mymi import logging
 from mymi.plotting import plot_patient
 from mymi.typing import PatientID, Regions

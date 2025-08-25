@@ -251,7 +251,7 @@ class NiftiDataset(Dataset, IndexMixin):
 
         return NiftiPatient(self.__id, id, dirpath, ct_from=self.__ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
 
-    # Copied from 'mymi/reporting/dataset/nift.py' to avoid circular dependency.
+    # Copied from 'mymi/reports/dataset/nift.py' to avoid circular dependency.
     def __load_patient_regions_report(
         self,
         exists_only: bool = False) -> Union[DataFrame, bool]:

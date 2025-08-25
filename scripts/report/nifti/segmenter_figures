@@ -5,7 +5,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.reporting.dataset.nifti import create_segmenter_figures
+from mymi.reports.dataset.nifti import create_segmenter_figures
 
 fire.Fire(create_segmenter_figures)
 

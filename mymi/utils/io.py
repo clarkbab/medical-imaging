@@ -9,7 +9,7 @@ import yaml
 from mymi import config
 from mymi.typing import *
 
-from .arguments import arg_to_list
+from .args import arg_to_list
 from .nifti import from_nifti
 from .python import delegates
 from .sitk import from_sitk_image, to_sitk_image
@@ -84,14 +84,14 @@ def load_json(filepath: str) -> Any:
 @delegates(from_nifti)
 def load_nifti(
     filepath: str,
-    **kwargs) -> Tuple[ImageData3D, Spacing3D, Point3D]:
+    **kwargs) -> Tuple[ImageArray3D, Spacing3D, Point3D]:
     assert filepath.endswith('.nii') or filepath.endswith('.nii.gz'), "Filepath must end with .nii or .nii.gz"
     img = nib.load(filepath)
     return from_nifti(img, **kwargs)
 
 def load_numpy(
     filepath: str,
-    keys: Union[str, List[str]] = 'data') -> Union[ImageData3D, List[ImageData3D]]:
+    keys: Union[str, List[str]] = 'data') -> Union[ImageArray3D, List[ImageArray3D]]:
     assert filepath.endswith('.npz'), "Filepath must end with .npz"
     keys = arg_to_list(keys, str)
     data = np.load(filepath)
@@ -146,7 +146,7 @@ def save_yaml(
     with open(filepath, 'w') as f:
         yaml.dump(data, f)
 
-def sitk_load_image(filepath: FilePath) -> Tuple[ImageData3D, Spacing3D, Point3D]:
+def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray3D, Spacing3D, Point3D]:
     if filepath.endswith('.mha'):
         img_type = 'mha'
     elif filepath.endswith('.nii.gz') or filepath.endswith('.nii'):
@@ -157,7 +157,7 @@ def sitk_load_image(filepath: FilePath) -> Tuple[ImageData3D, Spacing3D, Point3D
     return from_sitk_image(img, img_type=img_type)
 
 def sitk_save_image(
-    data: ImageData3D,
+    data: ImageArray3D,
     spacing: Spacing3D,
     offset: Point3D,
     filepath: FilePath) -> None:

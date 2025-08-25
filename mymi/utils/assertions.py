@@ -5,7 +5,7 @@ from typing import *
 
 from mymi.typing import *
 
-from .arguments import arg_to_list
+from .args import arg_to_list
 
 def assert_can_write(filepaths: FilePaths) -> None:
     filepaths = arg_to_list(filepaths, FilePath)

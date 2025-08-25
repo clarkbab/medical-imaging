@@ -3,7 +3,7 @@ from typing import *
 
 from mymi.typing import *
 
-from .arguments import arg_to_list
+from .args import arg_to_list
 
 def alias_kwargs(aliases: Union[Tuple[str, str], List[Tuple[str, str]]]) -> Callable:
     aliases = arg_to_list(aliases, tuple)
@@ -12,7 +12,7 @@ def alias_kwargs(aliases: Union[Tuple[str, str], List[Tuple[str, str]]]) -> Call
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for full_name, shortcut in alias_map.items():
+            for shortcut, full_name in alias_map.items():
                 if shortcut in kwargs:
                     kwargs[full_name] = kwargs.pop(shortcut)
             return func(*args, **kwargs)
@@ -21,9 +21,9 @@ def alias_kwargs(aliases: Union[Tuple[str, str], List[Tuple[str, str]]]) -> Call
 
 def handle_non_spatial_dims(
     spatial_fn: Callable,
-    data: ImageData,
-    *args, **kwargs) -> ImageData:
-    datas = arg_to_list(data, ImageData)
+    data: Union[ImageArrays, ImageTensors],
+    *args, **kwargs) -> ImageArray:
+    datas = arg_to_list(data, (ImageArray, ImageTensor))
     outputs = []
     for data in datas:
         n_dims = len(data.shape)
@@ -63,10 +63,8 @@ def handle_non_spatial_dims(
     return outputs
 
 def __stack(
-    data: List[ImageData],
-    axis: int = 0) -> ImageData:
-    if isinstance(data[0], np.ndarray):
-        data = np.stack(data, axis=axis)
-    elif isinstance(data[0], torch.Tensor):
-        data = torch.stack(data, dim=axis)
+    data: Union[List[ImageArray], List[ImageTensor]],
+    axis: int = 0) -> Union[ImageArray, ImageTensor]:
+    stack_fn = lambda x, a: np.stack(x, axis=a) if isinstance(x[0], np.ndarray) else torch.stack(x, dim=a)
+    data = stack_fn(data, axis)
     return data

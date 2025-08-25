@@ -36,7 +36,7 @@ class CtImageSeries(NiftiImageSeries):
 
     @property
     @ensure_loaded
-    def data(self) -> CtData:
+    def data(self) -> CtVolume:
         return self.__data
 
     @ensure_loaded

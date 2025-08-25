@@ -7,13 +7,13 @@ from mymi.utils import *
 from .transforms import assert_box_width
 
 def __spatial_crop_or_pad(
-    image: ImageData3D,
+    image: ImageArray3D,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageData3D:
+    use_patient_coords: bool = True) -> ImageArray3D:
     bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
     fill = np.min(image) if fill == 'min' else fill
@@ -63,20 +63,20 @@ def __spatial_crop_or_pad(
 
 @delegates(__spatial_crop_or_pad)
 def crop_or_pad(
-    image: ImageData,
-    *args, **kwargs) -> ImageData:
+    image: ImageArray,
+    *args, **kwargs) -> ImageArray:
     assert_image(image)
     return handle_non_spatial_dims(__spatial_crop_or_pad, image, *args, **kwargs)
 
 @delegates(__spatial_crop_or_pad)
 def __spatial_centre_crop_or_pad(
-    image: ImageData,
+    image: ImageArray,
     size: Union[Size, SizeMM],
     offset: Optional[Point] = None,
     return_inverse: bool = False,
     spacing: Optional[Spacing] = None,
     use_patient_coords: bool = True,
-    **kwargs) -> ImageData:
+    **kwargs) -> ImageArray:
 
     # Determine cropping/padding amounts.
     n_dims = len(image.shape)
@@ -111,8 +111,8 @@ def __spatial_centre_crop_or_pad(
 
 @delegates(__spatial_centre_crop_or_pad)
 def centre_crop_or_pad(
-    image: ImageData,
-    *args, **kwargs) -> ImageData:
+    image: ImageArray,
+    *args, **kwargs) -> ImageArray:
     assert_image(image)
     return handle_non_spatial_dims(__spatial_centre_crop_or_pad, image, *args, **kwargs)
 

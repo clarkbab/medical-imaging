@@ -7,7 +7,7 @@ from typing import *
 import wandb
 
 from mymi import config
-from mymi.loaders.augmentation import RandomAffine
+from mymi.loaders.data_augmentation import RandomAffine
 from mymi.loaders import HoldoutLoader
 from mymi import logging
 from mymi.losses import MSELoss, NCCLoss, SpatialSmoothingLoss

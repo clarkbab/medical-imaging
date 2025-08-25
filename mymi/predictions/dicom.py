@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from mymi import config
 from mymi import datasets as ds
 from mymi.datasets.dicom import DicomDataset, ROIData, RtStructConverter
-from mymi.geometry import extent
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import MultiSegmenter, Segmenter

@@ -14,7 +14,7 @@ from uuid import uuid1
 
 from mymi import config
 from mymi.datasets import DicomDataset, NiftiDataset
-from mymi.geometry import extent, fov_centre
+from mymi.geometry import fov, fov_centre
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
 from mymi.plotting.nifti import plot_patients

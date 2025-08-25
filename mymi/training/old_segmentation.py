@@ -5,7 +5,7 @@ from typing import *
 from mymi import config
 from mymi.datasets import TrainingDataset
 from mymi.loaders import HoldoutLoader
-from mymi.loaders.augmentation import RandomAffine, get_transforms
+from mymi.loaders.data_augmentation import RandomAffine, get_transforms
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import *

@@ -5,6 +5,7 @@ kwargs = dict(
     dry_run=False,
     overwrite_labels=True,
     rename_regions={
+        'brain': 'ts_Brain',
         'brainstem': 'ts_Brainstem',
         'mandible': 'ts_Bone_Mandible',
         'optic_nerve_left': 'ts_OpticNrv_L',
@@ -16,19 +17,22 @@ kwargs = dict(
     },
     save_as_labels=True,
     task_regions={
-        'brain_structures': [
-            'brainstem',
-        ],
-        'craniofacial_structures': [
-            'mandible',
-        ],
-        'head_glands_cavities': [
-            'optic_nerve_left',
-            'optic_nerve_right',
-            'parotid_gland_left',
-            'parotid_gland_right',
-            'submandibular_gland_left',
-            'submandibular_gland_right',
+        # 'brain_structures': [
+        #     'brainstem',
+        # ],
+        # 'craniofacial_structures': [
+        #     'mandible',
+        # ],
+        # 'head_glands_cavities': [
+        #     'optic_nerve_left',
+        #     'optic_nerve_right',
+        #     'parotid_gland_left',
+        #     'parotid_gland_right',
+        #     'submandibular_gland_left',
+        #     'submandibular_gland_right',
+        # ],
+        'total': [
+            'brain',
         ],
     },
 )

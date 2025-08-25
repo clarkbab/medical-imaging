@@ -82,7 +82,7 @@ class RegionsImageSeries(NiftiImageSeries):
         n_overlap = len(np.intersect1d(region_ids, all_ids))
         return n_overlap > 0 if any else n_overlap == len(region_ids)
 
-    @alias_kwargs(('use_mapping', 'um'))
+    @alias_kwargs(('um', 'use_mapping'))
     def list_regions(
         self,
         region_ids: RegionIDs = 'all',

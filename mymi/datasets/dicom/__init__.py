@@ -18,18 +18,24 @@ def list() -> List[str]:
 
 def create(name: str) -> DicomDataset:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)
+    if os.path.exists(ds_path):
+        raise FileExistsError(f"Dataset '{name}' already exists at {ds_path}.")
     os.makedirs(ds_path)
     return DicomDataset(name)
 
-def destroy(name: str) -> None:
+def destroy(
+    name: str,
+    dry_run: bool = True) -> None:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)
     if os.path.exists(ds_path):
-        shutil.rmtree(ds_path)
+        with_dry_run(dry_run, lambda: shutil.rmtree(ds_path), f"Destroying dicom dataset '{name}' at {ds_path}.")
     
 def exists(name: str) -> bool:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)
     return os.path.exists(ds_path)
 
-def recreate(name: str) -> DicomDataset:
-    destroy(name)
+def recreate(
+    name: str,
+    dry_run: bool = True) -> DicomDataset:
+    destroy(name, dry_run=dry_run)
     return create(name)

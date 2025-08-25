@@ -10,7 +10,7 @@ from uuid import uuid1
 
 from mymi import config
 from mymi.datasets import TrainingDataset
-from mymi.geometry import extent, fov_centre
+from mymi.geometry import fov, fov_centre
 from mymi import logging
 from mymi.processing import get_object, one_hot_encode
 from mymi.typing import *

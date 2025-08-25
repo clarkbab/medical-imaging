@@ -9,20 +9,20 @@ from mymi.utils import *
 from .data import plot_histograms
 from .plotting import *
 
-@alias_kwargs(('use_patient_coords', 'upc'))
+@alias_kwargs(('upc', 'use_patient_coords'))
 def plot_patient(
     size: Size3D,
     spacing: Spacing3D,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
-    centre: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionData, RegionID]] = None,
+    centre: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     centre_other: bool = False,
     colours: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[LandmarkData, LandmarkID, Box2D, RegionData, RegionID]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    crop: Optional[Union[LandmarkData, LandmarkID, Box2D, RegionArray, RegionID]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin_mm: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
     crosshairs: Optional[Union[Pixel, Point2D, Landmark, LandmarkData]] = None,
-    ct_data: Optional[CtData] = None,
+    ct_data: Optional[CtVolume] = None,
     dose_alpha_min: float = 0.3,
     dose_alpha_max: float = 1.0,
     dose_cmap: str = 'turbo',
@@ -102,7 +102,7 @@ def plot_patient(
                 crop_vox_xy = __get_region_crop(region_data[crop], crop_margin_mm, spacing, offset, view)
         elif isinstance(crop, LandmarkData):
             crop_vox_xy = __get_landmark_crop(crop, crop_margin_mm, size, spacing, offset, view)
-        elif isinstance(centre, RegionData):
+        elif isinstance(centre, RegionArray):
             crop_vox_xy = __get_region_crop(crop, crop_margin_mm, spacing, offset, view)
         else:
             crop_vox_xy = tuple(*zip(crop))    # API accepts ((xmin, xmax), (ymin, ymax)) - convert to Box2D.
@@ -621,9 +621,9 @@ def plot_patients_matrix(
     # Allows us to plot multiple patients (rows) and patient studies, series, and views (columns).
     pat_ids: Union[str, List[str]],
     ax: Optional[mpl.axes.Axes] = None,
-    centres: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionData, RegionID, List[Union[LandmarkData, LandmarkID, Literal['dose'], RegionData, RegionID]], List[Union[LandmarkData, LandmarkID, RegionData, RegionID, List[Union[LandmarkData, LandmarkID, RegionData, RegionID]]]]]] = None,
+    centres: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID, List[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID]], List[Union[LandmarkData, LandmarkID, RegionArray, RegionID, List[Union[LandmarkData, LandmarkID, RegionArray, RegionID]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
-    ct_datas: Optional[Union[CtData, List[CtData], List[Union[CtData, List[CtData]]]]] = None,
+    ct_datas: Optional[Union[CtVolume, List[CtVolume], List[Union[CtVolume, List[CtVolume]]]]] = None,
     dose_datas: Optional[Union[DoseData, List[DoseData], List[Union[DoseData, List[DoseData]]]]] = None,
     dose_series_dates: Union[str, List[str]] = None,
     dose_series_ids: Union[SeriesIDs, List[SeriesIDs]] = None,
@@ -647,9 +647,9 @@ def plot_patients_matrix(
     study_dates = arg_to_list(study_dates, str, broadcast=n_rows)
     series_ids = arg_to_list(series_ids, SeriesID, broadcast=n_rows)
     spacings = arg_to_list(spacings, Spacing3D, broadcast=n_rows)
-    centres = arg_to_list(centres, (None, LandmarkData, LandmarkID, RegionData, RegionID), broadcast=n_rows)
+    centres = arg_to_list(centres, (None, LandmarkData, LandmarkID, RegionArray, RegionID), broadcast=n_rows)
     crops = arg_to_list(crops, (None, LandmarkID, Box2D, RegionID), broadcast=n_rows)
-    ct_datas = arg_to_list(ct_datas, (None, CtData), broadcast=n_rows)
+    ct_datas = arg_to_list(ct_datas, (None, CtVolume), broadcast=n_rows)
     dose_datas = arg_to_list(dose_datas, (None, DoseData), broadcast=n_rows)
     dose_series_dates = arg_to_list(dose_series_dates, str, broadcast=n_rows)
     dose_series_ids = arg_to_list(dose_series_ids, SeriesID, broadcast=n_rows)
@@ -783,7 +783,7 @@ def __map_regions(
     return region_data, centre, crop
 
 def __get_region_crop(
-    data: RegionData,
+    data: RegionArray,
     crop_margin_mm: float,
     spacing: Spacing3D,
     offset: Point3D,

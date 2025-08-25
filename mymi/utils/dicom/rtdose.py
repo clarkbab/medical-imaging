@@ -11,13 +11,14 @@ def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseData, Spacing3D, P
     data = rtdose_dicom.DoseGridScaling * data
 
     # Load spacing.
-    spacing_x_y = rtdose_dicom.PixelSpacing 
+    spacing_xy = rtdose_dicom.PixelSpacing 
     z_diffs = np.diff(rtdose_dicom.GridFrameOffsetVector)
-    z_diffs = np.unique(TOLERANCE_MM * np.round(z_diffs / TOLERANCE_MM))
+    z_diffs = round(z_diffs, tol=TOLERANCE_MM)
+    z_diffs = np.unique(z_diffs)
     if len(z_diffs) != 1:
         raise ValueError(f"Slice z spacings for RtDoseDicom not equal: {z_diffs}.")
     spacing_z = z_diffs[0]
-    spacing = tuple((float(s) for s in np.append(spacing_x_y, spacing_z)))
+    spacing = tuple((float(s) for s in np.append(spacing_xy, spacing_z)))
 
     # Get offset.
     offset = tuple(float(o) for o in rtdose_dicom.ImagePositionPatient)

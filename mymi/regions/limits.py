@@ -1,6 +1,6 @@
 import numpy as np
 
-from mymi.geometry import extent, fov_width
+from mymi.geometry import fov_width
 from mymi import logging
 from mymi.transforms import crop_foreground
 from mymi import typing

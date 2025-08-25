@@ -1,12 +1,15 @@
 from mymi.typing import *
 
-def landmarks_to_data(data: Union[LandmarksData, LandmarksVoxelData]) -> Points3D:
+def landmarks_from_data(data: Points3D) -> LandmarksData:
+    return pd.DataFrame(data).rename_axis('landmark-id').reset_index()
+
+def landmarks_to_data(data: Union[LandmarksData, LandmarksDataVox]) -> Points3D:
     return data[list(range(3))].to_numpy()
 
 def landmarks_to_image_coords(
     data: LandmarksData,
     spacing: Spacing3D,
-    offset: Point3D) -> LandmarksVoxelData:
+    offset: Point3D) -> LandmarksDataVox:
     data = data.copy()
     lm_data = data[list(range(3))].to_numpy()
     lm_data = np.round((lm_data - offset) / spacing).astype(int)
@@ -14,7 +17,7 @@ def landmarks_to_image_coords(
     return data
 
 def landmarks_to_patient_coords(
-    data: LandmarksVoxelData,
+    data: LandmarksDataVox,
     spacing: Spacing3D,
     offset: Point3D) -> LandmarksData:
     data = data.copy()

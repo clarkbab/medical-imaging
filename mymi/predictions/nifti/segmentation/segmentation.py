@@ -10,7 +10,7 @@ from typing import *
 
 from mymi import config
 from mymi.datasets import NiftiDataset, TrainingDataset
-from mymi.geometry import get_box, extent, fov_centre
+from mymi.geometry import get_box, fov_centre
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
@@ -912,7 +912,7 @@ def load_moved_data(
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
     model: str,
-    regions: Optional[Regions] = 'all') -> Tuple[CtData, RegionsData]:
+    regions: Optional[Regions] = 'all') -> Tuple[CtVolume, RegionsData]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     basepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)

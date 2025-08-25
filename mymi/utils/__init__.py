@@ -1,4 +1,4 @@
-from .arguments import *
+from .args import *
 from .assertions import *
 from .colours import *
 from .decorators import *

@@ -4,7 +4,6 @@ import torch
 from typing import Optional
 
 from mymi import logging
-from mymi.geometry import extent
 from mymi.models.lightning_modules import Localiser
 from mymi.regions import RegionLimits
 from mymi import typing

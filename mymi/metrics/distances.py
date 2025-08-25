@@ -2,7 +2,7 @@ import numpy as np
 from surface_distance import *
 from typing import *
 
-from mymi.geometry import extent, fov_centre
+from mymi.geometry import fov_centre
 from mymi.typing import *
 from mymi.utils import arg_to_list
 

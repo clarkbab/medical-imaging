@@ -8,28 +8,29 @@ from mymi.typing import *
 
 def from_ct_dicoms(
     cts: List[CtDicom] = [],
-    check_consistency: bool = True,
-    dirpath: Optional[str] = None) -> Tuple[CtData, Spacing3D, Point3D]:
+    assert_consistency: bool = True,
+    dirpath: Optional[str] = None) -> Tuple[CtVolume, Spacing3D, Point3D]:
     # Load from dirpath if present.
     if dirpath is not None:
         cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
 
+    # Check CT consistency.
+    if assert_consistency:
+        # TODO: this doesn't work - xy_pos is a list of tuples.
+        xy_pos = [c.ImagePositionPatient[:2] for c in cts]
+        xy_pos = round(xy_pos, tol=TOLERANCE_MM)
+        xy_pos = np.unique(xy_pos)
+        if len(xy_pos) > 1:
+            raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_pos}.")
+        z_pos = list(sorted([c.ImagePositionPatient[2] for c in cts]))
+        z_pos = round(z_pos, tol=TOLERANCE_MM)
+        z_diffs = np.diff(z_pos)
+        z_diffs = np.unique(z_diffs)
+        if len(z_diffs) > 1:
+            raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' z spacings: {z_diffs}.")
+
     # Sort CTs by z position, smallest first.
     cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
-
-    # Check CT consistency.
-    if check_consistency:
-        first_xy_pos = cts[0].ImagePositionPatient[:2]  # Use only x and y position.
-        first_z_diff = abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2])
-        last_z_pos = cts[0].ImagePositionPatient[2]
-        for c in cts[1:]:
-            xy_pos = c.ImagePositionPatient[:2]
-            if xy_pos != first_xy_pos:
-                raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_pos} != {first_xy_pos}.")
-            z_diff = abs(c.ImagePositionPatient[2] - last_z_pos)
-            if abs(z_diff - first_z_diff) > 1e-6:  # Allow for very small differences.
-                raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' z values: {z_diff} != {first_z_diff} (tol=1e-6).")
-            last_z_pos = c.ImagePositionPatient[2]
 
     # Calculate offset.
     # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
@@ -65,7 +66,7 @@ def from_ct_dicoms(
     return data, spacing, offset
 
 def to_ct_dicoms(
-    data: CtData, 
+    data: CtVolume, 
     spacing: Spacing3D,
     offset: Point3D,
     pat_id: PatientID,

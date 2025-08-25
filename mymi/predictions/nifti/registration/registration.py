@@ -307,7 +307,7 @@ def load_registration(
     moving_study_id: StudyID = 'study_0',
     raise_error: bool = False,
     region_ids: Optional[RegionIDs] = 'all',
-    use_patient_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtData], RegionsData, Optional[LandmarksData], Optional[DoseData]]:
+    use_patient_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtVolume], RegionsData, Optional[LandmarksData], Optional[DoseData]]:
     # Load moved CT.
     if moving_pat_id is None:
         moving_pat_id = fixed_pat_id
@@ -374,7 +374,7 @@ def load_registered_dose(
     model: str,
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
-    moving_study_id: StudyID = 'study_0') -> Optional[RegionData]:
+    moving_study_id: StudyID = 'study_0') -> Optional[RegionArray]:
     moving_pat_id = moving_pat_id if moving_pat_id is not None else fixed_pat_id
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'dose', f'{model}.nii.gz')
@@ -428,7 +428,7 @@ def load_registered_region(
     region_id: RegionID,
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
-    moving_study_id: StudyID = 'study_0') -> Optional[RegionData]:
+    moving_study_id: StudyID = 'study_0') -> Optional[RegionArray]:
     moving_pat_id = moving_pat_id if moving_pat_id is not None else fixed_pat_id
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'regions', region_id, f'{model}.nii.gz')

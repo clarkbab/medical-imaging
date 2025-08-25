@@ -4,10 +4,10 @@ from typing import *
 
 from mymi.typing import *
 
-from .arguments import arg_to_list
+from .args import arg_to_list
 from .python import delegates
 
-def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageData3D, Spacing3D, Point3D]:
+def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageArray3D, Spacing3D, Point3D]:
     data = img.get_fdata()
     affine = img.affine
     spacing = (float(affine[0][0]), float(affine[1][1]), float(affine[2][2]))
@@ -15,7 +15,7 @@ def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageData3D, Spacing3D, Poi
     return data, spacing, offset
 
 def to_nifti(
-    data: ImageData3D,
+    data: ImageArray3D,
     spacing: Spacing3D,
     offset: Point3D) -> nib.nifti1.Nifti1Image:
     # Convert data types.
@@ -32,7 +32,7 @@ def to_nifti(
     return nib.nifti1.Nifti1Image(data, affine)
 
 def save_nifti(
-    data: ImageData3D,
+    data: ImageArray3D,
     filepath: str,
     spacing: Spacing3D = (1, 1, 1),
     offset: Point3D = (0, 0, 0)) -> None:
@@ -44,7 +44,7 @@ def save_nifti(
     nib.save(img, filepath)
 
 def save_numpy(
-    data: ImageData3D,
+    data: ImageArray3D,
     filepath: str) -> None:
     assert filepath.endswith('.npz'), "Filepath must end with .npz"
     np.savez_compressed(filepath, data=data)

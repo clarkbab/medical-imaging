@@ -1,6 +1,5 @@
 import numpy as np
 
-from mymi.geometry import extent
 from mymi.transforms import resample
 
 def interpolate_z(data: np.ndarray) -> np.ndarray:

@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional
 
 from mymi.metrics import mean_intensity, snr
-from mymi.geometry import extent, fov_width
+from mymi.geometry import fov, fov_width
 from mymi.processing import largest_cc_3D
 from mymi.typing import *
 
@@ -27,11 +27,11 @@ def get_ct_stats(
     return stats
 
 def get_region_stats(
-    ct_data: CtData,
-    region_data: RegionData,
+    ct_data: CtVolume,
+    region_data: RegionArray,
     spacing: Spacing3D,
     offset: Voxel,
-    brain_data: Optional[RegionData] = None) -> List[Dict[str, Any]]:
+    brain_data: Optional[RegionArray] = None) -> List[Dict[str, Any]]:
 
     stats = []
 

@@ -6,7 +6,6 @@ from torch.nn.functional import one_hot
 from typing import List, Optional, Union
 from tqdm import tqdm
 
-from mymi.geometry import extent
 from mymi import logging
 from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list

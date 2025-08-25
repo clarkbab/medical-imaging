@@ -12,7 +12,6 @@ from typing import *
 
 from mymi.datasets import TrainingDataset
 from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
-from mymi.geometry import extent
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import crop_foreground, resample

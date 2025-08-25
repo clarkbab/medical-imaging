@@ -17,7 +17,7 @@ def rigid_registration(
     landmarks: Optional[Landmarks] = None,
     regions: Optional[Regions] = None,
     regions_ignore_missing: bool = False,
-    **kwargs) -> Tuple[CtData, Optional[RegionsData], Optional[LandmarksData], sitk.Transform]:
+    **kwargs) -> Tuple[CtVolume, Optional[RegionsData], Optional[LandmarksData], sitk.Transform]:
 
     # Load CT data.
     set = NiftiDataset(dataset)

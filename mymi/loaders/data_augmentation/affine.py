@@ -38,7 +38,8 @@ class RandomAffine():
 
     def get_concrete_transform(
         self,
-        random_seed: Optional[int] = None) -> Tuple[sitk.Transform, sitk.Transform, Dict[str, Any]]:
+        random_seed: Optional[int] = None,
+        **kwargs) -> Tuple[sitk.Transform, sitk.Transform, Dict[str, Any]]:
         # Sample transform parameters.
         if random_seed is not None:
             np.random.seed(random_seed)
@@ -67,6 +68,7 @@ class RandomAffine():
             'scaling': scaling,
             'translation': translation
         }
+        print(params)
 
         return forward_transform, backward_transform, params
 

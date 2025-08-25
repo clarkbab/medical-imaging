@@ -8,12 +8,13 @@ from mymi.utils import *
 
 from .plotting import get_aspect, get_origin, get_view_slice, get_view_xy, get_window, plot_landmark_data
 
+@alias_kwargs(('upc', 'use_patient_coords'))
 def plot_images(
-    data: Union[DirPath, FilePath, ImageData3D, List[ImageData3D]],
+    data: Union[DirPath, FilePath, ImageArray3D, List[ImageArray3D]],
     figsize: Tuple[float, float] = (16, 6),
     idxs: Union[int, float, List[Union[int, float]]] = 0.5,
     labels: Optional[Union[DirPath, FilePath, LabelData3D, List[Optional[LabelData3D]]]] = None,
-    landmarks: Optional[Union[LandmarksData, List[LandmarksData]]] = None,    # Should be in patient coordinates.
+    landmarks: Optional[Union[LandmarksData, List[LandmarksData], Points3D]] = None,    # Should be in patient coordinates.
     landmark_ids: LandmarkIDs = 'all',
     modality: Literal['ct', 'dose'] = 'ct',
     offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
@@ -37,7 +38,7 @@ def plot_images(
             data, spacings, offsets = sitk_load_image(data)
         else:
             raise ValueError(f'Unsupported file type: {data}')
-    data = arg_to_list(data, ImageData3D)
+    data = arg_to_list(data, ImageArray3D)
     idxs = arg_to_list(idxs, (int, float), broadcast=len(data))
     # Assuming one main image only.
     if isinstance(labels, (DirPath, FilePath)):
@@ -52,7 +53,7 @@ def plot_images(
             loaded_labels.append(loaded_label)
         labels = [loaded_labels]
     labels = arg_to_list(labels, [LabelData3D, None], broadcast=len(data))
-    landmarks = arg_to_list(landmarks, [LandmarksData, None], broadcast=len(data))
+    landmarks = arg_to_list(landmarks, [LandmarksData, Points3D, None], broadcast=len(data))
     offsets = arg_to_list(offsets, Point3D, broadcast=len(data))
     points = arg_to_list(points, [Point3D, None], broadcast=len(data))
     spacings = arg_to_list(spacings, Spacing3D, broadcast=len(data))

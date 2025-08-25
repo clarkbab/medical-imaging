@@ -7,7 +7,6 @@ import sys
 from tqdm import tqdm
 
 from mymi.datasets import NiftiDataset
-from mymi.geometry import extent
 from mymi import logging
 from mymi.processing import one_hot_encode
 # from mymi.predictions.nifti.segmentation.segmentation import load_localiser_prediction

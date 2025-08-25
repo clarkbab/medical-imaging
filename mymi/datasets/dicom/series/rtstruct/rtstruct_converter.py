@@ -116,7 +116,7 @@ class RtStructConverter:
         region_id: RegionID,
         size: Size3D,
         spacing: Spacing3D,
-        offset: Point3D) -> RegionData:
+        offset: Point3D) -> RegionArray:
         # Load the contour data.
         roi_infos = rtstruct.StructureSetROISequence
         roi_contours = rtstruct.ROIContourSequence

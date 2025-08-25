@@ -5,6 +5,6 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.append(root_dir)
 
-from mymi.reporting.datasets.nifti import create_registration_figures_report
+from mymi.reports.datasets.nifti import create_registration_figures_report
 
 fire.Fire(create_registration_figures_report)

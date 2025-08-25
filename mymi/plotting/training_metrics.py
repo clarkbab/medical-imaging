@@ -6,7 +6,7 @@ import re
 import seaborn as sns
 from typing import *
 
-from mymi.reporting import load_training_metrics
+from mymi.reports import load_training_metrics
 from mymi.typing import *
 from mymi.utils import *
 

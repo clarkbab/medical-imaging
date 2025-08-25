@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing import List, Optional, Union
 
 from mymi.datasets.dicom import DicomDataset
-from mymi.geometry import extent
+from mymi.geometry import fov
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import Regions

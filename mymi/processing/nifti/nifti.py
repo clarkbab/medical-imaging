@@ -22,7 +22,7 @@ from mymi.datasets.nifti import create_region
 from mymi.datasets.training import TrainingDataset, exists as exists_training
 from mymi.datasets.training import create as create_training
 from mymi.datasets.training import recreate as recreate_training
-from mymi.geometry import extent, fov_centre
+from mymi.geometry import fov_centre
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base

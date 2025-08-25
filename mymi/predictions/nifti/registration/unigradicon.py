@@ -2,8 +2,10 @@ import numpy as np
 import os
 import SimpleITK as sitk
 import subprocess
+import torch
 from tqdm import tqdm
 from typing import *
+import unigradicon as ugi
 
 from mymi.datasets.nifti import NiftiDataset
 from mymi import logging
@@ -12,8 +14,21 @@ from mymi.transforms import load_itk_transform, sitk_load_transform, resample, s
 from mymi.typing import *
 from mymi.utils import *
 
+def load_finetuned_model(
+    dataset: DatasetID,
+    run_name: str,
+    ckpt: str) -> torch.nn.Module:
+    model = ugi.get_unigradicon()
+    filepath = os.path.join('models', 'unigradicon', dataset, run_name, ckpt) 
+    trained_weights = torch.load(filepath)
+    model.regis_net.load_state_dict(trained_weights)
+    model.to(icon.config.device)
+    return model
+
 def create_unigradicon_finetuned_predictions(
-    dataset: str,
+    dataset: DatasetID,
+    run_name: str,
+    ckpt: str,
     model: str,
     create_moved_dose: bool = True,
     create_moved_ct: bool = True,
@@ -34,6 +49,9 @@ def create_unigradicon_finetuned_predictions(
         }
         timer = Timer(cols)
 
+    # Load model.
+    model = load_finetuned_model(dataset, run_name, ckpt)
+
     # Load patients.
     set = NiftiDataset(dataset)
     pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
@@ -46,17 +64,49 @@ def create_unigradicon_finetuned_predictions(
             'device': 'cuda',
         }
         with timer.record(data, enabled=use_timing):
-            # Load details.
+            # Load images.
             moving_pat_id, moving_study_id = p, 'study_0'
             fixed_pat_id, fixed_study_id = p, 'study_1'
-            # moving/fixed_series_id = 'series_0' implicit.
             moving_pat = set.patient(moving_pat_id)
             fixed_pat = set.patient(fixed_pat_id)
             moving_study = moving_pat.study(moving_study_id)
             fixed_study = fixed_pat.study(fixed_study_id)
-            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id)
-            moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
-            transform_path = os.path.join(reg_path, 'dvf', f'{model}.hdf5')
+            moving_ct = moving_study.ct_data
+            fixed_ct = fixed_study.ct_data
+
+            # Process images for network input.
+            min_val, max_val = -1000, 1000
+            moving, fixed = moving.clamp(min_val, max_val), fixed.clamp(min_val, max_val)
+            moving, fixed = (moving - min_val) / (max_val - min_val), (fixed - min_val) / (max_val - min_val)
+            moving, fixed = moving.float().cuda(), fixed.float().cuda()
+
+    # fixed = itk.imread(args.fixed)
+    # moving = itk.imread(args.moving)
+
+    # if args.io_iterations == "None":
+    #     io_iterations = None
+    # else:
+    #     io_iterations = int(args.io_iterations)
+
+    # phi_AB, phi_BA = icon_registration.itk_wrapper.register_pair(
+    #     net,
+    #     preprocess(moving),
+    #     preprocess(fixed),
+    #     finetune_steps=io_iterations)
+
+    # itk.transformwrite([phi_AB], args.transform_out)
+
+    # if args.warped_moving_out:
+    #     moving = itk.CastImageFilter[type(moving), itk.Image[itk.F, 3]].New()(moving)
+    #     interpolator = itk.LinearInterpolateImageFunction.New(moving)
+    #     warped_moving_image = itk.resample_image_filter(
+    #             moving,
+    #             transform=phi_AB,
+    #             interpolator=interpolator,
+    #             use_reference_image=True,
+    #             reference_image=fixed
+    #             )
+    #     itk.imwrite(warped_moving_image, args.warped_moving_out)
 
             # Register CT images.
             if create_moved_ct:
