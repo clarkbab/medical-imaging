@@ -15,7 +15,7 @@ def create_corrfield_predictions(
     dataset: str,
     create_moved_dose: bool = True,
     fixed_study_id: StudyID = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     lung_region: Region = 'Lungs',
     model: str = 'corrfield',
     moving_study_id: StudyID = 'study_0',

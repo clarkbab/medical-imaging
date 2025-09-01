@@ -77,7 +77,7 @@ class TrainingSample:
     # a lot of datasets for the multi-organ work.
     def label(
         self,
-        landmarks: Landmarks = 'all',
+        landmarks: LandmarkIDs = 'all',
         landmark_data_only: bool = True,
         label_idx: Optional[int] = None,    # Enables multi-label training.
         regions: Regions = 'all') -> np.ndarray:

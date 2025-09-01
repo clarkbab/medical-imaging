@@ -11,9 +11,9 @@ from mymi.utils import *
 
 def to_rtstruct_dicom(
     ref_cts: List[CtDicom],
-    landmark_data: Optional[LandmarksData] = None,
+    landmark_data: Optional[LandmarksFrame] = None,
     landmark_prefix: str = '',
-    region_data: Optional[RegionsData] = None,
+    region_data: Optional[RegionArrays] = None,
     series_id: Optional[SeriesID] = None) -> RtStructDicom:
     if landmark_data is None and region_data is None:
         raise ValueError("At least one of 'landmark_data' or 'region_data' must be provided.")
@@ -104,7 +104,7 @@ def to_rtstruct_dicom(
 
 def add_landmark_data(
     rtstruct_dicom: RtStructDicom,
-    landmark_data: LandmarksData,
+    landmark_data: LandmarksFrame,
     ref_cts: List[CtDicom],
     landmark_prefix: str = '') -> RtStructDicom:
     rtstruct_dicom = rtstruct_dicom.copy()
@@ -150,7 +150,7 @@ def add_landmark_data(
 
 def add_region_data(
     rtstruct_dicom: RtStructDicom,
-    region_data: RegionsData,
+    region_data: RegionArrays,
     ref_cts: List[CtDicom]) -> RtStructDicom:
     # Add regions data.
     rtstruct_dicom = rtstruct_dicom.copy()
@@ -226,7 +226,7 @@ def add_region_data(
     return rtstruct_dicom
 
 def get_contour_coords(
-    data: CtSliceImage,
+    data: CtSlice,
     method: Literal['opencv', 'skimage'] = 'skimage') -> List[np.ndarray]:  # Arrays will have different numbers of points - can't return as single numpy array.
     if method == 'opencv':
         # coords, _ = cv.findContours(slice_data, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)

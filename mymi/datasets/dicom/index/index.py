@@ -51,7 +51,7 @@ def build_index(
     # Check if indexes are open and therefore can't be overwritten.
     files = ['index.csv', 'index-errors.csv']
     filepaths = [os.path.join(dataset_path, f) for f in files]
-    assert_can_write(filepaths)
+    assert_writeable(filepaths)
 
     # Remove markers.
     files = os.listdir(dataset_path)

@@ -5,7 +5,7 @@ import numpy as np
 from mymi.constants import *
 from mymi.typing import *
 
-def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseData, Spacing3D, Point3D]:
+def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseImageArray, Spacing3D, Point3D]:
     # Load data.
     data = np.transpose(rtdose_dicom.pixel_array)
     data = rtdose_dicom.DoseGridScaling * data
@@ -26,7 +26,7 @@ def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseData, Spacing3D, P
     return data, spacing, offset
 
 def to_rtdose_dicom(
-    data: DoseData, 
+    data: DoseImageArray, 
     spacing: Spacing3D,
     offset: Point3D,
     grid_scaling: float = 1e-3,

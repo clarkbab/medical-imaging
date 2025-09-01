@@ -460,7 +460,7 @@ class UNet3D(torch.nn.Module):
         x_res = []
         for i, module in enumerate(self.__submodules):
             if self.__use_pytorch_ckpt:
-                dummy_arg = torch.Tensor()
+                dummy_arg = torch.tensor()
                 dummy_arg.requires_grad = True
                 x, *x_res = torch.utils.checkpoint(module, x, *x_res, dummy_arg=dummy_arg, use_reentrant=False)
             else:

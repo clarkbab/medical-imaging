@@ -124,8 +124,8 @@ class DiceLoss(nn.Module):
 
             # Insert result back into main dice results.
             loss_a = loss[:, :sc_channel]
-            bk_loss = torch.Tensor(bk_losses).unsqueeze(1)
-            sc_loss = torch.Tensor(sc_losses).unsqueeze(1)
+            bk_loss = torch.tensor(bk_losses).unsqueeze(1)
+            sc_loss = torch.tensor(sc_losses).unsqueeze(1)
             loss_b = loss[:, sc_channel:]
             loss = torch.concat((bk_loss, loss_a, sc_loss, loss_b), dim=1)
 

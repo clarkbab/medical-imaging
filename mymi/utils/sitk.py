@@ -8,7 +8,7 @@ from .utils import transpose_image
 
 def from_sitk_image(
     img: sitk.Image,
-    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[ImageArray3D, Spacing3D, Point3D]:
+    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[ImageArray, Spacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.

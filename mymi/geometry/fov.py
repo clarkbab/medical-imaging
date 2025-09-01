@@ -6,7 +6,7 @@ from mymi.utils import *
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def foreground_fov(
-    data: LabelData,
+    data: LabelArray,
     offset: Optional[Point] = None,
     spacing: Optional[Spacing] = None,
     use_patient_coords: bool = True) -> Optional[Box]:
@@ -31,7 +31,7 @@ def foreground_fov(
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def foreground_fov_centre(
-    data: LabelData,
+    data: LabelArray,
     use_patient_coords: bool = True,
     **kwargs) -> Optional[Union[Pixel, Voxel]]:
     fov_d = foreground_fov(data, use_patient_coords=True, **kwargs)
@@ -45,7 +45,7 @@ def foreground_fov_centre(
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def foreground_fov_width(
-    data: LabelData,
+    data: LabelArray,
     offset: Optional[Point] = None,
     spacing: Optional[Spacing] = None,
     use_patient_coords: bool = True) -> Optional[Size]:
@@ -104,7 +104,7 @@ def fov_centre(
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def fov_width(
-    data: LabelData,
+    data: LabelArray,
     **kwargs) -> Size:
     fov_d = fov(data, **kwargs)
     if fov_d is None:

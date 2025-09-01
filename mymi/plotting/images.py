@@ -9,64 +9,84 @@ from mymi.utils import *
 from .plotting import get_aspect, get_origin, get_view_slice, get_view_xy, get_window, plot_landmark_data
 
 @alias_kwargs(('upc', 'use_patient_coords'))
-def plot_images(
-    data: Union[DirPath, FilePath, ImageArray3D, List[ImageArray3D]],
+def plot_image(
+    data: Union[ImageArray, ImageTensor, DirPath, FilePath, List[Union[ImageArray, ImageTensor]]],
     figsize: Tuple[float, float] = (16, 6),
-    idxs: Union[int, float, List[Union[int, float]]] = 0.5,
-    labels: Optional[Union[DirPath, FilePath, LabelData3D, List[Optional[LabelData3D]]]] = None,
-    landmarks: Optional[Union[LandmarksData, List[LandmarksData], Points3D]] = None,    # Should be in patient coordinates.
+    idx: Union[int, float, List[Union[int, float]]] = 0.5,
+    # If single or list, broadcast to all images. If list of lists, leave alone.
+    label: Optional[Union[LabelArray, LabelTensor, DirPath, FilePath, List[Union[LabelArray, LabelTensor]], List[List[Union[LabelArray, LabelTensor]]]]] = None,
+    landmarks: Optional[Union[LandmarksFrame, PointsArray, PointsTensor, List[Union[LandmarksFrame, PointsArray, PointsTensor]]]] = None,    # Should be in patient coordinates.
     landmark_ids: LandmarkIDs = 'all',
     modality: Literal['ct', 'dose'] = 'ct',
-    offsets: Optional[Union[Point3D, List[Point3D]]] = (0, 0, 0),
-    points: Optional[Union[Point3D, List[Point3D]]] = None,
-    spacings: Optional[Union[Spacing3D, List[Spacing3D]]] = (1, 1, 1),
+    origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = (0, 0, 0),
+    spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = (1, 1, 1),
     transpose: bool = False,
     use_patient_coords: bool = False,
-    views: Union[int, Sequence[int]] = 'all',
+    view: Union[int, Sequence[int]] = 'all',
     window: Optional[Union[str, Tuple[float, float]]] = None,
     **kwargs) -> None:
     if isinstance(data, (DirPath, FilePath)):
         if os.path.isdir(data):
-            data, spacings, offsets = from_ct_dicoms(dirpath=data)
+            data, spacings, origins = from_ct_dicoms(dirpath=data)
         elif data.endswith('.nii') or data.endswith('.nii.gz'):
-            data, spacings, offsets = load_nifti(data)
+            data, spacings, origins = load_nifti(data)
         elif data.endswith('.npy'):
-            data, spacings, offsets = load_numpy(data)
+            data, spacings, origins = load_numpy(data)
         elif data.endswith('.nrrd'):
-            data, spacings, offsets = load_nrrd(data)
+            data, spacings, origins = load_nrrd(data)
         elif data.endswith('.mha') or data.endswith('.mhd'):
-            data, spacings, offsets = sitk_load_image(data)
+            data, spacings, origins = sitk_load_image(data)
         else:
             raise ValueError(f'Unsupported file type: {data}')
-    data = arg_to_list(data, ImageArray3D)
-    idxs = arg_to_list(idxs, (int, float), broadcast=len(data))
+    data = arg_to_list(data, (np.ndarray, torch.Tensor))
+    idxs = arg_to_list(idx, (int, float), broadcast=len(data))
     # Assuming one main image only.
-    if isinstance(labels, (DirPath, FilePath)):
+    if isinstance(label, (DirPath, FilePath)):
         loaded_labels = []
-        if os.path.isdir(labels):
-            for f in os.listdir(labels):
+        if os.path.isdir(label):
+            for f in os.listdir(label):
                 if f.endswith('.nii') or f.endswith('.nii.gz'):
-                    label, _, _ = load_nifti(os.path.join(labels, f))
-                loaded_labels.append(label)
-        elif labels.endswith('.nii') or labels.endswith('.nii.gz'):
-            loaded_label, _, _ = load_nifti(labels)
+                    l, _, _ = load_nifti(os.path.join(label, f))
+                loaded_labels.append(l)
+        elif label.endswith('.nii') or label.endswith('.nii.gz'):
+            loaded_label, _, _ = load_nifti(label)
             loaded_labels.append(loaded_label)
         labels = [loaded_labels]
-    labels = arg_to_list(labels, [LabelData3D, None], broadcast=len(data))
-    landmarks = arg_to_list(landmarks, [LandmarksData, Points3D, None], broadcast=len(data))
-    offsets = arg_to_list(offsets, Point3D, broadcast=len(data))
-    points = arg_to_list(points, [Point3D, None], broadcast=len(data))
-    spacings = arg_to_list(spacings, Spacing3D, broadcast=len(data))
+    labels = arg_to_list(label, (None, np.ndarray, torch.Tensor))   # From single element to list.
+    labels = arg_to_list(labels, list, broadcast=len(data))   # From list to list of lists.
+    landmarks = arg_to_list(landmarks, (None, pd.DataFrame, np.ndarray, torch.Tensor), broadcast=len(data))
+    spacings = arg_to_list(spacing, (tuple, np.ndarray, torch.Tensor), broadcast=len(data))
+    origins = arg_to_list(origin, (tuple, np.ndarray, torch.Tensor), broadcast=len(data))
     assert len(landmarks) == len(data)
-    assert len(offsets) == len(data)
+    assert len(origins) == len(data)
     assert len(spacings) == len(data)
     n_label_max = np.max([len(ls) if ls is not None else 0 for ls in labels])
     palette = sns.color_palette('colorblind', n_label_max)
-    views = arg_to_list(views, int, literals={ 'all': list(range(3)) })
+    views = arg_to_list(view, int, literals={ 'all': list(range(3)) })
     n_rows, n_cols = (len(views), len(data)) if transpose else (len(data), len(views))
+
+    # Convert tensors.
+    for i in range(len(data)):
+        if isinstance(data[i], torch.Tensor):
+            data[i] = data[i].cpu().numpy()
+    for i in range(len(labels)):
+        for j in range(len(labels[i])):
+            if isinstance(labels[i][j], torch.Tensor):
+                labels[i][j] = labels[i][j].cpu().numpy()
+    for i in range(len(landmarks)):
+        if isinstance(landmarks[i], torch.Tensor):
+            landmarks[i] = landmarks[i].cpu().numpy()
+    for i in range(len(spacings)):
+        if isinstance(spacings[i], torch.Tensor):
+            spacings[i] = spacings[i].cpu().numpy()
+    for i in range(len(origins)):
+        if isinstance(origins[i], torch.Tensor):
+            origins[i] = origins[i].cpu().numpy()
+
+    # Plot images.
     _, axs = plt.subplots(n_rows, n_cols, figsize=(figsize[0], len(data) * figsize[1]), squeeze=False)
-    for i, (row_axs, d, idx, ls, lm, o, s, p) in enumerate(zip(axs, data, idxs, labels, landmarks, offsets, spacings, points)):
-        logging.info(f"Plotting image {i+1}/{len(data)}: with size={d.shape}, idx={idx}, offset={o}, spacing={s}.")
+    for i, (row_axs, d, idx, ls, lm, o, s) in enumerate(zip(axs, data, idxs, labels, landmarks, origins, spacings)):
+        logging.info(f"Plotting image {i+1}/{len(data)}: with size={d.shape}, idx={idx}, spacing={s}, origin={o}.")
 
         # Rescale RGB image to range [0, 1).
         n_dims = len(d.shape)
@@ -84,13 +104,17 @@ def plot_images(
                 cmap='viridis'
             col_ax.imshow(image, aspect=aspect, cmap=cmap, origin=origin, vmin=vmin, vmax=vmax)
             col_ax.set_title(f'{get_axis_name(v)} view, slice {view_idx}')
-            if ls is not None:   # Plot labels.
-                for j, l in enumerate(ls):
-                    cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), palette[j]))
-                    assert len(l.shape) == 3
-                    label_image, _ = get_view_slice(l, idx, v)
-                    col_ax.imshow(label_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
-                    col_ax.contour(label_image, colors=[palette[j]], levels=[.5], linestyles='solid')
+
+            # Plot labels.
+            for j, l in enumerate(ls):
+                if l is None:
+                    continue
+                cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), palette[j]))
+                assert len(l.shape) == 3
+                label_image, _ = get_view_slice(l, idx, v)
+                col_ax.imshow(label_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
+                col_ax.contour(label_image, colors=[palette[j]], levels=[.5], linestyles='solid')
+
             if use_patient_coords:  # Change axis tick labels to show patient coordinates.
                 size_x, size_y = get_view_xy(d.shape, v)
                 sx, sy = get_view_xy(s, v)
@@ -111,40 +135,35 @@ def plot_images(
                 col_ax.set_title(f'{get_axis_name(v)} view, slice {view_idx} ({view_loc:.1f}mm)')
             if lm is not None:
                 plot_landmark_data(lm, col_ax, view_idx, d.shape, s, o, v, landmark_ids=landmark_ids)
-            if p is not None:
-                # Convert point to image coordinates.
-                pv = (np.array(p) - o) / s
-                px, py = get_view_xy(pv, v)
-                col_ax.scatter(px, py, c='yellow', s=20, zorder=1)
 
-@delegates(plot_images)
+@delegates(plot_image)
 def plot_nifti(
     filepath: str,
     spacing: Optional[Spacing3D] = None,
-    offset: Optional[Point3D] = None,
+    origin: Optional[Point3D] = None,
     **kwargs) -> None:
-    data, nspacing, noffset = load_nifti(filepath)
+    data, nspacing, norigin = load_nifti(filepath)
     spacing = nspacing if spacing is None else spacing
-    offset = noffset if offset is None else offset
-    plot_images(data, offsets=offset, spacings=spacing, **kwargs)
+    origin = norigin if origin is None else origin
+    plot_image(data, origin=origin, spacing=spacing, **kwargs)
 
-@delegates(load_numpy, plot_images)
+@delegates(load_numpy, plot_image)
 def plot_numpy(
     filepath: str,
     spacing: Optional[Spacing3D] = (1, 1, 1),
-    offset: Optional[Point3D] = (0, 0, 0),
+    origin: Optional[Point3D] = (0, 0, 0),
     **kwargs) -> None:
     data = load_numpy(filepath, **kwargs)
-    plot_images(data, offsets=offset, spacings=spacing, **kwargs)
+    plot_image(data, origin=origin, spacing=spacing, **kwargs)
 
 def sitk_plot_image(
     filepath: str,
     spacing: Optional[Spacing3D] = None,
-    offset: Optional[Point3D] = None,
+    origin: Optional[Point3D] = None,
     **kwargs) -> None:
-    data, lspacing, loffset = sitk_load_image(filepath)
+    data, lspacing, lorigin = sitk_load_image(filepath)
     if spacing is None:
         spacing = lspacing
-    if offset is None:
-        offset = loffset
-    plot_images(data, offsets=offset, spacings=spacing, **kwargs)
+    if origin is None:
+        origin = lorigin
+    plot_image(data, origin=origin, spacing=spacing, **kwargs)

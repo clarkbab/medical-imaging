@@ -7,13 +7,13 @@ from mymi.utils import *
 from .transforms import assert_box_width
 
 def __spatial_crop_or_pad(
-    image: ImageArray3D,
+    image: ImageArray,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray3D:
+    use_patient_coords: bool = True) -> ImageArray:
     bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
     fill = np.min(image) if fill == 'min' else fill
@@ -117,11 +117,11 @@ def centre_crop_or_pad(
     return handle_non_spatial_dims(__spatial_centre_crop_or_pad, image, *args, **kwargs)
 
 def crop_or_pad_landmarks(
-    landmarks: LandmarksData,    # Should use patient coords, landmarks in image coords are only used for plotting.
+    landmarks: LandmarksFrame,    # Should use patient coords, landmarks in image coords are only used for plotting.
     bounding_box: Union[BoxMM3D, Box3D],
     offset: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
-    use_patient_coords: bool = True) -> LandmarksData:
+    use_patient_coords: bool = True) -> LandmarksFrame:
     landmarks = landmarks.copy()
     min, max = bounding_box
             

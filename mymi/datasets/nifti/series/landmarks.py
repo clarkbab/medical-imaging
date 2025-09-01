@@ -35,7 +35,7 @@ class LandmarksSeries(NiftiSeries):
         sample_ct: bool = False,
         sample_dose: bool = False,
         use_patient_coords: bool = True,
-        **kwargs) -> Union[LandmarksData, LandmarksDataVox, Points3D, Voxels]:
+        **kwargs) -> Union[LandmarksFrame, LandmarksFrameVox, Points3D, Voxels]:
 
         # Load landmarks.
         landmark_data = load_csv(self.__filepath)

@@ -5,10 +5,10 @@ from typing import *
 from mymi.typing import *
 
 def get_centre_of_mass(
-    a: Union[ImageArray2D, ImageArray3D],
-    offset: Optional[Union[Point2D, Point3D]] = None,
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None, 
-    use_patient_coords: bool = True) -> Union[Point2D, Point3D]:
+    a: Union[SliceArray, ImageArray],
+    offset: Optional[Point] = None,
+    spacing: Optional[Spacing] = None, 
+    use_patient_coords: bool = True) -> Point:
     com = scipy.ndimage.center_of_mass(a)
     if use_patient_coords:
         com = tuple(np.array(com) * spacing + offset)

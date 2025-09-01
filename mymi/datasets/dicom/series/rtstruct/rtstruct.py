@@ -70,7 +70,7 @@ class RtStructSeries(DicomSeries):
         landmarks_regexp: str = LANDMARKS_REGEXP,
         show_ids: bool = True,
         use_patient_coords: bool = True,
-        **kwargs) -> Optional[Union[LandmarksData, LandmarksDataVox, Points3D, Voxels]]:
+        **kwargs) -> Optional[Union[LandmarksFrame, LandmarksFrameVox, Points3D, Voxels]]:
         # Load landmarks.
         landmarks = self.list_landmarks(landmark_ids=landmark_ids, landmarks_regexp=landmarks_regexp, **kwargs)
         rtstruct_dicom = self.dicom
@@ -116,7 +116,7 @@ class RtStructSeries(DicomSeries):
 
     def list_landmarks(
         self,
-        landmark_ids: Landmarks = 'all', 
+        landmark_ids: LandmarkIDs = 'all', 
         landmarks_regexp: str = LANDMARKS_REGEXP) -> List[LandmarkID]:
         ids = self.list_regions(landmarks_regexp=None)
         ids = [l for l in ids if re.match(landmarks_regexp, l) is not None in l]
@@ -236,7 +236,7 @@ class RtStructSeries(DicomSeries):
         region_ids: RegionID = 'all',
         regions_ignore_missing: bool = False,
         use_mapping: bool = True,
-        **kwargs) -> RegionsData:
+        **kwargs) -> RegionArrays:
 
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:

@@ -27,7 +27,7 @@ def get_ct_stats(
     return stats
 
 def get_region_stats(
-    ct_data: CtVolume,
+    ct_data: CtImageArray,
     region_data: RegionArray,
     spacing: Spacing3D,
     offset: Voxel,

@@ -14,10 +14,10 @@ def rigid_registration(
     moving_study_id: StudyID,
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
-    landmarks: Optional[Landmarks] = None,
+    landmarks: Optional[LandmarkIDs] = None,
     regions: Optional[Regions] = None,
     regions_ignore_missing: bool = False,
-    **kwargs) -> Tuple[CtVolume, Optional[RegionsData], Optional[LandmarksData], sitk.Transform]:
+    **kwargs) -> Tuple[CtImageArray, Optional[RegionArrays], Optional[LandmarksFrame], sitk.Transform]:
 
     # Load CT data.
     set = NiftiDataset(dataset)

@@ -47,7 +47,7 @@ def rename_patients(
     # Check if indexes are open and therefore can't be overwritten.
     dset = DicomDataset(dataset)
     files = ['index.csv', 'index-errors.csv']
-    assert_can_write(files)
+    assert_writeable(files)
 
     # Rename all DICOMs in the index.
     logging.info("Renaming all indexed dicoms.")

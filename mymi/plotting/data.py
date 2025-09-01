@@ -837,9 +837,9 @@ def plot_dataframe(
         fig.show()
 
 def plot_histogram(
-    data: Union[ImageArray3D, str],
+    data: Union[ImageArray, str],
     ax: Optional[mpl.axes.Axes] = None,
-    diff: Optional[ImageArray3D] = None,
+    diff: Optional[ImageArray] = None,
     fontsize: float = 12,
     n_bins: int = 100,
     title: Optional[str] = None,
@@ -901,13 +901,13 @@ min/max: {min_val:.2f}/{max_val:.2f}\
         plt.show()
 
 def plot_histograms(
-    datas: Union[ImageArray3D, List[ImageArray3D]],
+    datas: Union[ImageArray, List[ImageArray]],
     axs: Optional[Union[mpl.axes.Axes, List[mpl.axes.Axes]]] = None,
-    diffs: Optional[Union[ImageArray3D, List[ImageArray3D]]] = None,
+    diffs: Optional[Union[ImageArray, List[ImageArray]]] = None,
     figsize: Tuple[float, float] = (6, 4),
     **kwargs) -> None:
-    datas = arg_to_list(datas, (ImageArray3D, str))
-    diffs = arg_to_list(diffs, (ImageArray3D, None), broadcast=len(datas))
+    datas = arg_to_list(datas, (ImageArray, str))
+    diffs = arg_to_list(diffs, (ImageArray, None), broadcast=len(datas))
     assert len(diffs) == len(datas)
     figsize = (len(datas) * figsize[0], figsize[1])
     if axs is None:

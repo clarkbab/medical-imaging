@@ -23,7 +23,7 @@ class HoldoutLoader:
     def build_loaders(
         dataset: str,
         batch_size: int = 1,
-        landmarks: Optional[Landmarks] = 'all',
+        landmarks: Optional[LandmarkIDs] = 'all',
         normalise: bool = True,
         normalise_by_channel: bool = False,
         norm_params: Optional[Dict[str, float]] = None,
@@ -77,7 +77,7 @@ class TrainingSet(Dataset):
     def __init__(
         self,
         split: 'HoldoutSplit',
-        landmarks: Optional[Landmarks] = 'all',
+        landmarks: Optional[LandmarkIDs] = 'all',
         normalise: bool = True,
         normalise_by_channel: bool = False,
         norm_params: Optional[Dict[str, float]] = None,

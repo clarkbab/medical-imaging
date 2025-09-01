@@ -34,7 +34,7 @@ class MrImageSeries(NiftiImageSeries):
 
     @property
     @ensure_loaded
-    def data(self) -> MrData:
+    def data(self) -> MrImageArray:
         return self.__data
 
     @property

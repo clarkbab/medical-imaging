@@ -9,12 +9,12 @@ from .transforms import assert_box_width
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def __spatial_pad(
-    image: ImageArray3D,
+    image: ImageArray,
     bounding_box: Union[Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
     offset: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray3D:
+    use_patient_coords: bool = True) -> ImageArray:
     assert_box_width(bounding_box)
     fill = image.min() if fill == 'min' else fill
     if isinstance(fill, torch.Tensor):

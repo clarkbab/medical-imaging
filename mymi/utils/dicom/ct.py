@@ -9,7 +9,7 @@ from mymi.typing import *
 def from_ct_dicoms(
     cts: List[CtDicom] = [],
     assert_consistency: bool = True,
-    dirpath: Optional[str] = None) -> Tuple[CtVolume, Spacing3D, Point3D]:
+    dirpath: Optional[str] = None) -> Tuple[CtImageArray, Spacing3D, Point3D]:
     # Load from dirpath if present.
     if dirpath is not None:
         cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
@@ -66,7 +66,7 @@ def from_ct_dicoms(
     return data, spacing, offset
 
 def to_ct_dicoms(
-    data: CtVolume, 
+    data: CtImageArray, 
     spacing: Spacing3D,
     offset: Point3D,
     pat_id: PatientID,
@@ -116,7 +116,7 @@ def to_ct_dicoms(
         file_meta.FileMetaInformationGroupLength = 204
         file_meta.FileMetaInformationVersion = b'\x00\x01'
         file_meta.ImplementationClassUID = dcm.uid.PYDICOM_IMPLEMENTATION_UID
-        file_meta.MediaStorageSOPClassUID = dcm.uid.CTImageStorage
+        file_meta.MediaStorageSOPClassUID = dcm.uid.CtImageArraytorage
         file_meta.MediaStorageSOPInstanceUID = dcm.uid.generate_uid()
         file_meta.TransferSyntaxUID = dcm.uid.ImplicitVRLittleEndian
 

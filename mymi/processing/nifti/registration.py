@@ -127,7 +127,7 @@ def create_registered_dataset(
     dest_dataset: str,
     fill: Union[float, Literal['min']] = -2000,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_study_id: str = 'study_0',
     regions: Optional[Regions] = 'all',
     **kwargs) -> None:

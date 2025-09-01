@@ -30,7 +30,7 @@ class RegionsImageSeries(NiftiImageSeries):
         self,
         region_ids: Regions = 'all',
         regions_ignore_missing: bool = True,
-        **kwargs) -> RegionsData:
+        **kwargs) -> RegionArrays:
         region_ids = regions_to_list(region_ids, literals={ 'all': self.list_regions })
 
         rd = {}

@@ -23,7 +23,7 @@ def create_voxelmorph_predictions(
     modelname: str,
     model_spacing: Spacing3D,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_study_id: str = 'study_0',
     pad_shape: Optional[Size3D] = None,
     pat_ids: PatientIDs = 'all',

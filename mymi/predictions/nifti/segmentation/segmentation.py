@@ -96,7 +96,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
         raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
 
     # Pass image to model.
-    input = torch.Tensor(input)
+    input = torch.tensor(input)
     input = input.unsqueeze(0)      # Add 'batch' dimension.
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
@@ -211,7 +211,7 @@ def get_multi_segmenter_prediction(
         raise ValueError(f"Unknown 'crop_type' value '{crop_type}'.")
 
     # Pass image to model.
-    input = torch.Tensor(input)
+    input = torch.tensor(input)
     input = input.unsqueeze(0)      # Add 'batch' dimension.
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
@@ -284,7 +284,7 @@ def get_segmenter_prediction(
     input = crop_or_pad_vox(input, patch, fill=input.min())
 
     # Pass patch to segmenter.
-    input = torch.Tensor(input)
+    input = torch.tensor(input)
     input = input.unsqueeze(0)      # Add 'batch' dimension.
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()
@@ -912,7 +912,7 @@ def load_moved_data(
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID,
     model: str,
-    regions: Optional[Regions] = 'all') -> Tuple[CtVolume, RegionsData]:
+    regions: Optional[Regions] = 'all') -> Tuple[CtImageArray, RegionArrays]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     basepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)

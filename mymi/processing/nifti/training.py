@@ -17,7 +17,7 @@ def convert_to_registration_training_holdout(
     dataset: str,
     dest_dataset: Optional[str] = None,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_study_id: str = 'study_0',
     normalise: bool = False,
     norm_mean: Optional[float] = None,

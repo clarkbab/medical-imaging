@@ -49,7 +49,7 @@ class MrSeries(DicomSeries):
 
     @property
     @ensure_loaded
-    def data(self) -> MrData:
+    def data(self) -> MrImageArray:
         return self.__data
 
     @ensure_loaded

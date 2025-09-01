@@ -66,7 +66,7 @@ class TrainingDataset(Dataset):
         return list(self.index['split'].unique())
     
     @property
-    def landmarks(self) -> List[Landmark]:
+    def landmarks(self) -> List[LandmarkID]:
         return self.params['landmarks'] if 'landmarks' in self.params else []
     
     @property

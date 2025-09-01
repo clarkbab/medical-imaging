@@ -14,7 +14,7 @@ def load_itk_transform(
     return transform
 
 def itk_transform_image(
-    data: ImageArray3D,
+    data: ImageArray,
     transform: itk.Transform,
     output_size: Size3D,
     fill: Union[float, Literal['min']] = 'min',
@@ -22,7 +22,7 @@ def itk_transform_image(
     output_offset: Point3D = (0, 0, 0),
     output_spacing: Spacing3D = (1, 1, 1), 
     spacing: Spacing3D = (1, 1, 1),
-    reverse_xy: bool = False) -> Tuple[ImageArray3D, Spacing3D, Point3D]:
+    reverse_xy: bool = False) -> Tuple[ImageArray, Spacing3D, Point3D]:
     # Load moving image.
     moving_itk = to_itk_image(data, spacing, offset)
 

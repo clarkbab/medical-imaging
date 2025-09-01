@@ -6,10 +6,12 @@ from typing import *
 from mymi.typing import *
 
 from .args import arg_to_list
+from .io import handle_filepath
 
-def assert_can_write(filepaths: FilePaths) -> None:
+def assert_writable(filepaths: FilePaths) -> None:
     filepaths = arg_to_list(filepaths, FilePath)
     for f in filepaths:
+        f = handle_filepath(f)
         if os.path.exists(f) and not os.access(f, os.W_OK):
             raise PermissionError(f"File '{f}' is open or read-only, cannot overwrite.")
 

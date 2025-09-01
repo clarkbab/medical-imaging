@@ -121,7 +121,7 @@ def get_segmenter_heatmap(
     # Pass image to model.
     logging.info('forward pass')
     input_size_model = input.shape
-    input = torch.Tensor(input)
+    input = torch.tensor(input)
     input = input.unsqueeze(0)      # Add 'batch' dimension.
     input = input.unsqueeze(1)      # Add 'channel' dimension.
     input = input.float()

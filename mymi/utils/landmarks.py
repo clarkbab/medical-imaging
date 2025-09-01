@@ -1,15 +1,15 @@
 from mymi.typing import *
 
-def landmarks_from_data(data: Points3D) -> LandmarksData:
+def landmarks_from_data(data: Points3D) -> LandmarksFrame:
     return pd.DataFrame(data).rename_axis('landmark-id').reset_index()
 
-def landmarks_to_data(data: Union[LandmarksData, LandmarksDataVox]) -> Points3D:
+def landmarks_to_data(data: Union[LandmarksFrame, LandmarksFrameVox]) -> Points3D:
     return data[list(range(3))].to_numpy()
 
 def landmarks_to_image_coords(
-    data: LandmarksData,
+    data: LandmarksFrame,
     spacing: Spacing3D,
-    offset: Point3D) -> LandmarksDataVox:
+    offset: Point3D) -> LandmarksFrameVox:
     data = data.copy()
     lm_data = data[list(range(3))].to_numpy()
     lm_data = np.round((lm_data - offset) / spacing).astype(int)
@@ -17,9 +17,9 @@ def landmarks_to_image_coords(
     return data
 
 def landmarks_to_patient_coords(
-    data: LandmarksDataVox,
+    data: LandmarksFrameVox,
     spacing: Spacing3D,
-    offset: Point3D) -> LandmarksData:
+    offset: Point3D) -> LandmarksFrame:
     data = data.copy()
     lm_data = data[list(range(3))].to_numpy()
     lm_data = lm_data * spacing + offset
@@ -34,8 +34,8 @@ def point_to_image_coords(
     return tuple(point)
 
 def replace_landmarks(
-    data: LandmarksData,
-    points: Points3D) -> LandmarksData:
+    data: LandmarksFrame,
+    points: Points3D) -> LandmarksFrame:
     assert len(data) == len(points), "Number of points must match number of landmarks."
     data = data.copy()
     data[list(range(3))] = points

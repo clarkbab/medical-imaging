@@ -24,7 +24,7 @@ def create_patient_registration(
     model_spacing: Spacing3D,
     device: Optional[torch.device] = None,
     fixed_study_id: StudyID = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
     pad_threshold: Optional[float] = -1024,
@@ -132,7 +132,7 @@ def delete_patient_registration(
     fixed_pat_id: PatientID,
     model_name: str,
     fixed_study_id: StudyID = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
     regions: Optional[Regions] = 'all') -> None:
@@ -307,7 +307,7 @@ def load_registration(
     moving_study_id: StudyID = 'study_0',
     raise_error: bool = False,
     region_ids: Optional[RegionIDs] = 'all',
-    use_patient_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtVolume], RegionsData, Optional[LandmarksData], Optional[DoseData]]:
+    use_patient_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtImageArray], RegionArrays, Optional[LandmarksFrame], Optional[DoseImageArray]]:
     # Load moved CT.
     if moving_pat_id is None:
         moving_pat_id = fixed_pat_id
@@ -391,7 +391,7 @@ def load_registered_landmarks(
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
-    use_patient_coords: bool = True) -> Optional[Landmarks]:
+    use_patient_coords: bool = True) -> Optional[LandmarkIDs]:
     moving_pat_id = moving_pat_id if moving_pat_id is not None else fixed_pat_id
 
     # Load landmarks.
@@ -442,7 +442,7 @@ def create_patient_vxmpp_identity_registration(
     dataset: str,
     fixed_pat_id: PatientID,
     fixed_study_id: StudyID = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     model_name: str = 'vxmpp-identity',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
@@ -513,7 +513,7 @@ def warp_patient_data(
     fixed_pat_id: PatientID,
     model_name: str,
     fixed_study_id: StudyID = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_pat_id: Optional[PatientID] = None,
     moving_study_id: StudyID = 'study_0',
     regions: Optional[Regions] = 'all',

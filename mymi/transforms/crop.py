@@ -7,11 +7,11 @@ from mymi.utils import *
 from .transforms import *
 
 def __spatial_crop(
-    image: ImageArray3D,
+    image: ImageArray,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     offset: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray3D:
+    use_patient_coords: bool = True) -> ImageArray:
     bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
@@ -70,12 +70,12 @@ def centre_crop(
     return handle_non_spatial_dims(__spatial_centre_crop, data, *args, **kwargs)
 
 def __spatial_crop_foreground(
-    data: LabelData3D,
+    data: LabelArray,
     bounding_box: Union[BoxMM2D, BoxMM3D, Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     offset: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> LabelData3D:
+    use_patient_coords: bool = True) -> LabelArray:
     bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
@@ -106,14 +106,14 @@ def __spatial_crop_foreground(
 
 @delegates(__spatial_crop_foreground)
 def crop_foreground(
-    data: LabelData,
-    *args, **kwargs) -> LabelData:
+    data: LabelArray,
+    *args, **kwargs) -> LabelArray:
     assert_image(data)
     return handle_non_spatial_dims(__spatial_crop_foreground, data, *args, **kwargs)
 
 def crop_landmarks(
-    landmark_data: Union[LandmarksData, LandmarksDataVox],
-    crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksData, LandmarksDataVox]:
+    landmark_data: Union[LandmarksFrame, LandmarksFrameVox],
+    crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksFrame, LandmarksFrameVox]:
     landmark_data = landmark_data.copy()
     lm_data = landmarks_to_data(landmark_data)
     lm_data = lm_data - crop[0]

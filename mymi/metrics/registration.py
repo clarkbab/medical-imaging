@@ -20,11 +20,11 @@ def ncc(
     return result
 
 def tre(
-    a: Union[LandmarksData, Points3D],
-    b: Union[LandmarksData, Points3D]) -> List[float]:
-    if isinstance(a, LandmarksData):
+    a: Union[LandmarksFrame, Points3D],
+    b: Union[LandmarksFrame, Points3D]) -> List[float]:
+    if isinstance(a, LandmarksFrame):
         a = landmarks_to_data(a)
-    if isinstance(b, LandmarksData):
+    if isinstance(b, LandmarksFrame):
         b = landmarks_to_data(b)
     if a.shape != b.shape:
         raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")

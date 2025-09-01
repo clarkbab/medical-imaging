@@ -9,7 +9,7 @@ from mymi.utils import *
 from .transforms import assert_box_width
 
 def __spatial_resample(
-    data: Optional[Union[ImageArray3D, ImageTensor3D]] = None,
+    data: Optional[Union[ImageArray, ImageTensor3D]] = None,
     fill: Union[float, Literal['min']] = 'min',
     image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
     offset: Point3D = (0, 0, 0),
@@ -20,7 +20,7 @@ def __spatial_resample(
     return_transform: bool = False,
     spacing: Spacing3D = (1, 1, 1),
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    ) -> Union[ImageArray3D, ImageTensor3D, Tuple[Union[ImageArray3D, ImageTensor3D], sitk.Transform]]:
+    ) -> Union[ImageArray, ImageTensor3D, Tuple[Union[ImageArray, ImageTensor3D], sitk.Transform]]:
     # Use 'image' and 'output_image' to get data/spacing/offset if provided.
     if data is None:
         if image is None:
@@ -146,8 +146,8 @@ def resample_landmarks(
     return landmarks
 
 def __spatial_sample(
-    data: ImageArray3D,
-    points: Union[LandmarksData, Point3D, Points3D],
+    data: ImageArray,
+    points: Union[LandmarksFrame, Point3D, Points3D],
     fill: Union[float, Literal['min']] = 'min',
     landmarks_col: str = 'sample',
     offset: Optional[Point3D] = None,
@@ -155,7 +155,7 @@ def __spatial_sample(
     sample_spacing: Spacing3D = (1, 1, 1),
     spacing: Optional[Spacing3D] = None,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
-    **kwargs) -> Union[ImageArray3D, Tuple[ImageArray3D, sitk.Transform]]:
+    **kwargs) -> Union[ImageArray, Tuple[ImageArray, sitk.Transform]]:
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -188,7 +188,7 @@ def __spatial_sample(
         filter.SetTransform(transform)
 
     # Convert points to list.
-    if isinstance(points, LandmarksData):
+    if isinstance(points, LandmarksFrame):
         return_type = 'landmarks'
         lm_df = points.copy()
         points = landmarks_to_data(points)

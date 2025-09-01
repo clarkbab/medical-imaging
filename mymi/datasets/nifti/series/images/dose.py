@@ -36,7 +36,7 @@ class DoseImageSeries(NiftiImageSeries):
 
     @property
     @ensure_loaded
-    def data(self) -> DoseData:
+    def data(self) -> DoseImageArray:
         return self.__data
 
     @ensure_loaded

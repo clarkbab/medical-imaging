@@ -26,7 +26,7 @@ def create_region_summary(
 
     for region in tqdm(region_ids):
         filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
-        assert_can_write(filepath)
+        assert_writeable(filepath)
 
         # Check if there are patients with this region.
         n_pats = len(set.list_patients(region_ids=region_ids))

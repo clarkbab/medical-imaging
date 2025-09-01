@@ -74,19 +74,19 @@ def get_aspect(
 def get_idx(
     size: Size3D,
     view: Axis,
-    centre: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
+    centre: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     centre_other: bool = False,
-    dose_data: Optional[DoseData] = None,
+    dose_data: Optional[DoseImageArray] = None,
     idx: Optional[Union[int, float]] = None,
     idx_mm: Optional[float] = None,
-    landmark_data: Optional[LandmarksData] = None,
-    landmark_data_other: Optional[LandmarksData] = None,
+    landmark_data: Optional[LandmarksFrame] = None,
+    landmark_data_other: Optional[LandmarksFrame] = None,
     offset: Optional[Point3D] = None,
-    region_data: Optional[RegionsData] = None,
+    region_data: Optional[RegionArrays] = None,
     spacing: Optional[Spacing3D] = None) -> int:
     if idx is not None:
         if centre is not None:
-            if isinstance(centre, (LandmarkData, RegionArray)):
+            if isinstance(centre, (LandmarkSeries, RegionArray)):
                 centre = type(centre)
             raise ValueError(f"Cannot specify both 'centre' ({centre}) and 'idx' ({idx}).")
         if idx_mm is not None:
@@ -114,13 +114,13 @@ def get_idx(
                 idx = fov_centre(region_data[centre], use_patient_coords=False)[view]
             else:
                 raise ValueError(f"No centre '{centre}' found in 'landmarks/region_data'.")
-        elif isinstance(centre, LandmarkData):
+        elif isinstance(centre, LandmarkSeries):
             centre_point = tuple(centre[list(range(3))])
             idx = point_to_image_coords(centre_point, spacing, offset)[view]
         elif isinstance(centre, RegionArray):
             idx = fov_centre(centre, use_patient_coords=False)[view]
         else:
-            raise ValueError(f"Invalid type for 'centre': {type(centre)}. Must be one of (LandmarkData, LandmarkID, RegionArray, RegionID).")
+            raise ValueError(f"Invalid type for 'centre': {type(centre)}. Must be one of (LandmarkSeries, LandmarkID, RegionArray, RegionID).")
     else:
         # raise ValueError(f"Either 'centre', 'idx' or 'idx_mm' must be specified.")
         idx = np.round(size[view] / 2).astype(int)
@@ -131,9 +131,9 @@ def get_origin(view: Axis) -> Literal['lower', 'upper']:
     return 'upper' if view == 2 else 'lower'
 
 def get_view_slice(
-    data: Union[ImageArray3D, VectorImageArray],
+    data: Union[ImageArray, VectorImageArray],
     idx: Union[int, float],
-    view: Axis) -> Tuple[ImageArray2D, int]:
+    view: Axis) -> Tuple[SliceArray, int]:
     n_dims = len(data.shape)
     if n_dims == 4:
         assert data.shape[0] == 3   # vector image.
@@ -175,7 +175,7 @@ def get_view_xy(
 
 def get_window(
     window: Optional[Union[str, Tuple[Optional[float], Optional[float]]]] = None,
-    data: Optional[ImageArray3D] = None) -> Tuple[float, float]:
+    data: Optional[ImageArray] = None) -> Tuple[float, float]:
     if isinstance(window, tuple):
         width, level = window
     elif isinstance(window, str):
@@ -250,7 +250,7 @@ def plot_box_slice(
     ax.plot(0, 0, c=colour, label=label, linestyle=linestyle)
 
 def plot_landmark_data(
-    landmark_data: Union[LandmarksData, LandmarksDataVox, Points3D],
+    landmark_data: Union[LandmarksFrame, LandmarksFrameVox, Points3D],
     ax: mpl.axes.Axes,
     idx: int,
     size: Size3D,
@@ -259,7 +259,7 @@ def plot_landmark_data(
     view: Axis, 
     colour: str = 'yellow',
     crop: Optional[Box2D] = None,
-    dose_data: Optional[DoseData] = None,
+    dose_data: Optional[DoseImageArray] = None,
     fontsize_landmarks: float = 10,
     landmark_ids: LandmarkIDs = 'all',
     landmarks_use_patient_coords: bool = True,
@@ -320,7 +320,7 @@ def plot_landmark_data(
             ax.text(x, y, text, fontsize=fontsize_landmarks, color=colour)
 
 def plot_region_data(
-    data: RegionsData,
+    data: RegionArrays,
     ax: mpl.axes.Axes,
     idx: int,
     aspect: float,

@@ -16,20 +16,20 @@ def plot_patient(
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
-    centre: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
+    centre: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     centre_other: bool = False,
     colours: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[LandmarkData, LandmarkID, Box2D, RegionArray, RegionID]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    crop: Optional[Union[LandmarkSeries, LandmarkID, Box2D, RegionArray, RegionID]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
     crop_margin_mm: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
-    crosshairs: Optional[Union[Pixel, Point2D, Landmark, LandmarkData]] = None,
-    ct_data: Optional[CtVolume] = None,
+    crosshairs: Optional[Union[Pixel, Point2D, LandmarkSeries]] = None,
+    ct_data: Optional[CtImageArray] = None,
     dose_alpha_min: float = 0.3,
     dose_alpha_max: float = 1.0,
     dose_cmap: str = 'turbo',
     dose_cmap_trunc: float = 0.15,
     dose_colourbar_pad: float = 0.05,
     dose_colourbar_size: float = 0.03,
-    dose_data: Optional[DoseData] = None,
+    dose_data: Optional[DoseImageArray] = None,
     dose_series_date: Optional[str] = None,
     dose_series_id: Optional[SeriesID] = None,
     escape_latex: bool = False,
@@ -39,8 +39,8 @@ def plot_patient(
     idx: Optional[float] = None,
     idx_mm: Optional[float] = None,
     isodoses: Union[float, List[float]] = [],
-    landmark_data: Optional[LandmarksData] = None,     # All landmarks are plotted.
-    landmark_data_other: Optional[LandmarksData] = None,     # Plotted as 'red' landmarks, e.g. from registration.
+    landmark_data: Optional[LandmarksFrame] = None,     # All landmarks are plotted.
+    landmark_data_other: Optional[LandmarksFrame] = None,     # Plotted as 'red' landmarks, e.g. from registration.
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
     legend_loc: Union[str, Tuple[float, float]] = 'upper left',
     legend_show_all_regions: bool = False,
@@ -50,7 +50,7 @@ def plot_patient(
     offset: Optional[Point3D] = None,
     pat_id: Optional[PatientID] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    region_data: Optional[RegionsData] = None,         # All regions are plotted.
+    region_data: Optional[RegionArrays] = None,         # All regions are plotted.
     savepath: Optional[str] = None,
     series_date: Optional[str] = None,
     series_id: Optional[SeriesID] = None,
@@ -100,7 +100,7 @@ def plot_patient(
                 crop_vox_xy = __get_landmark_crop(lm_data, crop_margin_mm, size, spacing, offset, view)
             elif region_data is not None and crop in region_data:
                 crop_vox_xy = __get_region_crop(region_data[crop], crop_margin_mm, spacing, offset, view)
-        elif isinstance(crop, LandmarkData):
+        elif isinstance(crop, LandmarkSeries):
             crop_vox_xy = __get_landmark_crop(crop, crop_margin_mm, size, spacing, offset, view)
         elif isinstance(centre, RegionArray):
             crop_vox_xy = __get_region_crop(crop, crop_margin_mm, spacing, offset, view)
@@ -570,7 +570,7 @@ def plot_patients(
                             if lm_data is not None and crop in list(lm_data['landmark-id']):
                                 c = crop
                             else:
-                                c = study.landmark_data(landmark_ids=crop).iloc[0]    # Load LandmarkData.
+                                c = study.landmark_data(landmark_ids=crop).iloc[0]    # Load LandmarkSeries.
                 row_crop_datas.append(c)
 
         # Apply region labels.
@@ -621,17 +621,17 @@ def plot_patients_matrix(
     # Allows us to plot multiple patients (rows) and patient studies, series, and views (columns).
     pat_ids: Union[str, List[str]],
     ax: Optional[mpl.axes.Axes] = None,
-    centres: Optional[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID, List[Union[LandmarkData, LandmarkID, Literal['dose'], RegionArray, RegionID]], List[Union[LandmarkData, LandmarkID, RegionArray, RegionID, List[Union[LandmarkData, LandmarkID, RegionArray, RegionID]]]]]] = None,
+    centres: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID, List[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]], List[Union[LandmarkSeries, LandmarkID, RegionArray, RegionID, List[Union[LandmarkSeries, LandmarkID, RegionArray, RegionID]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
-    ct_datas: Optional[Union[CtVolume, List[CtVolume], List[Union[CtVolume, List[CtVolume]]]]] = None,
-    dose_datas: Optional[Union[DoseData, List[DoseData], List[Union[DoseData, List[DoseData]]]]] = None,
+    ct_datas: Optional[Union[CtImageArray, List[CtImageArray], List[Union[CtImageArray, List[CtImageArray]]]]] = None,
+    dose_datas: Optional[Union[DoseImageArray, List[DoseImageArray], List[Union[DoseImageArray, List[DoseImageArray]]]]] = None,
     dose_series_dates: Union[str, List[str]] = None,
     dose_series_ids: Union[SeriesIDs, List[SeriesIDs]] = None,
     figsize: Tuple[int, int] = (46, 12),    # In cm.
-    landmark_datas: Optional[Union[LandmarksData, List[LandmarksData], List[Union[LandmarksData, List[LandmarksData]]]]] = None,
-    landmark_datas_other: Optional[Union[LandmarksData, List[LandmarksData], List[Union[LandmarksData, List[LandmarksData]]]]] = None,
+    landmark_datas: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
+    landmark_datas_other: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
     offsets: Union[Point3D, List[Point3D], List[Union[Point3D, List[Point3D]]]] = None,
-    region_datas: Optional[Union[RegionsData, List[RegionsData], List[Union[RegionsData, List[RegionsData]]]]] = None,
+    region_datas: Optional[Union[RegionArrays, List[RegionArrays], List[Union[RegionArrays, List[RegionArrays]]]]] = None,
     savepath: Optional[str] = None,
     series_ids: Union[SeriesIDs, List[SeriesIDs]] = None,
     show_progress: bool = False,
@@ -647,15 +647,15 @@ def plot_patients_matrix(
     study_dates = arg_to_list(study_dates, str, broadcast=n_rows)
     series_ids = arg_to_list(series_ids, SeriesID, broadcast=n_rows)
     spacings = arg_to_list(spacings, Spacing3D, broadcast=n_rows)
-    centres = arg_to_list(centres, (None, LandmarkData, LandmarkID, RegionArray, RegionID), broadcast=n_rows)
+    centres = arg_to_list(centres, (None, LandmarkSeries, LandmarkID, RegionArray, RegionID), broadcast=n_rows)
     crops = arg_to_list(crops, (None, LandmarkID, Box2D, RegionID), broadcast=n_rows)
-    ct_datas = arg_to_list(ct_datas, (None, CtVolume), broadcast=n_rows)
-    dose_datas = arg_to_list(dose_datas, (None, DoseData), broadcast=n_rows)
+    ct_datas = arg_to_list(ct_datas, (None, CtImageArray), broadcast=n_rows)
+    dose_datas = arg_to_list(dose_datas, (None, DoseImageArray), broadcast=n_rows)
     dose_series_dates = arg_to_list(dose_series_dates, str, broadcast=n_rows)
     dose_series_ids = arg_to_list(dose_series_ids, SeriesID, broadcast=n_rows)
-    landmark_datas = arg_to_list(landmark_datas, (None, LandmarksData), broadcast=n_rows)
-    landmark_datas_other = arg_to_list(landmark_datas_other, (None, LandmarksData), broadcast=n_rows)
-    region_datas = arg_to_list(region_datas, (None, RegionsData), broadcast=n_rows)
+    landmark_datas = arg_to_list(landmark_datas, (None, LandmarksFrame), broadcast=n_rows)
+    landmark_datas_other = arg_to_list(landmark_datas_other, (None, LandmarksFrame), broadcast=n_rows)
+    region_datas = arg_to_list(region_datas, (None, RegionArrays), broadcast=n_rows)
     views = arg_to_list(views, int, literals={ 'all': tuple(range(3)) })
     n_series_max = np.max([len(ss) for ss in series_ids])
     n_cols = len(views) * n_series_max
@@ -740,7 +740,7 @@ def plot_patients_matrix(
         plt.close() 
 
 def __get_landmark_crop(
-    landmark: LandmarkData,
+    landmark: LandmarkSeries,
     margin_mm: float,
     size: Size3D,
     spacing: Spacing3D,

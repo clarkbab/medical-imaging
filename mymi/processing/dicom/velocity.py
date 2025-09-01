@@ -12,7 +12,7 @@ from mymi.utils import *
 def convert_velocity_predictions_to_nifti(
     dataset: str,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     moving_study_id: str = 'study_0',
     pat_ids: PatientIDs = 'all',
     pat_prefix: Optional[str] = None,

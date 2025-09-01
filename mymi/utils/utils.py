@@ -247,7 +247,7 @@ def benchmark(
 
     return np.mean(durations)
 
-def p_landmarks(landmarks: List[Landmark], f: float) -> List[Landmark]:
+def p_landmarks(landmarks: List[LandmarkID], f: float) -> List[LandmarkID]:
     # Take non-random subset of landmarks.
     n_landmarks = int(f * len(landmarks))
     idxs = np.linspace(0, len(landmarks), n_landmarks).astype(int)

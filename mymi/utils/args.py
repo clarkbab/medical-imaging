@@ -58,7 +58,8 @@ def arg_to_list(
     arg_types: Union[Any, List[Any]],
     broadcast: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
     literals: Dict[str, Tuple[Any]] = {},
-    out_type: Optional[Any] = None) -> List[Any]:
+    out_type: Optional[Any] = None,
+    return_matched: bool = False) -> List[Any]:
     # Convert arg types to list.
     if not isinstance(arg_types, list) and not isinstance(arg_types, tuple):
         arg_types = [arg_types]
@@ -74,7 +75,10 @@ def arg_to_list(
             if isinstance(arg, Callable):
                 arg = arg()
 
-            return arg
+            if not return_matched:
+                return arg
+            else:
+                return arg, matched
 
     # Check types.
     matched = False
@@ -88,4 +92,7 @@ def arg_to_list(
     if matched and out_type is not None:
         arg = [out_type(a) for a in arg]
 
-    return arg
+    if not return_matched:
+        return arg
+    else:
+        return arg, matched

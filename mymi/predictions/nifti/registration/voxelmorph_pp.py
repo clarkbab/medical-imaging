@@ -18,7 +18,7 @@ def create_voxelmorph_pp_predictions(
     dataset: str,
     crop_to_lung_centres: bool = True,
     fixed_study_id: str = 'study_1',
-    landmarks: Optional[Landmarks] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     lung_region: Region = 'Lungs',
     moving_study_id: str = 'study_0',
     pat_ids: PatientIDs = 'all',
