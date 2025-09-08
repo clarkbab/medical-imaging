@@ -12,26 +12,30 @@ from ..transform import Transform
 from .identity import IdentityTransform
 from .spatial import SpatialTransform
 
+# rotation:
+# - r=5 -> r=(-5, 5, -5, 5) for 2D, r=(-5, 5, -5, 5, -5, 5) for 3D.
+# - r=(-3, 5) -> r=(-3, 5, -3, 5) for 2D, r=(-3, 5, -3, 5, -3, 5) for 3D.
 class RandomRotation(RandomTransform):
     def __init__(
         self, 
-        rotation: Tuple[float] = (-5, 5),
+        rotation: Union[Number, Tuple[Number, ...]] = 5.0,
         centre: Union[Point, Literal['centre']] = 'centre',
         dim: int = 3,   # Setting this allows us to apply transform to 2-5D arrays/tensors and determine batch/channel/spatial dimensions.
-        p: float = 1.0,  # What proportion of the time is a random rotation applied?
+        p: Number = 1.0,  # What proportion of the time is a random rotation applied?
         **kwargs) -> None:
         super().__init__(**kwargs)
         assert dim in [2, 3], "Only 2D and 3D rotations are supported."
-        if dim == 2:
-            assert len(rotation) == 2, "2D rotation requires two angles."
-        else:
-            assert len(rotation) == 2 or len(rotation) == 6, "3D rotation requires either two or six angles."
-            if len(rotation) == 2:
-                rotation *= 3
         self._dim = dim
+        if isinstance(rotation, (int, float)):
+            rot_ranges = (-rotation, rotation) * self._dim
+        elif len(rotation) == 2:
+            rot_ranges = rotation * self._dim
+        else:
+            rot_ranges = rotation
+        assert len(rot_ranges) == 2 * self._dim, f"Expected 'rotation' of length {2 * self._dim}, got {len(rot_ranges)}."
         if isinstance(centre, tuple):
             assert len(centre) == dim, f"Rotation centre must have {dim} dimensions."
-        self.__rot_ranges = to_tensor(rotation).reshape(3, 2)
+        self.__rot_ranges = to_tensor(rot_ranges).reshape(self._dim, 2)
         self.__centre = to_tensor(centre) if not centre == 'centre' else centre
         self.__p = p
         self._params = dict(
@@ -55,12 +59,12 @@ class RandomRotation(RandomTransform):
 class Rotation(TransformImageMixin, TransformMixin, Transform):
     def __init__(
         self,
-        rotation: Union[float, Tuple[float], np.ndarray, torch.Tensor],
+        rotation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
         centre: Union[Literal['centre'], Point, torch.Tensor] = 'centre',
         dim: int = 3) -> None:
         self._dim = dim
         self._is_homogeneous = True
-        rotations = arg_to_list(rotation, float, broadcast=dim)
+        rotations = arg_to_list(rotation, (int, float), broadcast=dim)
         assert len(rotations) == dim, f"Expected 'rotation' of length {dim} for dim={dim}, got {len(rotations)}."
         self.__rotations = to_tensor(rotations)
         self.__centre = 'centre' if centre == 'centre' else to_tensor(centre)
@@ -76,22 +80,6 @@ class Rotation(TransformImageMixin, TransformMixin, Transform):
             rotations=self.__rotations,
             rotations_rad=self.__rotations_rad,
         )
-
-    def back_transform_points(
-        self,
-        points: Union[PointsArray, PointsTensor],
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
-        **kwargs) -> PointsTensor:
-        # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(device=points.device, size=size, spacing=spacing, origin=origin)
-
-        # Transform points.
-        points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torhc.linalg.multi_dot([matrix_h, points_h.T]).T
-        points_t = points_t_h[:, :-1]
-        return points_t
 
     # This is used for image resampling, not for point clouds.
     def back_transform_points(

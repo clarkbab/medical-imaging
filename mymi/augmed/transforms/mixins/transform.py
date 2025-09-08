@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import alias_kwargs, arg_to_list
 
-from ...utils import to_tensor, image_points
+from ...utils import to_array, to_tensor, image_points
 
 # Why are these methods included using 'mixins' and not subclassing?
 # This is because not all transforms want to use 'back_transform_points'
@@ -152,7 +152,8 @@ class TransformImageMixin:
         group_points_mm_ts = []
         for g in groups:
             image, size, spacing, origin = images[g], sizes[g], spacings[g], origins[g]
-            points_mm = image_points(image, origin=origin, spacing=spacing)
+            points_mm = image_points(image.shape, origin=origin, spacing=spacing)
+            points_mm = to_tensor(points_mm, device=image.device)
 
             # Perform back transform of resampling points.
             # Currently we pass all args to each transform and they can consume if they need.

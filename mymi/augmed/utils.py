@@ -27,19 +27,18 @@ def create_translation(
     return matrix
 
 def image_points(
-    image: Union[ImageArray, ImageTensor, List[Union[ImageArray, ImageTensor]]],
+    size: Union[Size, SizeArray, SizeTensor, List[Union[Size, SizeArray, SizeTensor]]],
     spacing: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
     origin: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
     return_superset: bool = False) -> Union[PointsArray, PointsTensor, List[Union[PointsArray, PointsTensor]], Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
-    images, image_was_single = arg_to_list(image, (np.ndarray, torch.Tensor), return_matched=True)
-    return_types = ['torch' if isinstance(i, torch.Tensor) else 'numpy' for i in images]
-    spacings = arg_to_list(spacing, (tuple, np.ndarray, torch.Tensor), broadcast=len(images))
-    origins = arg_to_list(origin, (tuple, np.ndarray, torch.Tensor), broadcast=len(images))
-    images = [to_tensor(i) for i in images]
-    devices = [i.device for i in images]
-    sizes = [to_tensor(i.shape, device=i.device, dtype=torch.int) for i in images]
-    spacings = [to_tensor(s, device=i.device) for s, i in zip(spacings, images)]
-    origins = [to_tensor(o, device=i.device) for o, i in zip(origins, images)]
+    sizes, size_was_single = arg_to_list(size, (tuple, np.ndarray, torch.Tensor), return_matched=True)
+    return_types = ['torch' if isinstance(s, torch.Tensor) else 'numpy' for s in sizes]
+    spacings = arg_to_list(spacing, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
+    origins = arg_to_list(origin, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
+    sizes = [to_tensor(s) for s in sizes]
+    devices = [s.device for s in sizes]
+    spacings = [to_tensor(sp, device=s.device) for sp, s in zip(spacings, sizes)]
+    origins = [to_tensor(o, device=s.device) for o, s in zip(origins, sizes)]
     assert len(spacings) == len(sizes)
     assert len(origins) == len(sizes)
 
@@ -92,7 +91,7 @@ def image_points(
         if r == 'numpy':
             points_mms[i] = to_array(points_mms[i])
 
-    if image_was_single:
+    if size_was_single:
         return points_mms[0]
     else:
         return points_mms

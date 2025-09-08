@@ -13,14 +13,14 @@ from .spatial import SpatialTransform
 class RandomFlip(RandomTransform):
     def __init__(
         self,
-        p_flip: Union[float, Tuple[float]] = 0.5,
+        p_flip: Union[Number, Tuple[Number]] = 0.5,
         dim: int = 3,
-        p: float = 1.0,
+        p: Number = 1.0,
         **kwargs) -> None:
         super().__init__(**kwargs)
         assert dim in [2, 3], "Only 2D and 3D flips are supported."
         self._dim = dim
-        p_flips = arg_to_list(p_flip, float, broadcast=dim)
+        p_flips = arg_to_list(p_flip, (int, float), broadcast=dim)
         assert len(p_flips) == dim, f"Expected 'p_flip' of length {dim} for dim={dim}, got {len(p_flips)}."
         self.__p_flips = to_tensor(p_flips, dtype=torch.bool)
         self.__p = p

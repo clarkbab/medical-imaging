@@ -53,6 +53,8 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
         # Nx4 point matrix. Transforms that consist of homogeneous matrix multiplications
         # should have the option to return these transforms for 'pipeline'.
         points_t = points
+        print('pipeline back transform')
+        print(type(points_t))
 
         # Create chains of homogeneous matrix multiplications.
         # E.g. for flip and rotate, naively we could perform each separately by 
