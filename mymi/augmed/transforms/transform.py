@@ -7,6 +7,14 @@ from mymi.typing import *
 # and RandomTransform must follow.
 # What about pipeline? Yeah, I guess so. We treat it just like a transform.
 class Transform:
+    def __init__(
+        self,
+        dim: SpatialDim = 3,
+        **kwargs) -> None:
+        assert dim in [2, 3], "Only 2D and 3D flips are supported."
+        self._dim = dim
+        self._is_homogeneous = False
+
     def back_transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
@@ -24,15 +32,11 @@ class Transform:
         return self.transform(data, origin=origin, spacing=spacing, **kwargs)
 
     @property
-    def dim(self) -> int:
-        if not hasattr(self, '_dim'):
-            raise ValueError("Subclasses of 'Transform' must have '_dim' attribute.")
+    def dim(self) -> SpatialDim:
         return self._dim
 
     @property
-    def is_homogeneous(self) -> int:
-        if not hasattr(self, '_is_homogeneous'):
-            raise ValueError("Subclasses of 'Transform' must have '_is_homogeneous' attribute.")
+    def is_homogeneous(self) -> bool:
         return self._is_homogeneous
 
     @property
@@ -43,6 +47,12 @@ class Transform:
 
     def __repr__(self) -> str:
         return str(self)
+
+    def set_dim(
+        self,
+        dim: SpatialDim) -> None:
+        assert dim in [2, 3], "Only 2D and 3D transforms are supported."
+        self._dim = dim
 
     def __str__(self) -> str:
         raise ValueError("Subclasses of 'Transform' must implement '__str__' method.")

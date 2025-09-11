@@ -18,14 +18,24 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
     def __init__(
         self,
         transforms: List[Union[Transform]],
+        # What's the thinking re 'dim'?
+        # Same as 'random_seed'. Allow us to override here, rather than setting in each transform's constructor.
+        # Allows, very easy setting of dim=2 for a pipeline.
+        dim: Optional[int] = None,
         freeze: Optional[Union[bool, List[bool]]] = False,
+        # What's the thinking around 'random_seed'?
+        # If set here, override anything set in the transforms constructor. Allows easy setting of seeds in one place.
         random_seed: Optional[Union[int, List[int]]] = None) -> None:
         freezes = arg_to_list(freeze, (None, bool), broadcast=len(transforms))
         random_seeds = arg_to_list(random_seed, (None, int), broadcast=len(transforms))
         assert len(random_seeds) == len(transforms), "Random seeds ('random_seed') must have same length as 'transforms'."
-        dim = transforms[0].dim
-        for t in transforms:
-            assert t.dim == dim, "All transforms must have same 'dim'."
+        if dim is not None:
+            assert dim in [2, 3], "Only 2D and 3D pipelines are supported."
+            [t.set_dim(dim) for t in transforms]
+        else:
+            dim = transforms[0].dim
+            for t in transforms:
+                assert t.dim == dim, "All transforms must have same 'dim'."
         # Can be a combination of random and deterministic transforms.
         # For example, we may always want to centre crop first, or extract patches last,
         # with random augmentations in the middle.
@@ -33,7 +43,7 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
 
         # Reseed the random transforms if requested - just easier doing it during pipeline creation rather than
         # for each transform.
-        [t.seed_rng(random_seed=s) for s, t in zip(random_seeds, transforms) if s is not None and isinstance(t, RandomTransform)]
+        [t.seed(random_seed=s) for s, t in zip(random_seeds, transforms) if s is not None and isinstance(t, RandomTransform)]
 
         # Freeze transforms if requested.
         transforms = [t.freeze() if f and isinstance(t, RandomTransform) else t for f, t in zip(freezes, transforms)]
@@ -74,15 +84,12 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
             )
             # Store any homogeneous multiplications for later.
             if t.is_homogeneous:
-                print(f'adding transform {i} to chain')
-                t_back = t.get_homogeneous_back_transform(device=points_t.device, **okwargs)
+                t_back = t.get_homogeneous_back_transform(points_t.device, **okwargs)
                 chain.insert(0, t_back)
 
             # Resolve any stored chains.
             if not t.is_homogeneous or i == len(self.__transforms) - 1:
                 if len(chain) > 0:
-                    print(f'performing chained muliplication for {len(chain)} transforms')
-                    # TODO: points should be in homogeneous coordinates.h
                     points_t_h = torch.hstack([points_t, create_ones((points_t.shape[0], 1), device=points_t.device)])  # Move to homogeneous coords.
                     points_t_h = torch.linalg.multi_dot(chain + [points_t_h.T]).T
                     points_t = points_t_h[:, :-1]
@@ -90,7 +97,6 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
 
             # Perform non-homogeneous transform.
             if not t.is_homogeneous:
-                print(f'performing non-homogeneous transform {i}')
                 points_t = t.back_transform_points(points_t, **okwargs)
 
         return points_t

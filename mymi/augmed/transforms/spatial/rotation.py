@@ -9,8 +9,8 @@ from ...utils import *
 from ..mixins import TransformImageMixin, TransformMixin
 from ..random import RandomTransform
 from ..transform import Transform
-from .identity import IdentityTransform
-from .spatial import SpatialTransform
+from .homogeneous import HomogeneousTransform
+from .identity import Identity
 
 # rotation:
 # - r=5 -> r=(-5, 5, -5, 5) for 2D, r=(-5, 5, -5, 5, -5, 5) for 3D.
@@ -18,14 +18,10 @@ from .spatial import SpatialTransform
 class RandomRotation(RandomTransform):
     def __init__(
         self, 
-        rotation: Union[Number, Tuple[Number, ...]] = 5.0,
+        rotation: Union[Number, Tuple[Number, ...]] = 15.0,
         centre: Union[Point, Literal['centre']] = 'centre',
-        dim: int = 3,   # Setting this allows us to apply transform to 2-5D arrays/tensors and determine batch/channel/spatial dimensions.
-        p: Number = 1.0,  # What proportion of the time is a random rotation applied?
         **kwargs) -> None:
         super().__init__(**kwargs)
-        assert dim in [2, 3], "Only 2D and 3D rotations are supported."
-        self._dim = dim
         if isinstance(rotation, (int, float)):
             rot_ranges = (-rotation, rotation) * self._dim
         elif len(rotation) == 2:
@@ -34,38 +30,36 @@ class RandomRotation(RandomTransform):
             rot_ranges = rotation
         assert len(rot_ranges) == 2 * self._dim, f"Expected 'rotation' of length {2 * self._dim}, got {len(rot_ranges)}."
         if isinstance(centre, tuple):
-            assert len(centre) == dim, f"Rotation centre must have {dim} dimensions."
+            assert len(centre) == self._dim, f"Rotation centre must have {self._dim} dimensions."
         self.__rot_ranges = to_tensor(rot_ranges).reshape(self._dim, 2)
         self.__centre = to_tensor(centre) if not centre == 'centre' else centre
-        self.__p = p
         self._params = dict(
             centre=self.__centre,
             dim=self._dim,
-            p=self.__p,
+            p=self._p,
             rotation_ranges=self.__rot_ranges,
         )
 
     def freeze(self) -> 'Rotation':
-        should_apply = self._rng.random(1) < self.__p
+        should_apply = self._rng.random(1) < self._p
         if not should_apply:
-            return IdentityTransform()
+            return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
         rot_draw = draw * (self.__rot_ranges[:, 1] - self.__rot_ranges[:, 0]) + self.__rot_ranges[:, 0]
         return Rotation(rotation=rot_draw, centre=self.__centre, dim=self._dim)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__rot_ranges.flatten())}, dim={self._dim}, p={self.__p})"
+        return f"{self.__class__.__name__}({to_tuple(self.__rot_ranges.flatten())}, dim={self._dim}, p={self._p})"
 
-class Rotation(TransformImageMixin, TransformMixin, Transform):
+class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
     def __init__(
         self,
         rotation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
         centre: Union[Literal['centre'], Point, torch.Tensor] = 'centre',
-        dim: int = 3) -> None:
-        self._dim = dim
-        self._is_homogeneous = True
-        rotations = arg_to_list(rotation, (int, float), broadcast=dim)
-        assert len(rotations) == dim, f"Expected 'rotation' of length {dim} for dim={dim}, got {len(rotations)}."
+        **kwargs) -> None:
+        super().__init__(**kwargs)
+        rotations = arg_to_list(rotation, (int, float), broadcast=self._dim)
+        assert len(rotations) == self._dim, f"Expected 'rotation' of length {self._dim} for dim={self._dim}, got {len(rotations)}."
         self.__rotations = to_tensor(rotations)
         self.__centre = 'centre' if centre == 'centre' else to_tensor(centre)
         self.__rotations_rad = torch.deg2rad(rotations)
@@ -98,7 +92,7 @@ class Rotation(TransformImageMixin, TransformMixin, Transform):
         print('performing rotation back transform points')
 
         # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(device=points.device, size=size, spacing=spacing, origin=origin)
+        matrix_h = self.get_homogeneous_back_transform(points.device, size=size, spacing=spacing, origin=origin)
 
         # Transform points.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
@@ -110,41 +104,8 @@ class Rotation(TransformImageMixin, TransformMixin, Transform):
 
     # Defines the forward/backward transforms.
     def __create_transforms(self) -> None:
-        # Standard rotation matrices are 'backward' as we want the forward transform
-        # to be clockwise. Do we?
-        # We use homogeneous coordinates for rotation matrices so they can be easily
-        # multiplied with transforms that require homogeneous coords, e.g. translations.
-        if self._dim == 2:
-            # 2D rotation matrix.
-            self.__backward_matrix = to_tensor([
-                [torch.cos(self.__rotations_rad[0]), -torch.sin(self.__rotations_rad[0]), 0],
-                [torch.sin(self.__rotations_rad[0]), torch.cos(self.__rotations_rad[0]), 0],
-                [0, 0, 1]
-            ])
-        else:
-            # 3D rotation matrix.
-            self.__backward_x = to_tensor([
-                [1, 0, 0, 0],
-                [0, torch.cos(self.__rotations_rad[0]), -torch.sin(self.__rotations_rad[0]), 0],
-                [0, torch.sin(self.__rotations_rad[0]), torch.cos(self.__rotations_rad[0]), 0],
-                [0, 0, 0, 1]
-            ])
-            self.__backward_y = to_tensor([
-                [torch.cos(self.__rotations_rad[1]), 0, torch.sin(self.__rotations_rad[1]), 0],
-                [0, 1, 0, 0],
-                [-torch.sin(self.__rotations_rad[1]), 0, torch.cos(self.__rotations_rad[1]), 0],
-                [0, 0, 0, 1]
-            ])
-            self.__backward_z = to_tensor([
-                [torch.cos(self.__rotations_rad[2]), -torch.sin(self.__rotations_rad[2]), 0, 0],
-                [torch.sin(self.__rotations_rad[2]), torch.cos(self.__rotations_rad[2]), 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1]
-            ])
-            self.__backward_matrix = torch.linalg.multi_dot([self.__backward_z, self.__backward_y, self.__backward_x])
-
-        # Rotation matrix inverse is just the transpose.
-        self.__matrix = self.__backward_matrix.T
+        self.__backward_matrix = create_rotation(self.__rotations_rad)
+        self.__matrix = self.__backward_matrix.T     # Rotation matrix inverse is just transpose.
 
     def get_homogeneous_back_transform(
         self,

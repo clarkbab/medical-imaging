@@ -113,6 +113,7 @@ SizeMM2D = Tuple[float, float]
 SizeMM3D = Tuple[float, float, float]
 SizeMM = Union[SizeMM2D, SizeMM3D]
 SizeMMTensor = torch.Tensor
+SpatialDim = Literal[2, 3]
 # Spacing refers to a simple tuple.
 # In some instances, we have to specify that the function should take a tensor
 # or array. We don't want to have to keep shifting data on/off gpus by converting
@@ -134,4 +135,5 @@ ImageTensor3D = ImageTensor
 TrainingInterval = str
 Transform = sitk.Transform
 VectorImageArray = np.ndarray   # Deformation field.
+VectorImageTensor = torch.Tensor    # By default has size: C, X, Y, Z.
 VectorImageArrays = Union[VectorImageArray, List[VectorImageArray]]

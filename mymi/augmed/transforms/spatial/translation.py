@@ -1,3 +1,4 @@
+import torch
 from typing import *
 
 from mymi.geometry import fov_centre, fov_width
@@ -7,115 +8,110 @@ from mymi.utils import *
 from ...utils import *
 from ..mixins import TransformImageMixin, TransformMixin
 from ..random import RandomTransform
+from ..transform import Transform
 from .homogeneous import HomogeneousTransform
 from .identity import Identity
 
-class RandomFlip(RandomTransform):
+# translation:
+# - t=5 -> t=(-5, 5, -5, 5) for 2D, t=(-5, 5, -5, 5, -5, 5) for 3D.
+# - t=(-3, 5) -> t=(-3, 5, -3, 5) for 2D, t=(-3, 5, -3, 5, -3, 5) for 3D.
+class RandomTranslation(RandomTransform):
     def __init__(
-        self,
-        p_flip: Union[Number, Tuple[Number]] = 0.5,
+        self, 
+        translation: Union[Number, Tuple[Number, ...]] = 100.0,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        p_flips = arg_to_list(p_flip, (int, float), broadcast=self._dim)
-        assert len(p_flips) == self._dim, f"Expected 'p_flip' of length {self._dim} for dim={self._dim}, got {len(p_flips)}."
-        self._p_flips = to_tensor(p_flips, dtype=torch.bool)
+        if isinstance(translation, (int, float)):
+            trans_ranges = (-translation, translation) * self._dim
+        elif len(translation) == 2:
+            trans_ranges = translation * self._dim
+        else:
+            trans_ranges = translation
+        assert len(trans_ranges) == 2 * self._dim, f"Expected 'translation' of length {2 * self._dim}, got {len(trans_ranges)}."
+        self.__trans_ranges = to_tensor(trans_ranges).reshape(self._dim, 2)
         self._params = dict(
             dim=self._dim,
             p=self._p,
-            p_flips=self._p_flips,
+            rotation_ranges=self.__trans_ranges,
         )
 
-    def freeze(self) -> 'Flip':
-        should_apply = self._rng.random() < self._p
+    def freeze(self) -> 'Translation':
+        should_apply = self._rng.random(1) < self._p
         if not should_apply:
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
-        should_flip = draw < self._p_flips
-        return Flip(flip=should_flip, dim=self._dim)
+        trans_draw = draw * (self.__trans_ranges[:, 1] - self.__trans_ranges[:, 0]) + self.__trans_ranges[:, 0]
+        return Translation(translation=trans_draw, dim=self._dim)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self._p_flips)}, dim={self._dim}, p={self._p})"
-        
-class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
+        return f"{self.__class__.__name__}({to_tuple(self.__trans_ranges.flatten())}, dim={self._dim}, p={self._p})"
+
+class Translation(TransformImageMixin, TransformMixin, HomogeneousTransform):
     def __init__(
         self,
-        flip: Union[bool, Tuple[bool], np.ndarray, torch.Tensor],
+        translation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
         **kwargs) -> None:
         super().__init__(**kwargs)
-        flips = arg_to_list(flip, bool, broadcast=self._dim)
-        assert len(flips) == self._dim, f"Expected 'flip' of length {self._dim} for dim={self._dim}, got {len(flips)}."
-        self.__flips = to_tensor(flips, dtype=torch.bool)
+        translations = arg_to_list(translation, (int, float), broadcast=self._dim)
+        assert len(translations) == self._dim, f"Expected 'translation' of length {self._dim} for dim={self._dim}, got {len(translations)}."
+        self.__translations = to_tensor(translations)
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
             dim=self._dim,
-            flips=self.__flips,
             matrix=self.__matrix,
             matrix_complete=False,      # Do matrices define the full transform?
-            requires=['centre'],        # What information is needed at transform time?
+            translations=self.__translations,
         )
 
+    # This is used for image resampling, not for point clouds.
     def back_transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
         size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
         spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
         origin: Optional[Union[Point, PointArray, PointTensor]] = None,
-        **kwargs) -> PointsTensor:
+        **kwargs) -> Union[PointsArray, PointsTensor]:
         if isinstance(points, np.ndarray):
             points = to_tensor(points)
             return_type = 'numpy'
         else:
             return_type = 'torch'
 
-        print('performing flip back transform points')
+        print('performing translation back transform points')
 
         # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(points.device, size=size, spacing=spacing, origin=origin)
+        matrix_h = self.get_homogeneous_back_transform(points.device)
 
         # Transform points.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([matrix_h, points_h.T]).T
+        points_t_h = torhc.linalg.multi_dot([matrix_h, points_h.T]).T
         points_t = points_t_h[:, :-1]
         if return_type == 'numpy':
             points_t = to_array(points_t)
         return points_t
 
+    # Defines the forward/backward transforms.
     def __create_transforms(self) -> None:
-        scaling = tuple([-1 if f else 1 for f in self.__flips] + [1])
-        self.__matrix = create_eye(self._dim, scaling=scaling)
-        self.__backward_matrix = self.__matrix      # Flip matrix is it's own inverse.
+        self.__matrix = create_translation(self.__translations)
+        self.__backward_matrix = create_translation(-self.__translations)
 
     def get_homogeneous_back_transform(
         self,
-        device: torch.device,
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
+        device: torch.device,   # Need to pass here, as we might compute matrix mults in this function.
         **kwargs) -> torch.Tensor:
-        # Get flip centre.
-        assert size is not None
-        assert spacing is not None
-        assert origin is not None
-        size = to_tensor(size, device=device, dtype=torch.int)
-        spacing = to_tensor(spacing, device=device)
-        origin = to_tensor(origin, device=device)
 
-        print('getting flip back transform')
-
-        # Get flip centre.
-        fov = torch.stack([origin, origin + size * spacing]).to(device)
-        flip_centre = fov.sum(axis=0) / 2
+        print('getting translation back transform')
 
         # Get homogeneous matrix.
-        trans_matrix = create_translation(-flip_centre, device=device)
-        inv_trans_matrix = create_translation(flip_centre, device=device)
-        matrix_h = torch.linalg.multi_dot([inv_trans_matrix, self.__backward_matrix.to(device), trans_matrix])
-        return matrix_h
+        return self.__backward_matrix.to(device)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__flips)}, dim={self._dim})"
+        return f"{self.__class__.__name__}({to_tuple(self.__translations)}, dim={self._dim})"
 
+    # This is for point clouds, not for image resampling. Note that this
+    # requires invertibility of the back point transform, which may not be
+    # be available for some transforms (e.g. folded elastic).
     def transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
@@ -130,21 +126,19 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
             return_type = 'numpy'
         else:
             return_type = 'torch'
-        assert origin is not None
-        assert size is not None
-        assert spacing is not None
+        origin = to_tensor(origin, device=points.device)
         size = to_tensor(size, device=points.device, dtype=torch.int)
         spacing = to_tensor(spacing, device=points.device)
-        origin = to_tensor(origin, device=points.device)
 
-        # Get FOV and centre.
-        fov = torch.stack([origin, origin + size * spacing]).to(points.device)
-        flip_centre = fov.sum(axis=0) / 2
+        # Calculate fov.
+        if filter_offscreen:
+            assert origin is not None
+            assert size is not None
+            assert spacing is not None
+            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
 
-        trans_matrix = create_translation(-flip_centre, device=points.device)
-        inv_trans_matrix = create_translation(flip_centre, device=points.device)
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([inv_trans_matrix, self.__matrix.to(points.device), trans_matrix, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([self.__matrix.to(points.device), points_h.T]).T
         points_t = points_t_h[:, :-1]
 
         # Forward transformed points could end up off-screen and should be filtered.
@@ -155,12 +149,12 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
             points_t = points_t[to_keep]
             indices = torch.where(to_keep)[0]
             if return_type == 'numpy':
-                points_t, indices = to_array(points_t), to_array(indices)
+                points_t, indices = points_t.numpy(), indices.numpy()
             if return_filtered:
                 return points_t, indices
             else:
                 return points_t
         else:
             if return_type == 'numpy':
-                points_t = to_array(points_t)
+                points_t = points_t.numpy()
             return points_t

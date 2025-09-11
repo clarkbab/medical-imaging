@@ -14,8 +14,12 @@ from .transform import Transform
 class RandomTransform(Transform):
     def __init__(
         self,
-        random_seed: Optional[int] = None):
-        self.seed_rng(random_seed=random_seed)
+        p: Number = 1.0,    # What proportion of the time is the transform applied? Un-applied transforms resolve to 'Identity' when frozen.
+        random_seed: Optional[int] = None,
+        **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._p = p
+        self.seed(random_seed=random_seed)
 
     def back_transform_points(
         self,
@@ -25,7 +29,7 @@ class RandomTransform(Transform):
         t = self.freeze(random_seed=random_seed)
         return t.back_transform_points(points, **kwargs)
 
-    def seed_rng(
+    def seed(
         self,
         random_seed: Optional[int] = None) -> None:
         self._rng = np.random.default_rng(seed=random_seed)

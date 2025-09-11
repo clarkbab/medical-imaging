@@ -2,21 +2,33 @@ from typing import *
 
 from mymi.typing import *
 
-from .spatial import SpatialTransform
+from ...utils import *
+from .homogeneous import HomogeneousTransform
 
 # Doesn't use TransformMixin/TransformImageMixin as we don't need to transform
 # the image using 'back_transform_points' route.
-class IdentityTransform(SpatialTransform):
-    def __init__(
-        self, 
-        **kwargs) -> None:
-        self._is_homogeneous = True
-
+class Identity(HomogeneousTransform):
     def back_transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
         **kwargs) -> Union[PointsArray, PointsTensor]:
         return points
+
+    # This is called by 'Pipeline'. Adding this so that we don't have to include
+    # special logic for skipping identity back transform points in pipeline. 
+    # Could add a bit of overhead if the identity transform isn't chained with
+    # other homogeneous transforms.
+    def get_homogeneous_back_transform(
+        self,
+        device: torch.device,
+        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
+        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
+        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
+        **kwargs) -> torch.Tensor:
+        return create_eye(self._dim + 1, device=device)
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(dim={self._dim})"
 
     def transform(
         self,

@@ -16,6 +16,7 @@ def plot_image(
     # If single or list, broadcast to all images. If list of lists, leave alone.
     label: Optional[Union[LabelArray, LabelTensor, DirPath, FilePath, List[Union[LabelArray, LabelTensor]], List[List[Union[LabelArray, LabelTensor]]]]] = None,
     landmarks: Optional[Union[LandmarksFrame, PointsArray, PointsTensor, List[Union[LandmarksFrame, PointsArray, PointsTensor]]]] = None,    # Should be in patient coordinates.
+    landmark_colour: str = 'yellow',
     landmark_ids: LandmarkIDs = 'all',
     modality: Literal['ct', 'dose'] = 'ct',
     origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = (0, 0, 0),
@@ -134,7 +135,7 @@ def plot_image(
                 view_loc = view_idx * s[v] + o[v]
                 col_ax.set_title(f'{get_axis_name(v)} view, slice {view_idx} ({view_loc:.1f}mm)')
             if lm is not None:
-                plot_landmark_data(lm, col_ax, view_idx, d.shape, s, o, v, landmark_ids=landmark_ids)
+                plot_landmark_data(lm, col_ax, view_idx, d.shape, s, o, v, colour=landmark_colour, landmark_ids=landmark_ids)
 
 @delegates(plot_image)
 def plot_nifti(

@@ -8,8 +8,15 @@ from mymi.utils import *
 def create_eye(
     dim: int,
     device: torch.device = torch.device('cpu'),
-    dtype: torch.dtype = torch.float32) -> torch.Tensor:
-    return torch.eye(dim, device=device, dtype=dtype)
+    dtype: torch.dtype = torch.float32,
+    scaling: Optional[Union[Tuple, np.ndarray, torch.Tensor]] = None) -> torch.Tensor:
+    matrix = torch.eye(dim, device=device, dtype=dtype)
+    if scaling is not None:
+        scalings = to_tensor(scaling, device=device)
+        assert len(scaling) == dim
+        for i, s in enumerate(scalings):
+            matrix[i, i] = s
+    return matrix
     
 def create_ones(
     size: Tuple[int, ...],
@@ -17,14 +24,110 @@ def create_ones(
     dtype: torch.dtype = torch.float32) -> torch.Tensor:
     return torch.ones(size, device=device, dtype=dtype)
 
-def create_translation(
-    t: Union[Point, PointArray, PointTensor],
+def create_rotation(
+    rotation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
     device: torch.device = torch.device('cpu'),
     dtype: torch.dtype = torch.float32) -> torch.Tensor:
-    dim = len(t)
-    matrix = create_eye(dim + 1, device=device, dtype=dtype)
-    matrix[:dim, dim] = t  # Translate to origin.
+    dim = len(rotation)
+    if dim == 2:
+        # 2D rotation matrix.
+        matrix = to_tensor([
+            [torch.cos(rotation[0]), -torch.sin(rotation[0]), 0],
+            [torch.sin(rotation[0]), torch.cos(rotation[0]), 0],
+            [0, 0, 1]
+        ])
+    else:
+        # 3D rotation matrix.
+        rotation_x = to_tensor([
+            [1, 0, 0, 0],
+            [0, torch.cos(rotation[0]), -torch.sin(rotation[0]), 0],
+            [0, torch.sin(rotation[0]), torch.cos(rotation[0]), 0],
+            [0, 0, 0, 1]
+        ])
+        rotation_y = to_tensor([
+            [torch.cos(rotation[1]), 0, torch.sin(rotation[1]), 0],
+            [0, 1, 0, 0],
+            [-torch.sin(rotation[1]), 0, torch.cos(rotation[1]), 0],
+            [0, 0, 0, 1]
+        ])
+        rotation_z = to_tensor([
+            [torch.cos(rotation[2]), -torch.sin(rotation[2]), 0, 0],
+            [torch.sin(rotation[2]), torch.cos(rotation[2]), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+        matrix = torch.linalg.multi_dot([rotation_z, rotation_y, rotation_x])
+
     return matrix
+
+def create_translation(
+    translation: Union[Point, PointArray, PointTensor],
+    device: torch.device = torch.device('cpu'),
+    dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    dim = len(translation)
+    matrix = create_eye(dim + 1, device=device, dtype=dtype)
+    matrix[:dim, dim] = translation
+    return matrix
+
+def grid_sample(
+    image: Union[ImageArray, ImageTensor],    # 3-5D tensor - expects channels in PyTorch order: N, C, X, Y, Z.
+    points: Union[ImageArray, ImageTensor, PointsArray, PointsTensor],     # 3-5D tensor of points in patient coords - expects channels in PyTorch order, except for points arrays.
+    origin: Union[Point, PointArray, PointTensor] = (0, 0, 0),
+    spacing: Union[Spacing, SpacingArray, SpacingTensor] = (1, 1, 1),
+    mode: Literal['bicubic', 'bilinear', 'nearest'] = 'bilinear',
+    dim: SpatialDim = 3,
+    **kwargs) -> Union[ImageArray, ImageTensor]:
+    if isinstance(image, np.ndarray):
+        return_type = 'numpy'
+        return_dtype = 'bool' if image.dtype == np.bool_ else 'float'
+        image = to_tensor(image)
+    elif isinstance(image, torch.Tensor):
+        return_type = 'torch'
+        return_dtype = 'bool' if image.dtype == torch.bool else 'float'
+    else:
+        return_type = 'torch'
+    if points.shape[-1] == 2 or points.shape[-1] == 3:
+        points_type = 'points'
+    else:
+        points_type = 'image'
+    points = to_tensor(points, device=image.device)
+    spatial_size = to_tensor(image.shape[-dim:], device=image.device)
+    origin = to_tensor(origin, device=image.device)
+    spacing = to_tensor(spacing, device=image.device)
+
+    # Normalise to range [-1, 1] expected by 'grid_sample'.
+    points = 2 * (points - origin) / ((spatial_size - 1) * spacing) - 1      
+
+    # Add image channels expected by 'grid_sample'.
+    image_dims_to_add = dim + 2 - len(image.shape)
+    image = image.reshape(*(1,) * image_dims_to_add, *image.shape) if image_dims_to_add > 0 else image
+
+    # Add points channels expected by 'grid_sample'.
+    points_dims_to_add = dim + 2 - len(points.shape)
+    points = points.reshape(*(1,) * points_dims_to_add, *points.shape)
+
+    # Transpose image spatial axes as expected by 'grid_sample'.
+    image_src_dims = list(range(-dim, 0))    # Image should have channels first anyway.
+    image_dest_dims = list(reversed(image_src_dims))
+    image = torch.moveaxis(image, image_src_dims, image_dest_dims)
+
+    # Resample image.
+    # Convert bool types to float as required.
+    if return_dtype == 'bool':
+        image = image.type(torch.float32)
+        mode = 'nearest'
+    image_t = torch.nn.functional.grid_sample(image, points, align_corners=True, mode=mode, **kwargs)
+
+    # Remove channels that were added for 'grid_sample'.
+    image_t = image_t.squeeze(axis=tuple(range(image_dims_to_add))) if image_dims_to_add > 0 else image_t
+
+    # Convert to return type.
+    if return_dtype == 'bool':
+        image_t = image_t.type(torch.bool)
+    if return_type == 'numpy':
+        image_t = to_array(image_t)
+
+    return image_t
 
 def image_points(
     size: Union[Size, SizeArray, SizeTensor, List[Union[Size, SizeArray, SizeTensor]]],

@@ -1,3 +1,4 @@
+import struct
 from typing import *
 
 from mymi.geometry import fov_centre, fov_width
@@ -7,7 +8,7 @@ from mymi.utils import *
 from ...utils import *
 from ..mixins import TransformImageMixin, TransformMixin
 from ..random import RandomTransform
-from .identity import IdentityTransform
+from .identity import Identity
 from .spatial import SpatialTransform
 
 # control spacing:
@@ -24,20 +25,16 @@ class RandomElastic(RandomTransform):
         self, 
         # Note that image folding may occur if the displacements are more than half the magnitude
         # of the control grid spacings. Add some sort of warning.
-        control_spacing: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 100.0,   # In mm.
-        disp: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 40.0,    # In mm.
-        control_origin: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 50.0,  # In mm.
+        control_spacing: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 50.0,
+        disp: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 20.0,
+        control_origin: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 20.0,
         # Would other curve-fitting methods have desirable properties for certain situations?
         # E.g. 'bezier' allows sharp discontinuities which could be good for shearing in lung.
         # Can we randomise the curve-fitting method to increase the space of data augmentation?
         # This is the method for interpolating between points on the coarse control grid.
-        method: Literal['bspline', 'cubic', 'linear'] = 'linear',
-        dim: int = 3,
-        p: float = 1.0,
+        method: Literal['bspline', 'cubic', 'linear', 'linear-gs'] = 'linear',
         **kwargs) -> None:
         super().__init__(**kwargs)
-        assert dim in [2, 3], "Only 2D and 3D elastic deformations are supported."
-        self._dim = dim
         self.__method = method
         if isinstance(control_spacing, (int, float)):
             control_spacing_ranges = (control_spacing, control_spacing) * self._dim
@@ -63,20 +60,19 @@ class RandomElastic(RandomTransform):
             disp_ranges = disp
         assert len(disp_ranges) == 2 * self._dim, f"Expected 'disp' of length {2 * self._dim}, got {len(disp_ranges)}."
         self.__disp_ranges = to_tensor(disp_ranges).reshape(self._dim, 2)
-        self.__p = p
         self._params = dict(
             control_origin_ranges=self.__control_origin_ranges,
             control_spacing_ranges=self.__control_spacing_ranges,
             dim=self._dim,
             disp_ranges=self.__disp_ranges,
             method=self.__method,
-            p=self.__p,
+            p=self._p,
         )
 
     def freeze(self) -> 'Elastic':
-        should_apply = self._rng.random(1) < self.__p
+        should_apply = self._rng.random(1) < self._p
         if not should_apply:
-            return IdentityTransform()
+            return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
         control_spacing_draw = draw * (self.__control_spacing_ranges[:, 1] - self.__control_spacing_ranges[:, 0]) + self.__control_spacing_ranges[:, 0]
         control_origin_draw = draw * (self.__control_origin_ranges[:, 1] - self.__control_origin_ranges[:, 0]) + self.__control_origin_ranges[:, 0]
@@ -86,7 +82,7 @@ class RandomElastic(RandomTransform):
         return Elastic(control_spacing=control_spacing_draw, disp=self.__disp_ranges, control_origin=control_origin_draw, dim=self._dim, method=self.__method, random_seed=draw_rs)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing_ranges.flatten())}, {to_tuple(self.__disp_ranges.flatten())}, {to_tuple(self.__control_origin_ranges.flatten())}, dim={self._dim}, p={self.__p})"
+        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing_ranges.flatten())}, {to_tuple(self.__disp_ranges.flatten())}, {to_tuple(self.__control_origin_ranges.flatten())}, dim={self._dim}, p={self._p})"
 
 # Defines a coarse grid of control points.
 # Random displacements are assigned at each control point.
@@ -110,18 +106,17 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         control_spacing: Union[Number, Spacing, SpacingArray, SpacingTensor] = 100.0,
         disp: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 40.0,
         control_origin: Union[Number, Point, PointArray, PointTensor] = 20.0,
-        dim: int = 3,
-        method: Literal['bspline', 'cubic', 'linear'] = 'linear') -> None:
-        assert dim in [2, 3], "Only 2D and 3D elastic deformations are supported."
-        self._dim = dim
-        assert method in ['bspline', 'cubic', 'linear'], "Only 'bspline', 'cubic', and 'linear' elastic methods are supported."
+        method: Literal['bspline', 'cubic', 'linear'] = 'linear',
+        **kwargs) -> None:
+        super().__init__(**kwargs)
+        assert method in ['bspline', 'cubic', 'linear', 'linear-gs'], "Only 'bspline', 'cubic', 'linear', and 'linear-gs' elastic methods are supported."
         self.__method = method
         self._is_homogeneous = False
-        control_spacing = arg_to_list(control_spacing, (int, float), broadcast=dim)
-        assert len(control_spacing) == dim, f"Expected 'control_spacing' of length '{dim}' for dim={dim}, got {len(control_spacing)}."
+        control_spacing = arg_to_list(control_spacing, (int, float), broadcast=self._dim)
+        assert len(control_spacing) == self._dim, f"Expected 'control_spacing' of length '{self._dim}' for dim={self._dim}, got {len(control_spacing)}."
         self.__control_spacing = to_tensor(control_spacing)
-        control_origin = arg_to_list(control_origin, (int, float), broadcast=dim)
-        assert len(control_origin) == dim, f"Expected 'control_origin' of length '{dim}' for dim={dim}, got {len(control_origin)}."
+        control_origin = arg_to_list(control_origin, (int, float), broadcast=self._dim)
+        assert len(control_origin) == self._dim, f"Expected 'control_origin' of length '{self._dim}' for dim={self._dim}, got {len(control_origin)}."
         self.__control_origin = to_tensor(control_origin)
         # Disps aren't known until presented with the image.
         if isinstance(disp, (int, float)):
@@ -139,87 +134,112 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
             disp_ranges=self.__disp_ranges,
             random_seed=self.__random_seed,
         )
-
-    # Control grid returned will change depending upon method.
-    # E.g. cubic needs two control points outside whilst linear requires only one.
-    def __get_control_grid(
+        
+    # For the same location in a control grid (set spacing, origin) we should always get the
+    # same displacement for the same 'random_seed'. This is so that subsequent calls to the
+    # transform methods will return the same results.
+    def __control_point_seed(
         self,
-        point_min: PointTensor,
-        point_max: PointTensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Get CP extrema for this point cloud.
-        cp_spacing = self.__control_spacing.to(point_min.device)
-        cp_origin = self.__control_origin.to(point_min.device)
-        cp_idx_min = torch.floor((point_min - cp_origin) / cp_spacing)
-        cp_idx_max = torch.ceil((point_max - cp_origin) / cp_spacing)
+        point: Union[Point, PointArray, PointTensor]) -> int:
+        primes = (73856093, 19349663, 83492791)[:self._dim]
+        def f2i(f: float) -> int:   
+            return struct.unpack('<I', struct.pack('<f', float(f)))[0]
+        point = [f2i(f) for f in point]
+        h = point[0] * primes[0]
+        for p, pr in zip(point[1:], primes[1:]):
+            h = h ^ (p * pr)
+        h = h ^ self.__random_seed
+        return h & 0x7fffffff
+
+    # The control grid displacements must not change depending on the passed points.
+    # That is, if we pass the point (0.5, 0.5, 0.5) this must give the same transformed
+    # point regardless of the other points we pass.
+    # This means that subsequent calls to transform_points and back_transform_points
+    # will align points and images properly.
+    def get_control_grid(
+        self,
+        points: Union[PointsArray, PointsTensor]) -> Tuple[Union[ImageArray, ImageTensor], Union[VectorImageArray, VectorImageTensor], Union[SpacingArray, SpacingTensor], Union[PointArray, PointTensor]]:
+        if isinstance(points, torch.Tensor):
+            return_type = 'torch'
+        else:
+            points = to_tensor(points)
+            return_type = 'numpy'
+
+        # Get the origin/spacing for this point cloud.
+        cp_spacing = self.__control_spacing.to(points.device)
+        cp_global_origin = self.__control_origin.to(points.device)
+        point_min, _ = points.min(dim=0)
+        point_max, _ = points.max(dim=0)
+        cp_idx_min = torch.floor((point_min - cp_global_origin) / cp_spacing)
+        cp_idx_max = torch.ceil((point_max - cp_global_origin) / cp_spacing)
+        cp_origin = cp_idx_min * cp_spacing + cp_global_origin
 
         # Create grid of control points.
         cps = torch.stack(torch.meshgrid([
-            torch.arange(cp_idx_min[a], cp_idx_max[a] + 1) for a in range(self._dim)
+            torch.arange(cp_idx_min[a].item(), cp_idx_max[a].item() + 1) for a in range(self._dim)
         ], indexing='ij'), dim=-1)
-        cps = to_tensor(cps, device=point_min.device)
-        cps = cps * cp_spacing + cp_origin
+        cps = to_tensor(cps, device=points.device)
+        cps = cps * cp_spacing + cp_global_origin
 
-        # Seed the random number generator for deterministic transforms.
-        # If the same 'points' are passed to 'back_transform_points' then the
-        # transform is deterministic. Actually the same min/max points as these
-        # determine the control grid size.
-        self.__rng = np.random.default_rng(seed=self.__random_seed)
+        # Generate reproducible displacements.
+        cp_points = cps.reshape(-1, self._dim)
+        draws = []
+        for p in cp_points:
+            seed = self.__control_point_seed(p)
+            rng = np.random.default_rng(seed=seed)
+            draw = to_tensor(rng.random(self._dim), device=points.device)
+            draws.append(draw)
+        draws = torch.stack(draws).reshape(*cps.shape[:-1], self._dim)
+        disp_ranges = self.__disp_ranges.to(points.device)
+        cp_disps = draws * (disp_ranges[:, 1] - disp_ranges[:, 0]) + disp_ranges[:, 0]
 
-        # Draw random displacement at each control point.
-        draw = to_tensor(self.__rng.random(cps.shape), device=point_min.device)
-        disp_ranges = self.__disp_ranges.to(point_min.device)
-        cp_disps = draw * (disp_ranges[:, 1] - disp_ranges[:, 0]) + disp_ranges[:, 0]
+        # Bring channels dimension to fore as these are images - i.e. not just an Nx2/3 list of points.
+        cps, cp_disps = torch.moveaxis(cps, -1, 0), torch.moveaxis(cp_disps, -1, 0)
 
-        return cps, cp_disps
+        # Displacements are a vector image - move channels dimension first.
+        if return_type == 'numpy':
+            cps, cp_disps, cp_spacing, cp_origin = to_array(cps), to_array(cp_disps), to_array(cp_spacing), to_array(cp_origin)
+        return cps, cp_disps, cp_spacing, cp_origin
 
+    # We can't call 'back_transform_points' using a single point to test
+    # as it will create a completely new displacement grid.
     def back_transform_points(
         self,
         *args,
+        method: Optional[Literal['bspline', 'cubic', 'linear', 'linear-gs']] = None,
         **kwargs) -> PointsTensor:
-        if self.__method == 'linear':
-            return self.__back_transform_points_linear(*args, **kwargs)
-        elif self.__method == 'cubic':
-            return self.__back_transform_points_cubic(*args, **kwargs)
-        elif self.__method == 'bspline':
+        method = self.__method if method is None else method
+        if method == 'bspline':
             return self.__back_transform_points_bspline(*args, **kwargs)
+        elif method == 'cubic':
+            return self.__back_transform_points_cubic(*args, **kwargs)
+        elif method == 'linear':
+            return self.__back_transform_points_linear(*args, **kwargs)
+        elif method == 'linear-gs':
+            return self.__back_transform_points_linear_gs(*args, **kwargs)
         else:
-            raise ValueError(f"Unrecognised elastic method '{self.__method}'.")
+            raise ValueError(f"Unrecognised elastic method '{method}'.")
 
     def __back_transform_points_linear(
         self,
         points: Union[PointsArray, PointsTensor],
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
         **kwargs) -> PointsTensor:
-        print('back transform')
-        print(type(points))
         if isinstance(points, np.ndarray):
             points = to_tensor(points)
             return_type = 'numpy'
         else:
             return_type = 'torch'
 
-        print('performing elastic back transform points')
-
         # Get control grid.
-        p_min, _ = points.min(dim=0)
-        p_max, _ = points.max(dim=0)
-        cps, cp_disps = self.__get_control_grid(p_min, p_max)
+        # Make this just large enough to interpolate all 'points'.
+        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points)
+        cp_disps = torch.moveaxis(cp_disps, 0, -1)  # Move channels dim to back.
 
-        # Create a new control grid origin for this point cloud.
-        # Makes interpolation easier.
-        cp_spacing = self.__control_spacing.to(points.device)
-        cp_origin = self.__control_origin.to(points.device)
-        cp_pc_idx_min = torch.floor((p_min - cp_origin) / cp_spacing)
-        cp_pc_idx_max = torch.ceil((p_max - cp_origin) / cp_spacing)
-        cp_pc_origin = cp_pc_idx_min * cp_spacing + cp_origin
-
-        # Normalise points to the control grid.
-        points_norm = (points - cp_pc_origin) / cp_spacing
+        # Normalise points to the control grid integer coords.
+        points_norm = (points - cp_origin) / cp_spacing
 
         # Get lowest corner point.
-        corner_min = torch.stack([torch.searchsorted(torch.arange(cps.shape[a]).to(points.device), points_norm[:, a]) - 1 for a in range(self._dim)], dim=-1)
+        corner_min = torch.stack([torch.searchsorted(torch.arange(cp_disps.shape[a]).to(points.device), points_norm[:, a]) - 1 for a in range(self._dim)], dim=-1)
 
         # Get distances from corner.
         u = points_norm - corner_min
@@ -234,8 +254,6 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
 
         # Split into x/y/z indices to perform control point disp selection.
         idxs = corners.unbind(-1)
-        print('idxs: ', idxs[0].device)
-        print('cp_disps: ', cp_disps.device)
         corner_disps = cp_disps[*idxs]
 
         # Create V of corner point displacements.
@@ -250,13 +268,95 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         # Get displaced input points.
         points_t = points + disps
 
-        print('points')
-        print(type(points_t))
-        print(return_type)
+        if return_type == 'numpy':
+            points_t = to_array(points_t)
+        return points_t
+
+    def __back_transform_points_linear_gs(
+        self,
+        points: Union[PointsArray, PointsTensor],
+        **kwargs) -> PointsTensor:
+        if isinstance(points, np.ndarray):
+            points = to_tensor(points)
+            return_type = 'numpy'
+        else:
+            return_type = 'torch'
+
+        # Get control grid.
+        # Are they points or an image? An image implies a regular grid of samples
+        # can definitely treat them as an image - channels axis first.
+        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points)
+
+        # Interpolate the displacement grid.
+        disps = grid_sample(cp_disps, points, dim=self._dim, origin=cp_origin, spacing=cp_spacing)
+        disps = torch.moveaxis(disps, 0, -1)[0, 0]    # Disps come back from 'grid_sample' as 3-channel image.
+
+        # Get displaced input points.
+        points_t = points + disps
 
         if return_type == 'numpy':
             points_t = to_array(points_t)
         return points_t
+
+    # How do we ensure that forward transform uses the same control grid as back transform?
+    def transform_points(
+        self,
+        points: Union[PointsArray, PointsTensor],
+        method: Optional[Literal['bspline', 'cubic', 'linear', 'linear-gs']] = None,
+        **kwargs) -> PointsTensor:
+        if isinstance(points, np.ndarray):
+            points = to_tensor(points)
+            return_type = 'numpy'
+        else:
+            return_type = 'torch'
+
+        # Get the back transform.
+        method = self.__method if method is None else method
+        if method == 'bspline':
+            back_fn = self.__back_transform_points_bspline
+        elif method == 'cubic':
+            back_fn = self.__back_transform_points_cubic
+        elif method == 'linear':
+            back_fn = self.__back_transform_points_linear
+        elif method == 'linear-gs':
+            back_fn = self.__back_transform_points_linear_gs
+        else:
+            raise ValueError(f"Unrecognised elastic method '{method}'.")
+
+        max_i = 100     # Log the required number of iterations for solve and adjust.
+        x_i = points.clone().requires_grad_()
+
+        for i in range(max_i):
+            # Perform transform.
+            t_x = back_fn(x_i)
+
+            # Check convergence.
+            if torch.isclose(t_x, points).all():
+                print('Newton-Raphson for inverse transform converged after runs: ', i)
+                break
+            elif i == max_i - 1:
+                raise ValueError('No convergence after runs: ', i)
+
+            # Get Jacobians for batch of points.
+            grads = []
+            for a in range(self._dim):
+                grad_a, = torch.autograd.grad(t_x[:, a], x_i, grad_outputs=torch.ones(len(x_i)).to(x_i.device), retain_graph=True)
+                grads.append(grad_a)
+            J = torch.stack(grads, dim=1)
+
+            # Batch solve for deltas for each point.
+            r = t_x - points
+            dx = torch.linalg.solve(J, r)
+
+            # Update guess.
+            x_i = x_i.detach()  # How does it get 'requires_grad_' again, must be through 'dx'.
+            x_i = x_i - dx
+
+        x_i = x_i.detach()
+        if return_type == 'numpy':
+            x_i = to_array(x_i)
+
+        return x_i
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__control_spacing)}, {to_tuple(self.__disp_ranges.flatten())}, {to_tuple(self.__control_origin)}, random_seed={self.__random_seed}, dim={self._dim})"

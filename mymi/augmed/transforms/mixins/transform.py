@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import alias_kwargs, arg_to_list
 
-from ...utils import to_array, to_tensor, image_points
+from ...utils import *
 
 # Why are these methods included using 'mixins' and not subclassing?
 # This is because not all transforms want to use 'back_transform_points'
@@ -163,53 +163,19 @@ class TransformImageMixin:
                 origin=origin,
             )
             points_mm_t = self.back_transform_points(points_mm, **okwargs)
-
-            # Normalise to range [-1, 1] expected by 'grid_sample'.
-            points_mm_t = 2 * (points_mm_t - origin) / (size * spacing) - 1      
-
-            # Reshape to image size.
-            points_mm_t = points_mm_t.reshape(*to_array(size), self._dim)
             group_points_mm_ts.append(points_mm_t)
 
         # Resample images.
         image_ts = []
-        for i, (image, dim, s, dev, r, rd) in enumerate(zip(images, dims, sizes, devices, return_types, return_dtypes)):
+        for i, (image, dim, s, sp, o, dev, r, rd) in enumerate(zip(images, dims, sizes, spacings, origins, devices, return_types, return_dtypes)):
             # Get resample points.
             points_mm_t = group_points_mm_ts[image_groups[i]].to(dev)
 
-            # Transpose spatial axes as expected by 'grid_sample'.
-            spatial_dims = list(range(-self._dim, 0))
-            image = torch.moveaxis(image, spatial_dims, list(reversed(spatial_dims)))
+            # Reshape to image size.
+            points_mm_t = points_mm_t.reshape(*to_tuple(s), self._dim)
 
-            # Add image channels expected by 'grid_sample'.
-            image_shape = image.shape
-            image_dims_to_add = self._dim + 2 - dim
-            image = image.reshape(*(1,) * image_dims_to_add, *image.shape) if image_dims_to_add > 0 else image
-
-            # Add points channels expected by 'grid_sample'.
-            point_dims_to_add = image_dims_to_add - 1
-            points_mm_t = points_mm_t.reshape(*(1,) * point_dims_to_add, *points_mm_t.shape)
-
-            # Resample image.
-            # Convert bool types to float as required.
-            if rd == 'bool':
-                mode = 'nearest'
-                image = image.type(torch.float32)
-            else:
-                mode = 'bilinear'
-            image_t = torch.nn.functional.grid_sample(image, points_mm_t, align_corners=True, mode=mode)
-            if rd == 'bool':
-                image_t = image_t.type(torch.bool)
-
-            # Reverse spatial axes transpose.
-            image = torch.moveaxis(image, spatial_dims, list(reversed(spatial_dims)))
-
-            # Remove channels that were added for 'grid_sample'.
-            image_t = image_t.squeeze(axis=tuple(range(image_dims_to_add))) if image_dims_to_add > 0 else image_t
-
-            # Convert to return type.
-            if r == 'numpy':
-                image_t = to_array(image_t)
+            # Perform resample.
+            image_t = grid_sample(image, points_mm_t, spacing=sp, origin=o)
             image_ts.append(image_t)
 
         if image_was_single:
