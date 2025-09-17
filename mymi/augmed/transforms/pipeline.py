@@ -83,12 +83,12 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
                 spacing=spacing,
             )
             # Store any homogeneous multiplications for later.
-            if t.is_homogeneous:
-                t_back = t.get_homogeneous_back_transform(points_t.device, **okwargs)
+            if t.is_affine:
+                t_back = t.get_affine_back_transform(points_t.device, **okwargs)
                 chain.insert(0, t_back)
 
             # Resolve any stored chains.
-            if not t.is_homogeneous or i == len(self.__transforms) - 1:
+            if not t.is_affine or i == len(self.__transforms) - 1:
                 if len(chain) > 0:
                     points_t_h = torch.hstack([points_t, create_ones((points_t.shape[0], 1), device=points_t.device)])  # Move to homogeneous coords.
                     points_t_h = torch.linalg.multi_dot(chain + [points_t_h.T]).T
@@ -96,7 +96,7 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
                     chain = []
 
             # Perform non-homogeneous transform.
-            if not t.is_homogeneous:
+            if not t.is_affine:
                 points_t = t.back_transform_points(points_t, **okwargs)
 
         return points_t
@@ -140,13 +140,32 @@ class Pipeline(TransformImageMixin, TransformMixin, Transform):
 
         # Call each transform's 'transform_points'.
         points_t = points
-        for t in self.__transforms:
+        chain = []
+        for i, t in enumerate(self.__transforms):
             okwargs = dict(
                 origin=origin,
                 size=size,
                 spacing=spacing,
             )
-            points_t = t.transform_points(points_t, filter_offscreen=False, **okwargs)
+            # Store any homogeneous multiplications for later.
+            if t._is_affine:
+                print('adding affine transform to chain: ', i)
+                t_forward = t.get_affine_transform(points_t.device, **okwargs)
+                chain.append(t_forward)
+
+            # Resolve any stored chains.
+            if not t._is_affine or i == len(self.__transforms) - 1:
+                if len(chain) > 0:
+                    print('resolving chained affine transforms: ', len(chain))
+                    points_t_h = torch.hstack([points_t, create_ones((points_t.shape[0], 1), device=points_t.device)])  # Move to homogeneous coords.
+                    points_t_h = torch.linalg.multi_dot(chain + [points_t_h.T]).T
+                    points_t = points_t_h[:, :-1]
+                    chain = []
+
+            # Perform non-homogeneous transform.
+            if not t._is_affine:
+                print('performing non-affine transform: ', i)
+                points_t = t.transform_points(points_t, filter_offscreen=False, **okwargs)
 
         if filter_offscreen:
             assert origin is not None

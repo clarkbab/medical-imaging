@@ -3,11 +3,10 @@ from typing import *
 from mymi.typing import *
 
 from ...utils import *
-from .homogeneous import HomogeneousTransform
+from ..mixins import AffineMixin
+from .spatial import SpatialTransform
 
-# Doesn't use TransformMixin/TransformImageMixin as we don't need to transform
-# the image using 'back_transform_points' route.
-class Identity(HomogeneousTransform):
+class Identity(AffineMixin, SpatialTransform):
     def back_transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
@@ -18,12 +17,9 @@ class Identity(HomogeneousTransform):
     # special logic for skipping identity back transform points in pipeline. 
     # Could add a bit of overhead if the identity transform isn't chained with
     # other homogeneous transforms.
-    def get_homogeneous_back_transform(
+    def get_affine_back_transform(
         self,
         device: torch.device,
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
         **kwargs) -> torch.Tensor:
         return create_eye(self._dim + 1, device=device)
 

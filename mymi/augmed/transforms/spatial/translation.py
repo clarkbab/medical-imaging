@@ -6,16 +6,16 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import TransformImageMixin, TransformMixin
+from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin, TransformMixin
 from ..random import RandomTransform
 from ..transform import Transform
-from .homogeneous import HomogeneousTransform
 from .identity import Identity
+from .spatial import SpatialTransform
 
 # translation:
 # - t=5 -> t=(-5, 5, -5, 5) for 2D, t=(-5, 5, -5, 5, -5, 5) for 3D.
 # - t=(-3, 5) -> t=(-3, 5, -3, 5) for 2D, t=(-3, 5, -3, 5, -3, 5) for 3D.
-class RandomTranslation(RandomTransform):
+class RandomTranslation(RandomAffineMixin, RandomTransform):
     def __init__(
         self, 
         translation: Union[Number, Tuple[Number, ...]] = 100.0,
@@ -46,7 +46,7 @@ class RandomTranslation(RandomTransform):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__trans_ranges.flatten())}, dim={self._dim}, p={self._p})"
 
-class Translation(TransformImageMixin, TransformMixin, HomogeneousTransform):
+class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
         self,
         translation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
@@ -81,11 +81,11 @@ class Translation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         print('performing translation back transform points')
 
         # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(points.device)
+        matrix_a = self.get_affine_back_transform(points.device)
 
         # Transform points.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torhc.linalg.multi_dot([matrix_h, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
         if return_type == 'numpy':
             points_t = to_array(points_t)
@@ -96,15 +96,25 @@ class Translation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         self.__matrix = create_translation(self.__translations)
         self.__backward_matrix = create_translation(-self.__translations)
 
-    def get_homogeneous_back_transform(
+    def get_affine_back_transform(
         self,
-        device: torch.device,   # Need to pass here, as we might compute matrix mults in this function.
+        device: torch.device,
         **kwargs) -> torch.Tensor:
 
         print('getting translation back transform')
 
         # Get homogeneous matrix.
         return self.__backward_matrix.to(device)
+
+    def get_affine_transform(
+        self,
+        device: torch.device,
+        **kwargs) -> torch.Tensor:
+
+        print('getting translation forward transform')
+
+        # Get homogeneous matrix.
+        return self.__matrix.to(device)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__translations)}, dim={self._dim})"
@@ -130,20 +140,21 @@ class Translation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         size = to_tensor(size, device=points.device, dtype=torch.int)
         spacing = to_tensor(spacing, device=points.device)
 
-        # Calculate fov.
-        if filter_offscreen:
-            assert origin is not None
-            assert size is not None
-            assert spacing is not None
-            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
+        # Get homogeneous matrix.
+        matrix_a = self.get_affine_transform(points.device, size=size, spacing=spacing, origin=origin)
 
+        # Perform forward transform.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([self.__matrix.to(points.device), points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
         if filter_offscreen:
+            assert origin is not None
+            assert size is not None
+            assert spacing is not None
+            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
             to_keep = (points_t >= fov[0]) & (points_t < fov[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]

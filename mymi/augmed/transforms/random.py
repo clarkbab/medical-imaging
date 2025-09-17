@@ -18,6 +18,7 @@ class RandomTransform(Transform):
         random_seed: Optional[int] = None,
         **kwargs) -> None:
         super().__init__(**kwargs)
+        print('init random transform')
         self._p = p
         self.seed(random_seed=random_seed)
 
@@ -26,8 +27,13 @@ class RandomTransform(Transform):
         points: PointsTensor,
         random_seed: Optional[int] = None,
         **kwargs) -> PointsTensor:
-        t = self.freeze(random_seed=random_seed)
+        t = self.freeze()
         return t.back_transform_points(points, **kwargs)
+
+    def freeze(
+        self,
+        **kwargs) -> Transform:
+        raise ValueError("Subclasses of 'RandomTransform' must implement 'freeze' method.")
 
     def seed(
         self,
@@ -40,7 +46,7 @@ class RandomTransform(Transform):
         data: Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]],
         random_seed: Optional[int] = None,
         **kwargs) -> Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]]:
-        t = self.freeze(random_seed=random_seed)
+        t = self.freeze()
         return t.transform(data, **kwargs)
 
     # Overrides 'Transform.transform_image'.
@@ -49,7 +55,7 @@ class RandomTransform(Transform):
         image: Union[ImageArray, ImageTensor],
         random_seed: Optional[int] = None,
         **kwargs) -> Union[ImageArray, ImageTensor]:
-        t = self.freeze(random_seed=random_seed)
+        t = self.freeze()
         return t.transform_image(image, **kwargs)
 
     # Overrides 'Transform.transform_points'.
@@ -61,5 +67,5 @@ class RandomTransform(Transform):
         origin: Optional[Union[Point, PointTensor]] = None,
         random_seed: Optional[int] = None,
         **kwargs) -> Union[PointsArray, PointsTensor, Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
-        t = self.freeze(random_seed=random_seed)
+        t = self.freeze()
         return t.transform_points(points, origin=origin, size=size, spacing=spacing, **kwargs)

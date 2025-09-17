@@ -6,22 +6,27 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import TransformImageMixin, TransformMixin
+from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin, TransformMixin
 from ..random import RandomTransform
-from ..transform import Transform
-from .homogeneous import HomogeneousTransform
 from .identity import Identity
+from .spatial import SpatialTransform
 
 # rotation:
 # - r=5 -> r=(-5, 5, -5, 5) for 2D, r=(-5, 5, -5, 5, -5, 5) for 3D.
 # - r=(-3, 5) -> r=(-3, 5, -3, 5) for 2D, r=(-3, 5, -3, 5, -3, 5) for 3D.
-class RandomRotation(RandomTransform):
+# Mixins: 
+# RandomAffineMixin calls super().__init__() which means it continues up the 
+# chain looking for __init__ methods. RandomAffineMixin parent is 'object', so
+# the MRO (method resolution order) moves on to RandomTransform.
+# So 'RandomAffineMixin' stuff after super() will actually get called last.
+class RandomRotation(RandomAffineMixin, RandomTransform):
     def __init__(
         self, 
         rotation: Union[Number, Tuple[Number, ...]] = 15.0,
         centre: Union[Point, Literal['centre']] = 'centre',
         **kwargs) -> None:
         super().__init__(**kwargs)
+        print('init random rotation transform')
         if isinstance(rotation, (int, float)):
             rot_ranges = (-rotation, rotation) * self._dim
         elif len(rotation) == 2:
@@ -51,7 +56,7 @@ class RandomRotation(RandomTransform):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__rot_ranges.flatten())}, dim={self._dim}, p={self._p})"
 
-class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
+class Rotation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
         self,
         rotation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
@@ -92,11 +97,11 @@ class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         print('performing rotation back transform points')
 
         # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(points.device, size=size, spacing=spacing, origin=origin)
+        matrix_a = self.get_affine_back_transform(points.device, size=size, spacing=spacing, origin=origin)
 
         # Transform points.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torhc.linalg.multi_dot([matrix_h, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
         if return_type == 'numpy':
             points_t = to_array(points_t)
@@ -107,7 +112,7 @@ class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         self.__backward_matrix = create_rotation(self.__rotations_rad)
         self.__matrix = self.__backward_matrix.T     # Rotation matrix inverse is just transpose.
 
-    def get_homogeneous_back_transform(
+    def get_affine_back_transform(
         self,
         device: torch.device,
         size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
@@ -140,8 +145,44 @@ class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         # Get homogeneous matrix.
         trans_matrix = create_translation(-rot_centre, device=device)
         inv_trans_matrix = create_translation(rot_centre, device=device)
-        matrix_h = torch.linalg.multi_dot([inv_trans_matrix, self.__backward_matrix.to(device), trans_matrix])
-        return matrix_h
+        matrix_a = torch.linalg.multi_dot([inv_trans_matrix, self.__backward_matrix.to(device), trans_matrix])
+        return matrix_a
+
+    def get_affine_transform(
+        self,
+        device: torch.device,
+        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
+        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
+        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
+        **kwargs) -> torch.Tensor:
+        # Get flip centre.
+        assert size is not None
+        assert spacing is not None
+        assert origin is not None
+        size = to_tensor(size, device=device, dtype=torch.int)
+        spacing = to_tensor(spacing, device=device)
+        origin = to_tensor(origin, device=device)
+
+        print('getting rotation forward transform')
+
+        # Get centre of rotation.
+        if self.__centre == 'centre':
+            assert size is not None
+            assert spacing is not None
+            assert origin is not None
+            size = to_tensor(size, device=device, dtype=torch.int)
+            spacing = to_tensor(spacing, device=device)
+            origin = to_tensor(origin, device=device)
+            fov = torch.stack([origin, origin + size * spacing]).to(device)
+            rot_centre = fov.sum(axis=0) / 2
+        else:
+            rot_centre = self.__centre.to(device)
+
+        # Get homogeneous matrix.
+        trans_matrix = create_translation(-rot_centre, device=device)
+        inv_trans_matrix = create_translation(rot_centre, device=device)
+        matrix_a = torch.linalg.multi_dot([inv_trans_matrix, self.__matrix.to(device), trans_matrix])
+        return matrix_a
 
     def __str__(self) -> str:
         centre = "\"centre\"" if self.__centre == 'centre' else self.__centre
@@ -168,28 +209,21 @@ class Rotation(TransformImageMixin, TransformMixin, HomogeneousTransform):
         size = to_tensor(size, device=points.device, dtype=torch.int)
         spacing = to_tensor(spacing, device=points.device)
 
-        # Calculate fov.
-        if self.__centre == 'centre' or filter_offscreen:
-            assert origin is not None
-            assert size is not None
-            assert spacing is not None
-            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
+        # Get homogeneous matrix.
+        matrix_a = self.get_affine_transform(points.device, size=size, spacing=spacing, origin=origin)
 
-        # Find rotation centre.
-        if self.__centre == 'centre':
-            rot_centre = fov.sum(axis=0) / 2
-        else:
-            rot_centre = self.__centre.to(points.device)
-
-        trans_matrix = create_translation(-rot_centre, device=points.device)
-        inv_trans_matrix = create_translation(rot_centre, device=points.device)
+        # Perform forward transform.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([inv_trans_matrix, self.__matrix.to(points.device), trans_matrix, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
         if filter_offscreen:
+            assert origin is not None
+            assert size is not None
+            assert spacing is not None
+            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
             to_keep = (points_t >= fov[0]) & (points_t < fov[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]

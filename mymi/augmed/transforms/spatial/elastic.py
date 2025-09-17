@@ -23,8 +23,10 @@ from .spatial import SpatialTransform
 class RandomElastic(RandomTransform):
     def __init__(
         self, 
-        # Note that image folding may occur if the displacements are more than half the magnitude
-        # of the control grid spacings. Add some sort of warning.
+        # How do we deal with elastic deformations that may fold?
+        #   - prevent by requiring 'disp' to be < half of the control spacing.
+        #   - allow but warn that folding may occur and forward point transforms may not converge.
+        #      will also need to raise error upon no convergence.
         control_spacing: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 50.0,
         disp: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 20.0,
         control_origin: Union[Number, Tuple[Number], np.ndarray, torch.Tensor] = 20.0,
@@ -69,6 +71,14 @@ class RandomElastic(RandomTransform):
             p=self._p,
         )
 
+        # Warn about displacement ranges.
+        disp_widths = self.__disp_ranges[:, 1] - self.__disp_ranges[:, 0]
+        min_control_spacing, _ = self.__control_spacing_ranges.min(axis=1)
+        if (disp_widths >= min_control_spacing).any():
+            logging.warning(f"RandomElastic transforms with larger displacement widths (widths={to_tuple(disp_widths)}) larger than \
+(or equal to) control spacings (min. spacings={to_tuple(min_control_spacing)}) may produce folding transforms. Such transforms may \
+be non-invertible and could raise errors when performing forward points transform.")
+
     def freeze(self) -> 'Elastic':
         should_apply = self._rng.random(1) < self._p
         if not should_apply:
@@ -111,7 +121,7 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         super().__init__(**kwargs)
         assert method in ['bspline', 'cubic', 'linear', 'linear-gs'], "Only 'bspline', 'cubic', 'linear', and 'linear-gs' elastic methods are supported."
         self.__method = method
-        self._is_homogeneous = False
+        self._is_affine = False
         control_spacing = arg_to_list(control_spacing, (int, float), broadcast=self._dim)
         assert len(control_spacing) == self._dim, f"Expected 'control_spacing' of length '{self._dim}' for dim={self._dim}, got {len(control_spacing)}."
         self.__control_spacing = to_tensor(control_spacing)
@@ -151,14 +161,15 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         h = h ^ self.__random_seed
         return h & 0x7fffffff
 
-    # The control grid displacements must not change depending on the passed points.
+    # The control grid random displacements must not change depending on the passed points.
     # That is, if we pass the point (0.5, 0.5, 0.5) this must give the same transformed
     # point regardless of the other points we pass.
     # This means that subsequent calls to transform_points and back_transform_points
     # will align points and images properly.
     def get_control_grid(
         self,
-        points: Union[PointsArray, PointsTensor]) -> Tuple[Union[ImageArray, ImageTensor], Union[VectorImageArray, VectorImageTensor], Union[SpacingArray, SpacingTensor], Union[PointArray, PointTensor]]:
+        points: Union[PointsArray, PointsTensor],
+        method: Optional[Literal['bspline', 'cubic', 'linear']] = None) -> Tuple[Union[ImageArray, ImageTensor], Union[VectorImageArray, VectorImageTensor], Union[SpacingArray, SpacingTensor], Union[PointArray, PointTensor]]:
         if isinstance(points, torch.Tensor):
             return_type = 'torch'
         else:
@@ -172,6 +183,11 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         point_max, _ = points.max(dim=0)
         cp_idx_min = torch.floor((point_min - cp_global_origin) / cp_spacing)
         cp_idx_max = torch.ceil((point_max - cp_global_origin) / cp_spacing)
+        method = self.__method if method is None else method
+        if method == 'cubic':
+            # Add extra boundary points for cubic splines.
+            cp_idx_min -= 1
+            cp_idx_max += 1
         cp_origin = cp_idx_min * cp_spacing + cp_global_origin
 
         # Create grid of control points.
@@ -201,8 +217,6 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
             cps, cp_disps, cp_spacing, cp_origin = to_array(cps), to_array(cp_disps), to_array(cp_spacing), to_array(cp_origin)
         return cps, cp_disps, cp_spacing, cp_origin
 
-    # We can't call 'back_transform_points' using a single point to test
-    # as it will create a completely new displacement grid.
     def back_transform_points(
         self,
         *args,
@@ -220,6 +234,58 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         else:
             raise ValueError(f"Unrecognised elastic method '{method}'.")
 
+    def __back_transform_points_cubic(
+        self,
+        points: Union[PointsArray, PointsTensor],
+        **kwargs) -> PointsTensor:
+        if isinstance(points, np.ndarray):
+            points = to_tensor(points)
+            return_type = 'numpy'
+        else:
+            return_type = 'torch'
+
+        # Get control grid.
+        # Make this just large enough to interpolate all 'points'.
+        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points, method='cubic')
+        cp_disps = torch.moveaxis(cp_disps, 0, -1)  # Move channels dim to back.
+
+        # Normalise points to the control grid integer coords.
+        points_norm = (points - cp_origin) / cp_spacing
+
+        # Get lowest corner point.
+        corner_min = torch.stack([torch.searchsorted(torch.arange(cp_disps.shape[a]).to(points.device), points_norm[:, a]) - 1 for a in range(self._dim)], dim=-1)
+
+        # Get distances from corner.
+        u = points_norm - corner_min
+        b = torch.stack([1 - u, u], dim=-2)
+
+        # Get corner point offsets.
+        offsets = torch.stack(torch.meshgrid([torch.tensor([0, 1]) for _ in range(self._dim)], indexing='ij'), dim=-1)
+        offsets = offsets.reshape(-1, self._dim).to(points.device)
+
+        # Calculate corners for each point.
+        corners = corner_min[:, None, :] + offsets[None, :, :]
+
+        # Split into x/y/z indices to perform control point disp selection.
+        idxs = corners.unbind(-1)
+        corner_disps = cp_disps[*idxs]
+
+        # Create V of corner point displacements.
+        V = corner_disps.reshape(-1, *(2, ) * self._dim, self._dim)
+
+        # Compute interpolated displacements.
+        if self._dim == 2:
+            disps = torch.einsum('ni,nj,nijd->nd', b[:, :, 0], b[:, :, 1], V)
+        elif self._dim == 3:
+            disps = torch.einsum('ni,nj,nk,nijkd->nd', b[:, :, 0], b[:, :, 1], b[:, :, 2], V)
+
+        # Get displaced input points.
+        points_t = points + disps
+
+        if return_type == 'numpy':
+            points_t = to_array(points_t)
+        return points_t
+
     def __back_transform_points_linear(
         self,
         points: Union[PointsArray, PointsTensor],
@@ -232,7 +298,7 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
 
         # Get control grid.
         # Make this just large enough to interpolate all 'points'.
-        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points)
+        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points, method='linear')
         cp_disps = torch.moveaxis(cp_disps, 0, -1)  # Move channels dim to back.
 
         # Normalise points to the control grid integer coords.
@@ -283,9 +349,7 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
             return_type = 'torch'
 
         # Get control grid.
-        # Are they points or an image? An image implies a regular grid of samples
-        # can definitely treat them as an image - channels axis first.
-        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points)
+        _, cp_disps, cp_spacing, cp_origin = self.get_control_grid(points, method='linear')
 
         # Interpolate the displacement grid.
         disps = grid_sample(cp_disps, points, dim=self._dim, origin=cp_origin, spacing=cp_spacing)
@@ -298,7 +362,6 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
             points_t = to_array(points_t)
         return points_t
 
-    # How do we ensure that forward transform uses the same control grid as back transform?
     def transform_points(
         self,
         points: Union[PointsArray, PointsTensor],
@@ -313,29 +376,31 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         # Get the back transform.
         method = self.__method if method is None else method
         if method == 'bspline':
-            back_fn = self.__back_transform_points_bspline
+            back_transform = self.__back_transform_points_bspline
         elif method == 'cubic':
-            back_fn = self.__back_transform_points_cubic
+            back_transform = self.__back_transform_points_cubic
         elif method == 'linear':
-            back_fn = self.__back_transform_points_linear
+            back_transform = self.__back_transform_points_linear
         elif method == 'linear-gs':
-            back_fn = self.__back_transform_points_linear_gs
+            back_transform = self.__back_transform_points_linear_gs
         else:
             raise ValueError(f"Unrecognised elastic method '{method}'.")
 
+        # Let: T_back(x) = x + u(x), where x is the point to find (fixed image) and T_back is known.
+        # Let: F(x) = T_back(x) - y, where y is the target point we know (moving image).
+        # Solve for F(x) = 0 using an iterative method, e.g. Newton-Raphson.
         max_i = 100     # Log the required number of iterations for solve and adjust.
         x_i = points.clone().requires_grad_()
-
         for i in range(max_i):
             # Perform transform.
-            t_x = back_fn(x_i)
+            t_x = back_transform(x_i)
 
             # Check convergence.
             if torch.isclose(t_x, points).all():
-                print('Newton-Raphson for inverse transform converged after runs: ', i)
+                print('Newton-Raphson for inverse transform converged after iterations: ', i)
                 break
             elif i == max_i - 1:
-                raise ValueError('No convergence after runs: ', i)
+                raise ValueError('No convergence after iterations: ', i)
 
             # Get Jacobians for batch of points.
             grads = []

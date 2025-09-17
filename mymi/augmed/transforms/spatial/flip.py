@@ -5,12 +5,12 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import TransformImageMixin, TransformMixin
+from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin, TransformMixin
 from ..random import RandomTransform
-from .homogeneous import HomogeneousTransform
 from .identity import Identity
+from .spatial import SpatialTransform
 
-class RandomFlip(RandomTransform):
+class RandomFlip(RandomAffineMixin, RandomTransform):
     def __init__(
         self,
         p_flip: Union[Number, Tuple[Number]] = 0.5,
@@ -36,7 +36,10 @@ class RandomFlip(RandomTransform):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self._p_flips)}, dim={self._dim}, p={self._p})"
         
-class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
+# Methods are resolved left to right, so overridding mixins should appear first.
+# Init methods are also run left to right, so mixins that override params, e.g. _is_affine
+# should appear last.
+class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
         self,
         flip: Union[bool, Tuple[bool], np.ndarray, torch.Tensor],
@@ -71,11 +74,11 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
         print('performing flip back transform points')
 
         # Get homogeneous matrix.
-        matrix_h = self.get_homogeneous_back_transform(points.device, size=size, spacing=spacing, origin=origin)
+        matrix_a = self.get_affine_back_transform(points.device, size=size, spacing=spacing, origin=origin)
 
         # Transform points.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([matrix_h, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
         if return_type == 'numpy':
             points_t = to_array(points_t)
@@ -86,7 +89,7 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
         self.__matrix = create_eye(self._dim, scaling=scaling)
         self.__backward_matrix = self.__matrix      # Flip matrix is it's own inverse.
 
-    def get_homogeneous_back_transform(
+    def get_affine_back_transform(
         self,
         device: torch.device,
         size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
@@ -110,8 +113,35 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
         # Get homogeneous matrix.
         trans_matrix = create_translation(-flip_centre, device=device)
         inv_trans_matrix = create_translation(flip_centre, device=device)
-        matrix_h = torch.linalg.multi_dot([inv_trans_matrix, self.__backward_matrix.to(device), trans_matrix])
-        return matrix_h
+        matrix_a = torch.linalg.multi_dot([inv_trans_matrix, self.__backward_matrix.to(device), trans_matrix])
+        return matrix_a
+
+    def get_affine_transform(
+        self,
+        device: torch.device,
+        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
+        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
+        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
+        **kwargs) -> torch.Tensor:
+        # Get flip centre.
+        assert size is not None
+        assert spacing is not None
+        assert origin is not None
+        size = to_tensor(size, device=device, dtype=torch.int)
+        spacing = to_tensor(spacing, device=device)
+        origin = to_tensor(origin, device=device)
+
+        print('getting flip forward transform')
+
+        # Get flip centre.
+        fov = torch.stack([origin, origin + size * spacing]).to(device)
+        flip_centre = fov.sum(axis=0) / 2
+
+        # Get homogeneous matrix.
+        trans_matrix = create_translation(-flip_centre, device=device)
+        inv_trans_matrix = create_translation(flip_centre, device=device)
+        matrix_a = torch.linalg.multi_dot([inv_trans_matrix, self.__matrix.to(device), trans_matrix])
+        return matrix_a
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__flips)}, dim={self._dim})"
@@ -130,26 +160,22 @@ class Flip(TransformImageMixin, TransformMixin, HomogeneousTransform):
             return_type = 'numpy'
         else:
             return_type = 'torch'
-        assert origin is not None
-        assert size is not None
-        assert spacing is not None
-        size = to_tensor(size, device=points.device, dtype=torch.int)
-        spacing = to_tensor(spacing, device=points.device)
-        origin = to_tensor(origin, device=points.device)
 
-        # Get FOV and centre.
-        fov = torch.stack([origin, origin + size * spacing]).to(points.device)
-        flip_centre = fov.sum(axis=0) / 2
+        # Get homogeneous matrix.
+        matrix_a = self.get_affine_transform(points.device, size=size, spacing=spacing, origin=origin)
 
-        trans_matrix = create_translation(-flip_centre, device=points.device)
-        inv_trans_matrix = create_translation(flip_centre, device=points.device)
+        # Perform forward transform.
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
-        points_t_h = torch.linalg.multi_dot([inv_trans_matrix, self.__matrix.to(points.device), trans_matrix, points_h.T]).T
+        points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
         if filter_offscreen:
+            assert origin is not None
+            assert size is not None
+            assert spacing is not None
+            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
             to_keep = (points_t >= fov[0]) & (points_t < fov[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]

@@ -13,7 +13,9 @@ class Transform:
         **kwargs) -> None:
         assert dim in [2, 3], "Only 2D and 3D flips are supported."
         self._dim = dim
-        self._is_homogeneous = False
+        print('init transform')
+        print('setting affine false')
+        self._is_affine = False
 
     def back_transform_points(
         self,
@@ -36,8 +38,8 @@ class Transform:
         return self._dim
 
     @property
-    def is_homogeneous(self) -> bool:
-        return self._is_homogeneous
+    def is_affine(self) -> bool:
+        return self._is_affine
 
     @property
     def params(self) -> Dict[str, Any]:
