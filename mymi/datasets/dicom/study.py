@@ -8,9 +8,10 @@ from mymi.utils import *
 
 from ..mixins import IndexWithErrorsMixin
 from ..region_map import RegionMap
+from ..study import Study
 from .series import *
 
-class DicomStudy(IndexWithErrorsMixin):
+class DicomStudy(IndexWithErrorsMixin, Study):
     def __init__(
         self,
         dataset_id: DatasetID,
@@ -21,15 +22,10 @@ class DicomStudy(IndexWithErrorsMixin):
         index_errors: pd.DataFrame,
         ct_from: Optional['DicomStudy'] = None,
         region_map: Optional[RegionMap] = None):
-        self.__ct_from = ct_from
-        self.__dataset_id = dataset_id
-        self.__global_id = f"DICOM:{dataset_id}:{pat_id}:{id}"
-        self.__id = str(id)
+        super().__init__(dataset_id, pat_id, id, ct_from=ct_from, region_map=region_map)
         self._index = index
         self._index_errors = index_errors
         self._index_policy = index_policy
-        self.__pat_id = pat_id
-        self.__region_map = region_map
 
     @property
     def date(self) -> str:
@@ -53,19 +49,19 @@ class DicomStudy(IndexWithErrorsMixin):
 
     def has_series(
         self,
-        series_ids: SeriesIDs,
+        series_id: SeriesIDs,
         modality: DicomModality,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_series(modality, series_ids=series_ids, **kwargs)
-        req_ids = arg_to_list(series_ids, SeriesID)
+        real_ids = self.list_series(modality, series_id=series_id, **kwargs)
+        req_ids = arg_to_list(series_id, SeriesID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def list_series(
         self,
         modality: DicomModality,
-        series_ids: SeriesIDs = 'all',
+        series_id: SeriesIDs = 'all',
         show_date: bool = False,
         show_filepath: bool = False) -> List[SeriesID]:
         if modality not in DicomModality.__args__:
@@ -75,9 +71,9 @@ class DicomStudy(IndexWithErrorsMixin):
         index = index.sort_values(['series-date', 'series-time'], ascending=[True, True])
         ids = list(index['series-id'].unique())
 
-        # Filter by 'series_ids'.
-        if series_ids != 'all':
-            series_ids = arg_to_list(series_ids, SeriesID)
+        # Filter by 'series_id'.
+        if series_id != 'all':
+            series_ids = arg_to_list(series_id, SeriesID)
             ids = [i for i in ids if i in series_ids]
 
         # Add extra info if requested.
@@ -121,13 +117,13 @@ class DicomStudy(IndexWithErrorsMixin):
             if self.__ct_from is not None:
                 return self.__ct_from.series(id, modality, **kwargs)
             else:
-                return CtSeries(self.__dataset_id, self.__pat_id, self.__id, id, index, index_policy, **kwargs)
+                return CtSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'mr':
-            return MrSeries(self.__dataset_id, self.__pat_id, self.__id, id, index, index_policy, **kwargs)
+            return MrSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtdose':
-            return RtDoseSeries(self.__dataset_id, self.__pat_id, self.__id, id, index, index_policy, **kwargs)
+            return RtDoseSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtplan':
-            return RtPlanSeries(self.__dataset_id, self.__pat_id, self.__id, id, index, index_policy, **kwargs)
+            return RtPlanSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtstruct':
             ref_study = self.__ct_from if self.__ct_from is not None else self
             ref_ct_id = index['mod-spec'][DICOM_RTSTRUCT_REF_CT_KEY]
@@ -141,7 +137,7 @@ class DicomStudy(IndexWithErrorsMixin):
                 else:
                     ref_ct = ref_study.default_series('ct')
 
-            return RtStructSeries(self.__dataset_id, self.__pat_id, self.__id, id, ref_ct, index, index_policy, region_map=self.__region_map, **kwargs)
+            return RtStructSeries(self._dataset_id, self._pat_id, self._id, id, ref_ct, index, index_policy, region_map=self._region_map, **kwargs)
 
     def series_modality(
         self,
@@ -155,12 +151,10 @@ class DicomStudy(IndexWithErrorsMixin):
         return modality
 
     def __str__(self) -> str:
-        return self.__global_id
-
-# Add properties.
-props = ['global_id', 'id', 'region_map']
-for p in props:
-    setattr(DicomStudy, p, property(lambda self, p=p: getattr(self, f'_{DicomStudy.__name__}__{p}')))
+        if self.__ct_from is None:
+            return f"DicomStudy({self._id}, dataset={self._dataset_id}, pat_id={self._pat_id})"
+        else:
+            return f"DicomStudy({self._id}, dataset={self._dataset_id}, pat_id={self._pat_id}, ct_from={self.__ct_from.dataset_id})"
 
 # Add 'has_{mod}' properties.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
@@ -174,7 +168,7 @@ for m in mods:
 
 # Add image property shortcuts from 'default_series(mod)' methods.
 mods = ['ct', 'mr', 'rtdose']
-props = ['data', 'fov', 'offset', 'size', 'spacing']
+props = ['data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
     n = 'dose' if m == 'rtdose' else m
     for p in props:

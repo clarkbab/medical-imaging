@@ -29,7 +29,7 @@ def convert_predictions_to_nifti_single_region(
         pat = set.patient(pat_id)
         orig_size = pat.ct_size
         orig_spacing = pat.ct_spacing
-        orig_offset = pat.ct_offset
+        orig_origin = pat.ct_origin
 
         # Load predicted label.
         filepath = os.path.join(basepath, f"{pat_id}.nii.gz")
@@ -46,7 +46,7 @@ def convert_predictions_to_nifti_single_region(
         # Save image.
         filepath = os.path.join(set.path, 'data', 'predictions', pat_id, 'study_0', 'regions', 'series_1', region, 'nnunet.nii.gz')
         label = label.argmax(0).astype(np.bool_)
-        save_nifti(label, filepath, spacing=orig_spacing, offset=orig_offset)
+        save_nifti(label, filepath, spacing=orig_spacing, origin=orig_origin)
 
 def convert_predictions_to_nifti_multi_region(
     dataset: str,
@@ -65,7 +65,7 @@ def convert_predictions_to_nifti_multi_region(
         pat = set.patient(p)
         orig_size = pat.ct_size
         orig_spacing = pat.ct_spacing
-        orig_offset = pat.ct_offset
+        orig_origin = pat.ct_origin
 
         # Load predicted label.
         filepath = os.path.join(basepath, f"{p}.nii.gz")
@@ -85,4 +85,4 @@ def convert_predictions_to_nifti_multi_region(
             filepath = os.path.join(set.path, 'data', 'predictions', p, 'study_0', 'regions', 'series_1', r, 'nnunet-multi.nii.gz')
             channel = i + 1 
             rlabel = label[channel].astype(np.bool_)
-            save_nifti(rlabel, filepath, spacing=orig_spacing, offset=orig_offset)
+            save_nifti(rlabel, filepath, spacing=orig_spacing, origin=orig_origin)

@@ -53,7 +53,7 @@ def convert_registration_predictions_to_dicom(
             # Write CTs.
             ref_cts = None  # Perhaps required for RTSTRUCT and RTDOSE.
             if study.has_ct:
-                ct_dicoms = to_ct_dicoms(study.ct_data, study.ct_spacing, study.ct_offset, p, s)
+                ct_dicoms = to_ct_dicoms(study.ct_data, study.ct_spacing, study.ct_origin, p, s)
                 ref_cts = ct_dicoms
                 if s == moving_study_id:
                     moving_ref_cts = ct_dicoms
@@ -72,7 +72,7 @@ def convert_registration_predictions_to_dicom(
 
             # Write RTDOSE.
             if convert_study and convert_dose and study.has_dose:
-                rtdose_dicom = to_rtdose_dicom(study.dose_data, study.dose_spacing, study.dose_offset, ref_ct=ref_cts[0])
+                rtdose_dicom = to_rtdose_dicom(study.dose_data, study.dose_spacing, study.dose_origin, ref_ct=ref_cts[0])
                 filepath = os.path.join(base_path, p, s, 'rtdose', 'series_2.dcm')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 rtdose_dicom.save_as(filepath)
@@ -84,7 +84,7 @@ def convert_registration_predictions_to_dicom(
         fixed_study = pat.study(fixed_study_id)
         moved_ref_cts = None
         if convert_ct and convert_moved and moved_ct is not None:
-            moved_ref_cts = to_ct_dicoms(moved_ct, fixed_study.ct_spacing, fixed_study.ct_offset, p, model)
+            moved_ref_cts = to_ct_dicoms(moved_ct, fixed_study.ct_spacing, fixed_study.ct_origin, p, model)
             for i, c in enumerate(moved_ref_cts):
                 filepath = os.path.join(base_path, p, model, 'ct', 'series_0', f'{i:03}.dcm')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -116,7 +116,7 @@ def convert_registration_predictions_to_dicom(
                 if dest_fixed_study.has_rtdose:
                     rtdose_template = dest_fixed_study.default_rtdose.dicom
                     # Dose has been resample to the fixed CT spacing when transform was applied.
-                    rtdose_dicom = to_rtdose_dicom(moved_dose, fixed_study.ct_spacing, fixed_study.ct_offset, rtdose_template=rtdose_template)
+                    rtdose_dicom = to_rtdose_dicom(moved_dose, fixed_study.ct_spacing, fixed_study.ct_origin, rtdose_template=rtdose_template)
                     filepath = os.path.join(base_path, p, model, 'rtdose', 'series_2.dcm')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     if convert_moved or not os.path.exists(filepath):
@@ -162,15 +162,15 @@ def create_registered_dataset(
 
         # Save moved data.
         fixed_spacing = fixed_study.ct_spacing
-        fixed_offset = fixed_study.ct_offset
+        fixed_origin = fixed_study.ct_origin
         moved_study = dest_set.patient(p, check_path=False).study(moving_study_id, check_path=False)
         filepath = os.path.join(moved_study.path, 'ct', 'series_0.nii.gz')
-        save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+        save_nifti(moved_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         if moved_region_data is not None:
             for r, moved_r in moved_region_data.items():
                 filepath = os.path.join(moved_study.path, 'regions', 'series_1', f'{r}.nii.gz')
-                save_nifti(moved_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                save_nifti(moved_r, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
         if moved_landmark_data is not None:
@@ -189,14 +189,14 @@ def create_registered_dataset(
         # if pad_value is not None:
         #     fixed_ct[moved_ct == pad_value] = pad_value
         filepath = os.path.join(dest_fixed_study.path, 'ct', 'series_1.nii.gz')
-        save_nifti(fixed_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+        save_nifti(fixed_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         if regions is not None:
             fixed_region_data = fixed_study.region_data(regions=regions, regions_ignore_missing=True)
             if fixed_region_data is not None:
                 for r, fixed_r in fixed_region_data.items():
                     filepath = os.path.join(dest_fixed_study.path, 'regions', 'series_1', f'{r}.nii.gz')
-                    save_nifti(fixed_r, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                    save_nifti(fixed_r, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         if landmarks is not None:
             fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)

@@ -30,7 +30,7 @@ def get_region_stats(
     ct_data: CtImageArray,
     region_data: RegionArray,
     spacing: Spacing3D,
-    offset: Voxel,
+    origin: Voxel,
     brain_data: Optional[RegionArray] = None) -> List[Dict[str, Any]]:
 
     stats = []
@@ -38,9 +38,9 @@ def get_region_stats(
     # Add 'min/max' extent metrics.
     data = {}
     min_extent_vox = np.argwhere(region_data).min(axis=0)
-    min_extent_mm = min_extent_vox * spacing + offset
+    min_extent_mm = min_extent_vox * spacing + origin
     max_extent_vox = np.argwhere(region_data).max(axis=0)
-    max_extent_mm = max_extent_vox * spacing + offset
+    max_extent_mm = max_extent_vox * spacing + origin
     for axis, min, max in zip(('x', 'y', 'z'), min_extent_mm, max_extent_mm):
         data['metric'] = f'min-extent-mm-{axis}'
         data['value'] = min

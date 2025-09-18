@@ -79,9 +79,9 @@ class RandomTranslation:
         # Apply transformation.
         # TODO: Look into whether we should crop or not.
         if binary: 
-            data = affine_transform(data, np.identity(3), offset=translations, order=0, cval=0)
+            data = affine_transform(data, np.identity(3), origin=translations, order=0, cval=0)
         else:
-            data = affine_transform(data, np.identity(3), offset=translations, order=3, cval=self.fill)
+            data = affine_transform(data, np.identity(3), origin=translations, order=3, cval=self.fill)
 
         # Reset types.
         data = data.astype(dtype)

@@ -25,17 +25,19 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
     def __init__(
         self,
         id: DatasetID) -> None:
-        self.__id = str(id)
-        self.__path = os.path.join(config.directories.datasets, 'dicom', self.__id)
-        ct_from_id = None
+        path = os.path.join(config.directories.datasets, 'nifti', id)
+        ct_from = None
         for f in os.listdir(self.__path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
-                ct_from_id = match.group(1)
-        self.__ct_from = DicomDataset(ct_from_id) if ct_from_id is not None else None
-        self.__global_id = f"DICOM:{self.__id}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"DICOM:{self.__id}"
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset '{self}' not found. Filepath: {self.__path}.")
+                ct_from = match.group(1)
+        ct_from = NiftiDataset(ct_from) if ct_from is not None else None
+        super().__init__(id, path, ct_from=ct_from)
+
+    def build_index(
+        self,
+        **kwargs) -> None:
+        build_index_base(self._id, **kwargs)
 
     @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
@@ -45,21 +47,21 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
             return fn(self, *args, **kwargs)
         return wrapper
 
-    def has_patients(
+    def has_patient(
         self,
-        pat_ids: PatientIDs,
+        pat_id: PatientIDs,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_patients(pat_ids=pat_ids, **kwargs)
-        req_ids = arg_to_list(pat_ids, PatientID)
+        real_ids = self.list_patients(pat_id=pat_id, **kwargs)
+        req_ids = arg_to_list(pat_id, PatientID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     @ensure_loaded
     def list_patients(
         self,
-        pat_ids: PatientIDs = 'all', 
-        region_ids: RegionIDs = 'all',
+        pat_id: PatientIDs = 'all', 
+        region_id: RegionIDs = 'all',
         show_progress: bool = False,
         use_mapping: bool = True,
         use_regions_report: bool = True) -> List[str]:
@@ -80,15 +82,15 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         ids = list(sorted(self._index['patient-id'].unique()))
 
         # Filter on 'region_ids'.
-        if region_ids != 'all':
+        if region_id != 'all':
             def filter_fn(p: PatientID) -> bool:
-                pat_region_ids = self.patient(p).list_regions(region_ids=region_ids, use_mapping=use_mapping)
+                pat_region_ids = self.patient(p).list_regions(region_id=region_id, use_mapping=use_mapping)
                 return True if len(pat_region_ids) > 0 else False
             ids = list(filter(filter_fn, tqdm(ids, disable=not show_progress)))
 
-        # Filter on 'pat_ids'.
-        if pat_ids != 'all':
-            pat_ids = arg_to_list(pat_ids, PatientID)
+        # Filter on 'pat_id'.
+        if pat_id != 'all':
+            pat_ids = arg_to_list(pat_id, PatientID)
             all_ids = ids.copy()
             ids = []
             for i, id in enumerate(all_ids):
@@ -117,15 +119,15 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         index = self._index[self._index['patient-id'] == str(id)]
         index_errors = self._index_errors[self._index_errors['patient-id'] == str(id)]
         ct_from = self.__ct_from.patient(id) if self.__ct_from is not None and self.__ct_from.has_patients(id) else None
-        return DicomPatient(self.__id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self.__region_map, **kwargs)
+        return DicomPatient(self._id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self.__region_map, **kwargs)
 
     @ensure_loaded
     def list_regions(
         self,
-        pat_ids: PatientIDs = 'all',
+        pat_id: PatientIDs = 'all',
         use_mapping: bool = True) -> List[RegionID]:
         # Load all patients.
-        pat_ids = self.list_patients(pat_ids=pat_ids)
+        pat_ids = self.list_patients(pat_id=pat_id)
 
         # Get patient regions.
         ids = []
@@ -138,8 +140,8 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
 
     def __load_data(self) -> None:
         # Trigger index build if necessary.
-        if not index_exists(self.__id):
-            build_index_base(self.__id) 
+        if not index_exists(self._id):
+            build_index_base(self._id) 
 
         # Load index policy.
         filepath = os.path.join(self.__path, 'index-policy.yaml')
@@ -173,12 +175,8 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
     def region_map(self) -> RegionMap:
         return self.__region_map
 
-    def build_index(
-        self,
-        **kwargs) -> None:
-        build_index_base(self.__id, **kwargs)
-    
-# Add properties.
-props = ['ct_from', 'global_id', 'id', 'path']
-for p in props:
-    setattr(DicomDataset, p, property(lambda self, p=p: getattr(self, f'_{DicomDataset.__name__}__{p}')))
+    def __str__(self) -> str:
+        if self.__ct_from is None:
+            return f"DicomDataset({self._id})"
+        else:
+            return f"DicomDataset({self._id}, ct_from={self.__ct_from.id})"

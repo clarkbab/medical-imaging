@@ -61,7 +61,7 @@ def convert_to_dicom(
             ct_series_id = ct_series_ids[0]
             # Load data.
             ct_series = dataset_fns['series'](study, ct_series_id, 'ct')
-            ct_dicoms = to_ct_dicoms(ct_series.data, ct_series.spacing, ct_series.offset, p_mapped, s)
+            ct_dicoms = to_ct_dicoms(ct_series.data, ct_series.spacing, ct_series.origin, p_mapped, s)
             for i, d in enumerate(ct_dicoms):
                 if convert_ct:
                     filepath = os.path.join(base_path, p_mapped, s, 'ct', ct_series_id, f'{i:03d}.dcm')
@@ -96,7 +96,7 @@ def convert_to_dicom(
             #         f.write(f'# columns = id,x,y,z,ow,ox,oy,oz,vis,sel,lock,label,desc,associatedNodeID\n')
 
             #         for i, lm_voxel in enumerate(lms_voxel):
-            #             lm_patient = np.array(lm_voxel) * spacing + offset
+            #             lm_patient = np.array(lm_voxel) * spacing + origin
             #             f.write(f'{i},{lm_patient[0]},{lm_patient[1]},{lm_patient[2]},0,0,0,1,1,1,0,{i},,\n')
 
             # Convert dose to RTDOSE/RTPLAN.
@@ -104,7 +104,7 @@ def convert_to_dicom(
                 dose_series_ids = dataset_fns['list_series'](study, 'dose')
                 for ss in dose_series_ids:
                     dose_series = dataset_fns['series'](study, ss, 'dose')
-                    dose_dicom = to_rtdose_dicom(dose_series.data, dose_series.spacing, dose_series.offset, ct_dicoms[0])
+                    dose_dicom = to_rtdose_dicom(dose_series.data, dose_series.spacing, dose_series.origin, ct_dicoms[0])
                     filepath = os.path.join(base_path, p_mapped, s, 'rtdose', f'{ss}.dcm')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     dose_dicom.save_as(filepath)

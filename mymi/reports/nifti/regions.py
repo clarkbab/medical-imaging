@@ -92,7 +92,7 @@ def get_region_summary(
         }
 
         # Add OAR position.
-        fov_l = foreground_fov(label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        fov_l = foreground_fov(label, spacing=pat.ct_spacing, origin=pat.ct_origin, use_patient_coords=True)
         if fov_l is not None:
             for i, a in enumerate(axes):
                 for j, e in enumerate(extrema):
@@ -106,7 +106,7 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add OAR width.
-        fov_w = foreground_fov_width(label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        fov_w = foreground_fov_width(label, origin=pat.ct_origin, spacing=pat.ct_spacing, use_patient_coords=True)
         if fov_w is not None:
             for i, a in enumerate(axes):
                 data['metric'] = f'fov-width-mm-{a}'
@@ -125,7 +125,7 @@ def get_region_summary(
         df = append_row(df, data)
 
         # Add position of largest connected component.
-        fov_l = foreground_fov(lcc_label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        fov_l = foreground_fov(lcc_label, spacing=pat.ct_spacing, origin=pat.ct_origin, use_patient_coords=True)
         if fov_l is not None:
             for i, a in enumerate(axes):
                 for j, e in enumerate(extrema):
@@ -134,7 +134,7 @@ def get_region_summary(
                     df = append_row(df, data)
 
         # Add fov of largest connected component.
-        fov_width_lcc = foreground_fov_width(lcc_label, offset=pat.ct_offset, spacing=pat.ct_spacing, use_patient_coords=True)
+        fov_width_lcc = foreground_fov_width(lcc_label, origin=pat.ct_origin, spacing=pat.ct_spacing, use_patient_coords=True)
         if fov_width_lcc is not None:
             for i, a in enumerate(axes):
                 data['metric'] = f'connected-fov-mm-{a}'

@@ -32,10 +32,10 @@ def from_ct_dicoms(
     # Sort CTs by z position, smallest first.
     cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
 
-    # Calculate offset.
+    # Calculate origin.
     # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
-    offset = cts[0].ImagePositionPatient
-    offset = tuple(float(o) for o in offset)
+    origin = cts[0].ImagePositionPatient
+    origin = tuple(float(o) for o in origin)
 
     # Calculate size.
     # Indexing checked that CT slices had consisent x/y spacing in series.
@@ -63,12 +63,12 @@ def from_ct_dicoms(
         # Add slice data.
         data[:, :, i] = slice_data
 
-    return data, spacing, offset
+    return data, spacing, origin
 
 def to_ct_dicoms(
     data: CtImageArray, 
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     pat_id: PatientID,
     study_id: StudyID,
     pat_name: Optional[str] = None,
@@ -160,9 +160,9 @@ def to_ct_dicoms(
         ct_dicom.BitsStored = n_bits_stored
         ct_dicom.FrameOfReferenceUID = frame_of_reference_uid
         ct_dicom.HighBit = 11
-        offset_z = offset[2] + i * spacing[2]
+        origin_z = origin[2] + i * spacing[2]
         ct_dicom.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
-        ct_dicom.ImagePositionPatient = [offset[0], offset[1], offset_z]
+        ct_dicom.ImagePositionPatient = [origin[0], origin[1], origin_z]
         ct_dicom.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
         ct_dicom.InstanceNumber = i + 1
         ct_dicom.PhotometricInterpretation = 'MONOCHROME2'

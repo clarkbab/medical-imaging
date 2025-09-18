@@ -116,7 +116,7 @@ class RtStructConverter:
         region_id: RegionID,
         size: Size3D,
         spacing: Spacing3D,
-        offset: Point3D) -> RegionArray:
+        origin: Point3D) -> RegionArray:
         # Load the contour data.
         roi_infos = rtstruct.StructureSetROISequence
         roi_contours = rtstruct.ROIContourSequence
@@ -156,11 +156,11 @@ class RtStructConverter:
             points = np.array(contour_data).reshape(-1, 3)
 
             # Convert contour data to voxels.
-            size_2D, spacing_2D, offset_2D = list(size)[:2], list(spacing)[:2], list(offset)[:2]
-            slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, offset_2D)
+            size_2D, spacing_2D, origin_2D = list(size)[:2], list(spacing)[:2], list(origin)[:2]
+            slice_data = cls._get_mask_slice(points, size_2D, spacing_2D, origin_2D)
 
             # Get z index of slice.
-            z_idx = int((points[0, 2] - offset[2]) / spacing[2])
+            z_idx = int((points[0, 2] - origin[2]) / spacing[2])
             if z_idx > data.shape[2] - 1:
                 # Happened with 'PMCC-COMP:PMCC_AI_GYN_011' - Kidney_L...
                 continue
@@ -176,19 +176,19 @@ class RtStructConverter:
         points: np.ndarray,
         size: Size2D,
         spacing: Spacing2D,
-        offset: Point2D) -> np.ndarray:
+        origin: Point2D) -> np.ndarray:
         """
         returns: the boolean array mask for the slice.
         args:
             points: the (n x 3) np.ndarray of contour points in physical space.
             size: the resulting mask size.
             spacing: the (x, y) pixel spacing in mm.
-            offset: the (0, 0) pixel offset in physical space.
+            origin: the (0, 0) pixel origin in physical space.
         """
 
         # Convert from physical coordinates to array indices.
-        x_indices = (points[:, 0] - offset[0]) / spacing[0]
-        y_indices = (points[:, 1] - offset[1]) / spacing[1]
+        x_indices = (points[:, 0] - origin[0]) / spacing[0]
+        y_indices = (points[:, 1] - origin[1]) / spacing[1]
         x_indices = np.around(x_indices)                    # Round to avoid truncation errors.
         y_indices = np.around(y_indices)
 
@@ -638,9 +638,9 @@ class RtStructConverter:
             contour_coords = np.array(contour_coords)
 
             # Translate to physical space.
-            offset = ref_ct.ImagePositionPatient
+            origin = ref_ct.ImagePositionPatient
             spacing = ref_ct.PixelSpacing
-            contour_coords = spacing * contour_coords + offset[:-1]
+            contour_coords = spacing * contour_coords + origin[:-1]
 
             # Format for DICOM.
             contour_coords = cls._format_coordinates(contour_coords, ref_ct)

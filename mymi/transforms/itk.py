@@ -18,13 +18,13 @@ def itk_transform_image(
     transform: itk.Transform,
     output_size: Size3D,
     fill: Union[float, Literal['min']] = 'min',
-    offset: Point3D = (0, 0, 0),
-    output_offset: Point3D = (0, 0, 0),
+    origin: Point3D = (0, 0, 0),
+    output_origin: Point3D = (0, 0, 0),
     output_spacing: Spacing3D = (1, 1, 1), 
     spacing: Spacing3D = (1, 1, 1),
     reverse_xy: bool = False) -> Tuple[ImageArray, Spacing3D, Point3D]:
     # Load moving image.
-    moving_itk = to_itk_image(data, spacing, offset)
+    moving_itk = to_itk_image(data, spacing, origin)
 
     # Get interpolation method.
     if data.dtype == bool:
@@ -44,7 +44,7 @@ def itk_transform_image(
     kwargs = dict(
         default_pixel_value=default_value,
         interpolator=interpolator,
-        output_origin=output_offset,
+        output_origin=output_origin,
         output_spacing=output_spacing,
         size=output_size,
         transform=transform,
@@ -57,8 +57,8 @@ def itk_transform_points(
     fixed_points: np.ndarray,
     fixed_spacing: Spacing3D,
     moving_spacing: Spacing3D,
-    fixed_offset: Point3D,
-    moving_offset: Point3D,
+    fixed_origin: Point3D,
+    moving_origin: Point3D,
     transform: itk.Transform,
     fill: Union[float, str] = 'min') -> np.ndarray:
     
@@ -66,7 +66,7 @@ def itk_transform_points(
     moved_points = []
     for f in fixed_points:
         # Convert from voxel to physical coordinates.
-        f_mm = fixed_offset + f * fixed_spacing
+        f_mm = fixed_origin + f * fixed_spacing
 
         # Transform point.
         # When we convert from numpy to sitk image, we correct the order of the axes
@@ -74,7 +74,7 @@ def itk_transform_points(
         f_t_mm = transform.TransformPoint(f_mm)
 
         # Convert back to voxel coordinates.
-        f_t = (np.array(f_t_mm) - moving_offset) / moving_spacing
+        f_t = (np.array(f_t_mm) - moving_origin) / moving_spacing
         moved_points.append(f_t)
     moved_points = np.vstack(moved_points)
 

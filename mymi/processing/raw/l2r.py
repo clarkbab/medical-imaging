@@ -39,17 +39,17 @@ def convert_l2r_lung_ct_to_nifti() -> None:
                 study_id = 'study_0'
 
             # Shift CT.
-            ct, spacing, offset = load_nifti(ctpath)
+            ct, spacing, origin = load_nifti(ctpath)
             ct -= 1000
             spacing = tuple(np.abs(spacing))
             destpath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(destpath), exist_ok=True)
-            save_nifti(ct, filepath, spacing=spacing, offset=offset)
+            save_nifti(ct, filepath, spacing=spacing, origin=origin)
 
             # Copy lung masks.
             lpath = os.path.join(lungpath, s)
-            lmask, spacing, offset = load_nifti(lpath)
+            lmask, spacing, origin = load_nifti(lpath)
             spacing = tuple(np.abs(spacing))
             destpath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'regions', 'series_1', 'Lung.nii.gz')
             os.makedirs(os.path.dirname(destpath), exist_ok=True)
-            save_nifti(lmask, filepath, spacing=spacing, offset=offset)
+            save_nifti(lmask, filepath, spacing=spacing, origin=origin)

@@ -24,14 +24,14 @@ class MrSeries(DicomSeries):
         datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
         relpaths = list(index['filepath'])
         abspaths = [os.path.join(datasetpath, p) for p in relpaths]
-        self.__dataset_id = dataset_id
+        self._dataset_id = dataset_id
         self.__filepaths = abspaths
-        self.__id = id
+        self._id = id
         self.__index = index
         self.__index_policy = index_policy
         self.__modality = 'mr'
-        self.__pat_id = pat_id
-        self.__study_id = study_id
+        self._pat_id = pat_id
+        self._study_id = study_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -56,12 +56,12 @@ class MrSeries(DicomSeries):
     def fov(
         self,
         **kwargs) -> Fov3D:
-        return fov(self.__data, spacing=self.__spacing, offset=self.__offset, **kwargs)
+        return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
 
     @property
     @ensure_loaded
-    def offset(self) -> Point3D:
-        return self.__offset
+    def origin(self) -> Point3D:
+        return self.__origin
 
     @property
     @ensure_loaded
@@ -76,10 +76,10 @@ class MrSeries(DicomSeries):
     def __load_data(self) -> None:
         mr_dicoms = self.dicoms
 
-        # Store offset.
+        # Store origin.
         # Indexing checked that all 'ImagePositionPatient' keys were the same for the series.
-        offset = mr_dicoms[0].ImagePositionPatient    
-        self.__offset = tuple(float(round(o)) for o in offset)
+        origin = mr_dicoms[0].ImagePositionPatient    
+        self.__origin = tuple(float(round(o)) for o in origin)
 
         # Store size.
         # Indexing checked that MR slices had consisent x/y spacing in series.
@@ -103,8 +103,8 @@ class MrSeries(DicomSeries):
             mr_data = np.transpose(m.pixel_array)      # 'pixel_array' contains row-first image data.
 
             # Get z index.
-            z_offset =  m.ImagePositionPatient[2] - self.__offset[2]
-            z_idx = int(round(z_offset / self.__spacing[2]))
+            z_origin =  m.ImagePositionPatient[2] - self.__origin[2]
+            z_idx = int(round(z_origin / self.__spacing[2]))
 
             # Add data.
             data[:, :, z_idx] = mr_data

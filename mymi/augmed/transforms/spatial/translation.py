@@ -13,7 +13,7 @@ from .identity import Identity
 from .spatial import SpatialTransform
 
 # translation:
-# - t=5 -> t=(-5, 5, -5, 5) for 2D, t=(-5, 5, -5, 5, -5, 5) for 3D.
+# - t=5 -> t=((-5, 5), (-5, 5)) for 2D, t=((-5, 5), (-5, 5), (-5, 5)) for 3D.
 # - t=(-3, 5) -> t=(-3, 5, -3, 5) for 2D, t=(-3, 5, -3, 5, -3, 5) for 3D.
 class RandomTranslation(RandomAffineMixin, RandomTransform):
     def __init__(
@@ -21,18 +21,13 @@ class RandomTranslation(RandomAffineMixin, RandomTransform):
         translation: Union[Number, Tuple[Number, ...]] = 100.0,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        if isinstance(translation, (int, float)):
-            trans_ranges = (-translation, translation) * self._dim
-        elif len(translation) == 2:
-            trans_ranges = translation * self._dim
-        else:
-            trans_ranges = translation
-        assert len(trans_ranges) == 2 * self._dim, f"Expected 'translation' of length {2 * self._dim}, got {len(trans_ranges)}."
-        self.__trans_ranges = to_tensor(trans_ranges).reshape(self._dim, 2)
+        trans_range = expand_range_arg(translation, negate_lower=True, vals_per_dim=2)
+        assert len(trans_range) == 2 * self._dim, f"Expected 'translation' of length {2 * self._dim}, got {len(trans_range)}."
+        self.__trans_range = to_tensor(trans_range).reshape(self._dim, 2)
         self._params = dict(
             dim=self._dim,
             p=self._p,
-            rotation_ranges=self.__trans_ranges,
+            translation_range=self.__trans_range,
         )
 
     def freeze(self) -> 'Translation':
@@ -40,11 +35,11 @@ class RandomTranslation(RandomAffineMixin, RandomTransform):
         if not should_apply:
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
-        trans_draw = draw * (self.__trans_ranges[:, 1] - self.__trans_ranges[:, 0]) + self.__trans_ranges[:, 0]
+        trans_draw = draw * (self.__trans_range[:, 1] - self.__trans_range[:, 0]) + self.__trans_range[:, 0]
         return Translation(translation=trans_draw, dim=self._dim)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__trans_ranges.flatten())}, dim={self._dim}, p={self._p})"
+        return f"{self.__class__.__name__}({to_tuple(self.__trans_range.flatten())}, dim={self._dim}, p={self._p})"
 
 class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
@@ -52,16 +47,15 @@ class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTrans
         translation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
         **kwargs) -> None:
         super().__init__(**kwargs)
-        translations = arg_to_list(translation, (int, float), broadcast=self._dim)
-        assert len(translations) == self._dim, f"Expected 'translation' of length {self._dim} for dim={self._dim}, got {len(translations)}."
-        self.__translations = to_tensor(translations)
+        translation = arg_to_list(translation, (int, float), broadcast=self._dim)
+        assert len(translation) == self._dim, f"Expected 'translation' of length {self._dim} for dim={self._dim}, got {len(translation)}."
+        self.__translation = to_tensor(translation)
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
             dim=self._dim,
             matrix=self.__matrix,
-            matrix_complete=False,      # Do matrices define the full transform?
-            translations=self.__translations,
+            translation=self.__translation,
         )
 
     # This is used for image resampling, not for point clouds.
@@ -93,8 +87,8 @@ class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTrans
 
     # Defines the forward/backward transforms.
     def __create_transforms(self) -> None:
-        self.__matrix = create_translation(self.__translations)
-        self.__backward_matrix = create_translation(-self.__translations)
+        self.__matrix = create_translation(self.__translation)
+        self.__backward_matrix = create_translation(-self.__translation)
 
     def get_affine_back_transform(
         self,
@@ -117,7 +111,7 @@ class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTrans
         return self.__matrix.to(device)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__translations)}, dim={self._dim})"
+        return f"{self.__class__.__name__}({to_tuple(self.__translation)}, dim={self._dim})"
 
     # This is for point clouds, not for image resampling. Note that this
     # requires invertibility of the back point transform, which may not be

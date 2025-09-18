@@ -50,11 +50,11 @@ for pat in tqdm(pats):
 
         # Save image.
         spacing = reader.dicom_handle.GetSpacing()
-        offset = reader.dicom_handle.GetOrigin()
+        origin = reader.dicom_handle.GetOrigin()
         affine = np.array([
-            [spacing[0], 0, 0, offset[0]],
-            [0, spacing[1], 0, offset[1]],
-            [0, 0, spacing[2], offset[2]],
+            [spacing[0], 0, 0, origin[0]],
+            [0, spacing[1], 0, origin[1]],
+            [0, 0, spacing[2], origin[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(image, affine) 
         filepath = os.path.join(nifti_set.path, 'data', 'ct', f'{pat}.nii.gz')

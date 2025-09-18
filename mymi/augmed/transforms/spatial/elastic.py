@@ -38,42 +38,27 @@ class RandomElastic(RandomTransform):
         **kwargs) -> None:
         super().__init__(**kwargs)
         self.__method = method
-        if isinstance(control_spacing, (int, float)):
-            control_spacing_ranges = (control_spacing, control_spacing) * self._dim
-        elif len(control_spacing) == 2:
-            control_spacing_ranges = control_spacing * self._dim
-        else:
-            control_spacing_ranges = control_spacing
-        assert len(control_spacing_ranges) == 2 * self._dim, f"Expected 'control' of length {2 * self._dim}, got {len(control_spacing_ranges)}."
-        self.__control_spacing_ranges = to_tensor(control_spacing_ranges).reshape(self._dim, 2)
-        if isinstance(control_origin, (int, float)):
-            control_origin_ranges = (-control_origin, control_origin) * self._dim
-        elif len(control_origin) == 2:
-            control_origin_ranges = control_origin * self._dim
-        else:
-            control_origin_ranges = control_origin
-        assert len(control_origin_ranges) == 2 * self._dim, f"Expected 'control_origin' of length {2 * self._dim}, got {len(control_origin_ranges)}."
-        self.__control_origin_ranges = to_tensor(control_origin_ranges).reshape(self._dim, 2)
-        if isinstance(disp, (int, float)):
-            disp_ranges = (-disp, disp) * self._dim
-        elif len(disp) == 2:
-            disp_ranges = disp * self._dim
-        else:
-            disp_ranges = disp
-        assert len(disp_ranges) == 2 * self._dim, f"Expected 'disp' of length {2 * self._dim}, got {len(disp_ranges)}."
-        self.__disp_ranges = to_tensor(disp_ranges).reshape(self._dim, 2)
+        control_spacing_range = expand_range_arg(control_spacing, negate_lower=False, vals_per_dim=2)
+        assert len(control_spacing_range) == 2 * self._dim, f"Expected 'control' of length {2 * self._dim}, got {len(control_spacing_range)}."
+        self.__control_spacing_range = to_tensor(control_spacing_range).reshape(self._dim, 2)
+        control_origin_range = expand_range_arg(control_origin, negate_lower=True, vals_per_dim=2)
+        assert len(control_origin_range) == 2 * self._dim, f"Expected 'control_origin' of length {2 * self._dim}, got {len(control_origin_range)}."
+        self.__control_origin_range = to_tensor(control_origin_range).reshape(self._dim, 2)
+        disp_range = expand_range_arg(disp, negate_lower=True, vals_per_dim=2)
+        assert len(disp_range) == 2 * self._dim, f"Expected 'disp' of length {2 * self._dim}, got {len(disp_range)}."
+        self.__disp_range = to_tensor(disp_range).reshape(self._dim, 2)
         self._params = dict(
-            control_origin_ranges=self.__control_origin_ranges,
-            control_spacing_ranges=self.__control_spacing_ranges,
+            control_origin_range=self.__control_origin_range,
+            control_spacing_range=self.__control_spacing_range,
             dim=self._dim,
-            disp_ranges=self.__disp_ranges,
+            disp_range=self.__disp_range,
             method=self.__method,
             p=self._p,
         )
 
         # Warn about displacement ranges.
-        disp_widths = self.__disp_ranges[:, 1] - self.__disp_ranges[:, 0]
-        min_control_spacing, _ = self.__control_spacing_ranges.min(axis=1)
+        disp_widths = self.__disp_range[:, 1] - self.__disp_range[:, 0]
+        min_control_spacing, _ = self.__control_spacing_range.min(axis=1)
         if (disp_widths >= min_control_spacing).any():
             logging.warning(f"RandomElastic transforms with larger displacement widths (widths={to_tuple(disp_widths)}) larger than \
 (or equal to) control spacings (min. spacings={to_tuple(min_control_spacing)}) may produce folding transforms. Such transforms may \
@@ -84,15 +69,15 @@ be non-invertible and could raise errors when performing forward points transfor
         if not should_apply:
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
-        control_spacing_draw = draw * (self.__control_spacing_ranges[:, 1] - self.__control_spacing_ranges[:, 0]) + self.__control_spacing_ranges[:, 0]
-        control_origin_draw = draw * (self.__control_origin_ranges[:, 1] - self.__control_origin_ranges[:, 0]) + self.__control_origin_ranges[:, 0]
+        control_spacing_draw = draw * (self.__control_spacing_range[:, 1] - self.__control_spacing_range[:, 0]) + self.__control_spacing_range[:, 0]
+        control_origin_draw = draw * (self.__control_origin_range[:, 1] - self.__control_origin_range[:, 0]) + self.__control_origin_range[:, 0]
         # We can't draw displacements here as we need the image to determine the number of control points.
         # However, we should pass a randomly-drawn seed.
         draw_rs = self._rng.integers(1e9)   # Requires upper bound.
-        return Elastic(control_spacing=control_spacing_draw, disp=self.__disp_ranges, control_origin=control_origin_draw, dim=self._dim, method=self.__method, random_seed=draw_rs)
+        return Elastic(control_spacing=control_spacing_draw, disp=self.__disp_range, control_origin=control_origin_draw, dim=self._dim, method=self.__method, random_seed=draw_rs)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing_ranges.flatten())}, {to_tuple(self.__disp_ranges.flatten())}, {to_tuple(self.__control_origin_ranges.flatten())}, dim={self._dim}, p={self._p})"
+        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing_range.flatten())}, {to_tuple(self.__disp_range.flatten())}, {to_tuple(self.__control_origin_range.flatten())}, dim={self._dim}, p={self._p})"
 
 # Defines a coarse grid of control points.
 # Random displacements are assigned at each control point.
@@ -129,19 +114,13 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         assert len(control_origin) == self._dim, f"Expected 'control_origin' of length '{self._dim}' for dim={self._dim}, got {len(control_origin)}."
         self.__control_origin = to_tensor(control_origin)
         # Disps aren't known until presented with the image.
-        if isinstance(disp, (int, float)):
-            disp_ranges = (-disp, disp) * self._dim
-        elif len(disp) == 2:
-            disp_ranges = disp * self._dim
-        else:
-            disp_ranges = disp
-        self.__disp_ranges = disp_ranges
+        self.__disp_range = expand_range_arg(disp, negate_lower=True, vals_per_dim=2)
         self.__random_seed = random_seed
         self._params = dict(
             control_origin=self.__control_origin,
             control_spacing=self.__control_spacing,
             dim=self._dim,
-            disp_ranges=self.__disp_ranges,
+            disp_range=self.__disp_range,
             random_seed=self.__random_seed,
         )
         
@@ -206,8 +185,8 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
             draw = to_tensor(rng.random(self._dim), device=points.device)
             draws.append(draw)
         draws = torch.stack(draws).reshape(*cps.shape[:-1], self._dim)
-        disp_ranges = self.__disp_ranges.to(points.device)
-        cp_disps = draws * (disp_ranges[:, 1] - disp_ranges[:, 0]) + disp_ranges[:, 0]
+        disp_range = self.__disp_range.to(points.device)
+        cp_disps = draws * (disp_range[:, 1] - disp_range[:, 0]) + disp_range[:, 0]
 
         # Bring channels dimension to fore as these are images - i.e. not just an Nx2/3 list of points.
         cps, cp_disps = torch.moveaxis(cps, -1, 0), torch.moveaxis(cp_disps, -1, 0)
@@ -424,4 +403,4 @@ class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
         return x_i
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing)}, {to_tuple(self.__disp_ranges.flatten())}, {to_tuple(self.__control_origin)}, random_seed={self.__random_seed}, dim={self._dim})"
+        return f"{self.__class__.__name__}({to_tuple(self.__control_spacing)}, {to_tuple(self.__disp_range.flatten())}, {to_tuple(self.__control_origin)}, random_seed={self.__random_seed}, dim={self._dim})"

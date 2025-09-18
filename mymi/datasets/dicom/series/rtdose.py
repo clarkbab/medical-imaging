@@ -20,14 +20,14 @@ class RtDoseSeries(DicomSeries):
         index: pd.Series,
         index_policy: Dict[str, Any]) -> None:
         datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
-        self.__dataset_id = dataset_id
+        self._dataset_id = dataset_id
         self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self.__id = id
+        self._id = id
         self.__index = index
         self.__index_policy = index_policy
         self.__modality = 'rtdose'
-        self.__pat_id = pat_id
-        self.__study_id = study_id
+        self._pat_id = pat_id
+        self._study_id = study_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -47,8 +47,8 @@ class RtDoseSeries(DicomSeries):
 
     @property
     @ensure_loaded
-    def offset(self) -> Point3D:
-        return self.__offset
+    def origin(self) -> Point3D:
+        return self.__origin
 
     @property
     @ensure_loaded
@@ -61,7 +61,7 @@ class RtDoseSeries(DicomSeries):
         return self.__spacing
 
     def __load_data(self) -> None:
-        self.__data, self.__spacing, self.__offset = from_rtdose_dicom(self.dicom)
+        self.__data, self.__spacing, self.__origin = from_rtdose_dicom(self.dicom)
 
 # Add properties.
 props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtplan', 'study_id']

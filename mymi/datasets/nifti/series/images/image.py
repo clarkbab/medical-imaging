@@ -6,4 +6,8 @@ from ..series import NiftiSeries
 
 # Abstract class.
 class NiftiImageSeries(NiftiSeries):
-    pass
+    def __init__(
+        self,
+        *args,
+        **kwargs) -> None:
+        super().__init__(*args, **kwargs)

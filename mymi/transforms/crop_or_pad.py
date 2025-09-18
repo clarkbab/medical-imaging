@@ -10,19 +10,19 @@ def __spatial_crop_or_pad(
     image: ImageArray,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     fill: Union[float, Literal['min']] = 'min',
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    origin: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True) -> ImageArray:
-    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
+    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
     fill = np.min(image) if fill == 'min' else fill
 
     # Convert box to image coordinates.
     min, max = bounding_box
     if use_patient_coords:
-        min = tuple(np.round((np.array(min) - offset) / spacing).astype(int))
-        max = tuple(np.round((np.array(max) - offset) / spacing).astype(int))
+        min = tuple(np.round((np.array(min) - origin) / spacing).astype(int))
+        max = tuple(np.round((np.array(max) - origin) / spacing).astype(int))
 
     # Calculate inverse bounding box.
     n_dims = len(image.shape)
@@ -30,7 +30,7 @@ def __spatial_crop_or_pad(
     if return_inverse:
         # Calculate the inverse bounding box.
         if use_patient_coords:
-            inv_box = extent(image, spacing=spacing, offset=offset)
+            inv_box = extent(image, spacing=spacing, origin=origin)
         else:
             inv_min = tuple(-np.array(min))
             new_spatial_size = np.array(max) - min
@@ -72,7 +72,7 @@ def crop_or_pad(
 def __spatial_centre_crop_or_pad(
     image: ImageArray,
     size: Union[Size, SizeMM],
-    offset: Optional[Point] = None,
+    origin: Optional[Point] = None,
     return_inverse: bool = False,
     spacing: Optional[Spacing] = None,
     use_patient_coords: bool = True,
@@ -82,11 +82,11 @@ def __spatial_centre_crop_or_pad(
     n_dims = len(image.shape)
     spatial_size = image.shape[1:] if n_dims == 4 else image.shape
     if use_patient_coords:
-        assert offset is not None
+        assert origin is not None
         assert spacing is not None
         fov = np.array(spatial_size) * spacing
         to_crop = fov - size
-        box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int) + offset
+        box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int) + origin
         box_max = box_min + fov
     else:
         to_crop = np.array(spatial_size) - size
@@ -119,7 +119,7 @@ def centre_crop_or_pad(
 def crop_or_pad_landmarks(
     landmarks: LandmarksFrame,    # Should use patient coords, landmarks in image coords are only used for plotting.
     bounding_box: Union[BoxMM3D, Box3D],
-    offset: Optional[Point3D] = None,
+    origin: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
     use_patient_coords: bool = True) -> LandmarksFrame:
     landmarks = landmarks.copy()
@@ -130,8 +130,8 @@ def crop_or_pad_landmarks(
         fov_min, fov_max = min, max
     else:
         assert spacing is not None
-        assert offset is not None
-        fov_min, fov_max = np.array(min) * spacing + offset, np.array(max) * spacing + offset
+        assert origin is not None
+        fov_min, fov_max = np.array(min) * spacing + origin, np.array(max) * spacing + origin
     for a in range(3):
         landmarks = landmarks[(landmarks[a] >= fov_min[a]) & (landmarks[a] < fov_max[a])]
         

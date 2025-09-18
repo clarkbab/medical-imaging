@@ -12,42 +12,42 @@ def __spatial_resample(
     data: Optional[Union[ImageArray, ImageTensor3D]] = None,
     fill: Union[float, Literal['min']] = 'min',
     image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
-    offset: Point3D = (0, 0, 0),
+    origin: Point3D = (0, 0, 0),
     output_image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
-    output_offset: Optional[Point3D] = None,    # Defaults to input image offset.
+    output_origin: Optional[Point3D] = None,    # Defaults to input image origin.
     output_size: Optional[Size3D] = None,       # Unless specified, is set to maintain image FOV.
     output_spacing: Optional[Spacing3D] = None,     # Defaults to input image spacing.
     return_transform: bool = False,
     spacing: Spacing3D = (1, 1, 1),
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
     ) -> Union[ImageArray, ImageTensor3D, Tuple[Union[ImageArray, ImageTensor3D], sitk.Transform]]:
-    # Use 'image' and 'output_image' to get data/spacing/offset if provided.
+    # Use 'image' and 'output_image' to get data/spacing/origin if provided.
     if data is None:
         if image is None:
             raise ValueError("Either 'data' or 'image' must be provided.")
         else:
             data = image.data
             spacing = image.spacing
-            offset = image.offset
+            origin = image.origin
     data_type = type(data)
     if output_image is not None:
         output_size = output_image.size
         output_spacing = output_image.spacing
-        output_offset = output_image.offset
+        output_origin = output_image.origin
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
     if is_boolean:
         data = data.astype(np.uint8) 
-    offset = tuple(float(o) for o in offset)
+    origin = tuple(float(o) for o in origin)
     spacing = tuple(float(s) for s in spacing)
-    if output_offset is not None:
-        output_offset = tuple(float(o) for o in output_offset)
+    if output_origin is not None:
+        output_origin = tuple(float(o) for o in output_origin)
     if output_spacing is not None:
         output_spacing = tuple(float(s) for s in output_spacing)
 
     # Create 'sitk' image.
-    img = to_sitk_image(data, offset=offset, spacing=spacing)
+    img = to_sitk_image(data, origin=origin, spacing=spacing)
 
     # Create resample filter.
     filter = sitk.ResampleImageFilter()
@@ -56,8 +56,8 @@ def __spatial_resample(
     filter.SetDefaultPixelValue(fill)
     if is_boolean:
         filter.SetInterpolator(sitk.sitkNearestNeighbor)
-    if output_offset is not None:
-        filter.SetOutputOrigin(output_offset)
+    if output_origin is not None:
+        filter.SetOutputOrigin(output_origin)
     else:
         filter.SetOutputOrigin(img.GetOrigin())
     if output_spacing is not None:
@@ -133,15 +133,15 @@ def resample_box_3D(
 
 def resample_landmarks(
     landmarks: pd.DataFrame,
-    offset: Point3D = (0, 0, 0),
-    output_offset: Point3D = (0, 0, 0),
+    origin: Point3D = (0, 0, 0),
+    output_origin: Point3D = (0, 0, 0),
     output_spacing: Spacing3D = (1, 1, 1),
     spacing: Spacing3D = (1, 1, 1)) -> pd.DataFrame:
     raise MemoryError("You forgot that this function makes no sense. Landmarks are not images, they're points in physical space.")
 
     # Transform landmarks.
     mult = np.array(spacing) / np.array(output_spacing)
-    landmarks[list(range(3))] = (landmarks[list(range(3))] - offset) * mult + output_offset
+    landmarks[list(range(3))] = (landmarks[list(range(3))] - origin) * mult + output_origin
 
     return landmarks
 
@@ -150,7 +150,7 @@ def __spatial_sample(
     points: Union[LandmarksFrame, Point3D, Points3D],
     fill: Union[float, Literal['min']] = 'min',
     landmarks_col: str = 'sample',
-    offset: Optional[Point3D] = None,
+    origin: Optional[Point3D] = None,
     sample_size: SizeMM3D = (0, 0, 0),  # Defaults to point sample.
     sample_spacing: Spacing3D = (1, 1, 1),
     spacing: Optional[Spacing3D] = None,
@@ -168,8 +168,8 @@ def __spatial_sample(
     kwargs = {}
     if spacing is not None:
         kwargs['spacing'] = spacing
-    if offset is not None:
-        kwargs['offset'] = offset
+    if origin is not None:
+        kwargs['origin'] = origin
     img = to_sitk_image(data, **kwargs)
 
     # Create resample filter.

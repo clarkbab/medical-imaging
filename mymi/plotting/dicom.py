@@ -1,9 +1,9 @@
 from mymi.constants import *
 from mymi.datasets.dicom import DicomDataset
 
-from ..plotting import plot_patients as pp, plot_patient_histograms as pph  
+from ..plotting import plot_patient as pp, plot_patient_histogram as pph  
 
-def plot_patients(dataset, *args, **kwargs) -> None:
+def plot_patient(dataset, *args, **kwargs) -> None:
     set = DicomDataset(dataset)
     fns = {
         'ct_series': lambda study, series_id: study.series(series_id, 'ct'),
@@ -20,5 +20,5 @@ def plot_patients(dataset, *args, **kwargs) -> None:
     }
     pp(set, fns, *args, **kwargs)
 
-def plot_patient_histograms(*args, **kwargs) -> None:
+def plot_patient_histogram(*args, **kwargs) -> None:
     pph(DicomDataset, *args, **kwargs)

@@ -7,9 +7,9 @@ from mymi.utils import *
 
 def velocity_load_transform(
     filepath: str,
-    # Velocity '.bdf' file does not preserve the DICOM 'ImageOffsetPatient' offset.
+    # Velocity '.bdf' file does not preserve the DICOM 'ImageOffsetPatient' origin.
     # We need to pass this manually.
-    fixed_offset: Point3D) -> sitk.Transform:
+    fixed_origin: Point3D) -> sitk.Transform:
 
     # Read ".bdf" file.
     with open(filepath, "rb") as f:
@@ -74,7 +74,7 @@ def velocity_load_transform(
     image = transpose_image(image, vector=True)
 
     # Create transform.
-    # The 'offset' is not stored in the '.bdf' file, so we need to use the fixed image offset.
-    image = to_sitk_image(image, spacing=spacing, offset=fixed_offset, vector=True)
+    # The 'origin' is not stored in the '.bdf' file, so we need to use the fixed image origin.
+    image = to_sitk_image(image, spacing=spacing, origin=fixed_origin, vector=True)
     transform = sitk.DisplacementFieldTransform(image)
     return transform

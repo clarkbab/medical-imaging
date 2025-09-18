@@ -16,13 +16,13 @@ class RandomFlip(RandomAffineMixin, RandomTransform):
         p_flip: Union[Number, Tuple[Number]] = 0.5,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        p_flips = arg_to_list(p_flip, (int, float), broadcast=self._dim)
-        assert len(p_flips) == self._dim, f"Expected 'p_flip' of length {self._dim} for dim={self._dim}, got {len(p_flips)}."
-        self._p_flips = to_tensor(p_flips, dtype=torch.bool)
+        p_flip = arg_to_list(p_flip, (int, float), broadcast=self._dim)
+        assert len(p_flip) == self._dim, f"Expected 'p_flip' of length {self._dim} for dim={self._dim}, got {len(p_flip)}."
+        self._p_flip = to_tensor(p_flip, dtype=torch.bool)
         self._params = dict(
             dim=self._dim,
             p=self._p,
-            p_flips=self._p_flips,
+            p_flip=self._p_flip,
         )
 
     def freeze(self) -> 'Flip':
@@ -30,11 +30,11 @@ class RandomFlip(RandomAffineMixin, RandomTransform):
         if not should_apply:
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
-        should_flip = draw < self._p_flips
+        should_flip = draw < self._p_flip
         return Flip(flip=should_flip, dim=self._dim)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self._p_flips)}, dim={self._dim}, p={self._p})"
+        return f"{self.__class__.__name__}({to_tuple(self._p_flip)}, dim={self._dim}, p={self._p})"
         
 # Methods are resolved left to right, so overridding mixins should appear first.
 # Init methods are also run left to right, so mixins that override params, e.g. _is_affine
@@ -43,19 +43,18 @@ class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
         self,
         flip: Union[bool, Tuple[bool], np.ndarray, torch.Tensor],
+        # TODO: Add centre for flips about other points.
         **kwargs) -> None:
         super().__init__(**kwargs)
-        flips = arg_to_list(flip, bool, broadcast=self._dim)
-        assert len(flips) == self._dim, f"Expected 'flip' of length {self._dim} for dim={self._dim}, got {len(flips)}."
-        self.__flips = to_tensor(flips, dtype=torch.bool)
+        flip = arg_to_list(flip, bool, broadcast=self._dim)
+        assert len(flip) == self._dim, f"Expected 'flip' of length {self._dim} for dim={self._dim}, got {len(flip)}."
+        self.__flip = to_tensor(flip, dtype=torch.bool)
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
             dim=self._dim,
-            flips=self.__flips,
+            flip=self.__flip,
             matrix=self.__matrix,
-            matrix_complete=False,      # Do matrices define the full transform?
-            requires=['centre'],        # What information is needed at transform time?
         )
 
     def back_transform_points(
@@ -85,7 +84,7 @@ class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
         return points_t
 
     def __create_transforms(self) -> None:
-        scaling = tuple([-1 if f else 1 for f in self.__flips] + [1])
+        scaling = tuple([-1 if f else 1 for f in self.__flip] + [1])
         self.__matrix = create_eye(self._dim, scaling=scaling)
         self.__backward_matrix = self.__matrix      # Flip matrix is it's own inverse.
 
@@ -144,7 +143,7 @@ class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
         return matrix_a
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__flips)}, dim={self._dim})"
+        return f"{self.__class__.__name__}({to_tuple(self.__flip)}, dim={self._dim})"
 
     def transform_points(
         self,

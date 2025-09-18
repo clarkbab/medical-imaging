@@ -1,17 +1,15 @@
 from typing import *
 
-class NiftiSeries:
+from ...series import Series
+
+class NiftiSeries(Series):
+    def __init__(
+        self,
+        *args,
+        **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
     @property
     def date(self) -> Optional[str]:
         # May implement in dicom -> nifti processing in future.
         return None
-
-    @property
-    def global_id(self) -> str:
-        return self._global_id
-
-    def __repr(self) -> str:
-        return str(self)
-
-    def __str__(self) -> str:
-        return self._global_id

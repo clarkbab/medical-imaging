@@ -14,27 +14,27 @@ def from_sitk_image(
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
-    offset = list(img.GetOrigin())
+    origin = list(img.GetOrigin())
     if img_type == 'mha':
         pass
     elif img_type == 'nii':
-        # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative offsets
+        # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative origins
         # and directions. For all images we write to nifti, they'll be in LPS+, so undo ITK changes.
         # The image data is not flipped by ITK.
-        offset[0], offset[1] = -offset[0], -offset[1]
-    offset = tuple(offset)
-    return data, spacing, offset
+        origin[0], origin[1] = -origin[0], -origin[1]
+    origin = tuple(origin)
+    return data, spacing, origin
 
 def to_sitk_image(
     data: Union[ImageArray, VectorImageArray],   # We use LPS coordinates - the same as SimpleITK!
     spacing: Spacing,
-    offset: Point,
+    origin: Point,
     vector: bool = False) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:
         data = data.astype(np.uint8)
     spacing = tuple(float(s) for s in spacing)
-    offset = tuple(float(o) for o in offset)
+    origin = tuple(float(o) for o in origin)
     
     # SimpleITK **sometimes** flips the data coordinates (x, y, z) -> (z, y, x) when converting from numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -52,16 +52,16 @@ def to_sitk_image(
         data = moveaxis_fn(data, 0, -1)
     img = sitk.GetImageFromArray(data, isVector=vector)
     img.SetSpacing(spacing)
-    img.SetOrigin(offset)
+    img.SetOrigin(origin)
 
     return img
 
 def dvf_to_sitk_transform(
     dvf: VectorImageArray,   # (3, X, Y, Z)
     spacing: Spacing3D = (1, 1, 1),
-    offset: Point3D = (0, 0, 0)) -> sitk.Transform:
+    origin: Point3D = (0, 0, 0)) -> sitk.Transform:
     dvf = dvf.astype(np.float64)
     assert dvf.shape[0] == 3
-    dvf_sitk = to_sitk_image(dvf, spacing, offset, vector=True)
+    dvf_sitk = to_sitk_image(dvf, spacing, origin, vector=True)
     dvf_transform = sitk.DisplacementFieldTransform(dvf_sitk)
     return dvf_transform

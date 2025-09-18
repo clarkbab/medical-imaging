@@ -9,28 +9,28 @@ def landmarks_to_data(data: Union[LandmarksFrame, LandmarksFrameVox]) -> Points3
 def landmarks_to_image_coords(
     data: LandmarksFrame,
     spacing: Spacing3D,
-    offset: Point3D) -> LandmarksFrameVox:
+    origin: Point3D) -> LandmarksFrameVox:
     data = data.copy()
     lm_data = data[list(range(3))].to_numpy()
-    lm_data = np.round((lm_data - offset) / spacing).astype(int)
+    lm_data = np.round((lm_data - origin) / spacing).astype(int)
     data[list(range(3))] = lm_data
     return data
 
 def landmarks_to_patient_coords(
     data: LandmarksFrameVox,
     spacing: Spacing3D,
-    offset: Point3D) -> LandmarksFrame:
+    origin: Point3D) -> LandmarksFrame:
     data = data.copy()
     lm_data = data[list(range(3))].to_numpy()
-    lm_data = lm_data * spacing + offset
+    lm_data = lm_data * spacing + origin
     data[list(range(3))] = lm_data
     return data
 
 def point_to_image_coords(
     point: Point3D,
     spacing: Spacing3D,
-    offset: Point3D) -> Voxel:
-    point = np.round((np.array(point) - offset) / spacing).astype(int)
+    origin: Point3D) -> Voxel:
+    point = np.round((np.array(point) - origin) / spacing).astype(int)
     return tuple(point)
 
 def replace_landmarks(

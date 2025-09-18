@@ -69,6 +69,21 @@ def create_translation(
     matrix[:dim, dim] = translation
     return matrix
 
+def expand_range_arg(
+    a: Union[Number, Tuple[Number, ...]],
+    dim: SpatialDim = 3,
+    negate_lower: bool = False,
+    vals_per_dim: int = 2) -> Tuple[Number, ...]:
+    if isinstance(a, (int, float)):
+        ranges = (-a if negate_lower else a, a) * (vals_per_dim // 2) * dim
+    elif len(a) == vals_per_dim // 2:
+        ranges = a * 2 * dim
+    elif len(a) == vals_per_dim:
+        ranges = a * dim
+    else:
+        ranges = a
+    return ranges
+
 def grid_sample(
     image: Union[ImageArray, ImageTensor],    # 3-5D tensor - expects channels in PyTorch order: N, C, X, Y, Z.
     points: Union[ImageArray, ImageTensor, PointsArray, PointsTensor],     # 3-5D tensor of points in patient coords - expects channels in PyTorch order, except for points arrays.
@@ -200,7 +215,7 @@ def image_points(
         return points_mms
 
 def to_array(
-    data: Optional[Union[Tuple[Union[bool, Number]], np.ndarray, torch.Tensor, torch.Size]],
+    data: Optional[Union[Tuple[Union[Number, bool, str]], np.ndarray, torch.Tensor, torch.Size]],
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None) -> Optional[np.ndarray]:
     # Gives no-op for None.
@@ -214,8 +229,10 @@ def to_array(
         return np.array(data)
     if isinstance(data, torch.Tensor):
         return data.cpu().numpy()
-    dtype = np.float32 if dtype is None else dtype
-    return np.array(data, dtype=dtype)
+    data = np.array(data)
+    if dtype is not None:
+        data = data.astype(dtype)
+    return data
 
 def to_tensor(
     data: Optional[Union[Tuple[Union[bool, Number]], np.ndarray, torch.Size, torch.Tensor]],

@@ -6,11 +6,12 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ..mixins import IndexWithErrorsMixin
+from ..patient import Patient
 from ..region_map import RegionMap
 from .series import * 
 from .study import DicomStudy
 
-class DicomPatient(IndexWithErrorsMixin):
+class DicomPatient(IndexWithErrorsMixin, Patient):
     def __init__(
         self,
         dataset_id: DatasetID,
@@ -20,14 +21,10 @@ class DicomPatient(IndexWithErrorsMixin):
         index_errors: pd.DataFrame,
         ct_from: Optional['DicomPatient'] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        self.__ct_from = ct_from
-        self.__dataset_id = dataset_id
+        super().__init__(dataset_id, id, ct_from=ct_from, region_map=region_map)
         self._index_errors = index_errors
-        self.__global_id = f'DICOM:{dataset_id}:{id}'
-        self.__id = str(id)
         self._index = index
         self._index_policy = index_policy
-        self.__region_map = region_map
 
     @property
     def age(self) -> str:
@@ -87,26 +84,26 @@ class DicomPatient(IndexWithErrorsMixin):
 
         return df
 
-    def has_studies(
+    def has_study(
         self,
-        study_ids: StudyIDs,
+        study_id: StudyIDs,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_studies(study_ids=study_ids, **kwargs)
-        req_ids = arg_to_list(study_ids, StudyID)
+        real_ids = self.list_studies(study_id=study_id, **kwargs)
+        req_ids = arg_to_list(study_id, StudyID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def list_studies(
         self,
         show_datetime: bool = False,
-        study_ids: StudyIDs = 'all') -> List[StudyID]:
+        study_id: StudyIDs = 'all') -> List[StudyID]:
         # Sort studies by date/time - oldest first.
         ids = list(self._index.sort_values(['study-date', 'study-time'])['study-id'].unique())
         
-        # Filter by 'study_ids'.
-        if study_ids != 'all':
-            study_ids = arg_to_list(study_ids, StudyID)
+        # Filter by 'study_id'.
+        if study_id != 'all':
+            study_ids = arg_to_list(study_id, StudyID)
             all_ids = ids.copy()
             ids = []
             for i, id in enumerate(all_ids):
@@ -138,14 +135,17 @@ class DicomPatient(IndexWithErrorsMixin):
             raise ValueError(f"Study '{id}' not found for patient '{self}'.")
         index = self._index[self._index['study-id'] == str(id)].copy()
         index_errors = self._index_errors[self._index_errors['study-id'] == str(id)].copy()
-        ct_from = self.__ct_from.study(id) if self.__ct_from is not None and self.__ct_from.has_studies(id) else None
-        return DicomStudy(self.__dataset_id, self.__id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self.__region_map)
+        ct_from = self._ct_from.study(id) if self._ct_from is not None and self._ct_from.has_studies(id) else None
+        return DicomStudy(self._dataset_id, self._id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self._region_map)
 
     def __str__(self) -> str:
-        return self.__global_id
+        if self._ct_from is None:
+            return f"DicomPatient({self._id}, dataset={self._dataset_id})"
+        else:
+            return f"DicomPatient({self._id}, dataset={self._dataset_id}, ct_from={self._ct_from.dataset_id})"
     
 # Add properties.
-props = ['ct_from', 'global_id', 'id', 'index_policy', 'path', 'region_map']
+props = ['index_policy']
 for p in props:
     setattr(DicomPatient, p, property(lambda self, p=p: getattr(self, f'_{DicomPatient.__name__}__{p}')))
 
@@ -161,7 +161,7 @@ for m in mods:
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'rtdose']
-props = ['data', 'fov', 'offset', 'size', 'spacing']
+props = ['data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
     n = 'dose' if m == 'rtdose' else m  # Rename 'rtdose' to 'dose'.
     for p in props:

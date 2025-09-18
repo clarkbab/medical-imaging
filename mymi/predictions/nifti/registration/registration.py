@@ -46,10 +46,10 @@ def create_patient_registration(
     fixed_ct = fixed_study.ct_data
     fixed_size = fixed_ct.shape
     fixed_spacing = fixed_study.ct_spacing
-    fixed_offset = fixed_study.ct_offset
+    fixed_origin = fixed_study.ct_origin
     moving_ct = moving_study.ct_data
     moving_spacing = moving_study.ct_spacing
-    moving_offset = moving_study.ct_offset
+    moving_origin = moving_study.ct_origin
     assert moving_spacing == fixed_spacing, "Fixed and moving images should have same spacing - initial rigid registration."
 
     # Replace padding before passing through model.
@@ -79,18 +79,18 @@ def create_patient_registration(
 
     # Convert DVF to sitk format - each voxel represents displacement in patient coordinates.
     dvf = dvf / 2    # Network operates on [-1, 1) scale for DVF values. 
-    dvf = np.moveaxis(dvf, 0, -1) * fixed_spacing * fixed_size + fixed_offset
+    dvf = np.moveaxis(dvf, 0, -1) * fixed_spacing * fixed_size + fixed_origin
     dvf = np.moveaxis(dvf, -1, 0)
 
     # Don't use y_moved predicted from network. Otherwise CT moved will have been resampled 3 times
     # Use resampled DVF to transform moving -> fixed CT using one resample. Otherwise, CT will have
     # been resampled 3 times: moving (original) -> moving (model) -> moved (model) -> moved(original).
-    sitk_transform = dvf_to_sitk_transform(dvf, fixed_spacing, fixed_offset)
-    ct_moved = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
+    sitk_transform = dvf_to_sitk_transform(dvf, fixed_spacing, fixed_origin)
+    ct_moved = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-    save_nifti(ct_moved, filepath, spacing=fixed_spacing, offset=fixed_offset)
+    save_nifti(ct_moved, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Save DVF.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
@@ -102,9 +102,9 @@ def create_patient_registration(
         if moving_region_data is not None:
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
+                moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=sitk_transform)   
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Move landmarks.
     if landmarks is not None:
@@ -123,9 +123,9 @@ def create_patient_registration(
     # Move dose.
     if warp_dose and moving_study.has_dose:
         moving_dose = moving_study.dose_data
-        moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dose', f'{model_name}.nii.gz')
-        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
 def delete_patient_registration(
     dataset: str,
@@ -189,19 +189,19 @@ def create_pat_identity_registration(
     fixed_ct = fixed_study.ct_data
     fixed_size = fixed_ct.shape
     fixed_spacing = fixed_study.ct_spacing
-    fixed_offset = fixed_study.ct_offset
+    fixed_origin = fixed_study.ct_origin
     moving_ct = moving_study.ct_data
     moving_spacing = moving_study.ct_spacing
-    moving_offset = moving_study.ct_offset
-    if moving_spacing != fixed_spacing or moving_offset != fixed_offset:
-        raise ValueError("Fixed and moving images should have same spacing and offset - initial rigid registration.")
+    moving_origin = moving_study.ct_origin
+    if moving_spacing != fixed_spacing or moving_origin != fixed_origin:
+        raise ValueError("Fixed and moving images should have same spacing and origin - initial rigid registration.")
 
     # Resample moving to moved.
-    moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
+    moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-    save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+    save_nifti(moved_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Save transform.
     transform = sitk.Transform(3, sitk.sitkIdentity)
@@ -214,9 +214,9 @@ def create_pat_identity_registration(
         if moving_region_data is not None:
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
+                moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Move landmarks.
     if landmark_ids is not None:
@@ -234,9 +234,9 @@ def create_pat_identity_registration(
     # Move dose.
     if create_moved_dose and moving_study.has_dose:
         moving_dose = moving_study.dose_data
-        moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dose', f'{model_name}.nii.gz')
-        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
 def create_registrations(
     dataset: str,
@@ -406,9 +406,9 @@ def load_registered_landmarks(
     if not use_patient_coords:
         study = set.patient(moving_pat_id).study(moving_study_id)
         spacing = study.ct_spacing
-        offset = study.ct_offset
+        origin = study.ct_origin
         lm_data = landmarks[list(range(3))].to_numpy()
-        lm_data = (lm_data - offset) / spacing
+        lm_data = (lm_data - origin) / spacing
         lm_data = lm_data.round()
         lm_data = lm_data.astype(np.uint32)
         landmarks[list(range(3))] = lm_data
@@ -459,11 +459,11 @@ def create_patient_vxmpp_identity_registration(
     fixed_ct = fixed_study.ct_data
     fixed_size = fixed_ct.shape
     fixed_spacing = fixed_study.ct_spacing
-    fixed_offset = fixed_study.ct_offset
+    fixed_origin = fixed_study.ct_origin
     moving_ct = moving_study.ct_data
     moving_size = moving_ct.shape
     moving_spacing = moving_study.ct_spacing
-    moving_offset = moving_study.ct_offset
+    moving_origin = moving_study.ct_origin
     if fixed_size != moving_size:
         raise ValueError("Fixed and moving images should have same size.")
 
@@ -474,11 +474,11 @@ def create_patient_vxmpp_identity_registration(
     transform.SetMatrix(list(matrix.flatten()))
 
     # Resample moving to moved.
-    moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+    moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
 
     # Save moved CT.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-    save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+    save_nifti(moved_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Save transform.
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dvf', f'{model_name}.hdf5')
@@ -490,9 +490,9 @@ def create_patient_vxmpp_identity_registration(
         if moving_region_data is not None:
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_size, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-                save_nifti(moved_label, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                save_nifti(moved_label, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
     # Move landmarks.
     if landmarks is not None:
@@ -532,18 +532,18 @@ def warp_patient_data(
 
     # Move CT data.
     if warp_ct and moving_study.has_ct:
-        moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        moved_ct = resample(moving_study.ct_data, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'ct', f'{model_name}.nii.gz')
-        save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Move region data.
     if regions is not None and moving_study.has_region(regions=regions):
         moving_region_data = moving_study.region_data(regions=regions)
         for region, moving_label in moving_region_data.items():
             # Apply registration transform.
-            moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+            moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
             filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'regions', region, f'{model_name}.nii.gz')
-            save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+            save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Move landmarks.
     if landmarks is not None and fixed_study.has_landmark(landmarks=landmarks):
@@ -560,9 +560,9 @@ def warp_patient_data(
     # Move dose.
     if warp_dose and moving_study.has_dose:
         moving_dose = moving_study.dose_data
-        moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+        moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat.id, fixed_study.id, moving_pat.id, moving_study.id, 'dose', f'{model_name}.nii.gz')
-        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
             
 def warp_patients_data(
     dataset: str,

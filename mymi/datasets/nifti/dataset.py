@@ -15,21 +15,21 @@ from ..mixins import IndexMixin
 from ..region_map import RegionMap
 from .patient import NiftiPatient
 
-class NiftiDataset(Dataset, IndexMixin):
+class NiftiDataset(IndexMixin, Dataset):
     def __init__(
         self,
-        id: str):
-        self.__id = id
-        self.__path = os.path.join(config.directories.datasets, 'nifti', self.__id)
-        ct_from_id = None
-        for f in os.listdir(self.__path):
+        id: DatasetID) -> None:
+        path = os.path.join(config.directories.datasets, 'nifti', id)
+        if not os.path.exists(path):
+            raise ValueError(f"NiftiDataset '{id}' not found. Dirpath: {path}")
+        self.__path = path
+        ct_from = None
+        for f in os.listdir(path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
-                ct_from_id = match.group(1)
-        self.__ct_from = NiftiDataset(ct_from_id) if ct_from_id is not None else None
-        self.__global_id = f"NIFTI:{self.__id}__CT_FROM_{self.__ct_from}__" if self.__ct_from is not None else f"NIFTI:{self.__id}"
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Dataset '{self}' not found.")
+                ct_from = match.group(1)
+        ct_from = NiftiDataset(ct_from) if ct_from is not None else None
+        super().__init__(id, ct_from=ct_from)
 
     @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
@@ -39,12 +39,12 @@ class NiftiDataset(Dataset, IndexMixin):
             return fn(self, *args, **kwargs)
         return wrapper
 
-    def has_patients(
+    def has_patient(
         self,
-        pat_ids: PatientID = 'all',
+        pat_id: PatientID = 'all',
         all: bool = False) -> bool:
         all_pats = self.list_patients()
-        subset_pats = self.list_patients(pat_ids=pat_ids)
+        subset_pats = self.list_patients(pat_id=pat_id)
         n_overlap = len(np.intersect1d(all_pats, subset_pats))
         return n_overlap == len(all_pats) if all else n_overlap > 0
 
@@ -62,17 +62,17 @@ class NiftiDataset(Dataset, IndexMixin):
     def list_patients(
         self,
         exclude: Optional[PatientIDs] = None,
-        pat_ids: PatientIDs = 'all',    # Saves on filtering code elsewhere.
-        region_ids: RegionIDs = 'all',
+        pat_id: PatientIDs = 'all',    # Saves on filtering code elsewhere.
+        region_id: RegionIDs = 'all',
         splits: Splits = 'all') -> List[PatientID]:
         # Load patients from filenames.
         dirpath = os.path.join(self.__path, 'data', 'patients')
         all_ids = list(sorted(os.listdir(dirpath)))
 
-        # Filter by 'region_ids'.
+        # Filter by 'region_id'.
         ids = all_ids.copy()
-        if region_ids != 'all':
-            region_ids = regions_to_list(region_ids)
+        if region_id != 'all':
+            region_ids = regions_to_list(region_id)
             all_region_ids = self.list_regions()
 
             # # Check that 'region_ids' are valid.
@@ -115,9 +115,9 @@ class NiftiDataset(Dataset, IndexMixin):
             exclude = arg_to_list(exclude, PatientID)
             ids = [p for p in ids if p not in exclude]
 
-        # Filter by 'pat_ids'.
-        if pat_ids != 'all':
-            pat_ids = arg_to_list(pat_ids, PatientID)
+        # Filter by 'pat_id'.
+        if pat_id != 'all':
+            pat_ids = arg_to_list(pat_id, PatientID)
 
             # # Check that 'pat_ids' are valid.
             # for p in pat_ids:
@@ -165,9 +165,9 @@ class NiftiDataset(Dataset, IndexMixin):
 
     def list_regions(
         self,
-        pat_ids: PatientIDs = 'all') -> List[RegionID]:
+        pat_id: PatientIDs = 'all') -> List[RegionID]:
         # Load all patients.
-        pat_ids = self.list_patients(pat_ids=pat_ids)
+        pat_ids = self.list_patients(pat_id=pat_id)
 
         # Get patient regions.
         ids = []
@@ -188,7 +188,7 @@ class NiftiDataset(Dataset, IndexMixin):
 
     def __load_data(self) -> None:
         # Load index.
-        filepath = os.path.join(self.path, 'index.csv')
+        filepath = os.path.join(self.__path, 'index.csv')
         if os.path.exists(filepath):
             map_types = { 'dicom-patient-id': str, 'patient-id': str, 'study-id': str, 'data-id': str }
             self._index = load_csv(filepath, map_types=map_types)
@@ -218,11 +218,27 @@ class NiftiDataset(Dataset, IndexMixin):
             self.__group_index = None
 
         # Load region map.
-        filepath = os.path.join(self.path, 'region-map.yaml')
+        filepath = os.path.join(self.__path, 'region-map.yaml')
         if os.path.exists(filepath):
             self.__region_map = RegionMap(load_yaml(filepath))
         else:
             self.__region_map = None
+
+    # Copied from 'mymi/reports/dataset/nift.py' to avoid circular dependency.
+    def __load_patient_regions_report(
+        self,
+        exists_only: bool = False) -> Union[DataFrame, bool]:
+        filepath = os.path.join(self.__path, 'reports', 'region-count.csv')
+        if os.path.exists(filepath):
+            if exists_only:
+                return True
+            else:
+                return read_csv(filepath)
+        else:
+            if exists_only:
+                return False
+            else:
+                raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
 
     @property
     def n_patients(self) -> int:
@@ -244,28 +260,13 @@ class NiftiDataset(Dataset, IndexMixin):
         index = self._index[self._index['patient-id'] == str(id)].copy() if self._index is not None else None
         exc_df = self.__excluded_labels[self.__excluded_labels['patient-id'] == str(id)].copy() if self.__excluded_labels is not None else None
 
-        # Check that patient ID exists.
-        dirpath = os.path.join(self.__path, 'data', 'patients', str(id))
-        if not os.path.exists(dirpath):
-            raise ValueError(f"Patient '{id}' not found for dataset '{self}'. Filepath: {dirpath}")
-
-        return NiftiPatient(self.__id, id, dirpath, ct_from=self.__ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
-
-    # Copied from 'mymi/reports/dataset/nift.py' to avoid circular dependency.
-    def __load_patient_regions_report(
-        self,
-        exists_only: bool = False) -> Union[DataFrame, bool]:
-        filepath = os.path.join(self.__path, 'reports', 'region-count.csv')
-        if os.path.exists(filepath):
-            if exists_only:
-                return True
-            else:
-                return read_csv(filepath)
+        # Get 'ct_from' patient.
+        if self._ct_from is not None and self._ct_from.has_patient(id):
+            ct_from = self._ct_from.patient(id)
         else:
-            if exists_only:
-                return False
-            else:
-                raise ValueError(f"Patient regions report doesn't exist for dataset '{self}'.")
+            ct_from = None
+
+        return NiftiPatient(self._id, id, ct_from=ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
 
     @property
     @ensure_loaded
@@ -273,13 +274,11 @@ class NiftiDataset(Dataset, IndexMixin):
         return self.__region_map
 
     def __str__(self) -> str:
-        return self.__global_id
+        if self._ct_from is None:
+            return f"NiftiDataset({self._id})"
+        else:
+            return f"NiftiDataset({self._id}, ct_from={self._ct_from.id})"
 
     @property
     def type(self) -> DatasetType:
         return DatasetType.NIFTI
-    
-# Add properties.
-props = ['ct_from', 'global_id', 'id', 'path']
-for p in props:
-    setattr(NiftiDataset, p, property(lambda self, p=p: getattr(self, f'_{NiftiDataset.__name__}__{p}')))

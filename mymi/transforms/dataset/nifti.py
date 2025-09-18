@@ -25,12 +25,12 @@ def rigid_registration(
     moving_study = moving_pat.study(moving_study_id)
     moving_ct = moving_study.ct_data
     moving_spacing = moving_study.ct_spacing
-    moving_offset = moving_study.ct_offset
+    moving_origin = moving_study.ct_origin
     fixed_pat = set.patient(fixed_pat_id)
     fixed_study = fixed_pat.study(fixed_study_id)
     fixed_ct = fixed_study.ct_data
     fixed_spacing = fixed_study.ct_spacing
-    fixed_offset = fixed_study.ct_offset
+    fixed_origin = fixed_study.ct_origin
 
     # Do we need to resample before applying rigid registration?
     # The rigid registration transform operates on patient coordinates, and the object's patient
@@ -38,7 +38,7 @@ def rigid_registration(
     # moving_ct = resample(moving_ct, spacing=moving_spacing, output_spacing=fixed_spacing)
 
     # Perform CT registration.
-    moved_ct, transform = rigid_image_registration(moving_ct, moving_spacing, moving_offset, fixed_ct, fixed_spacing, fixed_offset, **kwargs)
+    moved_ct, transform = rigid_image_registration(moving_ct, moving_spacing, moving_origin, fixed_ct, fixed_spacing, fixed_origin, **kwargs)
 
     # Move region data.
     moved_region_data = None
@@ -48,7 +48,7 @@ def rigid_registration(
             moved_region_data = {}
             for region, moving_label in moving_region_data.items():
                 # Apply registration transform.
-                moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 moved_region_data[region] = moved_label
 
     # Move landmarks.

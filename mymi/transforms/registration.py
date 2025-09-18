@@ -8,10 +8,10 @@ from mymi.utils import *
 def rigid_image_registration(
     moving_image: ImageArray,
     moving_spacing: Spacing3D,
-    moving_offset: Point3D,
+    moving_origin: Point3D,
     fixed_image: ImageArray,
     fixed_spacing: Spacing3D,
-    fixed_offset: Point3D,
+    fixed_origin: Point3D,
     disable_x_axis_rotation: bool = False,
     disable_y_axis_rotation: bool = False,
     fill: Union[float, Literal['min']] = 'min',
@@ -20,8 +20,8 @@ def rigid_image_registration(
     show_progress: bool = False) -> Tuple[ImageArray, sitk.Transform]:
     # Convert to sitk images.
     fixed_size = fixed_image.shape
-    fixed_sitk = to_sitk_image(fixed_image, fixed_spacing, fixed_offset)
-    moving_sitk = to_sitk_image(moving_image, moving_spacing, moving_offset)
+    fixed_sitk = to_sitk_image(fixed_image, fixed_spacing, fixed_origin)
+    moving_sitk = to_sitk_image(moving_image, moving_spacing, moving_origin)
 
     initial_transform = sitk.CenteredTransformInitializer(fixed_sitk, moving_sitk, sitk.Euler3DTransform(), sitk.CenteredTransformInitializerFilter.GEOMETRY)
 
@@ -38,8 +38,8 @@ def rigid_image_registration(
         if mask_window[1] is not None:
             fixed_mask[fixed_image >= mask_window[1]] = 0
             moving_mask[moving_image >= mask_window[1]] = 0
-        fixed_mask_sitk = to_sitk_image(fixed_mask, fixed_spacing, fixed_offset)
-        moving_mask_sitk = to_sitk_image(moving_mask, moving_spacing, moving_offset)
+        fixed_mask_sitk = to_sitk_image(fixed_mask, fixed_spacing, fixed_origin)
+        moving_mask_sitk = to_sitk_image(moving_mask, moving_spacing, moving_origin)
         registration_method.SetMetricFixedMask(fixed_mask_sitk)
         registration_method.SetMetricMovingMask(moving_mask_sitk)
 
@@ -95,10 +95,10 @@ def rigid_image_registration(
     if fill == 'min':
         fill = moving_image.min()
     moved_sitk = sitk.Resample(moving_sitk, fixed_sitk, transform, sitk.sitkLinear, fill, moving_sitk.GetPixelID())
-    moved, moved_spacing, moved_offset = from_sitk_image(moved_sitk)
+    moved, moved_spacing, moved_origin = from_sitk_image(moved_sitk)
     assert moved.shape == fixed_size
     assert moved_spacing == fixed_spacing
-    assert moved_offset == fixed_offset
+    assert moved_origin == fixed_origin
 
     return moved, transform
     

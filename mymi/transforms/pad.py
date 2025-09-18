@@ -12,7 +12,7 @@ def __spatial_pad(
     image: ImageArray,
     bounding_box: Union[Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    origin: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True) -> ImageArray:
     assert_box_width(bounding_box)
@@ -23,8 +23,8 @@ def __spatial_pad(
     # Convert box to voxel coordinates.
     if use_patient_coords:
         min_mm, max_mm = bounding_box
-        min = tuple(np.round((np.array(min_mm) - offset) / spacing).astype(int))
-        max = tuple(np.round((np.array(max_mm) - offset) / spacing).astype(int))
+        min = tuple(np.round((np.array(min_mm) - origin) / spacing).astype(int))
+        max = tuple(np.round((np.array(max_mm) - origin) / spacing).astype(int))
     else:
         min, max = bounding_box
 

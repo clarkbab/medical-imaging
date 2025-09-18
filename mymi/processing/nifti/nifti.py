@@ -50,7 +50,7 @@ def combine_labels(
             study = pat.study(s)
             region_data = study.data(data_id, 'regions').data(region_ids=region_ids)
             label = np.clip(np.stack([v for v in region_data.values()]).sum(axis=0), 0, 1).astype(bool)
-            create_region(dataset, p, s, data_id, output_region_id, label, study.ct_spacing, study.ct_offset, dry_run=dry_run)
+            create_region(dataset, p, s, data_id, output_region_id, label, study.ct_spacing, study.ct_origin, dry_run=dry_run)
 
 def convert_replan_to_nnunet_ref_model(
     regions: Regions,
@@ -706,11 +706,11 @@ def convert_replan_to_nnunet_bootstrap() -> None:
         spacing = pat.ct_spacing
 
         # Create NIFTI CT image.
-        offset = pat.ct_offset
+        origin = pat.ct_origin
         affine = np.array([
-            [spacing[0], 0, 0, offset[0]],
-            [0, spacing[1], 0, offset[1]],
-            [0, 0, spacing[2], offset[2]],
+            [spacing[0], 0, 0, origin[0]],
+            [0, spacing[1], 0, origin[1]],
+            [0, 0, spacing[2], origin[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(data, affine)
         filepath = os.path.join(dset.path, 'data', 'ct', f'{pat_id}.nii.gz')
@@ -845,11 +845,11 @@ def convert_replan_to_lens_crop(
             raise ValueError(f"Unrecognised crop method '{crop_method}'.")
 
         # Create NIFTI CT image.
-        offset = pat.ct_offset
+        origin = pat.ct_origin
         affine = np.array([
-            [spacing[0], 0, 0, offset[0]],
-            [0, spacing[1], 0, offset[1]],
-            [0, 0, spacing[2], offset[2]],
+            [spacing[0], 0, 0, origin[0]],
+            [0, spacing[1], 0, origin[1]],
+            [0, 0, spacing[2], origin[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(data, affine)
         filepath = os.path.join(dset.path, 'data', 'ct', f'{pat_id}.nii.gz')
@@ -913,11 +913,11 @@ def create_excluded_brainstem(
 
         # Write new label.
         ct_spacing = pat.ct_spacing
-        ct_offset = pat.ct_offset
+        ct_origin = pat.ct_origin
         affine = np.array([
-            [ct_spacing[0], 0, 0, ct_offset[0]],
-            [0, ct_spacing[1], 0, ct_offset[1]],
-            [0, 0, ct_spacing[2], ct_offset[2]],
+            [ct_spacing[0], 0, 0, ct_origin[0]],
+            [0, ct_spacing[1], 0, ct_origin[1]],
+            [0, 0, ct_spacing[2], ct_origin[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(brain_data.astype(np.int32), affine)
         filepath = os.path.join(dest_set.path, 'data', 'regions', 'Brain', f'{pat_id}.nii.gz')

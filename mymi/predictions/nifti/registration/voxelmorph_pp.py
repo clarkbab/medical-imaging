@@ -131,9 +131,9 @@ def create_voxelmorph_pp_predictions(
                 sitk_save_transform(transform, transform_path)
 
                 # Move image manually using transform - only requires one resampling.
-                moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_ct = resample(moving_study.ct_data, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(pred_base_path, 'ct', f'voxelmorph-pp.nii.gz')
-                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
         if regions is not None:
             transform = sitk_load_transform(transform_path)
@@ -145,10 +145,10 @@ def create_voxelmorph_pp_predictions(
 
                 # Create moved region label.
                 moving_label = moving_study.region_data(regions=r)[r]
-                moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'voxelmorph-pp.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
-                save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
         
         if landmarks is not None:
             if not fixed_study.has_landmark(pat_landmarks):

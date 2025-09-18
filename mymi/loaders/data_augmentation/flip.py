@@ -20,10 +20,10 @@ class RandomFlip:
 
     def get_concrete_transform(
         self,
-        # Size/spacing/offset are required to set the centre [mm] of the flip transform.
+        # Size/spacing/origin are required to set the centre [mm] of the flip transform.
         size: Size3D,
         spacing: Spacing3D,
-        offset: Point3D,
+        origin: Point3D,
         random_seed: Optional[int] = None,
         **kwargs) -> Tuple[sitk.Transform, sitk.Transform, Dict[str, Any]]:
         # Sample transform parameters.
@@ -31,13 +31,13 @@ class RandomFlip:
             np.random.seed(random_seed)
         p_draw = [np.random.choice([1, -1], p=[1 - p, p]) for p in self.__p]
         print('drawn p:', p_draw)
-        print(size, spacing, offset)
+        print(size, spacing, origin)
 
         # Create transform.
         flip_transform = sitk.AffineTransform(3)
         matrix = np.diag(p_draw)
         flip_transform.SetMatrix(matrix.flatten().tolist())
-        centre = fov_centre(np.zeros(size), spacing=spacing, offset=offset, use_patient_coords=True)
+        centre = fov_centre(np.zeros(size), spacing=spacing, origin=origin, use_patient_coords=True)
         print('centre:', centre)
         flip_transform.SetCenter(list(centre))
 

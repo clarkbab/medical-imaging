@@ -23,26 +23,21 @@ class RandomRotation(RandomAffineMixin, RandomTransform):
     def __init__(
         self, 
         rotation: Union[Number, Tuple[Number, ...]] = 15.0,
-        centre: Union[Point, Literal['centre']] = 'centre',
+        centre: Union[Literal['centre'], PointArray, PointTensor] = 'centre',
         **kwargs) -> None:
         super().__init__(**kwargs)
         print('init random rotation transform')
-        if isinstance(rotation, (int, float)):
-            rot_ranges = (-rotation, rotation) * self._dim
-        elif len(rotation) == 2:
-            rot_ranges = rotation * self._dim
-        else:
-            rot_ranges = rotation
-        assert len(rot_ranges) == 2 * self._dim, f"Expected 'rotation' of length {2 * self._dim}, got {len(rot_ranges)}."
+        rot_range = expand_range_arg(rotation, dim=self._dim, negate_lower=True, vals_per_dim=2)
+        assert len(rot_range) == 2 * self._dim, f"Expected 'rotation' of length {2 * self._dim}, got {len(rot_range)}."
         if isinstance(centre, tuple):
             assert len(centre) == self._dim, f"Rotation centre must have {self._dim} dimensions."
-        self.__rot_ranges = to_tensor(rot_ranges).reshape(self._dim, 2)
+        self.__rot_range = to_tensor(rot_range).reshape(self._dim, 2)
         self.__centre = to_tensor(centre) if not centre == 'centre' else centre
         self._params = dict(
             centre=self.__centre,
             dim=self._dim,
             p=self._p,
-            rotation_ranges=self.__rot_ranges,
+            rotation_range=self.__rot_range,
         )
 
     def freeze(self) -> 'Rotation':
@@ -50,34 +45,32 @@ class RandomRotation(RandomAffineMixin, RandomTransform):
         if not should_apply:
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
-        rot_draw = draw * (self.__rot_ranges[:, 1] - self.__rot_ranges[:, 0]) + self.__rot_ranges[:, 0]
+        rot_draw = draw * (self.__rot_range[:, 1] - self.__rot_range[:, 0]) + self.__rot_range[:, 0]
         return Rotation(rotation=rot_draw, centre=self.__centre, dim=self._dim)
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({to_tuple(self.__rot_ranges.flatten())}, dim={self._dim}, p={self._p})"
+        return f"{self.__class__.__name__}({to_tuple(self.__rot_range.flatten())}, dim={self._dim}, p={self._p})"
 
 class Rotation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
     def __init__(
         self,
         rotation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
-        centre: Union[Literal['centre'], Point, torch.Tensor] = 'centre',
+        centre: Union[Literal['centre'], Point, PointArray, PointTensor] = 'centre',
         **kwargs) -> None:
         super().__init__(**kwargs)
-        rotations = arg_to_list(rotation, (int, float), broadcast=self._dim)
-        assert len(rotations) == self._dim, f"Expected 'rotation' of length {self._dim} for dim={self._dim}, got {len(rotations)}."
-        self.__rotations = to_tensor(rotations)
+        rotation = arg_to_list(rotation, (int, float), broadcast=self._dim)
+        assert len(rotation) == self._dim, f"Expected 'rotation' of length {self._dim} for dim={self._dim}, got {len(rotation)}."
+        self.__rotation = to_tensor(rotation)
         self.__centre = 'centre' if centre == 'centre' else to_tensor(centre)
-        self.__rotations_rad = torch.deg2rad(rotations)
+        self.__rotation_rad = torch.deg2rad(rotation)
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
             centre=self.__centre,
             dim=self._dim,
             matrix=self.__matrix,
-            matrix_complete=False,      # Do matrices define the full transform?
-            requires=['centre'],        # What information is needed at transform time?
-            rotations=self.__rotations,
-            rotations_rad=self.__rotations_rad,
+            rotation=self.__rotation,
+            rotation_rad=self.__rotation_rad,
         )
 
     # This is used for image resampling, not for point clouds.
@@ -109,7 +102,7 @@ class Rotation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransfor
 
     # Defines the forward/backward transforms.
     def __create_transforms(self) -> None:
-        self.__backward_matrix = create_rotation(self.__rotations_rad)
+        self.__backward_matrix = create_rotation(self.__rotation_rad)
         self.__matrix = self.__backward_matrix.T     # Rotation matrix inverse is just transpose.
 
     def get_affine_back_transform(
@@ -186,7 +179,7 @@ class Rotation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransfor
 
     def __str__(self) -> str:
         centre = "\"centre\"" if self.__centre == 'centre' else self.__centre
-        return f"{self.__class__.__name__}({to_tuple(self.__rotations)}, centre={centre}, dim={self._dim})"
+        return f"{self.__class__.__name__}({to_tuple(self.__rotation)}, centre={centre}, dim={self._dim})"
 
     # This is for point clouds, not for image resampling. Note that this
     # requires invertibility of the back point transform, which may not be

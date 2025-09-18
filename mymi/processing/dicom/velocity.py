@@ -32,10 +32,10 @@ def convert_velocity_predictions_to_nifti(
         moving_study = nifti_set.patient(p_dest).study(moving_study_id)
         moving_ct = moving_study.ct_data
         moving_spacing = moving_study.ct_spacing
-        moving_offset = moving_study.ct_offset
+        moving_origin = moving_study.ct_origin
         fixed_study = nifti_set.patient(p_dest).study(fixed_study_id)
         fixed_spacing = fixed_study.ct_spacing
-        fixed_offset = fixed_study.ct_offset
+        fixed_origin = fixed_study.ct_origin
 
         for t in transform_types:
             # Load velocity '.bdf' as sitk transform
@@ -45,14 +45,14 @@ def convert_velocity_predictions_to_nifti(
                 logging.info(f"Skipping prediction '{dvf_path}' - not found.")
                 continue
             # Note that the 'affine' transform pre-alignment is built into the velocity DVF transform.
-            transform = velocity_load_transform(dvf_path, fixed_offset)
+            transform = velocity_load_transform(dvf_path, fixed_origin)
 
             # Move CT image.
-            moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+            moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                 
             # Save moved CT.
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'ct', f'{model}.nii.gz')
-            save_nifti(moved_ct, filepath, spacing=fixed_spacing, offset=fixed_offset)
+            save_nifti(moved_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
             # Save warp.
             filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'dvf', f'{model}.hdf5')
@@ -65,9 +65,9 @@ def convert_velocity_predictions_to_nifti(
                     if not moving_study.has_region(r):
                         continue
                     moving_region = moving_study.region_data(regions=r)[r]
-                    moved_region = resample(moving_region, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                    moved_region = resample(moving_region, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study_id, p_dest, moving_study_id, 'regions', r, f'{model}.nii.gz')
-                    save_nifti(moved_region, filepath, spacing=fixed_spacing, offset=fixed_offset)
+                    save_nifti(moved_region, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
             # Move landmarks.
             # We move 'fixed' to 'moving' for TRE calculation to avoid finding inverse of potentially

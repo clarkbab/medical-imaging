@@ -163,7 +163,7 @@ def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray, Spacing3D, Point3D]
 def sitk_save_image(
     data: ImageArray,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     filepath: FilePath) -> None:
-    img = to_sitk_image(data, spacing, offset)
+    img = to_sitk_image(data, spacing, origin)
     sitk.WriteImage(img, filepath)

@@ -30,8 +30,8 @@ def convert_to_training_unigradicon(
         moving_ct_p = resample(moving_ct, output_size=ugi_size, output_spacing=output_spacing)
         # # UGI uses 'itk.imread' follwed by 'np.array(img)' to load training/inference data.
         # # 'itk.imread' expects '.nii' data to be in RAS+ coordinates and so sets negative 
-        # # x/y directions/offsets, whilst leaving image data unchanged. AFAIK, UGI doesn't use
-        # # directions/offsets, so it's presenting data in LPS+ coords. However 'np.array(img)'
+        # # x/y directions/origins, whilst leaving image data unchanged. AFAIK, UGI doesn't use
+        # # directions/origins, so it's presenting data in LPS+ coords. However 'np.array(img)'
         # # transposes axes, so the network actually sees SPL+ data. 
         # # Convert our fine-tuning data to match this format.
 

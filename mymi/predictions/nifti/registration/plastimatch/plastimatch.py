@@ -115,7 +115,7 @@ def create_plastimatch_predictions(
             spline_order = 3
             assert lines[1].startswith('img_origin = ')
             img_origin = tuple(float(o) for o in lines[1].split(' = ')[-1].strip().split())
-            assert img_origin == fixed_study.ct_offset
+            assert img_origin == fixed_study.ct_origin
             assert lines[2].startswith('img_spacing = ')
             img_spacing = tuple(float(s) for s in lines[2].split(' = ')[-1].strip().split())
             assert img_spacing == fixed_study.ct_spacing
@@ -143,7 +143,7 @@ def create_plastimatch_predictions(
             bspline = sitk.BSplineTransform(3)
             bspline.SetTransformDomainDirection(direction_cosines)
             bspline.SetTransformDomainMeshSize(mesh_size)
-            bspline.SetTransformDomainOrigin(fixed_study.ct_offset)
+            bspline.SetTransformDomainOrigin(fixed_study.ct_origin)
             bspline.SetTransformDomainPhysicalDimensions(fixed_study.ct_size)
             bspline.SetParameters(coefs)    # Must be set after domain.
             transform.AddTransform(bspline)
@@ -153,19 +153,19 @@ def create_plastimatch_predictions(
 
             # Create moved image.
             if create_moved_ct:
-                moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_ct = resample(moving_study.ct_data, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(pred_base, 'ct', f'{model}.nii.gz')
-                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
             if region_ids is not None:
                 pat_regions = regions_to_list(region_ids, literals={ 'all': pat.list_regions })
                 for r in pat_regions:
                     # Perform transform.
                     moving_label = moving_study.region_data(region_ids=r)[r]
-                    moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                    moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                     filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                    save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
             if landmark_ids is not None:
                 fixed_lms_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
@@ -182,9 +182,9 @@ def create_plastimatch_predictions(
 
             if create_moved_dose and moving_study.has_dose:
                 moving_dose = moving_study.dose_data
-                moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(pred_base, 'dose', f'{model}.nii.gz')
-                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Save timing data.
     if use_timing:

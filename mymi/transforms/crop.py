@@ -10,16 +10,16 @@ def __spatial_crop(
     image: ImageArray,
     bounding_box: Union[BoxMM2D, BoxMM3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    origin: Optional[Union[Point2D, Point3D]] = None,
     use_patient_coords: bool = True) -> ImageArray:
-    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
+    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
     # Convert box to voxel coordinates.
     if use_patient_coords:
         min_mm, max_mm = bounding_box
-        min = tuple(np.round((np.array(min_mm) - offset) / spacing).astype(int))
-        max = tuple(np.round((np.array(max_mm) - offset) / spacing).astype(int))
+        min = tuple(np.round((np.array(min_mm) - origin) / spacing).astype(int))
+        max = tuple(np.round((np.array(max_mm) - origin) / spacing).astype(int))
     else:
         min, max = bounding_box
 
@@ -74,16 +74,16 @@ def __spatial_crop_foreground(
     bounding_box: Union[BoxMM2D, BoxMM3D, Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    origin: Optional[Union[Point2D, Point3D]] = None,
     use_patient_coords: bool = True) -> LabelArray:
-    bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, offset=offset, use_patient_coords=use_patient_coords)
+    bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
     assert_box_width(bounding_box)
 
     # Convert box to voxel coordinates.
     min, max = bounding_box
     if use_patient_coords:
-        min = np.round((np.array(min) - offset) / spacing)
-        max = np.round((np.array(max) - offset) / spacing)
+        min = np.round((np.array(min) - origin) / spacing)
+        max = np.round((np.array(max) - origin) / spacing)
 
     if fill == 'min':
         fill = np.min(data)

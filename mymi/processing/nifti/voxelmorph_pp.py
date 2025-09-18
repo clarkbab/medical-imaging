@@ -48,10 +48,10 @@ def create_vxmpp_preprocessed_dataset(
         moving_crop = (tuple(moving_com - half_size), tuple(moving_com + half_size))
         fixed_ct_cp = crop_or_pad(fixed_ct_rs, fixed_crop, use_patient_coords=False)
         fixed_lung_cp = crop_or_pad(fixed_lung_rs, fixed_crop, use_patient_coords=False)
-        fixed_lms_cp = crop_or_pad_landmarks(fixed_lms, fixed_crop, spacing=vxm_fixed_spacing, offset=(0, 0, 0), use_patient_coords=False)
+        fixed_lms_cp = crop_or_pad_landmarks(fixed_lms, fixed_crop, spacing=vxm_fixed_spacing, origin=(0, 0, 0), use_patient_coords=False)
         moving_ct_cp = crop_or_pad(moving_ct_rs, moving_crop, use_patient_coords=False)
         moving_lung_cp = crop_or_pad(moving_lung_rs, moving_crop, use_patient_coords=False)
-        moving_lms_cp = crop_or_pad_landmarks(moving_lms, moving_crop, spacing=vxm_moving_spacing, offset=(0, 0, 0), use_patient_coords=False)
+        moving_lms_cp = crop_or_pad_landmarks(moving_lms, moving_crop, spacing=vxm_moving_spacing, origin=(0, 0, 0), use_patient_coords=False)
 
         # Clamp intensity values.
         fixed_ct_cp = np.clip(fixed_ct_cp, a_min=hu_range[0], a_max=hu_range[1])

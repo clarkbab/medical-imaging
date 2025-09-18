@@ -6,10 +6,10 @@ from mymi.transforms import sample
 from mymi.typing import *
 from mymi.utils import *
 
+from .images import NiftiCtSeries, NiftiDoseSeries
 from .series import NiftiSeries
-from .images import CtImageSeries, DoseImageSeries
 
-class LandmarksSeries(NiftiSeries):
+class NiftiLandmarksSeries(NiftiSeries):
     def __init__(
         self,
         dataset_id: DatasetID,
@@ -17,16 +17,16 @@ class LandmarksSeries(NiftiSeries):
         study_id: StudyID,
         id: NiftiSeriesID,
         filepath: FilePath,
-        ref_ct: Optional[CtImageSeries] = None,
-        ref_dose: Optional[DoseImageSeries] = None) -> None:
-        self.__dataset_id = dataset_id
+        ref_ct: Optional[NiftiCtSeries] = None,
+        ref_dose: Optional[NiftiDoseSeries] = None) -> None:
+        self._dataset_id = dataset_id
         self.__filepath = filepath
         self._global_id = f'NIFTI:{dataset_id}:{pat_id}:{study_id}:{id}'
-        self.__id = id
-        self.__pat_id = pat_id
+        self._id = id
+        self._pat_id = pat_id
         self.__ref_ct = ref_ct
         self.__ref_dose = ref_dose
-        self.__study_id = study_id
+        self._study_id = study_id
 
     def data(
         self,
@@ -43,7 +43,7 @@ class LandmarksSeries(NiftiSeries):
         if not use_patient_coords:
             if self.__ref_ct is None:
                 raise ValueError(f"Cannot convert landmarks to image coordinates without 'ref_ct'.")
-            landmark_data = landmarks_to_image_coords(landmark_data, self.__ref_ct.spacing, self.__ref_ct.offset)
+            landmark_data = landmarks_to_image_coords(landmark_data, self.__ref_ct.spacing, self.__ref_ct.origin)
 
         # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
         # Dicom/Nifti dataset types.
@@ -57,7 +57,7 @@ class LandmarksSeries(NiftiSeries):
         if sample_ct:
             if self.__ref_ct is None:
                 raise ValueError(f"Cannot sample CT intensities without 'ref_ct'.")
-            ct_values = sample(self.__ref_ct.data, landmarks_to_data(landmark_data), spacing=self.__ref_ct.spacing, offset=self.__ref_ct.offset, **kwargs)
+            ct_values = sample(self.__ref_ct.data, landmarks_to_data(landmark_data), spacing=self.__ref_ct.spacing, origin=self.__ref_ct.origin, **kwargs)
             landmark_data['ct-data-id'] = self.__ref_ct.id
             landmark_data['ct'] = ct_values
 
@@ -65,17 +65,17 @@ class LandmarksSeries(NiftiSeries):
         if sample_dose:
             if self.__ref_dose is None:
                 raise ValueError(f"Cannot sample dose intensities without 'ref_dose'.")
-            dose_values = sample(self.__ref_dose.data, landmarks_to_data(landmark_data), spacing=self.__ref_dose.spacing, offset=self.__ref_dose.offset, **kwargs)
+            dose_values = sample(self.__ref_dose.data, landmarks_to_data(landmark_data), spacing=self.__ref_dose.spacing, origin=self.__ref_dose.origin, **kwargs)
             landmark_data['dose-data-id'] = self.__ref_dose.id
             landmark_data['dose'] = dose_values
 
         # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
         if 'patient-id' not in landmark_data.columns:
-            landmark_data.insert(0, 'patient-id', self.__pat_id)
+            landmark_data.insert(0, 'patient-id', self._pat_id)
         if 'study-id' not in landmark_data.columns:
-            landmark_data.insert(1, 'study-id', self.__study_id)
+            landmark_data.insert(1, 'study-id', self._study_id)
         if 'data-id' not in landmark_data.columns:
-            landmark_data.insert(2, 'data-id', self.__id)
+            landmark_data.insert(2, 'data-id', self._id)
 
         if data_only:
             return landmark_data[range(3)].to_numpy().astype(np.float32)
@@ -111,4 +111,7 @@ class LandmarksSeries(NiftiSeries):
             ids = [i for i in ids if i in landmark_ids]
 
         return ids
+
+    def __str__(self) -> str:
+        return f"NiftiLandmarksSeries({self._id}, dataset={self._dataset_id}, pat_id={self._pat_id}, study_id={self._study_id})"
     

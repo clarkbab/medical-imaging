@@ -49,8 +49,8 @@ def convert_registrations_from_lung_preprocessed(
             # Create composite transform from fixed -> moving image in unprocessed space.
             transform = sitk.CompositeTransform(3)
             moving_pp_to_moving = sitk.TranslationTransform(3)
-            offset = moving_crop[0]
-            moving_pp_to_moving.SetOffset(offset)
+            origin = moving_crop[0]
+            moving_pp_to_moving.SetOffset(origin)
             transform.AddTransform(moving_pp_to_moving)
             if isinstance(transform_pp, sitk.CompositeTransform):
                 for i in range(transform_pp.GetNumberOfTransforms()):
@@ -58,8 +58,8 @@ def convert_registrations_from_lung_preprocessed(
             else:
                 transform.AddTransform(transform_pp)
             fixed_to_fixed_pp = sitk.TranslationTransform(3)
-            offset = to_tuple(-np.array(fixed_crop[0]))
-            fixed_to_fixed_pp.SetOffset(offset)
+            origin = to_tuple(-np.array(fixed_crop[0]))
+            fixed_to_fixed_pp.SetOffset(origin)
             transform.AddTransform(fixed_to_fixed_pp)
 
             # Save DVF.
@@ -76,7 +76,7 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_ct = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_offset, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                create_registration_moved_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
 
             # Move region data.
             if region_ids is not None:
@@ -86,12 +86,12 @@ def convert_registrations_from_lung_preprocessed(
                         # Apply registration transform.
                         okwargs = dict(
                             spacing=moving_study.ct_spacing,
-                            offset=moving_study.ct_offset,
+                            origin=moving_study.ct_origin,
                             output_image=fixed_study.default_ct,
                             transform=transform,
                         )
                         moved_label = resample(l, **okwargs)
-                        create_registration_moved_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_offset, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                        create_registration_moved_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
 
             # Move landmarks.
             if landmark_ids is not None:
@@ -111,7 +111,7 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_dose = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_offset, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                create_registration_moved_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
 
 def convert_to_lung_preprocessed_dataset(
     dataset: str,
@@ -180,26 +180,26 @@ def convert_to_lung_preprocessed_dataset(
         moving_lms = moving_study.landmark_data()
 
         # Get COM vector (fixed -> moving).
-        fixed_com = get_centre_of_mass(fixed_lung_rs, spacing=spacing, offset=fixed_study.ct_offset)
-        moving_com = get_centre_of_mass(moving_lung_rs, spacing=spacing, offset=moving_study.ct_offset)
+        fixed_com = get_centre_of_mass(fixed_lung_rs, spacing=spacing, origin=fixed_study.ct_origin)
+        moving_com = get_centre_of_mass(moving_lung_rs, spacing=spacing, origin=moving_study.ct_origin)
         trans_mm = np.array(moving_com) - fixed_com
 
         # Crop to 10mm surrounding fixed lung mask.
-        fixed_fov_min, fixed_fov_max = foreground_fov(fixed_lung_rs, spacing=spacing, offset=fixed_study.ct_offset)
+        fixed_fov_min, fixed_fov_max = foreground_fov(fixed_lung_rs, spacing=spacing, origin=fixed_study.ct_origin)
         fixed_fov_min = tuple(float(f) for f in np.array(fixed_fov_min) - margin_mm)
         fixed_fov_max = tuple(float(f) for f in np.array(fixed_fov_max) + margin_mm)
         crop_fixed_mm = (fixed_fov_min, fixed_fov_max)
         moving_fov_min = tuple(float(f) for f in np.array(trans_mm) + fixed_fov_min)
         moving_fov_max = tuple(float(f) for f in np.array(trans_mm) + fixed_fov_max)
         crop_moving_mm = (moving_fov_min, moving_fov_max)
-        fixed_ct_cp = crop_or_pad(fixed_ct_rs, crop_fixed_mm, spacing=spacing, offset=fixed_study.ct_offset)
+        fixed_ct_cp = crop_or_pad(fixed_ct_rs, crop_fixed_mm, spacing=spacing, origin=fixed_study.ct_origin)
         if fixed_study.has_dose:
-            fixed_dose_cp = crop_or_pad(fixed_dose_rs, crop_fixed_mm, spacing=spacing, offset=fixed_study.dose_offset)
-        fixed_lung_cp = crop_or_pad(fixed_lung_rs, crop_fixed_mm, spacing=spacing, offset=fixed_study.ct_offset)
-        moving_ct_cp = crop_or_pad(moving_ct_rs, crop_moving_mm, spacing=spacing, offset=moving_study.ct_offset)
+            fixed_dose_cp = crop_or_pad(fixed_dose_rs, crop_fixed_mm, spacing=spacing, origin=fixed_study.dose_origin)
+        fixed_lung_cp = crop_or_pad(fixed_lung_rs, crop_fixed_mm, spacing=spacing, origin=fixed_study.ct_origin)
+        moving_ct_cp = crop_or_pad(moving_ct_rs, crop_moving_mm, spacing=spacing, origin=moving_study.ct_origin)
         if moving_study.has_dose:
-            moving_dose_cp = crop_or_pad(moving_dose_rs, crop_moving_mm, spacing=spacing, offset=moving_study.dose_offset)
-        moving_lung_cp = crop_or_pad(moving_lung_rs, crop_moving_mm, spacing=spacing, offset=moving_study.ct_offset)
+            moving_dose_cp = crop_or_pad(moving_dose_rs, crop_moving_mm, spacing=spacing, origin=moving_study.dose_origin)
+        moving_lung_cp = crop_or_pad(moving_lung_rs, crop_moving_mm, spacing=spacing, origin=moving_study.ct_origin)
 
         # Add crop data.
         data = {
@@ -215,7 +215,7 @@ def convert_to_lung_preprocessed_dataset(
         }
         crops_df = append_row(crops_df, data)
 
-        # Move landmarks due to crop (and saving image data with offset=0).
+        # Move landmarks due to crop (and saving image data with origin=0).
         fixed_lms_data = fixed_lms[list(range(3))]
         fixed_lms_data = fixed_lms_data - fixed_fov_min
         fixed_lms[list(range(3))] = fixed_lms_data

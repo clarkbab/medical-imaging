@@ -187,7 +187,7 @@ def convert_to_nifti(
                     # a 'recreate' tag, which will remove existing patient data.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'ct', f'{nifti_series_id}.nii.gz')
                     if convert_ct and not os.path.exists(filepath):
-                        save_nifti(series.data, filepath, spacing=series.spacing, offset=series.offset)
+                        save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
 
                     # Add index entry.
                     data = {
@@ -217,7 +217,7 @@ def convert_to_nifti(
                     # Create Nifti MR.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'mr', f'{nifti_series_id}.nii.gz')
                     if convert_mr and not os.path.exists(filepath):
-                        save_nifti(series.data, filepath, spacing=series.spacing, offset=series.offset)
+                        save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
 
                     # Add index entry.
                     data = {
@@ -251,7 +251,7 @@ def convert_to_nifti(
                     for r, data in region_data.items():
                         filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'regions', nifti_series_id, f'{r}.nii.gz')
                         if not os.path.exists(filepath):
-                            save_nifti(data, filepath, spacing=ref_ct.spacing, offset=ref_ct.offset)
+                            save_nifti(data, filepath, spacing=ref_ct.spacing, origin=ref_ct.origin)
 
                 # Create landmarks.
                 if landmark_ids is not None:
@@ -276,7 +276,7 @@ def convert_to_nifti(
                 # Create RTDOSE NIFTI.
                 filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'dose', f'{nifti_series_id}.nii.gz')
                 if convert_dose and not os.path.exists(filepath):
-                    save_nifti(rtdose_series.data, filepath, spacing=rtdose_series.spacing, offset=rtdose_series.offset)
+                    save_nifti(rtdose_series.data, filepath, spacing=rtdose_series.spacing, origin=rtdose_series.origin)
 
     # Save index.
     if len(index) > 0:
@@ -346,11 +346,11 @@ def convert_to_nifti_replan(
             study = pat.study(study_id)
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            ct_offset = study.ct_offset
+            ct_origin = study.ct_origin
             affine = np.array([
-                [ct_spacing[0], 0, 0, ct_offset[0]],
-                [0, ct_spacing[1], 0, ct_offset[1]],
-                [0, 0, ct_spacing[2], ct_offset[2]],
+                [ct_spacing[0], 0, 0, ct_origin[0]],
+                [0, ct_spacing[1], 0, ct_origin[1]],
+                [0, 0, ct_spacing[2], ct_origin[2]],
                 [0, 0, 0, 1]])
             img = Nifti1Image(ct_data, affine)
             filepath = os.path.join(nifti_set.path, 'data', 'ct', f'{nifti_id}.nii.gz')
@@ -369,11 +369,11 @@ def convert_to_nifti_replan(
             dose_data = study.dose_data
             if dose_data is not None:
                 dose_spacing = study.dose_spacing
-                dose_offset = study.dose_offset
+                dose_origin = study.dose_origin
                 affine = np.array([
-                    [dose_spacing[0], 0, 0, dose_offset[0]],
-                    [0, dose_spacing[1], 0, dose_offset[1]],
-                    [0, 0, dose_spacing[2], dose_offset[2]],
+                    [dose_spacing[0], 0, 0, dose_origin[0]],
+                    [0, dose_spacing[1], 0, dose_origin[1]],
+                    [0, 0, dose_spacing[2], dose_origin[2]],
                     [0, 0, 0, 1]])
                 img = Nifti1Image(dose_data, affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'dose', f'{nifti_id}.nii.gz')

@@ -40,15 +40,15 @@ for pat in tqdm(pats):
 
         # Get label.
         spacing = patient.ct_spacing()
-        offset = patient.ct_offset()
+        origin = patient.ct_origin()
         image = patient.ct_data()
         label = patient.region_data(region=region)[region]
 
         # Save image.
         affine = np.array([
-            [spacing[0], 0, 0, offset[0]],
-            [0, spacing[1], 0, offset[1]],
-            [0, 0, spacing[2], offset[2]],
+            [spacing[0], 0, 0, origin[0]],
+            [0, spacing[1], 0, origin[1]],
+            [0, 0, spacing[2], origin[2]],
             [0, 0, 0, 1]])
         img = Nifti1Image(image, affine) 
         filepath = os.path.join(nifti_set.path, 'data', 'ct', f'{pat}.nii.gz')

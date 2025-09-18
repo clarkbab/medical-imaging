@@ -24,7 +24,7 @@ def create_pddca_cropped_dataset(
         pat = set.patient(p)
         ct_data = pat.ct_data
         spacing = pat.ct_spacing
-        offset = pat.ct_offset
+        origin = pat.ct_origin
 
         # Get crop coords from boundary organs.
         min_mm = []
@@ -36,7 +36,7 @@ def create_pddca_cropped_dataset(
                 label = np.logical_or(label, v)
             
             # Get structure fov.
-            fov_l = foreground_fov(label, spacing=spacing, offset=offset, use_patient_coords=True)
+            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_patient_coords=True)
             min_mm.append(fov_l[0][i])
 
         # Add margin.
@@ -52,7 +52,7 @@ def create_pddca_cropped_dataset(
                 label = np.logical_or(label, v)
             
             # Get structure fov.
-            fov_l = foreground_fov(label, spacing=spacing, offset=offset, use_patient_coords=True)
+            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_patient_coords=True)
             max_mm.append(fov_l[1][i])
 
         # Add margin.
@@ -61,14 +61,14 @@ def create_pddca_cropped_dataset(
 
         # Crop and save CT image.
         crop_mm = (min_mm, max_mm)
-        ct_data = crop(ct_data, crop_mm, spacing=spacing, offset=offset, use_patient_coords=True)
-        create_ct(dest_set.id, p, 'study_0', 'series_0', ct_data, spacing, offset, dry_run=dry_run)
+        ct_data = crop(ct_data, crop_mm, spacing=spacing, origin=origin, use_patient_coords=True)
+        create_ct(dest_set.id, p, 'study_0', 'series_0', ct_data, spacing, origin, dry_run=dry_run)
 
         # Crop non-totalseg labels.
         for r in region_ids:
             if not pat.has_region(r):
                 continue
             rdata = pat.region_data(r)[r]
-            rdata = crop(rdata, crop_mm, spacing=spacing, offset=offset, use_patient_coords=True)
-            create_region(dest_set.id, p, 'study_0', 'series_0', r, rdata, spacing, offset, dry_run=dry_run)
+            rdata = crop(rdata, crop_mm, spacing=spacing, origin=origin, use_patient_coords=True)
+            create_region(dest_set.id, p, 'study_0', 'series_0', r, rdata, spacing, origin, dry_run=dry_run)
     

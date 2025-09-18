@@ -28,16 +28,16 @@ class RtStructSeries(DicomSeries):
         index_policy: Dict[str, Any],
         region_map: Optional[RegionMap] = None) -> None:
         datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
-        self.__dataset_id = dataset_id
+        self._dataset_id = dataset_id
         self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self.__id = id
+        self._id = id
         self.__index = index
         self.__index_policy = index_policy
         self.__modality = 'rtstruct'
-        self.__pat_id = pat_id
+        self._pat_id = pat_id
         self.__ref_ct = ref_ct
         self.__region_map = region_map
-        self.__study_id = study_id
+        self._study_id = study_id
 
     @property
     def dicom(self) -> CtDicom:
@@ -86,16 +86,16 @@ class RtStructSeries(DicomSeries):
         landmark_data = pd.DataFrame(lms, index=landmarks).reset_index()
         landmark_data = landmark_data.rename(columns={ 'index': 'landmark-id' })
         if not use_patient_coords:
-            landmark_data = landmarks_to_image_coords(landmark_data, self.ref_ct.spacing, self.ref_ct.offset)
+            landmark_data = landmarks_to_image_coords(landmark_data, self.ref_ct.spacing, self.ref_ct.origin)
 
         # Add extra columns - in case we're concatenating landmarks from multiple patients/studies.
         if show_ids:
             if 'patient-id' not in landmark_data.columns:
-                landmark_data.insert(0, 'patient-id', self.__pat_id)
+                landmark_data.insert(0, 'patient-id', self._pat_id)
             if 'study-id' not in landmark_data.columns:
-                landmark_data.insert(1, 'study-id', self.__study_id)
+                landmark_data.insert(1, 'study-id', self._study_id)
             if 'series-id' not in landmark_data.columns:
-                landmark_data.insert(2, 'series-id', self.__id)
+                landmark_data.insert(2, 'series-id', self._id)
 
         # Sort by landmark IDs - this means that 'n_landmarks' will be consistent between
         # Dicom/Nifti dataset types.
@@ -127,7 +127,7 @@ class RtStructSeries(DicomSeries):
     def list_regions(
         self,
         landmarks_regexp: Optional[str] = LANDMARKS_REGEXP,
-        region_ids: RegionIDs = 'all',
+        region_id: RegionIDs = 'all',
         return_numbers: bool = False,
         return_unmapped: bool = False,
         use_mapping: bool = True) -> Union[List[RegionID], Tuple[List[RegionID], List[RegionID]], Tuple[List[RegionID], List[int]], Tuple[List[RegionID], List[RegionID], List[int]]]:
@@ -189,10 +189,10 @@ class RtStructSeries(DicomSeries):
             if return_numbers:
                 numbers = nums
 
-        # Filter on 'region_ids'. If region mapping is used (i.e. mapped_regions != None),
+        # Filter on 'region_id'. If region mapping is used (i.e. mapped_regions != None),
         # this will try to match mapped names, otherwise it will map unmapped names.
-        if region_ids != 'all':
-            region_ids = regions_to_list(region_ids)
+        if region_id != 'all':
+            region_ids = regions_to_list(region_id)
             if use_mapping:
                 if return_numbers:
                     mapped_ids, unmapped_ids, numbers = filter_lists([mapped_ids, unmapped_ids, numbers], lambda i: i[0] in region_ids)
@@ -259,14 +259,14 @@ class RtStructSeries(DicomSeries):
                 combine_ids = arg_to_list(u, RegionID)
                 labels = []
                 for c in combine_ids:
-                    rdata = RtStructConverter.get_region_data(rtstruct_dicom, c, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                    rdata = RtStructConverter.get_region_data(rtstruct_dicom, c, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.origin)
                     labels.append(rdata)
                 label = np.maximum(*labels) if len(labels) > 1 else labels[0]
                 data[m] = label
         else:
             # Load and store region using unmapped name.
             for u in unmapped_ids:
-                rdata = RtStructConverter.get_region_data(rtstruct_dicom, u, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.offset)
+                rdata = RtStructConverter.get_region_data(rtstruct_dicom, u, self.ref_ct.size, self.ref_ct.spacing, self.ref_ct.origin)
                 data[u] = rdata
 
         # Sort dict keys.

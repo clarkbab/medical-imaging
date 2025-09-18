@@ -113,10 +113,10 @@ def add_landmark_data(
 
     # May not be any structures yet.
     if hasattr(rtstruct_dicom, 'StructureSetROISequence'):
-        num_offset = len(rtstruct_dicom.StructureSetROISequence)
+        num_origin = len(rtstruct_dicom.StructureSetROISequence)
     else:
         rtstruct_dicom.StructureSetROISequence = []
-        num_offset = 0
+        num_origin = 0
 
     for i, (id, d) in enumerate(zip(landmark_ids, landmark_data)):
         # Create structure set roi.
@@ -124,7 +124,7 @@ def add_landmark_data(
         ss_roi.ReferencedFrameOfReferenceUID = ref_cts[0].FrameOfReferenceUID
         ss_roi.ROIGenerationAlgorithm = 'AUTOMATIC'
         ss_roi.ROIName = f'{landmark_prefix}{id}'
-        ss_roi.ROINumber = i + num_offset
+        ss_roi.ROINumber = i + num_origin
         rtstruct_dicom.StructureSetROISequence.append(ss_roi)
 
         # Choose closest CT as the ref CT.
@@ -141,7 +141,7 @@ def add_landmark_data(
         contour.ContourData = list(d)
         contour.ContourImageSequence = [ref_image]
         roi_contour = dcm.dataset.Dataset()
-        roi_contour.ReferencedROINumber = i + num_offset
+        roi_contour.ReferencedROINumber = i + num_origin
         roi_contour.ROIDisplayColor = [255, 255, 0]     # Yellow.
         roi_contour.ContourSequence = [contour]
         rtstruct_dicom.ROIContourSequence.append(roi_contour)
@@ -183,13 +183,13 @@ def add_region_data(
             # I.e. multiple contours per slice are possible.
             for cc in coords:
                 # Convert to patient coords.
-                xy_offset = c.ImagePositionPatient[:-1]
+                xy_origin = c.ImagePositionPatient[:-1]
                 xy_spacing = c.PixelSpacing
-                cc = xy_spacing * cc + xy_offset
+                cc = xy_spacing * cc + xy_origin
 
                 # Format contours.
-                z_offset = c.ImagePositionPatient[2]
-                z_idxs = np.ones((len(cc), 1)) * z_offset
+                z_origin = c.ImagePositionPatient[2]
+                z_idxs = np.ones((len(cc), 1)) * z_origin
                 cc = np.concatenate((cc, z_idxs), axis=1)
                 cc = list(cc.flatten())
 

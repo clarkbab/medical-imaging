@@ -7,14 +7,14 @@ from mymi.utils import *
 @alias_kwargs(('upc', 'use_patient_coords'))
 def foreground_fov(
     data: LabelArray,
-    offset: Optional[Point] = None,
     spacing: Optional[Spacing] = None,
+    origin: Optional[Point] = None,
     use_patient_coords: bool = True) -> Optional[Box]:
     if data.sum() == 0:
         return None
     if use_patient_coords:
         assert spacing is not None
-        assert offset is not None
+        assert origin is not None
 
     # Get fov of foreground objects.
     non_zero = np.argwhere(data != 0).astype(int)
@@ -24,8 +24,8 @@ def foreground_fov(
 
     # Get fov in mm.
     fov_min_vox, fov_max_vox = fov_vox
-    fov_min_mm = tuple(np.array(fov_min_vox) * spacing + offset)
-    fov_max_mm = tuple(np.array(fov_max_vox) * spacing + offset)
+    fov_min_mm = tuple(np.array(fov_min_vox) * spacing + origin)
+    fov_max_mm = tuple(np.array(fov_max_vox) * spacing + origin)
     fov_mm = fov_min_mm, fov_max_mm
     return fov_mm
 
@@ -46,11 +46,11 @@ def foreground_fov_centre(
 @alias_kwargs(('upc', 'use_patient_coords'))
 def foreground_fov_width(
     data: LabelArray,
-    offset: Optional[Point] = None,
     spacing: Optional[Spacing] = None,
+    origin: Optional[Point] = None,
     use_patient_coords: bool = True) -> Optional[Size]:
     # Get foreground fov.
-    fov_fg = foreground_fov(data, use_patient_coords=use_patient_coords, offset=offset, spacing=spacing)
+    fov_fg = foreground_fov(data, use_patient_coords=use_patient_coords, spacing=spacing, origin=origin)
     if fov_fg is None:
         return None
     min, max = fov_fg
@@ -59,28 +59,28 @@ def foreground_fov_width(
 
 def fov(
     data: Union[ImageArray, ImageTensor],
-    offset: Optional[Point] = None,
     spacing: Optional[Spacing] = None,
+    origin: Optional[Point] = None,
     raise_error: bool = True,
     use_patient_coords: bool = True) -> Box:
     if use_patient_coords:
         assert spacing is not None
-        assert offset is not None
+        assert origin is not None
 
     # Get fov in voxels.
     n_dims = len(data.shape)
     if spacing is not None:
         assert len(spacing) == n_dims, f"Expected spacing to have {n_dims} dimensions, got {spacing}."
-    if offset is not None:
-        assert len(offset) == n_dims, f"Expected offset to have {n_dims} dimensions, got {offset}."
+    if origin is not None:
+        assert len(origin) == n_dims, f"Expected origin to have {n_dims} dimensions, got {origin}."
     fov_vox = ((0,) * n_dims, data.shape)
     if not use_patient_coords:
         return fov_vox
 
     # Get fov in mm.
     fov_min_vox, fov_max_vox = fov_vox
-    fov_min_mm = tuple(float(e) for e in (np.array(fov_min_vox) * spacing + offset))
-    fov_max_mm = tuple(float(e) for e in (np.array(fov_max_vox) * spacing + offset))
+    fov_min_mm = tuple(float(e) for e in (np.array(fov_min_vox) * spacing + origin))
+    fov_max_mm = tuple(float(e) for e in (np.array(fov_max_vox) * spacing + origin))
     fov_mm = fov_min_mm, fov_max_mm
 
     return fov_mm

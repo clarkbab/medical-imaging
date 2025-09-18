@@ -13,9 +13,9 @@ class HoldoutSplit:
         dataset: 'TrainingDataset',
         id: str) -> None:
         self.__dataset = dataset
-        self.__id = id
-        self.__global_id = f"{self.__dataset}:{self.__id}"
-        self.__path = os.path.join(self.__dataset.path, 'data', self.__id)
+        self._id = id
+        self.__global_id = f"{self.__dataset}:{self._id}"
+        self.__path = os.path.join(self.__dataset.path, 'data', self._id)
         if not os.path.exists(self.__path):
             raise ValueError(f"Training split '{self.__global_id}' does not exist.")
         self.__index = None
@@ -28,7 +28,7 @@ class HoldoutSplit:
     def index(self) -> pd.DataFrame:
         if self.__index is None:
             ds_index = self.dataset.index
-            self.__index = ds_index[ds_index['split'] == self.__id].copy()
+            self.__index = ds_index[ds_index['split'] == self._id].copy()
         return self.__index
 
     @property

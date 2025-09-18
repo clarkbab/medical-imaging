@@ -17,14 +17,14 @@ class RtPlanSeries(DicomSeries):
         index: pd.Series,
         index_policy: Dict[str, Any]) -> None:
         datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
-        self.__dataset_id = dataset_id
+        self._dataset_id = dataset_id
         self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self.__id = id
+        self._id = id
         self._index = index
         self._index_policy = index_policy
         self.__modality = 'rtplan'
-        self.__pat_id = pat_id
-        self.__study_id = study_id
+        self._pat_id = pat_id
+        self._study_id = study_id
 
     @property
     def dicom(self) -> RtPlanDicom:

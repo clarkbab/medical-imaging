@@ -25,14 +25,14 @@ class CtSeries(DicomSeries):
         datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
         relpaths = list(index['filepath'])
         abspaths = [os.path.join(datasetpath, p) for p in relpaths]
-        self.__dataset_id = dataset_id
+        self._dataset_id = dataset_id
         self.__filepaths = abspaths
-        self.__id = id
+        self._id = id
         self.__index = index
         self.__index_policy = index_policy
         self.__modality = 'ct'
-        self.__pat_id = pat_id
-        self.__study_id = study_id
+        self._pat_id = pat_id
+        self._study_id = study_id
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
@@ -58,7 +58,7 @@ class CtSeries(DicomSeries):
     def fov(
         self,
         **kwargs) -> Fov3D:
-        return fov(self.__data, spacing=self.__spacing, offset=self.__offset, **kwargs)
+        return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
 
     @property
     def filepaths(self) -> List[str]:
@@ -66,8 +66,8 @@ class CtSeries(DicomSeries):
 
     @property
     @ensure_loaded
-    def offset(self) -> Point3D:
-        return self.__offset
+    def origin(self) -> Point3D:
+        return self.__origin
 
     @property
     @ensure_loaded
@@ -82,7 +82,7 @@ class CtSeries(DicomSeries):
     def __load_data(self) -> None:
         # Consistency is checked during indexing.
         # TODO: Change 'check_consistency' to be more granular and set based on the index policy.
-        self.__data, self__spacing, self.__offset = from_ct_dicoms(self.dicoms, check_consistency=False)
+        self.__data, self__spacing, self.__origin = from_ct_dicoms(self.dicoms, check_consistency=False)
 
 # Add properties.
 props = ['dataset_id', 'filepaths', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'study_id']

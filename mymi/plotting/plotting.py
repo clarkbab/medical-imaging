@@ -9,7 +9,7 @@ from tqdm import tqdm
 from typing import *
 
 from mymi.datasets import Dataset
-from mymi.geometry import get_box, get_centre_of_mass, fov_centre
+from mymi.geometry import get_box, get_centre_of_mass, fov, fov_centre
 from mymi import logging
 from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
@@ -81,7 +81,7 @@ def get_idx(
     idx_mm: Optional[float] = None,
     landmark_data: Optional[LandmarksFrame] = None,
     landmark_data_other: Optional[LandmarksFrame] = None,
-    offset: Optional[Point3D] = None,
+    origin: Optional[Point3D] = None,
     region_data: Optional[RegionArrays] = None,
     spacing: Optional[Spacing3D] = None) -> int:
     if idx is not None:
@@ -98,7 +98,7 @@ def get_idx(
         if centre is not None:
             raise ValueError(f"Cannot specify both 'centre' and 'idx_mm'.")
         # Find nearest voxel index to mm position.
-        idx = int(np.round((idx_mm - offset[view]) / spacing[view]))
+        idx = int(np.round((idx_mm - origin[view]) / spacing[view]))
     elif centre is not None:
         if isinstance(centre, str) and centre == 'dose':
             if dose_data is None:
@@ -109,14 +109,14 @@ def get_idx(
             lm_data = landmark_data_other if centre_other and landmark_data_other is not None else landmark_data
             if lm_data is not None and centre in list(lm_data['landmark-id']):
                 centre_point = lm_data[lm_data['landmark-id'] == centre][list(range(3))].iloc[0]
-                idx = point_to_image_coords(centre_point, spacing, offset)[view]
+                idx = point_to_image_coords(centre_point, spacing, origin)[view]
             elif region_data is not None and centre in region_data:
                 idx = fov_centre(region_data[centre], use_patient_coords=False)[view]
             else:
                 raise ValueError(f"No centre '{centre}' found in 'landmarks/region_data'.")
         elif isinstance(centre, LandmarkSeries):
             centre_point = tuple(centre[list(range(3))])
-            idx = point_to_image_coords(centre_point, spacing, offset)[view]
+            idx = point_to_image_coords(centre_point, spacing, origin)[view]
         elif isinstance(centre, RegionArray):
             idx = fov_centre(centre, use_patient_coords=False)[view]
         else:
@@ -255,7 +255,7 @@ def plot_landmark_data(
     idx: int,
     size: Size3D,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     view: Axis, 
     colour: str = 'yellow',
     crop: Optional[Box2D] = None,
@@ -280,11 +280,11 @@ def plot_landmark_data(
 
     # Add sampled dose intensities.
     if show_landmark_doses and dose_data is not None:
-        landmark_data = sample(dose_data, landmark_data, landmarks_col='dose', offset=offset, spacing=spacing)
+        landmark_data = sample(dose_data, landmark_data, landmarks_col='dose', origin=origin, spacing=spacing)
 
     # Convert landmarks to image coords.
     if landmarks_use_patient_coords:
-        landmark_data = landmarks_to_image_coords(landmark_data, spacing, offset)
+        landmark_data = landmarks_to_image_coords(landmark_data, spacing, origin)
 
     # Take subset of n closest landmarks landmarks.
     landmark_data['dist'] = np.abs(landmark_data[view] - idx)
@@ -358,10 +358,10 @@ def plot_region_data(
 
         # Plot extent.
         if show_extent:
-            ext = extent(data[region])
-            if ext is not None:
-                label = f'{region} extent' if box_intesects_view_plane(ext, view, idx) else f'{region} extent (offscreen)'
-                plot_box_slice(ext, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
+            fov_box = fov(data[region])
+            if fov_box is not None:
+                label = f'{region} extent' if box_intesects_view_plane(fov_box, view, idx) else f'{region} extent (offscreen)'
+                plot_box_slice(fov_box, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
                 show_legend = True
 
         # Skip region if not present on this slice.

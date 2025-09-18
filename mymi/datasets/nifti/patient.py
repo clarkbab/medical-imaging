@@ -3,55 +3,57 @@ import os
 import pandas as pd
 from typing import *
 
+from mymi import config
 from mymi.typing import *
 from mymi.utils import *
 
 from ..mixins import IndexMixin
+from ..patient import Patient
 from ..region_map import RegionMap
 from .study import NiftiStudy
 
-class NiftiPatient(IndexMixin):
+class NiftiPatient(IndexMixin, Patient):
     def __init__(
         self,
         dataset_id: DatasetID,
         id: PatientID,
-        path: str,
-        check_path: bool = True,
-        ct_from: Optional['NiftiDataset'] = None,
+        ct_from: Optional['NiftiPatient'] = None,
         index: Optional[pd.DataFrame] = None,
         excluded_labels: Optional[List[str]] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        self.__ct_from = ct_from
-        self.__dataset_id = dataset_id
-        self.__global_id = f'NIFTI:{dataset_id}:{id}'
-        self.__id = str(id)
-        self._index = index
+        # Check that patient ID exists.
+        path = os.path.join(config.directories.datasets, 'nifti', str(dataset_id), 'data', 'patients', str(id))
+        if not os.path.exists(path):
+            raise ValueError(f"NiftiPatient '{id}' not found for dataset '{self}'. Dirpath: {path}")
         self.__path = path
-        self.__region_map = region_map
+        super().__init__(dataset_id, id, ct_from=ct_from, region_map=region_map)
+        self._index = index
 
     @property
     def default_study(self) -> Optional[NiftiStudy]:
         study_ids = self.list_studies()
         return self.study(study_ids[-1]) if len(study_ids) > 0 else None
 
-    @property
-    def origin(self) -> Dict[str, str]:
-        if self._index is None:
-            raise ValueError(f"Dataset has no 'index.csv'.")
-        info = self._index.iloc[0].to_dict()
-        info = {k: info[k] for k in ['dicom-dataset', 'dicom-patient-id']}
-        return info
+    def has_study(
+        self,
+        study_id: StudyIDs,
+        any: bool = False,
+        **kwargs) -> bool:
+        real_ids = self.list_studies(study_id=study_id, **kwargs)
+        req_ids = arg_to_list(study_id, StudyID)
+        n_overlap = len(np.intersect1d(real_ids, req_ids))
+        return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def list_studies(
         self,
-        study_ids: StudyIDs = 'all',    # Used for filtering.
+        study_id: StudyIDs = 'all',    # Used for filtering.
         ) -> List[StudyID]:
         # Might have to deal with sorting at some point for 'default_study'.
         # Right now sorting is just alphabetical, which is fine if we're using anonymous IDs,
         # as they're sorted during DICOM -> NIFTI conversion.
         ids = list(sorted(os.listdir(self.__path)))
-        if study_ids != 'all':
-            study_ids = arg_to_list(study_ids, StudyID)
+        if study_id != 'all':
+            study_ids = arg_to_list(study_id, StudyID)
             all_ids = ids.copy()
             ids = []
             for i, id in enumerate(all_ids):
@@ -69,8 +71,13 @@ class NiftiPatient(IndexMixin):
 
         return ids
 
-    def __repr__(self) -> str:
-        return str(self)
+    @property
+    def origin(self) -> Dict[str, str]:
+        if self._index is None:
+            raise ValueError(f"Dataset has no 'index.csv'.")
+        info = self._index.iloc[0].to_dict()
+        info = {k: info[k] for k in ['dicom-dataset', 'dicom-patient-id']}
+        return info
 
     def study(
         self,
@@ -79,20 +86,19 @@ class NiftiPatient(IndexMixin):
         id = handle_idx_prefix(id, self.list_studies)
         index = self._index[self._index['study-id'] == id].copy() if self._index is not None else None
 
-        # Check that study ID exists.
-        path = os.path.join(self.__path, str(id))
-        if not os.path.exists(path):
-            raise ValueError(f"Study '{id}' not found for patient '{self}'.")
+        # Get 'ct_from' study.
+        if self._ct_from is not None and self._ct_from.has_study(id):
+            ct_from = self._ct_from.study(id)
+        else:
+            ct_from = None
 
-        return NiftiStudy(self.__dataset_id, self.__id, id, path, index=index, region_map=self.__region_map, **kwargs)
+        return NiftiStudy(self._dataset_id, self._id, id, ct_from=ct_from, index=index, region_map=self._region_map, **kwargs)
 
     def __str__(self) -> str:
-        return self.__global_id
-
-# Add properties.
-props = ['global_id', 'id', 'path']
-for p in props:
-    setattr(NiftiPatient, p, property(lambda self, p=p: getattr(self, f'_{NiftiPatient.__name__}__{p}')))
+        if self._ct_from is None:
+            return f"NiftiPatient({self._id}, dataset={self._dataset_id})"
+        else:
+            return f"NiftiPatient({self._id}, dataset={self._dataset_id}, ct_from={self._ct_from.dataset_id})"
 
 # Add shortcut properies from 'default_study'.
 mods = ['ct', 'dose', 'landmarks', 'mr', 'regions']
@@ -109,7 +115,7 @@ setattr(NiftiPatient, 'region_filepaths', lambda self, region_id: self.default_s
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'dose', 'mr']
-props = ['data', 'fov', 'offset', 'size', 'spacing']
+props = ['data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
     for p in props:
         setattr(NiftiPatient, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_study, f'{m}_{p}') if self.default_study is not None else None))

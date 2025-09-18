@@ -13,11 +13,11 @@ def create_ct(
     series_id: NiftiSeriesID,
     data: CtImageArray,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     dry_run: bool = True) -> None:
     set = NiftiDataset(dataset_id)
     filepath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'ct', f'{series_id}.nii.gz')
-    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, offset=offset), f"Creating CT at {filepath}.")
+    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating CT at {filepath}.")
 
 def create_region(
     dataset_id: DatasetID,
@@ -27,11 +27,11 @@ def create_region(
     region_id: RegionID,
     data: LabelArray,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     dry_run: bool = True) -> None:
     set = NiftiDataset(dataset_id)
     filepath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'regions', series_id, f'{region_id}.nii.gz')
-    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, offset=offset), f"Creating region at {filepath}.")
+    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating region at {filepath}.")
 
 def create_registration_moved_image(
     dataset_id: DatasetID,
@@ -40,7 +40,7 @@ def create_registration_moved_image(
     data: Union[CtImageArray, DoseImageArray, MrImageArray],
     modality: NiftiModality,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     dry_run: bool = True,
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
@@ -48,7 +48,7 @@ def create_registration_moved_image(
     set = NiftiDataset(dataset_id)
     moving_pat_id = fixed_pat_id if moving_pat_id is None else moving_pat_id
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, modality, f'{model}.nii.gz')
-    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, offset=offset), f"Creating moved image at {filepath}.")
+    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating moved image at {filepath}.")
 
 def create_registration_moved_landmarks(
     dataset_id: DatasetID,
@@ -71,7 +71,7 @@ def create_registration_moved_region(
     model: ModelID,
     data: LabelArray,
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     dry_run: bool = True,
     fixed_study_id: StudyID = 'study_1',
     moving_pat_id: Optional[PatientID] = None,
@@ -79,7 +79,7 @@ def create_registration_moved_region(
     set = NiftiDataset(dataset_id)
     moving_pat_id = fixed_pat_id if moving_pat_id is None else moving_pat_id
     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id, 'regions', region_id, f'{model}.nii.gz')
-    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, offset=offset), f"Creating moved region at {filepath}.")
+    with_dry_run(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating moved region at {filepath}.")
 
 def create_registration_transform(
     dataset_id: DatasetID,

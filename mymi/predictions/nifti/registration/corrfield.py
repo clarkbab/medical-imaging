@@ -65,49 +65,49 @@ def create_corrfield_predictions(
 
                         # Resample to isotropic spacing.
                         fixed_data = fixed_study.ct_data
-                        fixed_data = resample(fixed_data, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
+                        fixed_data = resample(fixed_data, origin=fixed_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                         fixed_label = fixed_study.region_data(region_ids=lung_region)[lung_region]
-                        fixed_label = resample(fixed_label, offset=fixed_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
+                        fixed_label = resample(fixed_label, origin=fixed_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                         moving_data = moving_study.ct_data
-                        moving_data = resample(moving_data, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
+                        moving_data = resample(moving_data, origin=moving_study.ct_origin, output_origin=moving_study.ct_origin, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                         moving_label = moving_study.region_data(region_ids=lung_region)[lung_region]
-                        moving_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=moving_study.ct_offset, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
+                        moving_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=moving_study.ct_origin, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                     else:
                         model_spacing = fixed_study.ct_spacing
 
                     # Translate moving image to centre lung COMs.
-                    fixed_com = get_centre_of_mass(fixed_label, spacing=model_spacing, offset=fixed_study.ct_offset)
-                    moving_com = get_centre_of_mass(moving_label, spacing=model_spacing, offset=moving_study.ct_offset)
+                    fixed_com = get_centre_of_mass(fixed_label, spacing=model_spacing, origin=fixed_study.ct_origin)
+                    moving_com = get_centre_of_mass(moving_label, spacing=model_spacing, origin=moving_study.ct_origin)
                     print(fixed_com, moving_com)
                     trans_mm = np.array(moving_com) - fixed_com
                     trans_mm = tuple(trans_mm.astype(np.float64))
                     logging.info(f"Translating ({trans_mm}) moving image to align COMs.")
                     translate = sitk.TranslationTransform(3)
-                    translate.SetOffset(trans_mm)
+                    translate.Setorigin(trans_mm)
                     moving_data, moving_label = resample([moving_data, moving_label], transform=translate)
                     
                     # Crop to 10mm surrounding lung.
                     logging.info(f"Cropping to 10mm surrounding fixed lung mask.")
                     margin = 10
-                    fov_min, fov_max = foreground_fov(fixed_label, spacing=model_spacing, offset=fixed_study.ct_offset)
+                    fov_min, fov_max = foreground_fov(fixed_label, spacing=model_spacing, origin=fixed_study.ct_origin)
                     print(fov_min, fov_max)
                     fov_min = tuple(np.array(fov_min) - (margin / np.array(model_spacing)))
                     fov_max = tuple(np.array(fov_max) + (margin / np.array(model_spacing)))
                     crop_mm = (fov_min, fov_max)
                     print(crop_mm)
-                    fixed_data, inv_crop = crop_or_pad(fixed_data, crop_mm, spacing=model_spacing, offset=fixed_study.ct_offset, return_inverse=True)
+                    fixed_data, inv_crop = crop_or_pad(fixed_data, crop_mm, spacing=model_spacing, origin=fixed_study.ct_origin, return_inverse=True)
                     print(inv_crop)
-                    fixed_label = crop_or_pad(fixed_label, crop_mm, spacing=model_spacing, offset=fixed_study.ct_offset)
-                    moving_data = crop_or_pad(moving_data, crop_mm, spacing=model_spacing, offset=moving_study.ct_offset)
-                    moving_label = crop_or_pad(moving_label, crop_mm, spacing=model_spacing, offset=moving_study.ct_offset)
+                    fixed_label = crop_or_pad(fixed_label, crop_mm, spacing=model_spacing, origin=fixed_study.ct_origin)
+                    moving_data = crop_or_pad(moving_data, crop_mm, spacing=model_spacing, origin=moving_study.ct_origin)
+                    moving_label = crop_or_pad(moving_label, crop_mm, spacing=model_spacing, origin=moving_study.ct_origin)
 
                     # Save files.
                     fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
-                    save_nifti(fixed_data, fixed_path, spacing=model_spacing, offset=fixed_study.ct_offset)
+                    save_nifti(fixed_data, fixed_path, spacing=model_spacing, origin=fixed_study.ct_origin)
                     fixed_label_path = os.path.join(temp_dir, 'fixed_label.nii.gz')
-                    save_nifti(fixed_label, fixed_label_path, spacing=model_spacing, offset=fixed_study.ct_offset)
+                    save_nifti(fixed_label, fixed_label_path, spacing=model_spacing, origin=fixed_study.ct_origin)
                     moving_path = os.path.join(temp_dir, 'moving.nii.gz')
-                    save_nifti(moving_data, moving_path, spacing=model_spacing, offset=moving_study.ct_offset)
+                    save_nifti(moving_data, moving_path, spacing=model_spacing, origin=moving_study.ct_origin)
                 else:
                     fixed_path = fixed_study.ct_filepath
                     moving_path = moving_study.ct_filepath
@@ -157,33 +157,33 @@ def create_corrfield_predictions(
                 dvf = np.moveaxis(dvf, -1, 0)
                 if preprocess_images:
                     logging.info(f"Reversing crop on DVF.")
-                    dvf = crop_or_pad(dvf, inv_crop, spacing=model_spacing, offset=crop_mm[0], fill=0)
+                    dvf = crop_or_pad(dvf, inv_crop, spacing=model_spacing, origin=crop_mm[0], fill=0)
 
                     logging.info(f"Creating composite transform.")
                     transform = sitk.CompositeTransform(3)
                     # Composite mapping from fixed -> warped (dvf) -> translated (COM alignment).
                     transform.AddTransform(translate)
-                    dvf_transform = dvf_to_sitk_transform(dvf, spacing=model_spacing, offset=fixed_study.ct_offset)
+                    dvf_transform = dvf_to_sitk_transform(dvf, spacing=model_spacing, origin=fixed_study.ct_origin)
                     transform.AddTransform(dvf_transform)
                 else:
-                    transform = dvf_to_sitk_transform(dvf, fixed_study.ct_spacing, fixed_study.ct_offset)
+                    transform = dvf_to_sitk_transform(dvf, fixed_study.ct_spacing, fixed_study.ct_origin)
                 filepath = os.path.join(pred_base, 'dvf', f'{model}.hdf5')
                 sitk_save_transform(transform, filepath)
 
                 # Create moved image.
-                moved_ct = resample(moving_study.ct_data, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_ct = resample(moving_study.ct_data, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(pred_base, 'ct', f'{model}.nii.gz')
-                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
                 if region_ids is not None:
                     pat_regions = regions_to_list(region_ids, literals={ 'all': moving_study.list_regions })
                     for r in pat_regions:
                         # Perform transform.
                         moving_label = moving_study.region_data(region_ids=r)[r]
-                        moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                        moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                         filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                        save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                        save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
                 if landmarks is not None:
                     fixed_lms_df = fixed_study.landmark_data(landmarks=landmarks)
@@ -201,9 +201,9 @@ def create_corrfield_predictions(
                 # Move dose.
                 if create_moved_dose and moving_study.has_dose:
                     moving_dose = moving_study.dose_data
-                    moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                    moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                     filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
-                    save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                    save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Save timing data.
     if use_timing:

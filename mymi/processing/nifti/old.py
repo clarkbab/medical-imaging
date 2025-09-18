@@ -27,32 +27,32 @@ def convert_old_pmcc_hn() -> None:
         for p in tqdm(pat_ids):
             # Copy CT data.
             filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{fixed_id}.nii.gz')
-            data, spacing, offset = load_nifti(filepath)
+            data, spacing, origin = load_nifti(filepath)
             filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            save_nifti(data, filepath, spacing=spacing, offset=offset)
+            save_nifti(data, filepath, spacing=spacing, origin=origin)
             
             filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{moving_id}.nii.gz')
-            data, spacing, offset = load_nifti(filepath)
+            data, spacing, origin = load_nifti(filepath)
             filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            save_nifti(data, filepath, spacing=spacing, offset=offset)
+            save_nifti(data, filepath, spacing=spacing, origin=origin)
             
             # Copy region data.
             for r in regions:
                 filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{fixed_id}.nii.gz')
                 if os.path.exists(filepath):
-                    data, spacing, offset = load_nifti(filepath)
+                    data, spacing, origin = load_nifti(filepath)
                     filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', f'{r}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    save_nifti(data, filepath, spacing=spacing, offset=offset)
+                    save_nifti(data, filepath, spacing=spacing, origin=origin)
                     
                 filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{moving_id}.nii.gz')
                 if os.path.exists(filepath):
-                    data, spacing, offset = load_nifti(filepath)
+                    data, spacing, origin = load_nifti(filepath)
                     filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', f'{r}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    save_nifti(data, filepath, spacing=spacing, offset=offset)
+                    save_nifti(data, filepath, spacing=spacing, origin=origin)
 
 def convert_old_replan() -> None:
     oset = NiftiDataset('PMCC-HN-REPLAN-OLD')
@@ -75,29 +75,29 @@ def convert_old_replan() -> None:
     for p in tqdm(pat_ids):
         # Copy CT data.
         filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{fixed_id}.nii.gz')
-        data, spacing, offset = load_nifti(filepath)
+        data, spacing, origin = load_nifti(filepath)
         filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(data, filepath, spacing=spacing, offset=offset)
+        save_nifti(data, filepath, spacing=spacing, origin=origin)
         
         filepath = os.path.join(oset.path, 'data', 'ct', f'{p}-{moving_id}.nii.gz')
-        data, spacing, offset = load_nifti(filepath)
+        data, spacing, origin = load_nifti(filepath)
         filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(data, filepath, spacing=spacing, offset=offset)
+        save_nifti(data, filepath, spacing=spacing, origin=origin)
         
         # Copy region data.
         for r in regions:
             filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{fixed_id}.nii.gz')
             if os.path.exists(filepath):
-                data, spacing, offset = load_nifti(filepath)
+                data, spacing, origin = load_nifti(filepath)
                 filepath = os.path.join(nset.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', f'{r}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                save_nifti(data, filepath, spacing=spacing, offset=offset)
+                save_nifti(data, filepath, spacing=spacing, origin=origin)
                 
             filepath = os.path.join(oset.path, 'data', 'regions', r, f'{p}-{moving_id}.nii.gz')
             if os.path.exists(filepath):
-                data, spacing, offset = load_nifti(filepath)
+                data, spacing, origin = load_nifti(filepath)
                 filepath = os.path.join(nset.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', f'{r}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                save_nifti(data, filepath, spacing=spacing, offset=offset)
+                save_nifti(data, filepath, spacing=spacing, origin=origin)

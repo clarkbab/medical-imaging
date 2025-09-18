@@ -5,10 +5,10 @@ from mymi.predictions.nifti import load_registration, load_segmenter_predictions
 from mymi.typing import *
 from mymi.utils import *
 
-from ..plotting import plot_patient_histograms as pph, plot_patients as pp, plot_registrations as pr
+from ..plotting import plot_patient_histogram as pph, plot_patient as pp, plot_registrations as pr
 
 @delegates(pp)
-def plot_patients(dataset, *args, **kwargs) -> None:
+def plot_patient(dataset, *args, **kwargs) -> None:
     set = NiftiDataset(dataset)
     fns = {
         'ct_series': lambda study, data_id: study.series(data_id, 'ct'),
@@ -26,7 +26,7 @@ def plot_patients(dataset, *args, **kwargs) -> None:
     pp(set, fns, *args, **kwargs)
 
 @delegates(pph)
-def plot_patient_histograms(*args, **kwargs) -> None:
+def plot_patient_histogram(*args, **kwargs) -> None:
     pph(NiftiDataset, *args, **kwargs)
 
 @delegates(pr)

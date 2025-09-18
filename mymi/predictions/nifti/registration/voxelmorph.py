@@ -60,9 +60,9 @@ def create_voxelmorph_predictions(
 
                 # Save files for 'voxelmorph'.
                 fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
-                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, offset=fixed_study.ct_offset)
+                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, origin=fixed_study.ct_origin)
                 moving_path = os.path.join(temp_dir, 'moving.nii.gz')
-                save_nifti(moving_ct_resampled, moving_path, spacing=model_spacing, offset=moving_study.ct_offset)
+                save_nifti(moving_ct_resampled, moving_path, spacing=model_spacing, origin=moving_study.ct_origin)
                 moved_path = os.path.join(temp_dir, 'moved.npz')
                 dvf_path = os.path.join(temp_dir, 'dvf.npz')
 
@@ -84,8 +84,8 @@ def create_voxelmorph_predictions(
 
                 # Load, resample, save DVF.
                 # Transform goes from fixed -> moving image.
-                model_offset = (0, 0, 0)
-                to_model_t = create_sitk_affine_transform(offset=fixed_study.ct_offset, output_offset=model_offset)
+                model_origin = (0, 0, 0)
+                to_model_t = create_sitk_affine_transform(origin=fixed_study.ct_origin, output_origin=model_origin)
                 dvf = np.load(dvf_path)['vol']
                 if pad_shape is not None:
                     dvf = centre_crop(dvf, resampled_size, use_patient_coords=False)
@@ -95,17 +95,17 @@ def create_voxelmorph_predictions(
                 dvf = np.moveaxis(dvf, 0, -1)
                 dvf = dvf * np.array(model_spacing)  # Convert to mm.
                 dvf = np.moveaxis(dvf, -1, 0)
-                dvf_t = dvf_to_sitk_transform(dvf, model_spacing, model_offset)
-                to_image_t = create_sitk_affine_transform(offset=model_offset, output_offset=moving_study.ct_offset)
+                dvf_t = dvf_to_sitk_transform(dvf, model_spacing, model_origin)
+                to_image_t = create_sitk_affine_transform(origin=model_origin, output_origin=moving_study.ct_origin)
                 transforms = [to_image_t, dvf_t, to_model_t]    # Reverse order.
                 transform = sitk.CompositeTransform(transforms)
                 sitk_save_transform(transform, transform_path)
 
                 # Move image manually using transform - only requires one resampling.
-                moved_ct = resample(moving_ct, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_ct = resample(moving_ct, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 # moved_ct = load_numpy(moved_path, keys='vol')
                 moved_path = os.path.join(pred_base_path, 'ct', f'{modelname}.nii.gz')
-                save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
         if regions is not None:
             transform = sitk_load_transform(transform_path)
@@ -117,10 +117,10 @@ def create_voxelmorph_predictions(
 
                 # Create moved region label.
                 moving_label = moving_study.region_data(regions=r)[r]
-                moved_label = resample(moving_label, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
-                save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_label, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
         
         if landmarks is not None:
             if not fixed_study.has_landmark(pat_landmarks):

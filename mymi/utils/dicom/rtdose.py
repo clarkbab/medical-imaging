@@ -20,15 +20,15 @@ def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseImageArray, Spacin
     spacing_z = z_diffs[0]
     spacing = tuple((float(s) for s in np.append(spacing_xy, spacing_z)))
 
-    # Get offset.
-    offset = tuple(float(o) for o in rtdose_dicom.ImagePositionPatient)
+    # Get origin.
+    origin = tuple(float(o) for o in rtdose_dicom.ImagePositionPatient)
 
-    return data, spacing, offset
+    return data, spacing, origin
 
 def to_rtdose_dicom(
     data: DoseImageArray, 
     spacing: Spacing3D,
-    offset: Point3D,
+    origin: Point3D,
     grid_scaling: float = 1e-3,
     ref_ct: Optional[CtDicom] = None,
     rtdose_template: Optional[RtDoseDicom] = None,
@@ -117,7 +117,7 @@ def to_rtdose_dicom(
     rtdose_dicom.FrameIncrementPointer = dcm.datadict.tag_for_keyword('GridFrameOffsetVector')
     rtdose_dicom.GridFrameOffsetVector = [i * spacing[2] for i in range(data.shape[2])]
     rtdose_dicom.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
-    rtdose_dicom.ImagePositionPatient = list(offset)
+    rtdose_dicom.ImagePositionPatient = list(origin)
     rtdose_dicom.ImageType = ['DERIVED', 'SECONDARY', 'AXIAL']
     rtdose_dicom.NumberOfFrames = data.shape[2]
     rtdose_dicom.PixelSpacing = [spacing[0], spacing[1]]    # Uses (x, y) spacing.

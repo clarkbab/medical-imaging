@@ -134,12 +134,12 @@ def create_unigradicon_finetuned_predictions(
                 # Apply transform to moving CT.
                 fixed_ct = fixed_study.ct_data
                 fixed_spacing = fixed_study.ct_spacing
-                fixed_offset = fixed_study.ct_offset
+                fixed_origin = fixed_study.ct_origin
                 moving_ct = moving_study.ct_data
                 moving_spacing = moving_study.ct_spacing
-                moving_offset = moving_study.ct_offset
-                moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, offset=fixed_offset)
+                moving_origin = moving_study.ct_origin
+                moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, origin=fixed_origin)
 
             # Register regions.
             if region_ids is not None:
@@ -151,17 +151,17 @@ def create_unigradicon_finetuned_predictions(
                     # Load data.
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
-                    fixed_offset = fixed_study.ct_offset
+                    fixed_origin = fixed_study.ct_origin
                     moving_label = moving_study.region_data(region_ids=r)[r]
                     moving_spacing = moving_study.ct_spacing
-                    moving_offset = moving_study.ct_offset
+                    moving_origin = moving_study.ct_origin
                     transform = sitk_load_transform(transform_path)
 
                     # Perform transform.
-                    moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                    moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     moved_label_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(moved_label_path), exist_ok=True)
-                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, offset=fixed_offset)
+                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, origin=fixed_origin)
 
                     # # Perform region warp.
                     # moving_region_path = moving_study.region_path(r)
@@ -197,9 +197,9 @@ def create_unigradicon_finetuned_predictions(
             # Move dose.
             if create_moved_dose and moving_study.has_dose:
                 moving_dose = moving_study.dose_data
-                moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
-                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Save timing data.
     if use_timing:
@@ -278,12 +278,12 @@ def create_unigradicon_predictions(
                 # Apply transform to moving CT.
                 fixed_ct = fixed_study.ct_data
                 fixed_spacing = fixed_study.ct_spacing
-                fixed_offset = fixed_study.ct_offset
+                fixed_origin = fixed_study.ct_origin
                 moving_ct = moving_study.ct_data
                 moving_spacing = moving_study.ct_spacing
-                moving_offset = moving_study.ct_offset
-                moved_ct = resample(moving_ct, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, offset=fixed_offset)
+                moving_origin = moving_study.ct_origin
+                moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, origin=fixed_origin)
 
             # Register regions.
             if region_ids is not None:
@@ -295,17 +295,17 @@ def create_unigradicon_predictions(
                     # Load data.
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
-                    fixed_offset = fixed_study.ct_offset
+                    fixed_origin = fixed_study.ct_origin
                     moving_label = moving_study.region_data(region_ids=r)[r]
                     moving_spacing = moving_study.ct_spacing
-                    moving_offset = moving_study.ct_offset
+                    moving_origin = moving_study.ct_origin
                     transform = sitk_load_transform(transform_path)
 
                     # Perform transform.
-                    moved_label = resample(moving_label, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                    moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     moved_label_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(moved_label_path), exist_ok=True)
-                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, offset=fixed_offset)
+                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, origin=fixed_origin)
 
                     # # Perform region warp.
                     # moving_region_path = moving_study.region_path(r)
@@ -341,16 +341,16 @@ def create_unigradicon_predictions(
             # Move dose.
             if create_moved_dose and moving_study.has_dose:
                 moving_dose = moving_study.dose_data
-                moved_dose = resample(moving_dose, offset=moving_study.ct_offset, output_offset=fixed_study.ct_offset, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
+                moved_dose = resample(moving_dose, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_size=fixed_study.ct_size, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id, 'dose', f'{model}.nii.gz')
-                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+                save_nifti(moved_dose, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
     # Save timing data.
     if use_timing:
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'timing', f'{model}.csv')
         timer.save(filepath)
 
-# Because ITK/SimpleITK load nifti files with negative x/y directions and offsets,
+# Because ITK/SimpleITK load nifti files with negative x/y directions and origins,
 # the transform is configured to work with this input space. Which is different from
 # how nibabel loads nifti files. ITK expects nifti files to use RAS but we write them
 # using LPS.
@@ -370,10 +370,10 @@ def convert_transform_to_sitk(t: itk.Transform) -> sitk.Transform:
 
     # Convert DVF to sitk.
     dvf_image_itk = t1.GetDisplacementField()
-    dvf_data, dvf_spacing, dvf_offset = from_itk_image(dvf_image_itk)
+    dvf_data, dvf_spacing, dvf_origin = from_itk_image(dvf_image_itk)
     # We need to reverse DVF x/y components because our affines are mapping into the negative x/y space.
     dvf_data[0], dvf_data[1] = -dvf_data[0], -dvf_data[1]
-    dvf_image_sitk = to_sitk_image(dvf_data, dvf_spacing, dvf_offset, vector=True)
+    dvf_image_sitk = to_sitk_image(dvf_data, dvf_spacing, dvf_origin, vector=True)
     dir = np.array(dvf_image_sitk.GetDirection())
     dir = reverse_xy(dir)
     dvf_image_sitk.SetDirection(dir)

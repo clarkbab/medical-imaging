@@ -63,7 +63,7 @@ def plot_registrations(
     moving_centres, fixed_centres, moved_centres = [], [], []
     moving_crops, fixed_crops, moved_crops = [], [], []
     moving_spacings, fixed_spacings = [], []
-    moving_offsets, fixed_offsets = [], []
+    moving_origins, fixed_origins = [], []
     moving_landmark_datas, fixed_landmark_datas, moved_landmark_datas = [], [], []
     moving_region_datas, fixed_region_datas, moved_region_datas = [], [], []
     moving_idxs, fixed_idxs, moved_idxs = [], [], []
@@ -81,7 +81,7 @@ def plot_registrations(
         spacings = []
         centres = []
         crops = []
-        offsets = []
+        origins = []
         centres = [moving_centre if moving_centre is not None else centre, fixed_centre if fixed_centre is not None else centre, moved_centre if moved_centre is not None else centre]
         crops = [moving_crop if moving_crop is not None else crop, fixed_crop if fixed_crop is not None else crop, moved_crop if moved_crop is not None else crop]
         idxs = [moving_idx if moving_idx is not None else idx, fixed_idx if fixed_idx is not None else idx, moved_idx if moved_idx is not None else idx]
@@ -90,13 +90,13 @@ def plot_registrations(
             ct_image = study.default_ct
             ct_datas.append(ct_image.data)
             spacings.append(ct_image.spacing)
-            offsets.append(ct_image.offset)
+            origins.append(ct_image.origin)
             if show_doses[j] or len(isodoses) > 0 and study.has_dose:
-                # Resample dose data to CT spacing/offset.
+                # Resample dose data to CT spacing/origin.
                 dose_image = study.default_dose
                 resample_kwargs = dict(
-                    offset=dose_image.offset,
-                    output_offset=ct_image.offset,
+                    origin=dose_image.origin,
+                    output_origin=ct_image.origin,
                     output_size=ct_image.size,
                     output_spacing=ct_image.spacing,
                     spacing=dose_image.spacing,
@@ -207,8 +207,8 @@ def plot_registrations(
         moved_ct_datas.append(moved_ct_data)
         fixed_spacings.append(spacings[1])
         moving_spacings.append(spacings[0])
-        fixed_offsets.append(offsets[1])
-        moving_offsets.append(offsets[0])
+        fixed_origins.append(origins[1])
+        moving_origins.append(origins[0])
         fixed_dose_datas.append(dose_datas[1])
         moving_dose_datas.append(dose_datas[0])
         moved_dose_datas.append(moved_dose_data)
@@ -237,7 +237,7 @@ def plot_registrations(
         fixed_dose_datas=fixed_dose_datas,
         fixed_idxs=fixed_idxs,
         fixed_landmark_datas=fixed_landmark_datas,
-        fixed_offsets=fixed_offsets,
+        fixed_origins=fixed_origins,
         fixed_spacings=fixed_spacings,
         fixed_region_datas=fixed_region_datas,
         isodoses=isodoses,
@@ -256,7 +256,7 @@ def plot_registrations(
         moving_dose_datas=moving_dose_datas,
         moving_idxs=moving_idxs,
         moving_landmark_datas=moving_landmark_datas,
-        moving_offsets=moving_offsets,
+        moving_origins=moving_origins,
         moving_spacings=moving_spacings,
         moving_region_datas=moving_region_datas,
         show_fixed_dose=show_doses[1],
@@ -277,7 +277,7 @@ def plot_registrations_matrix(
     fixed_dose_datas: Sequence[Optional[DoseImageArrays]] = [],
     fixed_idxs: Sequence[Optional[Union[int, float]]] = [],
     fixed_landmark_datas: Sequence[Optional[LandmarksFrame]] = [],
-    fixed_offsets: Sequence[Optional[Point3D]] = [],
+    fixed_origins: Sequence[Optional[Point3D]] = [],
     fixed_region_datas: Sequence[Optional[np.ndarray]] = [],
     fixed_spacings: Sequence[Optional[Spacing3D]] = [],
     figsize: Tuple[float, float] = (16, 4),     # Width always the same, height is based on a single row.
@@ -294,7 +294,7 @@ def plot_registrations_matrix(
     moving_dose_datas: Sequence[Optional[DoseImageArrays]] = [],
     moving_idxs: Sequence[Optional[Union[int, float]]] = [],
     moving_landmark_datas: Sequence[Optional[LandmarksFrame]] = [],
-    moving_offsets: Sequence[Optional[Point3D]] = [],
+    moving_origins: Sequence[Optional[Point3D]] = [],
     moving_region_datas: Sequence[Optional[RegionArrays]] = [],
     moving_spacings: Sequence[Optional[Spacing3D]] = [],
     savepath: Optional[str] = None,
@@ -323,7 +323,7 @@ def plot_registrations_matrix(
             fixed_dose_data=fixed_dose_datas[i],
             fixed_idx=fixed_idxs[i],
             fixed_landmark_data=fixed_landmark_datas[i],
-            fixed_offset=fixed_offsets[i],
+            fixed_origin=fixed_origins[i],
             fixed_region_data=fixed_region_datas[i],
             fixed_spacing=fixed_spacings[i],
             moved_centre=moved_centres[i],
@@ -340,7 +340,7 @@ def plot_registrations_matrix(
             moving_dose_data=moving_dose_datas[i],
             moving_idx=moving_idxs[i],
             moving_landmark_data=moving_landmark_datas[i],
-            moving_offset=moving_offsets[i],
+            moving_origin=moving_origins[i],
             moving_region_data=moving_region_datas[i],
             moving_spacing=moving_spacings[i],
             show_fixed=show_fixed,
@@ -378,7 +378,7 @@ def plot_registration(
     fixed_dose_data: Optional[DoseImageArray] = None,
     fixed_idx: Optional[int] = None,
     fixed_landmark_data: Optional[LandmarksFrame] = None,
-    fixed_offset: Optional[Point3D] = None,
+    fixed_origin: Optional[Point3D] = None,
     fixed_region_data: Optional[np.ndarray] = None,
     fixed_spacing: Optional[Spacing3D] = None,
     figsize: Tuple[float, float] = (30, 10),
@@ -402,7 +402,7 @@ def plot_registration(
     moving_dose_data: Optional[DoseImageArray] = None,
     moving_idx: Optional[int] = None,
     moving_landmark_data: Optional[LandmarkIDs] = None,
-    moving_offset: Optional[Point3D] = None,
+    moving_origin: Optional[Point3D] = None,
     moving_region_data: Optional[np.ndarray] = None,
     moving_spacing: Optional[Spacing3D] = None,
     n_landmarks: Optional[int] = None,
@@ -448,8 +448,8 @@ def plot_registration(
     dose_datas = [c for c in dose_datas if not (isinstance(c, str) and c == hidden)]
     spacings = [moving_spacing if show_moving else hidden, fixed_spacing if show_fixed else hidden, fixed_spacing]
     spacings = [c for c in spacings if not (isinstance(c, str) and c == hidden)]
-    offsets = [moving_offset if show_moving else hidden, fixed_offset if show_fixed else hidden, fixed_offset]
-    offsets = [c for c in offsets if not (isinstance(c, str) and c == hidden)]
+    origins = [moving_origin if show_moving else hidden, fixed_origin if show_fixed else hidden, fixed_origin]
+    origins = [c for c in origins if not (isinstance(c, str) and c == hidden)]
     if moved_ct_data is None:
         raise ValueError(f"No moved CT data for registration for patient {moving_pat_id}->{fixed_pat_id}, study {moving_study_id}->{fixed_study_id}.")
     sizes = [moving_ct_data.shape if show_moving else hidden, fixed_ct_data.shape if show_fixed else hidden, moved_ct_data.shape]
@@ -475,7 +475,7 @@ def plot_registration(
     if moved_use_fixed_idx:
         # Plot patients resolves the fixed idx based on parameters (e.g. idx, centre).
         # We need to resolve the fixed idx here for the moved image.
-        resolved_fixed_idx = get_idx(sizes[1], view, centre=centres[1], idx=fixed_idx, landmark_data=fixed_landmark_data, offset=offsets[1], region_data=fixed_region_data, spacing=spacings[1])
+        resolved_fixed_idx = get_idx(sizes[1], view, centre=centres[1], idx=fixed_idx, landmark_data=fixed_landmark_data, origin=origins[1], region_data=fixed_region_data, spacing=spacings[1])
     idxs = [moving_idx if show_moving else hidden, fixed_idx if show_fixed else hidden, resolved_fixed_idx if moved_use_fixed_idx else moved_idx]
     idxs = [c for c in idxs if not (isinstance(c, str) and c == hidden)]
     show_doses = [show_moving_dose, show_fixed_dose, show_moved_dose]
@@ -532,7 +532,7 @@ def plot_registration(
             landmark_data=landmark_datas[i],
             landmark_data_other=lm_other,
             n_landmarks=n_landmarks,
-            offset=offsets[i],
+            origin=origins[i],
             pat_id=pat_ids[i],
             region_data=region_datas[i],
             show_dose=show_doses[i],
@@ -545,30 +545,30 @@ def plot_registration(
 
     # # Add moved landmarks to moving image.
     # if show_moving and show_moved_landmarks and moved_landmark_data is not None:
-    #     moving_idx = get_idx(sizes[0], view, centre=centres[0], idx=idxs[0], landmark_data=moving_landmark_data, spacing=spacings[0], offset=offsets[0])
+    #     moving_idx = get_idx(sizes[0], view, centre=centres[0], idx=idxs[0], landmark_data=moving_landmark_data, spacing=spacings[0], origin=origins[0])
     #     okwargs = dict(
     #         colour=moved_landmarks_colour,
     #         dose_data=dose_datas[0],
     #         zorder=0,
     #     )
-    #     plot_landmark_data(moved_landmark_data, axs[0], moving_idx, sizes[0], spacings[0], offsets[0], view, **okwargs, **kwargs)
+    #     plot_landmark_data(moved_landmark_data, axs[0], moving_idx, sizes[0], spacings[0], origins[0], view, **okwargs, **kwargs)
 
     # Add fixed landmarks to moved image.
     if fixed_landmark_data is not None:
         # Resolve the moved idx - usually handled by 'plot_patients'.
-        moved_idx = resolved_fixed_idx if moved_use_fixed_idx else get_idx(sizes[2], view, centre=centres[2], idx=idxs[2], landmark_data=moving_landmark_data, spacing=spacings[2], offset=offsets[2])
+        moved_idx = resolved_fixed_idx if moved_use_fixed_idx else get_idx(sizes[2], view, centre=centres[2], idx=idxs[2], landmark_data=moving_landmark_data, spacing=spacings[2], origin=origins[2])
         okwargs = dict(
             dose_data=dose_datas[2],
             zorder=0,
         )
-        plot_landmark_data(fixed_landmark_data, axs[2], moved_idx, sizes[2], spacings[2], offsets[2], view, **okwargs, **kwargs)
+        plot_landmark_data(fixed_landmark_data, axs[2], moved_idx, sizes[2], spacings[2], origins[2], view, **okwargs, **kwargs)
 
     if show_grid:
         # Plot moving grid.
         include = [True] * 3
         include[view] = False
         moving_grid = __create_grid(moving_ct_data.shape, moving_spacing, include=include)
-        moving_idx = get_idx(sizes[0], view, centre=centres[0], idx=idxs[0], landmark_data=moving_landmark_data, spacing=spacings[0], offset=offsets[0])
+        moving_idx = get_idx(sizes[0], view, centre=centres[0], idx=idxs[0], landmark_data=moving_landmark_data, spacing=spacings[0], origin=origins[0])
         if show_moving:
             grid_slice, _ = get_view_slice(moving_grid, moving_idx, view)
             aspect = get_aspect(view, moving_spacing)
@@ -577,13 +577,13 @@ def plot_registration(
 
         # Plot moved grid.
         if transform_format == 'itk':
-            # When ITK loads nifti images, it reversed direction/offset for x/y axes.
+            # When ITK loads nifti images, it reversed direction/origin for x/y axes.
             # This is an issue as our code doesn't use directions, it assumes a positive direction matrix.
             # I don't know how to reverse x/y axes with ITK transforms, so we have to do it with 
             # images before applying the transform.
-            moved_grid = itk_transform_image(moving_grid, transform, fixed_ct_data.shape, offset=moving_offset, output_offset=fixed_offset, output_spacing=fixed_spacing, spacing=moving_spacing)
+            moved_grid = itk_transform_image(moving_grid, transform, fixed_ct_data.shape, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing)
         elif transform_format == 'sitk':
-            moved_grid = resample(moving_grid, offset=moving_offset, output_offset=fixed_offset, output_size=fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+            moved_grid = resample(moving_grid, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
         grid_slice, _ = get_view_slice(moved_grid, moving_idx, view)
         aspect = get_aspect(view, fixed_spacing)
         origin = get_origin(view)
@@ -622,13 +622,13 @@ def __create_grid(
     use_shading: bool = False) -> np.ndarray:
     # Create grid.
     grid = np.zeros(size, dtype=np.float32)
-    offset = [-1, -1, -1]
+    origin = [-1, -1, -1]
     grid_spacing_voxels = np.array(grid_spacing) / spacing
 
     for axis in range(3):
         if include[axis]:
             # Get line positions.
-            line_idxs = [i for i in list(np.arange(grid.shape[axis])) if int(np.floor((i - offset[axis]) % grid_spacing_voxels[axis])) in tuple(range(linewidth))]
+            line_idxs = [i for i in list(np.arange(grid.shape[axis])) if int(np.floor((i - origin[axis]) % grid_spacing_voxels[axis])) in tuple(range(linewidth))]
 
             # Set lines in grid image.
             idxs = [slice(None), slice(None), slice(None)]

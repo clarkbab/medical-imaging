@@ -16,12 +16,12 @@ def assert_box_width(box: Union[Box2D, Box3D]) -> None:
 def replace_box_none(
     bounding_box: Union[Box2D, Box3D],
     size: Union[Size2D, Size3D],
-    offset: Optional[Union[Point2D, Point3D]] = None,
+    origin: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     use_patient_coords: bool = True) -> Tuple[Box2D, Box3D]:
     if use_patient_coords:
         assert spacing is not None
-        assert offset is not None
+        assert origin is not None
 
     # Replace 'None' values.
     n_dims = len(size)
@@ -30,12 +30,12 @@ def replace_box_none(
     for i in range(n_dims):
         if min[i] is None:
             if use_patient_coords:
-                min[i] = offset[i]
+                min[i] = origin[i]
             else:
                 min[i] = 0
         if max[i] is None:
             if use_patient_coords:
-                max[i] = size[i] * spacing[i] + offset[i]
+                max[i] = size[i] * spacing[i] + origin[i]
             else:
                 max[i] = size[i]
     min, max = tuple(min), tuple(max)

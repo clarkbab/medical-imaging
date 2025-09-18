@@ -49,10 +49,10 @@ def convert_lung_copd_to_nifti() -> None:
         if truncate_data:
             data[(data != fill) & (data > data_max)] = data_max
             data[(data != fill) & (data < data_min)] = data_min
-        offset = (0, 0, 0)
+        origin = (0, 0, 0)
         if not dry_run:
             filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
-            save_nifti(data, filepath, spacing=spacing, offset=offset)
+            save_nifti(data, filepath, spacing=spacing, origin=origin)
             
         # Inhale points.
         filepath = os.path.join(rset.path, 'data', p, f'{p}_300_iBH_xyz_r1.txt')
@@ -201,7 +201,7 @@ def read_dirlab_image(
     image_size,
     spacing,
     sitk_pixel_type,
-    offset: Optional[Voxel] = None,
+    origin: Optional[Voxel] = None,
     big_endian=False) -> np.ndarray:
     """
     Read a raw binary scalar image.
@@ -214,7 +214,7 @@ def read_dirlab_image(
         sitk.sitkUInt16).
     spacing (tuple like): Optional image spacing, if none given assumed
         to be [1]*dim.
-    offset (tuple like): Optional image origin, if none given assumed to
+    origin (tuple like): Optional image origin, if none given assumed to
         be [0]*dim.
     big_endian (bool): Optional byte order indicator, if True big endian, else
         little endian.
@@ -258,8 +258,8 @@ def read_dirlab_image(
         (
             "Offset = "
             + (
-                " ".join([str(v) for v in offset])
-                if offset
+                " ".join([str(v) for v in origin])
+                if origin
                 else " ".join(["0"] * dim) + "\n"
             )
         ).encode(),

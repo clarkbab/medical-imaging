@@ -39,14 +39,14 @@ def finetune_unigradicon(
             moving_spacing, fixed_spacing = spacings[2 * draw:2 * draw + 2]
             assert np.array_equal(moving_spacing, fixed_spacing), "Moving and fixed spacings must be equal."
             spacing = fixed_spacing
-            offset = (0, 0, 0)
+            origin = (0, 0, 0)
 
             # Create composite transforms.
             if len(data_augs) > 0:
                 t_fs = []
                 t_bs = []
                 for d in data_augs:
-                    transform_f, transform_b, _ = d.get_concrete_transform(size=moving.shape[2:], spacing=spacing, offset=offset)
+                    transform_f, transform_b, _ = d.get_concrete_transform(size=moving.shape[2:], spacing=spacing, origin=origin)
                     t_bs.insert(0, transform_b)
                     t_fs.append(transform_f)
                 transform_f = sitk.CompositeTransform(t_fs)
@@ -57,8 +57,8 @@ def finetune_unigradicon(
 
             if transform_b is not None:
                 # Transform moving/fixed images.
-                moving = resample(moving, fill=fill_val, spacing=spacing, offset=offset, transform=transform_b)
-                fixed = resample(fixed, fill=fill_val, spacing=spacing, offset=offset, transform=transform_b)
+                moving = resample(moving, fill=fill_val, spacing=spacing, origin=origin, transform=transform_b)
+                fixed = resample(fixed, fill=fill_val, spacing=spacing, origin=origin, transform=transform_b)
 
             # Process images for network input.
             min_val, max_val = -1000, 1000

@@ -57,13 +57,13 @@ def create_totalseg_predictions(
                         d, s, o = load_nrrd(input_filepath)
                         dest_filepath = os.path.join(output_dir, input_filepath.split('/')[-1].replace('.nrrd', '.nii.gz'))
                         logging.info(f"Copying NRRD to NIFTI: {input_filepath} -> {dest_filepath}")
-                        save_nifti(d, dest_filepath, spacing=s, offset=o)
+                        save_nifti(d, dest_filepath, spacing=s, origin=o)
                         input_filepath = dest_filepath
 
                     # Convert data from LPS to RAS, as required by totalseg.
                     d, s, o = load_nifti(input_filepath)
                     d = np.flip(d, axis=(0, 1))  # Flip x and y axes.
-                    save_nifti(d, input_filepath, spacing=s, offset=o)
+                    save_nifti(d, input_filepath, spacing=s, origin=o)
 
                     # Make total seg predictions.
                     command = [
@@ -131,7 +131,7 @@ def create_totalseg_predictions(
                         filepath = os.path.join(output_dir, f)
                         d, s, o = load_nifti(filepath)
                         d = np.flip(d, axis=(0, 1))
-                        save_nifti(d, filepath, spacing=s, offset=o)
+                        save_nifti(d, filepath, spacing=s, origin=o)
 
                     # Copy predictions to the output directory.
                     files = os.listdir(output_dir)

@@ -20,19 +20,19 @@ def sitk_load_transform(
     return transform
 
 def create_sitk_affine_transform(
-    offset: Optional[Point3D] = (0, 0, 0),
-    output_offset: Optional[Point3D] = (0, 0, 0),
+    origin: Optional[Point3D] = (0, 0, 0),
+    output_origin: Optional[Point3D] = (0, 0, 0),
     output_spacing: Optional[Spacing3D] = (1, 1, 1),
     spacing: Optional[Spacing3D] = (1, 1, 1)) -> sitk.AffineTransform:
 
     # Create transform.
     transform = sitk.AffineTransform(3)
-    transform.SetCenter(offset)   # Scaling should happen around this point.
+    transform.SetCenter(origin)   # Scaling should happen around this point.
     matrix = np.eye(3)
     for i in range(3):
         matrix[i, i] = spacing[i] / output_spacing[i]
     transform.SetMatrix(matrix.flatten())
-    translation = tuple(np.array(output_offset) - offset)
+    translation = tuple(np.array(output_origin) - origin)
     transform.SetTranslation(translation)
 
     return transform

@@ -7,24 +7,23 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ....region_map import RegionMap
-from .images import NiftiImageSeries
+from .image import NiftiImageSeries
 
-class RegionsImageSeries(NiftiImageSeries):
+class NiftiRegionsSeries(NiftiImageSeries):
     def __init__(
         self,
         dataset_id: DatasetID,
         pat_id: PatientID,
         study_id: StudyID,
         id: SeriesID,
-        path: DirPath,
         region_map: Optional[RegionMap] = None) -> None:
-        self.__dataset_id = dataset_id
-        self._global_id = f'NIFTI:{dataset_id}:{pat_id}{study_id}:{id}'
-        self.__id = id
-        self.__path = path
-        self.__pat_id = pat_id
+        extensions = ['.nii', '.nii.gz', '.nrrd']
+        dirpath = os.path.join(config.directories.datasets, 'nifti', str(dataset_id), 'data', 'patients', str(pat_id), str(study_id), 'regions', str(id))
+        if not os.path.exists(dirpath):
+            raise ValueError(f"No NiftiRegionsSeries found for study '{study_id}'. Dirpath: {dirpath}")
+        self.__dirpath = dirpath
+        super().__init__(dataset_id, pat_id, study_id, id)
         self.__region_map = region_map
-        self.__study_id = study_id
 
     def data(
         self,
@@ -67,7 +66,7 @@ class RegionsImageSeries(NiftiImageSeries):
         disk_ids = self.__region_map.inv_map_region(region_id, disk_regions=self.list_regions(use_mapping=False)) if self.__region_map is not None else region_id
         disk_ids = arg_to_list(disk_ids, RegionID)
         # Check all possible file extensions.
-        filepaths = [os.path.join(self.__path, f'{i}{e}') for i in disk_ids for e in image_extensions if os.path.exists(os.path.join(self.__path, f'{i}{e}'))]
+        filepaths = [os.path.join(self.__dirpath, f'{i}{e}') for i in disk_ids for e in image_extensions if os.path.exists(os.path.join(self.__dirpath, f'{i}{e}'))]
         if len(filepaths) == 0:
             raise ValueError(f'No region filespaths found for region {region_id} in series {self}.')
         return filepaths
@@ -85,11 +84,11 @@ class RegionsImageSeries(NiftiImageSeries):
     @alias_kwargs(('um', 'use_mapping'))
     def list_regions(
         self,
-        region_ids: RegionIDs = 'all',
+        region_id: RegionIDs = 'all',
         use_mapping: bool = True) -> List[Region]:
         # Load regions from filenames.
         image_extensions = ['.nii', '.nii.gz', '.nrrd']
-        ids = os.listdir(self.__path)
+        ids = os.listdir(self.__dirpath)
         ids = [i.replace(e, '') for i in ids for e in image_extensions if i.endswith(e)]
 
         # Apply region mapping.
@@ -97,8 +96,8 @@ class RegionsImageSeries(NiftiImageSeries):
             ids = [self.__region_map.map_region(i) if self.__region_map is not None else i for i in ids]
 
         # Filter on 'only'.
-        if region_ids != 'all':
-            region_ids = regions_to_list(region_ids)
+        if region_id != 'all':
+            region_ids = regions_to_list(region_id)
             ids = [r for r in ids if r in region_ids]
 
         # Sort regions.
@@ -109,4 +108,4 @@ class RegionsImageSeries(NiftiImageSeries):
 # Add properties.
 props = ['id', 'path']
 for p in props:
-    setattr(RegionsImageSeries, p, property(lambda self, p=p: getattr(self, f'_{RegionsImageSeries.__name__}__{p}')))
+    setattr(NiftiRegionsSeries, p, property(lambda self, p=p: getattr(self, f'_{NiftiRegionsSeries.__name__}__{p}')))

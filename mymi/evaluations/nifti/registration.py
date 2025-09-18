@@ -84,13 +84,13 @@ def get_registration_landmarks_evaluation(
     if moving_study.has_dose is not None and moved_landmarks is not None:
         # # Sample moved dose at fixed landmarks.
         # fixed_landmarks = fixed_study.landmark_data(landmark_ids=landmark_ids)
-        # fixed_landmarks = sample(moved_dose, fixed_landmarks, spacing=fixed_study.ct_spacing, offset=fixed_study.ct_offset)
+        # fixed_landmarks = sample(moved_dose, fixed_landmarks, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
         # dose_errors = np.abs(fixed_landmarks['sample'] - moving_landmarks['dose']).tolist()
 
         # Rather than moving the dose (resampling) and then sampling at fixed landmarks (2x samplings),
         # we can just move the fixed landmarks and sample the moving dose (1x sampling).
         moving_landmarks = moving_study.landmark_data(landmark_ids=landmark_ids, sample_dose=True)
-        moved_landmarks = sample(moving_study.dose_data, moved_landmarks, spacing=moving_study.dose_spacing, offset=moving_study.dose_offset, landmarks_col='dose')
+        moved_landmarks = sample(moving_study.dose_data, moved_landmarks, spacing=moving_study.dose_spacing, origin=moving_study.dose_origin, landmarks_col='dose')
         assert np.all(moving_landmarks['landmark-id'].values == moved_landmarks['landmark-id'].values)
         dose_errors = list((moved_landmarks['dose'] - moving_landmarks['dose']).values)
 

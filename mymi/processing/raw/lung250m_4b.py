@@ -49,57 +49,57 @@ def convert_lung250m_4b_to_nifti() -> None:
         
         # Copy fixed image data.
         filepath = os.path.join(rset.path, f'images{split}', f'{p}_{fixed_suffix}.nii.gz')
-        ct_data, fixed_spacing, offset = load_nifti(filepath)
+        ct_data, fixed_spacing, origin = load_nifti(filepath)
         if replace_padding:
             ct_data = fill_border_padding(ct_data, fill=fill)
             # ct_data = fill_contiguous_padding(ct_data, fill=fill)
         fixed_spacing = tuple(np.abs(fixed_spacing))    # Spacing was saved as (-1, -1, 1), presumably because their code used LPS coordinates.
-        offset = (0, 0, 0)      # Set this to zero as it doesn't really matter.
+        origin = (0, 0, 0)      # Set this to zero as it doesn't really matter.
         filepath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(ct_data, filepath, spacing=fixed_spacing, offset=offset)
+        save_nifti(ct_data, filepath, spacing=fixed_spacing, origin=origin)
 
         # Copy moving image data.
         filepath = os.path.join(rset.path, f'images{split}', f'{p}_{moving_suffix}.nii.gz')
-        ct_data, moving_spacing, offset = load_nifti(filepath)
+        ct_data, moving_spacing, origin = load_nifti(filepath)
         if replace_padding:
             ct_data = fill_border_padding(ct_data, fill=fill)
             # ct_data = fill_contiguous_padding(ct_data, fill=fill)
         moving_spacing = tuple(np.abs(moving_spacing))    # Spacing was saved as (-1, -1, 1), presumably because their code used LPS coordinates.
-        offset = (0, 0, 0)      # Set this to zero as it doesn't really matter.
+        origin = (0, 0, 0)      # Set this to zero as it doesn't really matter.
         filepath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        save_nifti(ct_data, filepath, spacing=moving_spacing, offset=offset)
+        save_nifti(ct_data, filepath, spacing=moving_spacing, origin=origin)
 
         # Copy lung masks.
         filepath = os.path.join(rset.path, f'masks{split}', f'{p}_{fixed_suffix}.nii.gz')
-        lung_data, lung_spacing, lung_offset = load_nifti(filepath)
+        lung_data, lung_spacing, lung_origin = load_nifti(filepath)
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(lung_data, destpath, spacing=lung_spacing, offset=lung_offset)
+        save_nifti(lung_data, destpath, spacing=lung_spacing, origin=lung_origin)
 
         filepath = os.path.join(rset.path, f'masks{split}', f'{p}_{moving_suffix}.nii.gz')
-        lung_data, lung_spacing, lung_offset = load_nifti(filepath)
+        lung_data, lung_spacing, lung_origin = load_nifti(filepath)
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Lungs.nii.gz')
-        save_nifti(lung_data, destpath, spacing=lung_spacing, offset=lung_offset)
+        save_nifti(lung_data, destpath, spacing=lung_spacing, origin=lung_origin)
 
         # Copy artery/vein segmentations - guessing arteries are first...
         filepath = os.path.join(rset.path, f'seg{split}', f'{p}_{fixed_suffix}.nii.gz')
-        seg_data, seg_spacing, seg_offset = load_nifti(filepath)
+        seg_data, seg_spacing, seg_origin = load_nifti(filepath)
         artery_data = seg_data == 1
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Arteries.nii.gz')
-        save_nifti(artery_data, destpath, spacing=seg_spacing, offset=seg_offset)
+        save_nifti(artery_data, destpath, spacing=seg_spacing, origin=seg_origin)
         vein_data = seg_data == 2
         destpath = os.path.join(set.path, 'data', 'patients', p, fixed_study, 'regions', 'series_1', 'Veins.nii.gz')
-        save_nifti(vein_data, destpath, spacing=seg_spacing, offset=seg_offset)
+        save_nifti(vein_data, destpath, spacing=seg_spacing, origin=seg_origin)
 
         filepath = os.path.join(rset.path, f'seg{split}', f'{p}_{moving_suffix}.nii.gz')
-        seg_data, seg_spacing, seg_offset = load_nifti(filepath)
+        seg_data, seg_spacing, seg_origin = load_nifti(filepath)
         artery_data = seg_data == 1
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Arteries.nii.gz')
-        save_nifti(artery_data, destpath, spacing=seg_spacing, offset=seg_offset)
+        save_nifti(artery_data, destpath, spacing=seg_spacing, origin=seg_origin)
         vein_data = seg_data == 2
         destpath = os.path.join(set.path, 'data', 'patients', p, moving_study, 'regions', 'series_1', 'Veins.nii.gz')
-        save_nifti(vein_data, destpath, spacing=seg_spacing, offset=seg_offset)
+        save_nifti(vein_data, destpath, spacing=seg_spacing, origin=seg_origin)
 
         # Copy landmarks.
         if split == 'Tr':

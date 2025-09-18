@@ -5,30 +5,34 @@ from mymi.geometry import fov
 from mymi.typing import *
 from mymi.utils import *
 
-from .images import NiftiImageSeries
+from .image import NiftiImageSeries
 
-class DoseImageSeries(NiftiImageSeries):
+class NiftiDoseSeries(NiftiImageSeries):
     def __init__(
         self,
         dataset_id: DatasetID,
         pat_id: PatientID,
         study_id: StudyID,
-        id: SeriesID,
-        filepath: FilePath) -> None:
-        self.__dataset_id = dataset_id
+        id: SeriesID) -> None:
+        extensions = ['.nii', '.nii.gz', '.nrrd']
+        basepath = os.path.join(config.directories.datasets, 'nifti', str(dataset_id), 'data', 'patients', str(pat_id), str(study_id), 'dose', str(id))
+        filepath = None
+        for e in extensions:
+            fpath = f"{basepath}{e}"
+            if os.path.exists(fpath):
+                filepath = fpath
+        if filepath is None:
+            raise ValueError(f"No NiftiDoseSeries found for study '{study_id}'. Filepath: {basepath}, with extensions {extensions}.")
         self.__filepath = filepath
-        self._global_id = f'NIFTI:{dataset_id}:{pat_id}:{study_id}:{id}'
-        self.__id = id
-        self.__pat_id = pat_id
-        self.__study_id = study_id
+        super().__init__(dataset_id, pat_id, study_id, id)
 
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
                 if self.__filepath.endswith('.nii') or self.__filepath.endswith('.nii.gz'):
-                    self.__data, self.__spacing, self.__offset = load_nifti(self.__filepath)
+                    self.__data, self.__spacing, self.__origin = load_nifti(self.__filepath)
                 elif self.__filepath.endswith('.nrrd'):
-                    self.__data, self.__spacing, self.__offset = load_nrrd(self.__filepath)
+                    self.__data, self.__spacing, self.__origin = load_nrrd(self.__filepath)
                 else:
                     raise ValueError(f'Unsupported file format: {self.__filepath}')
             return fn(self, *args, **kwargs)
@@ -43,12 +47,12 @@ class DoseImageSeries(NiftiImageSeries):
     def fov(
         self,
         **kwargs) -> Fov3D:
-        return fov(self.__data, spacing=self.__spacing, offset=self.__offset, **kwargs)
+        return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
 
     @property
     @ensure_loaded
-    def offset(self) -> Point3D:
-        return self.__offset
+    def origin(self) -> Point3D:
+        return self.__origin
 
     @property
     @ensure_loaded
@@ -63,4 +67,4 @@ class DoseImageSeries(NiftiImageSeries):
 # Add properties.
 props = ['filepath', 'id']
 for p in props:
-    setattr(DoseImageSeries, p, property(lambda self, p=p: getattr(self, f'_{DoseImageSeries.__name__}__{p}')))
+    setattr(NiftiDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{NiftiDoseSeries.__name__}__{p}')))
