@@ -6,11 +6,11 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin, TransformMixin
+from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin
 from ..random import RandomTransform
 from ..transform import Transform
+from .affine import Affine
 from .identity import Identity
-from .spatial import SpatialTransform
 
 # translation:
 # - t=5 -> t=((-5, 5), (-5, 5)) for 2D, t=((-5, 5), (-5, 5), (-5, 5)) for 3D.
@@ -41,7 +41,7 @@ class RandomTranslation(RandomAffineMixin, RandomTransform):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__trans_range.flatten())}, dim={self._dim}, p={self._p})"
 
-class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
+class Translation(AffineMixin, TransformImageMixin, Affine):
     def __init__(
         self,
         translation: Union[Number, Tuple[Number], np.ndarray, torch.Tensor],
@@ -61,17 +61,11 @@ class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTrans
     # This is used for image resampling, not for point clouds.
     def back_transform_points(
         self,
-        points: Union[PointsArray, PointsTensor],
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
-        **kwargs) -> Union[PointsArray, PointsTensor]:
-        if isinstance(points, np.ndarray):
-            points = to_tensor(points)
-            return_type = 'numpy'
-        else:
-            return_type = 'torch'
-
+        points: PointsTensor,
+        size: Optional[SizeTensor] = None,
+        spacing: Optional[SpacingTensor] = None,
+        origin: Optional[PointTensor] = None,
+        **kwargs) -> PointsTensor:
         print('performing translation back transform points')
 
         # Get homogeneous matrix.
@@ -81,8 +75,6 @@ class Translation(AffineMixin, TransformImageMixin, TransformMixin, SpatialTrans
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
         points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
-        if return_type == 'numpy':
-            points_t = to_array(points_t)
         return points_t
 
     # Defines the forward/backward transforms.

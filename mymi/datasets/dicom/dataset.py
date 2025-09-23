@@ -25,14 +25,14 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
     def __init__(
         self,
         id: DatasetID) -> None:
-        path = os.path.join(config.directories.datasets, 'nifti', id)
+        self.__path = os.path.join(config.directories.datasets, 'dicom', str(id))
         ct_from = None
         for f in os.listdir(self.__path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from = match.group(1)
         ct_from = NiftiDataset(ct_from) if ct_from is not None else None
-        super().__init__(id, path, ct_from=ct_from)
+        super().__init__(id, ct_from=ct_from)
 
     def build_index(
         self,
@@ -65,23 +65,23 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         show_progress: bool = False,
         use_mapping: bool = True,
         use_regions_report: bool = True) -> List[str]:
-        if region_ids != 'all' and use_regions_report:
+        if region_id != 'all' and use_regions_report:
             # Can't use 'load_patient_regions_report' due to circularity.
             filename = 'regions-count.csv' if use_mapping else 'unmapped-regions-count.csv'
             filepath = os.path.join(self.__path, 'data', 'reports', filename)
             if os.path.exists(filepath):
-                region_ids = regions_to_list(region_ids)
+                region_ids = regions_to_list(region_id)
                 df = pd.read_csv(filepath)
                 df = df[df['region'].isin(region_ids)]
                 ids = list(sorted(df['patient-id'].unique()))
                 return ids
             else:
-                logging.warning(f"No patient regions report for dataset '{self}'. Would speed up queries filtered by 'region_ids'.")
+                logging.warning(f"No patient regions report for dataset '{self}'. Would speed up queries filtered by 'region_id'.")
 
         # Load patient IDs from index.
         ids = list(sorted(self._index['patient-id'].unique()))
 
-        # Filter on 'region_ids'.
+        # Filter on 'region_id'.
         if region_id != 'all':
             def filter_fn(p: PatientID) -> bool:
                 pat_region_ids = self.patient(p).list_regions(region_id=region_id, use_mapping=use_mapping)
@@ -164,7 +164,7 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
             self._index_errors = pd.DataFrame(columns=ERROR_INDEX_COLS.keys())
 
         # Load region map.
-        filepath = os.path.join(self.path, 'region-map.yaml')
+        filepath = os.path.join(self.__path, 'region-map.yaml')
         if os.path.exists(filepath):
             self.__region_map = RegionMap(load_yaml(filepath))
         else:

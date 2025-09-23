@@ -5,10 +5,10 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin, TransformMixin
+from ..mixins import AffineMixin, RandomAffineMixin, TransformImageMixin
 from ..random import RandomTransform
+from .affine import Affine
 from .identity import Identity
-from .spatial import SpatialTransform
 
 class RandomFlip(RandomAffineMixin, RandomTransform):
     def __init__(
@@ -39,7 +39,7 @@ class RandomFlip(RandomAffineMixin, RandomTransform):
 # Methods are resolved left to right, so overridding mixins should appear first.
 # Init methods are also run left to right, so mixins that override params, e.g. _is_affine
 # should appear last.
-class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
+class Flip(AffineMixin, TransformImageMixin, Affine):
     def __init__(
         self,
         flip: Union[bool, Tuple[bool], np.ndarray, torch.Tensor],
@@ -59,17 +59,11 @@ class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
 
     def back_transform_points(
         self,
-        points: Union[PointsArray, PointsTensor],
-        size: Optional[Union[Size, SizeArray, SizeTensor]] = None,
-        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor]] = None,
-        origin: Optional[Union[Point, PointArray, PointTensor]] = None,
+        points: PointsTensor,
+        size: Optional[SizeTensor] = None,
+        spacing: Optional[SpacingTensor] = None,
+        origin: Optional[PointTensor] = None,
         **kwargs) -> PointsTensor:
-        if isinstance(points, np.ndarray):
-            points = to_tensor(points)
-            return_type = 'numpy'
-        else:
-            return_type = 'torch'
-
         print('performing flip back transform points')
 
         # Get homogeneous matrix.
@@ -79,8 +73,6 @@ class Flip(AffineMixin, TransformImageMixin, TransformMixin, SpatialTransform):
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Homogeneous coordinates.
         points_t_h = torch.linalg.multi_dot([matrix_a, points_h.T]).T
         points_t = points_t_h[:, :-1]
-        if return_type == 'numpy':
-            points_t = to_array(points_t)
         return points_t
 
     def __create_transforms(self) -> None:

@@ -1,6 +1,7 @@
 from typing import *
 
 from mymi.typing import *
+from mymi.utils import alias_kwargs, arg_to_list
 
 # What is a Transform?
 # Transform defines the API that any (deterministic) Transform
@@ -16,12 +17,6 @@ class Transform:
         print('init transform')
         print('setting affine false')
         self._is_affine = False
-
-    def back_transform_points(
-        self,
-        points: Union[PointsArray, PointsTensor],
-        **kwargs) -> Union[PointsArray, PointsTensor]:
-        raise ValueError("Subclasses of 'Transform' must implement 'back_transform_points' method.")
     
     # Alias for 'transform' method.
     def __call__(
@@ -59,11 +54,83 @@ class Transform:
     def __str__(self) -> str:
         raise ValueError("Subclasses of 'Transform' must implement '__str__' method.")
 
+    # Originally this was defined as a mixin to avoid having RandomTransforms override the method.
+    # However, as a mixin, each new transform class needs to subclass the mixin also, which creates
+    # more boilerplate for new transforms.
+    @alias_kwargs([
+        ('o', 'origin'),
+        ('s', 'spacing'),
+    ])
+    # Can pass a single array/tensor or a list of arrays/tensors.
+    # Points arrays/tensors are inferred by their Nx2/3 shape. It's unlikely that images of this size will
+    # be passed, but it would break.
+    # Labels are inferred by the data type of the passed array/tensor (bool) and will be returned
+    # in boolean type.
+    # Will return a single transformed array/tensor or list of arrays/tensors.
+    # If a single spacing/origin/size is passed, this is broadcast to all image arrays/tensors,
+    # other
     def transform(
         self,
-        data: Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]],
-        **kwargs) -> Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]]:
-        raise ValueError("Subclasses of 'Transform' must implement 'transform' method.")
+        data: Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor]]],
+        spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
+        origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
+        # This comes last because it can be inferred via adjacent images.
+        size: Optional[Union[Size, SizeArray, SizeTensor, List[Union[Size, SizeArray, SizeTensor]]]] = None,
+        filter_offscreen: bool = True,
+        return_fov: bool = False) -> Union[ImageArrayWithFov, ImageTensorWithFov, PointsArray, PointsTensor, List[Union[ImageArrayWithFov, ImageTensorWithFov, PointsArray, PointsTensor]]]:
+        datas, data_was_single = arg_to_list(data, (np.ndarray, torch.Tensor), return_matched=True)
+        sizes = arg_to_list(size, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
+        spacings = arg_to_list(spacing, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
+        origins = arg_to_list(origin, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
+
+        # Infer data types.
+        image_indices = []
+        points_indices = []
+        data_types = {}
+        for i, d in enumerate(datas):
+            if d.shape[-1] == 2 or d.shape[-1] == 3:
+                points_indices.append(i)
+                data_types[i] = 'points'
+            else:
+                image_indices.append(i)
+                data_types[i] = 'image'
+
+        # Infer sizes for offscreen point filtering.
+        if filter_offscreen:
+            for i in points_indices:
+                if sizes[i] is None:
+                    # Infer size from images - must all have same shape.
+                    image_sizes = [datas[j].shape[-self._dim:] for j in image_indices]
+                    if len(image_sizes) > 0 and np.unique(image_sizes, axis=0).shape[0] == 1:
+                        sizes[i] = tuple(image_sizes[0])
+
+        # Transform images.
+        images, image_spacings, image_origins = [datas[i] for i in image_indices], [spacings[i] for i in image_indices], [origins[i] for i in image_indices]
+        print('transform')
+        print(return_fov)
+        images_ts = self.transform_image(images, spacing=image_spacings, origin=image_origins, return_fov=return_fov)
+
+        # Transform points.
+        points, points_sizes, points_spacings, points_origins = [datas[i] for i in points_indices], [sizes[i] for i in points_indices], [spacings[i] for i in points_indices], [origins[i] for i in points_indices]
+        points_ts = []
+        for p, si, sp, o in zip(points, points_sizes, points_spacings, points_origins):
+            if size is None:
+                filter_offscreen = False    # Only filter if 'size' was passed or inferred from image sizes.
+            points_t = self.transform_points(p, filter_offscreen=filter_offscreen, size=si, spacing=sp, origin=o)
+            points_ts.append(points_t)
+
+        # Flatten results.
+        datas_t = []
+        image_i, points_i = 0, 0
+        for i in range(len(datas)):
+            if data_types[i] == 'image':
+                datas_t.append(images_ts[image_i])
+                image_i += 1
+            else:
+                datas_t.append(points_ts[points_i])
+                points_i += 1
+
+        return datas_t[0] if data_was_single else datas_t
 
     def transform_image(
         self,

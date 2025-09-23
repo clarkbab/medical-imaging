@@ -57,15 +57,15 @@ def plot_dataframe(
     stats_bar_alg_use_lowest_level: bool = True,
     stats_bar_alpha: float = 0.5,
     # Stats bars must sit at least this high above data points.
-    stats_bar_grid_origin: float = 0.015,           # Proportion of window height.
+    stats_bar_grid_offset: float = 0.015,           # Proportion of window height.
     # This value is important! Without this number, the first grid line
     # will only have one bar, which means our bars will be stacked much higher. This allows
     # a little wiggle room.
-    stats_bar_grid_origin_wiggle: float = 0.01,     # Proportion of window height.
+    stats_bar_grid_offset_wiggle: float = 0.01,     # Proportion of window height.
     stats_bar_grid_spacing: float = 0.04,          # Proportion of window height.
     stats_bar_height: float = 0.007,                # Proportion of window height.
     stats_bar_show_direction: bool = False,
-    stats_bar_text_origin: float = 0.008,            # Proportion of window height.
+    stats_bar_text_offset: float = 0.008,            # Proportion of window height.
     stats_boot_df: Optional[pd.DataFrame] = None,
     stats_boot_df_cols: Optional[List[str]] = None,
     stats_exclude: List[str] = [],
@@ -559,16 +559,16 @@ def plot_dataframe(
             y_height = max_y - min_y
             stats_bar_height = y_height * stats_bar_height
             stats_bar_grid_spacing = y_height * stats_bar_grid_spacing
-            stats_bar_grid_origin = y_height * stats_bar_grid_origin
-            stats_bar_grid_origin_wiggle = y_height * stats_bar_grid_origin_wiggle
-            stats_bar_text_origin = y_height * stats_bar_text_origin
+            stats_bar_grid_offset = y_height * stats_bar_grid_offset
+            stats_bar_grid_offset_wiggle = y_height * stats_bar_grid_offset_wiggle
+            stats_bar_text_offset = y_height * stats_bar_text_offset
                 
             if hue is None:
-                # Calculate 'y_grid_origin' - the bottom of the grid.
+                # Calculate 'y_grid_offset' - the bottom of the grid.
                 # For each pair, we calculate the max value of the data, as the bar should
                 # lie above this. Then we find the smallest of these max values across all pairs.
-                # 'stats_bar_grid_origin' is added to give spacing between the data and the bar.
-                y_grid_origin = np.inf
+                # 'stats_bar_grid_offset' is added to give spacing between the data and the bar.
+                y_grid_offset = np.inf
                 min_skip = None
                 for x_l, x_r in filt_pairs:
                     if stats_bar_alg_use_lowest_level:
@@ -581,12 +581,12 @@ def plot_dataframe(
                     x_l_df = row_df[row_df[x] == x_l]
                     x_r_df = row_df[row_df[x] == x_r]
                     y_max = max(x_l_df[y].max(), x_r_df[y].max())
-                    y_max = y_max + stats_bar_grid_origin
-                    if y_max < y_grid_origin:
-                        y_grid_origin = y_max
+                    y_max = y_max + stats_bar_grid_offset
+                    if y_max < y_grid_offset:
+                        y_grid_offset = y_max
 
-                # Add data origin.
-                y_grid_origin = y_grid_origin + stats_bar_grid_origin_wiggle
+                # Add data offset.
+                y_grid_offset = y_grid_offset + stats_bar_grid_offset_wiggle
 
                 # Annotate figure.
                 # We keep track of bars we've plotted using 'y_idxs'.
@@ -612,8 +612,8 @@ def plot_dataframe(
                         x_mid_df = row_df[row_df[x] == x_mid]
                         y_data_max = x_mid_df[y].max()
                         y_data_maxes.append(y_data_max)
-                    y_data_max = max(y_data_maxes) + stats_bar_grid_origin
-                    y_idx_min = int(np.ceil((y_data_max - y_grid_origin) / stats_bar_grid_spacing))
+                    y_data_max = max(y_data_maxes) + stats_bar_grid_offset
+                    y_idx_min = int(np.ceil((y_data_max - y_grid_offset) / stats_bar_grid_spacing))
 
                     # We don't want our new stats bar to collide with any existing bars.
                     # Get the y positions for all stats bar that have already been plotted
@@ -633,7 +633,7 @@ def plot_dataframe(
                             break
 
                     # Plot bar.
-                    y_min = y_grid_origin + y_idx * stats_bar_grid_spacing
+                    y_min = y_grid_offset + y_idx * stats_bar_grid_spacing
                     y_max = y_min + stats_bar_height
                     inset_ax.plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=line_width)    
 
@@ -646,7 +646,7 @@ def plot_dataframe(
 
                     # Plot p-value.
                     x_text = (x_left + x_right) / 2
-                    y_text = y_max + stats_bar_text_origin
+                    y_text = y_max + stats_bar_text_offset
                     inset_ax.text(x_text, y_text, p_val, alpha=stats_bar_alpha, fontsize=fontsize_stats, horizontalalignment='center', verticalalignment='center')
 
                     # Save position of plotted stats bar.
@@ -660,11 +660,11 @@ def plot_dataframe(
                         y_idxs[x_r] = list(sorted(y_idxs[x_r] + [y_idx]))
             else:
                 for hue_pairs, hue_p_vals in zip(filt_pairs, filt_p_vals):
-                    # Calculate 'y_grid_origin' - the bottom of the grid.
+                    # Calculate 'y_grid_offset' - the bottom of the grid.
                     # For each pair, we calculate the max value of the data, as the bar should
                     # lie above this. Then we find the smallest of these max values across all pairs.
-                    # 'stats_bar_grid_origin' is added to give spacing between the data and the bar.
-                    y_grid_origin = np.inf
+                    # 'stats_bar_grid_offset' is added to give spacing between the data and the bar.
+                    y_grid_offset = np.inf
                     min_skip = None
                     for hue_l, hue_r in hue_pairs:
                         if stats_bar_alg_use_lowest_level:
@@ -677,12 +677,12 @@ def plot_dataframe(
                         hue_l_df = x_df[x_df[hue] == hue_l]
                         hue_r_df = x_df[x_df[hue] == hue_r]
                         y_max = max(hue_l_df[y].max(), hue_r_df[y].max())
-                        y_max = y_max + stats_bar_grid_origin
-                        if y_max < y_grid_origin:
-                            y_grid_origin = y_max
+                        y_max = y_max + stats_bar_grid_offset
+                        if y_max < y_grid_offset:
+                            y_grid_offset = y_max
 
-                    # Add data origin.
-                    y_grid_origin = y_grid_origin + stats_bar_grid_origin_wiggle
+                    # Add data offset.
+                    y_grid_offset = y_grid_offset + stats_bar_grid_offset_wiggle
 
                     # Annotate figure.
                     # We keep track of bars we've plotted using 'y_idxs'.
@@ -710,8 +710,8 @@ def plot_dataframe(
                             hue_mid_df = x_df[x_df[hue] == hue_mid]
                             y_data_max = hue_mid_df[y].max()
                             y_data_maxes.append(y_data_max)
-                        y_data_max = max(y_data_maxes) + stats_bar_grid_origin
-                        y_idx_min = int(np.ceil((y_data_max - y_grid_origin) / stats_bar_grid_spacing))
+                        y_data_max = max(y_data_maxes) + stats_bar_grid_offset
+                        y_idx_min = int(np.ceil((y_data_max - y_grid_offset) / stats_bar_grid_spacing))
 
                         # We don't want our new stats bar to collide with any existing bars.
                         # Get the y positions for all stats bar that have already been plotted
@@ -731,7 +731,7 @@ def plot_dataframe(
                                 break
 
                         # Plot bar.
-                        y_min = y_grid_origin + y_idx * stats_bar_grid_spacing
+                        y_min = y_grid_offset + y_idx * stats_bar_grid_spacing
                         y_max = y_min + stats_bar_height
                         inset_ax.plot([x_left, x_left, x_right, x_right], [y_min, y_max, y_max, y_min], alpha=stats_bar_alpha, color=linecolour, linewidth=line_width)    
 
@@ -744,7 +744,7 @@ def plot_dataframe(
 
                         # Plot p-value.
                         x_text = (x_left + x_right) / 2
-                        y_text = y_max + stats_bar_text_origin
+                        y_text = y_max + stats_bar_text_offset
                         inset_ax.text(x_text, y_text, p_val, alpha=stats_bar_alpha, fontsize=fontsize_stats, horizontalalignment='center', verticalalignment='center')
 
                         # Save position of plotted stats bar.

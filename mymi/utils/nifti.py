@@ -10,8 +10,8 @@ from .python import delegates
 def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageArray, Spacing3D, Point3D]:
     data = img.get_fdata()
     affine = img.affine
-    spacing = (float(affine[0][0]), float(affine[1][1]), float(affine[2][2]))
-    origin = (float(affine[0][3]), float(affine[1][3]), float(affine[2][3]))
+    spacing = tuple(np.array([affine[0, 0], affine[1, 1], affine[2, 2]]).tolist())
+    origin = tuple(np.array([affine[0, 3], affine[1, 3], affine[2, 3]]).tolist())
     return data, spacing, origin
 
 def to_nifti(

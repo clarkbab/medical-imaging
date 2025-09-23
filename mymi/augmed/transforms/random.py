@@ -4,13 +4,7 @@ from mymi.typing import *
 
 from .transform import Transform
 
-# 'transform' methods need to call 'freeze' before applying the
-# transform, so we override these.
-# If this the best? Should these be a subclass of transform?
-# Maybe rather than overriding, we should define the API in 'Transform'
-# and then have a mixin for those classes that use the 'transform', 
-# 'transform_image', and 'transform_points' methods directly (i.e.)
-# deterministic transforms.
+# RandomTransforms should have all the behaviour of a normal transform.
 class RandomTransform(Transform):
     def __init__(
         self,
@@ -40,7 +34,6 @@ class RandomTransform(Transform):
         random_seed: Optional[int] = None) -> None:
         self._rng = np.random.default_rng(seed=random_seed)
 
-    # Overrides 'Transform.transform'.
     def transform(
         self,
         data: Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]],
@@ -49,7 +42,6 @@ class RandomTransform(Transform):
         t = self.freeze()
         return t.transform(data, **kwargs)
 
-    # Overrides 'Transform.transform_image'.
     def transform_image(
         self,
         image: Union[ImageArray, ImageTensor],
@@ -58,7 +50,6 @@ class RandomTransform(Transform):
         t = self.freeze()
         return t.transform_image(image, **kwargs)
 
-    # Overrides 'Transform.transform_points'.
     def transform_points(
         self,
         points: Union[PointsArray, PointsTensor],

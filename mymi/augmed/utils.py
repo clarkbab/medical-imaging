@@ -145,12 +145,11 @@ def grid_sample(
     return image_t
 
 def image_points(
-    size: Union[Size, SizeArray, SizeTensor, List[Union[Size, SizeArray, SizeTensor]]],
-    spacing: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
-    origin: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
-    return_superset: bool = False) -> Union[PointsArray, PointsTensor, List[Union[PointsArray, PointsTensor]], Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
+    size: SizeTensor,
+    spacing: SpacingTensor,
+    origin: PointTensor,
+    return_superset: bool = False) -> Union[PointsTensor, Tuple[PointsTensor, torch.Tensor]]:
     sizes, size_was_single = arg_to_list(size, (tuple, np.ndarray, torch.Tensor), return_matched=True)
-    return_types = ['torch' if isinstance(s, torch.Tensor) else 'numpy' for s in sizes]
     spacings = arg_to_list(spacing, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
     origins = arg_to_list(origin, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
     sizes = [to_tensor(s) for s in sizes]
@@ -162,7 +161,7 @@ def image_points(
 
     # Get grid points.
     points_mms = []
-    for si, o, sp, r, d in zip(sizes, origins, spacings, return_types, devices):
+    for si, o, sp, d in zip(sizes, origins, spacings, devices):
         dim = len(si)
         grids = torch.meshgrid([torch.arange(s) for s in si], indexing='ij')
         points_vox = torch.stack(grids, dim=-1).reshape(-1, dim).to(d)
@@ -198,16 +197,7 @@ def image_points(
             index = index.to(d)
             indices.append(index)
 
-        if 'torch' in return_types:
-            return super_points_mm, indices
-        else:
-            indices = [to_array(i) for i in indices]
-            return to_array(super_points_mm), indices 
-    
-    # Set return types.
-    for i, r in enumerate(return_types):
-        if r == 'numpy':
-            points_mms[i] = to_array(points_mms[i])
+        return super_points_mm, indices
 
     if size_was_single:
         return points_mms[0]
@@ -216,45 +206,60 @@ def image_points(
 
 def to_array(
     data: Optional[Union[Tuple[Union[Number, bool, str]], np.ndarray, torch.Tensor, torch.Size]],
+    broadcast: Optional[int] = None,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None) -> Optional[np.ndarray]:
-    # Gives no-op for None.
     if data is None:
         return None
-    if isinstance(data, np.ndarray):
-        # Use data dtype default.
-        dtype = data.dtype if dtype is None else dtype
-        return data.astype(dtype)
-    if isinstance(data, torch.Size):
-        return np.array(data)
-    if isinstance(data, torch.Tensor):
-        return data.cpu().numpy()
-    data = np.array(data)
+
+    # Convert data to array.
+    if isinstance(data, (bool, float, int, str)):
+        data = np.array([data])
+    if isinstance(data, (list, tuple)):
+        data = np.array(data)
+    elif isinstance(data, torch.Size):
+        data = np.array(data)
+    elif isinstance(data, torch.Tensor):
+        data = data.cpu().numpy()
+
+    # Set data type.
     if dtype is not None:
         data = data.astype(dtype)
+
+    # Broadcast if required.
+    if broadcast is not None and len(data) == 1:
+        data = np.repeat(data, broadcast)
+
     return data
 
 def to_tensor(
     data: Optional[Union[Tuple[Union[bool, Number]], np.ndarray, torch.Size, torch.Tensor]],
+    broadcast: Optional[int] = None,
     device: Optional[torch.device] = None,
     dtype: Optional[torch.dtype] = None) -> Optional[torch.Tensor]:
-    # Gives no-op for None.
     if data is None:
         return None
-    if isinstance(data, torch.Size):
-        return torch.tensor(data, device=device)
-    if isinstance(data, torch.Tensor):
-        # Use data device/dtype defaults.
+
+    # Convert to tensor.
+    if isinstance(data, (bool, float, int, str)):
+        device = torch.device('cpu') if device is None else device  
+        data = torch.tensor([data], device=device, dtype=dtype)
+    elif isinstance(data, (list, tuple, np.ndarray, torch.Size)):
+        device = torch.device('cpu') if device is None else device  
+        data = torch.tensor(data, device=device, dtype=dtype)
+    elif isinstance(data, torch.Tensor):
         device = data.device if device is None else device
         dtype = data.dtype if dtype is None else dtype
-        return data.to(device=device, dtype=dtype)
-    # Use CPU for default device.
-    device = torch.device('cpu') if device is None else device  
-    dtype = torch.float32 if dtype is None else dtype
-    return torch.tensor(data, device=device, dtype=dtype)
+        data = data.to(device=device, dtype=dtype)
+
+    # Broadcast if required.
+    if broadcast is not None and len(data) == 1:
+        data = data.repeat(broadcast)
+
+    return data
 
 @delegates(to_array)
 def to_tuple(
     *args,
     **kwargs) -> Optional[torch.Tensor]:
-    return tuple(to_array(*args, **kwargs))
+    return tuple(to_array(*args, **kwargs).tolist())

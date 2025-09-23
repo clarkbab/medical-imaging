@@ -19,12 +19,11 @@ class NiftiDataset(IndexMixin, Dataset):
     def __init__(
         self,
         id: DatasetID) -> None:
-        path = os.path.join(config.directories.datasets, 'nifti', id)
-        if not os.path.exists(path):
-            raise ValueError(f"NiftiDataset '{id}' not found. Dirpath: {path}")
-        self.__path = path
+        self.__path = os.path.join(config.directories.datasets, 'nifti', str(id))
+        if not os.path.exists(self.__path):
+            raise ValueError(f"NiftiDataset '{id}' not found. Dirpath: {self.__path}")
         ct_from = None
-        for f in os.listdir(path):
+        for f in os.listdir(self.__path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from = match.group(1)

@@ -2,7 +2,9 @@ import numpy as np
 
 from typing import *
 
-def to_tuple(a: np.ndarray) -> Tuple[Union[bool, int, float]]:
+def to_tuple(
+    a: np.ndarray,
+    broadcast: Optional[int] = None) -> Tuple[Union[bool, int, float]]:
     k = a.dtype.kind
     if k == 'b':
         conv_fn = bool

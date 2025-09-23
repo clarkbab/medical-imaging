@@ -6,7 +6,7 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ...utils import *
-from ..mixins import TransformImageMixin, TransformMixin
+from ..mixins import TransformImageMixin
 from ..random import RandomTransform
 from .identity import Identity
 from .spatial import SpatialTransform
@@ -94,7 +94,7 @@ be non-invertible and could raise errors when performing forward points transfor
 # - d=(3, 5) -> d=(3, 5, 3, 5) for 2D, d=(3, 5, 3, 5, 3, 5) for 3D.
 # control origin:
 # - c=5 -> c=(5, 5) for 2D, c=(5, 5, 5) for 3D.
-class Elastic(TransformImageMixin, TransformMixin, SpatialTransform):
+class Elastic(TransformImageMixin, SpatialTransform):
     def __init__(
         self,
         random_seed: int,
