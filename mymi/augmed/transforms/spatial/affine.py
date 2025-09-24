@@ -11,9 +11,6 @@ class Affine(SpatialTransform):
         self,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        print('init affine transform')
-        print('setting affine true')
-        self._is_affine = True
 
     def get_affine_back_transform(
         self,

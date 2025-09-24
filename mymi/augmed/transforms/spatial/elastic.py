@@ -38,13 +38,13 @@ class RandomElastic(RandomTransform):
         **kwargs) -> None:
         super().__init__(**kwargs)
         self.__method = method
-        control_spacing_range = expand_range_arg(control_spacing, negate_lower=False, vals_per_dim=2)
+        control_spacing_range = expand_range_arg(control_spacing, dim=self._dim)
         assert len(control_spacing_range) == 2 * self._dim, f"Expected 'control' of length {2 * self._dim}, got {len(control_spacing_range)}."
         self.__control_spacing_range = to_tensor(control_spacing_range).reshape(self._dim, 2)
-        control_origin_range = expand_range_arg(control_origin, negate_lower=True, vals_per_dim=2)
+        control_origin_range = expand_range_arg(control_origin, dim=self._dim, negate_lower=True)
         assert len(control_origin_range) == 2 * self._dim, f"Expected 'control_origin' of length {2 * self._dim}, got {len(control_origin_range)}."
         self.__control_origin_range = to_tensor(control_origin_range).reshape(self._dim, 2)
-        disp_range = expand_range_arg(disp, negate_lower=True, vals_per_dim=2)
+        disp_range = expand_range_arg(disp, dim=self._dim, negate_lower=True)
         assert len(disp_range) == 2 * self._dim, f"Expected 'disp' of length {2 * self._dim}, got {len(disp_range)}."
         self.__disp_range = to_tensor(disp_range).reshape(self._dim, 2)
         self._params = dict(
@@ -74,7 +74,9 @@ be non-invertible and could raise errors when performing forward points transfor
         # We can't draw displacements here as we need the image to determine the number of control points.
         # However, we should pass a randomly-drawn seed.
         draw_rs = self._rng.integers(1e9)   # Requires upper bound.
-        return Elastic(control_spacing=control_spacing_draw, disp=self.__disp_range, control_origin=control_origin_draw, dim=self._dim, method=self.__method, random_seed=draw_rs)
+        t_frozen = Elastic(control_spacing=control_spacing_draw, disp=self.__disp_range, control_origin=control_origin_draw, method=self.__method, random_seed=draw_rs)
+        super().freeze(t_frozen)
+        return t_frozen
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__control_spacing_range.flatten())}, {to_tuple(self.__disp_range.flatten())}, {to_tuple(self.__control_origin_range.flatten())}, dim={self._dim}, p={self._p})"
@@ -106,7 +108,6 @@ class Elastic(TransformImageMixin, SpatialTransform):
         super().__init__(**kwargs)
         assert method in ['bspline', 'cubic', 'linear', 'linear-gs'], "Only 'bspline', 'cubic', 'linear', and 'linear-gs' elastic methods are supported."
         self.__method = method
-        self._is_affine = False
         control_spacing = arg_to_list(control_spacing, (int, float), broadcast=self._dim)
         assert len(control_spacing) == self._dim, f"Expected 'control_spacing' of length '{self._dim}' for dim={self._dim}, got {len(control_spacing)}."
         self.__control_spacing = to_tensor(control_spacing)
@@ -114,7 +115,7 @@ class Elastic(TransformImageMixin, SpatialTransform):
         assert len(control_origin) == self._dim, f"Expected 'control_origin' of length '{self._dim}' for dim={self._dim}, got {len(control_origin)}."
         self.__control_origin = to_tensor(control_origin)
         # Disps aren't known until presented with the image.
-        self.__disp_range = expand_range_arg(disp, negate_lower=True, vals_per_dim=2)
+        self.__disp_range = expand_range_arg(disp, dim=self._dim, negate_lower=True)
         self.__random_seed = random_seed
         self._params = dict(
             control_origin=self.__control_origin,

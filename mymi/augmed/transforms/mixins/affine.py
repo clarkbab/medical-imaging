@@ -7,9 +7,6 @@ class AffineMixin:
         self,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        print('init affine mixin')
-        print('setting affine true')
-        self._is_affine = True
 
     def get_affine_back_transform(
         self,
@@ -28,9 +25,6 @@ class RandomAffineMixin:
         self,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        print('init random affine mixin')
-        print('setting affine true')
-        self._is_affine = True
 
     def get_affine_back_transform(
         self,

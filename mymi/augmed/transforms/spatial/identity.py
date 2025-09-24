@@ -48,6 +48,6 @@ class Identity(AffineMixin, SpatialTransform):
         **kwargs) -> Union[PointsArray, PointsTensor]:
         if return_filtered:
             # Create filtered indices to match API.
-            indices = to_tensor([], device=points.device, dtype=torch.int) if isinstance(points, torch.Tensor) else np.array([])
+            indices = to_tensor([], device=points.device, dtype=torch.int32) if isinstance(points, torch.Tensor) else np.array([])
             return points, indices 
         return points

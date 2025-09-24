@@ -31,14 +31,14 @@ class RandomFlip(RandomAffineMixin, RandomTransform):
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
         should_flip = draw < self._p_flip
-        return Flip(flip=should_flip, dim=self._dim)
+        t_frozen = Flip(flip=should_flip)
+        super().freeze(t_frozen)
+        return t_frozen
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self._p_flip)}, dim={self._dim}, p={self._p})"
         
 # Methods are resolved left to right, so overridding mixins should appear first.
-# Init methods are also run left to right, so mixins that override params, e.g. _is_affine
-# should appear last.
 class Flip(AffineMixin, TransformImageMixin, Affine):
     def __init__(
         self,
@@ -46,9 +46,8 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
         # TODO: Add centre for flips about other points.
         **kwargs) -> None:
         super().__init__(**kwargs)
-        flip = arg_to_list(flip, bool, broadcast=self._dim)
-        assert len(flip) == self._dim, f"Expected 'flip' of length {self._dim} for dim={self._dim}, got {len(flip)}."
-        self.__flip = to_tensor(flip, dtype=torch.bool)
+        self.__flip = to_tensor(flip, broadcast=self._dim, dtype=torch.bool)
+        assert len(self.__flip) == self._dim, f"Expected 'flip' of length {self._dim} for dim={self._dim}, got {len(self.__flip)}."
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
@@ -77,7 +76,7 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
 
     def __create_transforms(self) -> None:
         scaling = tuple([-1 if f else 1 for f in self.__flip] + [1])
-        self.__matrix = create_eye(self._dim, scaling=scaling)
+        self.__matrix = create_eye(self._dim + 1, scaling=scaling)
         self.__backward_matrix = self.__matrix      # Flip matrix is it's own inverse.
 
     def get_affine_back_transform(
@@ -91,15 +90,16 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
         assert size is not None
         assert spacing is not None
         assert origin is not None
-        size = to_tensor(size, device=device, dtype=torch.int)
+        size = to_tensor(size, device=device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=device)
         origin = to_tensor(origin, device=device)
 
         print('getting flip back transform')
 
         # Get flip centre.
-        fov = torch.stack([origin, origin + size * spacing]).to(device)
-        flip_centre = fov.sum(axis=0) / 2
+        grid = torch.stack([origin, origin + size * spacing]).to(device)
+        flip_centre = grid.sum(axis=0) / 2
+        print('flip about: ', flip_centre)
 
         # Get homogeneous matrix.
         trans_matrix = create_translation(-flip_centre, device=device)
@@ -118,15 +118,15 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
         assert size is not None
         assert spacing is not None
         assert origin is not None
-        size = to_tensor(size, device=device, dtype=torch.int)
+        size = to_tensor(size, device=device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=device)
         origin = to_tensor(origin, device=device)
 
         print('getting flip forward transform')
 
         # Get flip centre.
-        fov = torch.stack([origin, origin + size * spacing]).to(device)
-        flip_centre = fov.sum(axis=0) / 2
+        grid = torch.stack([origin, origin + size * spacing]).to(device)
+        flip_centre = grid.sum(axis=0) / 2
 
         # Get homogeneous matrix.
         trans_matrix = create_translation(-flip_centre, device=device)
@@ -143,7 +143,7 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
         size: Optional[Union[Size, SizeTensor]] = None,
         spacing: Optional[Union[Spacing, SpacingTensor]] = None,
         origin: Optional[Union[Point, PointTensor]] = None,
-        filter_offscreen: bool = True,
+        filter_offgrid: bool = True,
         return_filtered: bool = False,
         **kwargs) -> Union[PointsArray, PointsTensor, Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
         if isinstance(points, np.ndarray):
@@ -162,12 +162,12 @@ class Flip(AffineMixin, TransformImageMixin, Affine):
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
-        if filter_offscreen:
+        if filter_offgrid:
             assert origin is not None
             assert size is not None
             assert spacing is not None
-            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
-            to_keep = (points_t >= fov[0]) & (points_t < fov[1])
+            grid = torch.stack([origin, origin + size * spacing]).to(points.device)
+            to_keep = (points_t >= grid[0]) & (points_t < grid[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]
             indices = torch.where(to_keep)[0]

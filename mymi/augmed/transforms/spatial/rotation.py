@@ -27,7 +27,7 @@ class RandomRotation(RandomAffineMixin, RandomTransform):
         **kwargs) -> None:
         super().__init__(**kwargs)
         print('init random rotation transform')
-        rot_range = expand_range_arg(rotation, dim=self._dim, negate_lower=True, vals_per_dim=2)
+        rot_range = expand_range_arg(rotation, dim=self._dim, negate_lower=True)
         assert len(rot_range) == 2 * self._dim, f"Expected 'rotation' of length {2 * self._dim}, got {len(rot_range)}."
         if isinstance(centre, tuple):
             assert len(centre) == self._dim, f"Rotation centre must have {self._dim} dimensions."
@@ -46,7 +46,9 @@ class RandomRotation(RandomAffineMixin, RandomTransform):
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
         rot_draw = draw * (self.__rot_range[:, 1] - self.__rot_range[:, 0]) + self.__rot_range[:, 0]
-        return Rotation(rotation=rot_draw, centre=self.__centre, dim=self._dim)
+        t_frozen = Rotation(rotation=rot_draw, centre=self.__centre)
+        super().freeze(t_frozen)
+        return t_frozen
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__rot_range.flatten())}, dim={self._dim}, p={self._p})"
@@ -62,7 +64,7 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
         assert len(rotation) == self._dim, f"Expected 'rotation' of length {self._dim} for dim={self._dim}, got {len(rotation)}."
         self.__rotation = to_tensor(rotation)
         self.__centre = 'centre' if centre == 'centre' else to_tensor(centre)
-        self.__rotation_rad = torch.deg2rad(rotation)
+        self.__rotation_rad = torch.deg2rad(self.__rotation)
         self.__create_transforms()
         self._params = dict(
             backward_matrix=self.__backward_matrix,
@@ -108,7 +110,7 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
         assert size is not None
         assert spacing is not None
         assert origin is not None
-        size = to_tensor(size, device=device, dtype=torch.int)
+        size = to_tensor(size, device=device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=device)
         origin = to_tensor(origin, device=device)
 
@@ -119,11 +121,11 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
             assert size is not None
             assert spacing is not None
             assert origin is not None
-            size = to_tensor(size, device=device, dtype=torch.int)
+            size = to_tensor(size, device=device, dtype=torch.int32)
             spacing = to_tensor(spacing, device=device)
             origin = to_tensor(origin, device=device)
-            fov = torch.stack([origin, origin + size * spacing]).to(device)
-            rot_centre = fov.sum(axis=0) / 2
+            grid = torch.stack([origin, origin + size * spacing]).to(device)
+            rot_centre = grid.sum(axis=0) / 2
         else:
             rot_centre = self.__centre.to(device)
 
@@ -144,7 +146,7 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
         assert size is not None
         assert spacing is not None
         assert origin is not None
-        size = to_tensor(size, device=device, dtype=torch.int)
+        size = to_tensor(size, device=device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=device)
         origin = to_tensor(origin, device=device)
 
@@ -155,11 +157,11 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
             assert size is not None
             assert spacing is not None
             assert origin is not None
-            size = to_tensor(size, device=device, dtype=torch.int)
+            size = to_tensor(size, device=device, dtype=torch.int32)
             spacing = to_tensor(spacing, device=device)
             origin = to_tensor(origin, device=device)
-            fov = torch.stack([origin, origin + size * spacing]).to(device)
-            rot_centre = fov.sum(axis=0) / 2
+            grid = torch.stack([origin, origin + size * spacing]).to(device)
+            rot_centre = grid.sum(axis=0) / 2
         else:
             rot_centre = self.__centre.to(device)
 
@@ -182,7 +184,7 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
         size: Optional[Union[Size, SizeTensor]] = None,
         spacing: Optional[Union[Spacing, SpacingTensor]] = None,
         origin: Optional[Union[Point, PointTensor]] = None,
-        filter_offscreen: bool = True,
+        filter_offgrid: bool = True,
         return_filtered: bool = False,
         **kwargs) -> Union[PointsArray, PointsTensor, Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
         if isinstance(points, np.ndarray):
@@ -191,7 +193,7 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
         else:
             return_type = 'torch'
         origin = to_tensor(origin, device=points.device)
-        size = to_tensor(size, device=points.device, dtype=torch.int)
+        size = to_tensor(size, device=points.device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=points.device)
 
         # Get homogeneous matrix.
@@ -204,12 +206,12 @@ class Rotation(AffineMixin, TransformImageMixin, Affine):
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
-        if filter_offscreen:
+        if filter_offgrid:
             assert origin is not None
             assert size is not None
             assert spacing is not None
-            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
-            to_keep = (points_t >= fov[0]) & (points_t < fov[1])
+            grid = torch.stack([origin, origin + size * spacing]).to(points.device)
+            to_keep = (points_t >= grid[0]) & (points_t < grid[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]
             indices = torch.where(to_keep)[0]

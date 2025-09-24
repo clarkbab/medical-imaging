@@ -17,6 +17,11 @@ class SpatialTransform(Transform):
         **kwargs) -> Union[PointsArray, PointsTensor]:
         raise ValueError("Subclasses of 'SpatialTransform' must implement 'back_transform_points' method.")
 
+    def __str__(
+        class_name: str,
+        **kwargs) -> str:
+        return super().__str__(class_name, **kwargs)
+
     @alias_kwargs([
         ('o', 'origin'),
         ('s', 'spacing'),
@@ -42,7 +47,7 @@ class SpatialTransform(Transform):
         elif self._dim == 3:
             for i, d in enumerate(dims):
                 assert d in [3, 4, 5], f"Expected 3-5D image (3D spatial, optional batch/channel), got {d}D for image {i}."
-        sizes = [to_tensor(i.shape[-self._dim:], device=i.device, dtype=torch.int) for i in images]
+        sizes = [to_tensor(i.shape[-self._dim:], device=i.device, dtype=torch.int32) for i in images]
         spacings = [to_tensor((1,) * self._dim, device=i.device) if s is None else to_tensor(s, device=i.device) for s, i in zip(spacings, images)]
         origins = [to_tensor((0,) * self._dim, device=i.device) if o is None else to_tensor(o, device=i.device) for o, i in zip(origins, images)]
 
@@ -62,7 +67,7 @@ class SpatialTransform(Transform):
         group_points_mm_ts = []
         for g in groups:
             image, size, spacing, origin = images[g], sizes[g], spacings[g], origins[g]
-            points_mm = image_points(image.shape, origin=origin, spacing=spacing)
+            points_mm = grid_points(image.shape, origin=origin, spacing=spacing)
             points_mm = to_tensor(points_mm, device=image.device)
 
             # Perform back transform of resampling points.
@@ -90,11 +95,11 @@ class SpatialTransform(Transform):
             # Convert to return types.
             if rt == 'numpy': 
                 image_t = to_array(image_t)
-            if return_fov:
-                fov_t = group_fov_ts[image_groups[i]]
+            if return_grid:
+                grid_t = group_grid_ts[image_groups[i]]
                 if rt == 'numpy':
-                    fov_t = (to_array(f) for f in fov_t)
-                image_ts.append((image_t, fov_t))
+                    grid_t = (to_array(f) for f in grid_t)
+                image_ts.append((image_t, grid_t))
             else:
                 image_ts.append(image_t)
 

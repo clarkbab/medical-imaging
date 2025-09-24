@@ -21,7 +21,7 @@ class RandomTranslation(RandomAffineMixin, RandomTransform):
         translation: Union[Number, Tuple[Number, ...]] = 100.0,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        trans_range = expand_range_arg(translation, negate_lower=True, vals_per_dim=2)
+        trans_range = expand_range_arg(translation, dim=self._dim, negate_lower=True)
         assert len(trans_range) == 2 * self._dim, f"Expected 'translation' of length {2 * self._dim}, got {len(trans_range)}."
         self.__trans_range = to_tensor(trans_range).reshape(self._dim, 2)
         self._params = dict(
@@ -36,7 +36,8 @@ class RandomTranslation(RandomAffineMixin, RandomTransform):
             return Identity(dim=self._dim)
         draw = to_tensor(self._rng.random(self._dim))
         trans_draw = draw * (self.__trans_range[:, 1] - self.__trans_range[:, 0]) + self.__trans_range[:, 0]
-        return Translation(translation=trans_draw, dim=self._dim)
+        t_frozen = Translation(translation=trans_draw)
+        
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({to_tuple(self.__trans_range.flatten())}, dim={self._dim}, p={self._p})"
@@ -114,7 +115,7 @@ class Translation(AffineMixin, TransformImageMixin, Affine):
         size: Optional[Union[Size, SizeTensor]] = None,
         spacing: Optional[Union[Spacing, SpacingTensor]] = None,
         origin: Optional[Union[Point, PointTensor]] = None,
-        filter_offscreen: bool = True,
+        filter_offgrid: bool = True,
         return_filtered: bool = False,
         **kwargs) -> Union[PointsArray, PointsTensor, Tuple[Union[PointsArray, PointsTensor], Union[np.ndarray, torch.Tensor]]]:
         if isinstance(points, np.ndarray):
@@ -123,7 +124,7 @@ class Translation(AffineMixin, TransformImageMixin, Affine):
         else:
             return_type = 'torch'
         origin = to_tensor(origin, device=points.device)
-        size = to_tensor(size, device=points.device, dtype=torch.int)
+        size = to_tensor(size, device=points.device, dtype=torch.int32)
         spacing = to_tensor(spacing, device=points.device)
 
         # Get homogeneous matrix.
@@ -136,12 +137,12 @@ class Translation(AffineMixin, TransformImageMixin, Affine):
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
-        if filter_offscreen:
+        if filter_offgrid:
             assert origin is not None
             assert size is not None
             assert spacing is not None
-            fov = torch.stack([origin, origin + size * spacing]).to(points.device)
-            to_keep = (points_t >= fov[0]) & (points_t < fov[1])
+            grid = torch.stack([origin, origin + size * spacing]).to(points.device)
+            to_keep = (points_t >= grid[0]) & (points_t < grid[1])
             to_keep = to_keep.all(axis=1)
             points_t = points_t[to_keep]
             indices = torch.where(to_keep)[0]

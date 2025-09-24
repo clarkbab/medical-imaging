@@ -144,11 +144,11 @@ def grid_sample(
 
     return image_t
 
-def image_points(
+def grid_points(
     size: SizeTensor,
     spacing: SpacingTensor,
     origin: PointTensor,
-    return_superset: bool = False) -> Union[PointsTensor, Tuple[PointsTensor, torch.Tensor]]:
+    return_superset: bool = False) -> PointsTensor:
     sizes, size_was_single = arg_to_list(size, (tuple, np.ndarray, torch.Tensor), return_matched=True)
     spacings = arg_to_list(spacing, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
     origins = arg_to_list(origin, (tuple, np.ndarray, torch.Tensor), broadcast=len(sizes))
@@ -260,6 +260,8 @@ def to_tensor(
 
 @delegates(to_array)
 def to_tuple(
-    *args,
+    data: Optional[Union[Tuple[Union[Number, bool, str]], np.ndarray, torch.Tensor, torch.Size]],
     **kwargs) -> Optional[torch.Tensor]:
-    return tuple(to_array(*args, **kwargs).tolist())
+    if data is None:
+        return None 
+    return tuple(to_array(data, **kwargs).tolist())

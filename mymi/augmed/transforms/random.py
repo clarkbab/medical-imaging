@@ -12,9 +12,8 @@ class RandomTransform(Transform):
         random_seed: Optional[int] = None,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        print('init random transform')
         self._p = p
-        self.seed(random_seed=random_seed)
+        self.set_random_seed(random_seed)
 
     def back_transform_points(
         self,
@@ -26,13 +25,24 @@ class RandomTransform(Transform):
 
     def freeze(
         self,
-        **kwargs) -> Transform:
-        raise ValueError("Subclasses of 'RandomTransform' must implement 'freeze' method.")
+        klass: 'Object',
+        params: Dict[str, Any]) -> None:
+        # Copy general params from random -> frozen transform. I always forget these.
+        params['dim'] = self._dim
+        params['use_image_coords'] = self._use_image_coords
+        return klass(**params)
 
-    def seed(
+    def set_random_seed(
         self,
-        random_seed: Optional[int] = None) -> None:
-        self._rng = np.random.default_rng(seed=random_seed)
+        seed: Optional[int]) -> None:
+        self._rng = np.random.default_rng(seed=seed)
+
+    def __str__(
+        self,
+        class_name: str,
+        params: Dict[str, str]) -> str:
+        params['p'] = self._p
+        return super().__str__(class_name, params)
 
     def transform(
         self,
