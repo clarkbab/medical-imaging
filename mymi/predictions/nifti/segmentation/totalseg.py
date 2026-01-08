@@ -22,7 +22,7 @@ def create_totalseg_predictions(
     task_regions: Dict[str, Union[str, List[str], Literal['all']]] = {},
     save_as_labels: bool = False,
     splits: Splits = 'all',
-    study_ids: StudyIDs = 'all') -> None:
+    study: StudyIDs = 'all') -> None:
     roi_subset_tasks = ['total', 'total_mr']
 
     # Load patient IDs.
@@ -31,8 +31,8 @@ def create_totalseg_predictions(
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)
-        pat_study_ids = pat.list_studies(study_ids=study_ids)
-        for s in tqdm(pat_study_ids, leave=False):
+        pat_studys = pat.list_studies(study=studys)
+        for s in tqdm(pat_studys, leave=False):
             study = pat.study(s)
 
             # Either save as predictions or labels.
@@ -45,8 +45,8 @@ def create_totalseg_predictions(
             # predictions and we can copy just those we do want. We can't limit the predicted masks to a subset of
             # structures using '--roi_subset' except for 'total/total_mr' tasks.
             with tempfile.TemporaryDirectory() as temp_dir:
-                for task, region_ids in task_regions.items():
-                    region_ids = regions_to_list(region_ids, literals={'all': 'all'})
+                for task, regions in task_regions.items():
+                    regions = regions_to_list(regions, literals={'all': 'all'})
                     output_dir = os.path.join(temp_dir, task)
                     os.makedirs(output_dir, exist_ok=True)
 
@@ -74,8 +74,8 @@ def create_totalseg_predictions(
                         '--output_type', 'nifti',
                     ]
                     # Predict subset of regions if possible.
-                    if task in roi_subset_tasks and region_ids != 'all':
-                        command += ['--roi_subset'] + region_ids
+                    if task in roi_subset_tasks and regions != 'all':
+                        command += ['--roi_subset'] + regions
                     logging.info(command)
                     subprocess.run(command)
 
@@ -85,14 +85,14 @@ def create_totalseg_predictions(
                         os.remove(input_filepath)
 
                     # Remove unwanted regions, if subset predictions wasn't possible.
-                    if task not in roi_subset_tasks and region_ids != 'all':
+                    if task not in roi_subset_tasks and regions != 'all':
                         files = os.listdir(output_dir)
                         print(files)
                         for f in files:
-                            region_id = f.replace('.nii.gz', '')
-                            if region_id not in region_ids:
+                            region = f.replace('.nii.gz', '')
+                            if region not in regions:
                                 filepath = os.path.join(output_dir, f)
-                                logging.info(f"Removing {task}:{region_id}. Filepath: {filepath}")
+                                logging.info(f"Removing {task}:{region}. Filepath: {filepath}")
                                 os.remove(filepath)
 
                     # # Combine regions.
@@ -111,9 +111,9 @@ def create_totalseg_predictions(
                     if callable(rename_regions):
                         files = os.listdir(output_dir)
                         for f in files:
-                            region_id = f.replace('.nii.gz', '')
-                            oldpath = os.path.join(output_dir, f'{region_id}.nii.gz')
-                            newname = rename_regions(region_id)
+                            region = f.replace('.nii.gz', '')
+                            oldpath = os.path.join(output_dir, f'{region}.nii.gz')
+                            newname = rename_regions(region)
                             newpath = os.path.join(output_dir, f'{newname}.nii.gz')
                             logging.info(f'Renaming {oldpath} to {newpath}')
                             os.rename(oldpath, newpath)

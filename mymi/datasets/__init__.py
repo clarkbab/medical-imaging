@@ -1,9 +1,9 @@
 from typing import List, Optional
 
 from .dataset import Dataset, DatasetType, to_type
-from .dicom import DicomDataset
+from .dicom import DicomDataset, DicomModality
 from .dicom import list as list_dicom
-from .nifti import NiftiDataset
+from .nifti import NiftiDataset, NiftiModality
 from .nifti import list as list_nifti
 from .raw import RawDataset
 from .raw import list as list_raw

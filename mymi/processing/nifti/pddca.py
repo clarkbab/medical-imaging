@@ -12,7 +12,7 @@ def create_pddca_cropped_dataset(
     boundary_min = ['ts_Parotid_R', 'ts_Bone_Mandible', ['ts_Glnd_Submand_L', 'ts_Glnd_Submand_R']]
     boundary_max = ['ts_Parotid_L', 'ts_Brainstem', ['ts_OpticNrv_L', 'ts_OpticNrv_R']]
     margin_mm = 30
-    region_ids = regions_to_list('rl:pddca')
+    regions = regions_to_list('rl:pddca')
 
     set = NiftiDataset('PDDCA')
     if recreate:
@@ -30,9 +30,9 @@ def create_pddca_cropped_dataset(
         min_mm = []
         for i, r in enumerate(boundary_min):
             r = arg_to_list(r, RegionID)
-            region_data = pat.region_data(r)
+            regions_data = pat.regions_data(r)
             label = np.zeros_like(ct_data)
-            for k, v in region_data.items():
+            for k, v in regions_data.items():
                 label = np.logical_or(label, v)
             
             # Get structure fov.
@@ -46,9 +46,9 @@ def create_pddca_cropped_dataset(
         max_mm = []
         for i, r in enumerate(boundary_max):
             r = arg_to_list(r, RegionID)
-            region_data = pat.region_data(r)
+            regions_data = pat.regions_data(r)
             label = np.zeros_like(ct_data)
-            for k, v in region_data.items():
+            for k, v in regions_data.items():
                 label = np.logical_or(label, v)
             
             # Get structure fov.
@@ -65,10 +65,10 @@ def create_pddca_cropped_dataset(
         create_ct(dest_set.id, p, 'study_0', 'series_0', ct_data, spacing, origin, dry_run=dry_run)
 
         # Crop non-totalseg labels.
-        for r in region_ids:
+        for r in regions:
             if not pat.has_region(r):
                 continue
-            rdata = pat.region_data(r)[r]
+            rdata = pat.regions_data(r)[r]
             rdata = crop(rdata, crop_mm, spacing=spacing, origin=origin, use_patient_coords=True)
             create_region(dest_set.id, p, 'study_0', 'series_0', r, rdata, spacing, origin, dry_run=dry_run)
     

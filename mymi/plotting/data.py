@@ -1,4 +1,5 @@
 import pandas as pd
+import scipy
 
 from typing import *
 
@@ -13,12 +14,18 @@ def plot_dataframe(
     y: Optional[str] = None,
     hue: Optional[str] = None,
     ax: Optional[mpl.axes.Axes] = None,
+    axis_title: Union[str, List[str]] = None,
+    axis_title_fontsize: Optional[Number] = None,
+    axis_title_fontweight: Optional[str] = 'normal',
+    axis_title_rotation: Union[str, List[str]] = 'horizontal',
+    axis_title_x: Union[Number, List[Number]] = 0.5,
+    axis_title_y: Union[Number, List[Number]] = 0.98,
     dpi: float = 300,
     exclude_x: Optional[Union[str, List[str]]] = None,
-    figsize: Tuple[float, float] = (16, 6),
+    figsize: Tuple[Number, Number] = (16, 6),
+    figsize_pixels: Optional[Tuple[int, int]] = None,
     filt: Optional[Dict[str, Any]] = {},
     fontsize: float = 6,
-    fontsize_label: Optional[float] = None,
     fontsize_legend: Optional[float] = None,
     fontsize_stats: Optional[float] = None,
     fontsize_tick_label: Optional[float] = None,
@@ -29,10 +36,10 @@ def plot_dataframe(
     hue_order: Optional[List[str]] = None,
     hspace: Optional[float] = None,
     include_x: Optional[Union[str, List[str]]] = None,
-    # legend_bbox: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = (1, 1),    # This is the point at which the legend anchor is anchored to the axes.
+    legend_bbox: Tuple[float, float] = (1.0, 1.0),
     # legend_borderaxespad: float = 1.0,
     legend_borderpad: float = 0.1,
-    # legend_loc: str = 'upper left',     # This is actually the part of the legend that is anchored, not the legend's position within the axes.
+    legend_loc: str = 'upper left',
     linecolour: str = 'black',
     line_width: float = 0.25,
     major_tick_freq: Optional[float] = None,
@@ -43,16 +50,16 @@ def plot_dataframe(
     outlier_legend_loc: str = 'upper left',
     palette: str = 'colorblind',
     savepath: Optional[str] = None,
-    save_pad_inches: float = 0.03,
+    save_pad: float = 0.03,
     share_y: bool = True,
     show_boxes: bool = True,
     show_hue_connections: bool = False,
     show_hue_connections_inliers: bool = False,
     show_legend: Union[bool, List[bool]] = True,
+    show_n: bool = True,
     show_points: bool = True,
     show_stats: bool = False,
     show_x_tick_labels: bool = True,
-    show_x_tick_label_counts: bool = True,
     stats_alt: Literal['greater', 'less', 'two-sided'] = 'two-sided',
     stats_bar_alg_use_lowest_level: bool = True,
     stats_bar_alpha: float = 0.5,
@@ -77,16 +84,27 @@ def plot_dataframe(
     style: Optional[Literal['box', 'violin']] = 'box',
     tick_length: float = 1.0,
     title: Optional[str] = None,
-    title_x: Optional[float] = None,
-    title_y: Optional[float] = None,
     x_label: Optional[str] = None,
+    x_label_fontweight: str = 'normal',
+    x_label_pad: float = 0,
+    x_label_x: float = 0.5,
+    x_label_y: float = 0.02,
     x_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
     x_order: Optional[List[str]] = None,
     x_width: float = 0.8,
     x_tick_label: Optional[List[str]] = None,
+    x_label_fontsize: Optional[float] = None,
+    x_tick_label_pad: float = 0,
     x_tick_label_rot: float = 0,
     y_label: Optional[str] = None,
-    y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None)):
+    y_label_fontsize: Optional[float] = None,
+    y_label_fontweight: str = 'normal',
+    y_label_pad: float = 0,
+    y_label_x: float = 0,
+    y_label_y: float = 0.5,
+    y_lim: Optional[Tuple[Optional[float], Optional[float]]] = (None, None),
+    y_tick_label_pad: float = 1.0,
+    ) -> None:
     if data is None:
         raise ValueError("'data' is None.")
     elif len(data) == 0:
@@ -102,8 +120,9 @@ def plot_dataframe(
     x_tick_labels = arg_to_list(x_tick_label, str)
 
     # Set default fontsizes.
-    if fontsize_label is None:
-        fontsize_label = fontsize
+    axis_title_fontsize = axis_title_fontsize if axis_title_fontsize is not None else fontsize
+    x_label_fontsize = x_label_fontsize if x_label_fontsize is not None else fontsize
+    y_label_fontsize = y_label_fontsize if y_label_fontsize is not None else fontsize
     if fontsize_legend is None:
         fontsize_legend = fontsize
     if fontsize_stats is None:
@@ -151,11 +170,13 @@ def plot_dataframe(
                     ns = ns[:1]
             else:
                 ns = [count]
-            label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_x_tick_label_counts else x_val
+            label = f"{x_val}\n(n={','.join([str(n) for n in ns])})" if show_n else x_val
             x_tick_labels.append(label)
 
     # Create subplots if required.
     figsize = figsize_to_inches(figsize)
+    if figsize_pixels is not None:
+        figsize = tuple(np.array(figsize_pixels) / dpi)
     if n_cols is None:
         n_cols = len(x_order)
     if n_rows is None:
@@ -167,7 +188,8 @@ def plot_dataframe(
         show_figure = False
     elif n_rows > 1:
         # Expand figsize height to match number of rows.
-        figsize = (figsize[0], n_rows * figsize[1])
+        if figsize_pixels is None:
+            figsize = (figsize[0], n_rows * figsize[1])
 
         # Use gridspec, this is required so we can create a final row that is smaller
         # than the other rows to preserve scale across rows. Sharing the x-axes doesn't work
@@ -178,9 +200,11 @@ def plot_dataframe(
         n_cols_final_row = len(x_order) % n_cols if len(x_order) % n_cols != 0 else n_cols
         width_ratios = [n_cols_final_row, n_cols - n_cols_final_row]
         gs = mpl.gridspec.GridSpec(n_rows, ncols=2, height_ratios=hr, hspace=hspace, width_ratios=width_ratios)
-
-        # gridspec_kw = { 'hspace': hspace }
-        # fig, axs = plt.subplots(n_rows, 1, constrained_layout=True, dpi=dpi, figsize=figsize, gridspec_kw=gridspec_kw, sharex=False, sharey=share_y)
+        axs = []
+        for r in range(n_rows):
+            for c in range(2):  # since you used ncols=2
+                ax = fig.add_subplot(gs[r, c])
+                axs.append(ax)
         show_figure = True
     else:
         fig = plt.figure(dpi=dpi, figsize=figsize)
@@ -204,6 +228,10 @@ def plot_dataframe(
                 raise ValueError(f"Length of 'hue_labels' ({hue_labels}) should match hues ({hue_order}).")
     
     # Expand args to match number of rows.
+    axis_titles = arg_to_list(axis_title, (None, str), broadcast=n_rows)
+    axis_title_rotations = arg_to_list(axis_title_rotation, str, broadcast=n_rows)
+    axis_title_xs = arg_to_list(axis_title_x, (int, float), broadcast=n_rows)
+    axis_title_ys = arg_to_list(axis_title_y, (int, float), broadcast=n_rows)
     if isinstance(show_legend, bool):
         show_legends = [show_legend] * n_rows
     else: 
@@ -384,7 +412,7 @@ def plot_dataframe(
                     main_legend = inset_ax.get_legend()
 
                     # Show outlier legend.
-                    inset_ax.legend(artists, labels, borderaxespad=legend_borderaxespad, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=outlier_legend_loc)
+                    inset_ax.legend(artists, labels, borderaxespad=legend_borderaxespad, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=legend_loc)
 
                     # Re-add main legend.
                     inset_ax.add_artist(main_legend)
@@ -400,9 +428,7 @@ def plot_dataframe(
                 # Show legend.
                 # legend = inset_ax.legend(artists, labels, borderaxespad=legend_borderaxespad, borderpad=legend_borderpad, bbox_to_anchor=legend_bbox, fontsize=fontsize_legend, loc=legend_loc)
                 # Calculate anchor point for 'upper left' of legend.
-                legend_loc = 'upper left'
-                bbox_to_anchor = (x_lim_row[1] + 0.05, y_lim_row[1])
-                legend = inset_ax.legend(artists, labels, bbox_to_anchor=bbox_to_anchor, bbox_transform=inset_ax.transData, borderpad=legend_borderpad, fontsize=fontsize_legend, loc=legend_loc)
+                legend = inset_ax.legend(artists, labels, bbox_to_anchor=legend_bbox, borderpad=legend_borderpad, fontsize=fontsize_legend, loc=legend_loc)
                 frame = legend.get_frame()
                 frame.set_boxstyle('square')
                 frame.set_edgecolor('black')
@@ -757,11 +783,13 @@ def plot_dataframe(
                         elif y_idx not in y_idxs[hue_r]:
                             y_idxs[hue_r] = list(sorted(y_idxs[hue_r] + [y_idx]))
           
-        # Set axis labels.
+        # Set axis title and labels.
         x_label = x_label if x_label is not None else ''
         y_label = y_label if y_label is not None else ''
-        inset_ax.set_xlabel(x_label, fontsize=fontsize_label)
-        inset_ax.set_ylabel(y_label, fontsize=fontsize_label)
+        inset_ax.set_xlabel(x_label, fontsize=x_label_fontsize, fontweight=x_label_fontweight, labelpad=x_label_pad, x=x_label_x, y=x_label_y)
+        inset_ax.set_ylabel(y_label, fontsize=y_label_fontsize, fontweight=y_label_fontweight, labelpad=y_label_pad, x=y_label_x, y=y_label_y)
+        if axis_titles[i] is not None:
+            inset_ax.set_title(axis_titles[i], fontsize=axis_title_fontsize, fontweight=axis_title_fontweight, rotation=axis_title_rotations[i], x=axis_title_xs[i], y=axis_title_ys[i])
                 
         # Set axis tick labels.
         inset_ax.set_xticks(list(range(len(row_x_tick_labels))))
@@ -770,7 +798,9 @@ def plot_dataframe(
         else:
             inset_ax.set_xticklabels([])
 
-        inset_ax.tick_params(axis='y', which='major', labelsize=fontsize_tick_label)
+        # Set tick label font size and padding.
+        inset_ax.tick_params(axis='x', which='major', labelsize=fontsize_tick_label, pad=x_tick_label_pad)
+        inset_ax.tick_params(axis='y', which='major', labelsize=fontsize_tick_label, pad=y_tick_label_pad)
 
         # Set y axis major ticks.
         if major_tick_freq is not None:
@@ -829,7 +859,7 @@ def plot_dataframe(
         dirpath = os.path.dirname(savepath)
         if not os.path.exists(dirpath):
             os.makedirs(dirpath)
-        fig.savefig(savepath, bbox_inches='tight', pad_inches=0.03)
+        fig.savefig(savepath, bbox_inches='tight', pad_inches=save_pad)
         logging.info(f"Saved plot to '{savepath}'.")
 
     # Show plot.

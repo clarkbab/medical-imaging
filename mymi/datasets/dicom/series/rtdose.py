@@ -7,28 +7,23 @@ from mymi.constants import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .rtplan import RtPlanSeries
+from .rtplan import DicomRtPlanSeries
 from .series import DicomSeries
 
-class RtDoseSeries(DicomSeries):
+class DicomRtDoseSeries(DicomSeries):
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
-        study_id: StudyID,
+        dataset: DatasetID,
+        pat: PatientID,
+        study: StudyID,
         id: SeriesID,
         index: pd.Series,
         index_policy: Dict[str, Any]) -> None:
-        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
-        self._dataset_id = dataset_id
-        self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self._id = id
-        self.__index = index
-        self.__index_policy = index_policy
-        self.__modality = 'rtdose'
-        self._pat_id = pat_id
-        self._study_id = study_id
+        super().__init__('rtdose', dataset, pat, study, id, index=index, index_policy=index_policy)
+        dspath = os.path.join(config.directories.datasets, 'dicom', self._dataset_id, 'data', 'patients')
+        self.__filepath = os.path.join(dspath, index['filepath'])
 
+    @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
@@ -45,6 +40,9 @@ class RtDoseSeries(DicomSeries):
     def dicom(self) -> RtDoseDicom:
         return dcm.dcmread(self.__filepath)
 
+    def __load_data(self) -> None:
+        self.__data, self.__spacing, self.__origin = from_rtdose_dicom(self.dicom)
+
     @property
     @ensure_loaded
     def origin(self) -> Point3D:
@@ -60,10 +58,10 @@ class RtDoseSeries(DicomSeries):
     def spacing(self) -> Spacing3D:
         return self.__spacing
 
-    def __load_data(self) -> None:
-        self.__data, self.__spacing, self.__origin = from_rtdose_dicom(self.dicom)
+    def __str__(self) -> str:
+        return super().__str__(self.__class__.__name__)
 
 # Add properties.
-props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtplan', 'study_id']
+props = ['filepath', 'ref_rtplan']
 for p in props:
-    setattr(RtDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{RtDoseSeries.__name__}__{p}')))
+    setattr(DicomRtDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{DicomRtDoseSeries.__name__}__{p}')))

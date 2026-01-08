@@ -110,10 +110,10 @@ class RtStructConverter:
         return landmark
 
     @classmethod
-    def get_region_data(
+    def get_regions_data(
         cls,
         rtstruct: dcm.dataset.FileDataset,
-        region_id: RegionID,
+        region: RegionID,
         size: Size3D,
         spacing: Spacing3D,
         origin: Point3D) -> RegionArray:
@@ -123,9 +123,9 @@ class RtStructConverter:
         if len(roi_infos) != len(roi_contours):
             raise ValueError(f"Length of 'StructureSetROISequence' and 'ROIContourSequence' must be the same, got '{len(roi_infos)}' and '{len(roi_contours)}' respectively.")
         info_map = dict((info.ROIName, contour) for contour, info in zip(roi_contours, roi_infos))
-        if region_id not in info_map:
-            raise ValueError(f"RTSTRUCT doesn't contain ROI '{region_id}'.")
-        roi_contour = info_map[region_id]
+        if region not in info_map:
+            raise ValueError(f"RTSTRUCT doesn't contain ROI '{region}'.")
+        roi_contour = info_map[region]
 
         # Create label placeholder.
         data = np.zeros(shape=size, dtype=bool)
@@ -133,7 +133,7 @@ class RtStructConverter:
         # Skip label if no contour sequence.
         contour_seq = getattr(roi_contour, 'ContourSequence', None)
         if not contour_seq:
-            raise ValueError(f"'ContourSequence' not found for ROI '{region_id}'.")
+            raise ValueError(f"'ContourSequence' not found for ROI '{region}'.")
 
         # Filter contours without data.
         contour_seq = filter(lambda c: hasattr(c, 'ContourData'), contour_seq)
@@ -148,7 +148,7 @@ class RtStructConverter:
 
             # This code handles 'CLOSED_PLANAR' and 'POINT' types.
             if not contour.ContourGeometricType in CONTOUR_FORMATS:
-                raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{i}', ROI '{region_id}'.")
+                raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{i}', ROI '{region}'.")
 
             # Coords are stored in flat array.
             if contour_data.size % 3 != 0:

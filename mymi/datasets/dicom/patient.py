@@ -14,14 +14,14 @@ from .study import DicomStudy
 class DicomPatient(IndexWithErrorsMixin, Patient):
     def __init__(
         self,
-        dataset_id: DatasetID,
+        dataset: DatasetID,
         id: PatientID,
         index: pd.DataFrame,
         index_policy: Dict[str, Any],
         index_errors: pd.DataFrame,
         ct_from: Optional['DicomPatient'] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        super().__init__(dataset_id, id, ct_from=ct_from, region_map=region_map)
+        super().__init__(dataset, id, ct_from=ct_from, region_map=region_map)
         self._index_errors = index_errors
         self._index = index
         self._index_policy = index_policy
@@ -36,9 +36,9 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
     
     @property
     def default_study(self) -> Optional[DicomStudy]:
-        study_ids = self.list_studies()
-        if len(study_ids) > 0:
-            return self.study(study_ids[-1])
+        studys = self.list_studies()
+        if len(studys) > 0:
+            return self.study(studys[-1])
         else:
             return None
 
@@ -86,29 +86,30 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
 
     def has_study(
         self,
-        study_id: StudyIDs,
+        study: StudyIDs,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_studies(study_id=study_id, **kwargs)
-        req_ids = arg_to_list(study_id, StudyID)
+        real_ids = self.list_studies(study=study, **kwargs)
+        req_ids = arg_to_list(study, StudyID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def list_studies(
         self,
         show_datetime: bool = False,
-        study_id: StudyIDs = 'all') -> List[StudyID]:
+        sort: Optional[Callable[DicomStudy, int]] = None,
+        study: StudyIDs = 'all') -> List[StudyID]:
         # Sort studies by date/time - oldest first.
         ids = list(self._index.sort_values(['study-date', 'study-time'])['study-id'].unique())
         
-        # Filter by 'study_id'.
-        if study_id != 'all':
-            study_ids = arg_to_list(study_id, StudyID)
+        # Filter by 'study'.
+        if study != 'all':
+            studys = arg_to_list(study, StudyID)
             all_ids = ids.copy()
             ids = []
             for i, id in enumerate(all_ids):
-                # Check if any of the passed 'study_ids' references this ID.
-                for j, sid in enumerate(study_ids):
+                # Check if any of the passed 'studys' references this ID.
+                for j, sid in enumerate(studys):
                     if sid.startswith('idx:'):
                         # Check if idx refer
                         idx = int(sid.split(':')[1])
@@ -119,30 +120,31 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
                         ids.append(id)
                         break
 
+        # Sort by custom function.
+        if sort is not None:
+            studies = sorted([self.study(i) for i in ids], key=sort)
+            ids = [s.id for s in studies]
+
         if show_datetime:
             ids = [f'{i} ({self.study(i).date})' for i in ids]
 
         return ids
 
-    def __repr__(self) -> str:
-        return str(self)
-
     def study(
         self,
-        id: StudyID) -> DicomStudy:
-        id = handle_idx_prefix(id, self.list_studies)
-        if not self.has_studies(id):
+        id: StudyID,
+        sort: Optional[Callable[DicomStudy, int]] = None,  # For 'idx:n' calls.
+        ) -> DicomStudy:
+        id = handle_idx_prefix(id, lambda: self.list_studies(sort=sort))
+        if not self.has_study(id):
             raise ValueError(f"Study '{id}' not found for patient '{self}'.")
         index = self._index[self._index['study-id'] == str(id)].copy()
         index_errors = self._index_errors[self._index_errors['study-id'] == str(id)].copy()
-        ct_from = self._ct_from.study(id) if self._ct_from is not None and self._ct_from.has_studies(id) else None
+        ct_from = self._ct_from.study(id) if self._ct_from is not None and self._ct_from.has_study(id) else None
         return DicomStudy(self._dataset_id, self._id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self._region_map)
 
     def __str__(self) -> str:
-        if self._ct_from is None:
-            return f"DicomPatient({self._id}, dataset={self._dataset_id})"
-        else:
-            return f"DicomPatient({self._id}, dataset={self._dataset_id}, ct_from={self._ct_from.dataset_id})"
+        return super().__str__(self.__class__.__name__)
     
 # Add properties.
 props = ['index_policy']
@@ -172,5 +174,5 @@ mods = ['landmarks', 'regions']
 for m in mods:
     setattr(DicomPatient, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m[:-1]}')(*args, **kwargs) if self.default_study is not None else False)
     setattr(DicomPatient, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'list_{m}')(*args, **kwargs) if self.default_study is not None else [])
-    setattr(DicomPatient, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m[:-1]}_data')(*args, **kwargs) if self.default_study is not None else None)
+    setattr(DicomPatient, f'{m}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m}_data')(*args, **kwargs) if self.default_study is not None else None)
  

@@ -3,13 +3,13 @@ from mymi.typing import *
 class Series:
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
-        study_id: StudyID,
+        dataset: DatasetID,
+        pat: PatientID,
+        study: StudyID,
         id: SeriesID) -> None:
-        self._dataset_id = str(dataset_id)
-        self._pat_id = str(pat_id)
-        self._study_id = str(study_id)
+        self._dataset_id = str(dataset)
+        self._pat_id = str(pat)
+        self._study_id = str(study)
         self._id = str(id)
 
     @property
@@ -25,11 +25,20 @@ class Series:
         return self._pat_id
 
     @property
-    def study_id(self) -> StudyID:
+    def study(self) -> StudyID:
         return self._study_id
 
     def __repr__(self) -> str:
         return str(self)
 
-    def __str__(self) -> str:
-        raise ValueError("Subclasses of 'Series' must implement '__str__' method.")
+    def __str__(
+        self,
+        class_name: str,
+        ) -> str:
+        params = dict(
+            id=self._id,
+            dataset=self._dataset_id,
+            pat=self._pat_id,
+            study=self._study_id,
+        )
+        return f"{class_name}({', '.join([f'{k}={v}' for k, v in params.items()])})"

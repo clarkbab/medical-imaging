@@ -4,7 +4,7 @@ dataset = 'PMCC-REIRRAD'
 dest_dataset = 'PMCC-REIRRAD-CP'
 kwargs = dict(
     margin_mm=20,
-    recreate_patients=True,
+    recreate_patient=True,
 )
 
 convert_to_lung_preprocessed_dataset(dataset, dest_dataset, **kwargs)

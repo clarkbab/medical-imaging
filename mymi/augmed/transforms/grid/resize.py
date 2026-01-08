@@ -3,8 +3,9 @@ from typing import *
 from mymi.typing import *
 
 from ...utils import *
-from ..random import RandomTransform
+from ..identity import Identity
 from .grid import GridTransform
+from .random import RandomGridTransform
 
 # If we change the spacing, size should change to preserve the field-of-view.
 # If we change the size, spacing should change to preserve the field-of-view.
@@ -16,48 +17,48 @@ from .grid import GridTransform
 # spacing:
 # - s=1.0 -> s=(1.0, 1.0, ...)
 # - s=(0.8, 1.2) -> s=(0.8, 1.2, ...)
-class RandomResize(RandomTransform):
+class RandomResize(RandomGridTransform):
     def __init__(
         self,
-        size: Optional[Union[int, Tuple[int, ...]]] = None,     # Not affected by use_image_coords?
-        spacing: Optional[Union[float, Tuple[float, ...]]] = None,
+        size_range: Optional[Union[int, Tuple[int, ...]]] = None,     # Not affected by use_image_coords?
+        spacing_range: Optional[Union[float, Tuple[float, ...]]] = None,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        assert size is not None or spacing is not None
-        if size is not None:
-            size = expand_range_arg(size, dim=self._dim)
-            assert len(size) == 2 * self._dim, f"Expected 'size' of length {2 * self._dim} for dim={self._dim}, got length {len(size)}."
-            self.__size = to_tensor(size, dtype=torch.int32).reshape(self._dim, 2)
+        assert size_range is not None or spacing_range is not None
+        if size_range is not None:
+            size_range = expand_range_arg(size_range, dim=self._dim)
+            assert len(size_range) == 2 * self._dim, f"Expected 'size_range' of length {2 * self._dim} for dim={self._dim}, got length {len(size_range)}."
+            self.__size_range = to_tensor(size_range, dtype=torch.int32).reshape(self._dim, 2)
         else:
-            self.__size = None
-        if spacing is not None:
-            spacing = expand_range_arg(spacing, dim=self._dim)
-            assert len(spacing) == 2 * self._dim, f"Expected 'spacing' of length {2 * self._dim} for dim={self._dim}, got length {len(spacing)}."
+            self.__size_range = None
+        if spacing_range is not None:
+            spacing_range = expand_range_arg(spacing_range, dim=self._dim)
+            assert len(spacing_range) == 2 * self._dim, f"Expected 'spacing_range' of length {2 * self._dim} for dim={self._dim}, got length {len(spacing_range)}."
             dtype = torch.int32 if self._use_image_coords else torch.float32
-            self.__spacing = to_tensor(spacing, dtype=dtype).reshape(self._dim, 2)
+            self.__spacing_range = to_tensor(spacing_range, dtype=dtype).reshape(self._dim, 2)
         else:
-            self.__spacing = None
+            self.__spacing_range = None
 
         self._params = dict(
             dim=self._dim,
             p=self._p,
-            size=self.__size,
-            spacing=self.__spacing,
+            size_range=self.__size_range,
+            spacing_range=self.__spacing_range,
         )
 
     def freeze(self) -> 'Resize':
         should_apply = self._rng.random(1) < self._p
         if not should_apply:
             return Identity(dim=self._dim)
-        if self.__size is not None:
+        if self.__size_range is not None:
             draw = to_tensor(self._rng.random(self._dim))
-            size_draw = (draw * (self.__size[:, 1] - self.__size[:, 0]) + self.__size[:, 0]).type(torch.int32)
+            size_draw = (draw * (self.__size_range[:, 1] - self.__size_range[:, 0]) + self.__size_range[:, 0]).type(torch.int32)
         else:
             size_draw = None
-        if self.__spacing is not None:
+        if self.__spacing_range is not None:
             draw = to_tensor(self._rng.random(self._dim))
             dtype = torch.int32 if self._use_image_coords else torch.float32
-            spacing_draw = (draw * (self.__spacing[:, 1] - self.__spacing[:, 0]) + self.__spacing[:, 0]).type(dtype)
+            spacing_draw = (draw * (self.__spacing_range[:, 1] - self.__spacing_range[:, 0]) + self.__spacing_range[:, 0]).type(dtype)
         else:
             spacing_draw = None
 

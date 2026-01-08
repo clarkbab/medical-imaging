@@ -26,7 +26,7 @@ class TestRtStructConverter(TestCase):
             name='sample'
         )
         RtStructConverter.add_roi_contour(rtstruct, roi_data, cts)
-        after = RtStructConverter.get_region_data(rtstruct, 'sample', cts)
+        after = RtStructConverter.get_regions_data(rtstruct, 'sample', cts)
 
         # Assert that conversion doesn't alter the segmentation.
         np.testing.assert_array_equal(before, after)

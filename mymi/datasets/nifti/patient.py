@@ -7,6 +7,7 @@ from mymi import config
 from mymi.typing import *
 from mymi.utils import *
 
+from ..dicom import DicomDataset, DicomPatient
 from ..mixins import IndexMixin
 from ..patient import Patient
 from ..region_map import RegionMap
@@ -15,50 +16,57 @@ from .study import NiftiStudy
 class NiftiPatient(IndexMixin, Patient):
     def __init__(
         self,
-        dataset_id: DatasetID,
+        dataset: DatasetID,
         id: PatientID,
         ct_from: Optional['NiftiPatient'] = None,
         index: Optional[pd.DataFrame] = None,
         excluded_labels: Optional[List[str]] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        # Check that patient ID exists.
-        path = os.path.join(config.directories.datasets, 'nifti', str(dataset_id), 'data', 'patients', str(id))
-        if not os.path.exists(path):
-            raise ValueError(f"NiftiPatient '{id}' not found for dataset '{self}'. Dirpath: {path}")
-        self.__path = path
-        super().__init__(dataset_id, id, ct_from=ct_from, region_map=region_map)
-        self._index = index
+        super().__init__(dataset, id, ct_from=ct_from, index=index, region_map=region_map)
+        self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset_id, 'data', 'patients', self._id)
+        if not os.path.exists(self.__path):
+            raise ValueError(f"No nifti patient '{self._id}' found at path: {self.__path}")
 
     @property
     def default_study(self) -> Optional[NiftiStudy]:
-        study_ids = self.list_studies()
-        return self.study(study_ids[-1]) if len(study_ids) > 0 else None
+        studys = self.list_studies()
+        return self.study(studys[-1]) if len(studys) > 0 else None
+
+    @property
+    def dicom(self) -> DicomPatient:
+        if self._index is None:
+            raise ValueError(f"Dataset did not originate from dicom (no 'index.csv').")
+        index = self._index[['dataset', 'patient-id', 'dicom-dataset', 'dicom-patient-id']]
+        index = index[(index['dataset'] == self._dataset_id) & (index['patient-id'] == self._id)].drop_duplicates()
+        assert len(index) == 1
+        row = index.iloc[0]
+        return DicomDataset(row['dicom-dataset']).patient(row['dicom-patient-id'])
 
     def has_study(
         self,
-        study_id: StudyIDs,
+        study: StudyIDs,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_studies(study_id=study_id, **kwargs)
-        req_ids = arg_to_list(study_id, StudyID)
+        real_ids = self.list_studies(study=study, **kwargs)
+        req_ids = arg_to_list(study, StudyID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
     def list_studies(
         self,
-        study_id: StudyIDs = 'all',    # Used for filtering.
+        study: StudyIDs = 'all',    # Used for filtering.
         ) -> List[StudyID]:
         # Might have to deal with sorting at some point for 'default_study'.
         # Right now sorting is just alphabetical, which is fine if we're using anonymous IDs,
         # as they're sorted during DICOM -> NIFTI conversion.
         ids = list(sorted(os.listdir(self.__path)))
-        if study_id != 'all':
-            study_ids = arg_to_list(study_id, StudyID)
+        if study != 'all':
+            studys = arg_to_list(study, StudyID)
             all_ids = ids.copy()
             ids = []
             for i, id in enumerate(all_ids):
-                # Check if any of the passed 'study_ids' references this ID.
-                for j, sid in enumerate(study_ids):
+                # Check if any of the passed 'studys' references this ID.
+                for j, sid in enumerate(studys):
                     if sid.startswith('idx:'):
                         # Check if idx refer
                         idx = int(sid.split(':')[1])
@@ -70,14 +78,6 @@ class NiftiPatient(IndexMixin, Patient):
                         break
 
         return ids
-
-    @property
-    def origin(self) -> Dict[str, str]:
-        if self._index is None:
-            raise ValueError(f"Dataset has no 'index.csv'.")
-        info = self._index.iloc[0].to_dict()
-        info = {k: info[k] for k in ['dicom-dataset', 'dicom-patient-id']}
-        return info
 
     def study(
         self,
@@ -95,23 +95,19 @@ class NiftiPatient(IndexMixin, Patient):
         return NiftiStudy(self._dataset_id, self._id, id, ct_from=ct_from, index=index, region_map=self._region_map, **kwargs)
 
     def __str__(self) -> str:
-        if self._ct_from is None:
-            return f"NiftiPatient({self._id}, dataset={self._dataset_id})"
-        else:
-            return f"NiftiPatient({self._id}, dataset={self._dataset_id}, ct_from={self._ct_from.dataset_id})"
+        return super().__str__(self.__class__.__name__)
 
 # Add shortcut properies from 'default_study'.
 mods = ['ct', 'dose', 'landmarks', 'mr', 'regions']
 for m in mods:
     setattr(NiftiPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
-    n = f'{m}_data' if m in ['landmarks', 'regions'] else m   # 'has_landmarks/regions' is reserved for LandmarkIDs.
-    setattr(NiftiPatient, f'has_{n}', property(lambda self, m=m: getattr(self.default_study, f'has_{n}') if self.default_study is not None else None))
+    setattr(NiftiPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'has_{m}') if self.default_study is not None else None))
     
 # Add image filepath shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'dose']
 for m in mods:
     setattr(NiftiPatient, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_study, f'{m}_filepath') if self.default_study is not None else None))
-setattr(NiftiPatient, 'region_filepaths', lambda self, region_id: self.default_study.region_filepaths(region_id) if self.default_study is not None else None)
+setattr(NiftiPatient, 'region_filepaths', lambda self, region: self.default_study.region_filepaths(region) if self.default_study is not None else None)
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'dose', 'mr']
@@ -125,4 +121,4 @@ mods = ['landmarks', 'regions']
 for m in mods:
     setattr(NiftiPatient, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m[:-1]}')(*args, **kwargs) if self.default_study is not None else False)
     setattr(NiftiPatient, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'list_{m}')(*args, **kwargs) if self.default_study is not None else [])
-    setattr(NiftiPatient, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m[:-1]}_data')(*args, **kwargs) if self.default_study is not None else None)
+    setattr(NiftiPatient, f'{m}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'{m}_data')(*args, **kwargs) if self.default_study is not None else None)

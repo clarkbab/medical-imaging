@@ -137,10 +137,13 @@ python {file} {kwarg_str}
             print(f"Queueing job with command: {command}")
             os.system(command)
 
+# Example:
+# cs_pmcc_grid --params "region" --values "['Bone_Mandible', 'Brainstem', 'Glnd_Submand_L', 'Glnd_Submand_R',
+#   'OpticChiasm', 'OpticNrv_L', 'OpticNrv_R', 'Parotid_L', 'Parotid_R']"
 def create_slurm_grid(
     create_slurm_fn,
     *args,
-    dry_run: bool = True,
+    makeitso: bool = False,
     params: Union[str, Sequence[str]] = [],     # M params.
     values: Union[float, int, str, List[Union[float, int, str]], List[List[Union[float, int, str]]]] = [],     # N runs.
     **kwargs) -> None:
@@ -185,8 +188,8 @@ def create_slurm_grid(
         param_vals = {}
         for j, p in enumerate(params):
             param_vals[p] = values[i][j]
-        if dry_run:
-            logging.info(f"Would call: {create_slurm_fn.__name__}({args}, {param_vals}, suffix={i}, {kwargs})")
+        if not makeitso:
+            logging.info(f"Would call: {create_slurm_fn.__name__}(args={args}, params={param_vals}, suffix={i}, kwargs={kwargs})")
         else:
             create_slurm_fn(*args, **param_vals, suffix=i, **kwargs)
 
@@ -196,7 +199,7 @@ def create_slurm_grid_pmcc(*args, **kwargs) -> None:
 def create_slurm_grid_spartan(*args, **kwargs) -> None:
     create_slurm_grid(create_slurm, *args, **kwargs)
 
-def grid_arg(
+def parse_arg(
     name: str,
     arg_type: Optional[Union[float, int, str]] = None,
     default: Optional[Union[float, int, str]] = None) -> Optional[Union[int, float]]:

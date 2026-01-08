@@ -8,24 +8,32 @@ from mymi.utils import alias_kwargs, arg_to_list
 # and RandomTransform must follow.
 # What about pipeline? Yeah, I guess so. We treat it just like a transform.
 class Transform:
-    @alias_kwargs(('uic', 'use_image_coords'))
+    @alias_kwargs([
+        ('uic', 'use_image_coords')
+    ])
     def __init__(
         self,
         dim: SpatialDim = 3,
-        use_image_coords: bool = False) -> None:
+        use_image_coords: bool = False,
+        verbose: bool = False,
+        ) -> None:
         assert dim in [2, 3], "Only 2D and 3D flips are supported."
         self._dim = dim
         self._use_image_coords = use_image_coords
+        self._verbose = verbose
     
-    # Alias for 'transform' method.
+    @alias_kwargs([
+        ('s', 'spacing'),
+        ('o', 'origin'),
+    ])
     def __call__(
         self,
-        data: Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]],
+        *data: Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]],
         # Require this ordering of kwargs for API simplicity.
         spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
         origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
         **kwargs) -> Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor]]]:
-        return self.transform(data, origin=origin, spacing=spacing, **kwargs)
+        return self.transform(*data, spacing=spacing, origin=origin, **kwargs)
 
     @property
     def dim(self) -> SpatialDim:
@@ -58,8 +66,8 @@ class Transform:
     # However, as a mixin, each new transform class needs to subclass the mixin also, which creates
     # more boilerplate for new transforms.
     @alias_kwargs([
-        ('o', 'origin'),
         ('s', 'spacing'),
+        ('o', 'origin'),
     ])
     # Can pass a single array/tensor or a list of arrays/tensors.
     # Points arrays/tensors are inferred by their Nx2/3 shape. It's unlikely that images of this size will
@@ -71,14 +79,17 @@ class Transform:
     # other
     def transform(
         self,
-        data: Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor]]],
+        *data: Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, LabelArray, LabelTensor, PointsArray, PointsTensor]]],
         spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
         origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
         # This comes last because it can be inferred via adjacent images.
         size: Optional[Union[Size, SizeArray, SizeTensor, List[Union[Size, SizeArray, SizeTensor]]]] = None,
         filter_offgrid: bool = True,
-        return_grid: bool = False) -> Union[ImageArrayWithFov, ImageTensorWithFov, PointsArray, PointsTensor, List[Union[ImageArrayWithFov, ImageTensorWithFov, PointsArray, PointsTensor]]]:
-        datas, data_was_single = arg_to_list(data, (np.ndarray, torch.Tensor), return_matched=True)
+        return_grid: bool = False,
+        ) -> Union[ImageArray, ImageTensor, PointsArray, PointsTensor, List[Union[ImageArray, ImageTensor, PointsArray, PointsTensor, Union[ImageGrid, List[ImageGrid]]]]]:
+        data_was_single = len(data) == 1
+        datas = list(data)
+        # datas, data_was_single = arg_to_list(data, (np.ndarray, torch.Tensor), return_matched=True)
         sizes = arg_to_list(size, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
         spacings = arg_to_list(spacing, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
         origins = arg_to_list(origin, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(datas))
@@ -86,14 +97,17 @@ class Transform:
         # Infer data types.
         image_indices = []
         points_indices = []
-        data_types = {}
+        data_types = []
         for i, d in enumerate(datas):
             if d.shape[-1] == 2 or d.shape[-1] == 3:
                 points_indices.append(i)
-                data_types[i] = 'points'
+                data_types.append('points')
             else:
                 image_indices.append(i)
-                data_types[i] = 'image'
+                data_types.append('image')
+        print(data_types)
+        print(image_indices)
+        print(points_indices)
 
         # Infer sizes for offscreen point filtering.
         if filter_offgrid:
@@ -106,9 +120,14 @@ class Transform:
 
         # Transform images.
         images, image_spacings, image_origins = [datas[i] for i in image_indices], [spacings[i] for i in image_indices], [origins[i] for i in image_indices]
-        print('transform')
-        print(return_grid)
-        images_ts = self.transform_image(images, spacing=image_spacings, origin=image_origins, return_grid=return_grid)
+        if len(images) > 0:
+            res_ts = self.transform_image(images, spacing=image_spacings, origin=image_origins, return_grid=return_grid)
+            if return_grid:
+                *image_ts, grid_ts = res_ts
+            else:
+                image_ts = res_ts
+        else:
+            image_ts = []
 
         # Transform points.
         points, points_sizes, points_spacings, points_origins = [datas[i] for i in points_indices], [sizes[i] for i in points_indices], [spacings[i] for i in points_indices], [origins[i] for i in points_indices]
@@ -119,23 +138,28 @@ class Transform:
             points_t = self.transform_points(p, filter_offgrid=filter_offgrid, size=sz, spacing=sp, origin=o)
             points_ts.append(points_t)
 
-        # Flatten results.
-        datas_t = []
+        # Flatten image and points results.
+        data_ts = []
         image_i, points_i = 0, 0
-        for i in range(len(datas)):
-            if data_types[i] == 'image':
-                datas_t.append(images_ts[image_i])
+        print(len(image_ts), len(points_ts))
+        for i, t in enumerate(data_types):
+            if t == 'image':
+                data_ts.append(image_ts[image_i])
                 image_i += 1
             else:
-                datas_t.append(points_ts[points_i])
+                data_ts.append(points_ts[points_i])
                 points_i += 1
 
-        return datas_t[0] if data_was_single else datas_t
+        if return_grid:
+            return [data_ts[0], grid_ts[0]] if data_was_single else [*data_ts, grid_ts]
+        else:
+            return data_ts[0] if data_was_single else data_ts
 
     def transform_image(
         self,
         image: Union[ImageArray, ImageTensor],
-        **kwargs) -> Union[ImageArray, ImageTensor]:
+        **kwargs,
+        ) -> Union[ImageArray, ImageTensor, List[Union[ImageArray, ImageTensor, Union[ImageGrid, List[ImageGrid]]]]]:
         raise ValueError("Subclasses of 'Transform' must implement 'transform_image' method.")
 
     def transform_points(

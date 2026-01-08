@@ -34,7 +34,7 @@ def foreground_fov_centre(
     data: LabelArray,
     use_patient_coords: bool = True,
     **kwargs) -> Optional[Union[Pixel, Voxel]]:
-    fov_d = foreground_fov(data, use_patient_coords=True, **kwargs)
+    fov_d = foreground_fov(data, use_patient_coords=use_patient_coords, **kwargs)
     if fov_d is None:
         return None
     fov_c = np.array(fov_d).sum(axis=0) / 2

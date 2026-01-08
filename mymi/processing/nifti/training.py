@@ -16,9 +16,9 @@ from mymi.utils import *
 def convert_to_registration_training_holdout(
     dataset: str,
     dest_dataset: Optional[str] = None,
-    fixed_study_id: str = 'study_1',
+    fixed_study: str = 'study_1',
     landmarks: Optional[LandmarkIDs] = 'all',
-    moving_study_id: str = 'study_0',
+    moving_study: str = 'study_0',
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
@@ -91,22 +91,22 @@ def convert_to_registration_training_holdout(
 
             # Load fixed data.
             pat = set.patient(p)
-            fixed_study = pat.study(fixed_study_id)
+            fixed_study = pat.study(fixed_study)
             fixed_ct = fixed_study.ct_data
             fixed_spacing = fixed_study.ct_spacing
             if landmarks is not None:
-                fixed_landmarks = fixed_study.landmark_data(landmarks=landmarks)
+                fixed_landmarks = fixed_study.landmarks_data(landmarks=landmarks)
             if regions is not None:
-                fixed_region_data = fixed_study.region_data(regions=regions)
+                fixed_regions_data = fixed_study.regions_data(regions=regions)
             
             # Load moving data.
-            moving_study = pat.study(moving_study_id)
+            moving_study = pat.study(moving_study)
             moving_ct = moving_study.ct_data
             assert moving_study.ct_spacing == fixed_spacing   # Images are pre-registered.
             if landmarks is not None:
-                moving_landmarks = moving_study.landmark_data(landmarks=landmarks)
+                moving_landmarks = moving_study.landmarks_data(landmarks=landmarks)
             if regions is not None:
-                moving_region_data = moving_study.region_data(regions=regions)
+                moving_regions_data = moving_study.regions_data(regions=regions)
 
             # # Normalise CT data. - Let the dataloader do this so we don't have to manually
             # calculate for each training dataset. For example, values will differ depending on 
@@ -119,8 +119,8 @@ def convert_to_registration_training_holdout(
                 # Resample fixed data.
                 fixed_ct = resample(fixed_ct, spacing=fixed_spacing, output_spacing=spacing)
                 if regions is not None:
-                    for r, d in fixed_region_data.items():
-                        fixed_region_data[r] = resample(d, spacing=fixed_spacing, output_spacing=spacing)
+                    for r, d in fixed_regions_data.items():
+                        fixed_regions_data[r] = resample(d, spacing=fixed_spacing, output_spacing=spacing)
                 # Landmarks shouldn't be resampled! Resampling just changes discrete measurements in physical space,
                 # landmarks are already in physical space.
                 # if landmarks is not None:
@@ -129,8 +129,8 @@ def convert_to_registration_training_holdout(
                 # Resample moving data.
                 moving_ct = resample(moving_ct, spacing=fixed_spacing, output_spacing=spacing)
                 if regions is not None:
-                    for r, d in moving_region_data.items():
-                        moving_region_data[r] = resample(d, spacing=fixed_spacing, output_spacing=spacing)
+                    for r, d in moving_regions_data.items():
+                        moving_regions_data[r] = resample(d, spacing=fixed_spacing, output_spacing=spacing)
                 # if landmarks is not None:
                 #     moving_landmarks = resample_landmarks(moving_landmarks, spacing=fixed_spacing, output_spacing=spacing)
 
@@ -142,8 +142,8 @@ def convert_to_registration_training_holdout(
                 if new_fixed_ct_size != fixed_ct_size:
                     pad_box = ((0, 0, 0), new_fixed_ct_size)
                     fixed_ct = pad(fixed_ct, pad_box)
-                    for r, d in fixed_region_data.items():
-                        fixed_region_data[r] = pad(d, pad_box)
+                    for r, d in fixed_regions_data.items():
+                        fixed_regions_data[r] = pad(d, pad_box)
 
                 # Pad moving data to ensure divisible by 2 ** size_factor.
                 moving_ct_size = moving_ct.shape
@@ -152,8 +152,8 @@ def convert_to_registration_training_holdout(
                 if new_moving_ct_size != moving_ct_size:
                     pad_box = ((0, 0, 0), new_moving_ct_size)
                     moving_ct = pad(moving_ct, pad_box)
-                    for r, d in moving_region_data.items():
-                        moving_region_data[r] = pad(d, pad_box)
+                    for r, d in moving_regions_data.items():
+                        moving_regions_data[r] = pad(d, pad_box)
 
                 # TODO: Pad landmarks.
 
@@ -189,7 +189,7 @@ def convert_to_registration_training_holdout(
                 n_channels = len(regions) + 1
                 label = np.zeros((n_channels, *fixed_ct.shape), dtype=bool)
                 mask = np.zeros((n_channels), dtype=bool)
-                for r, d in fixed_region_data.items():
+                for r, d in fixed_regions_data.items():
                     channel = regions.index(r) + 1
                     label[channel] = d
                     mask[channel] = True
@@ -212,7 +212,7 @@ def convert_to_registration_training_holdout(
                 n_channels = len(regions) + 1
                 label = np.zeros((n_channels, *fixed_ct.shape), dtype=bool)
                 mask = np.zeros((n_channels), dtype=bool)
-                for r, d in fixed_region_data.items():
+                for r, d in fixed_regions_data.items():
                     channel = regions.index(r) + 1
                     label[channel] = d
                     mask[channel] = True
@@ -339,7 +339,7 @@ def convert_to_segmentation_training_holdout(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            region_data = study.region_data(regions=regions)
+            regions_data = study.regions_data(regions=regions)
 
             # Normalise CT data.
             if normalise:
@@ -348,8 +348,8 @@ def convert_to_segmentation_training_holdout(
             # Resample data.
             if spacing:
                 ct_data = resample(ct_data, spacing=ct_spacing, output_spacing=spacing)
-                for r, d in region_data.items():
-                    region_data[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
+                for r, d in regions_data.items():
+                    regions_data[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
 
             # Pad data to ensure divisible by 2 ** size_factor.
             if size_factor is not None:
@@ -359,8 +359,8 @@ def convert_to_segmentation_training_holdout(
                 if new_ct_size != ct_size:
                     pad_box = ((0, 0, 0), new_ct_size)
                     ct_data = pad(ct_data, pad_box)
-                    for r, d in region_data.items():
-                        region_data[r] = pad(d, pad_box)
+                    for r, d in regions_data.items():
+                        regions_data[r] = pad(d, pad_box)
 
             # Save input data.
             filepath = os.path.join(dest_set.path, 'data', s, 'inputs', f"{sample_id}.npz")
@@ -371,7 +371,7 @@ def convert_to_segmentation_training_holdout(
             n_channels = len(regions) + 1
             label = np.zeros((n_channels, *ct_data.shape), dtype=bool)
             mask = np.zeros((n_channels), dtype=bool)
-            for r, d in region_data.items():
+            for r, d in regions_data.items():
                 channel = regions.index(r) + 1
                 label[channel] = d
                 mask[channel] = True

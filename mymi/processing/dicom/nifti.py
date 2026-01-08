@@ -11,7 +11,7 @@ from typing import *
 from tqdm import tqdm
 
 from mymi.datasets.dataset import CT_FROM_REGEXP
-from mymi.datasets.dicom import DicomDataset
+from mymi.datasets.dicom import DicomDataset, DicomStudy
 from mymi.datasets.nifti import NiftiDataset, create as create_nifti, exists as exists_nifti, recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
@@ -37,35 +37,38 @@ def convert_to_nifti(
     convert_dose: bool = True,
     convert_mr: bool = True,
     dest_dataset: Optional[str] = None,
+    dry_run: bool = True,
     filter_pats_by_landmarks: bool = False,
     filter_pats_by_regions: bool = False,
-    landmark_ids: Optional[LandmarkIDs] = 'all',
-    pat_ids: PatientIDs = 'all',
+    group: Optional[PatientGroups] = 'all',
+    landmark: Optional[LandmarkIDs] = 'all',
+    pat: PatientIDs = 'all',
     recreate: bool = False,
-    recreate_patients: bool = False,   # Setting to False allows us to append new patients without removing existing.
+    recreate_patient: bool = False,   # Setting to False allows us to append new patients without removing existing.
     recreate_ct: bool = False,         # Setting to False allows us to add new data to a patient without removing existing.
     recreate_dose: bool = False,
     recreate_landmarks: bool = False,
     recreate_regions: bool = False,
-    region_ids: Optional[RegionIDs] = 'all',
+    region: Optional[RegionIDs] = 'all',
+    study_sort: Optional[Callable[DicomStudy, int]] = None,
     ) -> None:
-    logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_studies', 'region_ids'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, region_ids))
+    logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_series', 'region'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, region))
     start = time()
 
     # Load all patients.
     dicom_set = DicomDataset(dataset)
-    okwargs = dict(pat_ids=pat_ids)
-    if filter_pats_by_landmarks and landmark_ids is not None: 
-        okwargs['landmark_ids'] = landmark_ids
-    if filter_pats_by_regions and region_ids is not None:
-        okwargs['region_ids'] = region_ids
+    okwargs = dict(group=group, pat=pat)
+    if filter_pats_by_landmarks and landmark is not None: 
+        okwargs['landmark'] = landmark
+    if filter_pats_by_regions and region is not None:
+        okwargs['region'] = region
     resolved_pat_ids = dicom_set.list_patients(**okwargs)
 
     # Create NIFTI dataset.
     dest_dataset = dataset if dest_dataset is None else dest_dataset
     if exists_nifti(dest_dataset):
         if recreate:
-            nifti_set = recreate_nifti(dest_dataset)
+            nifti_set = recreate_nifti(dest_dataset, dry_run=dry_run)
         else:
             nifti_set = NiftiDataset(dest_dataset)
     else:
@@ -98,19 +101,28 @@ def convert_to_nifti(
         filepath = os.path.join(nifti_set.path, f'__CT_FROM_{ct_from}__')
         open(filepath, 'w').close()
 
+    # Copy 'groups.csv' file.
+    filepath = os.path.join(dicom_set.path, 'groups.csv')
+    if os.path.exists(filepath):
+        destpath = os.path.join(nifti_set.path, 'groups.csv')
+        shutil.copy(filepath, destpath)
+
     # Create or load index.
+    # Each row of the index refers to a specific series.
     cols = {
         'dataset': str,
         'patient-id': str,
         'study-id': str,
         'series-id': str,
+        'modality': str,
         'dicom-dataset': str,
         'dicom-patient-id': str,
         'dicom-study-id': str,
         'dicom-series-id': str,
+        'dicom-modality': str,
     }
     filepath = os.path.join(nifti_set.path, 'index.csv')
-    if recreate or recreate_patients or not os.path.exists(filepath):
+    if recreate or not os.path.exists(filepath):
         index = pd.DataFrame(columns=cols.keys())
     else:
         index = load_csv(filepath, map_types=cols)
@@ -121,7 +133,7 @@ def convert_to_nifti(
 
     # Determine IDs.
     if anonymise_patients:
-        if recreate or recreate_patients or len(index) == 0:
+        if recreate or len(index) == 0:
             start_idx = 0
         else:
             existing_pat_ids = index['patient-id'].unique()
@@ -133,16 +145,15 @@ def convert_to_nifti(
 
     # Remove existing patient data.
     if not recreate:
-        if recreate_patients:
-            filepath = os.path.join(nifti_set.path, 'data', 'patients')
-            shutil.rmtree(filepath)
-        else:
-            # Remove series for any patients we're overwriting.
-            for ap in anon_pat_ids:
-                pat_dirpath = os.path.join(nifti_set.path, 'data', 'patients', ap)
-                if os.path.exists(pat_dirpath):
-                    study_ids = os.listdir(pat_dirpath)
-                    for s in study_ids:
+        # Remove series for any patients we're overwriting.
+        for ap in anon_pat_ids:
+            pat_dirpath = os.path.join(nifti_set.path, 'data', 'patients', ap)
+            if os.path.exists(pat_dirpath):
+                if recreate_patient:
+                    shutil.rmtree(pat_dirpath)
+                else:
+                    studies = os.listdir(pat_dirpath)
+                    for s in studies:
                         recreate_mods = [recreate_ct, recreate_dose, recreate_landmarks, recreate_regions]
                         mods = ['ct', 'dose', 'landmarks', 'regions']
                         for r, m in zip(recreate_mods, mods):
@@ -153,39 +164,44 @@ def convert_to_nifti(
     # Write all patient data.
     for p, ap in tqdm(zip(resolved_pat_ids, anon_pat_ids), total=len(resolved_pat_ids)):
         pat = dicom_set.patient(p)
+        logging.info(pat)
                 
-        study_ids = pat.list_studies()
-        anon_study_id = 0
-        for s in study_ids:
+        studys = pat.list_studies(sort=study_sort)
+        anon_study = 0
+        for s in studys:
             study = pat.study(s)
+            logging.info(study)
+
             if not study.has_ct:
+                logging.warning(f"Skipping study {study} due to no CT series. CT is required for RTSTRUCT reference geometry.")
                 continue
             
             # Get Nifti study ID.
             if anonymise_studies:
-                nifti_study_id = f'study_{anon_study_id}'
-                anon_study_id += 1
+                nifti_study = f'study_{anon_study}'
+                anon_study += 1
             else:
-                nifti_study_id = s
+                nifti_study = s
 
-            anon_series_id = 0
+            anon_series = 0
             if ct_from is None:
                 # Convert CT series.
-                ct_series_ids = study.list_series('ct')
-                for sr in ct_series_ids:
+                ct_serieses = study.list_series('ct')
+                for sr in ct_serieses:
                     series = study.series(sr, 'ct')
+                    logging.info(series)
                     
                     # Get Nifti series ID.
                     if anonymise_series:
-                        nifti_series_id = f'series_{anon_series_id}'
-                        anon_series_id += 1
+                        nifti_series = f'series_{anon_series}'
+                        anon_series += 1
                     else:
-                        nifti_series_id = sr
+                        nifti_series = sr
                     
                     # Create Nifti CT.
                     # Doesn't overwrite data, if we want to replace some existing data, need to use
                     # a 'recreate' tag, which will remove existing patient data.
-                    filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'ct', f'{nifti_series_id}.nii.gz')
+                    filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'ct', f'{nifti_series}.nii.gz')
                     if convert_ct and not os.path.exists(filepath):
                         save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
 
@@ -193,29 +209,32 @@ def convert_to_nifti(
                     data = {
                         'dataset': dest_dataset,
                         'patient-id': ap,
-                        'study-id': nifti_study_id,
-                        'series-id': nifti_series_id,
+                        'study-id': nifti_study,
+                        'series-id': nifti_series,
+                        'modality': 'ct',
                         'dicom-dataset': dataset,
                         'dicom-patient-id': p,
                         'dicom-study-id': s,
                         'dicom-series-id': sr,
+                        'dicom-modality': 'ct',
                     }
                     index = append_row(index, data)
 
                 # Convert MR series.
-                mr_series_ids = study.list_series('mr')
-                for sr in mr_series_ids:
+                mr_serieses = study.list_series('mr')
+                for sr in mr_serieses:
                     series = study.series(sr, 'mr')
+                    logging.info(series)
                     
                     # Get Nifti series ID.
                     if anonymise_series:
-                        nifti_series_id = f'series_{anon_series_id}'
-                        anon_series_id += 1
+                        nifti_series = f'series_{anon_series}'
+                        anon_series += 1
                     else:
-                        nifti_series_id = sr
+                        nifti_series = sr
                     
                     # Create Nifti MR.
-                    filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'mr', f'{nifti_series_id}.nii.gz')
+                    filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'mr', f'{nifti_series}.nii.gz')
                     if convert_mr and not os.path.exists(filepath):
                         save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
 
@@ -223,60 +242,111 @@ def convert_to_nifti(
                     data = {
                         'dataset': dataset,
                         'patient-id': ap,
-                        'study-id': nifti_study_id,
-                        'series-id': nifti_series_id,
+                        'study-id': nifti_study,
+                        'series-id': nifti_series,
+                        'modality': 'mr',
                         'dicom-dataset': dataset,
                         'dicom-patient-id': p,
                         'dicom-study-id': s,
                         'dicom-series-id': sr,
+                        'dicom-modality': 'mr',
                     }
                     index = append_row(index, data)
 
             # Convert RTSTRUCT series.
-            rtstruct_series_ids = study.list_series('rtstruct')
-            for sr in rtstruct_series_ids:
+            rtstruct_serieses = study.list_series('rtstruct')
+            for sr in rtstruct_serieses:
                 series = study.series(sr, 'rtstruct')
+                logging.info(series)
 
                 # Get Nifti series ID.
                 if anonymise_series:
-                    nifti_series_id = f'series_{anon_series_id}'
-                    anon_series_id += 1
+                    nifti_series = f'series_{anon_series}'
+                    anon_series += 1
                 else:
-                    nifti_series_id = sr
+                    nifti_series = sr
 
                 # Create region NIFTIs.
-                if region_ids is not None:
+                if region is not None:
                     ref_ct = series.ref_ct
-                    region_data = series.region_data(region_ids=region_ids, regions_ignore_missing=True)
-                    for r, data in region_data.items():
-                        filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'regions', nifti_series_id, f'{r}.nii.gz')
+                    print(series)
+                    print(region)
+                    regions_data = series.regions_data(region=region, regions_ignore_missing=True)
+                    for r, data in regions_data.items():
+                        filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'regions', nifti_series, f'{r}.nii.gz')
                         if not os.path.exists(filepath):
                             save_nifti(data, filepath, spacing=ref_ct.spacing, origin=ref_ct.origin)
 
+                    # Add index entry.
+                    data = {
+                        'dataset': dataset,
+                        'patient-id': ap,
+                        'study-id': nifti_study,
+                        'series-id': nifti_series,
+                        'modality': 'regions',
+                        'dicom-dataset': dataset,
+                        'dicom-patient-id': p,
+                        'dicom-study-id': s,
+                        'dicom-series-id': sr,
+                        'dicom-modality': 'rtstruct',
+                    }
+                    index = append_row(index, data)
+
                 # Create landmarks.
-                if landmark_ids is not None:
-                    lm_df = series.landmark_data(landmark_ids=landmark_ids, show_ids=False)
+                if landmark is not None:
+                    lm_df = series.landmarks_data(landmark=landmark, show_ids=False)
                     if lm_df is not None:
-                        filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'landmarks', f'{nifti_series_id}.csv')
+                        filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'landmarks', f'{nifti_series}.csv')
                         if not os.path.exists(filepath):
                             save_csv(lm_df, filepath)
 
+                        # Add index entry.
+                        data = {
+                            'dataset': dataset,
+                            'patient-id': ap,
+                            'study-id': nifti_study,
+                            'series-id': nifti_series,
+                            'modality': 'landmarks',
+                            'dicom-dataset': dataset,
+                            'dicom-patient-id': p,
+                            'dicom-study-id': s,
+                            'dicom-series-id': sr,
+                            'dicom-modality': 'rtstruct',
+                        }
+                        index = append_row(index, data)
+
             # Convert RTDOSE series.
-            rtdose_series_ids = study.list_series('rtdose')
-            for sr in rtdose_series_ids:
-                rtdose_series = study.series(sr, 'rtdose')
+            rtdose_serieses = study.list_series('rtdose')
+            for sr in rtdose_serieses:
+                series = study.series(sr, 'rtdose')
+                logging.info(series)
 
                 # Get Nifti series ID.
                 if anonymise_series:
-                    nifti_series_id = f'series_{anon_series_id}'
-                    anon_series_id += 1
+                    nifti_series = f'series_{anon_series}'
+                    anon_series += 1
                 else:
-                    nifti_series_id = sr
+                    nifti_series = sr
 
                 # Create RTDOSE NIFTI.
-                filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study_id, 'dose', f'{nifti_series_id}.nii.gz')
+                filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'dose', f'{nifti_series}.nii.gz')
                 if convert_dose and not os.path.exists(filepath):
-                    save_nifti(rtdose_series.data, filepath, spacing=rtdose_series.spacing, origin=rtdose_series.origin)
+                    save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
+
+                # Add index entry.
+                data = {
+                    'dataset': dataset,
+                    'patient-id': ap,
+                    'study-id': nifti_study,
+                    'series-id': nifti_series,
+                    'modality': 'dose',
+                    'dicom-dataset': dataset,
+                    'dicom-patient-id': p,
+                    'dicom-study-id': s,
+                    'dicom-series-id': sr,
+                    'dicom-modality': 'rtdose',
+                }
+                index = append_row(index, data)
 
     # Save index.
     if len(index) > 0:
@@ -322,9 +392,9 @@ def convert_to_nifti_replan(
 
     for i, pat_id in enumerate(tqdm(pat_ids)):
         # Get study IDs.
-        study_ids = study_df[study_df['patient-id'] == pat_id]['study-id'].values
+        studys = study_df[study_df['patient-id'] == pat_id]['study-id'].values
 
-        for j, study_id in enumerate(study_ids):
+        for j, study in enumerate(studys):
             # Get ID.
             if anonymise:
                 nifti_id = f'{i}-{j}'
@@ -337,13 +407,13 @@ def convert_to_nifti_replan(
                     'patient-id': nifti_id,
                     'origin-dataset': dicom_dataset,
                     'origin-patient-id': pat_id,
-                    'origin-study-id': study_id,
+                    'origin-study-id': study,
                 }
                 df = append_row(df, data)
 
             # Create CT NIFTI for study.
             pat = set.patient(pat_id)
-            study = pat.study(study_id)
+            study = pat.study(study)
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
             ct_origin = study.ct_origin
@@ -358,8 +428,8 @@ def convert_to_nifti_replan(
             nib.save(img, filepath)
 
             # Create region NIFTIs for study.
-            region_data = study.region_data(regions=regions, regions_ignore_missing=True)
-            for region, data in region_data.items():
+            regions_data = study.regions_data(regions=regions, regions_ignore_missing=True)
+            for region, data in regions_data.items():
                 img = Nifti1Image(data.astype(np.int32), affine)
                 filepath = os.path.join(nifti_set.path, 'data', 'regions', region, f'{nifti_id}.nii.gz')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)

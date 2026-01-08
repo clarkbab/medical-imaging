@@ -22,9 +22,9 @@ def create_voxelmorph_predictions(
     model: str,
     modelname: str,
     model_spacing: Spacing3D,
-    fixed_study_id: str = 'study_1',
+    fixed_study: str = 'study_1',
     landmarks: Optional[LandmarkIDs] = 'all',
-    moving_study_id: str = 'study_0',
+    moving_study: str = 'study_0',
     pad_shape: Optional[Size3D] = None,
     pat_ids: PatientIDs = 'all',
     register_ct: bool = True,
@@ -39,10 +39,10 @@ def create_voxelmorph_predictions(
         pat = set.patient(p)
         pat_regions = regions_to_list(regions, literals={ 'all': pat.list_regions })
         pat_landmarks = arg_to_list(landmarks, Landmark, literals={ 'all': pat.list_landmarks })
-        fixed_study = pat.study(fixed_study_id)
-        moving_study = pat.study(moving_study_id)
-        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study_id, p, moving_study_id)
-        transform_path = os.path.join(pred_base_path, 'dvf', f'{modelname}.hdf5')
+        fixed_study = pat.study(fixed_study)
+        moving_study = pat.study(moving_study)
+        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study, p, moving_study)
+        transform_path = os.path.join(pred_base_path, 'transform', f'{modelname}.hdf5')
         
         if register_ct:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -116,7 +116,7 @@ def create_voxelmorph_predictions(
                     continue
 
                 # Create moved region label.
-                moving_label = moving_study.region_data(regions=r)[r]
+                moving_label = moving_study.regions_data(regions=r)[r]
                 moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
@@ -128,7 +128,7 @@ def create_voxelmorph_predictions(
 
             # Load transform and fixed landmarks.
             transform = sitk_load_transform(transform_path)
-            fixed_lms = fixed_study.landmark_data(landmarks=pat_landmarks)
+            fixed_lms = fixed_study.landmarks_data(landmarks=pat_landmarks)
 
             # Transform landmarks.
             fixed_lm_data = fixed_lms[list(range(3))]

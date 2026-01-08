@@ -11,7 +11,7 @@ kwargs = dict(
     savepath=os.path.join(config.directories.files, 'MULTIORG', 'hanseg-g0.pdf'),
     show_legend=False,
     show_progress=True,
-    study_ids='all',
+    study='all',
     views='all',
     window_mask=(-1024, None),
 )

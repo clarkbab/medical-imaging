@@ -14,15 +14,16 @@ from .series import *
 class DicomStudy(IndexWithErrorsMixin, Study):
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
+        dataset: DatasetID,
+        pat: PatientID,
         id: StudyID,
         index: pd.DataFrame,
         index_policy: Dict[str, Any],
         index_errors: pd.DataFrame,
         ct_from: Optional['DicomStudy'] = None,
         region_map: Optional[RegionMap] = None):
-        super().__init__(dataset_id, pat_id, id, ct_from=ct_from, region_map=region_map)
+        super().__init__(dataset, pat, id, ct_from=ct_from, region_map=region_map)
+        self.__ct_from = ct_from
         self._index = index
         self._index_errors = index_errors
         self._index_policy = index_policy
@@ -42,26 +43,30 @@ class DicomStudy(IndexWithErrorsMixin, Study):
         self,
         modality: DicomModality,
         show_warning: bool = True) -> Optional[DicomSeries]:
-        series_ids = self.list_series(modality)
-        if show_warning and len(series_ids) > 1:
+        serieses = self.list_series(modality)
+        if show_warning and len(serieses) > 1:
             logging.warning(f"More than one '{modality}' series found for '{self}', defaulting to latest.")
-        return self.series(series_ids[-1], modality) if len(series_ids) > 0 else None
+        return self.series(serieses[-1], modality) if len(serieses) > 0 else None
 
     def has_series(
         self,
-        series_id: SeriesIDs,
+        series: SeriesIDs,
         modality: DicomModality,
         any: bool = False,
         **kwargs) -> bool:
-        real_ids = self.list_series(modality, series_id=series_id, **kwargs)
-        req_ids = arg_to_list(series_id, SeriesID)
+        real_ids = self.list_series(modality, series=series, **kwargs)
+        req_ids = arg_to_list(series, SeriesID)
         n_overlap = len(np.intersect1d(real_ids, req_ids))
         return n_overlap > 0 if any else n_overlap == len(req_ids)
 
+    @alias_kwargs((
+        ('sd', 'show_date'),
+        ('sf', 'shof_filepath'),
+    ))
     def list_series(
         self,
         modality: DicomModality,
-        series_id: SeriesIDs = 'all',
+        series: SeriesIDs = 'all',
         show_date: bool = False,
         show_filepath: bool = False) -> List[SeriesID]:
         if modality not in DicomModality.__args__:
@@ -71,10 +76,10 @@ class DicomStudy(IndexWithErrorsMixin, Study):
         index = index.sort_values(['series-date', 'series-time'], ascending=[True, True])
         ids = list(index['series-id'].unique())
 
-        # Filter by 'series_id'.
-        if series_id != 'all':
-            series_ids = arg_to_list(series_id, SeriesID)
-            ids = [i for i in ids if i in series_ids]
+        # Filter by 'series'.
+        if series != 'all':
+            serieses = arg_to_list(series, SeriesID)
+            ids = [i for i in ids if i in serieses]
 
         # Add extra info if requested.
         def append_info(s: SeriesID) -> str:
@@ -89,9 +94,6 @@ class DicomStudy(IndexWithErrorsMixin, Study):
 
         return ids
 
-    def __repr__(self) -> str:
-        return str(self)
-
     def series(
         self,
         id: SeriesID,
@@ -105,7 +107,7 @@ class DicomStudy(IndexWithErrorsMixin, Study):
             id = handle_idx_prefix(id, lambda: self.list_series(modality))
 
         if not self.has_series(id, modality):
-            raise ValueError(f"Series '{id}' not found for study '{self}'.")
+            raise ValueError(f"{modality.upper()} series '{id}' not found for study '{self}'.")
 
         # Get series-specific data.
         index = self._index[(self._index['modality'] == modality) & (self._index['series-id'] == id)].copy()
@@ -117,13 +119,13 @@ class DicomStudy(IndexWithErrorsMixin, Study):
             if self.__ct_from is not None:
                 return self.__ct_from.series(id, modality, **kwargs)
             else:
-                return CtSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
+                return DicomCtSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'mr':
-            return MrSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
+            return DicomMrSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtdose':
-            return RtDoseSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
+            return DicomRtDoseSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtplan':
-            return RtPlanSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
+            return DicomRtPlanSeries(self._dataset_id, self._pat_id, self._id, id, index, index_policy, **kwargs)
         elif modality == 'rtstruct':
             ref_study = self.__ct_from if self.__ct_from is not None else self
             ref_ct_id = index['mod-spec'][DICOM_RTSTRUCT_REF_CT_KEY]
@@ -137,7 +139,7 @@ class DicomStudy(IndexWithErrorsMixin, Study):
                 else:
                     ref_ct = ref_study.default_series('ct')
 
-            return RtStructSeries(self._dataset_id, self._pat_id, self._id, id, ref_ct, index, index_policy, region_map=self._region_map, **kwargs)
+            return DicomRtStructSeries(self._dataset_id, self._pat_id, self._id, id, ref_ct, index, index_policy, region_map=self._region_map, **kwargs)
 
     def series_modality(
         self,
@@ -151,15 +153,22 @@ class DicomStudy(IndexWithErrorsMixin, Study):
         return modality
 
     def __str__(self) -> str:
-        if self.__ct_from is None:
-            return f"DicomStudy({self._id}, dataset={self._dataset_id}, pat_id={self._pat_id})"
-        else:
-            return f"DicomStudy({self._id}, dataset={self._dataset_id}, pat_id={self._pat_id}, ct_from={self.__ct_from.dataset_id})"
+        return super().__str__(self.__class__.__name__)
 
 # Add 'has_{mod}' properties.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 for m in mods:
     setattr(DicomStudy, f'has_{m}', property(lambda self, m=m: self.default_series(m, show_warning=False) is not None))
+
+# Add 'list_{mod}_series' methods.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomStudy, f'list_{m}_series', lambda self, m=m: self.list_series(m))
+
+# Add '{mod}_series' methods.
+mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
+for m in mods:
+    setattr(DicomStudy, f'{m}_series', lambda self, series, m=m: self.series(series, m))
 
 # Add 'default_{mod}' properties.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
@@ -179,4 +188,4 @@ mods = ['landmarks', 'regions']
 for m in mods:
     setattr(DicomStudy, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'has_{m[:-1]}')(*args, **kwargs) if self.default_rtstruct is not None else False)
     setattr(DicomStudy, f'list_{m}', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'list_{m}')(*args, **kwargs) if self.default_rtstruct is not None else [])
-    setattr(DicomStudy, f'{m[:-1]}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'{m[:-1]}_data')(*args, **kwargs) if self.default_rtstruct is not None else None)
+    setattr(DicomStudy, f'{m}_data', lambda self, *args, m=m, **kwargs: getattr(self.default_rtstruct, f'{m}_data')(*args, **kwargs) if self.default_rtstruct is not None else None)

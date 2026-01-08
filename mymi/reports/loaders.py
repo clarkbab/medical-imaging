@@ -221,7 +221,7 @@ def create_multi_loader_figures(
             ct_data = x_b[0, 0]
             size = ct_data.shape
             spacing = TrainingDataset(datasets[0]).params['output-spacing']
-            region_data = dict((r, y_b[0, i + 1]) for i, r in enumerate(regions))
+            regions_data = dict((r, y_b[0, i + 1]) for i, r in enumerate(regions))
 
             # Start sample section.
             if i != 0:
@@ -233,7 +233,7 @@ def create_multi_loader_figures(
                     continue
 
                 label = y_b[0, i + 1].numpy()
-                region_data = { region: label }
+                regions_data = { region: label }
                 
                 # Start region section.
                 if i != 0:
@@ -249,7 +249,7 @@ def create_multi_loader_figures(
                 for view, page_coord in zip(views, img_coords):
                     # Set figure.
                     filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
-                    plot_patients(desc_b[0], size, spacing, centre=region, ct_data=x_b[0, 0].numpy(), region_data=region_data, savepath=filepath, show=False, show_extent=True, view=view)
+                    plot_patients(desc_b[0], size, spacing, centre=region, ct_data=x_b[0, 0].numpy(), regions_data=regions_data, savepath=filepath, show=False, show_extent=True, view=view)
 
                     # Add image to report.
                     pdf.image(filepath, *page_coord, w=img_width, h=img_height)

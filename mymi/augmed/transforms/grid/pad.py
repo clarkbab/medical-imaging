@@ -3,8 +3,9 @@ from typing import *
 from mymi.typing import *
 
 from ...utils import *
-from ..random import RandomTransform
+from ..identity import Identity
 from .grid import GridTransform
+from .random import RandomGridTransform
 
 # The API should allow complexity but reduce to simplicity.
 # E.g. rotation=5 -> rotation=(-5, 5, -5, 5) - for 2D - for each axis is a simple
@@ -22,29 +23,29 @@ from .grid import GridTransform
 # Probably, if they want to remove a random amount, use c=(0, 100).
 # pad_margin:
 # - cm=(80, 120) -> cm=(80, 120, 80, 120, 80, 120, 80, 120, 80, 120, 80, 120) for 3D.
-class RandomPad(RandomTransform):
+class RandomPad(RandomGridTransform):
     def __init__(
         self,
         # How do we handle the case where we want a symmetric pad?
         # For example, we may define pad as: (50, 50, 50, 50, 50, 50, 50, 50,)
-        pad: Optional[Union[Number, Tuple[Number, ...]]] = None,
-        pad_margin: Optional[Union[Number, Tuple[Number, ...]]] = None,
+        pad_range: Optional[Union[Number, Tuple[Number, ...]]] = None,
+        pad_margin_range: Optional[Union[Number, Tuple[Number, ...]]] = None,
         # Must keep 'centre' and 'centre_range' separate so we can specify image centre using 'centre'.
         centre: Union[Literal['centre'], Tuple[Union['centre', Number], ...], PointArray, PointTensor] = 'centre',
-        centre_offset: Union[Number, Tuple[Number, ...]] = 0.0,
+        centre_offset_range: Union[Number, Tuple[Number, ...]] = 0.0,
         # padped amounts are the same at both ends of each axis.
         # This should be configured per axis really, for example we might want want symmetry
         # along the x-axis only.
         symmetric: Union[bool, Tuple[bool, ...]] = False,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        assert pad is not None or pad_margin is not None
+        assert pad_range is not None or pad_margin_range is not None
         self.__symmetric = to_tensor(symmetric, broadcast=self._dim)
-        if pad is not None:
+        if pad_range is not None:
             # Handle pad from outside case.
             cr_vals_per_dim = 4
-            pad_range = expand_range_arg(pad, dim=self._dim, vals_per_dim=cr_vals_per_dim)
-            assert len(pad_range) == cr_vals_per_dim * self._dim, f"Expected 'pad' of length {cr_vals_per_dim * self._dim}, got {len(pad_range)}."
+            pad_range = expand_range_arg(pad_range, dim=self._dim, vals_per_dim=cr_vals_per_dim)
+            assert len(pad_range) == cr_vals_per_dim * self._dim, f"Expected 'pad_range' of length {cr_vals_per_dim * self._dim}, got {len(pad_range)}."
 
             # Ensure pad ranges allow symmetry.
             for i, s in enumerate(self.__symmetric):
@@ -62,8 +63,8 @@ class RandomPad(RandomTransform):
             # Handle pad from centre point and margin case.
             self.__pad_range = None
             cmr_vals_per_dim = 4
-            pad_margin_range = expand_range_arg(pad_margin, dim=self._dim, vals_per_dim=cmr_vals_per_dim)
-            assert len(pad_margin_range) == cmr_vals_per_dim * self._dim, f"Expected 'pad_margin' of length {cmr_vals_per_dim * self._dim}, got {len(pad_margin_range)}."
+            pad_margin_range = expand_range_arg(pad_margin_range, dim=self._dim, vals_per_dim=cmr_vals_per_dim)
+            assert len(pad_margin_range) == cmr_vals_per_dim * self._dim, f"Expected 'pad_margin_range' of length {cmr_vals_per_dim * self._dim}, got {len(pad_margin_range)}."
 
             # Ensure pad margin ranges allow symmetry.
             for i, s in enumerate(self.__symmetric):
@@ -76,17 +77,17 @@ class RandomPad(RandomTransform):
             centre = arg_to_list(centre, (int, float, str), broadcast=self._dim)
             assert len(centre) == self._dim, f"Expected 'centre' of length {self._dim}, got {len(centre)}."
             self.__centre = centre  # Can't be tensor as might have 'centre' str.
-            centre_offset_range = expand_range_arg(centre_offset, dim=self._dim, negate_lower=True)
-            assert len(centre_offset_range) == 2 * self._dim, f"Expected 'centre_offset' of length {2 * self._dim}, got {len(centre_offset_range)}."
+            centre_offset_range = expand_range_arg(centre_offset_range, dim=self._dim, negate_lower=True)
+            assert len(centre_offset_range) == 2 * self._dim, f"Expected 'centre_offset_range' of length {2 * self._dim}, got {len(centre_offset_range)}."
             dtype = torch.int32 if self._use_image_coords else torch.float32
             self.__centre_offset_range = to_tensor(centre_offset_range, dtype=dtype).reshape(self._dim, 2)
 
         self._params = dict(
             centre=self.__centre,
             centre_offset_range=self.__centre_offset_range,
+            dim=self._dim,
             pad_range=self.__pad_range,
             pad_margin_range=self.__pad_margin_range,
-            dim=self._dim,
             p=self._p,
         )
 
@@ -129,7 +130,7 @@ class RandomPad(RandomTransform):
             centre=to_tuple(self.__centre),
             centre_offset=to_tuple(self.__centre_offset.flatten()) if self.__centre_offset is not None else None,
         )
-        return super().__str__(self.__class__.__name__, **params)
+        return super().__str__(self.__class__.__name__, params)
 
 # centre:
 # - c='centre' -> image centre used for translation.
@@ -178,7 +179,7 @@ class Pad(GridTransform):
             centre=to_tuple(self.__centre),
             centre_offset=to_tuple(self.__centre_offset.flatten()) if self.__centre_offset is not None else None,
         )
-        return super().__str__(self.__class__.__name__, **params)
+        return super().__str__(self.__class__.__name__, params)
 
     def transform_grid(
         self,
@@ -243,9 +244,9 @@ class Pad(GridTransform):
             return_type = 'numpy'
         else:
             return_type = 'torch'
-        origin = to_tensor(origin, device=points.device)
-        size = to_tensor(size, device=points.device, dtype=torch.int32)
-        spacing = to_tensor(spacing, device=points.device)
+        origin = to_tensor(origin, device=points.device, dtype=points.dtype)
+        size = to_tensor(size, device=points.device, dtype=points.dtype)
+        spacing = to_tensor(spacing, device=points.device, dtype=points.dtype)
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
@@ -260,7 +261,7 @@ class Pad(GridTransform):
             pad_min_mm = origin_t
             pad_max_mm = origin_t + size_t * spacing_t
 
-            # pad points.
+            # Pad points.
             pad_mm = torch.stack([pad_min_mm, pad_max_mm]).to(points.device)
             print(pad_mm)
             to_keep = (points >= pad_mm[0]) & (points < pad_mm[1])

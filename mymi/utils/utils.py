@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-from pynvml_utils import nvidia_smi
+# from pynvml import nvidia_smi
 import sys
 from time import perf_counter
 from typing import *
@@ -79,7 +79,7 @@ def handle_idx_prefix(
         ids = list_ids() 
         if idx > len(ids) - 1:
             print(ids)
-            raise ValueError(f"Index {idx} out of range ({len(ids)} items).")
+            raise ValueError(f"Index ({idx}) was larger than list (len={len(ids)}).")
         id = ids[idx]
 
     return id
@@ -218,7 +218,7 @@ def gpu_usage() -> List[float]:
 
 def gpu_usage_nvml() -> List[float]:
     usages = []
-    nvsmi = nvidia_smi.getInstance()
+    # nvsmi = nvidia_smi.getInstance()
     results = nvsmi.DeviceQuery('memory.used')['gpu']
     for result in results:
         assert result['fb_memory_usage']['unit'] == 'MiB'

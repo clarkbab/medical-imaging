@@ -53,17 +53,17 @@ class TrainingDataset(Dataset):
 
     def list_samples(
         self,
-        splits: Optional[Splits] = 'all') -> List[SampleID]:
-        splits = arg_to_list(splits, Split, literals={ 'all': self.list_splits })
+        groups: Optional[PatientGroups] = 'all') -> List[SampleID]:
+        groups = arg_to_list(groups, PatientGroup, literals={ 'all': self.list_groups })
         samples = []
-        for s in splits:
-            split = self.split(s)
-            samples += split.list_samples()
+        for s in groups:
+            group = self.group(s)
+            samples += group.list_samples()
         samples = list(sorted(samples))
         return samples
 
-    def list_splits(self) -> List[HoldoutSplit]:
-        return list(self.index['split'].unique())
+    def list_groups(self) -> List[HoldoutSplit]:
+        return list(self.index['group'].unique())
     
     @property
     def landmarks(self) -> List[LandmarkID]:
@@ -71,8 +71,8 @@ class TrainingDataset(Dataset):
     
     @property
     def n_input_channels(self) -> int:
-        def_split = self.split(self.list_splits()[0])
-        def_sample = def_split.sample(def_split.list_samples()[0])
+        def_group = self.group(self.list_groups()[0])
+        def_sample = def_group.sample(def_group.list_samples()[0])
         input = def_sample.input
         n_channels = input.shape[0]
         return n_channels
@@ -99,7 +99,7 @@ class TrainingDataset(Dataset):
 
     def sample(self,
         id: SampleID) -> TrainingSample:
-        splits = self.list_splits()
+        groups = self.list_groups()
         for s in splits:
             split = self.split(s)
             samples = split.list_samples()

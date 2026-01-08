@@ -20,19 +20,25 @@ def ncc(
     return result
 
 def tre(
-    a: Union[LandmarksFrame, Points3D],
-    b: Union[LandmarksFrame, Points3D]) -> List[float]:
-    if isinstance(a, LandmarksFrame):
-        a = landmarks_to_data(a)
-    if isinstance(b, LandmarksFrame):
-        b = landmarks_to_data(b)
-    if a.shape != b.shape:
-        raise ValueError(f"Metric 'tre' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
+    a: Union[List[Point], PointsArray, LandmarksFrame],
+    b: Union[List[Point], PointsArray, LandmarksFrame],
+    ) -> Union[np.ndarray, pd.DataFrame]:
+    assert len(a) == len(b)
 
-    # Calculate euclidean distances.
-    tres = []
-    for ai, bi in zip(a, b):
-        tre = np.linalg.norm(bi - ai)
-        tres.append(tre)
-    
-    return tres
+    if isinstance(a, pd.DataFrame):
+        assert isinstance(b, pd.DataFrame)
+        return_type = 'frame'
+    else:
+        return_type = 'array'
+
+    if return_type == 'frame':
+        tre_df = a.merge(b, on=['patient-id', 'landmark-id'])
+        assert len(tre_df) == len(a), "Must have been different landmarks in a and b."
+        for i in range(3):
+            tre_df[f'diff-{i}'] = np.abs(tre_df[f'{i}_x'] - tre_df[f'{i}_y'])
+        tre_df['tre'] = np.sqrt(tre_df['diff-0'] ** 2 + tre_df['diff-1'] ** 2 + tre_df['diff-2'] ** 2)
+        tre_df = tre_df[['patient-id', 'landmark-id', 'diff-0', 'diff-1', 'diff-2', 'tre']]
+        return tre_df
+    else:
+        a, b = np.array(a), np.array(b)
+        return np.sqrt(((b - a) ** 2).sum(axis=1))

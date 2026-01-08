@@ -1,7 +1,7 @@
 from mymi.predictions.nifti import create_registrations
-from mymi.utils import grid_arg
+from mymi.utils import parse_arg
 
-loss_lambda = grid_arg('loss_lambda', float, 0.02)
+loss_lambda = parse_arg('loss_lambda', float, 0.02)
 
 dataset = "LUNG250M-4B"
 project = "IMREG"

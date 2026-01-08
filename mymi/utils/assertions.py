@@ -6,14 +6,17 @@ from typing import *
 from mymi.typing import *
 
 from .args import arg_to_list
-from .io import handle_filepath
+from .io import resolve_filepath
 
-def assert_writable(filepaths: FilePaths) -> None:
+def assert_writeable(filepaths: FilePaths) -> None:
     filepaths = arg_to_list(filepaths, FilePath)
     for f in filepaths:
-        f = handle_filepath(f)
-        if os.path.exists(f) and not os.access(f, os.W_OK):
-            raise PermissionError(f"File '{f}' is open or read-only, cannot overwrite.")
+        f = resolve_filepath(f)
+        if os.path.exists(f):
+            try:
+                open(f, 'a')
+            except (OSError, IOError):
+                raise PermissionError(f"File '{f}' is open or read-only, cannot overwrite.")
 
 def assert_image(d: Any) -> None:
     if not isinstance(d, np.ndarray) and not isinstance(d, torch.Tensor):

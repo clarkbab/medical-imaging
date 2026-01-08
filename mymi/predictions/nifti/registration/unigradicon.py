@@ -32,13 +32,13 @@ def create_unigradicon_finetuned_predictions(
     model: str,
     create_moved_dose: bool = True,
     create_moved_ct: bool = True,
-    landmark_ids: Optional[LandmarkIDs] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     pat_ids: PatientIDs = 'all',
-    region_ids: Optional[RegionIDs] = 'all',
+    regions: Optional[RegionIDs] = 'all',
     splits: Optional[Split] = 'all',
     use_io: bool = False,
     use_timing: bool = True) -> None:
-    logging.arg_log('Making UniGradICON (fine-tuned) predictions', ('dataset', 'model', 'region_ids'), (dataset, model, region_ids))
+    logging.arg_log('Making UniGradICON (fine-tuned) predictions', ('dataset', 'model', 'regions'), (dataset, model, regions))
 
     # Create timing table.
     if use_timing:
@@ -65,12 +65,12 @@ def create_unigradicon_finetuned_predictions(
         }
         with timer.record(data, enabled=use_timing):
             # Load images.
-            moving_pat_id, moving_study_id = p, 'study_0'
-            fixed_pat_id, fixed_study_id = p, 'study_1'
+            moving_pat_id, moving_study = p, 'study_0'
+            fixed_pat_id, fixed_study = p, 'study_1'
             moving_pat = set.patient(moving_pat_id)
             fixed_pat = set.patient(fixed_pat_id)
-            moving_study = moving_pat.study(moving_study_id)
-            fixed_study = fixed_pat.study(fixed_study_id)
+            moving_study = moving_pat.study(moving_study)
+            fixed_study = fixed_pat.study(fixed_study)
             moving_ct = moving_study.ct_data
             fixed_ct = fixed_study.ct_data
 
@@ -142,9 +142,9 @@ def create_unigradicon_finetuned_predictions(
                 save_nifti(moved_ct, moved_path, spacing=fixed_spacing, origin=fixed_origin)
 
             # Register regions.
-            if region_ids is not None:
-                region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
-                for r in region_ids:
+            if regions is not None:
+                regions = regions_to_list(regions, literals={ 'all': set.list_regions })
+                for r in regions:
                     if not moving_study.has_region(r):
                         continue
 
@@ -152,7 +152,7 @@ def create_unigradicon_finetuned_predictions(
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
                     fixed_origin = fixed_study.ct_origin
-                    moving_label = moving_study.region_data(region_ids=r)[r]
+                    moving_label = moving_study.regions_data(regions=r)[r]
                     moving_spacing = moving_study.ct_spacing
                     moving_origin = moving_study.ct_origin
                     transform = sitk_load_transform(transform_path)
@@ -179,10 +179,10 @@ def create_unigradicon_finetuned_predictions(
                     # subprocess.run(command)
 
             # Transform any fixed landmarks back to moving space.
-            if landmark_ids is not None:
+            if landmarks is not None:
                 transform = sitk_load_transform(transform_path)
-                if fixed_study.has_landmark(landmark_ids=landmark_ids):
-                    fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
+                if fixed_study.has_landmark(landmarks=landmarks):
+                    fixed_lm_df = fixed_study.landmarks_data(landmarks=landmarks)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)
                     if np.allclose(lm_data_t, lm_data):
@@ -211,13 +211,13 @@ def create_unigradicon_predictions(
     model: str,
     create_moved_dose: bool = True,
     create_moved_ct: bool = True,
-    landmark_ids: Optional[LandmarkIDs] = 'all',
+    landmarks: Optional[LandmarkIDs] = 'all',
     pat_ids: PatientIDs = 'all',
-    region_ids: Optional[RegionIDs] = 'all',
+    regions: Optional[RegionIDs] = 'all',
     splits: Optional[Split] = 'all',
     use_io: bool = False,
     use_timing: bool = True) -> None:
-    logging.arg_log('Making UniGradICON predictions', ('dataset', 'model', 'region_ids'), (dataset, model, region_ids))
+    logging.arg_log('Making UniGradICON predictions', ('dataset', 'model', 'regions'), (dataset, model, regions))
 
     # Create timing table.
     if use_timing:
@@ -241,16 +241,16 @@ def create_unigradicon_predictions(
         }
         with timer.record(data, enabled=use_timing):
             # Load details.
-            moving_pat_id, moving_study_id = p, 'study_0'
-            fixed_pat_id, fixed_study_id = p, 'study_1'
-            # moving/fixed_series_id = 'series_0' implicit.
+            moving_pat_id, moving_study = p, 'study_0'
+            fixed_pat_id, fixed_study = p, 'study_1'
+            # moving/fixed_series = 'series_0' implicit.
             moving_pat = set.patient(moving_pat_id)
             fixed_pat = set.patient(fixed_pat_id)
-            moving_study = moving_pat.study(moving_study_id)
-            fixed_study = fixed_pat.study(fixed_study_id)
-            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study_id, moving_pat_id, moving_study_id)
+            moving_study = moving_pat.study(moving_study)
+            fixed_study = fixed_pat.study(fixed_study)
+            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study, moving_pat_id, moving_study)
             moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
-            transform_path = os.path.join(reg_path, 'dvf', f'{model}.hdf5')
+            transform_path = os.path.join(reg_path, 'transform', f'{model}.hdf5')
 
             # Register CT images.
             if create_moved_ct:
@@ -286,9 +286,9 @@ def create_unigradicon_predictions(
                 save_nifti(moved_ct, moved_path, spacing=fixed_spacing, origin=fixed_origin)
 
             # Register regions.
-            if region_ids is not None:
-                region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
-                for r in region_ids:
+            if regions is not None:
+                regions = regions_to_list(regions, literals={ 'all': set.list_regions })
+                for r in regions:
                     if not moving_study.has_region(r):
                         continue
 
@@ -296,7 +296,7 @@ def create_unigradicon_predictions(
                     fixed_ct = fixed_study.ct_data
                     fixed_spacing = fixed_study.ct_spacing
                     fixed_origin = fixed_study.ct_origin
-                    moving_label = moving_study.region_data(region_ids=r)[r]
+                    moving_label = moving_study.regions_data(regions=r)[r]
                     moving_spacing = moving_study.ct_spacing
                     moving_origin = moving_study.ct_origin
                     transform = sitk_load_transform(transform_path)
@@ -323,10 +323,10 @@ def create_unigradicon_predictions(
                     # subprocess.run(command)
 
             # Transform any fixed landmarks back to moving space.
-            if landmark_ids is not None:
+            if landmarks is not None:
                 transform = sitk_load_transform(transform_path)
-                if fixed_study.has_landmark(landmark_ids=landmark_ids):
-                    fixed_lm_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
+                if fixed_study.has_landmark(landmarks=landmarks):
+                    fixed_lm_df = fixed_study.landmarks_data(landmarks=landmarks)
                     lm_data = fixed_lm_df[list(range(3))].to_numpy()
                     lm_data_t = sitk_transform_points(lm_data, transform)
                     if np.allclose(lm_data_t, lm_data):

@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+import fire
+
+def test(
+    normal_param: int,
+    makeitso: bool = False
+    ) -> None:
+    print(normal_param)
+    print(makeitso)
+
+fire.Fire(test)

@@ -60,7 +60,7 @@ def train_segmentation(
 
     # Create model.
     device = torch.device('cuda')
-    n_output_channels = len(region_ids) + 1
+    n_output_channels = len(regions) + 1
     module = get_module(arch, n_output_channels)
     if resume:
         model, _, ckpt_info = load_model(module, project, model_name, resume_ckpt, device=device, state='train')
@@ -159,7 +159,7 @@ def train_segmentation(
 
                 # Log images.
                 if interval_matches(epoch, step, val_image_interval, len(val_iter)):
-                    for i, r in enumerate(region_ids):
+                    for i, r in enumerate(regions):
                         channel = i + 1
 
                         # Skip channel if GT not present.

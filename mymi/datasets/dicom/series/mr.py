@@ -12,27 +12,22 @@ from mymi.utils import *
 
 from .series import DicomSeries
 
-class MrSeries(DicomSeries):
+class DicomMrSeries(DicomSeries):
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
-        study_id: StudyID,
+        dataset: DatasetID,
+        pat: PatientID,
+        study: StudyID,
         id: SeriesID,
         index: pd.DataFrame,
         index_policy: Dict[str, Any]) -> None:
-        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
+        super().__init__('mr', dataset, pat, study, id, index=index, index_policy=index_policy)
+        dspath = os.path.join(config.directories.datasets, 'dicom', self._dataset_id, 'data', 'patients')
         relpaths = list(index['filepath'])
-        abspaths = [os.path.join(datasetpath, p) for p in relpaths]
-        self._dataset_id = dataset_id
+        abspaths = [os.path.join(dspath, p) for p in relpaths]
         self.__filepaths = abspaths
-        self._id = id
-        self.__index = index
-        self.__index_policy = index_policy
-        self.__modality = 'mr'
-        self._pat_id = pat_id
-        self._study_id = study_id
 
+    @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
@@ -57,21 +52,6 @@ class MrSeries(DicomSeries):
         self,
         **kwargs) -> Fov3D:
         return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
-
-    @property
-    @ensure_loaded
-    def origin(self) -> Point3D:
-        return self.__origin
-
-    @property
-    @ensure_loaded
-    def size(self) -> Spacing3D:
-        return self.__data.shape
-
-    @property
-    @ensure_loaded
-    def spacing(self) -> Spacing3D:
-        return self.__spacing
 
     def __load_data(self) -> None:
         mr_dicoms = self.dicoms
@@ -111,7 +91,25 @@ class MrSeries(DicomSeries):
 
         self.__data = data
 
+    @property
+    @ensure_loaded
+    def origin(self) -> Point3D:
+        return self.__origin
+
+    @property
+    @ensure_loaded
+    def size(self) -> Spacing3D:
+        return self.__data.shape
+
+    @property
+    @ensure_loaded
+    def spacing(self) -> Spacing3D:
+        return self.__spacing
+
+    def __str__(self) -> str:
+        return super().__str__(self.__class__.__name__)
+
 # Add properties.
-props = ['dataset_id', 'filepaths', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'study_id']
+props = ['filepaths']
 for p in props:
-    setattr(MrSeries, p, property(lambda self, p=p: getattr(self, f'_{MrSeries.__name__}__{p}')))
+    setattr(DicomMrSeries, p, property(lambda self, p=p: getattr(self, f'_{DicomMrSeries.__name__}__{p}')))

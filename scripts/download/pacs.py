@@ -73,20 +73,20 @@ def download_patient_dicoms(
         error_df = append_row(error_df, data)
     
     # Download RTPLAN for each RTDOSE file.
-    for study_id, _, rtdose_sop_id in query_results:
+    for study, _, rtdose_sop_id in query_results:
         # Get RTPLAN ID.
-        filepath = image_filepath(pat_id, study_id, 'rtdose', rtdose_sop_id)
+        filepath = image_filepath(pat_id, study, 'rtdose', rtdose_sop_id)
         rtdose = pydicom.read_file(filepath)
         rtplan_id = rtdose.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
 
         # Query for RTPLAN file.
-        query_results = download_patient_rtplan_dicoms(pat_id, study_id, rtplan_id)
+        query_results = download_patient_rtplan_dicoms(pat_id, study, rtplan_id)
         
         if len(query_results) == 0:
             # Add error entry.
             data = {
                 'patient-id': pat_id,
-                'study-id': study_id,
+                'study-id': study,
                 'study-date': study_date,
                 'modality': 'rtplan',
                 'sop-id': rtplan_id,
@@ -98,18 +98,18 @@ def download_patient_dicoms(
         # Download RTSTRUCT for each RTPLAN file.
         for _, _, rtplan_sop_id in query_results:
             # Get RTSTRUCT ID.
-            filepath = image_filepath(pat_id, study_id, 'rtplan', rtplan_sop_id)
+            filepath = image_filepath(pat_id, study, 'rtplan', rtplan_sop_id)
             rtplan = pydicom.read_file(filepath)
             rtstruct_id = rtplan.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID
 
             # Query for RTSTRUCT file.
-            query_results = download_patient_rtstruct_dicoms(pat_id, study_id, rtstruct_id)
+            query_results = download_patient_rtstruct_dicoms(pat_id, study, rtstruct_id)
 
             if len(query_results) == 0:
                 # Add error entry.
                 data = {
                     'patient-id': pat_id,
-                    'study-id': study_id,
+                    'study-id': study,
                     'study-date': study_date,
                     'modality': 'rtstruct',
                     'sop-id': rtstruct_id,
@@ -121,21 +121,21 @@ def download_patient_dicoms(
             # Download CT series for each RTSTRUCT file.
             for _, _, rtstruct_sop_id in query_results:
                 # Get CT series ID.
-                filepath = image_filepath(pat_id, study_id, 'rtstruct', rtstruct_sop_id)
+                filepath = image_filepath(pat_id, study, 'rtstruct', rtstruct_sop_id)
                 rtstruct = pydicom.read_file(filepath)
-                ct_series_id = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
+                ct_series = rtstruct.ReferencedFrameOfReferenceSequence[0].RTReferencedStudySequence[0].RTReferencedSeriesSequence[0].SeriesInstanceUID
 
                 # Query CT files.
-                query_results = download_patient_ct_dicoms(pat_id, study_id, ct_series_id)
+                query_results = download_patient_ct_dicoms(pat_id, study, ct_series)
 
                 if len(query_results) == 0:
                     # Add error entry.
                     data = {
                         'patient-id': pat_id,
-                        'study-id': study_id,
+                        'study-id': study,
                         'study-date': study_date,
                         'modality': 'ct',
-                        'series-id': ct_series_id,
+                        'series-id': ct_series,
                         'parent-modality': 'rtstruct',
                         'parent-sop-id': rtstruct_sop_id,
                     }
@@ -153,116 +153,116 @@ def download_patient_rtdose_dicoms(
     query_results = queryPACS(pat_id, 'rtdose', start_date=start_date, end_date=end_date)
     print(query_results)
 
-    for study_id, series_id, sop_id in query_results:
+    for study, series, sop_id in query_results:
         # Create RTDOSE folder.
-        folder = series_folder(pat_id, study_id, 'rtdose')
+        folder = series_folder(pat_id, study, 'rtdose')
         os.makedirs(folder, exist_ok=True)
 
         # Download RTDOSE file.
         command = f"""
-powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study_id}' \
---key SeriesInstanceUID='{series_id}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
+powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study}' \
+--key SeriesInstanceUID='{series}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
 {PACS_REMOTE_PORT} --move {PACS_AE_TITLE} --output-directory '{folder}' --port {PACS_PORT}
         """
         logging.info(command)
         os.system(command)
 
         # Raise error if RTDOSE wasn't downloaded.
-        filepath = image_filepath(pat_id, study_id, 'rtdose', sop_id)
+        filepath = image_filepath(pat_id, study, 'rtdose', sop_id)
         if not os.path.exists(filepath):
-            raise_error(pat_id, study_id, 'rtdose', sop_id)
+            raise_error(pat_id, study, 'rtdose', sop_id)
 
     return query_results
 
 def download_patient_rtplan_dicoms(
     pat_id: typing.PatientID,
-    study_id: str,
+    study: str,
     rtplan_id: str) -> None:
-    logging.arg_log("Downloading patient RTPLAN dicoms", ('pat_id', 'study_id', 'rtplan_id'), (pat_id, study_id, rtplan_id))
+    logging.arg_log("Downloading patient RTPLAN dicoms", ('pat_id', 'study', 'rtplan_id'), (pat_id, study, rtplan_id))
 
     # Query for RTPLAN dicoms.
-    query_results = queryPACS(pat_id, 'rtplan', sop_id=rtplan_id, study_id=study_id) 
+    query_results = queryPACS(pat_id, 'rtplan', sop_id=rtplan_id, study=study) 
 
-    for study_id, series_id, sop_id in query_results:
+    for study, series, sop_id in query_results:
         # Create RTPLAN folder.
-        folder = series_folder(pat_id, study_id, 'rtplan')
+        folder = series_folder(pat_id, study, 'rtplan')
         os.makedirs(folder, exist_ok=True)
 
         # Download RTPLAN file.
         command = f"""
-powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study_id}' \
---key SeriesInstanceUID='{series_id}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
+powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study}' \
+--key SeriesInstanceUID='{series}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
 {PACS_REMOTE_PORT} --move {PACS_AE_TITLE} --output-directory '{folder}' --port {PACS_PORT}
         """
         logging.info(command)
         os.system(command)
 
         # Raise error if RTPLAN wasn't downloaded.
-        filepath = image_filepath(pat_id, study_id, 'rtplan', sop_id)
+        filepath = image_filepath(pat_id, study, 'rtplan', sop_id)
         if not os.path.exists(filepath):
-            raise_error(pat_id, study_id, 'rtplan', sop_id)
+            raise_error(pat_id, study, 'rtplan', sop_id)
 
     return query_results
 
 def download_patient_rtstruct_dicoms(
     pat_id: typing.PatientID,
-    study_id: str,
+    study: str,
     rtstruct_id: str) -> None:
-    logging.arg_log("Downloading patient RTSTRUCT dicoms", ('pat_id', 'study_id', 'rtstruct_id'), (pat_id, study_id, rtstruct_id))
+    logging.arg_log("Downloading patient RTSTRUCT dicoms", ('pat_id', 'study', 'rtstruct_id'), (pat_id, study, rtstruct_id))
 
     # Query for RTSTRUCT dicoms.
-    query_results = queryPACS(pat_id, 'rtstruct', sop_id=rtstruct_id, study_id=study_id) 
+    query_results = queryPACS(pat_id, 'rtstruct', sop_id=rtstruct_id, study=study) 
 
-    for study_id, series_id, sop_id in query_results:
+    for study, series, sop_id in query_results:
         # Create RTSTRUCT folder.
-        folder = series_folder(pat_id, study_id, 'rtstruct')
+        folder = series_folder(pat_id, study, 'rtstruct')
         os.makedirs(folder, exist_ok=True)
 
         # Download RTSTRUCT file.
         command = f"""
-powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study_id}' \
---key SeriesInstanceUID='{series_id}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
+powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study}' \
+--key SeriesInstanceUID='{series}' --key SOPInstanceUID='{sop_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
 {PACS_REMOTE_PORT} --move {PACS_AE_TITLE} --output-directory '{folder}' --port {PACS_PORT}
         """
         logging.info(command)
         os.system(command)
 
         # Raise error if RTSTRUCT wasn't downloaded.
-        filepath = image_filepath(pat_id, study_id, 'rtstruct', sop_id)
+        filepath = image_filepath(pat_id, study, 'rtstruct', sop_id)
         if not os.path.exists(filepath):
-            raise_error(pat_id, study_id, 'rtstruct', sop_id)
+            raise_error(pat_id, study, 'rtstruct', sop_id)
 
     return query_results
 
 def download_patient_ct_dicoms(
     pat_id: typing.PatientID,
-    study_id: str,
-    ct_series_id: str) -> List[Tuple[str, str]]:
-    logging.arg_log("Downloading patient CT dicoms", ('pat_id', 'study_id', 'ct_series_id'), (pat_id, study_id, ct_series_id))
+    study: str,
+    ct_series: str) -> List[Tuple[str, str]]:
+    logging.arg_log("Downloading patient CT dicoms", ('pat_id', 'study', 'ct_series'), (pat_id, study, ct_series))
 
     # Query for CT dicoms.
-    query_results = queryPACS(pat_id, 'ct', series_id=ct_series_id, study_id=study_id)
+    query_results = queryPACS(pat_id, 'ct', series=ct_series, study=study)
     print(query_results)
 
-    for study_id, series_id in query_results:
+    for study, series in query_results:
         # Create CT folder.
-        folder = series_folder(pat_id, study_id, 'ct')
+        folder = series_folder(pat_id, study, 'ct')
         os.makedirs(folder, exist_ok=True)
 
         # Download CT files.
         command = f"""
-powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study_id}' \
---key SeriesInstanceUID='{series_id}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
+powershell movescu --verbose --study --key QueryRetrieveLevel=IMAGE --key PatientID={pat_id} --key StudyInstanceUID='{study}' \
+--key SeriesInstanceUID='{series}' --aetitle {PACS_AE_TITLE} --call {PACS_REMOTE_AE_TITLE} {PACS_REMOTE_IP} \
 {PACS_REMOTE_PORT} --move {PACS_AE_TITLE} --output-directory '{folder}' --port {PACS_PORT}
         """
         logging.info(command)
         os.system(command)
 
         # Raise error if CT wasn't downloaded.
-        folder = series_folder(pat_id, study_id, 'ct')
+        folder = series_folder(pat_id, study, 'ct')
         files = os.listdir(folder)
         if len(files) == 0:
-            raise_error(pat_id, study_id, 'ct', series_id)
+            raise_error(pat_id, study, 'ct', series)
 
     return query_results
 
@@ -270,10 +270,10 @@ def queryPACS(
     pat_id: typing.PatientID,
     modality: Literal['ct', 'rtdose', 'rtplan', 'rtstruct'],
     end_date: Optional[datetime] = None,
-    series_id: str = '*',
+    series: str = '*',
     sop_id: str = '*',
     start_date: Optional[datetime] = None,
-    study_id: str = '*') -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    study: str = '*') -> Union[List[Tuple[str, str]], List[Tuple[str, str]]]:
     # Determine query retrieve level.
     if modality == 'ct':
         level = 'SERIES'
@@ -294,8 +294,8 @@ def queryPACS(
         ds.QueryRetrieveLevel = level
         ds.Modality = modality
         ds.StudyDate = '*'      # Filter dates in python - faster than using the query.
-        ds.SeriesInstanceUID = series_id
-        ds.StudyInstanceUID = study_id
+        ds.SeriesInstanceUID = series
+        ds.StudyInstanceUID = study
         if level == 'IMAGE':
             ds.SOPInstanceUID = sop_id
 
@@ -346,18 +346,18 @@ def parse_date(s: str) -> datetime:
 
 def study_folder(
     pat_id: typing.PatientID,
-    study_id: str):
-    return os.path.join(config.directories.files, 'patient-specific-models', 'data', 'dcmFiles', str(pat_id), study_id)
+    study: str):
+    return os.path.join(config.directories.files, 'patient-specific-models', 'data', 'dcmFiles', str(pat_id), study)
 
 def series_folder(
     pat_id: typing.PatientID,
-    study_id: str,
+    study: str,
     modality: Literal['ct', 'rtdose', 'rtplan', 'rtstruct']) -> str:
-    return os.path.join(study_folder(pat_id, study_id), modality)
+    return os.path.join(study_folder(pat_id, study), modality)
 
 def image_filepath(
     pat_id: typing.PatientID,
-    study_id: str,
+    study: str,
     modality: Literal['ct', 'rtdose', 'rtplan', 'rtstruct'],
     sop_id: str) -> str:
     if modality == 'rtdose':
@@ -366,11 +366,11 @@ def image_filepath(
         prefix = 'RP'
     elif modality == 'rtstruct':
         prefix = 'RS'
-    return os.path.join(series_folder(pat_id, study_id, modality), f'{prefix}.{sop_id}')
+    return os.path.join(series_folder(pat_id, study, modality), f'{prefix}.{sop_id}')
 
 def raise_error(
     pat_id: str,
-    study_id: str,
+    study: str,
     modality: Literal['ct', 'rtdose', 'rtplan', 'rtstruct'],
     sop_id: str) -> None:
-    raise ValueError(f"No '{modality}' ({sop_id}) downloaded for patient '{pat_id}', study '{study_id}'.")
+    raise ValueError(f"No '{modality}' ({sop_id}) downloaded for patient '{pat_id}', study '{study}'.")

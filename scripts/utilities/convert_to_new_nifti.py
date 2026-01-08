@@ -88,7 +88,7 @@ for p in pat_ids:
 
         # Move transform.
         src = os.path.join(predpath, m, 'ct', f'{p}-0_warp.{warp_ext}')
-        dest = os.path.join(datapath, 'predictions', 'registration', 'patients', p, 'study_0', p, 'study_1', m, 'dvf', f'series_0.{warp_ext}')
+        dest = os.path.join(datapath, 'predictions', 'registration', 'patients', p, 'study_0', p, 'study_1', m, 'transform', f'series_0.{warp_ext}')
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(src, dest)
 

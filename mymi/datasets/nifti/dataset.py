@@ -11,6 +11,7 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ..dataset import CT_FROM_REGEXP, Dataset, DatasetType
+from ..dicom import DicomDataset
 from ..mixins import IndexMixin
 from ..region_map import RegionMap
 from .patient import NiftiPatient
@@ -19,31 +20,29 @@ class NiftiDataset(IndexMixin, Dataset):
     def __init__(
         self,
         id: DatasetID) -> None:
-        self.__path = os.path.join(config.directories.datasets, 'nifti', str(id))
-        if not os.path.exists(self.__path):
-            raise ValueError(f"NiftiDataset '{id}' not found. Dirpath: {self.__path}")
+        self._path = os.path.join(config.directories.datasets, 'nifti', str(id))
+        if not os.path.exists(self._path):
+            raise ValueError(f"No nifti dataset '{id}' found at path: {self._path}")
         ct_from = None
-        for f in os.listdir(self.__path):
+        for f in os.listdir(self._path):
             match = re.match(CT_FROM_REGEXP, f)
             if match:
                 ct_from = match.group(1)
         ct_from = NiftiDataset(ct_from) if ct_from is not None else None
         super().__init__(id, ct_from=ct_from)
 
-    @staticmethod
-    def ensure_loaded(fn: Callable) -> Callable:
-        def wrapper(self, *args, **kwargs):
-            if not hasattr(self, '_index'):
-                self.__load_data()
-            return fn(self, *args, **kwargs)
-        return wrapper
+    @property
+    def dicom(self) -> DicomDataset:
+        ds = self._index['dicom-dataset'].unique().tolist()
+        assert len(ds) == 1
+        return DicomDataset(ds[0])
 
     def has_patient(
         self,
-        pat_id: PatientID = 'all',
+        pat: PatientID = 'all',
         all: bool = False) -> bool:
         all_pats = self.list_patients()
-        subset_pats = self.list_patients(pat_id=pat_id)
+        subset_pats = self.list_patients(pat=pat)
         n_overlap = len(np.intersect1d(all_pats, subset_pats))
         return n_overlap == len(all_pats) if all else n_overlap > 0
 
@@ -58,52 +57,55 @@ class NiftiDataset(IndexMixin, Dataset):
         landmarks = list(sorted(np.unique(landmarks)))
         return landmarks
 
+    @Dataset.ensure_loaded
     def list_patients(
         self,
         exclude: Optional[PatientIDs] = None,
-        pat_id: PatientIDs = 'all',    # Saves on filtering code elsewhere.
-        region_id: RegionIDs = 'all',
-        splits: Splits = 'all') -> List[PatientID]:
+        group: PatientGroups = 'all',
+        pat: PatientIDs = 'all',    # Saves on filtering code elsewhere.
+        region: RegionIDs = 'all',
+        ) -> List[PatientID]:
         # Load patients from filenames.
-        dirpath = os.path.join(self.__path, 'data', 'patients')
+        dirpath = os.path.join(self._path, 'data', 'patients')
         all_ids = list(sorted(os.listdir(dirpath)))
 
-        # Filter by 'region_id'.
+        # Filter by 'region'.
         ids = all_ids.copy()
-        if region_id != 'all':
-            region_ids = regions_to_list(region_id)
-            all_region_ids = self.list_regions()
+        if region != 'all':
+            regions = regions_to_list(region)
+            all_regions = self.list_regions()
 
-            # # Check that 'region_ids' are valid.
-            # for r in region_ids:
-            #     if not r in all_region_ids:
+            # # Check that 'regions' are valid.
+            # for r in regions:
+            #     if not r in all_regions:
             #         logging.warning(f"Filtering by region '{r}' but it doesn't exist in dataset '{self}'.")
 
             def filter_fn(p: PatientID) -> bool:
-                pat_region_ids = self.patient(p).list_regions(region_ids=region_ids)
-                if len(pat_region_ids) > 0:
+                pat_regions = self.patient(p).list_regions(region=regions)
+                if len(pat_regions) > 0:
                     return True
                 else:
                     return False
             ids = list(filter(filter_fn, ids))
 
-        # Filter by 'splits'.
-        if splits != 'all':
-            filepath = os.path.join(self.__path, 'splits.csv')
-            if not os.path.exists(filepath):
-                raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
-            split_df = load_csv(filepath)
-            splits = arg_to_list(splits, Split, literals={ 'all': self.list_splits })
-            all_splits = self.list_splits()
+        # Filter by 'group'.
+        if group != 'all':
+            if self._groups is None:
+                raise ValueError(f"File 'groups.csv' not found for dicom dataset '{self._id}'.")
+            all_groups = self.list_groups()
+            groups = arg_to_list(group, PatientGroup, literals={ 'all': all_groups })
+            for g in groups:
+                if g not in all_groups:
+                    raise ValueError(f"Group {g} not found.")
 
-            # # Check that 'region_ids' are valid.
-            # for s in splits:
-            #     if not s in all_splits:
-            #         logging.warning(f"Filtering by split '{s}' but it doesn't exist in dataset '{self}'.")
-
-            def filter_fn(pat_id: PatientID) -> bool:
-                pat_split = split_df[split_df['patient-id'] == pat_id].iloc[0]['split']
-                if pat_split in splits:
+            def filter_fn(p: PatientID) -> bool:
+                pat_groups = self._groups[self._groups['patient-id'] == p]
+                if len(pat_groups) == 0:
+                    return False
+                elif len(pat_groups) > 1:
+                    raise ValueError(f"Patient {p} is a member of more than one group.")
+                pat_group = pat_groups.iloc[0]['group-id']
+                if pat_group in groups:
                     return True
                 else:
                     return False
@@ -114,9 +116,9 @@ class NiftiDataset(IndexMixin, Dataset):
             exclude = arg_to_list(exclude, PatientID)
             ids = [p for p in ids if p not in exclude]
 
-        # Filter by 'pat_id'.
-        if pat_id != 'all':
-            pat_ids = arg_to_list(pat_id, PatientID)
+        # Filter by 'pat'.
+        if pat != 'all':
+            pat_ids = arg_to_list(pat, PatientID)
 
             # # Check that 'pat_ids' are valid.
             # for p in pat_ids:
@@ -164,38 +166,42 @@ class NiftiDataset(IndexMixin, Dataset):
 
     def list_regions(
         self,
-        pat_id: PatientIDs = 'all') -> List[RegionID]:
+        pat: PatientIDs = 'all',
+        region: RegionIDs = 'all',  # Used for filtration.
+        ) -> List[RegionID]:
         # Load all patients.
-        pat_ids = self.list_patients(pat_id=pat_id)
+        pat_ids = self.list_patients(pat=pat)
 
-        # Get patient regions.
+        # Trawl the depths for region IDs.
         ids = []
         for p in pat_ids:
-            pat_region_ids = self.patient(p).list_regions()
-            ids += pat_region_ids
+            pat = self.patient(p)
+            study_ids = pat.list_studies()
+            for s in study_ids:
+                study = pat.study(s)
+                series_ids = study.list_regions_series()
+                for s in series_ids:
+                    series = study.regions_series(s)
+                    ids += series.list_regions(region=region)
         ids = list(str(i) for i in np.unique(ids))
 
         return ids
 
-    def list_splits(self) -> List[Split]:
-        filepath = os.path.join(self.__path, 'splits.csv')
-        if not os.path.exists(filepath):
-            raise ValueError(f"Holdout split file doesn't exist for dataset '{self}'.")
-        split_df = load_csv(filepath)
-        splits = list(sorted(split_df['split'].unique()))
-        return splits
+    def _load_data(self) -> None:
+        # Load groups.
+        filepath = os.path.join(self._path, 'groups.csv')
+        self._groups = load_csv(filepath) if os.path.exists(filepath) else None
 
-    def __load_data(self) -> None:
         # Load index.
-        filepath = os.path.join(self.__path, 'index.csv')
+        filepath = os.path.join(self._path, 'index.csv')
         if os.path.exists(filepath):
-            map_types = { 'dicom-patient-id': str, 'patient-id': str, 'study-id': str, 'data-id': str }
+            map_types = { 'dicom-patient-id': str, 'patient-id': str, 'study-id': str, 'series-id': str }
             self._index = load_csv(filepath, map_types=map_types)
         else:
             self._index = None
     
         # Load excluded labels.
-        filepath = os.path.join(self.__path, 'excluded-labels.csv')
+        filepath = os.path.join(self._path, 'excluded-labels.csv')
         if os.path.exists(filepath):
             self.__excluded_labels = read_csv(filepath).astype({ 'patient-id': str })
             self.__excluded_labels = self.__excluded_labels.sort_values(['patient-id', 'region'])
@@ -210,14 +216,14 @@ class NiftiDataset(IndexMixin, Dataset):
             self.__excluded_labels = None
 
         # Load group index.
-        filepath = os.path.join(self.__path, 'group-index.csv')
+        filepath = os.path.join(self._path, 'group-index.csv')
         if os.path.exists(filepath):
             self.__group_index = read_csv(filepath).astype({ 'patient-id': str })
         else:
             self.__group_index = None
 
         # Load region map.
-        filepath = os.path.join(self.__path, 'region-map.yaml')
+        filepath = os.path.join(self._path, 'region-map.yaml')
         if os.path.exists(filepath):
             self.__region_map = RegionMap(load_yaml(filepath))
         else:
@@ -227,7 +233,7 @@ class NiftiDataset(IndexMixin, Dataset):
     def __load_patient_regions_report(
         self,
         exists_only: bool = False) -> Union[DataFrame, bool]:
-        filepath = os.path.join(self.__path, 'reports', 'region-count.csv')
+        filepath = os.path.join(self._path, 'reports', 'region-count.csv')
         if os.path.exists(filepath):
             if exists_only:
                 return True
@@ -243,13 +249,14 @@ class NiftiDataset(IndexMixin, Dataset):
     def n_patients(self) -> int:
         return len(self.list_patients())
 
-    @ensure_loaded
+    @Dataset.ensure_loaded
     def patient(
         self,
         id: Optional[PatientID] = None,
+        group: PatientGroups = 'all',
         n: Optional[int] = None,
         **kwargs) -> NiftiPatient:
-        id = handle_idx_prefix(id, self.list_patients)
+        id = handle_idx_prefix(id, lambda: self.list_patients(group=group))
         if n is not None:
             if id is not None:
                 raise ValueError("Cannot specify both 'id' and 'n'.")
@@ -268,15 +275,12 @@ class NiftiDataset(IndexMixin, Dataset):
         return NiftiPatient(self._id, id, ct_from=ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
 
     @property
-    @ensure_loaded
+    @Dataset.ensure_loaded
     def region_map(self) -> Optional[RegionMap]:
         return self.__region_map
 
     def __str__(self) -> str:
-        if self._ct_from is None:
-            return f"NiftiDataset({self._id})"
-        else:
-            return f"NiftiDataset({self._id}, ct_from={self._ct_from.id})"
+        return super().__str__(self.__class__.__name__)
 
     @property
     def type(self) -> DatasetType:

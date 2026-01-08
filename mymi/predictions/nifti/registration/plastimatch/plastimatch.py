@@ -17,13 +17,13 @@ def create_plastimatch_predictions(
     create_coefs: bool = True,
     create_moved_ct: bool = True,
     create_moved_dose: bool = True,
-    fixed_study_id: StudyID = 'study_1',
-    landmark_ids: Optional[LandmarkIDs] = 'all',
+    fixed_study: StudyID = 'study_1',
+    landmarks: Optional[LandmarkIDs] = 'all',
     lung_region: str = 'Lungs',
     model: str = 'plastimatch',
-    moving_study_id: StudyID = 'study_0',
+    moving_study: StudyID = 'study_0',
     pat_ids: PatientIDs = 'all',
-    region_ids: Optional[RegionIDs] = 'all',
+    regions: Optional[RegionIDs] = 'all',
     save_as_labels: bool = False,
     splits: Splits = 'all',
     use_timing: bool = True) -> None:
@@ -51,8 +51,8 @@ def create_plastimatch_predictions(
         }
         with timer.record(data, enabled=use_timing):
             pat = set.patient(p)
-            fixed_study = pat.study(fixed_study_id)
-            moving_study = pat.study(moving_study_id)
+            fixed_study = pat.study(fixed_study)
+            moving_study = pat.study(moving_study)
 
             # Check for isotropic voxel spacing.
             fixed_spacing = fixed_study.ct_spacing
@@ -65,7 +65,7 @@ def create_plastimatch_predictions(
                 pm_config = f.read()
 
             # Replace template placeholders. Paths must be relative to the container home path.
-            pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study_id, p, moving_study_id)
+            pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study, p, moving_study)
             fixed_path = fixed_study.ct_filepath
             moving_path = moving_study.ct_filepath
             moved_path = os.path.join(pred_base, 'plastimatch', f'ct.nii.gz')
@@ -106,7 +106,7 @@ def create_plastimatch_predictions(
             if save_as_labels:
                 output_path = os.path.join(set.path, 'data', 'patients', p, s, 'regions', 'series_1')
             else:
-                pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study_id, p, moving_study_id)
+                pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study, p, moving_study)
 
             # Convert transform to SimpleITK and save.
             filepath = os.path.join(pred_base, 'plastimatch', 'bspline_coef.txt')
@@ -148,7 +148,7 @@ def create_plastimatch_predictions(
             bspline.SetParameters(coefs)    # Must be set after domain.
             transform.AddTransform(bspline)
             transform.AddTransform(affine)
-            filepath = os.path.join(pred_base, 'dvf', f'{model}.hdf5')
+            filepath = os.path.join(pred_base, 'transform', f'{model}.hdf5')
             sitk_save_transform(transform, filepath)
 
             # Create moved image.
@@ -157,18 +157,18 @@ def create_plastimatch_predictions(
                 filepath = os.path.join(pred_base, 'ct', f'{model}.nii.gz')
                 save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
-            if region_ids is not None:
-                pat_regions = regions_to_list(region_ids, literals={ 'all': pat.list_regions })
+            if regions is not None:
+                pat_regions = regions_to_list(regions, literals={ 'all': pat.list_regions })
                 for r in pat_regions:
                     # Perform transform.
-                    moving_label = moving_study.region_data(region_ids=r)[r]
+                    moving_label = moving_study.regions_data(regions=r)[r]
                     moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                     filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
                     save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
-            if landmark_ids is not None:
-                fixed_lms_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
+            if landmarks is not None:
+                fixed_lms_df = fixed_study.landmarks_data(landmarks=landmarks)
                 if fixed_lms_df is not None:
                     fixed_lms = fixed_lms_df[list(range(3))].to_numpy()
                     moved_lms = sitk_transform_points(fixed_lms, transform)

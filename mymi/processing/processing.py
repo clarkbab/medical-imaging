@@ -165,7 +165,7 @@ def convert_brain_crop_to_training(
                         continue
 
                 # Load label data.
-                label = patient.region_data(region=region)[region]
+                label = patient.regions_data(region=region)[region]
 
                 # Resample data.
                 if spacing is not None:

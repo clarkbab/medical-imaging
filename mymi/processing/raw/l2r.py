@@ -34,15 +34,15 @@ def convert_l2r_lung_ct_to_nifti() -> None:
             pat_id = s.split('_')[1]
             study_part = s.split('_')[2].replace('.nii.gz', '') 
             if study_part == 'insp':
-                study_id = 'study_1'
+                study = 'study_1'
             elif study_part == 'exp':
-                study_id = 'study_0'
+                study = 'study_0'
 
             # Shift CT.
             ct, spacing, origin = load_nifti(ctpath)
             ct -= 1000
             spacing = tuple(np.abs(spacing))
-            destpath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'ct', 'series_0.nii.gz')
+            destpath = os.path.join(set.path, 'data', 'patients', pat_id, study, 'ct', 'series_0.nii.gz')
             os.makedirs(os.path.dirname(destpath), exist_ok=True)
             save_nifti(ct, filepath, spacing=spacing, origin=origin)
 
@@ -50,6 +50,6 @@ def convert_l2r_lung_ct_to_nifti() -> None:
             lpath = os.path.join(lungpath, s)
             lmask, spacing, origin = load_nifti(lpath)
             spacing = tuple(np.abs(spacing))
-            destpath = os.path.join(set.path, 'data', 'patients', pat_id, study_id, 'regions', 'series_1', 'Lung.nii.gz')
+            destpath = os.path.join(set.path, 'data', 'patients', pat_id, study, 'regions', 'series_1', 'Lung.nii.gz')
             os.makedirs(os.path.dirname(destpath), exist_ok=True)
             save_nifti(lmask, filepath, spacing=spacing, origin=origin)

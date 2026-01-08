@@ -14,14 +14,14 @@ from mymi.utils import *
 def create_deeds_predictions(
     dataset: str,
     create_moved_dose: bool = True,
-    fixed_study_id: StudyID = 'study_1',
-    landmark_ids: Optional[LandmarkIDs] = 'all',
+    fixed_study: StudyID = 'study_1',
+    landmarks: Optional[LandmarkIDs] = 'all',
     lung_region: str = 'Lungs',
     model: str = 'deeds',
-    moving_study_id: StudyID = 'study_0',
+    moving_study: StudyID = 'study_0',
     pat_ids: PatientIDs = 'all',
     preprocess_images: bool = True,
-    region_ids: Optional[RegionIDs] = 'all',
+    regions: Optional[RegionIDs] = 'all',
     save_as_labels: bool = False,
     splits: Splits = 'all',
     use_timing: bool = True) -> None:
@@ -48,8 +48,8 @@ def create_deeds_predictions(
         }
         with timer.record(data, enabled=use_timing):
             pat = set.patient(p)
-            fixed_study = pat.study(fixed_study_id)
-            moving_study = pat.study(moving_study_id)
+            fixed_study = pat.study(fixed_study)
+            moving_study = pat.study(moving_study)
 
             # Check for isotropic voxel spacing.
             fixed_spacing = fixed_study.ct_spacing
@@ -65,11 +65,11 @@ def create_deeds_predictions(
                         # Resample to isotropic spacing.
                         fixed_data = fixed_study.ct_data
                         fixed_data = resample(fixed_data, origin=fixed_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
-                        fixed_label = fixed_study.region_data(region_ids=lung_region)[lung_region]
+                        fixed_label = fixed_study.regions_data(regions=lung_region)[lung_region]
                         fixed_label = resample(fixed_label, origin=fixed_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
                         moving_data = moving_study.ct_data
                         moving_data = resample(moving_data, origin=moving_study.ct_origin, output_origin=moving_study.ct_origin, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
-                        moving_label = moving_study.region_data(region_ids=lung_region)[lung_region]
+                        moving_label = moving_study.regions_data(regions=lung_region)[lung_region]
                         moving_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=moving_study.ct_origin, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
                     else:
                         model_spacing = fixed_study.ct_spacing
@@ -137,7 +137,7 @@ def create_deeds_predictions(
                 if save_as_labels:
                     output_path = os.path.join(set.path, 'data', 'patients', p, s, 'regions', 'series_1')
                 else:
-                    pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study_id, p, moving_study_id)
+                    pred_base = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study, p, moving_study)
 
                 filepath = os.path.join(temp_dir, 'output_dense_disp.nii.gz')
                 dvf, _, _ = load_nifti(filepath)
@@ -157,7 +157,7 @@ def create_deeds_predictions(
                     transform.AddTransform(dvf_transform)
                 else:
                     transform = dvf_to_sitk_transform(dvf, fixed_study.ct_spacing, fixed_study.ct_origin)
-                filepath = os.path.join(pred_base, 'dvf', f'{model}.hdf5')
+                filepath = os.path.join(pred_base, 'transform', f'{model}.hdf5')
                 sitk_save_transform(transform, filepath)
 
                 # Create moved image.
@@ -165,18 +165,18 @@ def create_deeds_predictions(
                 filepath = os.path.join(pred_base, 'ct', f'{model}.nii.gz')
                 save_nifti(moved_ct, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
-                if region_ids is not None:
-                    pat_regions = regions_to_list(region_ids, literals={ 'all': pat.list_regions })
+                if regions is not None:
+                    pat_regions = regions_to_list(regions, literals={ 'all': pat.list_regions })
                     for r in pat_regions:
                         # Perform transform.
-                        moving_label = moving_study.region_data(region_ids=r)[r]
+                        moving_label = moving_study.regions_data(regions=r)[r]
                         moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                         filepath = os.path.join(pred_base, 'regions', r, f'{model}.nii.gz')
                         os.makedirs(os.path.dirname(filepath), exist_ok=True)
                         save_nifti(moved_label, filepath, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
-                if landmark_ids is not None:
-                    fixed_lms_df = fixed_study.landmark_data(landmark_ids=landmark_ids)
+                if landmarks is not None:
+                    fixed_lms_df = fixed_study.landmarks_data(landmarks=landmarks)
                     if fixed_lms_df is not None:
                         fixed_lms = fixed_lms_df[list(range(3))].to_numpy()
                         moved_lms = sitk_transform_points(fixed_lms, transform)

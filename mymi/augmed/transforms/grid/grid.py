@@ -36,7 +36,8 @@ class GridTransform(Transform):
         image: Union[ImageArray, ImageTensor, LabelArray, LabelTensor, List[Union[ImageArray, ImageTensor, LabelArray, LabelTensor]]],
         spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
         origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
-        return_grid: bool = False) -> Union[ImageArrayWithFov, ImageTensorWithFov, List[Union[ImageArrayWithFov, ImageTensorWithFov]]]:
+        return_grid: bool = False,
+        ) -> Union[ImageArray, ImageTensor, List[Union[ImageArray, ImageTensor, Union[ImageGrid, List[ImageGrid]]]]]:
         images, image_was_single = arg_to_list(image, (np.ndarray, torch.Tensor), return_matched=True)
         return_types = ['numpy' if isinstance(i, np.ndarray) else 'torch' for i in images]
         origins = arg_to_list(origin, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(images))
@@ -56,31 +57,37 @@ class GridTransform(Transform):
 
         # Crop images.
         image_ts = []
-        for i, (image, dim, sz, sp, o, dev, rt) in enumerate(zip(images, dims, sizes, spacings, origins, devices, return_types)):
+        grid_ts = []
+        for image, dim, sz, sp, o, dev, rt in zip(images, dims, sizes, spacings, origins, devices, return_types):
             # Get new FOV.
-            size_t, spacing_t, origin_t = self.transform_grid(sz, sp, o)
+            grid_t = self.transform_grid(sz, sp, o)
 
             # Get resample points.
-            points_mm_t = grid_points(size_t, spacing_t, origin_t)
-            points_mm_t = to_tensor(points_mm, device=image.device)
+            points = grid_points(*grid_t)
+            points_t = to_tensor(points, device=image.device)
 
             # Reshape to image size.
-            points_mm_t = points_mm_t.reshape(*to_tuple(size_t), self._dim)
+            size_t, _, _ = grid_t
+            points_t = points_t.reshape(*to_tuple(size_t), self._dim)
 
             # Perform resample.
-            image_t = grid_sample(image, points_mm_t, spacing=sp, origin=o)
+            print('grid resample')
+            print(image.dtype)
+            image_t = grid_sample(image, sp, o, points_t)
+            print(image_t.dtype)
 
             # Convert to return types.
             if rt == 'numpy': 
                 image_t = to_array(image_t)
                 if return_grid:
-                    grid_t = tuple(to_array(f) for f in grid_t)
+                    grid_t = tuple(to_array(g) for g in grid_t)
+            image_ts.append(image_t)
             if return_grid:
-                image_ts.append((image_t, grid_t))
-            else:
-                image_ts.append(image_t)
+                grid_ts.append(grid_t)
 
-        if image_was_single:
-            return image_ts[0]
+        # 'return_grid' just adds a list of grids at the end (or single if only one image)
+        if return_grid:
+            res = [image_ts[0], grid_ts[0]] if image_was_single else [*image_ts, grid_ts]
+            return res
         else:
-            return image_ts
+            return image_ts[0] if image_was_single else image_ts

@@ -15,7 +15,7 @@ models=[
 kwargs = dict(
     dry_run=False,
     pat_ids=['PMCC_ReIrrad_L08', 'PMCC_ReIrrad_L14'],
-    # region_ids=None,
+    # regions=None,
     # warp_ct=False,
 )
 convert_registrations_from_lung_preprocessed(dataset, dest_dataset, models, **kwargs)

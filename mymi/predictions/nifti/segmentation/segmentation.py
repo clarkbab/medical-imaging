@@ -22,7 +22,7 @@ from mymi.utils import *
 
 def get_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     model: Union[ModelName, pl.LightningModule],
     model_region: Regions,
     model_spacing: Spacing3D,
@@ -134,7 +134,7 @@ def get_multi_segmenter_prediction_nnunet_bootstrap(
 
 def get_multi_segmenter_prediction(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     model: Union[ModelName, pl.LightningModule],
     model_region: Regions,
     model_spacing: Spacing3D,
@@ -249,7 +249,7 @@ def get_multi_segmenter_prediction(
 
 def get_segmenter_prediction(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     region: str,
     loc_centre: Voxel,
     segmenter: Union[pl.LightningModule, ModelName],
@@ -767,7 +767,7 @@ def create_segmenter_predictions_v2(
 
 def load_multi_segmenter_prediction(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     model: ModelName,
     crop_type: str = 'brain',
     exists_only: bool = False,
@@ -793,7 +793,7 @@ def load_multi_segmenter_prediction(
 
 def load_multi_segmenter_prediction_dict(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     model: ModelName,
     model_region: Regions,
     region: Optional[Regions] = None,
@@ -846,31 +846,31 @@ def load_multi_segmenter_prediction_timings(
 
 def load_segmenter_predictions(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     model: str,
     exists_only: bool = False,
     regions: Regions = 'all',
-    series_id: str = 'series_1',
-    study_id: str = 'study_0') -> Union[np.ndarray, bool]:
+    series: str = 'series_1',
+    study: str = 'study_0') -> Union[np.ndarray, bool]:
 
     # Load predictions.
     set = NiftiDataset(dataset)
     regions = regions_to_list(regions, literals={ 'all': set.list_regions })
-    region_data = {}
+    regions_data = {}
     for r in regions:
-        filepath = os.path.join(set.path, 'data', 'predictions', pat_id, study_id, 'regions', series_id, r, f'{model}.nii.gz')
+        filepath = os.path.join(set.path, 'data', 'predictions', pat_id, study, 'regions', series, r, f'{model}.nii.gz')
         if not os.path.exists(filepath):
             if exists_only:
                 return False
             else:
                 raise ValueError(f"Prediction not found for dataset '{dataset}', patient '{pat_id}', segmenter '{segmenter}' with localiser '{localiser}'. Path: {filepath}")
         data, _, _ = load_nifti(filepath)
-        region_data[r] = data
+        regions_data[r] = data
     
     if exists_only:
         return True
 
-    return region_data
+    return regions_data
 
 def load_segmenter_predictions_timings(
     datasets: Union[str, List[str]],
@@ -893,7 +893,7 @@ def load_segmenter_predictions_timings(
 
 def save_patient_segmenter_prediction(
     dataset: str,
-    pat_id: PatientID,
+    pat: PatientID,
     localiser: ModelName,
     segmenter: ModelName,
     data: np.ndarray) -> None:
@@ -907,21 +907,21 @@ def save_patient_segmenter_prediction(
 
 def load_moved_data(
     dataset: str,
-    moving_pat_id: PatientID,
-    moving_study_id: StudyID,
-    fixed_pat_id: PatientID,
-    fixed_study_id: StudyID,
+    moving_pat: PatientID,
+    moving_study: StudyID,
+    fixed_pat: PatientID,
+    fixed_study: StudyID,
     model: str,
     regions: Optional[Regions] = 'all') -> Tuple[CtImageArray, RegionArrays]:
     # Load moved CT.
     set = NiftiDataset(dataset)
-    basepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', moving_pat_id, moving_study_id, fixed_pat_id, fixed_study_id, model)
+    basepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', moving_pat_id, moving_study, fixed_pat_id, fixed_study, model)
     filepath = os.path.join(basepath, 'ct.nii.gz')
     moved_ct, _, _ = load_nifti(filepath)
 
     # Load moved labels.
     if regions is not None:
-        moving_study = set.patient(moving_pat_id).study(moving_study_id)
+        moving_study = set.patient(moving_pat_id).study(moving_study)
         regions = regions_to_list(regions, literals={ 'all': moving_study.list_regions })
         moved_regions = {}
         for r in regions:

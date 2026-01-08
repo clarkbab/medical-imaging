@@ -23,13 +23,13 @@ def convert_registration_predictions_to_dicom(
     convert_moved: bool = False,
     convert_moving: bool = False,
     dest_dataset: Optional[DatasetID] = None,
-    dest_fixed_study_id: str = 'idx:1',
-    fixed_study_id: str = 'study_1',
-    landmark_ids: Optional[LandmarkIDs] = None,
-    moving_study_id: str = 'study_0',
+    dest_fixed_study: str = 'idx:1',
+    fixed_study: str = 'study_1',
+    landmarks: Optional[LandmarkIDs] = None,
+    moving_study: str = 'study_0',
     pat_ids: PatientIDs = 'all',
     recreate: bool = False,
-    region_ids: Optional[RegionIDs] = None,
+    regions: Optional[RegionIDs] = None,
     use_rtdose_template: bool = True)  -> None:
     # Get dest dataset.
     dest_dataset = dataset if dest_dataset is None else dest_dataset
@@ -44,10 +44,10 @@ def convert_registration_predictions_to_dicom(
     for p in tqdm(pat_ids):
         # Write fixed/moving data.
         pat = set.patient(p)
-        study_ids = [moving_study_id, fixed_study_id]
+        studys = [moving_study, fixed_study]
         converts = [convert_moving, convert_fixed]
         moving_ref_cts = None   # Required for 'moved' landmarks - in moving image space.
-        for s, convert_study in zip(study_ids, converts):
+        for s, convert_study in zip(studys, converts):
             study = pat.study(s)
 
             # Write CTs.
@@ -55,7 +55,7 @@ def convert_registration_predictions_to_dicom(
             if study.has_ct:
                 ct_dicoms = to_ct_dicoms(study.ct_data, study.ct_spacing, study.ct_origin, p, s)
                 ref_cts = ct_dicoms
-                if s == moving_study_id:
+                if s == moving_study:
                     moving_ref_cts = ct_dicoms
                 if convert_ct and convert_study:
                     for i, c in enumerate(ct_dicoms):
@@ -64,8 +64,8 @@ def convert_registration_predictions_to_dicom(
                         c.save_as(filepath)
 
             # Write RTSTRUCT (regions and landmarks).
-            if convert_study and (landmark_ids is not None or region_ids is not None) and (study.has_landmark_data or study.has_region_data):
-                rtstruct_dicom = to_rtstruct_dicom(ref_cts, region_data=study.region_data(region_ids=region_ids), landmark_data=study.landmark_data(landmark_ids=landmark_ids))
+            if convert_study and (landmarks is not None or regions is not None) and (study.has_landmarks_data or study.has_regions_data):
+                rtstruct_dicom = to_rtstruct_dicom(ref_cts, regions_data=study.regions_data(regions=regions), landmarks_data=study.landmarks_data(landmarks=landmarks))
                 filepath = os.path.join(base_path, p, s, 'rtstruct', 'series_1.dcm')
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 rtstruct_dicom.save_as(filepath)
@@ -78,10 +78,10 @@ def convert_registration_predictions_to_dicom(
                 rtdose_dicom.save_as(filepath)
 
         # Load moved data.
-        _, moved_ct, moved_region_data, moved_landmark_data, moved_dose = load_registration(dataset, p, model, fixed_study_id=fixed_study_id, landmark_ids=landmark_ids, moving_study_id=moving_study_id, region_ids=region_ids)
+        _, moved_ct, moved_dose, moved_landmarks_data, moved_regions_data = load_registration(dataset, p, model, study=fixed_study, landmarks=landmarks, moving_study=moving_study, regions=regions)
 
         # Write moved CT.
-        fixed_study = pat.study(fixed_study_id)
+        fixed_study = pat.study(fixed_study)
         moved_ref_cts = None
         if convert_ct and convert_moved and moved_ct is not None:
             moved_ref_cts = to_ct_dicoms(moved_ct, fixed_study.ct_spacing, fixed_study.ct_origin, p, model)
@@ -92,16 +92,16 @@ def convert_registration_predictions_to_dicom(
                     c.save_as(filepath)
         
         # Write moved landmarks to moving study.
-        if convert_moved and moved_landmark_data is not None:
-            rtstruct_dicom = to_rtstruct_dicom(moving_ref_cts, landmark_data=moved_landmark_data)
-            filepath = os.path.join(base_path, p, moving_study_id, 'rtstruct', f'{model}.dcm')
+        if convert_moved and moved_landmarks_data is not None:
+            rtstruct_dicom = to_rtstruct_dicom(moving_ref_cts, landmarks_data=moved_landmarks_data)
+            filepath = os.path.join(base_path, p, moving_study, 'rtstruct', f'{model}.dcm')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             if convert_moved or not os.path.exists(filepath):
                 rtstruct_dicom.save_as(filepath)
 
         # Write moved RTSTRUCT (regions only, landmarks belong to moving study).
-        if convert_moved and moved_region_data is not None:
-            rtstruct_dicom = to_rtstruct_dicom(moved_ref_cts, region_data=moved_region_data)
+        if convert_moved and moved_regions_data is not None:
+            rtstruct_dicom = to_rtstruct_dicom(moved_ref_cts, regions_data=moved_regions_data)
             filepath = os.path.join(base_path, p, model, 'rtstruct', 'series_1.dcm')
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             if convert_moved or not os.path.exists(filepath):
@@ -112,7 +112,7 @@ def convert_registration_predictions_to_dicom(
             if use_rtdose_template:
                 # Use an existing rtdose file from the dest dataset.
                 dest_pat = dest_set.patient(p)
-                dest_fixed_study = dest_pat.study(dest_fixed_study_id)
+                dest_fixed_study = dest_pat.study(dest_fixed_study)
                 if dest_fixed_study.has_rtdose:
                     rtdose_template = dest_fixed_study.default_rtdose.dicom
                     # Dose has been resample to the fixed CT spacing when transform was applied.
@@ -126,9 +126,9 @@ def create_registered_dataset(
     dataset: str,
     dest_dataset: str,
     fill: Union[float, Literal['min']] = -2000,
-    fixed_study_id: str = 'study_1',
+    fixed_study: str = 'study_1',
     landmarks: Optional[LandmarkIDs] = 'all',
-    moving_study_id: str = 'study_0',
+    moving_study: str = 'study_0',
     regions: Optional[Regions] = 'all',
     **kwargs) -> None:
     logging.arg_log('Creating registered dataset', ('dataset', 'dest_dataset'), (dataset, dest_dataset))
@@ -149,7 +149,7 @@ def create_registered_dataset(
     pat_ids = set.list_patients()
     for p in tqdm(pat_ids):
         # Perform rigid registration.
-        moved_ct, moved_region_data, moved_landmark_data, transform = rigid_registration(dataset, p, moving_study_id, p, fixed_study_id, fill=fill, landmarks=landmarks, regions=regions, regions_ignore_missing=True, **kwargs)
+        moved_ct, moved_regions_data, moved_landmarks_data, transform = rigid_registration(dataset, p, moving_study, p, fixed_study, fill=fill, landmarks=landmarks, regions=regions, regions_ignore_missing=True, **kwargs)
 
         # Don't do this - it messes up visualisation. Just do it during training/inference.
         # # Fill in padding values.
@@ -163,24 +163,24 @@ def create_registered_dataset(
         # Save moved data.
         fixed_spacing = fixed_study.ct_spacing
         fixed_origin = fixed_study.ct_origin
-        moved_study = dest_set.patient(p, check_path=False).study(moving_study_id, check_path=False)
+        moved_study = dest_set.patient(p, check_path=False).study(moving_study, check_path=False)
         filepath = os.path.join(moved_study.path, 'ct', 'series_0.nii.gz')
         save_nifti(moved_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
-        if moved_region_data is not None:
-            for r, moved_r in moved_region_data.items():
+        if moved_regions_data is not None:
+            for r, moved_r in moved_regions_data.items():
                 filepath = os.path.join(moved_study.path, 'regions', 'series_1', f'{r}.nii.gz')
                 save_nifti(moved_r, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
-        if moved_landmark_data is not None:
+        if moved_landmarks_data is not None:
             filepath = os.path.join(moved_study.path, 'landmarks', 'series_1.csv')
-            save_csv(moved_landmark_data[landmark_cols], filepath)
+            save_csv(moved_landmarks_data[landmark_cols], filepath)
 
         # Save transform - we'll need this to propagate fixed landmarks to non-registered moving images.
         # TRE is typically calculated in the moving image space. 
-        dest_fixed_study = dest_set.patient(p, check_path=False).study(fixed_study_id, check_path=False)
-        filepath = os.path.join(dest_fixed_study.path, 'dvf', 'series_0.tfm')
+        dest_fixed_study = dest_set.patient(p, check_path=False).study(fixed_study, check_path=False)
+        filepath = os.path.join(dest_fixed_study.path, 'transform', 'series_0.tfm')
         sitk_save_transform(transform, filepath)
 
         # Add fixed data.
@@ -192,14 +192,14 @@ def create_registered_dataset(
         save_nifti(fixed_ct, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         if regions is not None:
-            fixed_region_data = fixed_study.region_data(regions=regions, regions_ignore_missing=True)
-            if fixed_region_data is not None:
-                for r, fixed_r in fixed_region_data.items():
+            fixed_regions_data = fixed_study.regions_data(regions=regions, regions_ignore_missing=True)
+            if fixed_regions_data is not None:
+                for r, fixed_r in fixed_regions_data.items():
                     filepath = os.path.join(dest_fixed_study.path, 'regions', 'series_1', f'{r}.nii.gz')
                     save_nifti(fixed_r, filepath, spacing=fixed_spacing, origin=fixed_origin)
 
         if landmarks is not None:
-            fixed_landmark_data = fixed_study.landmark_data(landmarks=landmarks)
-            if fixed_landmark_data is not None:
+            fixed_landmarks_data = fixed_study.landmarks_data(landmarks=landmarks)
+            if fixed_landmarks_data is not None:
                 filepath = os.path.join(dest_fixed_study.path, 'landmarks', 'series_1.csv')
-                save_csv(fixed_landmark_data[landmark_cols], filepath)
+                save_csv(fixed_landmarks_data[landmark_cols], filepath)

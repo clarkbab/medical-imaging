@@ -25,7 +25,7 @@ def plot_heatmap(
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = None,
     legend_loc: Union[str, Tuple[float, float]] = 'upper right',
     pred_data: Optional[Dict[str, np.ndarray]] = None,
-    region_data: Optional[Dict[str, np.ndarray]] = None,
+    regions_data: Optional[Dict[str, np.ndarray]] = None,
     savepath: Optional[str] = None,
     show: bool = True,
     show_colorbar: bool = True,
@@ -51,12 +51,12 @@ def plot_heatmap(
 
     # Plot patient regions.
     size = heatmap.shape
-    plot_patients(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin_mm=crop_margin_mm, ct_data=ct_data, latex=latex, legend_loc=legend_loc, region_data=region_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
+    plot_patients(id, size, spacing, alpha_region=alpha_region, aspect=aspect, ax=ax, crop=crop, crop_margin_mm=crop_margin_mm, ct_data=ct_data, latex=latex, legend_loc=legend_loc, regions_data=regions_data, show=False, show_legend=False, idx=idx, view=view, **kwargs)
 
     if crop is not None:
         # Convert 'crop' to 'Box2D' type.
         if type(crop) == str:
-            crop = __get_region_crop(region_data[crop], crop_margin_mm, spacing, view)     # Crop was 'region_data' key.
+            crop = __get_region_crop(regions_data[crop], crop_margin_mm, spacing, view)     # Crop was 'regions_data' key.
         elif type(crop) == np.ndarray:
             crop = __get_region_crop(crop, crop_margin_mm, spacing, view)                  # Crop was 'np.ndarray'.
         else:

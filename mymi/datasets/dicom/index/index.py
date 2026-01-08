@@ -15,6 +15,7 @@ from mymi import logging
 from mymi.utils import *
 
 from ...dataset import CT_FROM_REGEXP
+from ..series import DicomModality
 
 filepath = os.path.join(os.path.dirname(__file__), 'default-policy.yaml')
 DEFAULT_POLICY = load_yaml(filepath)
@@ -168,15 +169,15 @@ def build_index(
                 pat_id = dicom.PatientID
 
                 # Get study info.
-                study_id = dicom.StudyInstanceUID
-                if study_id in policy['study']['map-ids']:
-                    study_id = policy['study']['map-ids'][study_id]
-                    logging.info(f"Mapped study ID '{dicom.StudyInstanceUID}' to '{study_id}'.")
+                study = dicom.StudyInstanceUID
+                if study in policy['study']['map-ids']:
+                    study = policy['study']['map-ids'][study]
+                    logging.info(f"Mapped study ID '{dicom.StudyInstanceUID}' to '{study}'.")
                 study_date = dicom.StudyDate
                 study_time = dicom.StudyTime
 
                 # Get series info.
-                series_id = dicom.SeriesInstanceUID
+                series = dicom.SeriesInstanceUID
                 series_date = dicom.SeriesDate if hasattr(dicom, 'SeriesDate') else ''
                 series_time = dicom.SeriesTime if hasattr(dicom, 'SeriesTime') else ''
 
@@ -216,10 +217,10 @@ def build_index(
                 data = {
                     'dataset': dataset,
                     'patient-id': pat_id,
-                    'study-id': study_id,
+                    'study-id': study,
                     'study-date': study_date,
                     'study-time': study_time,
-                    'series-id': series_id,
+                    'series-id': series,
                     'series-date': series_date,
                     'series-time': series_time,
                     'modality': modality,
@@ -318,9 +319,9 @@ def build_index(
     #   'allow': True/False,
     #   'in-study': '1'/'>=1'
     # }
-    ct_series_ids = list(index[index['modality'] == 'ct']['series-id'].unique())
+    ct_serieses = list(index[index['modality'] == 'ct']['series-id'].unique())
     rtstruct_rows = index[index['modality'] == 'rtstruct']
-    has_ref_ct = rtstruct_rows['mod-spec'].apply(lambda m: m['RefCTSeriesInstanceUID']).isin(ct_series_ids)
+    has_ref_ct = rtstruct_rows['mod-spec'].apply(lambda m: m['RefCTSeriesInstanceUID']).isin(ct_serieses)
     no_ref_ct = rtstruct_rows[~has_ref_ct].copy()
 
     if not policy['rtstruct']['no-ref-ct']['allow']:

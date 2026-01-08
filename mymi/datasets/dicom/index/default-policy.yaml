@@ -20,12 +20,12 @@ rtdose:
     from: {}
     no-ref-rtplan:
         allow: true
-        require-rtplan-in-study: true
+        require-rtplan-in-study: false
 rtplan:
     from: {}
     no-ref-rtstruct:
         allow: true
-        require-rtstruct-in-study: true
+        require-rtstruct-in-study: false
 rtstruct:
     from: {}
     no-ref-ct:

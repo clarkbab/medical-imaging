@@ -19,6 +19,7 @@ class TrainingSample:
         # Define paths.
         self.__input_path = os.path.join(self.split.path, 'inputs', f"{self._id:03}.npz")
 
+    @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__input'):
@@ -78,7 +79,7 @@ class TrainingSample:
     def label(
         self,
         landmarks: LandmarkIDs = 'all',
-        landmark_data_only: bool = True,
+        landmark_points_only: bool = True,
         label_idx: Optional[int] = None,    # Enables multi-label training.
         regions: Regions = 'all') -> np.ndarray:
         # Get label type.
@@ -129,7 +130,7 @@ class TrainingSample:
                 label = label[label['landmark-id'].isin(landmarks)]
             label = label.rename(columns={ '0': 0, '1': 1, '2': 2 })
 
-            if landmark_data_only:
+            if landmark_points_only:
                 # Return coordinates only - tensors don't handle multiple data types.
                 label = label[list(range(3))].to_numpy()
 

@@ -12,11 +12,14 @@ from mymi.transforms import sample
 from mymi.typing import *
 from mymi.utils import *
     
-def load_registrations_evaluations(
+def load_registration_evaluation(
     dataset: str,
-    models: Union[str, List[str]]) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    model: ModelIDs = 'all',
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     set = NiftiDataset(dataset)
-    models = arg_to_list(models, str)
+    filepath = os.path.join(set.path, 'data', 'evaluations', 'registration')
+    all_models = list(sorted(os.listdir(filepath)))
+    models = arg_to_list(model, ModelID, literals={ 'all': all_models })
 
     # Load regions evaluations.
     dfs = []
@@ -42,28 +45,32 @@ def load_registrations_evaluations(
     else:
         landmarks_df = None
 
-    return regions_df, landmarks_df
+    return landmarks_df, regions_df
 
-def get_registration_landmarks_evaluation(
+def get_registration_landmark_evaluation(
     dataset: str,
-    fixed_pat_id: PatientID,
-    fixed_study_id: str,
-    moving_pat_id: PatientID,
-    moving_study_id: str,
-    landmark_ids: LandmarkIDs,
+    fixed_pat: PatientID,
+    fixed_study: StudyID,
+    fixed_series: SeriesID,
+    moving_pat: PatientID,
+    moving_study: StudyID,
+    moving_series: SeriesID,
+    landmark: LandmarkIDs,
     model: str) -> Tuple[Optional[List[str]], Optional[List[float]], Optional[List[float]]]:
     set = NiftiDataset(dataset)
-    fixed_pat = set.patient(fixed_pat_id)
-    fixed_study = fixed_pat.study(fixed_study_id)
-    moving_pat = set.patient(moving_pat_id)
-    moving_study = moving_pat.study(moving_study_id)
+    fixed_pat = set.patient(fixed_pat)
+    fixed_study = fixed_pat.study(fixed_study)
+    fixed_series = fixed_study.landmarks_series(fixed_series)
+    moving_pat = set.patient(moving_pat)
+    moving_study = moving_pat.study(moving_study)
+    moving_series = moving_study.landmarks_series(moving_series)
 
     # Load moved (predicted) region data.
-    _, _, _, moved_landmarks, moved_dose = load_registration(dataset, fixed_pat.id, model, fixed_study_id=fixed_study.id, landmark_ids=landmark_ids, moving_pat_id=moving_pat.id, moving_study_id=moving_study.id)
+    _, _, moved_dose, moved_landmarks, _ = load_registration(dataset, fixed_pat.id, model, study=fixed_study.id, series=fixed_series.id, landmark=landmark, moving_pat=moving_pat.id, moving_study=moving_study.id, moving_series=moving_series.id)
 
     if moved_landmarks is not None:
         # Load moving landmarks.
-        moving_landmarks = moving_study.landmark_data(landmark_ids=landmark_ids, sample_dose=moving_study.has_dose)
+        moving_landmarks = moving_study.landmarks_data(landmark=landmark, sample_dose=moving_study.has_dose)
 
         # Merge on landmark IDs.
         merged_df = moving_landmarks.merge(moved_landmarks, on=['landmark-id'], how='inner', suffixes=['_moving', '_moved'])
@@ -76,59 +83,64 @@ def get_registration_landmarks_evaluation(
         tres = tre(moving_data, moved_data)
 
         # Store landmark IDs.
-        landmark_ids = merged_df['landmark-id'].tolist()
+        landmarks = merged_df['landmark-id'].tolist()
     else:
         tres = None
 
     # Calculate dose error - between moving dose at landmarks and moved dose at landmarks.
     if moving_study.has_dose is not None and moved_landmarks is not None:
         # # Sample moved dose at fixed landmarks.
-        # fixed_landmarks = fixed_study.landmark_data(landmark_ids=landmark_ids)
+        # fixed_landmarks = fixed_study.landmarks_data(landmarks=landmarks)
         # fixed_landmarks = sample(moved_dose, fixed_landmarks, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
         # dose_errors = np.abs(fixed_landmarks['sample'] - moving_landmarks['dose']).tolist()
 
         # Rather than moving the dose (resampling) and then sampling at fixed landmarks (2x samplings),
         # we can just move the fixed landmarks and sample the moving dose (1x sampling).
-        moving_landmarks = moving_study.landmark_data(landmark_ids=landmark_ids, sample_dose=True)
+        moving_landmarks = moving_study.landmarks_data(landmark=landmark, sample_dose=True)
         moved_landmarks = sample(moving_study.dose_data, moved_landmarks, spacing=moving_study.dose_spacing, origin=moving_study.dose_origin, landmarks_col='dose')
         assert np.all(moving_landmarks['landmark-id'].values == moved_landmarks['landmark-id'].values)
         dose_errors = list((moved_landmarks['dose'] - moving_landmarks['dose']).values)
 
         # Store landmark IDs.
-        landmark_ids = moving_landmarks['landmark-id'].tolist()
+        landmarks = moving_landmarks['landmark-id'].tolist()
     else:
         dose_errors = None
 
     if moved_landmarks is None and moved_dose is None:
-        landmark_ids = None
+        landmarks = None
 
-    return landmark_ids, tres, dose_errors
+    return landmarks, tres, dose_errors
 
 def get_registration_region_evaluation(
-    dataset: str,
-    fixed_pat_id: PatientID,
-    fixed_study_id: str,
-    moving_pat_id: PatientID,
-    moving_study_id: str,
-    region_id: RegionID,
-    model: str) -> List[Dict[str, float]]:
+    dataset: DatasetID,
+    fixed_pat: PatientID,
+    fixed_study: StudyID,
+    fixed_series: SeriesID,
+    moving_pat: PatientID,
+    moving_study: StudyID,
+    moving_series: SeriesID,
+    region: RegionID,
+    model: ModelID,
+    ) -> List[Dict[str, float]]:
     set = NiftiDataset(dataset)
-    fixed_pat = set.patient(fixed_pat_id)
-    fixed_study = fixed_pat.study(fixed_study_id)
-    moving_pat = set.patient(moving_pat_id)
-    moving_study = moving_pat.study(moving_study_id)
+    fixed_pat = set.patient(fixed_pat)
+    fixed_study = fixed_pat.study(fixed_study)
+    fixed_series = fixed_study.regions_series(fixed_series)
+    moving_pat = set.patient(moving_pat)
+    moving_study = moving_pat.study(moving_study)
+    moving_series = moving_study.regions_series(moving_series)
 
     # Load moved (predicted) region data.
-    _, _, moved_region_data, _, _ = load_registration(dataset, fixed_pat.id, model, fixed_study_id=fixed_study.id, moving_pat_id=moving_pat.id, moving_study_id=moving_study_id, raise_error=False, region_ids=region_id)
-    if region_id not in moved_region_data:
+    _, _, _, _, moved_regions_data = load_registration(dataset, fixed_pat.id, model, study=fixed_study.id, series=fixed_series.id, moving_pat=moving_pat.id, moving_study=moving_study.id, moving_series=moving_series.id, raise_error=False, region=region)
+    if region not in moved_regions_data:
         return {}
 
     # Load fixed region data.
-    fixed_region_data = fixed_study.region_data(region_ids=region_id)
+    fixed_regions_data = fixed_study.regions_series(fixed_series).data(region=region)
 
     # Get labels.
-    pred = moved_region_data[region_id]
-    gt = fixed_region_data[region_id]
+    pred = moved_regions_data[region]
+    gt = fixed_regions_data[region]
 
     # # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
     # if region == 'SpinalCord':
@@ -165,32 +177,39 @@ def get_registration_region_evaluation(
 
     return metrics
     
-def create_registration_evaluations(
+def create_registration_evaluation(
     dataset: str,
     models: ModelIDs,
-    exclude_pat_ids: Optional[PatientIDs] = None,
-    fixed_study_id: str = 'study_1',
-    landmark_ids: Optional[LandmarkIDs] = 'all',
-    moving_study_id: str = 'study_0',
-    pat_ids: PatientIDs = 'all',
-    region_ids: Optional[RegionIDs] = 'all',
-    splits: Optional[Splits] = 'all') -> None:
+    exclude_pat: Optional[PatientIDs] = None,
+    fixed_landmarks_series: SeriesID = 'series_1',
+    fixed_regions_series: SeriesID = 'series_1',
+    fixed_study: str = 'study_1',
+    landmark: Optional[LandmarkIDs] = 'all',
+    moving_study: str = 'study_0',
+    moving_landmarks_series: SeriesID = 'series_1',
+    moving_regions_series: SeriesID = 'series_1',
+    pat: PatientIDs = 'all',
+    region: Optional[RegionIDs] = 'all',
+    group: Optional[PatientGroups] = 'all') -> None:
     models = arg_to_list(models, ModelID)
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(exclude=exclude_pat_ids, pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(exclude=exclude_pat, group=group, pat=pat)
+    fixed_study_id = fixed_study
+    moving_study_id = moving_study
 
     # Evaluate registered regions.
-    region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
+    regions = regions_to_list(region, literals={ 'all': set.list_regions })
     for m in models:
-        if region_ids is not None:
+        if regions is not None:
             logging.info(f"Evaluating region registrations for dataset '{dataset}' with model '{m}'...")
 
             cols = {
                 'dataset': str,
-                'fixed-patient-id': str,
-                'fixed-study-id': str,
+                'patient-id': str,
+                'study-id': str,
+                'series-id': str,
                 'moving-patient-id': str,
                 'moving-study-id': str,
                 'region-id': str,
@@ -201,22 +220,26 @@ def create_registration_evaluations(
             df = pd.DataFrame(columns=cols.keys())
 
             for p in tqdm(pat_ids):
-                for r in tqdm(region_ids, leave=False):
+                for r in tqdm(regions, leave=False):
                     # Skip if either moving/fixed study is missing the region.
                     moving_study = set.patient(p).study(moving_study_id)
+                    moving_series = moving_study.regions_series(moving_series_series)
                     fixed_study = set.patient(p).study(fixed_study_id)
-                    if not moving_study.has_region(r) or not fixed_study.has_region(r):
+                    fixed_series = fixed_study.regions_series(fixed_regions_series)
+                    if not fixed_series.has_region(r) or moving_series.has_region(r):
                         continue
 
                     # Get metrics per region.
-                    metrics = get_registration_region_evaluation(dataset, p, fixed_study_id, p, moving_study_id, r, m)
+                    metrics = get_registration_region_evaluation(dataset, p, fixed_study.id, fixed_series.id, p, moving_study.id, moving_series.id, r, m)
                     for met, v in metrics.items():
                         data = {
                             'dataset': dataset,
-                            'fixed-patient-id': p,
-                            'fixed-study-id': fixed_study_id,
+                            'patient-id': p,
+                            'study-id': fixed_study.id,
+                            'series-id': fixed_series.id,
                             'moving-patient-id': p,
-                            'moving-study-id': moving_study_id,
+                            'moving-study-id': moving_study.id,
+                            'moving-series-id': moving_series.id,
                             'region-id': r,
                             'model': m,
                             'metric': met,
@@ -230,16 +253,18 @@ def create_registration_evaluations(
                 filepath = os.path.join(set.path, 'data', 'evaluations', 'registration', m, 'regions.csv')
                 save_csv(df, filepath, overwrite=True)
 
-        if landmark_ids is not None:
+        if landmark is not None:
             logging.info(f"Evaluating landmark registrations for dataset '{dataset}' with model '{m}'...")
 
             cols = {
                 'dataset': str,
-                'fixed-patient-id': str,
-                'fixed-study-id': str,
-                'landmark-id': str,
+                'patient-id': str,
+                'study-id': str,
+                'series-id': str,
                 'moving-patient-id': str,
                 'moving-study-id': str,
+                'moving-series-id': str,
+                'landmark-id': str,
                 'model': str,
                 'metric': str,
                 'value': float
@@ -251,22 +276,27 @@ def create_registration_evaluations(
 
             for p in tqdm(pat_ids):
                 # Skip if either moving/fixed study is missing the landmarks.
-                moving_study = set.patient(p).study(moving_study_id)
-                fixed_study = set.patient(p).study(fixed_study_id)
-                if not moving_study.has_landmark(landmark_ids, any=True) or not fixed_study.has_landmark(landmark_ids, any=True):
+                pat = set.patient(p)
+                moving_study = pat.study(moving_study_id)
+                moving_series = moving_study.landmarks_series(moving_landmarks_series)
+                fixed_study = pat.study(fixed_study_id)
+                fixed_series = fixed_study.landmarks_series(fixed_landmarks_series)
+                if not fixed_series.has_landmark(landmark, any=True) or not moving_series.has_landmark(landmark, any=True):
                     continue
 
                 # Get metrics per region.
-                lm_ids, tres, dose_errors = get_registration_landmarks_evaluation(dataset, p, fixed_study_id, p, moving_study_id, landmark_ids, m)
+                lm_ids, tres, dose_errors = get_registration_landmark_evaluation(dataset, p, fixed_study.id, fixed_series.id, p, moving_study.id, moving_series.id, landmark, m)
                 if tres is not None:
                     for l, t in zip(lm_ids, tres):
                         data = {
                             'dataset': dataset,
-                            'fixed-patient-id': p,
-                            'fixed-study-id': fixed_study_id,
-                            'landmark-id': l,
+                            'patient-id': p,
+                            'study-id': fixed_study.id,
+                            'series-id': fixed_series.id,
                             'moving-patient-id': p,
-                            'moving-study-id': moving_study_id,
+                            'moving-study-id': moving_study.id,
+                            'moving-series-id': moving_series.id,
+                            'landmark-id': l,
                             'model': m,
                             'metric': 'tre',
                             'value': t
@@ -277,11 +307,13 @@ def create_registration_evaluations(
                     for l, e in zip(lm_ids, dose_errors):
                         data = {
                             'dataset': dataset,
-                            'fixed-patient-id': p,
-                            'fixed-study-id': fixed_study_id,
-                            'landmark-id': l,
+                            'patient-id': p,
+                            'study-id': fixed_study.id,
+                            'series-id': fixed_series.id,
                             'moving-patient-id': p,
-                            'moving-study-id': moving_study_id,
+                            'moving-study-id': moving_study.id,
+                            'moving-series-id': moving_series.id,
+                            'landmark-id': l,
                             'model': m,
                             'metric': 'dose-error',
                             'value': e

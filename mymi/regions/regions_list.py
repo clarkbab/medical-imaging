@@ -324,13 +324,13 @@ class RegionList(list, Enum):
     assert len(PMCC) == len(PMCC_CVG_THRESHOLDS) == len(PMCC_INVERSE_VOLUMES) == len(PMCC_SHORT)
 
 # Behaves like 'arg_to_list', but also handles special 'RL:<region list>' format.
-def regions_to_list(region_ids: RegionIDs, **kwargs) -> RegionIDs:
-    if region_ids is None:
+def regions_to_list(regions: RegionIDs, **kwargs) -> RegionIDs:
+    if regions is None:
         return None
 
-    region_ids = arg_to_list(region_ids, RegionID, **kwargs)
+    regions = arg_to_list(regions, RegionID, **kwargs)
     rs = []
-    for r in region_ids:
+    for r in regions:
         if r.startswith('rl:'): 
             # Expand str to list of regions.
             rl_name = r.split(':')[-1]

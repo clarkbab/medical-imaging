@@ -32,10 +32,10 @@ def get_nnunet_multi_segmenter_evaluation(
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     filepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/fold-{fold}/{pat_id}_processed.nii.gz"
-    region_data = nib.load(filepath).get_fdata().astype(np.bool_)
+    regions_data = nib.load(filepath).get_fdata().astype(np.bool_)
     region_preds = {}
     for i, region in enumerate(regions):
-        region_preds[region] = region_data[i + 1]
+        region_preds[region] = regions_data[i + 1]
  
     region_metrics = []
     for region, pred in region_preds.items():
@@ -45,7 +45,7 @@ def get_nnunet_multi_segmenter_evaluation(
             continue
         
         # Load label.
-        label = pat.region_data(region=region)[region]
+        label = pat.regions_data(region=region)[region]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':
@@ -101,10 +101,10 @@ def get_nnunet_single_region_evaluation(
     pat = set.patient(pat_id)
     spacing = pat.ct_spacing
     filepath = f"/data/gpfs/projects/punim1413/mymi/datasets/nnunet/predictions/single-region/{region}/fold-{fold}/{pat_id}_processed.nii.gz"
-    region_data = nib.load(filepath).get_fdata().astype(np.bool_)
+    regions_data = nib.load(filepath).get_fdata().astype(np.bool_)
     region_preds = {}
     for i, region in enumerate(regions):
-        region_preds[region] = region_data[i + 1]
+        region_preds[region] = regions_data[i + 1]
  
     region_metrics = []
     for region, pred in region_preds.items():
@@ -114,7 +114,7 @@ def get_nnunet_single_region_evaluation(
             continue
         
         # Load label.
-        label = pat.region_data(region=region)[region]
+        label = pat.regions_data(region=region)[region]
 
         # Only evaluate 'SpinalCord' up to the last common foreground slice in the caudal-z direction.
         if region == 'SpinalCord':

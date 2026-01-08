@@ -10,14 +10,14 @@ from mymi.utils import *
 from ..dataset import DicomDataset
 
 def get_new_pat_id(
-    old_pat_id: PatientID,
+    old_pat: PatientID,
     rename_fn: Callable,
     pat_regexp: Optional[str] = None) -> PatientID:
     if pat_regexp is not None:
-        match = re.match(pat_regexp, old_pat_id)
+        match = re.match(pat_regexp, old_pat)
         if match is None:
-            return old_pat_id
-    return rename_fn(old_pat_id)
+            return old_pat
+    return rename_fn(old_pat)
 
 def rename_dicom(
     filepath: FilePath,
@@ -26,23 +26,23 @@ def rename_dicom(
     pat_regexp: Optional[str] = None) -> None:
     # Get new patient ID.
     dicom = dcm.dcmread(filepath)
-    old_pat_id = dicom.PatientID
-    new_pat_id = get_new_pat_id(old_pat_id, rename_fn, pat_regexp=pat_regexp)
-    if old_pat_id == new_pat_id:
+    old_pat = dicom.PatientID
+    new_pat = get_new_pat_id(old_pat, rename_fn, pat_regexp=pat_regexp)
+    if old_pat == new_pat:
         return
 
     if dry_run:
-        logging.info(f"Rename patient ID from {old_pat_id} to {new_pat_id} in {filepath}.")
+        logging.info(f"Rename patient ID from {old_pat} to {new_pat} in {filepath}.")
     else:
-        dicom.PatientID = new_pat_id
-        dicom.PatientName = new_pat_id
+        dicom.PatientID = new_pat
+        dicom.PatientName = new_pat
         dicom.save_as(filepath)
 
 def rename_patients(
     dataset: DatasetID,
     rename_fn: Optional[Callable],
     dry_run: bool = True,
-    pat_ids: PatientIDs = 'all',
+    pat: PatientIDs = 'all',
     pat_regexp: Optional[str] = None) -> None:
     # Check if indexes are open and therefore can't be overwritten.
     dset = DicomDataset(dataset)

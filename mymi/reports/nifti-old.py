@@ -44,14 +44,14 @@ def get_region_overlap_summary(
             continue
 
         # Load region data.
-        region_data = pat.region_data(labels='all')
+        regions_data = pat.regions_data(labels='all')
 
         # Calculate overlap for other regions.
-        for r in region_data.keys():
+        for r in regions_data.keys():
             if r == region:
                 continue
 
-            n_overlap = (region_data[region] & region_data[r]).sum()
+            n_overlap = (regions_data[region] & regions_data[r]).sum()
             data = {
                 'dataset': dataset,
                 'patient-id': pat_id,
@@ -94,15 +94,15 @@ def create_region_contrast_report(
         if not pat.has_region(region):
             continue
         ct_data = pat.ct_data
-        region_data = pat.region_data(region=region)[region]
+        regions_data = pat.regions_data(region=region)[region]
 
         # Get OAR label and margin label.
-        region_data_margin = np.logical_xor(binary_dilation(region_data, iterations=3), region_data)
+        regions_data_margin = np.logical_xor(binary_dilation(regions_data, iterations=3), regions_data)
 
         # Get OAR and margin HU values.
-        hu_oar = ct_data[np.nonzero(region_data)]
+        hu_oar = ct_data[np.nonzero(regions_data)]
         hu_oar_mean = hu_oar.mean()
-        hu_margin = ct_data[np.nonzero(region_data_margin)]
+        hu_margin = ct_data[np.nonzero(regions_data_margin)]
         hu_margin_mean = hu_margin.mean()
 
         # Calculate contrast-to-noise (CNR) ratio.
@@ -112,7 +112,7 @@ def create_region_contrast_report(
 
         # Calculate region noise.
         if pat.has_region(noise_region):
-            noise_data = pat.region_data(region=noise_region)[noise_region]
+            noise_data = pat.regions_data(region=noise_region)[noise_region]
             noise_data_eroded = binary_erosion(noise_data, iterations=3)
             if noise_data_eroded.sum() == 0:
                 raise ValueError(f"Eroded noise data for region '{noise_region}' is empty, choose a larger region.")
@@ -282,8 +282,8 @@ def get_ct_info_summary(
 
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
-        origin_dataset, origin_pat_id, origin_study_id = pat.origin
-        study = DicomDataset(origin_dataset).patient(origin_pat_id).study(origin_study_id)
+        origin_dataset, origin_pat_id, origin_study = pat.origin
+        study = DicomDataset(origin_dataset).patient(origin_pat_id).study(origin_study)
 
         # Add contrast details.
         ct = study.first_ct
@@ -758,7 +758,7 @@ def get_object_summary(
     pat = NiftiDataset(dataset).patient(pat_id)
 
     spacing = pat.ct_spacing
-    label = pat.region_data(region=region)[region]
+    label = pat.regions_data(region=region)[region]
     objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     

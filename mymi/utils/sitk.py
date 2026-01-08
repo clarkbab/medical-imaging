@@ -6,23 +6,13 @@ from mymi.typing import *
 
 from .utils import transpose_image
 
-def from_sitk_image(
-    img: sitk.Image,
-    img_type: Literal['mha', 'nii'] = 'nii') -> Tuple[ImageArray, Spacing3D, Point3D]:
+def from_sitk_image(img: sitk.Image) -> Tuple[ImageArray, Spacing3D, Point3D]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
     spacing = tuple(img.GetSpacing())
-    origin = list(img.GetOrigin())
-    if img_type == 'mha':
-        pass
-    elif img_type == 'nii':
-        # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative origins
-        # and directions. For all images we write to nifti, they'll be in LPS+, so undo ITK changes.
-        # The image data is not flipped by ITK.
-        origin[0], origin[1] = -origin[0], -origin[1]
-    origin = tuple(origin)
+    origin = tuple(img.GetOrigin())
     return data, spacing, origin
 
 def to_sitk_image(

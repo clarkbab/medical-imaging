@@ -14,11 +14,6 @@ from .nifti import from_nifti
 from .python import delegates
 from .sitk import from_sitk_image, to_sitk_image
 
-def handle_filepath(f: FilePath) -> FilePath:
-    if f.startswith('files:'):
-        f = os.path.join(config.directories.files, f[6:])
-    return f
-
 def load_csv(
     filepath: str,
     exists_only: bool = False,
@@ -41,6 +36,7 @@ def load_csv(
     # Load CSV.
     map_types['patient-id'] = str
     map_types['study-id'] = str
+    map_types['series-id'] = str
     df = pd.read_csv(filepath, dtype=map_types, **kwargs)
 
     # Map column names.
@@ -108,12 +104,17 @@ def load_yaml(filepath: str) -> Any:
     with open(filepath, 'r') as f:
         return yaml.safe_load(f)
 
+def resolve_filepath(filepath: FilePath) -> FilePath:
+    if filepath.startswith('files:'):
+        filepath = os.path.join(config.directories.files, filepath[6:])
+    return filepath
+
 def save_csv(
     data: pd.DataFrame,
     filepath: str,
     index: bool = False,
     overwrite: bool = True) -> None:
-    filepath = handle_filepath(filepath)
+    filepath = resolve_filepath(filepath)
     if os.path.exists(filepath):
         if overwrite:
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -136,8 +137,6 @@ def save_text(
     data: str,
     filepath: FilePath,
     overwrite: bool = True) -> None:
-    if filepath.startswith('files:'):
-        filepath = os.path.join(config.directories.files, filepath[6:])
     if os.path.exists(filepath) and not overwrite:
         raise ValueError(f"File '{filepath}' already exists, use overwrite=True.")
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -150,15 +149,16 @@ def save_yaml(
     with open(filepath, 'w') as f:
         yaml.dump(data, f)
 
-def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray, Spacing3D, Point3D]:
-    if filepath.endswith('.mha'):
-        img_type = 'mha'
-    elif filepath.endswith('.nii.gz') or filepath.endswith('.nii'):
-        img_type = 'nii'
-    else:
-        raise ValueError(f'Unsupported file type: {filepath}.')
+def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray, Spacing, Point]:
     img = sitk.ReadImage(filepath)
-    return from_sitk_image(img, img_type=img_type)
+    if filepath.endswith('.nii') or filepath.endswith('.nii.gz'):
+        # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative origins
+        # and directions. For all images we write to nifti, they'll be in LPS+, so undo ITK changes.
+        # The image data is not flipped by ITK.
+        origin = list(img.GetOrigin())
+        origin[0], origin[1] = -origin[0], -origin[1]
+        img.SetOrigin(origin)
+    return from_sitk_image(img)
 
 def sitk_save_image(
     data: ImageArray,

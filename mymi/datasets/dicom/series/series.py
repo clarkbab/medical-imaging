@@ -5,9 +5,20 @@ from mymi.constants import *
 from mymi.typing import *
 
 from ...mixins import IndexMixin
+from ...series import Series
+
+DicomModality = Literal['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 
 # Abstract class.
-class DicomSeries(IndexMixin):
+class DicomSeries(IndexMixin, Series):
+    def __init__(
+        self,
+        modality: DicomModality,
+        *args,
+        **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._modality = modality
+
     @property
     def date(self) -> str:
         date_str = self.index['study-date']
@@ -20,12 +31,6 @@ class DicomSeries(IndexMixin):
         return parsed_dt
 
     @property
-    def global_id(self) -> str:
-        return f'DICOM:{self.dataset_id}:{self.pat_id}:{self.study_id}:{self.id}[{self.modality}]'
-
-    def __repr__(self) -> str:
-        return self.global_id
-
-    def __str__(self) -> str:
-        return self.global_id
+    def modality(self) -> DicomModality:
+        return self._modality
  

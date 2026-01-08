@@ -167,7 +167,7 @@ def load_segmenter_predictions(
     # Extract data.
     preds = []
     for region in regions:
-        pred = RtStructConverter.get_region_data(rtstruct, name_map[region], ref_cts)
+        pred = RtStructConverter.get_regions_data(rtstruct, name_map[region], ref_cts)
         preds.append(pred)
     
     # Determine return type.

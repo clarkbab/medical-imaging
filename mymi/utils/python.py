@@ -34,7 +34,9 @@ def filter_lists(
     for l in lists:
         if len(l) != n_elements:
             raise ValueError('All lists must have the same length.')
-    lists = map(list, zip(*[i for i in list(zip(*lists)) if filt_fn(i)]))
+    lists = list(map(list, zip(*[i for i in list(zip(*lists)) if filt_fn(i)])))
+    if len(lists) == 0:
+        return [[],] * n_lists
     return lists
 
 def python_version(gte: Optional[str] = None) -> Union[Tuple[int, int, int], bool]:

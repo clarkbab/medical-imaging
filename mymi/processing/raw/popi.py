@@ -7,8 +7,8 @@ from mymi.utils import *
 
 def convert_popi_to_nifti(dry_run: bool = False) -> None:
     dataset = 'POPI'
-    fixed_study_id = 'study_1'
-    moving_study_id = 'study_0'
+    fixed_study = 'study_1'
+    moving_study = 'study_0'
     exhale_phases = [50, 60, 50, 50, 50, 50]
     inhale_phase = 0
     landmarks_y_origin = 0
@@ -23,7 +23,7 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
         filepath = os.path.join(basepath, p, 'mhd', f'{inhale_phase:02}.mhd')
         data, spacing, origin = sitk_load_image(filepath)
         if not dry_run:
-            filepath = os.path.join(dest_set.path, 'data', 'patients', p, fixed_study_id, 'ct', 'series_0.nii.gz')
+            filepath = os.path.join(dest_set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
             save_nifti(data, filepath, spacing=spacing, origin=origin)
         
         # Save moving (exhale) image.
@@ -31,7 +31,7 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
         filepath = os.path.join(basepath, p, 'mhd', f'{exhale_phase:02}.mhd')
         data, spacing, origin = sitk_load_image(filepath)
         if not dry_run:
-            filepath = os.path.join(dest_set.path, 'data', 'patients', p, moving_study_id, 'ct', 'series_0.nii.gz')
+            filepath = os.path.join(dest_set.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
             save_nifti(data, filepath, spacing=spacing, origin=origin)
             
         # Save fixed (inhale) landmarks.
@@ -40,7 +40,7 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
         landmarks[1] += landmarks_y_origin
         landmarks.insert(0, 'landmark-id', list(range(len(landmarks))))
         if not dry_run:
-            filepath = os.path.join(dest_set.path, 'data', 'patients', p, fixed_study_id, 'landmarks', 'series_1.csv')
+            filepath = os.path.join(dest_set.path, 'data', 'patients', p, fixed_study, 'landmarks', 'series_1.csv')
             save_csv(landmarks, filepath)
             
         # Save moving (exhale) landmarks.
@@ -49,5 +49,5 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
         landmarks[1] += landmarks_y_origin
         landmarks.insert(0, 'landmark-id', list(range(len(landmarks))))
         if not dry_run:
-            filepath = os.path.join(dest_set.path, 'data', 'patients', p, moving_study_id, 'landmarks', 'series_1.csv')
+            filepath = os.path.join(dest_set.path, 'data', 'patients', p, moving_study, 'landmarks', 'series_1.csv')
             save_csv(landmarks, filepath)

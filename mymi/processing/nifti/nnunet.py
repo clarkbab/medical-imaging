@@ -16,7 +16,7 @@ from mymi.utils import *
 def convert_to_nnunet_single_region_v1(
     # Creates a single nnU-Net 'raw' dataset per region.
     dataset: str,
-    first_dataset_id: int,
+    first_dataset: int,
     region: Region,
     normalise: bool = False,
     norm_mean: Optional[float] = None,
@@ -36,9 +36,9 @@ def convert_to_nnunet_single_region_v1(
 
     # Create the datasets.
     filepath = os.path.join(config.directories.datasets, 'nnunet', 'v1', 'raw', 'nnUNet_raw_data')
-    region_idx = all_regions.index(region)
-    dataset_id = first_dataset_id + region_idx
-    dest_dataset = f"Task{dataset_id:03}_SINGLE_REGION_{region}"
+    regionx = all_regions.index(region)
+    dataset_id = first_dataset_id + regionx
+    dest_dataset = f"Task{dataset:03}_SINGLE_REGION_{region}"
     datapath = os.path.join(filepath, dest_dataset)
     if os.path.exists(datapath):
         shutil.rmtree(datapath)
@@ -67,7 +67,7 @@ def convert_to_nnunet_single_region_v1(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.region_data(regions=region)[region]
+            label = study.regions_data(regions=region)[region]
 
             # Normalise CT data.
             if normalise:
@@ -112,10 +112,11 @@ def convert_to_nnunet_single_region_v1(
 def convert_to_nnunet_multi_region(
     # Creates a multi-region nnU-Net 'raw' dataset.
     dataset: str,
-    dataset_id: int,
+    nnunet_dataset: int,
     normalise: bool = False,
     norm_mean: Optional[float] = None,
     norm_stdev: Optional[float] = None,
+    region: RegionIDs = 'all',
     spacing: Optional[Spacing3D] = None,
     **kwargs) -> None:
     logging.arg_log('Converting NIFTI dataset to multi-region NNUNET', ('dataset',), (dataset,))
@@ -127,11 +128,11 @@ def convert_to_nnunet_multi_region(
 
     # Get regions.
     set = NiftiDataset(dataset)
-    regions = set.list_regions()
+    regions = set.list_regions(region=region)
 
     # Create the dataset.
     filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
-    dest_dataset = f"Dataset{dataset_id:03}_MULTI_REGION"
+    dest_dataset = f"Dataset{nnunet_dataset:03}_{dataset}_MULTI_REGION"
     datapath = os.path.join(filepath, dest_dataset)
     if os.path.exists(datapath):
         shutil.rmtree(datapath)
@@ -156,7 +157,7 @@ def convert_to_nnunet_multi_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            region_data = study.region_data()
+            regions_data = study.regions_data()
 
             # Normalise CT data.
             if normalise:
@@ -172,12 +173,12 @@ def convert_to_nnunet_multi_region(
 
             # Resample label.
             if spacing is not None:
-                for r, d in region_data.items():
-                    region_data[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
+                for r, d in regions_data.items():
+                    regions_data[r] = resample(d, spacing=ct_spacing, output_spacing=spacing)
 
             # Save label data.
             label = np.zeros(ct_data.shape, dtype=np.int32)
-            for r, d in region_data.items():
+            for r, d in regions_data.items():
                 region_class = regions.index(r) + 1
                 label[d == 1] = region_class
             filepath = os.path.join(labelspath, f'{p}.nii.gz')
@@ -203,7 +204,7 @@ def convert_to_nnunet_multi_region(
 def convert_to_nnunet_single_region(
     # Creates a single nnU-Net 'raw' dataset per region.
     dataset: str,
-    first_dataset_id: int,
+    first_dataset: int,
     region: Region,
     normalise: bool = False,
     norm_mean: Optional[float] = None,
@@ -223,9 +224,9 @@ def convert_to_nnunet_single_region(
 
     # Create the datasets.
     filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
-    region_idx = all_regions.index(region)
-    dataset_id = first_dataset_id + region_idx
-    dest_dataset = f"Dataset{dataset_id:03}_SINGLE_REGION_{region}"
+    regionx = all_regions.index(region)
+    dataset_id = first_dataset_id + regionx
+    dest_dataset = f"Dataset{dataset:03}_SINGLE_REGION_{region}"
     datapath = os.path.join(filepath, dest_dataset)
     if os.path.exists(datapath):
         shutil.rmtree(datapath)
@@ -254,7 +255,7 @@ def convert_to_nnunet_single_region(
             study = pat.default_study
             ct_data = study.ct_data
             ct_spacing = study.ct_spacing
-            label = study.region_data(regions=region)[region]
+            label = study.regions_data(regions=region)[region]
 
             # Normalise CT data.
             if normalise:

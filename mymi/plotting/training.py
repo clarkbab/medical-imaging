@@ -23,7 +23,7 @@ def plot_samples(
     inputses = []
     spacingses = []
     centreses = []
-    series_idses = []
+    serieseses = []
     for s in split_ids:
         # Get split samples.
         split = set.split(s)
@@ -33,7 +33,7 @@ def plot_samples(
             inputs = []
             spacings = []
             centres = []
-            series_ids = []
+            serieses = []
 
             for c in channels:
                 # Add sample data.
@@ -46,22 +46,22 @@ def plot_samples(
                 inputs.append(input)
                 spacings.append(spacing)
                 centres.append(centre)
-                series_ids.append(c)
+                serieses.append(c)
 
             plot_idses.append(plot_ids)
             inputses.append(inputs)
             spacingses.append(spacings)
             centreses.append(centres)
-            series_idses.append(series_ids)
+            serieseses.append(serieses)
 
     # Plot.
     n_rows = len(inputses)
     okwargs = dict(
         centres=centreses,
         datas=inputses,
-        landmark_datas=None,
-        region_datas=None,
-        series_ids=series_idses,
+        landmarks_datas=None,
+        regions_datas=None,
+        serieses=serieseses,
         spacings=[spacing] * n_rows,
     )
     plot_patients_matrix(plot_idses, **okwargs, **kwargs)

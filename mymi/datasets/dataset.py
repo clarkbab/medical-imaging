@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import *
 
 from mymi.typing import *
 
@@ -14,15 +15,46 @@ class Dataset:
         self._id = str(id)
         self._ct_from = ct_from
 
+    @staticmethod
+    def ensure_loaded(fn: Callable) -> Callable:
+        def wrapper(self, *args, **kwargs):
+            if not hasattr(self, '_index'):
+                self._load_data()
+            return fn(self, *args, **kwargs)
+        return wrapper
+
+    @property
+    def groups(self) -> pd.DataFrame:
+        return self._groups
+
     @property
     def id(self) -> DatasetID:
         return self._id
 
+    @ensure_loaded
+    def list_groups(self) -> List[PatientGroup]:
+        if self._groups is None:
+            raise ValueError(f"File 'groups.csv' not found for dicom dataset '{self._id}'.")
+        group_ids = list(sorted(self._groups['group-id'].unique()))
+        return group_ids
+
+    @property
+    def path(self) -> DirPath:
+        return self._path
+
     def __repr__(self) -> str:
         return str(self)
 
-    def __str__(self) -> str:
-        raise ValueError("Subclasses of 'Dataset' must implement '__str__' method.")
+    def __str__(
+        self,
+        class_name: str,
+        ) -> str:
+        params = dict(
+            id=self._id,
+        )
+        if self._ct_from is not None:
+            params['ct_from'] = self._ct_from.id
+        return f"{class_name}({', '.join([f'{k}={v}' for k, v in params.items()])})"
 
 class DatasetType(Enum):
     DICOM = 0

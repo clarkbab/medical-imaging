@@ -11,12 +11,12 @@ from mymi.utils import *
 
 def to_rtstruct_dicom(
     ref_cts: List[CtDicom],
-    landmark_data: Optional[LandmarksFrame] = None,
+    landmarks_data: Optional[LandmarksFrame] = None,
     landmark_prefix: str = '',
-    region_data: Optional[RegionArrays] = None,
-    series_id: Optional[SeriesID] = None) -> RtStructDicom:
-    if landmark_data is None and region_data is None:
-        raise ValueError("At least one of 'landmark_data' or 'region_data' must be provided.")
+    regions_data: Optional[RegionArrays] = None,
+    series: Optional[SeriesID] = None) -> RtStructDicom:
+    if landmarks_data is None and regions_data is None:
+        raise ValueError("At least one of 'landmarks_data' or 'regions_data' must be provided.")
 
     # Create metadata.
     file_meta = dcm.dataset.FileMetaDataset()
@@ -55,8 +55,8 @@ def to_rtstruct_dicom(
     rtstruct_dicom.StudyTime = ref_cts[0].StudyTime
 
     # Add series info.
-    series_id = f'RTSTRUCT ({ref_cts[0].StudyID})' if series_id is None else series_id
-    rtstruct_dicom.SeriesDescription = series_id,
+    series = f'RTSTRUCT ({ref_cts[0].StudyID})' if series is None else series
+    rtstruct_dicom.SeriesDescription = series,
     rtstruct_dicom.SeriesInstanceUID = dcm.uid.generate_uid()
     rtstruct_dicom.SeriesNumber = 1
 
@@ -82,12 +82,12 @@ def to_rtstruct_dicom(
 
     # Add contours.
     rtstruct_dicom.ROIContourSequence = []
-    if region_data is not None:
-        rtstruct_dicom = add_region_data(rtstruct_dicom, region_data, ref_cts)
+    if regions_data is not None:
+        rtstruct_dicom = add_regions_data(rtstruct_dicom, regions_data, ref_cts)
 
     # Add landmarks.
-    if landmark_data is not None:
-        rtstruct_dicom = add_landmark_data(rtstruct_dicom, landmark_data, ref_cts, landmark_prefix=landmark_prefix)
+    if landmarks_data is not None:
+        rtstruct_dicom = add_landmarks_data(rtstruct_dicom, landmarks_data, ref_cts, landmark_prefix=landmark_prefix)
 
     # Set timestamps.
     dt = datetime.now()
@@ -102,14 +102,14 @@ def to_rtstruct_dicom(
 
     return rtstruct_dicom
 
-def add_landmark_data(
+def add_landmarks_data(
     rtstruct_dicom: RtStructDicom,
-    landmark_data: LandmarksFrame,
+    landmarks_data: LandmarksFrame,
     ref_cts: List[CtDicom],
     landmark_prefix: str = '') -> RtStructDicom:
     rtstruct_dicom = rtstruct_dicom.copy()
-    landmark_ids = landmark_data['landmark-id'].to_list()
-    landmark_data = landmark_data[list(range(3))].to_numpy()
+    landmarks = landmarks_data['landmark-id'].to_list()
+    landmarks_data = landmarks_data[list(range(3))].to_numpy()
 
     # May not be any structures yet.
     if hasattr(rtstruct_dicom, 'StructureSetROISequence'):
@@ -118,7 +118,7 @@ def add_landmark_data(
         rtstruct_dicom.StructureSetROISequence = []
         num_origin = 0
 
-    for i, (id, d) in enumerate(zip(landmark_ids, landmark_data)):
+    for i, (id, d) in enumerate(zip(landmarks, landmarks_data)):
         # Create structure set roi.
         ss_roi = dcm.dataset.Dataset()
         ss_roi.ReferencedFrameOfReferenceUID = ref_cts[0].FrameOfReferenceUID
@@ -148,16 +148,16 @@ def add_landmark_data(
 
     return rtstruct_dicom
 
-def add_region_data(
+def add_regions_data(
     rtstruct_dicom: RtStructDicom,
-    region_data: RegionArrays,
+    regions_data: RegionArrays,
     ref_cts: List[CtDicom]) -> RtStructDicom:
     # Add regions data.
     rtstruct_dicom = rtstruct_dicom.copy()
     rtstruct_dicom.RTROIObservationsSequence = []
     rtstruct_dicom.StructureSetROISequence = []
-    palette = sns.color_palette('colorblind', len(region_data.keys()))
-    for i, (r, d) in enumerate(region_data.items()):
+    palette = sns.color_palette('colorblind', len(regions_data.keys()))
+    for i, (r, d) in enumerate(regions_data.items()):
         # Create contour.
         roi_contour = dcm.dataset.Dataset()
         roi_contour.ReferencedROINumber = str(i)

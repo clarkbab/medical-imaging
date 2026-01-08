@@ -4,7 +4,7 @@ dry_run = False
 
 model_idxs = list(range(9))
 model_idxs = [6, 7]
-target_region_idxs = [0, 1]
+target_regionxs = [0, 1]
 script = 'scripts/gradcam/nifti/spartan/array/heatmaps_pmcc_2_regions_numbers.slurm'
 
 # Bash doesn't support nested arrays so we have to do this here.
@@ -21,9 +21,9 @@ TARGET_REGIONS = [
 ]
 
 for model_idx in model_idxs:
-    for target_region_idx in target_region_idxs:
+    for target_regionx in target_regionxs:
         # Create slurm command.
-        target_region = TARGET_REGIONS[model_idx][target_region_idx]
+        target_region = TARGET_REGIONS[model_idx][target_regionx]
         export = f"ALL,TARGET_REGION={target_region}"
         command = f'sbatch --array={model_idx} --export={export} {script}' 
         print(command)

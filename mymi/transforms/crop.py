@@ -112,13 +112,13 @@ def crop_foreground(
     return handle_non_spatial_dims(__spatial_crop_foreground, data, *args, **kwargs)
 
 def crop_landmarks(
-    landmark_data: Union[LandmarksFrame, LandmarksFrameVox],
+    landmarks_data: Union[LandmarksFrame, LandmarksFrameVox],
     crop: Union[Box3D, BoxMM3D]) -> Union[LandmarksFrame, LandmarksFrameVox]:
-    landmark_data = landmark_data.copy()
-    lm_data = landmarks_to_data(landmark_data)
+    landmarks_data = landmarks_data.copy()
+    lm_data = landmarks_to_data(landmarks_data)
     lm_data = lm_data - crop[0]
-    landmark_data[list(range(3))] = lm_data
-    return landmark_data
+    landmarks_data[list(range(3))] = lm_data
+    return landmarks_data
 
 def crop_point(
     point: Union[Pixel, Voxel],

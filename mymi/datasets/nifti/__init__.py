@@ -17,12 +17,12 @@ def list() -> List[str]:
 
 def create(name: str) -> NiftiDataset:
     ds_path = os.path.join(config.directories.datasets, 'nifti', name)
-    os.makedirs(ds_path)
+    os.makedirs(ds_path, exist_ok=True)
     return NiftiDataset(name)
 
 def destroy(
     name: str,
-    dry_run: bool) -> None:
+    dry_run: bool = True) -> None:
     ds_path = os.path.join(config.directories.datasets, 'nifti', name)
     if os.path.exists(ds_path):
         with_dry_run(dry_run, lambda: shutil.rmtree(ds_path), f"Destroying nifti dataset '{name}' at {ds_path}.")
@@ -33,6 +33,9 @@ def exists(name: str) -> bool:
 
 def recreate(
     name: str,
-    dry_run: bool) -> NiftiDataset:
+    dry_run: bool = True) -> NiftiDataset:
     destroy(name, dry_run=dry_run)
-    return create(name)
+    if dry_run:
+        return NiftiDataset(name)
+    else:
+        return create(name)

@@ -8,14 +8,14 @@ from mymi.typing import *
 
 def from_ct_dicoms(
     cts: List[CtDicom] = [],
-    assert_consistency: bool = True,
+    check_consistency: bool = True,
     dirpath: Optional[str] = None) -> Tuple[CtImageArray, Spacing3D, Point3D]:
     # Load from dirpath if present.
     if dirpath is not None:
         cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
 
     # Check CT consistency.
-    if assert_consistency:
+    if check_consistency:
         # TODO: this doesn't work - xy_pos is a list of tuples.
         xy_pos = [c.ImagePositionPatient[:2] for c in cts]
         xy_pos = round(xy_pos, tol=TOLERANCE_MM)
@@ -69,12 +69,12 @@ def to_ct_dicoms(
     data: CtImageArray, 
     spacing: Spacing3D,
     origin: Point3D,
-    pat_id: PatientID,
-    study_id: StudyID,
+    pat: PatientID,
+    study: StudyID,
     pat_name: Optional[str] = None,
-    series_id: Optional[SeriesID] = None) -> List[CtDicom]:
+    series: Optional[SeriesID] = None) -> List[CtDicom]:
     pat_name = pat_id if pat_name is None else pat_name
-    series_id = f'CT ({study_id})' if series_id is None else series_id
+    series = f'CT ({study})' if series is None else series
 
     # Data settings.
     if data.min() < -1024:
@@ -143,14 +143,14 @@ def to_ct_dicoms(
 
         # Add study info.
         ct_dicom.StudyDate = dt.strftime(DICOM_DATE_FORMAT)
-        ct_dicom.StudyDescription = study_id
+        ct_dicom.StudyDescription = study
         ct_dicom.StudyInstanceUID = study_uid
-        ct_dicom.StudyID = study_id
+        ct_dicom.StudyID = study
         ct_dicom.StudyTime = dt.strftime(DICOM_TIME_FORMAT)
 
         # Add series info.
         ct_dicom.SeriesDate = dt.strftime(DICOM_DATE_FORMAT)
-        ct_dicom.SeriesDescription = series_id,
+        ct_dicom.SeriesDescription = series,
         ct_dicom.SeriesInstanceUID = series_uid
         ct_dicom.SeriesNumber = 0
         ct_dicom.SeriesTime = dt.strftime(DICOM_TIME_FORMAT)

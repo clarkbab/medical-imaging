@@ -31,7 +31,7 @@ def rename_patients(
                     filepath = os.path.join(dirpath, m, f'{mod}.csv')
                     if os.path.exists(filepath):
                         lm_df = load_csv(filepath)
-                        lm_df['fixed-patient-id'] = lm_df['fixed-patient-id'].apply(rename_fn)
+                        lm_df['patient-id'] = lm_df['patient-id'].apply(rename_fn)
                         lm_df['moving-patient-id'] = lm_df['moving-patient-id'].apply(rename_fn)
                         if dry_run:
                             logging.info(f"Rename patient IDs for registration evaluation {filepath}.")
@@ -82,8 +82,8 @@ def rename_patients(
         #     for o in old_pat_ids:
         #         # Rename moving patients.
         #         pat_dirpath = os.path.join(dirpath, o)
-        #         study_ids = os.listdir(pat_dirpath)
-        #         for s in study_ids:
+        #         studys = os.listdir(pat_dirpath)
+        #         for s in studys:
         #             study_dirpath = os.path.join(pat_dirpath, s)
         #             old_moving_pat_ids = os.listdir(study_dirpath)
         #             for oo in old_moving_pat_ids:

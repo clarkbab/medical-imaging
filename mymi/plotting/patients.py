@@ -3,6 +3,7 @@ import torchio
 from typing import *
 
 from mymi.constants import *
+from mymi.datasets import DicomModality, NiftiModality
 from mymi.geometry import foreground_fov
 from mymi.typing import *
 from mymi.utils import *
@@ -20,9 +21,9 @@ def plot_single_patient(
     centre: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     centre_other: bool = False,
     colours: Optional[Union[str, List[str]]] = None,
-    crop: Optional[Union[LandmarkSeries, LandmarkID, Box2D, RegionArray, RegionID]] = None,    # Uses 'region_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
-    crop_margin_mm: float = 100,                                       # Applied if cropping to 'region_data' or 'np.ndarray'.
-    crosshairs: Optional[Union[Pixel, Point2D, LandmarkSeries]] = None,
+    crop: Optional[Union[LandmarkSeries, LandmarkID, Box2D, RegionArray, RegionID]] = None,    # Uses 'regions_data' if 'str', else uses 'np.ndarray' or crop co-ordinates.
+    crop_margin_mm: float = 100,                                       # Applied if cropping to 'regions_data' or 'np.ndarray'.
+    crosshairs: Optional[Union[LandmarkID, LandmarkSeries, Pixel, Point2D]] = None,
     ct_data: Optional[CtImageArray] = None,
     dose_alpha_min: float = 0.3,
     dose_alpha_max: float = 1.0,
@@ -31,17 +32,19 @@ def plot_single_patient(
     dose_colourbar_pad: float = 0.05,
     dose_colourbar_size: float = 0.03,
     dose_data: Optional[DoseImageArray] = None,
+    dose_series: Optional[SeriesID] = None,
     dose_series_date: Optional[str] = None,
-    dose_series_id: Optional[SeriesID] = None,
     escape_latex: bool = False,
-    extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'region_data' if 'str', else 'np.ndarray') and min/max of extent.
+    extent_of: Optional[Union[Tuple[Union[str, np.ndarray], Extrema], Tuple[Union[str, np.ndarray], Extrema, Axis]]] = None,          # Tuple of object to crop to (uses 'regions_data' if 'str', else 'np.ndarray') and min/max of extent.
     figsize: Tuple[float, float] = (36, 12),
     fontsize: int = 12,
     idx: Optional[float] = None,
     idx_mm: Optional[float] = None,
     isodoses: Union[float, List[float]] = [],
-    landmark_data: Optional[LandmarksFrame] = None,     # All landmarks are plotted.
-    landmark_data_other: Optional[LandmarksFrame] = None,     # Plotted as 'red' landmarks, e.g. from registration.
+    landmarks_data: Optional[LandmarksFrame] = None,     # All landmarks are plotted.
+    landmarks_data_other: Optional[LandmarksFrame] = None,     # Plotted as 'red' landmarks, e.g. from registration.
+    landmark_series: Optional[SeriesID] = None,
+    landmark_series_date: Optional[str] = None,
     legend_bbox_to_anchor: Optional[Tuple[float, float]] = (1, 1),
     legend_loc: Union[str, Tuple[float, float]] = 'upper left',
     legend_show_all_regions: bool = False,
@@ -51,10 +54,12 @@ def plot_single_patient(
     origin: Optional[Point3D] = None,
     pat_id: Optional[PatientID] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    region_data: Optional[RegionArrays] = None,         # All regions are plotted.
+    regions_data: Optional[RegionArrays] = None,         # All regions are plotted.
+    region_series: Optional[SeriesID] = None,
+    region_series_date: Optional[str] = None,
     savepath: Optional[str] = None,
+    series: Optional[SeriesID] = None,
     series_date: Optional[str] = None,
-    series_id: Optional[SeriesID] = None,
     show_axes: bool = True,
     show_ct: bool = True,
     show_dose: bool = False,
@@ -62,9 +67,11 @@ def plot_single_patient(
     show_extent: bool = False,
     show_legend: bool = False,
     show_title: bool = True,
-    show_title_dose: bool = False,
+    show_title_dose: bool = True,
     show_title_pat: bool = True,
-    show_title_series: bool = False,
+    show_title_image_series: bool = True,
+    show_title_landmark_series: bool = True,
+    show_title_region_series: bool = True,
     show_title_slice: bool = True,
     show_title_study: bool = True,
     show_x_label: bool = True,
@@ -72,7 +79,7 @@ def plot_single_patient(
     show_y_label: bool = True,
     show_y_ticks: bool = True,
     study_date: Optional[str] = None,
-    study_id: Optional[StudyID] = None,
+    study: Optional[StudyID] = None,
     title: Optional[str] = None,
     title_width: int = 20,
     transform: torchio.transforms.Transform = None,
@@ -90,22 +97,21 @@ def plot_single_patient(
         show_figure = False
 
     # Convert to integer index in image coords.
-    idx = get_idx(size, view, centre=centre, centre_other=centre_other, idx=idx, idx_mm=idx_mm, dose_data=dose_data, landmark_data=landmark_data, landmark_data_other=landmark_data_other, region_data=region_data, spacing=spacing, origin=origin)
+    idx = get_idx(size, view, centre=centre, centre_other=centre_other, idx=idx, idx_mm=idx_mm, dose_data=dose_data, landmarks_data=landmarks_data, landmarks_data_other=landmarks_data_other, regions_data=regions_data, spacing=spacing, origin=origin)
 
     # Convert crop to Box2D.
     crop_vox_xy = None
     if crop is not None:
         if isinstance(crop, str):
-            if landmark_data is not None and crop in list(landmark_data['landmark-id']):
-                lm_data = landmark_data[landmark_data['landmark-id'] == crop].iloc[0]
+            if landmarks_data is not None and crop in list(landmarks_data['landmark-id']):
+                lm_data = landmarks_data[landmarks_data['landmark-id'] == crop].iloc[0]
                 crop_vox_xy = __get_landmark_crop(lm_data, crop_margin_mm, size, spacing, origin, view)
-            elif region_data is not None and crop in region_data:
-                crop_vox_xy = __get_region_crop(region_data[crop], crop_margin_mm, spacing, origin, view)
+            elif regions_data is not None and crop in regions_data:
+                crop_vox_xy = __get_region_crop(regions_data[crop], crop_margin_mm, spacing, origin, view)
         elif isinstance(crop, LandmarkSeries):
             crop_vox_xy = __get_landmark_crop(crop, crop_margin_mm, size, spacing, origin, view)
         elif isinstance(crop, RegionArray):
             crop_vox_xy = __get_region_crop(crop, crop_margin_mm, spacing, origin, view)
-            print(crop_vox_xy)
         else:
             crop_vox_xy = tuple(*zip(crop))    # API accepts ((xmin, xmax), (ymin, ymax)) - convert to Box2D.
             crop_vox_xy = replace_box_none(crop_vox_xy, size, use_patient_coords=False)
@@ -147,9 +153,9 @@ def plot_single_patient(
     if crosshairs is not None:
         # Convert crosshairs to Pixel.
         if isinstance(crosshairs, LandmarkID):
-            if crosshairs not in list(landmark_data['landmark-id']):
-                raise ValueError(f"Landmark '{crosshairs}' not found in 'landmark_data'.")
-            lm_data = landmark_data[landmark_data['landmark-id'] == crosshairs]
+            if crosshairs not in list(landmarks_data['landmark-id']):
+                raise ValueError(f"Landmark '{crosshairs}' not found in 'landmarks_data'.")
+            lm_data = landmarks_data[landmarks_data['landmark-id'] == crosshairs]
             lm_data = landmarks_to_image_coords(lm_data, spacing, origin).iloc[0]
             crosshairs = get_view_xy(lm_data[list(range(3))], view)
         elif use_patient_coords and isinstance(crosshairs, Point2D):
@@ -208,13 +214,13 @@ def plot_single_patient(
             imax = ax.contour(dose_slice, colors=isodose_colours, levels=isodose_levels)
 
     # Plot landmarks.
-    if landmark_data is not None:
-        plot_landmark_data(landmark_data, ax, idx, size, spacing, origin, view, crop=crop_vox_xy, dose_data=dose_data, **kwargs)
+    if landmarks_data is not None:
+        plot_landmarks_data(landmarks_data, ax, idx, size, spacing, origin, view, crop=crop_vox_xy, dose_data=dose_data, **kwargs)
 
-    if landmark_data_other is not None:
-        plot_landmark_data(landmark_data_other, ax, idx, size, spacing, origin, view, colour='red', crop=crop_vox_xy, dose_data=dose_data, **kwargs)
+    if landmarks_data_other is not None:
+        plot_landmarks_data(landmarks_data_other, ax, idx, size, spacing, origin, view, colour='red', crop=crop_vox_xy, dose_data=dose_data, **kwargs)
 
-    if region_data is not None:
+    if regions_data is not None:
         # Plot regions.
         okwargs = dict(
             alpha=alpha_region,
@@ -225,7 +231,7 @@ def plot_single_patient(
             show_extent=show_extent,
             view=view,
         )
-        should_show_legend = plot_region_data(region_data, ax, idx, aspect, **okwargs)
+        should_show_legend = plot_regions_data(regions_data, ax, idx, aspect, **okwargs)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -298,16 +304,34 @@ def plot_single_patient(
             title = ''
             if show_title_pat and pat_id is not None:
                 title = pat_id
-            if show_title_study and study_id is not None:
+            if show_title_study and study is not None:
                 prefix = '\n' if title != '' else ''
-                title_study_id = f'...{study_id[-title_width:]}' if len(study_id) > title_width else study_id
-                title += f'{prefix}Study: {title_study_id}'
+                title_study = f'...{study[-title_width:]}' if len(study) > title_width else study
+                title += f'{prefix}Study: {title_study}'
                 if study_date is not None:
                     title += f' ({study_date})'
-            if show_title_series and series_id is not None:
+            if show_title_image_series and series is not None:
                 prefix = '\n' if title != '' else ''
-                title_series_id = f'...{series_id[-title_width:]}' if len(series_id) > title_width else series_id
-                title += f'{prefix}Series: {title_series_id}'
+                title_image_series = f'...{series[-title_width:]}' if len(series) > title_width else series
+                title += f'{prefix}Image series: {title_image_series}'
+                if series_date is not None:
+                    title += f' ({series_date})'
+            if show_title_dose and dose_series is not None:
+                prefix = '\n' if title != '' else ''
+                title_dose_series = f'...{dose_series[-title_width:]}' if len(dose_series) > title_width else dose_series
+                title += f'{prefix}Dose series: {title_dose_series}'
+                if dose_series_date is not None:
+                    title += f' ({dose_series_date})'
+            if show_title_landmark_series and landmark_series is not None and landmarks_data is not None:
+                prefix = '\n' if title != '' else ''
+                title_landmark_series = f'...{landmark_series[-title_width:]}' if len(landmark_series) > title_width else landmark_series
+                title += f'{prefix}Landmark series: {title_landmark_series}'
+                if series_date is not None:
+                    title += f' ({series_date})'
+            if show_title_region_series and region_series is not None and regions_data is not None:
+                prefix = '\n' if title != '' else ''
+                title_region_series = f'...{region_series[-title_width:]}' if len(region_series) > title_width else region_series
+                title += f'{prefix}Region series: {title_region_series}'
                 if series_date is not None:
                     title += f' ({series_date})'
             if show_title_slice:
@@ -318,12 +342,6 @@ def plot_single_patient(
                 else:
                     title_idx = f'{idx}/{size[view] - 1}'
                 title += f'{prefix}Slice: {title_idx} ({get_axis_name(view)})'
-            if show_title_dose and dose_series_id is not None:
-                prefix = '\n' if title != '' else ''
-                title_dose_series_id = f'...{dose_series_id[-title_width:]}' if len(dose_series_id) > title_width else dose_series_id
-                title += f'{prefix}Dose series: {title_dose_series_id}'
-                if dose_series_date is not None:
-                    title += f' ({dose_series_date})'
 
         # Escape text if using latex.
         if escape_latex:
@@ -347,22 +365,22 @@ def plot_single_patient(
 def plot_patient_histogram(
     dataset_type: Dataset,
     dataset: str,
-    pat_id: PatientIDs = 'all',
+    pat: PatientIDs = 'all',
     savepath: Optional[str] = None,
     show_progress: bool = False,
-    study_id: StudyIDs = 'all',
+    study: StudyIDs = 'all',
     **kwargs) -> None:
     set = dataset_type(dataset)
-    pat_ids = set.list_patients(pat_id=pat_id)
+    pat_ids = set.list_patients(pat=pat)
     n_rows = len(pat_ids)
 
     # Get n_cols.
     n_cols = 0
-    study_idses = []
+    studieses = []
     for p in pat_ids:
         pat = set.patient(p)
-        ids = pat.list_studies(study_id=study_id)
-        study_idses.append(ids)
+        ids = pat.list_studies(study=study)
+        studieses.append(ids)
         if len(ids) > n_cols:
             n_cols = len(ids)
     
@@ -372,7 +390,7 @@ def plot_patient_histogram(
     for i, p in tqdm(enumerate(pat_ids), disable=not show_progress):
         pat = set.patient(p)
         row_axs = axs[i]
-        ss = study_idses[i]
+        ss = studieses[i]
         for col_ax, s in zip(row_axs, ss):
             study = pat.study(s)
             ct_data = study.ct_data.flatten()
@@ -393,104 +411,146 @@ def plot_patient_histogram(
 def plot_patient(
     dataset: Dataset,
     dataset_fns: Dict[str, Callable],
-    pat_id: PatientIDs = 'all',
+    pat: PatientIDs = 'all',
     centre: Optional[Union[LandmarkID, Literal['dose'], RegionID]] = None,
     crop: Optional[Union[str, Box2D]] = None,
-    dose_series_id: Optional[SeriesID] = None,
+    dose_series: Optional[SeriesID] = None,
     isodoses: Union[float, List[float]] = [],
-    landmark_id: Optional[LandmarkIDs] = None,
-    landmarks_series_id: Optional[SeriesID] = None,
-    landmarks_other_series_id: Optional[SeriesID] = None,
+    landmark: Optional[LandmarkIDs] = None,
+    landmark_series: Union[SeriesID, List[Optional[SeriesID]]] = None,
+    landmark_other_series: Optional[SeriesID] = None,
     loadpath: Union[str, List[str]] = [],
-    modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'series_ids'.
-    region_id: Optional[RegionIDs] = None,
+    modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'serieses'.
+    region: Optional[RegionIDs] = None,
     region_labels: Dict[str, str] = {},
-    regions_series_id: Optional[SeriesID] = None,
+    region_series: Optional[SeriesID] = None,
     savepath: Optional[FilePath] = None,
-    series_id: Optional[SeriesIDs] = None,
+    series: Optional[SeriesIDs] = None,
     show_dose: bool = False,
     show_progress: bool = False,
-    study_id: Optional[StudyIDs] = None,
+    study: Optional[StudyIDs] = None,
     **kwargs) -> None:
     isodoses = arg_to_list(isodoses, float)
-    loadpaths = arg_to_list(loadpath, str)
+    loadpaths = arg_to_list(loadpath, FilePath)
     if len(loadpaths) > 0:
         plot_saved(loadpaths)
         return
-    series_ids = arg_to_list(series_id, str)
-    study_ids = arg_to_list(study_id, str)
     if savepath is not None and savepath.endswith('.pdf'):
         raise ValueError(f"Savepath should not be '.pdf', issues loading without 'poppler' installed.")
 
     # Get patient IDs.
-    arg_pat_ids = pat_id
-    pat_ids = dataset.list_patients(pat_id=pat_id)
+    arg_pat_ids = pat
+    pat_ids = dataset.list_patients(pat=pat)
     if len(pat_ids) == 0:
         raise ValueError(f"No patients found for dataset '{dataset}' with IDs '{arg_pat_ids}'.")
 
     # Load all patient data.
     # This is the row-level data for 'plot_patients_matrix'.
-    loaded_study_ids = []
+    loaded_studies = []
     loaded_study_dates = []
-    loaded_series_ids = []
-    loaded_dose_series_ids = []
+    loaded_serieses = []
+    loaded_dose_serieses = []
     loaded_dose_series_dates = []
+    loaded_landmark_serieses = []
+    loaded_region_serieses = []
     ct_datas = []
     dose_datas = []
     spacings = []
     origins = []
-    region_datas = []
-    landmark_datas = []
-    landmark_datas_other = []
+    regions_datas = []
+    landmarks_datas = []
+    landmarks_datas_other = []
     centre_datas = []
     crop_datas = []
     if show_progress:
         logging.info("Loading patient data...")
+
+    # Patients are plotted one per row.
+    # Studies and series are plotted within the row and grouped by study.
     for p in tqdm(pat_ids, disable=not show_progress):
-        # Load single patient data.
-        # This is the column-level data for 'plot_patients_matrix'.
-
-        # Combinations:
-        # one study ID, multiple series IDs (or all).
-        # multiple study IDs (or all), one series IDs.
-
-        # Get study ID/s.
+        # Get studies for this patient.
         pat = dataset.patient(p)
-        if study_ids is None:
-            pat_study_ids = [pat.default_study.id]
+        if study is not None:
+            pat_studies = arg_to_list(study, StudyID)
         else:
-            pat_study_ids = pat.list_studies(study_ids=study_ids)
+            pat_studies = [pat.default_study.id]
 
-        row_series_ids = []
-        row_study_ids = []
+        # Load the row data.
+        row_serieses = []
+        row_studies = []
         row_study_dates = []
         row_ct_datas = []
         row_dose_datas = []
-        row_dose_series_ids = []
+        row_dose_serieses = []
         row_dose_series_dates = []
+        row_landmark_serieses = []
+        row_region_serieses = []
         row_spacings = []
         row_origins = []
-        row_region_datas = []
-        row_landmark_datas = []
-        row_landmark_datas_other = []
+        row_regions_datas = []
+        row_landmarks_datas = []
+        row_landmarks_datas_other = []
         row_centre_datas = []
         row_crop_datas = []
-        for s in pat_study_ids:
+        for i, s in enumerate(pat_studies):
             study = pat.study(s)
 
-            # Determine image series.
-            if series_ids is not None:
+            # Load all image series for this study.
+            # We do this here because we may not know the series ID before hand, it might be something general
+            # like 'mr' to load the MR series.
+            if series is not None:
                 # Replace CT/MR with default series IDs.
-                study_series_ids = [study.list_series(i) if i in ['ct', 'mr'] else i for i in series_ids].flatten()
+                serieses = arg_to_list(series, (SeriesID, str))
+                study_serieses = [study.list_series(i) if i in ['ct', 'mr'] else i for i in serieses].flatten()
             elif modality is not None:
-                study_series_ids = study.list_series(modality)
+                study_serieses = study.list_series(modality)
             else:
-                study_series_ids = [study.default_ct.id if study.default_ct is not None else study.default_mr.id]
+                study_serieses = [study.default_ct.id if study.default_ct is not None else study.default_mr.id]
+
+            # Dose series can be referrring to multiple studies or series or both.
+            if len(pat_studies) == 1:   # Single study, multiple image series.
+                study_dose_serieses = arg_to_list(dose_series, (None, SeriesID), broadcast=len(study_serieses))
+                assert len(study_dose_serieses) == len(study_serieses)
+            elif len(study_serieses) == 1:  # Multiple studies, single image series.
+                study_dose_serieses = arg_to_list(dose_series, (None, SeriesID), broadcast=len(pat_studies))
+                assert len(study_dose_serieses) == len(pat_studies)
+                study_dose_serieses = [study_dose_serieses[i]]  # Select series for current study.
+            else:  # Multiple studies, multiple image series.
+                study_dose_serieses = arg_to_list(dose_series, (None, SeriesID), broadcast=len(pat_studies) * len(study_serieses))
+                assert len(study_dose_serieses) == len(pat_studies) * len(study_serieses)
+                study_dose_serieses = study_dose_serieses[i * len(study_serieses):(i + 1) * len(study_serieses)]
+
+            # Landmark series can be referrring to multiple studies or series or both.
+            if len(pat_studies) == 1:   # Single study, multiple image series.
+                study_landmark_serieses = arg_to_list(landmark_series, (None, SeriesID), broadcast=len(study_serieses))
+                assert len(study_landmark_serieses) == len(study_serieses)
+            elif len(study_serieses) == 1:  # Multiple studies, single image series.
+                study_landmark_serieses = arg_to_list(landmark_series, (None, SeriesID), broadcast=len(pat_studies))
+                assert len(study_landmark_serieses) == len(pat_studies)
+                study_landmark_serieses = [study_landmark_serieses[i]]  # Select series for current study.
+            else:  # Multiple studies, multiple image series.
+                study_landmark_serieses = arg_to_list(landmark_series, (None, SeriesID), broadcast=len(pat_studies) * len(study_serieses))
+                assert len(study_landmark_serieses) == len(pat_studies) * len(study_serieses)
+                study_landmark_serieses = study_landmark_serieses[i * len(study_serieses):(i + 1) * len(study_serieses)]
+
+            # Region series can be referrring to multiple studies or series or both.
+            if len(pat_studies) == 1:   # Single study, multiple image series.
+                study_region_serieses = arg_to_list(region_series, (None, SeriesID), broadcast=len(study_serieses))
+                assert len(study_region_serieses) == len(study_serieses)
+            elif len(study_serieses) == 1:  # Multiple studies, single image series.
+                study_region_serieses = arg_to_list(region_series, (None, SeriesID), broadcast=len(pat_studies))
+                assert len(study_region_serieses) == len(pat_studies)
+                study_region_serieses = [study_region_serieses[i]]  # Select series for current study.
+            else:  # Multiple studies, multiple image series.
+                study_region_serieses = arg_to_list(region_series, (None, SeriesID), broadcast=len(pat_studies) * len(study_serieses))
+                assert len(study_region_serieses) == len(pat_studies) * len(study_serieses)
+                study_region_serieses = study_region_serieses[i * len(study_serieses):(i + 1) * len(study_serieses)]
 
             # Add data for each series.
-            for ss in study_series_ids:
-                row_series_ids.append(ss)
-                row_study_ids.append(s)
+            for ss, sd, sl, sr in zip(study_serieses, study_dose_serieses, study_landmark_serieses, study_region_serieses):
+                row_serieses.append(ss)
+                row_landmark_serieses.append(sl)
+                row_studies.append(s)
                 row_study_dates.append(dataset_fns['study_datetime'](study))
 
                 # Load image data (e.g. CT/MR).
@@ -499,51 +559,54 @@ def plot_patient(
                 row_spacings.append(ct_series.spacing)
                 row_origins.append(ct_series.origin)
 
-                # Determine landmarks/regions series.
-                if landmarks_series_id is not None:
-                    landmarks_series = dataset_fns['landmarks_series'](study, landmarks_series_id)
+                # Get landmarks data.
+                if sl is not None:
+                    lm_series = dataset_fns['landmark_series'](study, sl)
                 else:
-                    landmarks_series = dataset_fns['default_landmarks'](study)
-                other_landmarks_series = study.series(landmarks_other_series_id, 'rtstruct') if landmarks_other_series_id is not None else None
-                if regions_series_id is not None:
-                    regions_series = dataset_fns['regions_series'](study, regions_series_id)
-                else:
-                    regions_series = dataset_fns['default_regions'](study)
-
-                # Load landmarks/regions data.
-                if landmarks_series is not None:
-                    lm_data = dataset_fns['landmark_data'](landmarks_series, landmark_id) if landmark_id is not None else None
+                    lm_series = dataset_fns['default_landmarks'](study)
+                other_lm_series = study.series(landmark_other_series, 'rtstruct') if landmark_other_series is not None else None
+                if lm_series is not None:
+                    lm_data = dataset_fns['landmarks_data'](lm_series, landmark) if landmark is not None else None
                 else:
                     lm_data = None
-                row_landmark_datas.append(lm_data)
-                if other_landmarks_series is not None:
-                    other_lm_data = dataset_fns['landmark_data'](other_landmarks_series, landmark_id) if landmark_id is not None else None
+                if other_lm_series is not None:
+                    other_lm_data = dataset_fns['landmarks_data'](other_lm_series, landmark) if landmark is not None else None
                 else:
                     other_lm_data = None
-                row_landmark_datas_other.append(other_lm_data)
-                rdata = dataset_fns['region_data'](regions_series, region_id) if region_id is not None else None
-                row_region_datas.append(rdata)
+                row_landmarks_datas.append(lm_data)
+                row_landmarks_datas_other.append(other_lm_data)
+
+                # Get regions data.
+                if sr is not None:
+                    r_series = dataset_fns['region_series'](study, sr)
+                else:
+                    r_series = dataset_fns['default_regions'](study)
+                row_region_serieses.append(r_series.id if r_series is not None else None)
+                rdata = dataset_fns['regions_data'](r_series, region) if region is not None else None
+                row_regions_datas.append(rdata)
 
                 # Load dose data from the same study - and resample to image spacing.
                 if (show_dose or len(isodoses) > 0) and dataset_fns['has_dose'](study):
-                    if dose_series_id is not None:
-                        dose_series = dataset_fns['dose_series'](study, dose_series_id)
+                    if sd is not None:
+                        dose_s = dataset_fns['dose_series'](study, sd)
+                        resample_kwargs = dict(
+                            origin=dose_s.origin,
+                            output_origin=ct_series.origin,
+                            output_size=ct_series.size,
+                            output_spacing=ct_series.spacing,
+                            spacing=dose_s.spacing,
+                        )
+                        dose_data = resample(dose_s.data, **resample_kwargs)
+                        row_dose_datas.append(dose_data)
+                        row_dose_serieses.append(dose_s.id)
+                        row_dose_series_dates.append(dose_s.date)
                     else:
-                        dose_series = dataset_fns['default_dose'](study)
-                    resample_kwargs = dict(
-                        origin=dose_series.origin,
-                        output_origin=ct_series.origin,
-                        output_size=ct_series.size,
-                        output_spacing=ct_series.spacing,
-                        spacing=dose_series.spacing,
-                    )
-                    dose_data = resample(dose_series.data, **resample_kwargs)
-                    row_dose_datas.append(dose_data)
-                    row_dose_series_ids.append(dose_series.id)
-                    row_dose_series_dates.append(dose_series.date)
+                        row_dose_datas.append(None)
+                        row_dose_serieses.append(None)
+                        row_dose_series_dates.append(None)
                 else:
                     row_dose_datas.append(None)
-                    row_dose_series_ids.append(None)
+                    row_dose_serieses.append(None)
                     row_dose_series_dates.append(None)
 
                 # Handle centre.
@@ -552,12 +615,12 @@ def plot_patient(
                     if centre == 'dose':
                         c = centre
                     elif isinstance(centre, (LandmarkID, RegionID)):
-                        # If data isn't in landmarks/region_data then pass the data as 'centre', otherwise 'centre' can reference 
-                        # the data in 'landmarks/region_data'.
+                        # If data isn't in landmarks/regions_data then pass the data as 'centre', otherwise 'centre' can reference 
+                        # the data in 'landmarks/regions_data'.
                         if study.has_landmark(centre):
-                            c = study.landmark_data(landmark_id=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
+                            c = study.landmarks_data(landmark=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
                         elif study.has_region(centre):
-                            c = study.region_data(region_id=centre)[centre] if rdata is None or centre not in rdata else centre
+                            c = study.regions_data(region=centre)[centre] if rdata is None or centre not in rdata else centre
                         else:
                             raise ValueError(f"Study {study} has no landmark/regions with ID '{centre}' for 'centre'.")
                 row_centre_datas.append(c)
@@ -568,14 +631,14 @@ def plot_patient(
                     if isinstance(crop, str):
                         if study.has_region(crop):
                             if rdata is not None and crop in rdata:
-                                c = crop    # Pass string, it will be read from 'region_data' by 'plot_patient'.
+                                c = crop    # Pass string, it will be read from 'regions_data' by 'plot_patient'.
                             else:
-                                c = study.region_data(region_id=crop)[crop]  # Load RegionLabel.
+                                c = study.regions_data(region=crop)[crop]  # Load RegionLabel.
                         elif study.has_landmark(crop):
                             if lm_data is not None and crop in list(lm_data['landmark-id']):
                                 c = crop
                             else:
-                                c = study.landmark_data(landmark_id=crop).iloc[0]    # Load LandmarkSeries.
+                                c = study.landmarks_data(landmark=crop).iloc[0]    # Load LandmarkSeries.
                         else:
                             raise ValueError(f"Study '{study}' has no landmark/region ID '{crop}' for crop.")
                 row_crop_datas.append(c)
@@ -583,21 +646,23 @@ def plot_patient(
         # Apply region labels.
         # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
         # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
-        for i in range(len(row_series_ids)):
-            row_region_datas[i], row_centre_datas[i], row_crop_datas[i] = __map_regions(region_labels, row_region_datas[i], row_centre_datas[i], row_crop_datas[i])
+        for i in range(len(row_serieses)):
+            row_regions_datas[i], row_centre_datas[i], row_crop_datas[i] = __map_regions(region_labels, row_regions_datas[i], row_centre_datas[i], row_crop_datas[i])
 
-        loaded_study_ids.append(row_study_ids)
+        loaded_studies.append(row_studies)
         loaded_study_dates.append(row_study_dates)
-        loaded_series_ids.append(row_series_ids)
-        loaded_dose_series_ids.append(row_dose_series_ids)
+        loaded_serieses.append(row_serieses)
+        loaded_dose_serieses.append(row_dose_serieses)
         loaded_dose_series_dates.append(row_dose_series_dates)
+        loaded_landmark_serieses.append(row_landmark_serieses)
+        loaded_region_serieses.append(row_region_serieses)
         ct_datas.append(row_ct_datas)
         dose_datas.append(row_dose_datas)
         spacings.append(row_spacings)
         origins.append(row_origins)
-        region_datas.append(row_region_datas)
-        landmark_datas.append(row_landmark_datas)
-        landmark_datas_other.append(row_landmark_datas_other)
+        regions_datas.append(row_regions_datas)
+        landmarks_datas.append(row_landmarks_datas)
+        landmarks_datas_other.append(row_landmarks_datas_other)
         centre_datas.append(row_centre_datas)
         crop_datas.append(row_crop_datas)
 
@@ -607,23 +672,28 @@ def plot_patient(
         crops=crop_datas,
         ct_datas=ct_datas,
         dose_datas=dose_datas,
+        dose_serieses=loaded_dose_serieses,
         dose_series_dates=loaded_dose_series_dates,
-        dose_series_ids=loaded_dose_series_ids,
         isodoses=isodoses,
-        landmark_datas=landmark_datas,
-        landmark_datas_other=landmark_datas_other,
+        landmarks_datas=landmarks_datas,
+        landmarks_datas_other=landmarks_datas_other,
+        landmark_serieses=loaded_landmark_serieses,
         origins=origins,
-        region_datas=region_datas,
+        regions_datas=regions_datas,
+        region_serieses=loaded_region_serieses,
         savepath=savepath,
-        series_ids=loaded_series_ids,
+        serieses=loaded_serieses,
         show_progress=show_progress,
         show_dose=show_dose,
         spacings=spacings,
         study_dates=loaded_study_dates,
-        study_ids=loaded_study_ids,
+        study=loaded_studies,
     )
     plot_patients_matrix(pat_ids, **okwargs, **kwargs)
 
+@alias_kwargs(
+    ('ti', 'transpose_images')
+)
 def plot_patients_matrix(
     # Allows us to plot multiple patients (rows) and patient studies, series, and views (columns).
     pat_ids: Union[str, List[str]],
@@ -632,40 +702,44 @@ def plot_patients_matrix(
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
     ct_datas: Optional[Union[CtImageArray, List[CtImageArray], List[Union[CtImageArray, List[CtImageArray]]]]] = None,
     dose_datas: Optional[Union[DoseImageArray, List[DoseImageArray], List[Union[DoseImageArray, List[DoseImageArray]]]]] = None,
+    dose_serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     dose_series_dates: Union[str, List[str]] = None,
-    dose_series_ids: Union[SeriesIDs, List[SeriesIDs]] = None,
     figsize: Tuple[int, int] = (46, 12),    # In cm.
-    landmark_datas: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
-    landmark_datas_other: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
+    landmarks_datas: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
+    landmarks_datas_other: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
+    landmark_serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     origins: Union[Point3D, List[Point3D], List[Union[Point3D, List[Point3D]]]] = None,
-    region_datas: Optional[Union[RegionArrays, List[RegionArrays], List[Union[RegionArrays, List[RegionArrays]]]]] = None,
+    regions_datas: Optional[Union[RegionArrays, List[RegionArrays], List[Union[RegionArrays, List[RegionArrays]]]]] = None,
+    region_serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     savepath: Optional[str] = None,
-    series_ids: Union[SeriesIDs, List[SeriesIDs]] = None,
+    serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     show_progress: bool = False,
     spacings: Union[Spacing3D, List[Spacing3D], List[Union[Spacing3D, List[Spacing3D]]]] = None,
     study_dates: Union[str, List[str]] = None,
-    study_ids: Union[StudyIDs, List[StudyIDs]] = None,
-    transpose_plots: bool = False,
+    study: Union[StudyIDs, List[StudyIDs]] = None,
+    transpose_images: bool = False,
     view: Union[Axis, List[Axis], Literal['all']] = 0,
     **kwargs) -> None:
     # Handle args.
     pat_ids = arg_to_list(pat_ids, PatientID)
     n_rows = len(pat_ids)
-    study_ids = arg_to_list(study_ids, StudyID, broadcast=n_rows)
+    studies = arg_to_list(study, StudyID, broadcast=n_rows)
     study_dates = arg_to_list(study_dates, str, broadcast=n_rows)
-    series_ids = arg_to_list(series_ids, SeriesID, broadcast=n_rows)
+    serieses = arg_to_list(serieses, SeriesID, broadcast=n_rows)
     spacings = arg_to_list(spacings, Spacing3D, broadcast=n_rows)
     centres = arg_to_list(centres, (None, LandmarkSeries, LandmarkID, RegionArray, RegionID), broadcast=n_rows)
     crops = arg_to_list(crops, (None, LandmarkID, Box2D, RegionID), broadcast=n_rows)
     ct_datas = arg_to_list(ct_datas, (None, CtImageArray), broadcast=n_rows)
     dose_datas = arg_to_list(dose_datas, (None, DoseImageArray), broadcast=n_rows)
     dose_series_dates = arg_to_list(dose_series_dates, str, broadcast=n_rows)
-    dose_series_ids = arg_to_list(dose_series_ids, SeriesID, broadcast=n_rows)
-    landmark_datas = arg_to_list(landmark_datas, (None, LandmarksFrame), broadcast=n_rows)
-    landmark_datas_other = arg_to_list(landmark_datas_other, (None, LandmarksFrame), broadcast=n_rows)
-    region_datas = arg_to_list(region_datas, (None, RegionArrays), broadcast=n_rows)
+    dose_serieses = arg_to_list(dose_serieses, SeriesID, broadcast=n_rows)
+    landmarks_datas = arg_to_list(landmarks_datas, (None, LandmarksFrame), broadcast=n_rows)
+    landmarks_datas_other = arg_to_list(landmarks_datas_other, (None, LandmarksFrame), broadcast=n_rows)
+    landmark_serieses = arg_to_list(landmark_serieses, SeriesID, broadcast=n_rows)
+    regions_datas = arg_to_list(regions_datas, (None, RegionArrays), broadcast=n_rows)
+    region_serieses = arg_to_list(region_serieses, SeriesID, broadcast=n_rows)
     views = arg_to_list(view, int, literals={ 'all': tuple(range(3)) })
-    n_series_max = np.max([len(ss) for ss in series_ids])
+    n_series_max = np.max([len(ss) for ss in serieses])
     n_cols = len(views) * n_series_max
     if savepath is not None and savepath.endswith('.pdf'):
         raise ValueError(f"Use '.jpg' or '.png' for 'savepath', '.pdf' is tricky to load without 'poppler' installed.")
@@ -677,8 +751,8 @@ def plot_patients_matrix(
     if ax is None:
         if n_rows > 1 or n_cols > 1:
             # Subplots for multiple views.
-            n_plots = (n_rows, n_cols) if not transpose_plots else (n_cols, n_rows)
-            figsize = (figsize[0], n_rows * figsize[1]) if not transpose_plots else (figsize[0], n_cols * figsize[1])
+            n_plots = (n_rows, n_cols) if not transpose_images else (n_cols, n_rows)
+            figsize = (figsize[0], n_rows * figsize[1]) if not transpose_images else (figsize[0], n_cols * figsize[1])
             _, axs = plt.subplots(*n_plots, figsize=figsize, gridspec_kw={ 'hspace': 0.4 }, squeeze=False)
         else:
             plt.figure(figsize=figsize)
@@ -696,43 +770,47 @@ def plot_patients_matrix(
         for j in range(n_cols):
             # Multiple studies can be provided for a patient.
             # Interleave studies and views across the columns.
-            series_idx = j % n_series_max
+            seriesx = j % n_series_max
             view_idx = j // n_series_max
-            ct_data = ct_datas[i][series_idx] if isinstance(ct_datas[i], list) else ct_datas[i]
-            dose_data = dose_datas[i][series_idx] if isinstance(dose_datas[i], list) else dose_datas[i]
-            dose_series_id = dose_series_ids[i][series_idx] if isinstance(dose_series_ids[i], list) else dose_series_ids[i]
-            dose_series_date = dose_series_dates[i][series_idx] if isinstance(dose_series_dates[i], list) else dose_series_dates[i]
-            spacing = spacings[i][series_idx] if isinstance(spacings[i], list) else spacings[i]
-            origin = origins[i][series_idx] if isinstance(origins[i], list) else origins[i]
-            region_data = region_datas[i][series_idx] if isinstance(region_datas[i], list) else region_datas[i]
-            landmark_data = landmark_datas[i][series_idx] if isinstance(landmark_datas[i], list) else landmark_datas[i]
-            landmark_data_other = landmark_datas_other[i][series_idx] if isinstance(landmark_datas_other[i], list) else landmark_datas_other[i]
-            crop = crops[i][series_idx] if isinstance(crops[i], list) else crops[i]
-            centre = centres[i][series_idx] if isinstance(centres[i], list) else centres[i]
-            series_id = series_ids[i][series_idx] if isinstance(series_ids[i], list) else series_ids[i]
-            study_id = study_ids[i][series_idx] if isinstance(study_ids[i], list) else study_ids[i]
-            study_date = study_dates[i][series_idx] if isinstance(study_dates[i], list) else study_dates[i]
+            ct_data = ct_datas[i][seriesx] if isinstance(ct_datas[i], list) else ct_datas[i]
+            dose_data = dose_datas[i][seriesx] if isinstance(dose_datas[i], list) else dose_datas[i]
+            dose_series = dose_serieses[i][seriesx] if isinstance(dose_serieses[i], list) else dose_serieses[i]
+            dose_series_date = dose_series_dates[i][seriesx] if isinstance(dose_series_dates[i], list) else dose_series_dates[i]
+            spacing = spacings[i][seriesx] if isinstance(spacings[i], list) else spacings[i]
+            origin = origins[i][seriesx] if isinstance(origins[i], list) else origins[i]
+            regions_data = regions_datas[i][seriesx] if isinstance(regions_datas[i], list) else regions_datas[i]
+            landmarks_data = landmarks_datas[i][seriesx] if isinstance(landmarks_datas[i], list) else landmarks_datas[i]
+            landmarks_data_other = landmarks_datas_other[i][seriesx] if isinstance(landmarks_datas_other[i], list) else landmarks_datas_other[i]
+            landmark_series = landmark_serieses[i][seriesx] if isinstance(landmark_serieses[i], list) else landmark_serieses[i]
+            crop = crops[i][seriesx] if isinstance(crops[i], list) else crops[i]
+            centre = centres[i][seriesx] if isinstance(centres[i], list) else centres[i]
+            region_series = region_serieses[i][seriesx] if isinstance(region_serieses[i], list) else region_serieses[i]
+            series = serieses[i][seriesx] if isinstance(serieses[i], list) else serieses[i]
+            study = studies[i][seriesx] if isinstance(studies[i], list) else studies[i]
+            study_date = study_dates[i][seriesx] if isinstance(study_dates[i], list) else study_dates[i]
             view = views[view_idx] if len(views) > 1 else views[0]
 
             plot_single_patient(
                 ct_data.shape,
                 spacing,
-                ax=axs[i][j] if not transpose_plots else axs[j][i],
+                ax=axs[i][j] if not transpose_images else axs[j][i],
                 centre=centre,
                 close_figure=False,
                 crop=crop,
                 ct_data=ct_data,
                 dose_data=dose_data,
+                dose_series=dose_series,
                 dose_series_date=dose_series_date,
-                dose_series_id=dose_series_id,
-                landmark_data=landmark_data,
-                landmark_data_other=landmark_data_other,
+                landmarks_data=landmarks_data,
+                landmarks_data_other=landmarks_data_other,
+                landmark_series=landmark_series,
                 origin=origin,
                 pat_id=pat_id,
-                region_data=region_data,
-                series_id=series_id,
+                regions_data=regions_data,
+                region_series=region_series,
+                series=series,
                 study_date=study_date,
-                study_id=study_id,
+                study=study,
                 view=view,
                 **kwargs)
 
@@ -777,20 +855,20 @@ def __get_landmark_crop(
 
 def __map_regions(
     region_labels: Dict[str, str],
-    region_data: Optional[Dict[str, np.ndarray]],
+    regions_data: Optional[Dict[str, np.ndarray]],
     centre: Optional[str],
     crop: Optional[str]) -> Tuple[Dict[str, np.ndarray], Optional[str], Optional[str]]:
 
-    # Apply region labels to 'region_data' and 'centre/crop' keys.
-    if region_data is not None:
+    # Apply region labels to 'regions_data' and 'centre/crop' keys.
+    if regions_data is not None:
         for old, new in region_labels.items():
-            region_data[new] = region_data.pop(old)
+            regions_data[new] = regions_data.pop(old)
     if centre is not None and type(centre) == str and centre in region_labels:
         centre = region_labels[centre] 
     if centre is not None and type(crop) == str and crop in region_labels:
         crop = region_labels[crop]
 
-    return region_data, centre, crop
+    return regions_data, centre, crop
 
 def __get_region_crop(
     data: RegionArray,

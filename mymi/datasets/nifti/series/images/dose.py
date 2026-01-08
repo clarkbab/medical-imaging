@@ -5,27 +5,31 @@ from mymi.geometry import fov
 from mymi.typing import *
 from mymi.utils import *
 
+from ....dicom import DicomDataset, DicomRtDoseSeries
 from .image import NiftiImageSeries
 
 class NiftiDoseSeries(NiftiImageSeries):
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
-        study_id: StudyID,
-        id: SeriesID) -> None:
+        dataset: DatasetID,
+        pat: PatientID,
+        study: StudyID,
+        id: SeriesID,
+        index: Optional[pd.DataFrame] = None,
+        ) -> None:
+        super().__init__('dose', dataset, pat, study, id, index=index)
         extensions = ['.nii', '.nii.gz', '.nrrd']
-        basepath = os.path.join(config.directories.datasets, 'nifti', str(dataset_id), 'data', 'patients', str(pat_id), str(study_id), 'dose', str(id))
+        basepath = os.path.join(config.directories.datasets, 'nifti', self._dataset_id, 'data', 'patients', self._pat_id, self._study_id, self._modality, self._id)
         filepath = None
         for e in extensions:
             fpath = f"{basepath}{e}"
             if os.path.exists(fpath):
                 filepath = fpath
         if filepath is None:
-            raise ValueError(f"No NiftiDoseSeries found for study '{study_id}'. Filepath: {basepath}, with extensions {extensions}.")
+            raise ValueError(f"No nifti dose series found for study '{self._study_id}'. Filepath: {basepath}, with extensions {extensions}.")
         self.__filepath = filepath
-        super().__init__(dataset_id, pat_id, study_id, id)
 
+    @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
@@ -42,6 +46,16 @@ class NiftiDoseSeries(NiftiImageSeries):
     @ensure_loaded
     def data(self) -> DoseImageArray:
         return self.__data
+
+    @property
+    def dicom(self) -> DicomRtDoseSeries:
+        if self._index is None:
+            raise ValueError(f"Dataset did not originate from dicom (no 'index.csv').")
+        index = self._index[['dataset', 'patient-id', 'study-id', 'series-id', 'modality', 'dicom-dataset', 'dicom-patient-id', 'dicom-study-id', 'dicom-series-id']]
+        index = index[(index['dataset'] == self._dataset_id) & (index['patient-id'] == self._pat_id) & (index['study-id'] == self._study_id) & (index['series-id'] == self._id) & (index['modality'] == 'dose')].drop_duplicates()
+        assert len(index) == 1
+        row = index.iloc[0]
+        return DicomDataset(row['dicom-dataset']).patient(row['dicom-patient-id']).study(row['dicom-study-id']).rtdose_series(row['dicom-series-id'])
 
     @ensure_loaded
     def fov(
@@ -64,7 +78,10 @@ class NiftiDoseSeries(NiftiImageSeries):
     def spacing(self) -> Spacing3D:
         return self.__spacing
 
+    def __str__(self) -> str:
+        return super().__str__(self.__class__.__name__)
+
 # Add properties.
-props = ['filepath', 'id']
+props = ['filepath']
 for p in props:
     setattr(NiftiDoseSeries, p, property(lambda self, p=p: getattr(self, f'_{NiftiDoseSeries.__name__}__{p}')))

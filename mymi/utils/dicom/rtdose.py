@@ -5,6 +5,8 @@ import numpy as np
 from mymi.constants import *
 from mymi.typing import *
 
+from ..maths import round
+
 def from_rtdose_dicom(rtdose_dicom: RtDoseDicom) -> Tuple[DoseImageArray, Spacing3D, Point3D]:
     # Load data.
     data = np.transpose(rtdose_dicom.pixel_array)

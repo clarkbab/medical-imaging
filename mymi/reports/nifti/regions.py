@@ -19,24 +19,24 @@ def create_region_counts(dataset: DatasetID) -> None:
 
 def create_region_summary(
     dataset: str,
-    region_ids: RegionIDs = 'all') -> None:
-    logging.arg_log('Creating region summaries', ('dataset', 'region_ids'), (dataset, region_ids))
+    region: RegionIDs = 'all') -> None:
+    logging.arg_log('Creating region summaries', ('dataset', 'region'), (dataset, region))
     set = NiftiDataset(dataset)
-    region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
+    regions = regions_to_list(region, literals={ 'all': set.list_regions })
 
-    for region in tqdm(region_ids):
-        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+    for r in tqdm(regions):
+        filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{r}.csv')
         assert_writeable(filepath)
 
         # Check if there are patients with this region.
-        n_pats = len(set.list_patients(region_ids=region_ids))
+        n_pats = len(set.list_patients(region=r))
         if n_pats == 0:
             # Allows us to pass all regions from Spartan 'array' job.
-            logging.error(f"No patients with region '{region}' found for dataset '{set}'.")
+            logging.error(f"No patients with region '{r}' found for dataset '{set}'.")
             return
 
         # Generate counts report.
-        df = get_region_summary(dataset, region, labels='all')
+        df = get_region_summary(dataset, r, labels='all')
 
         # Save report.
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -72,7 +72,7 @@ def get_region_summary(
     labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
     # List patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(region_ids=region)
+    pat_ids = set.list_patients(region=region)
 
     cols = {
         'patient-id': str,
@@ -85,7 +85,7 @@ def get_region_summary(
     extrema = ['min', 'max']
     for pat_id in tqdm(pat_ids):
         pat = set.patient(pat_id)
-        label = pat.region_data(region_ids=region)[region]
+        label = pat.regions_data(regions=region)[region]
 
         data = {
             'patient-id': pat_id,
@@ -129,7 +129,7 @@ def get_region_summary(
         if fov_l is not None:
             for i, a in enumerate(axes):
                 for j, e in enumerate(extrema):
-                    data['metric'] = f'fov-{e}-mm-{a}'
+                    data['metric'] = f'connected-fov-{e}-mm-{a}'
                     data['value'] = fov_l[j][i]
                     df = append_row(df, data)
 
@@ -148,7 +148,7 @@ def get_region_summary(
 
 def load_region_counts(
     dataset: DatasetID,
-    region_ids: RegionIDs = 'all',
+    regions: RegionIDs = 'all',
     exists_only: bool = False) -> Union[pd.DataFrame, bool]:
     set = NiftiDataset(dataset)
     filepath = os.path.join(set.path, 'reports', 'region-count.csv')
@@ -157,9 +157,9 @@ def load_region_counts(
             return True
         else:
             df = load_csv(filepath)
-            if region_ids != 'all':
-                region_ids = regions_to_list(region_ids)
-                df = df[df['region'].isin(region_ids)]
+            if regions != 'all':
+                regions = regions_to_list(regions)
+                df = df[df['region'].isin(regions)]
             return df
     else:
         if exists_only:
@@ -170,7 +170,7 @@ def load_region_counts(
 def load_region_summary(
     dataset: Union[str, List[str]],
     labels: Literal['included', 'excluded', 'all'] = 'included',
-    region_ids: RegionIDs = 'all',
+    region: RegionIDs = 'all',
     pivot: bool = False,
     raise_error: bool = True) -> Optional[pd.DataFrame]:
     datasets = arg_to_list(dataset, str)
@@ -179,13 +179,13 @@ def load_region_summary(
     dfs = []
     for dataset in datasets:
         set = NiftiDataset(dataset)
-        ds_region_ids = regions_to_list(region_ids, literals={ 'all': set.list_regions })
+        regions = regions_to_list(region, literals={ 'all': set.list_regions })
 
-        for region in ds_region_ids:
-            filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{region}.csv')
+        for r in regions:
+            filepath = os.path.join(set.path, 'reports', 'region-summaries', f'{r}.csv')
             if not os.path.exists(filepath):
                 if raise_error:
-                    raise ValueError(f"Summary not found for region '{region}', dataset '{set}'.")
+                    raise ValueError(f"Summary not found for region '{r}', dataset '{set}'.")
                 else:
                     # Skip this region.
                     continue
@@ -193,7 +193,7 @@ def load_region_summary(
             # Load CSV.
             df = pd.read_csv(filepath, dtype={ 'patient-id': str })
             df.insert(0, 'dataset', dataset)
-            df.insert(2, 'region', region)
+            df.insert(2, 'region', r)
 
             # Add region summary.
             dfs.append(df)

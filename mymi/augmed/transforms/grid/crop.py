@@ -3,8 +3,9 @@ from typing import *
 from mymi.typing import *
 
 from ...utils import *
-from ..random import RandomTransform
+from ..identity import Identity
 from .grid import GridTransform
+from .random import RandomGridTransform
 
 # The API should allow complexity but reduce to simplicity.
 # E.g. rotation=5 -> rotation=(-5, 5, -5, 5) - for 2D - for each axis is a simple
@@ -24,48 +25,51 @@ from .grid import GridTransform
 # Probably, if they want to remove a random amount, use c=(0, 100).
 # crop_margin:
 # - cm=(80, 120) -> cm=(80, 120, 80, 120, 80, 120, 80, 120, 80, 120, 80, 120) for 3D.
-class RandomCrop(RandomTransform):
+class RandomCrop(RandomGridTransform):
     def __init__(
         self,
-        # How do we handle the case where we want a symmetric crop?
-        # For example, we may define crop as: (50, 50, 50, 50, 50, 50, 50, 50,)
-        crop: Optional[Union[Number, Tuple[Number, ...]]] = None,
-        crop_margin: Optional[Union[Number, Tuple[Number, ...]]] = None,
+        # How many ways are there to define a crop?
+        # 1. The amount taken off each end of each axis of the image - currently the default 'crop_remove_range'.
+        # 2. Using a centre point ('centre') and amount added to each end of each axis ('crop_margin_range').
+        # 3. Using the values in patient coordinates.
+        # Which of these should be the default option?
+        crop_remove_range: Optional[Union[Number, Tuple[Number, ...]]] = 50,
+        crop_margin_range: Optional[Union[Number, Tuple[Number, ...]]] = None,
         # Must keep 'centre' and 'centre_range' separate so we can specify image centre using 'centre'.
         centre: Union[Literal['centre'], Tuple[Union['centre', Number], ...], PointArray, PointTensor] = 'centre',
-        centre_offset: Union[Number, Tuple[Number, ...]] = 0.0,
+        centre_offset_range: Union[Number, Tuple[Number, ...]] = 0.0,
         # Cropped amounts are the same at both ends of each axis.
         # This should be configured per axis really, for example we might want want symmetry
         # along the x-axis only.
         symmetric: Union[bool, Tuple[bool, ...]] = False,
         **kwargs) -> None:
         super().__init__(**kwargs)
-        assert crop is not None or crop_margin is not None
+        assert crop_remove_range is not None or crop_margin_range is not None
         self.__symmetric = to_tensor(symmetric, broadcast=self._dim)
-        if crop is not None:
+        if crop_remove_range is not None:
             # Handle crop from outside case.
             cr_vals_per_dim = 4
-            crop_range = expand_range_arg(crop, dim=self._dim, vals_per_dim=cr_vals_per_dim)
-            assert len(crop_range) == cr_vals_per_dim * self._dim, f"Expected 'crop' of length {cr_vals_per_dim * self._dim}, got {len(crop_range)}."
+            crop_remove_range = expand_range_arg(crop_remove_range, dim=self._dim, vals_per_dim=cr_vals_per_dim)
+            assert len(crop_remove_range) == cr_vals_per_dim * self._dim, f"Expected 'crop_remove_range' of length {cr_vals_per_dim * self._dim}, got {len(crop_remove_range)}."
 
             # Ensure crop ranges allow symmetry.
             for i, s in enumerate(self.__symmetric):
-                cr_axis_vals = crop_range[i * cr_vals_per_dim:(i + 1) * cr_vals_per_dim]
+                cr_axis_vals = crop_remove_range[i * cr_vals_per_dim:(i + 1) * cr_vals_per_dim]
                 if s and (cr_axis_vals[0] != cr_axis_vals[2] or cr_axis_vals[1] != cr_axis_vals[3]):
                     raise ValueError(f"Cannot create symmetric crops for axis {i} with crop ranges {cr_axis_vals}.")
 
             dtype = torch.int32 if self._use_image_coords else torch.float32
-            self.__crop_range = to_tensor(crop_range, dtype=dtype).reshape(self._dim, 2, 2)
+            self.__crop_remove_range = to_tensor(crop_remove_range, dtype=dtype).reshape(self._dim, 2, 2)
             # Should we zero out things that aren't relevant?
             self.__crop_margin_range = None
             self.__centre = None
             self.__centre_offset_range = None
         else:
-            # Handle crop from centre point and margin case.
-            self.__crop_range = None
+            # Handle crop from centre point with margin case.
+            self.__crop_remove_range = None
             cmr_vals_per_dim = 4
-            crop_margin_range = expand_range_arg(crop_margin, dim=self._dim, vals_per_dim=cmr_vals_per_dim)
-            assert len(crop_margin_range) == cmr_vals_per_dim * self._dim, f"Expected 'crop_margin' of length {cmr_vals_per_dim * self._dim}, got {len(crop_margin_range)}."
+            crop_margin_range = expand_range_arg(crop_margin_range, dim=self._dim, vals_per_dim=cmr_vals_per_dim)
+            assert len(crop_margin_range) == cmr_vals_per_dim * self._dim, f"Expected 'crop_margin_range' of length {cmr_vals_per_dim * self._dim}, got {len(crop_margin_range)}."
 
             # Ensure crop margin ranges allow symmetry.
             for i, s in enumerate(self.__symmetric):
@@ -78,8 +82,8 @@ class RandomCrop(RandomTransform):
             centre = arg_to_list(centre, (int, float, str), broadcast=self._dim)
             assert len(centre) == self._dim, f"Expected 'centre' of length {self._dim}, got {len(centre)}."
             self.__centre = centre  # Can't be tensor as might have 'centre' str.
-            centre_offset_range = expand_range_arg(centre_offset, dim=self._dim, negate_lower=True)
-            assert len(centre_offset_range) == 2 * self._dim, f"Expected 'centre_offset' of length {2 * self._dim}, got {len(centre_offset_range)}."
+            centre_offset_range = expand_range_arg(centre_offset_range, dim=self._dim, negate_lower=True)
+            assert len(centre_offset_range) == 2 * self._dim, f"Expected 'centre_offset_range' of length {2 * self._dim}, got {len(centre_offset_range)}."
             dtype = torch.int32 if self._use_image_coords else torch.float32
             self.__centre_offset_range = to_tensor(centre_offset_range, dtype=dtype).reshape(self._dim, 2)
 
@@ -261,9 +265,9 @@ class Crop(GridTransform):
             return_type = 'numpy'
         else:
             return_type = 'torch'
-        origin = to_tensor(origin, device=points.device)
-        size = to_tensor(size, device=points.device, dtype=torch.int32)
-        spacing = to_tensor(spacing, device=points.device)
+        size = to_tensor(size, device=points.device, dtype=points.dtype)
+        spacing = to_tensor(spacing, device=points.device, dtype=points.dtype)
+        origin = to_tensor(origin, device=points.device, dtype=points.dtype)
 
         # Forward transformed points could end up off-screen and should be filtered.
         # However, we need to know which points are returned for loss calc for example.
@@ -272,7 +276,7 @@ class Crop(GridTransform):
             assert size is not None
             assert spacing is not None
             # Get new FOV.
-            size_t, spacing_t, origin_t = self.transform_grid(sz, sp, o)
+            size_t, spacing_t, origin_t = self.transform_grid(size, spacing, origin)
 
             # Get crop box.
             crop_min_mm = origin_t
@@ -280,9 +284,7 @@ class Crop(GridTransform):
 
             # Crop points.
             crop_mm = torch.stack([crop_min_mm, crop_max_mm]).to(points.device)
-            print(crop_mm)
             to_keep = (points >= crop_mm[0]) & (points < crop_mm[1])
-            print(to_keep)
             to_keep = to_keep.all(axis=1)
             points_t = points[to_keep]
             indices = torch.where(to_keep)[0]

@@ -42,7 +42,7 @@ for pat in tqdm(pats):
         spacing = patient.ct_spacing()
         origin = patient.ct_origin()
         image = patient.ct_data()
-        label = patient.region_data(region=region)[region]
+        label = patient.regions_data(region=region)[region]
 
         # Save image.
         affine = np.array([

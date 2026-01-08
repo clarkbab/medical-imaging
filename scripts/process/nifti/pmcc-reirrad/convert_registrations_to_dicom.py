@@ -5,8 +5,8 @@ model = 'deeds'
 kwargs = dict(
     convert_dose=True,
     convert_moved=True,
-    landmark_ids=None,
+    landmarks=None,
     pat_ids='PMCC_ReIrrad_L01',
-    region_ids=None,
+    regions=None,
 )
 convert_registration_predictions_to_dicom(dataset, model, **kwargs)

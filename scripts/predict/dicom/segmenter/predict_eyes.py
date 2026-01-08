@@ -34,7 +34,7 @@ check_epochs = False
 crop_mm = (330, 380, 500)
 n_epochs = 1000
 
-create_all_multi_segmenter_predictions(dataset, regions, model, model_spacing, check_epochs=check_epochs, crop_mm=crop_mm, n_epochs=n_epochs, restart_pat_id=restart_pat_id)
+create_all_multi_segmenter_predictions(dataset, regions, model, model_spacing, check_epochs=check_epochs, crop_mm=crop_mm, n_epochs=n_epochs, restart_pat=restart_pat_id)
 
 # Convert predictions to RTSTRUCT DICOM.
 # RTSTRUCT info.

@@ -4,7 +4,7 @@ dataset = 'PMCC-REIRRAD'
 model ='deeds'
 kwargs = dict(
     # pat_ids='idx:0',
-    # region_ids=None,
+    # regions=None,
     # splits='test',
 )
 

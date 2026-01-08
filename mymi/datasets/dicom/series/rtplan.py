@@ -7,32 +7,29 @@ from mymi.typing import *
 
 from .series import DicomSeries
 
-class RtPlanSeries(DicomSeries):
+class DicomRtPlanSeries(DicomSeries):
     def __init__(
         self,
-        dataset_id: DatasetID,
-        pat_id: PatientID,
-        study_id: StudyID,
+        dataset: DatasetID,
+        pat: PatientID,
+        study: StudyID,
         id: SeriesID,
         index: pd.Series,
         index_policy: Dict[str, Any]) -> None:
-        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset_id, 'data', 'patients')
-        self._dataset_id = dataset_id
-        self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self._id = id
-        self._index = index
-        self._index_policy = index_policy
-        self.__modality = 'rtplan'
-        self._pat_id = pat_id
-        self._study_id = study_id
+        super().__init__('rtplan', dataset, pat, study, id, index=index, index_policy=index_policy)
+        dspath = os.path.join(config.directories.datasets, 'dicom', self._dataset_id, 'data', 'patients')
+        self.__filepath = os.path.join(dspath, index['filepath'])
 
     @property
     def dicom(self) -> RtPlanDicom:
         return dcm.dcmread(self.__filepath)
 
+    def __str__(self) -> str:
+        return super().__str__(self.__class__.__name__)
+
 # Add properties.
-props = ['dataset_id', 'filepath', 'id', 'index', 'index_policy', 'modality', 'pat_id', 'ref_rtstruct', 'study_id']
+props = ['filepath', 'ref_rtstruct']
 for p in props:
-    setattr(RtPlanSeries, p, property(lambda self, p=p: getattr(self, f'_{RtPlanSeries.__name__}__{p}')))
+    setattr(DicomRtPlanSeries, p, property(lambda self, p=p: getattr(self, f'_{DicomRtPlanSeries.__name__}__{p}')))
 
 

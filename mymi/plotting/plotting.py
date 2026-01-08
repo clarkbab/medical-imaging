@@ -9,7 +9,7 @@ from tqdm import tqdm
 from typing import *
 
 from mymi.datasets import Dataset
-from mymi.geometry import get_box, get_centre_of_mass, fov, fov_centre
+from mymi.geometry import get_box, get_centre_of_mass, foreground_fov, foreground_fov_centre
 from mymi import logging
 from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
@@ -75,20 +75,39 @@ def get_idx(
     size: Size3D,
     view: Axis,
     centre: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
-    centre_other: bool = False,
+    centre_other: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     dose_data: Optional[DoseImageArray] = None,
     idx: Optional[Union[int, float]] = None,
     idx_mm: Optional[float] = None,
-    landmark_data: Optional[LandmarksFrame] = None,
-    landmark_data_other: Optional[LandmarksFrame] = None,
+    landmarks_data: Optional[LandmarksFrame] = None,
+    landmarks_data_other: Optional[LandmarksFrame] = None,
     origin: Optional[Point3D] = None,
-    region_data: Optional[RegionArrays] = None,
+    regions_data: Optional[RegionArrays] = None,
     spacing: Optional[Spacing3D] = None) -> int:
-    if idx is not None:
-        if centre is not None:
-            if isinstance(centre, (LandmarkSeries, RegionArray)):
-                centre = type(centre)
-            raise ValueError(f"Cannot specify both 'centre' ({centre}) and 'idx' ({idx}).")
+    if centre is not None or centre_other is not None:
+        lm_data = landmarks_data_other if centre is None else landmarks_data
+        centre = centre_other if centre is None else centre
+        if isinstance(centre, str) and centre == 'dose':
+            if dose_data is None:
+                raise ValueError("Cannot use 'dose' centre without 'dose_data'.")
+            centre = get_centre_of_mass(dose_data, use_patient_coords=False)
+            idx = centre[view]
+        elif isinstance(centre, (LandmarkID, RegionID)):
+            if lm_data is not None and centre in list(lm_data['landmark-id']):
+                centre_point = lm_data[lm_data['landmark-id'] == centre][list(range(3))].iloc[0]
+                idx = point_to_image_coords(centre_point, spacing, origin)[view]
+            elif regions_data is not None and centre in regions_data:
+                idx = foreground_fov_centre(regions_data[centre], use_patient_coords=False)[view]
+            else:
+                raise ValueError(f"No centre '{centre}' found in 'landmarks/regions_data'.")
+        elif isinstance(centre, LandmarkSeries):
+            centre_point = tuple(centre[list(range(3))])
+            idx = point_to_image_coords(centre_point, spacing, origin)[view]
+        elif isinstance(centre, RegionArray):
+            idx = foreground_fov_centre(centre, use_patient_coords=False)[view]
+        else:
+            raise ValueError(f"Invalid type for 'centre': {type(centre)}. Must be one of (LandmarkSeries, LandmarkID, RegionArray, RegionID).")
+    elif idx is not None:
         if idx_mm is not None:
             raise ValueError(f"Cannot specify both 'idx' and 'idx_mm'.")
         if idx > 0 and idx < 1:
@@ -99,28 +118,6 @@ def get_idx(
             raise ValueError(f"Cannot specify both 'centre' and 'idx_mm'.")
         # Find nearest voxel index to mm position.
         idx = int(np.round((idx_mm - origin[view]) / spacing[view]))
-    elif centre is not None:
-        if isinstance(centre, str) and centre == 'dose':
-            if dose_data is None:
-                raise ValueError("Cannot use 'dose' centre without 'dose_data'.")
-            centre = get_centre_of_mass(dose_data, use_patient_coords=False)
-            idx = centre[view]
-        elif isinstance(centre, (LandmarkID, RegionID)):
-            lm_data = landmark_data_other if centre_other and landmark_data_other is not None else landmark_data
-            if lm_data is not None and centre in list(lm_data['landmark-id']):
-                centre_point = lm_data[lm_data['landmark-id'] == centre][list(range(3))].iloc[0]
-                idx = point_to_image_coords(centre_point, spacing, origin)[view]
-            elif region_data is not None and centre in region_data:
-                idx = fov_centre(region_data[centre], use_patient_coords=False)[view]
-            else:
-                raise ValueError(f"No centre '{centre}' found in 'landmarks/region_data'.")
-        elif isinstance(centre, LandmarkSeries):
-            centre_point = tuple(centre[list(range(3))])
-            idx = point_to_image_coords(centre_point, spacing, origin)[view]
-        elif isinstance(centre, RegionArray):
-            idx = fov_centre(centre, use_patient_coords=False)[view]
-        else:
-            raise ValueError(f"Invalid type for 'centre': {type(centre)}. Must be one of (LandmarkSeries, LandmarkID, RegionArray, RegionID).")
     else:
         # raise ValueError(f"Either 'centre', 'idx' or 'idx_mm' must be specified.")
         idx = np.round(size[view] / 2).astype(int)
@@ -132,7 +129,7 @@ def get_origin(view: Axis) -> Literal['lower', 'upper']:
 
 def get_view_slice(
     data: Union[ImageArray, VectorImageArray],
-    idx: Union[int, float],
+    idx: int,
     view: Axis) -> Tuple[SliceArray, int]:
     n_dims = len(data.shape)
     if n_dims == 4:
@@ -144,10 +141,6 @@ def get_view_slice(
     # Check that slice index isn't too large.
     if idx >= data.shape[view_idx]:
         raise ValueError(f"Idx '{idx}' out of bounds, only '{data.shape[view_idx]}' {get_axis_name(view)} indices.")
-    
-    # Handle index in range [0, 1).
-    if isinstance(idx, float) and idx >= 0 and idx < 1:
-        idx = int(np.round(idx * data.shape[view_idx]))
 
     # Get correct plane.
     data_index = [slice(None)] if n_dims == 4 else []
@@ -174,6 +167,7 @@ def get_view_xy(
     return res
 
 def get_window(
+    # Note: the format is (width, level), not (min, max).
     window: Optional[Union[str, Tuple[Optional[float], Optional[float]]]] = None,
     data: Optional[ImageArray] = None) -> Tuple[float, float]:
     if isinstance(window, tuple):
@@ -249,77 +243,81 @@ def plot_box_slice(
     ax.add_patch(rect)
     ax.plot(0, 0, c=colour, label=label, linestyle=linestyle)
 
-def plot_landmark_data(
-    landmark_data: Union[LandmarksFrame, LandmarksFrameVox, Points3D],
+def plot_landmarks_data(
+    landmarks_data: Union[LandmarksFrame, LandmarksFrameVox, Points3D],
     ax: mpl.axes.Axes,
     idx: int,
     size: Size3D,
     spacing: Spacing3D,
     origin: Point3D,
     view: Axis, 
-    colour: str = 'yellow',
     crop: Optional[Box2D] = None,
     dose_data: Optional[DoseImageArray] = None,
     fontsize_landmarks: float = 10,
-    landmark_ids: LandmarkIDs = 'all',
+    landmark: LandmarkIDs = 'all',
     landmarks_use_patient_coords: bool = True,
+    marker_colour: str = 'yellow',
+    marker_edgecolour: str = 'face',
+    marker_linewidth: float = 1,
+    marker_size: float = 20,
+    marker_style: str = 'o',
     n_landmarks: Optional[int] = None,
-    show_landmark_ids: bool = False,
+    show_landmarks: bool = False,
     show_landmark_dists: bool = True,
     show_landmark_doses: bool = False,
     zorder: float = 1,
     **kwargs) -> None:
-    landmark_data = landmark_data.copy()
-    if isinstance(landmark_data, Points3D):
-        landmark_data = landmarks_from_data(landmark_data)
+    landmarks_data = landmarks_data.copy()
+    if isinstance(landmarks_data, Points3D):
+        landmarks_data = landmarks_from_data(landmarks_data)
 
-    # Filter by 'landmark_ids'.
-    if landmark_ids != 'all':
-        landmark_ids = arg_to_list(landmark_ids, (int, str))
-        landmark_data = landmark_data[landmark_data['landmark-id'].isin(landmark_ids)]
+    # Filter by 'landmarks'.
+    if landmark != 'all':
+        landmarks = arg_to_list(landmark, (int, str))
+        landmarks_data = landmarks_data[landmarks_data['landmark-id'].isin(landmarks)]
 
     # Add sampled dose intensities.
     if show_landmark_doses and dose_data is not None:
-        landmark_data = sample(dose_data, landmark_data, landmarks_col='dose', origin=origin, spacing=spacing)
+        landmarks_data = sample(dose_data, landmarks_data, landmarks_col='dose', origin=origin, spacing=spacing)
 
     # Convert landmarks to image coords.
     if landmarks_use_patient_coords:
-        landmark_data = landmarks_to_image_coords(landmark_data, spacing, origin)
+        landmarks_data = landmarks_to_image_coords(landmarks_data, spacing, origin)
 
     # Take subset of n closest landmarks landmarks.
-    landmark_data['dist'] = np.abs(landmark_data[view] - idx)
+    landmarks_data['dist'] = np.abs(landmarks_data[view] - idx)
     if n_landmarks is not None:
-        landmark_data = landmark_data.sort_values('dist')
-        landmark_data = landmark_data.iloc[:n_landmarks]
+        landmarks_data = landmarks_data.sort_values('dist')
+        landmarks_data = landmarks_data.iloc[:n_landmarks]
 
     # Convert distance to alpha.
-    dist_norm = landmark_data['dist'] / (size[view] / 2)
+    dist_norm = landmarks_data['dist'] / (size[view] / 2)
     dist_norm[dist_norm > 1] = 1
-    landmark_data['dist-norm'] = dist_norm
+    landmarks_data['dist-norm'] = dist_norm
     base_alpha = 0.3
-    landmark_data['alpha'] = base_alpha + (1 - base_alpha) * (1 - landmark_data['dist-norm'])
+    landmarks_data['alpha'] = base_alpha + (1 - base_alpha) * (1 - landmarks_data['dist-norm'])
     
-    r, g, b = mpl.colors.to_rgb(colour)
+    r, g, b = mpl.colors.to_rgb(marker_colour)
     if show_landmark_dists:
-        colours = [(r, g, b, a) for a in landmark_data['alpha']]
+        colours = [(r, g, b, a) for a in landmarks_data['alpha']]
     else:
-        colours = [(r, g, b, 1) for _ in landmark_data['alpha']]
+        colours = [(r, g, b, 1) for _ in landmarks_data['alpha']]
     img_axs = list(range(3))
     img_axs.remove(view)
-    lm_x, lm_y, lm_ids = landmark_data[img_axs[0]], landmark_data[img_axs[1]], landmark_data['landmark-id']
-    lm_doses = landmark_data['dose'].values if 'dose' in landmark_data.columns else None
+    lm_x, lm_y, lm_ids = landmarks_data[img_axs[0]], landmarks_data[img_axs[1]], landmarks_data['landmark-id']
+    lm_doses = landmarks_data['dose'].values if 'dose' in landmarks_data.columns else None
     if crop is not None:
         lm_x, lm_y = lm_x - crop[0][0], lm_y - crop[0][1]
-    ax.scatter(lm_x, lm_y, c=colours, s=20, zorder=zorder)
-    if show_landmark_doses or show_landmark_ids:
+    ax.scatter(lm_x, lm_y, c=colours, edgecolors=marker_edgecolour, linewidth=marker_linewidth, marker=marker_style, s=marker_size, zorder=zorder)
+    if show_landmark_doses or show_landmarks:
         for i, (id, x, y) in enumerate(zip(lm_ids, lm_x, lm_y)):
-            if show_landmark_ids:
+            if show_landmarks:
                 text = f'{id} ({lm_doses[i]:.1f})' if lm_doses is not None else id
             else:
                 text = f'{lm_doses[i]:.1f}'
             ax.text(x, y, text, fontsize=fontsize_landmarks, color=colour)
 
-def plot_region_data(
+def plot_regions_data(
     data: RegionArrays,
     ax: mpl.axes.Axes,
     idx: int,
@@ -358,7 +356,7 @@ def plot_region_data(
 
         # Plot extent.
         if show_extent:
-            fov_box = fov(data[region])
+            fov_box = foreground_fov(data[region])
             if fov_box is not None:
                 label = f'{region} extent' if box_intesects_view_plane(fov_box, view, idx) else f'{region} extent (offscreen)'
                 plot_box_slice(fov_box, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')

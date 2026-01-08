@@ -19,11 +19,11 @@ def convert_registrations_from_lung_preprocessed(
     models: ModelIDs,
     convert_ct: bool = True,
     convert_dose: bool = True,
-    fixed_study_id = 'study_1',
-    landmark_ids: LandmarkIDs = 'all',
-    moving_study_id = 'study_0',
+    fixed_study = 'study_1',
+    landmarks: LandmarkIDs = 'all',
+    moving_study = 'study_0',
     pat_ids: PatientIDs = 'all',
-    region_ids: RegionIDs = 'all',
+    regions: RegionIDs = 'all',
     **kwargs) -> None:
     # Load crops files.
     set = NiftiDataset(dataset)
@@ -37,11 +37,11 @@ def convert_registrations_from_lung_preprocessed(
         logging.info(f'Processing model {m} for dataset {dataset} -> {dest_dataset}.')
         for p in tqdm(pat_ids):
             # Load applied crops.
-            fixed_crop = df[(df['patient-id'] == p) & (df['study-id'] == fixed_study_id)].iloc[0]['crop']
-            moving_crop = df[(df['patient-id'] == p) & (df['study-id'] == moving_study_id)].iloc[0]['crop']
+            fixed_crop = df[(df['patient-id'] == p) & (df['study-id'] == fixed_study)].iloc[0]['crop']
+            moving_crop = df[(df['patient-id'] == p) & (df['study-id'] == moving_study)].iloc[0]['crop']
 
             # Load transform in preprocessed space.
-            transform_pp, _, _, _, _ = load_registration(dataset, p, m, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id)
+            transform_pp, _, _, _, _ = load_registration(dataset, p, m, study=fixed_study, moving_study=moving_study)
             if transform_pp is None:
                 # Some models (e.g. corrfield) failed for some patients.
                 continue
@@ -63,12 +63,12 @@ def convert_registrations_from_lung_preprocessed(
             transform.AddTransform(fixed_to_fixed_pp)
 
             # Save DVF.
-            create_registration_transform(dest_dataset, p, m, transform, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+            create_registration_transform(dest_dataset, p, m, transform, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Save moved CT.
             pat = dest_set.patient(p)
-            fixed_study = pat.study(fixed_study_id)
-            moving_study = pat.study(moving_study_id) 
+            fixed_study = pat.study(fixed_study)
+            moving_study = pat.study(moving_study) 
             if convert_ct and moving_study.has_ct:
                 okwargs = dict(
                     image=moving_study.default_ct,
@@ -76,13 +76,13 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_ct = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                create_registration_moved_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move region data.
-            if region_ids is not None:
-                moving_region_data = moving_study.region_data(region_ids=region_ids)
-                if moving_region_data is not None:
-                    for r, l in moving_region_data.items():
+            if regions is not None:
+                moving_regions_data = moving_study.regions_data(regions=regions)
+                if moving_regions_data is not None:
+                    for r, l in moving_regions_data.items():
                         # Apply registration transform.
                         okwargs = dict(
                             spacing=moving_study.ct_spacing,
@@ -91,17 +91,17 @@ def convert_registrations_from_lung_preprocessed(
                             transform=transform,
                         )
                         moved_label = resample(l, **okwargs)
-                        create_registration_moved_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                        create_registration_moved_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move landmarks.
-            if landmark_ids is not None:
-                fixed_landmark_data = fixed_study.landmark_data(landmark_ids=landmark_ids)
-                if fixed_landmark_data is not None:
+            if landmarks is not None:
+                fixed_landmarks_data = fixed_study.landmarks_data(landmarks=landmarks)
+                if fixed_landmarks_data is not None:
                     # Move landmarks from fixed -> moving spacing, we can't always invert DVF transforms.
-                    moved_landmark_data = sitk_transform_points(fixed_landmark_data, transform)
+                    moved_landmarks_data = sitk_transform_points(fixed_landmarks_data, transform)
                     landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
-                    moved_landmark_data = moved_landmark_data[landmark_cols]
-                    create_registration_moved_landmarks(dest_dataset, p, m, moved_landmark_data, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                    moved_landmarks_data = moved_landmarks_data[landmark_cols]
+                    create_registration_moved_landmarks(dest_dataset, p, m, moved_landmarks_data, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move dose.
             if convert_dose and moving_study.has_dose:
@@ -111,7 +111,7 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_dose = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study_id=fixed_study_id, moving_study_id=moving_study_id, **kwargs)
+                create_registration_moved_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
 def convert_to_lung_preprocessed_dataset(
     dataset: str,
@@ -121,7 +121,7 @@ def convert_to_lung_preprocessed_dataset(
     margin_mm: float = 20,
     pat_ids: PatientIDs = 'all',
     recreate: bool = False,
-    recreate_patients: bool = True,
+    recreate_patient: bool = True,
     spacing: Spacing3D = (1, 1, 1)) -> None:
     
     # Load patients.
@@ -131,7 +131,7 @@ def convert_to_lung_preprocessed_dataset(
             dest_set = recreate_nifti(dest_dataset)
         else:
             dest_set = NiftiDataset(dest_dataset)
-            if recreate_patients:
+            if recreate_patient:
                 # Remove 'patients' data to ensure there are no leftovers. Preserve other data, e.g. predictions, evaluations, etc.
                 filepath = os.path.join(dest_set.path, 'data', 'patients')
                 if os.path.exists(filepath):
@@ -152,7 +152,7 @@ def convert_to_lung_preprocessed_dataset(
 
     # Save the crop that was applied, so that it can be reversed later to apply transforms to original images.
     filepath = os.path.join(dest_set.path, 'data', 'crops.csv')
-    if recreate or recreate_patients or not os.path.exists(filepath):
+    if recreate or recreate_patient or not os.path.exists(filepath):
         cols = {
             'patient-id': str,
             'study-id': str,
@@ -171,13 +171,13 @@ def convert_to_lung_preprocessed_dataset(
         fixed_ct_rs = resample(fixed_study.ct_data, output_spacing=spacing, spacing=fixed_study.ct_spacing)
         if fixed_study.has_dose:
             fixed_dose_rs = resample(fixed_study.dose_data, output_spacing=spacing, spacing=fixed_study.dose_spacing)
-        fixed_lung_rs = resample(fixed_study.region_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
+        fixed_lung_rs = resample(fixed_study.regions_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=fixed_study.ct_spacing)
         moving_ct_rs = resample(moving_study.ct_data, output_spacing=spacing, spacing=moving_study.ct_spacing)
         if moving_study.has_dose:
             moving_dose_rs = resample(moving_study.dose_data, output_spacing=spacing, spacing=moving_study.dose_spacing)
-        moving_lung_rs = resample(moving_study.region_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
-        fixed_lms = fixed_study.landmark_data()
-        moving_lms = moving_study.landmark_data()
+        moving_lung_rs = resample(moving_study.regions_data(regions=lung_region)[lung_region], output_spacing=spacing, spacing=moving_study.ct_spacing)
+        fixed_lms = fixed_study.landmarks_data()
+        moving_lms = moving_study.landmarks_data()
 
         # Get COM vector (fixed -> moving).
         fixed_com = get_centre_of_mass(fixed_lung_rs, spacing=spacing, origin=fixed_study.ct_origin)

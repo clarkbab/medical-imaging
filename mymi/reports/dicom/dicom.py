@@ -2,7 +2,6 @@ from collections import Counter
 import numpy as np
 import os
 import pandas as pd
-from pandas import DataFrame
 import pytorch_lightning as pl
 from tqdm import tqdm
 from typing import List, Optional, Union
@@ -11,8 +10,8 @@ from mymi.datasets.dicom import DicomDataset
 from mymi.geometry import fov
 from mymi import logging
 from mymi.regions import regions_to_list
-from mymi.typing import Regions
-from mymi.utils import append_row, encode
+from mymi.typing import *
+from mymi.utils import *
 
 def create_evaluation_report(
     name: str,
@@ -137,7 +136,7 @@ def create_patient_regions_report(
 def load_patient_regions_report(
     dataset: str,
     exists_only: bool = False,
-    use_mapping: bool = True) -> Union[DataFrame, bool]:
+    use_mapping: bool = True) -> Union[pd.DataFrame, bool]:
     set = DicomDataset(dataset)
     filename = 'regions-count.csv' if use_mapping else 'unmapped-regions-count.csv'
     filepath = os.path.join(set.path, 'data', 'reports', filename)
@@ -149,12 +148,12 @@ def load_patient_regions_report(
         else:
             raise ValueError(f"Patient regions report doesn't exist for dataset '{dataset}'.")
 
-def get_mapped_duplicates(dataset: str) -> DataFrame:
+def get_mapped_duplicates(dataset: str) -> pd.DataFrame:
     # Allows us to check 'region-map.csv' mapping for duplicates rather than running 
     # 'create_patient_regions_report(..., use_mapping=True)' which will break on each duplicate.
     region_map = DicomDataset(dataset).region_map
     df = load_patient_regions_report(dataset, use_mapping=False)
-    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: region_map.to_internal(row['region'], pat_id=row['patient-id'])[0], axis=1)
+    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: region_map.to_internal(row['region'], pat=row['patient-id'])[0], axis=1)
     df = df.groupby('patient-id')['mapped'].apply(list).reset_index()
     df['mapped'] = df['mapped'].apply(lambda regions: [i for i, count in Counter(regions).items() if count > 1])
     df['duplicates'] = df['mapped'].apply(lambda dups: len(dups) > 0)
@@ -165,7 +164,7 @@ def get_regions_like(
     dataset: str,
     text: str,
     case: bool = False,
-    use_mapping: bool = False) -> DataFrame:
+    use_mapping: bool = False) -> pd.DataFrame:
     df = load_patient_regions_report(dataset, use_mapping=use_mapping)
     count_df = df.groupby('region')['patient-id'].count().rename('count').reset_index()
     if case:
@@ -233,7 +232,7 @@ def get_region_summary(
 
         # Get region data.
         pat_regions = set.patient(pat).list_regions(whitelist=regions)
-        rs_data = set.patient(pat).region_data(region=pat_regions)
+        rs_data = set.patient(pat).regions_data(region=pat_regions)
 
         # Add extents for all regions.
         for r in rs_data.keys():
@@ -256,12 +255,14 @@ def get_region_summary(
 
     return df
 
-def create_region_counts(dataset: str) -> None:
-    count_df = get_region_counts(dataset)
+# This is most useful for speeding up queries to dicom datasets that are filtered
+# by 'regions'.
+def create_regions_report(dataset: str) -> None:
+    regions_df = get_regions_report(dataset)
     set = DicomDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filepath = os.path.join(set.path, 'reports', 'regions.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    count_df.to_csv(filepath, index=False)
+    regions_df.to_csv(filepath, index=False)
 
 def create_region_summary(
     dataset: str,
@@ -276,7 +277,7 @@ def create_region_summary(
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
-def get_region_counts(dataset: str) -> DataFrame:
+def get_regions_report(dataset: DatasetID) -> pd.DataFrame:
     # List patients.
     set = DicomDataset(dataset)
     pat_ids = set.list_patients()
@@ -284,37 +285,49 @@ def get_region_counts(dataset: str) -> DataFrame:
     # Create dataframe.
     cols = {
         'patient-id': str,
+        'study-id': str,
+        'series-id': str,
         'region': str
     }
-    df = DataFrame(columns=cols.keys())
+    df = pd.DataFrame(columns=cols.keys())
 
     # Add rows.
-    for pat_id in tqdm(pat_ids):
-        pat_regions = set.patient(pat_id).list_regions()
-        for pat_region in pat_regions:
-            data = {
-                'patient-id': pat_id,
-                'region': pat_region
-            }
-            df = append_row(df, data)
+    for p in tqdm(pat_ids):
+        pat = set.patient(p)
+        study_ids = pat.list_studies()
+        for s in study_ids:
+            study = pat.study(s)
+            series_ids = study.list_rtstruct_series()
+            for ss in series_ids:
+                series = study.rtstruct_series(ss)
+                series_regions = series.list_regions()
+                for r in series_regions:
+                    data = {
+                        'patient-id': p,
+                        'study-id': s,
+                        'series-id': ss,
+                        'region': r,
+                    }
+                    df = append_row(df, data)
 
     return df
 
-def load_region_counts(
-    dataset: str,
-    regions: Optional[Regions] = None,
-    exists_only: bool = False) -> Union[DataFrame, bool]:
+def load_regions_report(
+    dataset: DatasetID,
+    region: RegionIDs = 'all',
+    exists_only: bool = False) -> Union[pd.DataFrame, bool]:
     set = DicomDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filepath = os.path.join(set.path, 'reports', 'regions.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True
         else:
-            df = pd.read_csv(filepath)
-            df = df.astype({ 'patient-id': str })
-            if regions is not None:
-                regions = regions_to_list(regions)
-                df = df[df['region'].isin(regions)]
+            df = load_csv(filepath)
+            df.insert(0, 'dataset', dataset)
+            if region == 'all':
+                return df
+            regions = regions_to_list(region)
+            df = df[df['region'].isin(regions)]
             return df
     else:
         if exists_only:

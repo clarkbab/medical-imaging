@@ -1,6 +1,7 @@
 from .args import *
 from .assertions import *
 from .colours import *
+from .debug import *
 from .decorators import *
 from .dicom import *
 from .interval import *

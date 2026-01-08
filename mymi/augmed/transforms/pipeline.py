@@ -7,29 +7,30 @@ from mymi.utils import *
 
 from ..utils import *
 from .grid import GridTransform
-from .mixins import TransformImageMixin
+from .identity import Identity
+from .intensity import IntensityTransform
 from .random import RandomTransform
 from .spatial import Affine, SpatialTransform
 from .transform import Transform
 
-# Is Pipeline actually a transform?
-# It should follow the API fairly closely.
-# It has params - a list of the params for each transform.
-class Pipeline(TransformImageMixin, Transform):
+class Pipeline(Transform):
     def __init__(
         self,
         transforms: List[Union[Transform]],
         # What's the thinking re 'dim'?
-        # Same as 'random_seed'. Allow us to override here, rather than setting in each transform's constructor.
+        # Same as 'seed'. Allow us to override here, rather than setting in each transform's constructor.
         # Allows, very easy setting of dim=2 for a pipeline.
         dim: Optional[int] = None,
         freeze: Optional[Union[bool, List[bool]]] = False,
-        # What's the thinking around 'random_seed'?
+        # What's the thinking around 'seed'?
         # If set here, override anything set in the transforms constructor. Allows easy setting of seeds in one place.
-        random_seed: Optional[Union[int, List[int]]] = None) -> None:
+        seed: Optional[Union[int, List[int]]] = None,
+        **kwargs,
+        ) -> None:
+        super().__init__(**kwargs)
         freezes = arg_to_list(freeze, (None, bool), broadcast=len(transforms))
-        random_seeds = arg_to_list(random_seed, (None, int), broadcast=len(transforms))
-        assert len(random_seeds) == len(transforms), "Random seeds ('random_seed') must have same length as 'transforms'."
+        seeds = arg_to_list(seed, (None, int), broadcast=len(transforms))
+        assert len(seeds) == len(transforms), "Random seeds ('seed') must have same length as 'transforms'."
         if dim is not None:
             assert dim in [2, 3], "Only 2D and 3D pipelines are supported."
             [t.set_dim(dim) for t in transforms]
@@ -45,24 +46,23 @@ class Pipeline(TransformImageMixin, Transform):
 
         # Reseed the random transforms if requested - just easier doing it during pipeline creation rather than
         # for each transform.
-        [t.set_random_seed(s) for s, t in zip(random_seeds, transforms) if s is not None and isinstance(t, RandomTransform)]
+        [t.set_seed(s) for s, t in zip(seeds, transforms) if s is not None and isinstance(t, RandomTransform)]
 
         # Freeze transforms if requested.
         transforms = [t.freeze() if f and isinstance(t, RandomTransform) else t for f, t in zip(freezes, transforms)]
 
         self.__transforms = transforms
+        self.__warn_resamples()
 
-    def back_transform_points(
+    # Performs the back transform for a grid/spatial group applying
+    # the affine optimisation if possible.
+    def __back_transform_points_for_group(
         self,
+        transforms: List[Transform],     # TODO: SpatialTransforms?
         points: PointsTensor,
-        sizes: List[SizeTensor],
-        spacings: List[SpacingTensor],
-        origins: List[PointTensor],
+        grids: List[ImageGrid],     # These are the input grids to each transform - required by some, e.g. Rotate.
         **kwargs) -> PointsTensor:
-        # TODO: Allow sizes/spacings/origins to be None and run a forward pass of 'transform_grid' for these.
-        # Will people want to use this API?
         points_t = points
-        grid_ts = list(zip(sizes, spacings, origins))
 
         # Create chains of homogeneous matrix multiplications.
         # E.g. for flip and rotate, naively we could perform each separately by 
@@ -74,12 +74,12 @@ class Pipeline(TransformImageMixin, Transform):
         # A better approach is to pull out chains of homogeneous matrix multiplications and concatenate them
         # so that the points matrix is only used once (for each chain).
         affine_chain = []
-        for i, (t, g) in enumerate(reversed(list(zip(self.__transforms, grid_ts)))):
-            size_t, spacing_t, origin_t = g
-            grid_args = dict(
-                size=size_t,
-                spacing=spacing_t,
-                origin=origin_t
+        for i, (t, g) in enumerate(reversed(list(zip(transforms, grids)))):
+            size, spacing, origin = g
+            grid_kwargs = dict(
+                size=size,
+                spacing=spacing,
+                origin=origin,
             )
 
             # Chain resolution conditions:
@@ -88,20 +88,23 @@ class Pipeline(TransformImageMixin, Transform):
             if isinstance(t, SpatialTransform):
                 # Store any affine multiplications for later.
                 if isinstance(t, Affine):
-                    t_affine = t.get_affine_back_transform(points_t.device, **grid_args)
+                    t_affine = t.get_affine_back_transform(points_t.device, **grid_kwargs)
+                    # Transform 't' iterates backwards through transform list.
+                    # We want transforms that are later in the list to be applied first (i.e. to be
+                    # later in the affine chain). So prepend transforms to the list.
                     affine_chain.insert(0, t_affine)
                 else:
                     # Resolve chain.
                     if len(affine_chain) > 0:
-                        points_t = self.resolve_chain(points_t, affine_chain)
+                        points_t = self.__resolve_affine_chain(points_t, affine_chain)
                         affine_chain = []
 
                     # Perform current transform.
-                    points_t = t.back_transform_points(points_t, **grid_args)
+                    points_t = t.back_transform_points(points_t, **grid_kwargs)
 
             # Resolve if final round.
-            if i == len(self.__transforms) - 1 and len(affine_chain) > 0:
-                points_t = self.resolve_chain(points_t, affine_chain)
+            if i == len(transforms) - 1 and len(affine_chain) > 0:
+                points_t = self.__resolve_affine_chain(points_t, affine_chain)
 
         return points_t
 
@@ -110,7 +113,6 @@ class Pipeline(TransformImageMixin, Transform):
     # random transforms.
     def freeze(self) -> 'Pipeline':
         transforms = [t.freeze() if isinstance(t, RandomTransform) else t for t in self.__transforms]
-        # Remove identity transforms?
         return Pipeline(transforms)
 
     def __getitem__(
@@ -118,15 +120,98 @@ class Pipeline(TransformImageMixin, Transform):
         i: int) -> Transform:
         return self.__transforms[i]
 
+    # Groups transforms by type (intensity vs. grid/spatial).
+    def __get_transform_groups(
+        self,
+        ) -> List[List[Transform]]:
+        current_types = None
+        transform_groups = []
+        transform_group = []
+
+        for i, t in enumerate(self.__transforms):
+            if isinstance(t, Identity):
+                continue
+
+            # Add transform to group.
+            if current_types is not None and isinstance(t, tuple(current_types)):
+                # Append transform to existing transform group of same type.
+                transform_group.append(t)
+            else:
+                # Close out existing transform group - unless first iteration.
+                if current_types is not None:
+                    transform_groups.append(transform_group)
+                
+                # Start new transform group.
+                if isinstance(t, IntensityTransform):
+                    current_types = [IntensityTransform]
+                else:
+                    current_types = [GridTransform, SpatialTransform]
+                transform_group = [t]
+
+        # Add final group.
+        if len(transform_group) > 0:
+            transform_groups.append(transform_group)
+
+        return transform_groups
+
+    # Returns input/output grid params for all transform groups.
+    def __get_transform_groups_grid_params(
+        self,
+        size: SizeTensor,
+        spacing: SpacingTensor,
+        origin: PointTensor,
+        ) -> List[List[ImageGrid]]:
+        # Each group contains the input grid params to each transform in the group (required
+        # for some transforms), plus the final grid params (required for resampling groups).
+        current_types = None
+        grid_groups = []
+        grid_group = []
+        size_t, spacing_t, origin_t = size, spacing, origin
+
+        for i, t in enumerate(self.__transforms):
+            if isinstance(t, Identity):
+                continue
+
+            # Add transform to group.
+            if current_types is not None and isinstance(t, tuple(current_types)):
+                grid_group.append((size_t, spacing_t, origin_t))
+            else:
+                # Close out existing grid group - unless first iteration.
+                if current_types is not None:
+                    grid_group.append((size_t, spacing_t, origin_t))    # Add final grid params to group.
+                    grid_groups.append(grid_group)
+                
+                # Append transform to new group of new type.
+                if isinstance(t, IntensityTransform):
+                    current_types = [IntensityTransform]
+                else:
+                    current_types = [GridTransform, SpatialTransform]
+                grid_group = [(size_t, spacing_t, origin_t)]
+
+            # Update grid params.
+            if isinstance(t, GridTransform):
+                size_t, spacing_t, origin_t = t.transform_grid(size_t, spacing_t, origin_t)
+
+        # Add final group - final transform could have been identity.
+        if len(grid_group) > 0:
+            grid_group.append((size_t, spacing_t, origin_t))    # Add final grid params to group.
+            grid_groups.append(grid_group)
+
+        return grid_groups
+
     @property
     def params(self) -> Dict[str, Any]:
         return dict((i, t.params) for i, t in enumerate(self.__transforms))
 
-    def resolve_chain(
+    def __resolve_affine_chain(
         self,
         points: PointsTensor,
-        chain: List[Affine]) -> PointsTensor:
+        chain: List[Affine],
+        ) -> PointsTensor:
+        if self._verbose:
+            logging.info(f"Resolving affine chain of length {len(chain)}.")
         points_h = torch.hstack([points, create_ones((points.shape[0], 1), device=points.device)])  # Move to homogeneous coords.
+        chain = [c.to(points.dtype) for c in chain]
         points_h_t = torch.linalg.multi_dot(chain + [points_h.T]).T
         points_t = points_h_t[:, :-1]
         return points_t
@@ -134,32 +219,20 @@ class Pipeline(TransformImageMixin, Transform):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.__transforms})"
 
-    def transform_grid(
-        self,
-        size: SizeTensor,
-        spacing: SpacingTensor,
-        origin: PointTensor,
-        **kwargs) -> Tuple[SizeTensor, SpacingTensor, PointTensor]:
-        size_t, spacing_t, origin_t = size.clone(), spacing.clone(), origin.clone()
-        for t in self.__transforms:
-            if isinstance(t, GridTransform):
-                size_t, spacing_t, origin_t = t.transform_grid(size_t, spacing_t, origin_t)
-        return size_t, spacing_t, origin_t
-
     @alias_kwargs([
-        ('o', 'origin'),
         ('s', 'spacing'),
+        ('o', 'origin'),
     ])
-    # This function should accept lists of images/spacings/origins.
-    # If two images are in the same coordinate system (group), we should only call
-    # 'back_transform_points' a single time.
     def transform_image(
         self,
         image: Union[ImageArray, ImageTensor, LabelArray, LabelTensor, List[Union[ImageArray, ImageTensor, LabelArray, LabelTensor]]],
         spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
         origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
-        return_grid: bool = False) -> Union[ImageArrayWithFov, ImageTensorWithFov, List[Union[ImageArrayWithFov, ImageTensorWithFov]]]:
+        return_grid: bool = False,
+        ) -> Union[ImageArray, ImageTensor, List[Union[ImageArray, ImageTensor, Union[ImageGrid, List[ImageGrid]]]]]:
         images, image_was_single = arg_to_list(image, (np.ndarray, torch.Tensor), return_matched=True)
+        if self._verbose:
+            logging.info(f"Transforming {len(images)} images.")
         return_types = ['numpy' if isinstance(i, np.ndarray) else 'torch' for i in images]
         origins = arg_to_list(origin, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(images))
         spacings = arg_to_list(spacing, (None, tuple, np.ndarray, torch.Tensor), broadcast=len(images))
@@ -176,77 +249,126 @@ class Pipeline(TransformImageMixin, Transform):
         spacings = [to_tensor((1,) * self._dim, device=i.device) if s is None else to_tensor(s, device=i.device) for s, i in zip(spacings, images)]
         origins = [to_tensor((0,) * self._dim, device=i.device) if o is None else to_tensor(o, device=i.device) for o, i in zip(origins, images)]
 
-        # Group images by size/spacing/origin.
-        image_groups = { 0: 0 }     # Maps images (by index) to a group.
-        groups = [0]    # Tracks groups (by index of first image).
-        for i, (si, sp, o, d) in enumerate(zip(sizes[1:], spacings[1:], origins[1:], devices[1:])):
-            j = i + 1
-            for k, g in enumerate(groups):
-                g_si, g_sp, g_o = sizes[g].to(d), spacings[g].to(d), origins[g].to(d)
-                if torch.all(si == g_si) and torch.all(sp == g_sp) and torch.all(o == g_o):
-                    # Add to existing group.
-                    image_groups[j] = g
-                elif k == len(groups) - 1:
-                    # Create new group.
-                    groups.append(j)
-                    image_groups[j] = j
+        # How do we handle image and transform grouping.
+        # - Transform grouping allows us to chain intensity and grid/spatial transforms.
+        # - Image grouping is an optimisation that allows us to calculate resampling positions
+        #   for images with the same grid params only once.
+        # - Now that multiple resampling steps may be applied, we need to store multiple resampling
+        #   position points tensors for each image group. 
+        # - For resampling, we require the tensor of back-transformed points (final grid params generate
+        #   these points, then 'back_transform_points' places them in moving image space) and the grid
+        #   params (spacing, origin) for the resampled image (first image in group).
 
-        # Get back transformed image points for all groups.
-        group_points_mm_ts = []
-        group_grid_ts = []
-        for g in groups:
-            print('image group: ', g)
+        # Group images by grid parameters: size, spacing, and origin.
+        # We need to know which groups there are -> i.e. the first image in each grid group.
+        # We need to know the mapping from image to group.
+        image_groups_map = []       # Maps images (by position in 'image_groups') to groups.
+        for i, (sz, sp, o, d) in enumerate(zip(sizes, spacings, origins, devices)):
+            # Check if this image has same grid params as an existing group.
+            image_groups = np.unique(image_groups_map).tolist()
+            for g in image_groups:
+                g_sz, g_sp, g_o = sizes[g].to(d), spacings[g].to(d), origins[g].to(d)
+                if torch.all(sz == g_sz) and torch.all(sp == g_sp) and torch.all(o == g_o):
+                    image_groups_map.append(g)
 
-            # Calculate intermediate grid params - these are required for certain transforms, 
-            # e.g. flip/rotate, which need the transform centre.
-            image, size_t, spacing_t, origin_t = images[g], sizes[g], spacings[g], origins[g]
-            size_ts, spacing_ts, origin_ts = [], [], []
-            for t in self.__transforms:
-                size_ts.append(size_t)
-                spacing_ts.append(spacing_t)
-                origin_ts.append(origin_t)
-                if isinstance(t, GridTransform):
-                    size_t, spacing_t, origin_t = t.transform_grid(size_t, spacing_t, origin_t)
+            # Otherwise, add to a new group.
+            if len(image_groups_map) != i + 1:
+                image_groups_map.append(i)
 
-            # Get final grid points.
-            points_mm = grid_points(size_t, spacing_t, origin_t).to(image.device)
+        # Load transforms - grouped by intensity or grid/spatial types.
+        transform_groups = self.__get_transform_groups()
 
-            # Perform back transform of resampling points.
-            points_mm_t = self.back_transform_points(points_mm, size_ts, spacing_ts, origin_ts)
+        # Save the data required for each resampling step.
+        # Resampling requires a tensor of sample locations in the moving image and
+        # the grid params defining the tensor position in patient coords.
+        image_groups = np.unique(image_groups_map).tolist()
+        moving_grids = []       # List[List[ImageGrid]]
+        resample_points = []    # List[List[PointsTensor]] 
+        final_grids = []        # List[ImageGrid]
+        for ig in image_groups:
+            image_group_moving_grids = []
+            image_group_resample_points = []
+
+            # Get grid params for each transform group.
+            size, spacing, origin, device = sizes[ig], spacings[ig], origins[ig], devices[ig]
+            grid_groups = self.__get_transform_groups_grid_params(size, spacing, origin)
+
+            # Calculate info needed for resampling steps: moving grid params, resampling points
+            # plus final grids for returning to user. 
+            for i, (ts, gs) in enumerate(zip(transform_groups, grid_groups)):
+                if isinstance(ts[0], IntensityTransform):
+                    # Ensuring group arrays have same length as number of transforms.
+                    image_group_moving_grids.append(None)
+                    image_group_resample_points.append(None)
+                elif isinstance(ts[0], (GridTransform, SpatialTransform)):
+                    # Get final grid points.
+                    points_t = grid_points(*gs[-1]).to(device)
+
+                    # Back transform to their moving image locations.
+                    # - Each transform requires the input grid params.
+                    points_t = self.__back_transform_points_for_group(ts, points_t, gs[:-1])
+
+                    # Reshape points to the fixed image size.
+                    points_t = points_t.reshape(*to_tuple(gs[-1][0]), self._dim)
+
+                    # Append to group resampling info.
+                    image_group_moving_grids.append(gs[0])
+                    image_group_resample_points.append(points_t)
 
             # Append group results.
-            group_points_mm_ts.append(points_mm_t)
-            group_grid_ts.append((size_t, spacing_t, origin_t))
+            moving_grids.append(image_group_moving_grids)
+            resample_points.append(image_group_resample_points)
+            final_grids.append(gs[-1])
 
-        # Resample images.
+        assert len(moving_grids) == len(image_groups)
+        assert len(resample_points) == len(image_groups)
+        assert len(final_grids) == len(image_groups)
+        assert len(moving_grids[0]) == len(transform_groups), f"Got {len(moving_grids[0])}, expected {len(transform_groups)}"
+        assert len(resample_points[0]) == len(transform_groups), f" Got {len(resample_points[0])}, expected {len(transform_groups)}"
+
+        # Transform images.
         image_ts = []
-        for i, (image, dim, sz, sp, o, dev, rt) in enumerate(zip(images, dims, sizes, spacings, origins, devices, return_types)):
-            # Get resample points.
-            points_mm_t = group_points_mm_ts[image_groups[i]].to(dev)
+        grid_ts = []
+        for i, (image, dev, rt) in enumerate(zip(images, devices, return_types)):
+            image_t = image
 
-            # Reshape to image size.
-            grid_t = group_grid_ts[image_groups[i]]
-            grid_t = tuple(f.to(dev) for f in grid_t)
-            size_t, spacing_t, origin_t = grid_t
-            points_mm_t = points_mm_t.reshape(*to_tuple(size_t), self._dim)
+            for j, ts in enumerate(transform_groups):
+                if isinstance(ts[0], IntensityTransform):
+                    # Perform all intensity transforms in the transform group.
+                    for t in ts:
+                        image_t = t.transform_intensity(image_t)
+                elif isinstance(ts[0], (GridTransform, SpatialTransform)):
+                    # Perform a single resample for all grid/spatial transforms in the 
+                    # transform group.
+                    moving_grid = moving_grids[image_groups_map[i]][j]
+                    moving_grid = (g.to(dev) for g in moving_grid)
+                    moving_size, moving_spacing, moving_origin = moving_grid
+                    # This warning is more for development.
+                    if to_tuple(image_t.shape) != to_tuple(moving_size):
+                        raise ValueError(f"Transform group {j} expected image to have shape {to_tuple(moving_size)}, got {to_tuple(image.shape)}.")
+                    points = resample_points[image_groups_map[i]][j].to(dev)
 
-            # Perform resample.
-            image_t = grid_sample(image, points_mm_t, spacing=sp, origin=o)
+                    # Perform resample.
+                    image_t = grid_sample(image_t, moving_spacing, moving_origin, points)
+
+            # Get the final grid.
+            grid_t = final_grids[image_groups_map[i]]
 
             # Convert to return types.
             if rt == 'numpy': 
                 image_t = to_array(image_t)
                 if return_grid:
-                    grid_t = tuple(to_array(f) for f in grid_t)
+                    grid_t = tuple(to_array(g) for g in grid_t)
+            image_ts.append(image_t)
             if return_grid:
-                image_ts.append((image_t, grid_t))
-            else:
-                image_ts.append(image_t)
+                grid_ts.append(grid_t)
 
-        if image_was_single:
-            return image_ts[0]
+        # 'return_grid' just adds a list of grids at the end (or single if only one image)
+        if return_grid:
+            res = [image_ts[0], grid_ts[0]] if image_was_single else [*image_ts, grid_ts]
+            return res
         else:
-            return image_ts
+            return image_ts[0] if image_was_single else image_ts
 
     # This is for point clouds, not for image resampling. Note that this
     # requires invertibility of the back point transform, which may not be
@@ -269,17 +391,26 @@ class Pipeline(TransformImageMixin, Transform):
         spacing = to_tensor(spacing, device=points.device)
         origin = to_tensor(origin, device=points.device)
 
+        print('pipeline: transform points')
+        print('points: ', points)
+
         # Chain 'transform_points' calls for SpatialTransforms.
         grid_t = (size, spacing, origin)
         points_t = points
         affine_chain = []   # Resolve chains of 4x4 affines before applying to large Nx4 points matrix.
         for i, t in enumerate(self.__transforms):
+            print('transform: ', i)
             # Get current FOV, transform might need e.g. for centre of image for flip/crop/rotate.
             size_t, spacing_t, origin_t = grid_t
+            print('grid params: ', size_t, spacing_t, origin_t)
 
             if isinstance(t, GridTransform):
                 # GridTransforms don't move points/objects.
                 grid_t = t.transform_grid(*grid_t)
+            elif isinstance(t, Identity):
+                pass
+            elif isinstance(t, IntensityTransform):
+                pass
             elif isinstance(t, SpatialTransform):
                 # SpatialTransforms don't affect the grid.
                 okwargs = dict(
@@ -290,20 +421,28 @@ class Pipeline(TransformImageMixin, Transform):
                 if isinstance(t, Affine):
                     # Store affine for later.
                     t_affine = t.get_affine_transform(points_t.device, **okwargs)
-                    affine_chain.append(t_affine)
+                    # Transform 't' iterates forwards through the transform list.
+                    # We want transforms that are earlier in the list to be applied first (i.e. to be
+                    # later in the affine chain). So prepend transforms to the list.
+                    affine_chain.insert(0, t_affine)
                 else:
                     # Resolve chain.
                     if len(affine_chain) > 0:
-                        points_t = self.resolve_chain(points_t, affine_chain)
+                        points_t = self.__resolve_affine_chain(points_t, affine_chain)
                         affine_chain = []
 
                     # Perform current transform.
                     points_t = t.transform_points(points_t, filter_offgrid=False, **okwargs)
+            else:
+                raise ValueError(f"Unrecognised transform type: {type(t)}.")
 
-            # Resolve if final round.
-            if i == len(self.__transforms) - 1 and len(affine_chain) > 0:
-                points_t = self.resolve_chain(points_t, affine_chain)
+        # Resolve affines if final transform.
+        if len(affine_chain) > 0:
+            print('resolving final affine chain')
+            print('chain: ', affine_chain)
+            points_t = self.__resolve_affine_chain(points_t, affine_chain)
 
+        # Filter off-grid points.
         if filter_offgrid:
             size_t, spacing_t, origin_t = grid_t
             fov = torch.stack([origin_t, origin_t + size_t * spacing_t]).to(points.device)
@@ -325,3 +464,12 @@ class Pipeline(TransformImageMixin, Transform):
     @property
     def transforms(self) -> List[Union[Transform]]:
         return self.__transforms
+
+    def __warn_resamples(self) -> None:
+        # If there are multiple 'grid/spatial' groups, multiple resamples will be triggered.
+        groups = self.__get_transform_groups()
+        gs_groups = [g for g in groups if isinstance(g[0], (GridTransform, SpatialTransform))]
+        n_resamples = len(gs_groups)
+        if n_resamples > 1:
+            logging.warning(f"Separating grid/spatial transforms with intensity transforms will trigger additional resampling steps " \
+f"({n_resamples} resamples total for current pipeline). Consider moving intensity transform/s to first/last position.")
