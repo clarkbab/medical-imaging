@@ -6,8 +6,10 @@ class Series:
         dataset: DatasetID,
         pat: PatientID,
         study: StudyID,
-        id: SeriesID) -> None:
+        id: SeriesID,
+        config: Optional[Dict[str, Any]] = None) -> None:
         self._dataset_id = str(dataset)
+        self._config = config
         self._pat_id = str(pat)
         self._study_id = str(study)
         self._id = str(id)

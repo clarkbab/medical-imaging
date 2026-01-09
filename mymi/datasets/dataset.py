@@ -2,6 +2,7 @@ from enum import Enum
 from typing import *
 
 from mymi.typing import *
+from mymi.utils import load_yaml
 
 from .region_map import * 
 
@@ -14,6 +15,12 @@ class Dataset:
         ct_from: Optional['Dataset'] = None) -> None:
         self._id = str(id)
         self._ct_from = ct_from
+        filepath = os.path.join(self._path, 'config.yaml')
+        self._config = load_yaml(filepath) if os.path.exists(filepath) else {}
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self._config
 
     @staticmethod
     def ensure_loaded(fn: Callable) -> Callable:
@@ -26,10 +33,6 @@ class Dataset:
     @property
     def groups(self) -> pd.DataFrame:
         return self._groups
-
-    @property
-    def id(self) -> DatasetID:
-        return self._id
 
     @ensure_loaded
     def list_groups(self) -> List[PatientGroup]:

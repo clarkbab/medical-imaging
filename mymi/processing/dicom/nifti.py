@@ -52,7 +52,7 @@ def convert_to_nifti(
     region: Optional[RegionIDs] = 'all',
     study_sort: Optional[Callable[DicomStudy, int]] = None,
     ) -> None:
-    logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_series', 'region'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, region))
+    logging.arg_log('Converting DicomDataset to NiftiDataset', ('dataset', 'anonymise_patients', 'anonymise_studies', 'anonymise_series', 'landmark', 'region'), (dataset, anonymise_patients, anonymise_studies, anonymise_studies, landmark, region))
     start = time()
 
     # Load all patients.

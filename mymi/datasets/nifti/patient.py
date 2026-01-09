@@ -97,26 +97,23 @@ class NiftiPatient(IndexMixin, Patient):
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)
 
-# Add shortcut properies from 'default_study'.
+# Add properties/methods from 'default_study'.
 mods = ['ct', 'dose', 'landmarks', 'mr', 'regions']
 for m in mods:
     setattr(NiftiPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
     setattr(NiftiPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'has_{m}') if self.default_study is not None else None))
-    
-# Add image filepath shortcuts from 'default_study'.
-mods = ['ct', 'mr', 'dose']
-for m in mods:
-    setattr(NiftiPatient, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_study, f'{m}_filepath') if self.default_study is not None else None))
-setattr(NiftiPatient, 'region_filepaths', lambda self, region: self.default_study.region_filepaths(region) if self.default_study is not None else None)
+    setattr(NiftiPatient, f'{m}_series', lambda self, *args, m=m: self.default_study.series(*args, m) if self.default_study is not None else None)
 
-# Add image property shortcuts from 'default_study'.
+# Add image properties from 'default_study'.
 mods = ['ct', 'dose', 'mr']
 props = ['data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
+    setattr(NiftiPatient, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_study, f'{m}_filepath') if self.default_study is not None else None))
     for p in props:
         setattr(NiftiPatient, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_study, f'{m}_{p}') if self.default_study is not None else None))
+setattr(NiftiPatient, 'region_filepaths', lambda self, region: self.default_study.region_filepaths(region) if self.default_study is not None else None)
 
-# Add landmark/region method shortcuts from 'default_study'.
+# Add landmarks/regions methods from 'default_study'.
 mods = ['landmarks', 'regions']
 for m in mods:
     setattr(NiftiPatient, f'has_{m[:-1]}', lambda self, *args, m=m, **kwargs: getattr(self.default_study, f'has_{m[:-1]}')(*args, **kwargs) if self.default_study is not None else False)

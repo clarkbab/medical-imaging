@@ -7,9 +7,11 @@ class Patient:
         self,
         dataset: DatasetID,
         id: PatientID,
+        config: Optional[Dict[str, Any]] = None,
         ct_from: Optional['Patient'] = None,
         region_map: Optional[RegionMap] = None) -> None:
         self._dataset_id = str(dataset)
+        self._config = config
         self._id = str(id)
         self._ct_from = ct_from
         self._region_map = region_map

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import *
 
-from mymi import config
+from mymi import config as conf
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
@@ -14,7 +14,7 @@ from ..ct import DicomCtSeries
 from ..series import DicomSeries
 from .rtstruct_converter import RtStructConverter
 
-LANDMARK_REGEXP = r'^Marker \d+$'
+DEFAULT_LANDMARK_REGEXP = r'^Marker \d+$'
 
 class DicomRtStructSeries(DicomSeries):
     def __init__(
@@ -26,12 +26,10 @@ class DicomRtStructSeries(DicomSeries):
         ref_ct: DicomCtSeries,
         index: pd.Series,
         index_policy: Dict[str, Any],
+        config: Optional[Dict[str, Any]] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        super().__init__('rtstruct', dataset, pat, study, id, index=index, index_policy=index_policy)
-        datasetpath = os.path.join(config.directories.datasets, 'dicom', dataset, 'data', 'patients')
-        self.__filepath = os.path.join(datasetpath, index['filepath'])
-        self.__index = index
-        self.__index_policy = index_policy
+        super().__init__('rtstruct', dataset, pat, study, id, config=config)
+        self.__filepath = os.path.join(conf.directories.datasets, 'dicom', dataset, 'data', 'patients', index['filepath'])
         self.__modality = 'rtstruct'
         self.__ref_ct = ref_ct
         self.__region_map = region_map
@@ -64,11 +62,18 @@ class DicomRtStructSeries(DicomSeries):
         n_overlap = len(np.intersect1d(regions, all_ids))
         return n_overlap > 0 if any else n_overlap == len(regions)
 
+    @property
+    def landmark_regexp(self) -> str:
+        if self._config is not None and 'landmarks' in self._config and 'regexp' in self._config['landmarks']:
+            return self._config['landmarks']['regexp']
+        else:
+            return DEFAULT_LANDMARK_REGEXP
+
     def landmarks_data(
         self,
         points_only: bool = False,
         landmark: LandmarkIDs = 'all',
-        landmark_regexp: str = LANDMARK_REGEXP,
+        landmark_regexp: Optional[str] = None,
         n: Optional[int] = None,
         show_ids: bool = True,
         use_patient_coords: bool = True,
@@ -123,21 +128,31 @@ class DicomRtStructSeries(DicomSeries):
     def list_landmarks(
         self,
         landmark: LandmarkIDs = 'all', 
-        landmark_regexp: str = LANDMARK_REGEXP) -> List[LandmarkID]:
-        ids = self.list_regions(landmark_regexp=None)
+        landmark_regexp: Optional[str] = None) -> List[LandmarkID]:
+        if landmark_regexp is None:
+            landmark_regexp = self.landmark_regexp
+        ids = self.list_regions(filter_landmarks=False)
         # Both landmarks/regions are stored in rtstruct, but we only want objects like 'Marker 1' for example.
         ids = [l for l in ids if re.match(landmark_regexp, l)]
         if landmark != 'all':
             ids = [i for i in ids if i in regions_to_list(landmark)]
         return ids
 
+    # 1. Should return only regions when landmark_regexp is None, load regexp from config or default.
+    # 2. Should return landmarks also when use_landmark_regexp is False.
+
     def list_regions(
         self,
-        landmark_regexp: Optional[str] = LANDMARK_REGEXP,
+        filter_landmarks: bool = True,
+        landmark_regexp: Optional[str] = None,
         region: RegionIDs = 'all',
         return_numbers: bool = False,
         return_unmapped: bool = False,
         use_mapping: bool = True) -> Union[List[RegionID], Tuple[List[RegionID], List[RegionID]], Tuple[List[RegionID], List[int]], Tuple[List[RegionID], List[RegionID], List[int]]]:
+        # Get the landmark regexp - used to filter out landmarks.
+        if filter_landmarks and landmark_regexp is None:
+            landmark_regexp = self.landmark_regexp
+
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
         if self.__region_map is None:
             use_mapping = False
@@ -209,7 +224,7 @@ class DicomRtStructSeries(DicomSeries):
                 unmapped_ids = [r for r in unmapped_ids if r in regions]
 
         # Filter out landmarks based on 'landmark_regexp'.
-        if landmark_regexp is not None:
+        if filter_landmarks and landmark_regexp is not None:
             if use_mapping:
                 if return_numbers:
                     mapped_ids, unmapped_ids, numbers = filter_lists([mapped_ids, unmapped_ids, numbers], lambda i: not re.match(landmark_regexp, i[0]))

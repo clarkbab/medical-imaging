@@ -138,7 +138,7 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         index = self._index[self._index['patient-id'] == str(id)]
         index_errors = self._index_errors[self._index_errors['patient-id'] == str(id)]
         ct_from = self._ct_from.patient(id) if self._ct_from is not None and self._ct_from.has_patient(id) else None
-        return DicomPatient(self._id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self.__region_map, **kwargs)
+        return DicomPatient(self._id, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, region_map=self.__region_map, **kwargs)
 
     @Dataset.ensure_loaded
     def list_regions(

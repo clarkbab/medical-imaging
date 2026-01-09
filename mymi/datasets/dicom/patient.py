@@ -19,9 +19,10 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
         index: pd.DataFrame,
         index_policy: Dict[str, Any],
         index_errors: pd.DataFrame,
+        config: Optional[Dict[str, Any]] = None,
         ct_from: Optional['DicomPatient'] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        super().__init__(dataset, id, ct_from=ct_from, region_map=region_map)
+        super().__init__(dataset, id, config=config, ct_from=ct_from, region_map=region_map)
         self._index_errors = index_errors
         self._index = index
         self._index_policy = index_policy
@@ -141,7 +142,7 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
         index = self._index[self._index['study-id'] == str(id)].copy()
         index_errors = self._index_errors[self._index_errors['study-id'] == str(id)].copy()
         ct_from = self._ct_from.study(id) if self._ct_from is not None and self._ct_from.has_study(id) else None
-        return DicomStudy(self._dataset_id, self._id, id, index, self._index_policy, index_errors, ct_from=ct_from, region_map=self._region_map)
+        return DicomStudy(self._dataset_id, self._id, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, region_map=self._region_map)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

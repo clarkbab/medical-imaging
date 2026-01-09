@@ -8,9 +8,11 @@ class Study:
         dataset: DatasetID,
         pat: PatientID,
         id: StudyID,
-        ct_from: Optional['Study'],
+        config: Optional[Dict[str, Any]] = None,
+        ct_from: Optional['Study'] = None,
         region_map: Optional[RegionMap] = None) -> None:
         self._dataset_id = str(dataset)
+        self._config = config
         self._pat_id = str(pat)
         self._id = str(id)
         self._ct_from = ct_from
