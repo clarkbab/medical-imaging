@@ -13,18 +13,18 @@ from .image import NiftiImageSeries
 class NiftiRegionsSeries(NiftiImageSeries):
     def __init__(
         self,
-        dataset: DatasetID,
-        pat: PatientID,
-        study: StudyID,
+        dataset: 'NiftiDataset',
+        pat: 'NiftiPatient',
+        study: 'NiftiStudy',
         id: SeriesID,
         index: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None,
         ) -> None:
         super().__init__('regions', dataset, pat, study, id, index=index)
         extensions = ['.nii', '.nii.gz', '.nrrd']
-        dirpath = os.path.join(config.directories.datasets, 'nifti', self._dataset_id, 'data', 'patients', self._pat_id, self._study_id, self._modality, self._id)
+        dirpath = os.path.join(config.directories.datasets, 'nifti', self._dataset.id, 'data', 'patients', self._pat.id, self._study.id, self._modality, self._id)
         if not os.path.exists(dirpath):
-            raise ValueError(f"No NiftiRegionsSeries found for study '{self._study_id}'. Dirpath: {dirpath}")
+            raise ValueError(f"No NiftiRegionsSeries found for study '{self._study.id}'. Dirpath: {dirpath}")
         self.__dirpath = dirpath
         self.__region_map = region_map
 
@@ -64,7 +64,7 @@ class NiftiRegionsSeries(NiftiImageSeries):
         if self._index is None:
             raise ValueError(f"Dataset did not originate from dicom (no 'index.csv').")
         index = self._index[['dataset', 'patient-id', 'study-id', 'series-id', 'modality', 'dicom-dataset', 'dicom-patient-id', 'dicom-study-id', 'dicom-series-id']]
-        index = index[(index['dataset'] == self._dataset_id) & (index['patient-id'] == self._pat_id) & (index['study-id'] == self._study_id) & (index['series-id'] == self._id) & (index['modality'] == 'regions')].drop_duplicates()
+        index = index[(index['dataset'] == self._dataset.id) & (index['patient-id'] == self._pat.id) & (index['study-id'] == self._study.id) & (index['series-id'] == self._id) & (index['modality'] == 'regions')].drop_duplicates()
         assert len(index) == 1
         row = index.iloc[0]
         return DicomDataset(row['dicom-dataset']).patient(row['dicom-patient-id']).study(row['dicom-study-id']).rtstruct_series(row['dicom-series-id'])

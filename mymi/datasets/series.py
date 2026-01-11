@@ -3,32 +3,33 @@ from mymi.typing import *
 class Series:
     def __init__(
         self,
-        dataset: DatasetID,
-        pat: PatientID,
-        study: StudyID,
+        dataset: 'Dataset',
+        pat: 'Patient',
+        study: 'Study',
         id: SeriesID,
         config: Optional[Dict[str, Any]] = None) -> None:
-        self._dataset_id = str(dataset)
+        self._dataset = dataset
         self._config = config
-        self._pat_id = str(pat)
-        self._study_id = str(study)
+        self._pat = pat
+        self._study = study
         self._id = str(id)
 
     @property
-    def dataset_id(self) -> DatasetID:
-        return self._dataset_id
+    def dataset(self) -> 'Dataset':
+        return self._dataset
 
     @property
     def id(self) -> SeriesID:
         return self._id
 
     @property
-    def pat_id(self) -> PatientID:
-        return self._pat_id
+    def pat(self) -> 'Patient':
+        return self._pat
+    patient = pat
 
     @property
-    def study(self) -> StudyID:
-        return self._study_id
+    def study(self) -> 'Study':
+        return self._study
 
     def __repr__(self) -> str:
         return str(self)
@@ -39,8 +40,8 @@ class Series:
         ) -> str:
         params = dict(
             id=self._id,
-            dataset=self._dataset_id,
-            pat=self._pat_id,
-            study=self._study_id,
+            dataset=self._dataset.id,
+            pat=self._pat.id,
+            study=self._study.id,
         )
         return f"{class_name}({', '.join([f'{k}={v}' for k, v in params.items()])})"

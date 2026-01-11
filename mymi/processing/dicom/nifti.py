@@ -37,7 +37,7 @@ def convert_to_nifti(
     convert_dose: bool = True,
     convert_mr: bool = True,
     dest_dataset: Optional[str] = None,
-    dry_run: bool = True,
+    makeitso: bool = False,
     filter_pats_by_landmarks: bool = False,
     filter_pats_by_regions: bool = False,
     group: Optional[PatientGroups] = 'all',
@@ -68,7 +68,7 @@ def convert_to_nifti(
     dest_dataset = dataset if dest_dataset is None else dest_dataset
     if exists_nifti(dest_dataset):
         if recreate:
-            nifti_set = recreate_nifti(dest_dataset, dry_run=dry_run)
+            nifti_set = recreate_nifti(dest_dataset, makeitso=makeitso)
         else:
             nifti_set = NiftiDataset(dest_dataset)
     else:

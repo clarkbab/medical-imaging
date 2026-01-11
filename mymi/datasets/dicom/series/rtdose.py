@@ -13,14 +13,14 @@ from .series import DicomSeries
 class DicomRtDoseSeries(DicomSeries):
     def __init__(
         self,
-        dataset: DatasetID,
-        pat: PatientID,
-        study: StudyID,
+        dataset: 'DicomDataset',
+        pat: 'DicomPatient',
+        study: 'DicomStudy',
         id: SeriesID,
         index: pd.Series,
         index_policy: Dict[str, Any]) -> None:
         super().__init__('rtdose', dataset, pat, study, id, index=index, index_policy=index_policy)
-        dspath = os.path.join(config.directories.datasets, 'dicom', self._dataset_id, 'data', 'patients')
+        dspath = os.path.join(config.directories.datasets, 'dicom', self._dataset.id, 'data', 'patients')
         self.__filepath = os.path.join(dspath, index['filepath'])
 
     @staticmethod

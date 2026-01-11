@@ -14,7 +14,7 @@ from .study import DicomStudy
 class DicomPatient(IndexWithErrorsMixin, Patient):
     def __init__(
         self,
-        dataset: DatasetID,
+        dataset: 'DicomDataset',
         id: PatientID,
         index: pd.DataFrame,
         index_policy: Dict[str, Any],
@@ -142,7 +142,7 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
         index = self._index[self._index['study-id'] == str(id)].copy()
         index_errors = self._index_errors[self._index_errors['study-id'] == str(id)].copy()
         ct_from = self._ct_from.study(id) if self._ct_from is not None and self._ct_from.has_study(id) else None
-        return DicomStudy(self._dataset_id, self._id, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, region_map=self._region_map)
+        return DicomStudy(self._dataset, self, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, region_map=self._region_map)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)
@@ -152,15 +152,12 @@ props = ['index_policy']
 for p in props:
     setattr(DicomPatient, p, property(lambda self, p=p: getattr(self, f'_{DicomPatient.__name__}__{p}')))
 
-# Add 'default_{mod}' property shortcuts from 'default_study'.
+# Add properties/methods from 'default_study'.
 mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 for m in mods:
     setattr(DicomPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
-
-# Add 'has_{mod}' property shortcuts from 'default_study'.
-mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
-for m in mods:
     setattr(DicomPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
+    setattr(DicomPatient, f'list_{m}_series', lambda self, m=m: self.default_study.list_series(m) if self.default_study is not None else None)
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'rtdose']

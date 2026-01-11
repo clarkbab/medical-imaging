@@ -84,9 +84,6 @@ def get_idx(
     origin: Optional[Point3D] = None,
     regions_data: Optional[RegionArrays] = None,
     spacing: Optional[Spacing3D] = None) -> int:
-    print('gi')
-    print(centre)
-    print(centre_other)
     if centre is not None or centre_other is not None:
         lm_data = landmarks_data_other if centre is None else landmarks_data
         centre = centre_other if centre is None else centre

@@ -5,12 +5,12 @@ from .region_map import RegionMap
 class Patient:
     def __init__(
         self,
-        dataset: DatasetID,
+        dataset: 'Dataset',
         id: PatientID,
         config: Optional[Dict[str, Any]] = None,
         ct_from: Optional['Patient'] = None,
         region_map: Optional[RegionMap] = None) -> None:
-        self._dataset_id = str(dataset)
+        self._dataset = dataset
         self._config = config
         self._id = str(id)
         self._ct_from = ct_from
@@ -21,8 +21,8 @@ class Patient:
         return self._ct_from
 
     @property
-    def dataset_id(self) -> DatasetID:
-        return self._dataset_id
+    def dataset(self) -> 'Dataset':
+        return self._dataset
 
     @property
     def id(self) -> PatientID:
@@ -41,7 +41,7 @@ class Patient:
         ) -> str:
         params = dict(
             id=self._id,
-            dataset=self._dataset_id,
+            dataset=self._dataset.id,
         )
         if self._ct_from is not None:
             params['ct_from'] = self._ct_from.id

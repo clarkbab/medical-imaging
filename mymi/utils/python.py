@@ -39,6 +39,9 @@ def filter_lists(
         return [[],] * n_lists
     return lists
 
+def flatten_list(l: List[Any]) -> List[Any]:
+    return [xi for x in l for xi in (x if isinstance(x, list) else [x])]
+
 def python_version(gte: Optional[str] = None) -> Union[Tuple[int, int, int], bool]:
     info = sys.version_info
     if gte is not None:

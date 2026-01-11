@@ -16,14 +16,14 @@ from .study import NiftiStudy
 class NiftiPatient(IndexMixin, Patient):
     def __init__(
         self,
-        dataset: DatasetID,
+        dataset: 'NiftiDataset',
         id: PatientID,
         ct_from: Optional['NiftiPatient'] = None,
         index: Optional[pd.DataFrame] = None,
         excluded_labels: Optional[List[str]] = None,
         region_map: Optional[RegionMap] = None) -> None:
         super().__init__(dataset, id, ct_from=ct_from, index=index, region_map=region_map)
-        self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset_id, 'data', 'patients', self._id)
+        self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset.id, 'data', 'patients', self._id)
         if not os.path.exists(self.__path):
             raise ValueError(f"No nifti patient '{self._id}' found at path: {self.__path}")
 
@@ -37,7 +37,7 @@ class NiftiPatient(IndexMixin, Patient):
         if self._index is None:
             raise ValueError(f"Dataset did not originate from dicom (no 'index.csv').")
         index = self._index[['dataset', 'patient-id', 'dicom-dataset', 'dicom-patient-id']]
-        index = index[(index['dataset'] == self._dataset_id) & (index['patient-id'] == self._id)].drop_duplicates()
+        index = index[(index['dataset'] == self._dataset.id) & (index['patient-id'] == self._id)].drop_duplicates()
         assert len(index) == 1
         row = index.iloc[0]
         return DicomDataset(row['dicom-dataset']).patient(row['dicom-patient-id'])
@@ -92,7 +92,7 @@ class NiftiPatient(IndexMixin, Patient):
         else:
             ct_from = None
 
-        return NiftiStudy(self._dataset_id, self._id, id, ct_from=ct_from, index=index, region_map=self._region_map, **kwargs)
+        return NiftiStudy(self._dataset, self, id, ct_from=ct_from, index=index, region_map=self._region_map, **kwargs)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

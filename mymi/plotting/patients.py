@@ -501,7 +501,7 @@ def plot_patient(
             if series is not None:
                 # Replace CT/MR with default series IDs.
                 serieses = arg_to_list(series, (SeriesID, str))
-                study_serieses = [pat_study.list_series(i) if i in ['ct', 'mr'] else i for i in serieses].flatten()
+                study_serieses = flatten_list([pat_study.list_series(i) if i in ['ct', 'mr'] else i for i in serieses])
             elif modality is not None:
                 study_serieses = pat_study.list_series(modality)
             else:

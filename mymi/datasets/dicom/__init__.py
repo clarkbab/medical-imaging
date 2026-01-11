@@ -29,7 +29,7 @@ def destroy(
     dry_run: bool = True) -> None:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)
     if os.path.exists(ds_path):
-        with_dry_run(dry_run, lambda: shutil.rmtree(ds_path), f"Destroying dicom dataset '{name}' at {ds_path}.")
+        with_makeitso(dry_run, lambda: shutil.rmtree(ds_path), f"Destroying dicom dataset '{name}' at {ds_path}.")
     
 def exists(name: str) -> bool:
     ds_path = os.path.join(config.directories.datasets, 'dicom', name)

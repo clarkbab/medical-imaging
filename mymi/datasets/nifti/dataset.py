@@ -272,7 +272,7 @@ class NiftiDataset(IndexMixin, Dataset):
         else:
             ct_from = None
 
-        return NiftiPatient(self._id, id, ct_from=ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
+        return NiftiPatient(self, id, ct_from=ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
 
     @property
     @Dataset.ensure_loaded

@@ -19,9 +19,9 @@ DEFAULT_LANDMARK_REGEXP = r'^Marker \d+$'
 class DicomRtStructSeries(DicomSeries):
     def __init__(
         self,
-        dataset: DatasetID,
-        pat: PatientID,
-        study: StudyID,
+        dataset: 'DicomDataset',
+        pat: 'DicomPatient',
+        study: 'DicomStudy',
         id: SeriesID,
         ref_ct: DicomCtSeries,
         index: pd.Series,
@@ -29,7 +29,7 @@ class DicomRtStructSeries(DicomSeries):
         config: Optional[Dict[str, Any]] = None,
         region_map: Optional[RegionMap] = None) -> None:
         super().__init__('rtstruct', dataset, pat, study, id, config=config)
-        self.__filepath = os.path.join(conf.directories.datasets, 'dicom', dataset, 'data', 'patients', index['filepath'])
+        self.__filepath = os.path.join(conf.directories.datasets, 'dicom', dataset.id, 'data', 'patients', index['filepath'])
         self.__modality = 'rtstruct'
         self.__ref_ct = ref_ct
         self.__region_map = region_map

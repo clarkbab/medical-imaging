@@ -34,6 +34,10 @@ class Dataset:
     def groups(self) -> pd.DataFrame:
         return self._groups
 
+    @property
+    def id(self) -> DatasetID:
+        return self._id
+
     @ensure_loaded
     def list_groups(self) -> List[PatientGroup]:
         if self._groups is None:

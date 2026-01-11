@@ -288,13 +288,13 @@ def transpose_image(
         data = np.moveaxis(data, -1, 0)
     return data
 
-def with_dry_run(
-    dry_run: bool,
+def with_makeitso(
+    makeitso: bool,
     f: Callable,
     msg: str = None) -> None:
-    if dry_run:
+    if not makeitso:
         if msg is not None:
-            logging.info(f"Dry run: {msg}")
+            logging.info(f"Would: {msg}")
     else:
         f()
         if msg is not None:

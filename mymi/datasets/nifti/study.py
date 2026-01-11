@@ -14,14 +14,14 @@ from .series import *
 class NiftiStudy(IndexMixin, Study):
     def __init__(
         self,
-        dataset: DatasetID,
-        pat: PatientID,
+        dataset: 'NiftiDataset',
+        pat: 'NiftiPatient',
         id: StudyID,
         ct_from: Optional['NiftiStudy'] = None,
         index: Optional[pd.DataFrame] = None,
         region_map: Optional[RegionMap] = None) -> None:
         super().__init__(dataset, pat, id, ct_from=ct_from, index=index, region_map=region_map)
-        self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset_id, 'data', 'patients', self._pat_id, self._id)
+        self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset.id, 'data', 'patients', self._pat.id, self._id)
         if not os.path.exists(self.__path):
             raise ValueError(f"No nifti study '{self._id}' found at path: {self.__path}")
 
@@ -30,7 +30,7 @@ class NiftiStudy(IndexMixin, Study):
         if self._index is None:
             raise ValueError(f"Dataset did not originate from dicom (no 'index.csv').")
         index = self._index[['dataset', 'patient-id', 'study-id', 'dicom-dataset', 'dicom-patient-id', 'dicom-study-id']]
-        index = index[(index['dataset'] == self._dataset_id) & (index['patient-id'] == self._pat_id) & (index['study-id'] == self._id)].drop_duplicates()
+        index = index[(index['dataset'] == self._dataset.id) & (index['patient-id'] == self._pat.id) & (index['study-id'] == self._id)].drop_duplicates()
         assert len(index) == 1
         row = index.iloc[0]
         return DicomDataset(row['dicom-dataset']).patient(row['dicom-patient-id']).study(row['dicom-study-id'])
@@ -43,30 +43,29 @@ class NiftiStudy(IndexMixin, Study):
         if modality == 'ct':
             id = handle_idx_prefix(id, lambda: self.list_series('ct'))
             if self._ct_from is None:
-                index = self._index[(self._index['dataset'] == self._dataset_id) & (self._index['patient-id'] == self._pat_id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'ct')].copy() if self._index is not None else None
-                return NiftiCtSeries(self._dataset_id, self._pat_id, self._id, id, index=index)
+                index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'ct')].copy() if self._index is not None else None
+                return NiftiCtSeries(self._dataset, self._pat, self, id, index=index)
             else:
                 return self._ct_from.series(id, modality)
         elif modality == 'dose':
             id = handle_idx_prefix(id, lambda: self.list_series('dose'))
             # Could multiple series have the same series-id? Yeah definitely.
-            index = self._index[(self._index['dataset'] == self._dataset_id) & (self._index['patient-id'] == self._pat_id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'dose')].copy() if self._index is not None else None
-            return NiftiDoseSeries(self._dataset_id, self._pat_id, self._id, id, index=index)
+            index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'dose')].copy() if self._index is not None else None
+            return NiftiDoseSeries(self._dataset, self._pat, self, id, index=index)
         elif modality == 'landmarks':
             id = handle_idx_prefix(id, lambda: self.list_series('landmarks'))
-            print(id)
-            index = self._index[(self._index['dataset'] == self._dataset_id) & (self._index['patient-id'] == self._pat_id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'landmarks')].copy() if self._index is not None else None
+            index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'landmarks')].copy() if self._index is not None else None
             ref_ct = self.default_series('ct')
             ref_dose = self.default_series('dose')
-            return NiftiLandmarksSeries(self._dataset_id, self._pat_id, self._id, id, index=index, ref_ct=ref_ct, ref_dose=ref_dose)
+            return NiftiLandmarksSeries(self._dataset, self._pat, self, id, index=index, ref_ct=ref_ct, ref_dose=ref_dose)
         elif modality == 'mr':
             id = handle_idx_prefix(id, lambda: self.list_series('mr'))
-            index = self._index[(self._index['dataset'] == self._dataset_id) & (self._index['patient-id'] == self._pat_id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'mr')].copy() if self._index is not None else None
-            return NiftiMrSeries(self._dataset_id, self._pat_id, self._id, id, index=index)
+            index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'mr')].copy() if self._index is not None else None
+            return NiftiMrSeries(self._dataset, self._pat, self, id, index=index)
         elif modality == 'regions':
             id = handle_idx_prefix(id, lambda: self.list_series('regions'))
-            index = self._index[(self._index['dataset'] == self._dataset_id) & (self._index['patient-id'] == self._pat_id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'regions')].copy() if self._index is not None else None
-            return NiftiRegionsSeries(self._dataset_id, self._pat_id, self._id, id, index=index, region_map=self._region_map)
+            index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'regions')].copy() if self._index is not None else None
+            return NiftiRegionsSeries(self._dataset, self._pat, self, id, index=index, region_map=self._region_map)
         else:
             raise ValueError(f"Unknown NiftiSeries modality '{modality}'.")
 
@@ -120,7 +119,7 @@ class NiftiStudy(IndexMixin, Study):
     @property
     def origin(self) -> Dict[str, str]:
         if self._index is None:
-            raise ValueError(f"No 'index.csv' provided for dataset '{self.__patient.dataset}'.")
+            raise ValueError(f"No 'index.csv' provided for dataset '{self._dataset}'.")
         info = self._index.iloc[0].to_dict()
         info = {k: info[k] for k in ['dicom-dataset', 'dicom-patient-id', 'dicom-study-id']}
         return info

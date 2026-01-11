@@ -22,10 +22,10 @@ def create(name: str) -> NiftiDataset:
 
 def destroy(
     name: str,
-    dry_run: bool = True) -> None:
+    makeitso: bool = False) -> None:
     ds_path = os.path.join(config.directories.datasets, 'nifti', name)
     if os.path.exists(ds_path):
-        with_dry_run(dry_run, lambda: shutil.rmtree(ds_path), f"Destroying nifti dataset '{name}' at {ds_path}.")
+        with_makeitso(makeitso, lambda: shutil.rmtree(ds_path), f"Destroying nifti dataset '{name}' at {ds_path}.")
     
 def exists(name: str) -> bool:
     ds_path = os.path.join(config.directories.datasets, 'nifti', name)
@@ -33,9 +33,9 @@ def exists(name: str) -> bool:
 
 def recreate(
     name: str,
-    dry_run: bool = True) -> NiftiDataset:
-    destroy(name, dry_run=dry_run)
-    if dry_run:
+    makeitso: bool = False) -> NiftiDataset:
+    destroy(name, makeitso=makeitso)
+    if not makeitso:
         return NiftiDataset(name)
     else:
         return create(name)

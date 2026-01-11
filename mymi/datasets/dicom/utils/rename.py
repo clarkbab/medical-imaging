@@ -11,18 +11,23 @@ from ..dataset import DicomDataset
 
 def get_new_pat_id(
     old_pat: PatientID,
-    rename_fn: Callable,
+    rename_fn: Union[Callable, Dict[str, str]],
     pat_regexp: Optional[str] = None) -> PatientID:
     if pat_regexp is not None:
         match = re.match(pat_regexp, old_pat)
         if match is None:
             return old_pat
-    return rename_fn(old_pat)
+    if isinstance(rename_fn, Callable):
+        return rename_fn(old_pat)
+    elif old_pat in rename_fn:
+        return rename_fn[old_pat]
+    else:
+        return old_pat
 
 def rename_dicom(
     filepath: FilePath,
-    rename_fn: Callable,
-    dry_run: bool = True,
+    rename_fn: Union[Callable, Dict[str, str]],
+    makeitso: bool = False,
     pat_regexp: Optional[str] = None) -> None:
     # Get new patient ID.
     dicom = dcm.dcmread(filepath)
@@ -31,7 +36,7 @@ def rename_dicom(
     if old_pat == new_pat:
         return
 
-    if dry_run:
+    if not makeitso:
         logging.info(f"Rename patient ID from {old_pat} to {new_pat} in {filepath}.")
     else:
         dicom.PatientID = new_pat
@@ -41,7 +46,7 @@ def rename_dicom(
 def rename_patients(
     dataset: DatasetID,
     rename_fn: Optional[Callable],
-    dry_run: bool = True,
+    makeitso: bool = False,
     pat: PatientIDs = 'all',
     pat_regexp: Optional[str] = None) -> None:
     # Check if indexes are open and therefore can't be overwritten.
@@ -55,7 +60,7 @@ def rename_patients(
     filepaths = index['filepath'].tolist()
     for f in tqdm(filepaths):
         f = os.path.join(dset.path, 'data', 'patients', f)
-        rename_dicom(f, rename_fn, dry_run=dry_run, pat_regexp=pat_regexp)
+        rename_dicom(f, rename_fn, makeitso=makeitso, pat_regexp=pat_regexp)
 
     # Rename all DICOMs in the error index.
     logging.info("Renaming all indexed dicoms with errors.")
@@ -63,7 +68,7 @@ def rename_patients(
     filepaths = index_errors['filepath'].tolist()
     for f in tqdm(filepaths):
         f = os.path.join(dset.path, 'data', 'patients', f)
-        rename_dicom(f, rename_fn, dry_run=dry_run, pat_regexp=pat_regexp)
+        rename_dicom(f, rename_fn, makeitso=makeitso, pat_regexp=pat_regexp)
 
     # Updating index filepaths.
     if pat_regexp is None:
@@ -90,7 +95,7 @@ def rename_patients(
                 # Rename filepath.
                 srcpath = os.path.join(dset.path, 'data', 'patients', f)
                 destpath = os.path.join(dset.path, 'data', 'patients', new_filepath)
-                if dry_run:
+                if not makeitso:
                     logging.info(f"Moving file from {srcpath} to {destpath}.")
                 else:
                     if not os.path.exists(os.path.dirname(destpath)):
@@ -134,7 +139,7 @@ def rename_patients(
                 # Rename filepath.
                 srcpath = os.path.join(dset.path, 'data', 'patients', f)
                 destpath = os.path.join(dset.path, 'data', 'patients', new_filepath)
-                if dry_run:
+                if not makeitso:
                     logging.info(f"Moving file from {srcpath} to {destpath}.")
                 else:
                     if not os.path.exists(os.path.dirname(destpath)):
@@ -160,12 +165,8 @@ def rename_patients(
     logging.info("Renaming patient IDs in index.")
     for i, r in index.iterrows():
         old_pat_id = r['patient-id']
-        if pat_regexp is not None:
-            match = re.match(pat_regexp, old_pat_id)
-            if match is None:
-                continue
-        new_pat_id = rename_fn(old_pat_id)
-        if dry_run:
+        new_pat_id = get_new_pat_id(old_pat_id, rename_fn, pat_regexp=pat_regexp)
+        if not makeitso:
             logging.info(f"Rename patient ID from {old_pat_id} to {new_pat_id} in index.")
         else:
             index.at[i, 'patient-id'] = new_pat_id
@@ -175,19 +176,15 @@ def rename_patients(
     logging.info("Renaming patient IDs in error index.")
     for i, r in index_errors.iterrows():
         old_pat_id = r['patient-id']
-        if pat_regexp is not None:
-            match = re.match(pat_regexp, old_pat_id)
-            if match is None:
-                continue
-        new_pat_id = rename_fn(old_pat_id)
-        if dry_run:
+        new_pat_id = get_new_pat_id(old_pat_id, rename_fn, pat_regexp=pat_regexp)
+        if not makeitso:
             logging.info(f"Rename patient ID from {old_pat_id} to {new_pat_id} in error index.")
         else:
             index_errors.at[i, 'patient-id'] = new_pat_id
             index_errors.at[i, 'patient-name'] = new_pat_id
 
     # Save indexes.
-    if not dry_run:
+    if makeitso:
         filepath = os.path.join(dset.path, 'index.csv')
         save_csv(index, filepath, index=True)
         filepath = os.path.join(dset.path, 'index-errors.csv')
@@ -209,10 +206,10 @@ def rename_patients(
                         if match is None:
                             continue
                     new_pat_id = rename_fn(old_pat_id)
-                    if dry_run:
+                    if not makeitso:
                         logging.info(f"Rename patient ID from {old_pat_id} to {new_pat_id} in report {f}.")
                     else:
                         df.at[i, 'patient-id'] = new_pat_id
                         df.at[i, 'patient-name'] = new_pat_id
-                if not dry_run:
+                if makeitso:
                     save_csv(df, filepath)
