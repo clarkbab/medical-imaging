@@ -46,6 +46,13 @@ class Dataset:
         return group_ids
 
     @property
+    def notes(self) -> None:
+        filepath = os.path.join(self._path, 'notes.txt')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                print(f.read())
+
+    @property
     def path(self) -> DirPath:
         return self._path
 

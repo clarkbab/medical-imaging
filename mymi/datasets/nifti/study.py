@@ -85,36 +85,40 @@ class NiftiStudy(IndexMixin, Study):
 
     def list_series(
         self,
-        modality: NiftiModality) -> List[NiftiSeriesID]:
+        modality: NiftiModality,
+        series: SeriesIDs = 'all',
+        ) -> List[NiftiSeriesID]:
         image_extensions = ['.nii', '.nii.gz', '.nrrd']
         if modality == 'ct':
             if self._ct_from is None:
                 dirpath = os.path.join(self.__path, 'ct')
-                ct_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
-                ct_ids = [i.replace(e, '') for i in ct_ids for e in image_extensions if i.endswith(e)]
-                return ct_ids
+                series_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+                series_ids = [i.replace(e, '') for i in series_ids for e in image_extensions if i.endswith(e)]
             else:
-                return self._ct_from.list_series(modality)
+                series_ids = self._ct_from.list_series(modality)
         elif modality == 'dose':
             dirpath = os.path.join(self.__path, 'dose')
-            dose_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
-            dose_ids = [i.replace(e, '') for i in dose_ids for e in image_extensions if i.endswith(e)]
-            return dose_ids
+            series_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+            series_ids = [i.replace(e, '') for i in series_ids for e in image_extensions if i.endswith(e)]
         elif modality == 'landmarks':
             dirpath = os.path.join(self.__path, 'landmarks')
-            landmarks_ids = list(sorted(f.replace('.csv', '') for f in os.listdir(dirpath))) if os.path.exists(dirpath) else []
-            return landmarks_ids
+            series_ids = list(sorted(f.replace('.csv', '') for f in os.listdir(dirpath))) if os.path.exists(dirpath) else []
         elif modality == 'mr':
             dirpath = os.path.join(self.__path, 'mr')
-            mr_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
-            mr_ids = [i.replace(e, '') for i in mr_ids for e in image_extensions if i.endswith(e)]
-            return mr_ids
+            series_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
+            series_ids = [i.replace(e, '') for i in series_ids for e in image_extensions if i.endswith(e)]
         elif modality == 'regions':
             dirpath = os.path.join(self.__path, 'regions')
-            regions_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
-            return regions_ids
+            series_ids = list(sorted(os.listdir(dirpath))) if os.path.exists(dirpath) else []
         else:
             raise ValueError(f"Unknown modality '{modality}'.")
+
+        # Filter by 'series'.
+        if series != 'all':
+            series = arg_to_list(series, (SeriesID))
+            series_ids = [s for s in series_ids if s in series]
+
+        return series_ids
 
     @property
     def origin(self) -> Dict[str, str]:

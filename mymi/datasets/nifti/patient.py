@@ -103,6 +103,8 @@ for m in mods:
     setattr(NiftiPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
     setattr(NiftiPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'has_{m}') if self.default_study is not None else None))
     setattr(NiftiPatient, f'{m}_series', lambda self, *args, m=m: self.default_study.series(*args, m) if self.default_study is not None else None)
+    setattr(NiftiPatient, f'list_{m}_series', lambda self, *args, m=m: self.default_study.list_series(*args, m) if self.default_study is not None else None)
+setattr(NiftiPatient, 'list_series', lambda self, *args, **kwargs: self.default_study.list_series(*args, **kwargs) if self.default_study is not None else None)
 
 # Add image properties from 'default_study'.
 mods = ['ct', 'dose', 'mr']

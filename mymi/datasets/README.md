@@ -19,6 +19,12 @@ When referring to regions/landmarks series or data this is a special case as the
 
 # Plotting
 
+## Simplified API
+I think the base plotting unit should be a plot_series method that plots a CT/MR/etc. image with optional
+overlaid regions and landmarks. We could build this from the plot_image code.
+
+Plot_patients should build on this by loading the appropriate series and using the series plotting code.
+
 ## How do we deal with expansion of patients/studies and series?
 
 - Patients are expanded down the rows - easy!

@@ -6,6 +6,7 @@ from mymi import config
 
 from .dataset import *
 from .series import *
+from .study import *
 from .utils import *
 
 def list() -> List[str]:

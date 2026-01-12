@@ -367,6 +367,7 @@ def plot_patient_histogram(
     dataset: str,
     pat: PatientIDs = 'all',
     savepath: Optional[str] = None,
+    series: SeriesIDs = 'all',
     show_progress: bool = False,
     study: StudyIDs = 'all',
     **kwargs) -> None:
@@ -379,7 +380,7 @@ def plot_patient_histogram(
     studieses = []
     for p in pat_ids:
         pat = set.patient(p)
-        ids = pat.list_studies(study=study)
+        study_ids = pat.list_studies(study=study)
         studieses.append(ids)
         if len(ids) > n_cols:
             n_cols = len(ids)
@@ -408,6 +409,10 @@ def plot_patient_histogram(
 
     plt.show()
 
+# Patients are plotted in rows.
+# Studies/series are flattened and plotting in columns.
+# Anything that applies to a series (e.g. region) can be passed
+# as a list of lists.
 def plot_patient(
     dataset: Dataset,
     dataset_fns: Dict[str, Callable],
@@ -421,7 +426,7 @@ def plot_patient(
     landmark_other_series: Optional[SeriesID] = None,
     loadpath: Union[str, List[str]] = [],
     modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'serieses'.
-    region: Optional[RegionIDs] = None,
+    region: Optional[Union[RegionIDs, List[RegionIDs]]] = None,
     region_labels: Dict[str, str] = {},
     region_series: Optional[SeriesID] = None,
     savepath: Optional[FilePath] = None,
@@ -546,8 +551,21 @@ def plot_patient(
                 assert len(study_region_serieses) == len(pat_studies) * len(study_serieses)
                 study_region_serieses = study_region_serieses[i * len(study_serieses):(i + 1) * len(study_serieses)]
 
+            # Regions can be referrring to multiple studies or series or both.
+            if len(pat_studies) == 1:   # Single study, multiple image series.
+                study_regions = arg_to_list(region, (None, RegionID), broadcast=len(study_serieses))
+                assert len(study_regions) == len(study_serieses)
+            elif len(study_serieses) == 1:  # Multiple studies, single image series.
+                study_regions = arg_to_list(region, (None, RegionID), broadcast=len(pat_studies))
+                assert len(study_regions) == len(pat_studies)
+                study_regions = [study_regions[i]]  # Select series for current study.
+            else:  # Multiple studies, multiple image series.
+                study_regions = arg_to_list(region, (None, RegionID), broadcast=len(pat_studies) * len(study_serieses))
+                assert len(study_regions) == len(pat_studies) * len(study_serieses)
+                study_regions = study_regions[i * len(study_serieses):(i + 1) * len(study_serieses)]
+
             # Add data for each series.
-            for ss, sd, sl, sr in zip(study_serieses, study_dose_serieses, study_landmark_serieses, study_region_serieses):
+            for ss, sd, sl, sr, srr in zip(study_serieses, study_dose_serieses, study_landmark_serieses, study_region_serieses, study_regions):
                 row_serieses.append(ss)
                 row_landmark_serieses.append(sl)
                 row_studies.append(s)
@@ -582,7 +600,7 @@ def plot_patient(
                 else:
                     r_series = dataset_fns['default_regions'](pat_study)
                 row_region_serieses.append(r_series.id if r_series is not None else None)
-                rdata = dataset_fns['regions_data'](r_series, region) if region is not None else None
+                rdata = dataset_fns['regions_data'](r_series, srr) if r_series is not None and srr is not None else None
                 row_regions_datas.append(rdata)
 
                 # Load dose data from the same study - and resample to image spacing.
@@ -753,7 +771,7 @@ def plot_patients_matrix(
             # Subplots for multiple views.
             n_plots = (n_rows, n_cols) if not transpose_images else (n_cols, n_rows)
             figsize = (figsize[0], n_rows * figsize[1]) if not transpose_images else (figsize[0], n_cols * figsize[1])
-            _, axs = plt.subplots(*n_plots, figsize=figsize, gridspec_kw={ 'hspace': 0.4 }, squeeze=False)
+            _, axs = plt.subplots(*n_plots, figsize=figsize, gridspec_kw={ 'hspace': 0.5 }, squeeze=False)
         else:
             plt.figure(figsize=figsize)
             ax = plt.axes(frameon=False)

@@ -157,7 +157,9 @@ mods = ['ct', 'mr', 'rtdose', 'rtplan', 'rtstruct']
 for m in mods:
     setattr(DicomPatient, f'default_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
     setattr(DicomPatient, f'has_{m}', property(lambda self, m=m: getattr(self.default_study, f'default_{m}') if self.default_study is not None else None))
-    setattr(DicomPatient, f'list_{m}_series', lambda self, m=m: self.default_study.list_series(m) if self.default_study is not None else None)
+    setattr(DicomPatient, f'{m}_series', lambda self, *args, m=m: self.default_study.series(*args, m) if self.default_study is not None else None)
+    setattr(DicomPatient, f'list_{m}_series', lambda self, *args, m=m: self.default_study.list_series(*args, m) if self.default_study is not None else None)
+setattr(DicomPatient, 'list_series', lambda self, *args, **kwargs: self.default_study.list_series(*args, **kwargs) if self.default_study is not None else None)
 
 # Add image property shortcuts from 'default_study'.
 mods = ['ct', 'mr', 'rtdose']
