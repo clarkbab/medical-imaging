@@ -12,7 +12,7 @@ pat_ids = set.list_patients(group='lung')
 moving_landmarkses = []
 for p in tqdm(pat_ids):
     pat = set.patient(p)
-    moving_study = pat.study('idx:0')
+    moving_study = pat.study('i:0')
     moving_lm_series = moving_study.landmarks_series('series_1')
     assert '/C1/' in moving_lm_series.dicom.filepath
     moving_landmarks = moving_lm_series.data(sample_dose=True)

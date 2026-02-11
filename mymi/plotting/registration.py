@@ -573,7 +573,7 @@ def plot_single_registration(
         if show_moving:
             grid_slice, _ = get_view_slice(moving_grid, moving_idx, view)
             aspect = get_aspect(view, moving_spacing)
-            origin = get_origin(view)
+            origin = get_view_origin(view)[1]
             axs[n_cols].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         # Plot moved grid.
@@ -587,7 +587,7 @@ def plot_single_registration(
             moved_grid = resample(moving_grid, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
         grid_slice, _ = get_view_slice(moved_grid, moving_idx, view)
         aspect = get_aspect(view, fixed_spacing)
-        origin = get_origin(view)
+        origin = get_view_origin(view)[1]
         axs[2 * n_cols - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         if show_region_overlay:
@@ -601,7 +601,7 @@ def plot_single_registration(
             background, _ = get_view_slice(np.zeros(shape=fixed_ct_data.shape), idxs[2], view)
             if fixed_crop is not None:
                 background = crop_fn(background, transpose_box(fixed_crop), use_patient_coords=False)
-            axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view))
+            axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])
             if fixed_regions_data is not None:
                 plot_regions_data(fixed_regions_data, axs[2 * n_cols - 2], idxs[2], aspect, **okwargs)
             if moved_regions_data is not None:

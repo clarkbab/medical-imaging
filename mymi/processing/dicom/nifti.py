@@ -183,9 +183,9 @@ def convert_to_nifti(
             else:
                 nifti_study = s
 
-            anon_series = 0
             if ct_from is None:
                 # Convert CT series.
+                anon_ct_series = 0
                 ct_serieses = study.list_series('ct')
                 for sr in ct_serieses:
                     series = study.series(sr, 'ct')
@@ -193,8 +193,8 @@ def convert_to_nifti(
                     
                     # Get Nifti series ID.
                     if anonymise_series:
-                        nifti_series = f'series_{anon_series}'
-                        anon_series += 1
+                        nifti_series = f'series_{anon_ct_series}'
+                        anon_ct_series += 1
                     else:
                         nifti_series = sr
                     
@@ -221,6 +221,7 @@ def convert_to_nifti(
                     index = append_row(index, data)
 
                 # Convert MR series.
+                anon_mr_series = 0
                 mr_serieses = study.list_series('mr')
                 for sr in mr_serieses:
                     series = study.series(sr, 'mr')
@@ -228,8 +229,8 @@ def convert_to_nifti(
                     
                     # Get Nifti series ID.
                     if anonymise_series:
-                        nifti_series = f'series_{anon_series}'
-                        anon_series += 1
+                        nifti_series = f'series_{anon_mr_series}'
+                        anon_mr_series += 1
                     else:
                         nifti_series = sr
                     
@@ -254,23 +255,23 @@ def convert_to_nifti(
                     index = append_row(index, data)
 
             # Convert RTSTRUCT series.
+            anon_landmarks_series = 0
+            anon_regions_series = 0
             rtstruct_serieses = study.list_series('rtstruct')
             for sr in rtstruct_serieses:
                 series = study.series(sr, 'rtstruct')
                 logging.info(series)
 
-                # Get Nifti series ID.
-                if anonymise_series:
-                    nifti_series = f'series_{anon_series}'
-                    anon_series += 1
-                else:
-                    nifti_series = sr
-
                 # Create region NIFTIs.
                 if region is not None:
+                    # Get Nifti series ID.
+                    if anonymise_series:
+                        nifti_series = f'series_{anon_regions_series}'
+                        anon_regions_series += 1
+                    else:
+                        nifti_series = sr
+
                     ref_ct = series.ref_ct
-                    print(series)
-                    print(region)
                     regions_data = series.regions_data(region=region, regions_ignore_missing=True)
                     for r, data in regions_data.items():
                         filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'regions', nifti_series, f'{r}.nii.gz')
@@ -296,6 +297,13 @@ def convert_to_nifti(
                 if landmark is not None:
                     lm_df = series.landmarks_data(landmark=landmark, show_ids=False)
                     if lm_df is not None:
+                        # Get Nifti series ID.
+                        if anonymise_series:
+                            nifti_series = f'series_{anon_landmarks_series}'
+                            anon_landmarks_series += 1
+                        else:
+                            nifti_series = sr
+
                         filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'landmarks', f'{nifti_series}.csv')
                         if not os.path.exists(filepath):
                             save_csv(lm_df, filepath)
@@ -316,6 +324,7 @@ def convert_to_nifti(
                         index = append_row(index, data)
 
             # Convert RTDOSE series.
+            anon_dose_series = 0
             rtdose_serieses = study.list_series('rtdose')
             for sr in rtdose_serieses:
                 series = study.series(sr, 'rtdose')
@@ -323,8 +332,8 @@ def convert_to_nifti(
 
                 # Get Nifti series ID.
                 if anonymise_series:
-                    nifti_series = f'series_{anon_series}'
-                    anon_series += 1
+                    nifti_series = f'series_{anon_dose_series}'
+                    anon_dose_series += 1
                 else:
                     nifti_series = sr
 

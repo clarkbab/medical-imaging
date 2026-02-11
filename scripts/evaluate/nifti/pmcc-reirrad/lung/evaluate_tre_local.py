@@ -10,7 +10,7 @@ dataset = 'PMCC-REIRRAD'
 kwargs = dict(
     group='lung',
     # pat=['PMCC_ReIrrad_L01', 'PMCC_ReIrrad_L02'],
-    pat='idx:2',
+    pat='i:2',
     region=None,
 )
 

@@ -22,8 +22,8 @@ for p in tqdm(pat_ids):
     for m in models:
         # set.build_index()
         pat = set.patient(p)
-        moving_study = pat.study('idx:0')
-        fixed_study = pat.study('idx:1')
+        moving_study = pat.study('i:0')
+        fixed_study = pat.study('i:1')
         
         # Compare to Velocity TREs.
         filepath = os.path.join(dset.path, 'data', 'velocity', pat.id, f"{m}.txt")

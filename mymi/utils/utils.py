@@ -74,7 +74,7 @@ def get_axis_name(
 def handle_idx_prefix(
     id: str,
     list_ids: Callable) -> id:
-    if id.startswith('idx:'):
+    if id.startswith('i:'):
         idx = int(id.split(':')[1])
         ids = list_ids() 
         if idx > len(ids) - 1:

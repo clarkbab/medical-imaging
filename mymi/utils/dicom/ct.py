@@ -6,6 +6,8 @@ import pydicom as dcm
 from mymi.constants import *
 from mymi.typing import *
 
+from ..maths import round
+
 def from_ct_dicoms(
     cts: List[CtDicom] = [],
     check_consistency: bool = True,

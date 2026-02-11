@@ -23,7 +23,7 @@ def convert_registration_predictions_to_dicom(
     convert_moved: bool = False,
     convert_moving: bool = False,
     dest_dataset: Optional[DatasetID] = None,
-    dest_fixed_study: str = 'idx:1',
+    dest_fixed_study: str = 'i:1',
     fixed_study: str = 'study_1',
     landmarks: Optional[LandmarkIDs] = None,
     moving_study: str = 'study_0',

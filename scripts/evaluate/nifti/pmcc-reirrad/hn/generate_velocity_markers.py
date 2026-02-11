@@ -5,7 +5,7 @@ from mymi.datasets.dicom import DicomStudy
 
 def study_sort(s: DicomStudy) -> int:
     assert s.has_rtstruct
-    filepath = s.rtstruct_series('idx:0').filepath
+    filepath = s.rtstruct_series('i:0').filepath
     if '/C1/' in filepath:
         return 0
     elif '/C2/' in filepath:
@@ -19,12 +19,12 @@ pat_ids = dset.list_patients(group='hn')
 
 for p in pat_ids:
     pat = dset.patient(p)
-    moving_study = pat.study('idx:0', sort=study_sort)
-    fixed_study = pat.study('idx:1', sort=study_sort)
-    moving_series = moving_study.rtstruct_series('idx:0')
+    moving_study = pat.study('i:0', sort=study_sort)
+    fixed_study = pat.study('i:1', sort=study_sort)
+    moving_series = moving_study.rtstruct_series('i:0')
     assert '/C1/' in moving_series.filepath, moving_series.filepath
     moving_lms = moving_series.landmarks_data()
-    fixed_series = fixed_study.rtstruct_series('idx:0')
+    fixed_series = fixed_study.rtstruct_series('i:0')
     assert '/C2/' in fixed_series.filepath
     fixed_lms = fixed_series.landmarks_data()
     filepath = os.path.join(dset.path, 'data', 'velocity', pat.id, 'C1-markers.txt')

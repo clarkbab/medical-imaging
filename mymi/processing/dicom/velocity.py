@@ -13,7 +13,7 @@ def convert_velocity_registrations_to_nifti(
     dataset: str,
     fixed_study: StudyID = 'study_1',
     landmark: Optional[LandmarkIDs] = 'all',
-    landmarks_series: SeriesID = 'idx:0',
+    landmarks_series: SeriesID = 'i:0',
     method: Union[str, List[str]] = ['dmp', 'edmp', 'rir', 'sg_c', 'sg_lm'],
     moving_study: StudyID = 'study_0',
     pat: PatientIDs = 'all',

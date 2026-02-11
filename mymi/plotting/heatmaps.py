@@ -74,7 +74,7 @@ def plot_heatmap(
         heatmap_slice = crop_fn(heatmap_slice, transpose_box(crop), use_patient_coords=False)
 
     # Plot heatmap
-    image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=get_origin(view))
+    image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=get_view_origin(view))
     if show_colorbar:
         # create an axes on the right side of ax. The width of cax will be 5%
         # of ax and the padding between cax and ax will be fixed at 0.05 inch.
@@ -96,7 +96,7 @@ def plot_heatmap(
                 # Plot prediction.
                 if pred_slice.sum() != 0: 
                     cmap = ListedColormap(((1, 1, 1, 0), colour))
-                    ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=get_origin(view))
+                    ax.imshow(pred_slice, alpha=alpha_pred, aspect=aspect, cmap=cmap, origin=get_view_origin(view)[1])
                     ax.plot(0, 0, c=colour, label=pred_label)
                     ax.contour(pred_slice, colors=[colour], levels=[.5], linestyles='solid')
 

@@ -111,7 +111,7 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
             for i, id in enumerate(all_ids):
                 # Check if any of the passed 'studys' references this ID.
                 for j, sid in enumerate(studys):
-                    if sid.startswith('idx:'):
+                    if sid.startswith('i:'):
                         # Check if idx refer
                         idx = int(sid.split(':')[1])
                         if i == idx or (idx < 0 and i == len(all_ids) + idx):   # Allow negative indexing.
@@ -134,7 +134,7 @@ class DicomPatient(IndexWithErrorsMixin, Patient):
     def study(
         self,
         id: StudyID,
-        sort: Optional[Callable[DicomStudy, int]] = None,  # For 'idx:n' calls.
+        sort: Optional[Callable[DicomStudy, int]] = None,  # For 'i:n' calls.
         ) -> DicomStudy:
         id = handle_idx_prefix(id, lambda: self.list_studies(sort=sort))
         if not self.has_study(id):

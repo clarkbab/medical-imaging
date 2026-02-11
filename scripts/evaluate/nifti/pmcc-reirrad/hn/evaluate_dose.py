@@ -23,7 +23,7 @@ for p in tqdm(pat_ids):
         print(m)
         # Get model/dose series.
         pat = set.patient(p)
-        fixed_study = pat.study('idx:1')
+        fixed_study = pat.study('i:1')
         print(fixed_study)
         model_series = {}
         for s in fixed_study.list_dose_series():
@@ -33,7 +33,7 @@ for p in tqdm(pat_ids):
                 model_series[m] = s
 
         # Sample moving dose at moving landmarks and moved dose at fixed landmarks - calculate difference.
-        moving_study = pat.study('idx:0')
+        moving_study = pat.study('i:0')
         moving_lm_series = moving_study.landmarks_series('series_1')
         assert '/C1/' in moving_lm_series.dicom.filepath, moving_lm_series.dicom.filepath
         moving_lms = moving_lm_series.data()
@@ -42,7 +42,7 @@ for p in tqdm(pat_ids):
         moving_dose = moving_dose_series.data
         moving_df = sample(moving_dose, moving_lms, spacing=moving_dose_series.spacing, origin=moving_dose_series.origin)
         
-        fixed_study = pat.study('idx:1')
+        fixed_study = pat.study('i:1')
         fixed_lm_series = fixed_study.landmarks_series('series_1')
         assert '/C2/' in fixed_lm_series.dicom.filepath, fixed_lm_series.dicom.filepath
         fixed_lms = fixed_lm_series.data()

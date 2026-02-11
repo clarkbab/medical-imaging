@@ -124,13 +124,27 @@ def get_idx(
 
     return idx
 
-def get_origin(view: Axis) -> Literal['lower', 'upper']:
-    return 'upper' if view == 2 else 'lower'
+def get_view_origin(
+    view: Axis,
+    orientation: str = 'LPS',
+    ) -> Literal['lower', 'upper']:
+    if view == 0:
+        origin_x = 'lower' if orientation[1] == 'P' else 'upper'
+        origin_y = 'lower' if orientation[2] == 'S' else 'upper'
+    elif view == 1:
+        origin_x = 'lower' if orientation[0] == 'L' else 'upper'
+        origin_y = 'lower' if orientation[2] == 'S' else 'upper'
+    else:
+        origin_x = 'lower' if orientation[0] == 'L' else 'upper'
+        origin_y = 'upper' if orientation[1] == 'P' else 'lower'
+
+    return (origin_x, origin_y)
 
 def get_view_slice(
     data: Union[ImageArray, VectorImageArray],
     idx: int,
-    view: Axis) -> Tuple[SliceArray, int]:
+    view: Axis,
+    ) -> Tuple[SliceArray, int]:
     n_dims = len(data.shape)
     if n_dims == 4:
         assert data.shape[0] == 3   # vector image.
@@ -373,7 +387,7 @@ def plot_regions_data(
             slice_data = largest_cc_3D(slice_data)
 
         # Plot region.
-        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
+        ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_view_origin(view)[1])
         label = escape_latex_fn(region) if escape_latex else region
         ax.plot(0, 0, c=colour, label=label)
         ax.contour(slice_data, colors=[colour], levels=[.5], linestyles='solid')

@@ -90,7 +90,7 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
             for i, id in enumerate(all_ids):
                 # Check if any of the passed 'pat_ids' references this ID.
                 for j, pid in enumerate(pat_ids):
-                    if pid.startswith('idx:'):
+                    if pid.startswith('i:'):
                         # Check if idx refer
                         idx = int(pid.split(':')[1])
                         if i == idx or (idx < 0 and i == len(all_ids) + idx):   # Allow negative indexing.

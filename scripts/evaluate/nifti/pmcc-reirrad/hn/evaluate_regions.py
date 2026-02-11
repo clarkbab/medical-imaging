@@ -21,8 +21,8 @@ cols = {
 res_df = pd.DataFrame(columns=cols.keys())
 for p in tqdm(pat_ids):
     pat = set.patient(p)
-    moving_study = pat.study('idx:0')
-    fixed_study = pat.study('idx:1')
+    moving_study = pat.study('i:0')
+    fixed_study = pat.study('i:1')
     fixed_spacing = fixed_study.ct_spacing
     fixed_regions_series = fixed_study.regions_series('series_1')
     assert '/C2/' in fixed_regions_series.dicom.filepath, fixed_regions_series.dicom.filepath

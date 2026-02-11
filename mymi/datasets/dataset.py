@@ -45,8 +45,7 @@ class Dataset:
         group_ids = list(sorted(self._groups['group-id'].unique()))
         return group_ids
 
-    @property
-    def notes(self) -> None:
+    def print_notes(self) -> None:
         filepath = os.path.join(self._path, 'notes.txt')
         if os.path.exists(filepath):
             with open(filepath, 'r') as f:

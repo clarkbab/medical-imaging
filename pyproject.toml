@@ -1,18 +1,19 @@
 [project]
     name = "MyMI"
     version = "0.0.1"
-    
-dependencies = [
-    "jupyterlab",
-    "nibabel",
-    "numpy",
-    "pandas",
-    "pydicom",
-    "pynrrd",
-    "pytorch_lightning",
-    "SimpleITK",
-    "surface_distance @ git+ssh://git@github.com/google-deepmind/surface-distance",
-    "torch",
-    "torchio",
-    "unigradicon",
-]
+
+[tool.poetry.dependencies]
+python = ">=3.8"
+
+jupyterlab = "*"
+nibabel = "*"
+numpy = "*"
+pandas = "*"
+pydicom = "*"
+pynrrd = "*"
+pytorch_lightning = "*"
+SimpleITK = "*"
+surface_distance = { git = "ssh://git@github.com/google-deepmind/surface-distance.git" }
+torch = "*"
+torchio = "*"
+unigradicon = "*"

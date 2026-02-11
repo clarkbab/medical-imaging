@@ -67,7 +67,7 @@ class NiftiPatient(IndexMixin, Patient):
             for i, id in enumerate(all_ids):
                 # Check if any of the passed 'studys' references this ID.
                 for j, sid in enumerate(studys):
-                    if sid.startswith('idx:'):
+                    if sid.startswith('i:'):
                         # Check if idx refer
                         idx = int(sid.split(':')[1])
                         if i == idx or (idx < 0 and i == len(all_ids) + idx):   # Allow negative indexing.

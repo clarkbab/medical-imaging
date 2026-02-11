@@ -4,7 +4,7 @@ from mymi.processing.dicom import convert_to_nifti
 def study_sort(s: DicomStudy) -> int:
     if not s.has_rtstruct:
         raise ValueError(f"No RTSTRUCT series found for study '{s}'.")
-    filepath = s.rtstruct_series('idx:0').filepath
+    filepath = s.rtstruct_series('i:0').filepath
     if '/C1/' in filepath:
         return 0
     elif '/C2/' in filepath or '/C2_PROP/':

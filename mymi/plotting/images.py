@@ -6,12 +6,13 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .plotting import get_aspect, get_idx, get_origin, get_view_slice, get_view_xy, get_window, plot_landmarks_data
+from .plotting import get_aspect, get_idx, get_view_origin, get_view_slice, get_view_xy, get_window, plot_landmarks_data
 
 @alias_kwargs(('upc', 'use_patient_coords'))
 def plot_image(
     data: Union[ImageArray, ImageTensor, DirPath, FilePath, List[Union[ImageArray, ImageTensor]]],
     centre: Optional[Union[LandmarkID, LandmarkSeries, Literal['dose'], RegionArray, RegionID]] = None,
+    centre_other: Optional[Union[LandmarkID, LandmarkSeries, Literal['dose'], RegionArray, RegionID]] = None,
     dose_alpha_min: float = 0.3,
     dose_alpha_max: float = 1.0,
     dose_cmap: str = 'turbo',
@@ -19,7 +20,6 @@ def plot_image(
     dose_data: Union[ImageArray, ImageTensor, DirPath, FilePath, List[Union[ImageArray, ImageTensor]]] = None,
     dose_origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = None,
     dose_spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = None,
-    ocentre: Optional[Union[LandmarkID, LandmarkSeries, Literal['dose'], RegionArray, RegionID]] = None,
     figsize: Tuple[float, float] = (16, 6),
     idx: Union[int, float, List[Union[int, float]]] = 0.5,
     # If single or list, broadcast to all images. If list of lists, leave alone.
@@ -27,6 +27,8 @@ def plot_image(
     landmark: LandmarkIDs = 'all',
     landmarks_data: Optional[Union[LandmarksFrame, PointsArray, PointsTensor, List[Union[LandmarksFrame, PointsArray, PointsTensor]]]] = None,    # Should be in patient coordinates.
     modality: Literal['ct', 'dose'] = 'ct',
+    # Our plotting follows standard radiological convention and assumes input data is in LPS+ orientation.
+    orientation: str = 'LPS',
     origin: Optional[Union[Point, PointArray, PointTensor, List[Union[Point, PointArray, PointTensor]]]] = (0, 0, 0),
     other_landmarks_data: Optional[Union[LandmarksFrame, PointsArray, PointsTensor, List[Union[LandmarksFrame, PointsArray, PointsTensor]]]] = None,    # Should be in patient coordinates.
     show_axis_ticks: bool = True,
@@ -57,7 +59,7 @@ def plot_image(
     dose_data = arg_to_list(dose_data, (None, np.ndarray, torch.Tensor))
     idxs = arg_to_list(idx, (int, float, str), broadcast=len(data))
     centres = arg_to_list(centre, (None, int, float, str), broadcast=len(data))
-    ocentres = arg_to_list(ocentre, (None, int, float, str), broadcast=len(data))
+    centre_others = arg_to_list(centre_other, (None, int, float, str), broadcast=len(data))
     # Assuming one main image only.
     if isinstance(region, (DirPath, FilePath)):
         loaded_regions = []
@@ -115,7 +117,7 @@ def plot_image(
     if transpose:
         axs = axs.T
 
-    for i, (row_axs, d, dd, idx, c, oc, rs, lms, o, do, olms, s, ds, sd, sl) in enumerate(zip(axs, data, dose_data, idxs, centres, ocentres, regions, landmarks_datas, origins, dose_origins, other_landmarks_datas, spacings, dose_spacings, show_doses, show_landmarkses)):
+    for i, (row_axs, d, dd, idx, c, oc, rs, lms, o, do, olms, s, ds, sd, sl) in enumerate(zip(axs, data, dose_data, idxs, centres, centre_others, regions, landmarks_datas, origins, dose_origins, other_landmarks_datas, spacings, dose_spacings, show_doses, show_landmarkses)):
         logging.info(f"Plotting image {i+1}/{len(data)}: with size={d.shape}, idx={idx}, centre={c}, spacing={s}, origin={o}.")
 
         # Rescale RGB image to range [0, 1).
@@ -124,16 +126,20 @@ def plot_image(
             d = (d - d.min()) / (d.max() - d.min())
 
         for col_ax, v in zip(row_axs, views):
-            view_idx = get_idx(d.shape, v, centre=c, ocentre=oc, idx=idx, landmarks_data=lms, landmarks_data_other=olms, origin=o, regions_data=rs, spacing=s)
+            view_idx = get_idx(d.shape, v, centre=c, centre_other=oc, idx=idx, landmarks_data=lms, landmarks_data_other=olms, origin=o, regions_data=rs, spacing=s)
             image, view_idx = get_view_slice(d, view_idx, v)
             aspect = get_aspect(v, s)
-            origin = get_origin(v)
+            origin = get_view_origin(v, orientation=orientation)
+            print(view)
+            print(origin)
             vmin, vmax = get_window(window, d)
             if modality == 'ct':
                 cmap='gray'
             elif modality == 'dose':
                 cmap='viridis'
-            col_ax.imshow(image, aspect=aspect, cmap=cmap, origin=origin, vmin=vmin, vmax=vmax)
+            col_ax.imshow(image, aspect=aspect, cmap=cmap, origin=origin[1], vmin=vmin, vmax=vmax)
+            if origin[0] == 'upper':
+                col_ax.invert_xaxis()
             if show_title:
                 col_ax.set_title(f'{get_axis_name(v)} view, slice {view_idx}')
             if not show_axis_ticks:

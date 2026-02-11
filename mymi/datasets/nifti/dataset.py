@@ -129,16 +129,16 @@ class NiftiDataset(IndexMixin, Dataset):
             for i, id in enumerate(ids):
                 # Check if any of the passed 'pat_ids' references this ID.
                 for j, pid in enumerate(pat_ids):
-                    if pid.startswith('idx:'):
-                        if '-' in pid and not 'idx:-' in pid:   # Make sure negative indexing doesn't match - probably better with a regexp.
-                            # Format 'idx:4-8'.
+                    if pid.startswith('i:'):
+                        if '-' in pid and not 'i:-' in pid:   # Make sure negative indexing doesn't match - probably better with a regexp.
+                            # Format 'i:4-8'.
                             min_idx, max_idx = pid.split(':')[1].split('-')
                             min_idx, max_idx = int(min_idx), int(max_idx)
                             if i >= min_idx and i < max_idx:
                                 filt_ids.append(id)
                                 break
                         else:
-                            # Format: 'idx:4' or 'idx:-4'.
+                            # Format: 'i:4' or 'i:-4'.
                             idx = int(pid.split(':')[1])
                             if i == idx or (idx < 0 and i == len(ids) + idx):   # Allow negative indexing.
                                 filt_ids.append(id)

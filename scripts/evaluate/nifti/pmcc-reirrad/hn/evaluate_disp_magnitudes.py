@@ -15,9 +15,9 @@ pat_disp_dfs = []
 for p in tqdm(pat_ids):
     # Get RIR-propagated landmarks.
     pat = set.patient(p)
-    fixed_study = pat.study('idx:1')
+    fixed_study = pat.study('i:1')
     for i in range(len(models)):
-        rir_series = fixed_study.landmarks_series(f'idx:{i + 1}')
+        rir_series = fixed_study.landmarks_series(f'i:{i + 1}')
         if '/rir.dcm' in rir_series.dicom.filepath:
             rir_lms = rir_series.data()
             break
@@ -25,7 +25,7 @@ for p in tqdm(pat_ids):
     disp_dfs = []
     for i in range(len(models)):
         # Get deformably propagated C2 landmarks.
-        def_series = fixed_study.landmarks_series(f'idx:{i + 1}')
+        def_series = fixed_study.landmarks_series(f'i:{i + 1}')
         # assert f'/{m}.dcm' in def_series.dicom.filepath, def_series.dicom.filepath
         m = def_series.dicom.filepath.split('/')[-1].replace('.dcm', '')
         def_lms = def_series.data()

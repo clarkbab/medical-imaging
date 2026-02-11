@@ -132,7 +132,7 @@ def plot_single_patient(
         ct_slice, _ = get_view_slice(ct_data, idx, view)
         ct_slice = crop_fn(ct_slice, transpose_box(crop_vox_xy), use_patient_coords=False)
         vmin, vmax = get_window(window=window, data=ct_data)
-        ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view), vmin=vmin, vmax=vmax)
+        ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1], vmin=vmin, vmax=vmax)
 
         # Highlight regions outside the window mask.
         if window_mask is not None:
@@ -142,12 +142,12 @@ def plot_single_patient(
                 hw_slice[ct_slice < window_mask[0]] = 1
             if window_mask[1] is not None:
                 hw_slice[ct_slice >= window_mask[1]] = 1
-            ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=get_origin(view))
+            ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=get_view_origin(view)[1])
     else:
         # Plot black background.
         empty_slice = np.zeros(get_view_xy(size, view))
         empty_slice = crop_fn(empty_slice, transpose_box(crop_vox_xy), use_patient_coords=False)
-        ax.imshow(empty_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_origin(view))
+        ax.imshow(empty_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])
 
     # Plot crosshairs.
     if crosshairs is not None:
@@ -197,7 +197,7 @@ def plot_single_patient(
 
         # Plot dose slice.
         if show_dose:
-            imax = ax.imshow(dose_slice, aspect=aspect, cmap=dose_cmap, origin=get_origin(view))
+            imax = ax.imshow(dose_slice, aspect=aspect, cmap=dose_cmap, origin=get_view_origin(view)[1])
             if show_dose_legend:
                 cbar = plt.colorbar(imax, fraction=dose_colourbar_size, pad=dose_colourbar_pad)
                 cbar.set_label(label='Dose [Gray]', size=fontsize)
@@ -325,13 +325,13 @@ def plot_single_patient(
             if show_title_landmark_series and landmark_series is not None and landmarks_data is not None:
                 prefix = '\n' if title != '' else ''
                 title_landmark_series = f'...{landmark_series[-title_width:]}' if len(landmark_series) > title_width else landmark_series
-                title += f'{prefix}Landmark series: {title_landmark_series}'
+                title += f'{prefix}Landmarks series: {title_landmark_series}'
                 if series_date is not None:
                     title += f' ({series_date})'
             if show_title_region_series and region_series is not None and regions_data is not None:
                 prefix = '\n' if title != '' else ''
                 title_region_series = f'...{region_series[-title_width:]}' if len(region_series) > title_width else region_series
-                title += f'{prefix}Region series: {title_region_series}'
+                title += f'{prefix}Regions series: {title_region_series}'
                 if series_date is not None:
                     title += f' ({series_date})'
             if show_title_slice:
@@ -538,7 +538,7 @@ def plot_patient(
                 assert len(study_landmark_serieses) == len(pat_studies) * len(study_serieses)
                 study_landmark_serieses = study_landmark_serieses[i * len(study_serieses):(i + 1) * len(study_serieses)]
 
-            # Region series can be referrring to multiple studies or series or both.
+            # Regions series can be referrring to multiple studies or series or both.
             if len(pat_studies) == 1:   # Single study, multiple image series.
                 study_region_serieses = arg_to_list(region_series, (None, SeriesID), broadcast=len(study_serieses))
                 assert len(study_region_serieses) == len(study_serieses)
