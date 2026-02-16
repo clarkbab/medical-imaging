@@ -21,3 +21,4 @@ from .slurm import *
 from .string import *
 from .timer import *
 from .utils import *
+from .varian import *

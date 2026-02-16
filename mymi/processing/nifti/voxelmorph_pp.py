@@ -41,17 +41,17 @@ def create_vxmpp_preprocessed_dataset(
 
         # Crop/pad to required size.
         vxm_size = (192, 192, 208)
-        fixed_com = get_centre_of_mass(fixed_lung_rs, use_patient_coords=False)
-        moving_com = get_centre_of_mass(moving_lung_rs, use_patient_coords=False)
+        fixed_com = get_centre_of_mass(fixed_lung_rs, use_world_coords=False)
+        moving_com = get_centre_of_mass(moving_lung_rs, use_world_coords=False)
         half_size = (np.array(vxm_size) / 2).astype(int)
         fixed_crop = (tuple(fixed_com - half_size), tuple(fixed_com + half_size))
         moving_crop = (tuple(moving_com - half_size), tuple(moving_com + half_size))
-        fixed_ct_cp = crop_or_pad(fixed_ct_rs, fixed_crop, use_patient_coords=False)
-        fixed_lung_cp = crop_or_pad(fixed_lung_rs, fixed_crop, use_patient_coords=False)
-        fixed_lms_cp = crop_or_pad_landmarks(fixed_lms, fixed_crop, spacing=vxm_fixed_spacing, origin=(0, 0, 0), use_patient_coords=False)
-        moving_ct_cp = crop_or_pad(moving_ct_rs, moving_crop, use_patient_coords=False)
-        moving_lung_cp = crop_or_pad(moving_lung_rs, moving_crop, use_patient_coords=False)
-        moving_lms_cp = crop_or_pad_landmarks(moving_lms, moving_crop, spacing=vxm_moving_spacing, origin=(0, 0, 0), use_patient_coords=False)
+        fixed_ct_cp = crop_or_pad(fixed_ct_rs, fixed_crop, use_world_coords=False)
+        fixed_lung_cp = crop_or_pad(fixed_lung_rs, fixed_crop, use_world_coords=False)
+        fixed_lms_cp = crop_or_pad_landmarks(fixed_lms, fixed_crop, spacing=vxm_fixed_spacing, origin=(0, 0, 0), use_world_coords=False)
+        moving_ct_cp = crop_or_pad(moving_ct_rs, moving_crop, use_world_coords=False)
+        moving_lung_cp = crop_or_pad(moving_lung_rs, moving_crop, use_world_coords=False)
+        moving_lms_cp = crop_or_pad_landmarks(moving_lms, moving_crop, spacing=vxm_moving_spacing, origin=(0, 0, 0), use_world_coords=False)
 
         # Clamp intensity values.
         fixed_ct_cp = np.clip(fixed_ct_cp, a_min=hu_range[0], a_max=hu_range[1])

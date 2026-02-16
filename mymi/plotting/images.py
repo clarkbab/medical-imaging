@@ -6,9 +6,9 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .plotting import get_aspect, get_idx, get_view_origin, get_view_slice, get_view_xy, get_window, plot_landmarks_data
+from .plotting import get_aspect, get_idx, get_view_origin, get_view_slice, get_view_xy, get_v_min_max, plot_landmarks_data
 
-@alias_kwargs(('upc', 'use_patient_coords'))
+@alias_kwargs(('uwc', 'use_world_coords'))
 def plot_image(
     data: Union[ImageArray, ImageTensor, DirPath, FilePath, List[Union[ImageArray, ImageTensor]]],
     centre: Optional[Union[LandmarkID, LandmarkSeries, Literal['dose'], RegionArray, RegionID]] = None,
@@ -38,13 +38,15 @@ def plot_image(
     show_title: bool = True,
     spacing: Optional[Union[Spacing, SpacingArray, SpacingTensor, List[Union[Spacing, SpacingArray, SpacingTensor]]]] = (1, 1, 1),
     transpose: bool = False,
-    use_patient_coords: bool = True,
+    use_world_coords: bool = True,
     view: Union[int, List[int]] = 'all',
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
     window: Optional[Union[str, Tuple[float, float]]] = 'tissue',
     **kwargs) -> None:
     if isinstance(data, (DirPath, FilePath)):
         if os.path.isdir(data):
-            data, spacings, origins = from_ct_dicoms(dirpath=data)
+            data, spacings, origins = from_ct_dicoms(data)
         elif data.endswith('.nii') or data.endswith('.nii.gz'):
             data, spacings, origins = load_nifti(data)
         elif data.endswith('.npy'):
@@ -130,9 +132,7 @@ def plot_image(
             image, view_idx = get_view_slice(d, view_idx, v)
             aspect = get_aspect(v, s)
             origin = get_view_origin(v, orientation=orientation)
-            print(view)
-            print(origin)
-            vmin, vmax = get_window(window, d)
+            vmin, vmax = get_v_min_max(data=d, vmin=vmin, vmax=vmax, window=window)
             if modality == 'ct':
                 cmap='gray'
             elif modality == 'dose':
@@ -196,7 +196,7 @@ def plot_image(
                 col_ax.imshow(region_image, alpha=0.3, aspect=aspect, cmap=cmap, origin=origin)
                 col_ax.contour(region_image, colors=[palette[j]], levels=[.5], linestyles='solid')
 
-            if use_patient_coords:  # Change axis tick labels to show patient coordinates.
+            if use_world_coords:  # Change axis tick labels to show patient coordinates.
                 size_x, size_y = get_view_xy(d.shape, v)
                 sx, sy = get_view_xy(s, v)
                 ox, oy = get_view_xy(o, v)

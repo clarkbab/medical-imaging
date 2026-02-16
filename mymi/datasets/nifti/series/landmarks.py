@@ -34,13 +34,13 @@ class NiftiLandmarksSeries(NiftiSeries):
         n: Optional[int] = None,
         sample_ct: bool = False,
         sample_dose: bool = False,
-        use_patient_coords: bool = True,
+        use_world_coords: bool = True,
         **kwargs) -> Union[LandmarksFrame, LandmarksFrameVox, Points3D, Voxels]:
 
         # Load landmarks.
         landmarks_data = load_csv(self.__filepath)
         landmarks_data = landmarks_data.rename(columns={ '0': 0, '1': 1, '2': 2 })
-        if not use_patient_coords:
+        if not use_world_coords:
             if self.__ref_ct is None:
                 raise ValueError(f"Cannot convert landmarks to image coordinates without 'ref_ct'.")
             landmarks_data = landmarks_to_image_coords(landmarks_data, self.__ref_ct.spacing, self.__ref_ct.origin)

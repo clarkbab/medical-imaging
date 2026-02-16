@@ -16,6 +16,18 @@ class Timer:
         self.__cols['time'] = float
         self.__df = pd.DataFrame(columns=self.__cols.keys())
 
+    @property
+    def data(self) -> pd.DataFrame:
+        return self.__df
+
+    @contextmanager
+    @staticmethod
+    def print():
+        start = time()
+        yield None
+        end = time()
+        print(f'Time: {end - start:.3f}s')
+
     @contextmanager
     def record(
         self,

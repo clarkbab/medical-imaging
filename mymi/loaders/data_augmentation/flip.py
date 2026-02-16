@@ -37,7 +37,7 @@ class RandomFlip:
         flip_transform = sitk.AffineTransform(3)
         matrix = np.diag(p_draw)
         flip_transform.SetMatrix(matrix.flatten().tolist())
-        centre = fov_centre(np.zeros(size), spacing=spacing, origin=origin, use_patient_coords=True)
+        centre = fov_centre(np.zeros(size), spacing=spacing, origin=origin, use_world_coords=True)
         print('centre:', centre)
         flip_transform.SetCenter(list(centre))
 

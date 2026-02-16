@@ -36,7 +36,7 @@ def create_pddca_cropped_dataset(
                 label = np.logical_or(label, v)
             
             # Get structure fov.
-            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_patient_coords=True)
+            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_world_coords=True)
             min_mm.append(fov_l[0][i])
 
         # Add margin.
@@ -52,7 +52,7 @@ def create_pddca_cropped_dataset(
                 label = np.logical_or(label, v)
             
             # Get structure fov.
-            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_patient_coords=True)
+            fov_l = foreground_fov(label, spacing=spacing, origin=origin, use_world_coords=True)
             max_mm.append(fov_l[1][i])
 
         # Add margin.
@@ -61,7 +61,7 @@ def create_pddca_cropped_dataset(
 
         # Crop and save CT image.
         crop_mm = (min_mm, max_mm)
-        ct_data = crop(ct_data, crop_mm, spacing=spacing, origin=origin, use_patient_coords=True)
+        ct_data = crop(ct_data, crop_mm, spacing=spacing, origin=origin, use_world_coords=True)
         create_ct(dest_set.id, p, 'study_0', 'series_0', ct_data, spacing, origin, dry_run=dry_run)
 
         # Crop non-totalseg labels.
@@ -69,6 +69,6 @@ def create_pddca_cropped_dataset(
             if not pat.has_region(r):
                 continue
             rdata = pat.regions_data(r)[r]
-            rdata = crop(rdata, crop_mm, spacing=spacing, origin=origin, use_patient_coords=True)
+            rdata = crop(rdata, crop_mm, spacing=spacing, origin=origin, use_world_coords=True)
             create_region(dest_set.id, p, 'study_0', 'series_0', r, rdata, spacing, origin, dry_run=dry_run)
     

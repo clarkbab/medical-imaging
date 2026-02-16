@@ -11,12 +11,12 @@ def __spatial_crop(
     bounding_box: Union[BoxMM2D, BoxMM3D],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     origin: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray:
-    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
+    use_world_coords: bool = True) -> ImageArray:
+    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_world_coords=use_world_coords)
     assert_box_width(bounding_box)
 
     # Convert box to voxel coordinates.
-    if use_patient_coords:
+    if use_world_coords:
         min_mm, max_mm = bounding_box
         min = tuple(np.round((np.array(min_mm) - origin) / spacing).astype(int))
         max = tuple(np.round((np.array(max_mm) - origin) / spacing).astype(int))
@@ -43,10 +43,10 @@ def __spatial_centre_crop(
     data: ImageArray,
     size: Union[Size, SizeMM],
     spacing: Optional[Spacing] = None,
-    use_patient_coords: bool = True) -> ImageArray:
+    use_world_coords: bool = True) -> ImageArray:
 
     # Determine cropping/padding amounts.
-    if use_patient_coords:
+    if use_world_coords:
         assert spacing is not None
         fov_mm = np.array(size) * spacing
         to_crop_mm = fov_mm - size
@@ -58,7 +58,7 @@ def __spatial_centre_crop(
     bounding_box = (box_min, box_max)
 
     # Perform crop or padding.
-    output = __spatial_crop(data, bounding_box, use_patient_coords=False)
+    output = __spatial_crop(data, bounding_box, use_world_coords=False)
 
     return output
 
@@ -75,13 +75,13 @@ def __spatial_crop_foreground(
     fill: Union[float, Literal['min']] = 'min',
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
     origin: Optional[Union[Point2D, Point3D]] = None,
-    use_patient_coords: bool = True) -> LabelArray:
-    bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
+    use_world_coords: bool = True) -> LabelArray:
+    bounding_box = replace_box_none(bounding_box, data.shape, spacing=spacing, origin=origin, use_world_coords=use_world_coords)
     assert_box_width(bounding_box)
 
     # Convert box to voxel coordinates.
     min, max = bounding_box
-    if use_patient_coords:
+    if use_world_coords:
         min = np.round((np.array(min) - origin) / spacing)
         max = np.round((np.array(max) - origin) / spacing)
 

@@ -40,13 +40,13 @@ def collate_fn(batch) -> List[Tensor]:
         descs.append(desc)
         input_cs = []
         for c in range(len(input)):     # Perform pad separately for each channel as 'centre_crop_or_pad, hasn't been written.
-            input_c = centre_crop_or_pad(input[c], max_size, use_patient_coords=False)
+            input_c = centre_crop_or_pad(input[c], max_size, use_world_coords=False)
             input_cs.append(input_c)
         input = np.stack(input_cs, axis=0)
         inputs.append(input)
         label_cs = []
         for c in range(len(label)): 
-            label_c = centre_crop_or_pad(label[c], max_size, use_patient_coords=False)
+            label_c = centre_crop_or_pad(label[c], max_size, use_world_coords=False)
             label_cs.append(label_c)
         label = np.stack(label_cs, axis=0)
         labels.append(label)

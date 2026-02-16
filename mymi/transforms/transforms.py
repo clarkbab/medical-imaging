@@ -18,8 +18,8 @@ def replace_box_none(
     size: Union[Size2D, Size3D],
     origin: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> Tuple[Box2D, Box3D]:
-    if use_patient_coords:
+    use_world_coords: bool = True) -> Tuple[Box2D, Box3D]:
+    if use_world_coords:
         assert spacing is not None
         assert origin is not None
 
@@ -29,12 +29,12 @@ def replace_box_none(
     min, max = list(min), list(max)
     for i in range(n_dims):
         if min[i] is None:
-            if use_patient_coords:
+            if use_world_coords:
                 min[i] = origin[i]
             else:
                 min[i] = 0
         if max[i] is None:
-            if use_patient_coords:
+            if use_world_coords:
                 max[i] = size[i] * spacing[i] + origin[i]
             else:
                 max[i] = size[i]

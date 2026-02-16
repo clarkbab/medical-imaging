@@ -309,7 +309,7 @@ def load_registration(
     region: Optional[RegionIDs] = 'all',
     series: SeriesID = 'series_0',  # Fixed image series, not currently used.
     study: StudyID = 'study_1',
-    use_patient_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtImageArray], Optional[DoseImageArray], Optional[LandmarksFrame], Optional[RegionArrays]]:
+    use_world_coords: bool = True) -> Tuple[Optional[sitk.Transform], Optional[CtImageArray], Optional[DoseImageArray], Optional[LandmarksFrame], Optional[RegionArrays]]:
     # Load moved CT.
     set = NiftiDataset(dataset)
     fixed_pat = set.patient(pat)
@@ -350,7 +350,7 @@ def load_registration(
 
     if landmark is not None:
         # Load landmarks - moved from fixed to moving space (reversed).
-        moved_landmarks_data = load_registered_landmarks(dataset, fixed_pat.id, model, fixed_study=fixed_study.id, moving_pat=moving_pat.id, moving_study=moving_study.id, use_patient_coords=use_patient_coords)
+        moved_landmarks_data = load_registered_landmarks(dataset, fixed_pat.id, model, fixed_study=fixed_study.id, moving_pat=moving_pat.id, moving_study=moving_study.id, use_world_coords=use_world_coords)
         if moved_landmarks_data is not None:
             all_landmarks = list(sorted(moved_landmarks_data['landmark-id'].unique()))
 
@@ -393,7 +393,7 @@ def load_registered_landmarks(
     fixed_study: StudyID = 'study_1',
     moving_pat: Optional[PatientID] = None,
     moving_study: StudyID = 'study_0',
-    use_patient_coords: bool = True) -> Optional[LandmarkIDs]:
+    use_world_coords: bool = True) -> Optional[LandmarkIDs]:
     moving_pat = moving_pat if moving_pat is not None else fixed_pat
 
     # Load landmarks.
@@ -405,7 +405,7 @@ def load_registered_landmarks(
     landmarks = load_files_csv(filepath, map_cols=map_cols)
 
     # Convert to image coordinates.
-    if not use_patient_coords:
+    if not use_world_coords:
         study = set.patient(moving_pat).study(moving_study)
         spacing = study.ct_spacing
         origin = study.ct_origin

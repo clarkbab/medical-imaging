@@ -13,14 +13,14 @@ def __spatial_crop_or_pad(
     origin: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray:
-    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_patient_coords=use_patient_coords)
+    use_world_coords: bool = True) -> ImageArray:
+    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_world_coords=use_world_coords)
     assert_box_width(bounding_box)
     fill = np.min(image) if fill == 'min' else fill
 
     # Convert box to image coordinates.
     min, max = bounding_box
-    if use_patient_coords:
+    if use_world_coords:
         min = tuple(np.round((np.array(min) - origin) / spacing).astype(int))
         max = tuple(np.round((np.array(max) - origin) / spacing).astype(int))
 
@@ -29,7 +29,7 @@ def __spatial_crop_or_pad(
     spatial_size = image.shape[1:] if n_dims == 4 else image.shape
     if return_inverse:
         # Calculate the inverse bounding box.
-        if use_patient_coords:
+        if use_world_coords:
             inv_box = extent(image, spacing=spacing, origin=origin)
         else:
             inv_min = tuple(-np.array(min))
@@ -75,13 +75,13 @@ def __spatial_centre_crop_or_pad(
     origin: Optional[Point] = None,
     return_inverse: bool = False,
     spacing: Optional[Spacing] = None,
-    use_patient_coords: bool = True,
+    use_world_coords: bool = True,
     **kwargs) -> ImageArray:
 
     # Determine cropping/padding amounts.
     n_dims = len(image.shape)
     spatial_size = image.shape[1:] if n_dims == 4 else image.shape
-    if use_patient_coords:
+    if use_world_coords:
         assert origin is not None
         assert spacing is not None
         fov = np.array(spatial_size) * spacing
@@ -97,7 +97,7 @@ def __spatial_centre_crop_or_pad(
     # Perform crop or padding.
     okwargs = dict(
         return_inverse=return_inverse,
-        use_patient_coords=use_patient_coords,
+        use_world_coords=use_world_coords,
     )
     res = __spatial_crop_or_pad(image, bounding_box, **okwargs, **kwargs)
 
@@ -121,12 +121,12 @@ def crop_or_pad_landmarks(
     bounding_box: Union[BoxMM3D, Box3D],
     origin: Optional[Point3D] = None,
     spacing: Optional[Spacing3D] = None,
-    use_patient_coords: bool = True) -> LandmarksFrame:
+    use_world_coords: bool = True) -> LandmarksFrame:
     landmarks = landmarks.copy()
     min, max = bounding_box
             
     # Filter landmarks outside of image FOV.
-    if use_patient_coords:
+    if use_world_coords:
         fov_min, fov_max = min, max
     else:
         assert spacing is not None

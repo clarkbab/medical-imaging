@@ -19,6 +19,6 @@ def truncate_spine(
         top_z = extent(pred)[1][2]
         bottom_z = int(np.ceil(top_z - RegionLimits.SpinalCord[2] / spacing[2]))
         crop = ((0, 0, bottom_z), tuple(np.array(pred.shape) - 1))
-        pred = crop_foreground(pred, crop, use_patient_coords=False)
+        pred = crop_foreground(pred, crop, use_world_coords=False)
 
     return pred

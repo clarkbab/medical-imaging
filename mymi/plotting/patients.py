@@ -11,7 +11,7 @@ from mymi.utils import *
 from .data import plot_histograms
 from .plotting import *
 
-@alias_kwargs(('upc', 'use_patient_coords'))
+@alias_kwargs(('uwc', 'use_world_coords'))
 def plot_single_patient(
     size: Size3D,
     spacing: Spacing3D,
@@ -83,7 +83,7 @@ def plot_single_patient(
     title: Optional[str] = None,
     title_width: int = 20,
     transform: torchio.transforms.Transform = None,
-    use_patient_coords: bool = True,
+    use_world_coords: bool = True,
     view: Axis = 0,
     window: Optional[Union[Literal['bone', 'lung', 'tissue'], Tuple[float, float]]] = 'tissue',
     window_mask: Optional[Tuple[float, float]] = None,
@@ -114,7 +114,7 @@ def plot_single_patient(
             crop_vox_xy = __get_region_crop(crop, crop_margin_mm, spacing, origin, view)
         else:
             crop_vox_xy = tuple(*zip(crop))    # API accepts ((xmin, xmax), (ymin, ymax)) - convert to Box2D.
-            crop_vox_xy = replace_box_none(crop_vox_xy, size, use_patient_coords=False)
+            crop_vox_xy = replace_box_none(crop_vox_xy, size, use_world_coords=False)
     else:
         crop_vox_xy = ((0, 0), get_view_xy(size, view))  # Default to full image size.
 
@@ -130,8 +130,8 @@ def plot_single_patient(
     if ct_data is not None and show_ct:
         # Plot CT slice.
         ct_slice, _ = get_view_slice(ct_data, idx, view)
-        ct_slice = crop_fn(ct_slice, transpose_box(crop_vox_xy), use_patient_coords=False)
-        vmin, vmax = get_window(window=window, data=ct_data)
+        ct_slice = crop_fn(ct_slice, transpose_box(crop_vox_xy), use_world_coords=False)
+        vmin, vmax = get_v_min_max(window=window, data=ct_data)
         ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1], vmin=vmin, vmax=vmax)
 
         # Highlight regions outside the window mask.
@@ -146,7 +146,7 @@ def plot_single_patient(
     else:
         # Plot black background.
         empty_slice = np.zeros(get_view_xy(size, view))
-        empty_slice = crop_fn(empty_slice, transpose_box(crop_vox_xy), use_patient_coords=False)
+        empty_slice = crop_fn(empty_slice, transpose_box(crop_vox_xy), use_world_coords=False)
         ax.imshow(empty_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])
 
     # Plot crosshairs.
@@ -158,7 +158,7 @@ def plot_single_patient(
             lm_data = landmarks_data[landmarks_data['landmark-id'] == crosshairs]
             lm_data = landmarks_to_image_coords(lm_data, spacing, origin).iloc[0]
             crosshairs = get_view_xy(lm_data[list(range(3))], view)
-        elif use_patient_coords and isinstance(crosshairs, Point2D):
+        elif use_world_coords and isinstance(crosshairs, Point2D):
             # Passed crosshairs should be in same coordinates as image axes. Convert to image coords
             crosshairs = (np.array(crosshairs) - get_view_xy(origin, view)) / get_view_xy(spacing, view)
 
@@ -167,7 +167,7 @@ def plot_single_patient(
         ax.axhline(y=crosshairs[1], color='yellow', linewidth=linewidth, linestyle='dashed')
         ch_label = crosshairs.copy()
         ch_label = ch_label + crop_vox_xy[0]
-        if use_patient_coords:
+        if use_world_coords:
             ch_label = ch_label * get_view_xy(spacing, view) + get_view_xy(origin, view)
             ch_label = f'({ch_label[0]:.1f}, {ch_label[1]:.1f})'
         else:
@@ -179,7 +179,7 @@ def plot_single_patient(
     isodoses = arg_to_list(isodoses, float)
     if dose_data is not None and (show_dose or len(isodoses) > 0):
         dose_slice, _ = get_view_slice(dose_data, idx, view)
-        dose_slice = crop_fn(dose_slice, transpose_box(crop_vox_xy), use_patient_coords=False)
+        dose_slice = crop_fn(dose_slice, transpose_box(crop_vox_xy), use_world_coords=False)
 
         # Create colormap with varying alpha - so 0 Gray is transparent.
         dose_cmap = plt.get_cmap(dose_cmap)
@@ -255,7 +255,7 @@ def plot_single_patient(
         elif view == 2:
             spacing_x = spacing[0]
 
-        if use_patient_coords:
+        if use_world_coords:
             ax.set_xlabel('mm')
         else:
             ax.set_xlabel(f'voxel [@ {spacing_x:.3f} mm]')
@@ -269,7 +269,7 @@ def plot_single_patient(
         elif view == 2:
             spacing_y = spacing[1]
 
-        if use_patient_coords:
+        if use_world_coords:
             ax.set_ylabel('mm')
         else:
             ax.set_ylabel(f'voxel [@ {spacing_y:.3f} mm]')
@@ -291,7 +291,7 @@ def plot_single_patient(
         tick_spacing_vox = int(np.diff(a.get_ticklocs())[0])    # Use spacing from default layout.
         n_ticks = int(np.floor((cx - cm) / tick_spacing_vox)) + 1
         ticks = np.arange(n_ticks) * tick_spacing_vox
-        if use_patient_coords:
+        if use_world_coords:
             tick_labels = (ticks + cm) * sp + o
             tick_labels = [f'{l:.1f}' for l in tick_labels]
         else:
@@ -336,7 +336,7 @@ def plot_single_patient(
                     title += f' ({series_date})'
             if show_title_slice:
                 prefix = '\n' if title != '' else ''
-                if use_patient_coords:
+                if use_world_coords:
                     slice_mm = spacing[view] * idx + origin[view]
                     title_idx = f'{slice_mm:.1f}mm'
                 else:

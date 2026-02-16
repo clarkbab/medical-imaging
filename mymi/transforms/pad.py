@@ -7,21 +7,21 @@ from mymi.utils import *
 
 from .transforms import assert_box_width
 
-@alias_kwargs(('upc', 'use_patient_coords'))
+@alias_kwargs(('uwc', 'use_world_coords'))
 def __spatial_pad(
     image: ImageArray,
     bounding_box: Union[Box2D, Box3D],
     fill: Union[float, Literal['min']] = 'min',
     origin: Optional[Union[Point2D, Point3D]] = None,
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True) -> ImageArray:
+    use_world_coords: bool = True) -> ImageArray:
     assert_box_width(bounding_box)
     fill = image.min() if fill == 'min' else fill
     if isinstance(fill, torch.Tensor):
         fill = fill.item()
 
     # Convert box to voxel coordinates.
-    if use_patient_coords:
+    if use_world_coords:
         min_mm, max_mm = bounding_box
         min = tuple(np.round((np.array(min_mm) - origin) / spacing).astype(int))
         max = tuple(np.round((np.array(max_mm) - origin) / spacing).astype(int))
@@ -54,10 +54,10 @@ def __spatial_centre_pad(
     image: ImageArray,
     size: Union[Size, SizeMM],
     spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_patient_coords: bool = True,
+    use_world_coords: bool = True,
     **kwargs) -> ImageArray:
     # Convert size to voxels if necessary.
-    if use_patient_coords:
+    if use_world_coords:
         assert spacing is not None
         size = tuple((np.array(size) / spacing).astype(int))
 
@@ -68,7 +68,7 @@ def __spatial_centre_pad(
     bounding_box = (box_min, box_max)
 
     # Perform padding.
-    output = __spatial_pad(image, bounding_box, use_patient_coords=False, **kwargs)
+    output = __spatial_pad(image, bounding_box, use_world_coords=False, **kwargs)
 
     return output
 

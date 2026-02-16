@@ -71,7 +71,7 @@ def plot_heatmap(
 
     # Crop the image.
     if crop is not None:
-        heatmap_slice = crop_fn(heatmap_slice, transpose_box(crop), use_patient_coords=False)
+        heatmap_slice = crop_fn(heatmap_slice, transpose_box(crop), use_world_coords=False)
 
     # Plot heatmap
     image = ax.imshow(heatmap_slice, alpha=alpha_heatmap, aspect=aspect, origin=get_view_origin(view))
@@ -91,7 +91,7 @@ def plot_heatmap(
 
                 # Crop the image.
                 if crop:
-                    pred_slice = crop_fn(pred_slice, transpose_box(crop), use_patient_coords=False)
+                    pred_slice = crop_fn(pred_slice, transpose_box(crop), use_world_coords=False)
 
                 # Plot prediction.
                 if pred_slice.sum() != 0: 

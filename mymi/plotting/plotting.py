@@ -90,21 +90,21 @@ def get_idx(
         if isinstance(centre, str) and centre == 'dose':
             if dose_data is None:
                 raise ValueError("Cannot use 'dose' centre without 'dose_data'.")
-            centre = get_centre_of_mass(dose_data, use_patient_coords=False)
+            centre = get_centre_of_mass(dose_data, use_world_coords=False)
             idx = centre[view]
         elif isinstance(centre, (LandmarkID, RegionID)):
             if lm_data is not None and centre in list(lm_data['landmark-id']):
                 centre_point = lm_data[lm_data['landmark-id'] == centre][list(range(3))].iloc[0]
                 idx = point_to_image_coords(centre_point, spacing, origin)[view]
             elif regions_data is not None and centre in regions_data:
-                idx = foreground_fov_centre(regions_data[centre], use_patient_coords=False)[view]
+                idx = foreground_fov_centre(regions_data[centre], use_world_coords=False)[view]
             else:
                 raise ValueError(f"No centre '{centre}' found in 'landmarks/regions_data'.")
         elif isinstance(centre, LandmarkSeries):
             centre_point = tuple(centre[list(range(3))])
             idx = point_to_image_coords(centre_point, spacing, origin)[view]
         elif isinstance(centre, RegionArray):
-            idx = foreground_fov_centre(centre, use_patient_coords=False)[view]
+            idx = foreground_fov_centre(centre, use_world_coords=False)[view]
         else:
             raise ValueError(f"Invalid type for 'centre': {type(centre)}. Must be one of (LandmarkSeries, LandmarkID, RegionArray, RegionID).")
     elif idx is not None:
@@ -180,10 +180,15 @@ def get_view_xy(
         res = (data[0], data[1])
     return res
 
-def get_window(
-    # Note: the format is (width, level), not (min, max).
+def get_v_min_max(
+    data: Optional[ImageArray] = None,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
     window: Optional[Union[str, Tuple[Optional[float], Optional[float]]]] = None,
-    data: Optional[ImageArray] = None) -> Tuple[float, float]:
+    ) -> Tuple[float, float]:
+    if vmin is not None and vmax is not None:
+        return vmin, vmax
+
     if isinstance(window, tuple):
         width, level = window
     elif isinstance(window, str):
@@ -269,7 +274,7 @@ def plot_landmarks_data(
     dose_data: Optional[DoseImageArray] = None,
     fontsize_landmarks: float = 10,
     landmark: LandmarkIDs = 'all',
-    landmarks_use_patient_coords: bool = True,
+    landmarks_use_world_coords: bool = True,
     marker_colour: str = 'yellow',
     marker_edgecolour: str = 'face',
     marker_linewidth: float = 1,
@@ -295,7 +300,7 @@ def plot_landmarks_data(
         landmarks_data = sample(dose_data, landmarks_data, landmarks_col='dose', origin=origin, spacing=spacing)
 
     # Convert landmarks to image coords.
-    if landmarks_use_patient_coords:
+    if landmarks_use_world_coords:
         landmarks_data = landmarks_to_image_coords(landmarks_data, spacing, origin)
 
     # Take subset of n closest landmarks landmarks.
@@ -366,7 +371,7 @@ def plot_regions_data(
 
         # Crop image.
         if crop:
-            slice_data = crop_fn(slice_data, transpose_box(crop), use_patient_coords=False)
+            slice_data = crop_fn(slice_data, transpose_box(crop), use_world_coords=False)
 
         # Plot extent.
         if show_extent:

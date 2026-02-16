@@ -150,8 +150,8 @@ def get_registration_region_evaluation(
 
     #     # Crop pred/label foreground voxels.
     #     crop = ((0, 0, z_min), label.shape)
-    #     pred = crop_foreground(pred, crop, use_patient_coords=False)
-    #     label = crop_foreground(label, crop, use_patient_coords=False)
+    #     pred = crop_foreground(pred, crop, use_world_coords=False)
+    #     label = crop_foreground(label, crop, use_world_coords=False)
 
     # Dice.
     metrics = {}

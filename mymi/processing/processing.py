@@ -323,7 +323,7 @@ def fill_border_padding(
                 
     crop = (tuple(crop_min), tuple(crop_max)) 
     logging.info(f'Border padding {crop} with values {fill}.')
-    data = crop_foreground(data, crop, fill=fill, use_patient_coords=False)
+    data = crop_foreground(data, crop, fill=fill, use_world_coords=False)
     return data
 
 def fill_contiguous_padding(

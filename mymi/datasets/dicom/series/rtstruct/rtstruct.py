@@ -76,7 +76,7 @@ class DicomRtStructSeries(DicomSeries):
         landmark_regexp: Optional[str] = None,
         n: Optional[int] = None,
         show_ids: bool = True,
-        use_patient_coords: bool = True,
+        use_world_coords: bool = True,
         **kwargs) -> Optional[Union[LandmarksFrame, LandmarksFrameVox, Points3D, Voxels]]:
         # Load landmarks.
         landmarks = self.list_landmarks(landmark=landmark, landmark_regexp=landmark_regexp, **kwargs)
@@ -92,7 +92,7 @@ class DicomRtStructSeries(DicomSeries):
         lms = np.vstack(lms)
         landmarks_data = pd.DataFrame(lms, index=landmarks).reset_index()
         landmarks_data = landmarks_data.rename(columns={ 'index': 'landmark-id' })
-        if not use_patient_coords:
+        if not use_world_coords:
             landmarks_data = landmarks_to_image_coords(landmarks_data, self.ref_ct.spacing, self.ref_ct.origin)
 
         # Filter by number of rows.

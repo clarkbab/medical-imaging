@@ -55,8 +55,8 @@ def create_voxelmorph_predictions(
                 # Pad images if required.
                 if pad_shape is not None:
                     resampled_size = fixed_ct_resampled.shape
-                    fixed_ct_resampled = centre_pad(fixed_ct_resampled, pad_shape, fill=-2000, use_patient_coords=False)
-                    moving_ct_resampled = centre_pad(moving_ct_resampled, pad_shape, fill=-2000, use_patient_coords=False)
+                    fixed_ct_resampled = centre_pad(fixed_ct_resampled, pad_shape, fill=-2000, use_world_coords=False)
+                    moving_ct_resampled = centre_pad(moving_ct_resampled, pad_shape, fill=-2000, use_world_coords=False)
 
                 # Save files for 'voxelmorph'.
                 fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
@@ -88,7 +88,7 @@ def create_voxelmorph_predictions(
                 to_model_t = create_sitk_affine_transform(origin=fixed_study.ct_origin, output_origin=model_origin)
                 dvf = np.load(dvf_path)['vol']
                 if pad_shape is not None:
-                    dvf = centre_crop(dvf, resampled_size, use_patient_coords=False)
+                    dvf = centre_crop(dvf, resampled_size, use_world_coords=False)
                 save_numpy(dvf, 'dvf.npz')
                 assert dvf.shape[0] == 3
                 # VXM DVF is on the scale of image voxels in the image - need to convert to mm.

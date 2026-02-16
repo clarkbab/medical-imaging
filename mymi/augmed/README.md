@@ -230,7 +230,7 @@ an image? They would need to calculate this value in mm before applying to the i
 crop 10 voxels, for a spacing=2mm or other image.
 - Each transform should have a "use_image_coords: bool = False" parameter that can be set to false if passed
 parameters are in image coordinates. Parameters will be converted to mm internally.
-- Why not 'use_patient_coords', isn't that clearer? Because the images may not be of patients? It could be bacteria in a petri dish :)
+- Why not 'use_world_coords', isn't that clearer? Because the images may not be of patients? It could be bacteria in a petri dish :)
 - Should each transform type have the 'uic' parameter? Spatial transform - yes, grid transforms - yes, intensity transforms
   - I could imagine a case where they do, for example we're defining a blurring kernel and we need to define the spatial 
   neighbourhood of the kernel.

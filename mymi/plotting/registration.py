@@ -162,7 +162,7 @@ def plot_registration(
         transform, moved_ct_data, moved_regions_data, moved_landmarks_data, moved_dose_data = dataset_fns['load_registration'](dataset, p, model, study=fixed_study, landmark=landmark, load_dose=show_doses[2] or len(isodoses) > 0, moving_pat=moving_pat_id, moving_study=moving_study_id, region=region) 
 
         # Add moved centre.
-        _, _, all_moved_regions_data, all_moved_landmarks_data, _ = dataset_fns['load_registration'](dataset, p, model, study=fixed_study, moving_pat=moving_pat_id, moving_study=moving_study_id, use_patient_coords=False) 
+        _, _, all_moved_regions_data, all_moved_landmarks_data, _ = dataset_fns['load_registration'](dataset, p, model, study=fixed_study, moving_pat=moving_pat_id, moving_study=moving_study_id, use_world_coords=False) 
         c = centres[2]
         moved_centre = None
         if c is not None:
@@ -600,7 +600,7 @@ def plot_single_registration(
             )
             background, _ = get_view_slice(np.zeros(shape=fixed_ct_data.shape), idxs[2], view)
             if fixed_crop is not None:
-                background = crop_fn(background, transpose_box(fixed_crop), use_patient_coords=False)
+                background = crop_fn(background, transpose_box(fixed_crop), use_world_coords=False)
             axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])
             if fixed_regions_data is not None:
                 plot_regions_data(fixed_regions_data, axs[2 * n_cols - 2], idxs[2], aspect, **okwargs)

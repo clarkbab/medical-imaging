@@ -65,15 +65,15 @@ def create_voxelmorph_pp_predictions(
                 vxm_size = (192, 192, 208)
                 if crop_to_lung_centres:
                     logging.info('Cropping to lung centres...')
-                    fixed_com = get_centre_of_mass(fixed_lung, use_patient_coords=False)
-                    moving_com = get_centre_of_mass(moving_lung, use_patient_coords=False)
+                    fixed_com = get_centre_of_mass(fixed_lung, use_world_coords=False)
+                    moving_com = get_centre_of_mass(moving_lung, use_world_coords=False)
                     half_size = (np.array(vxm_size) / 2).astype(int)
                     fixed_crop = (tuple(fixed_com - half_size), tuple(fixed_com + half_size))
                     moving_crop = (tuple(moving_com - half_size), tuple(moving_com + half_size))
-                    fixed_ct = crop_or_pad(fixed_ct, fixed_crop, use_patient_coords=False)
-                    fixed_lung = crop_or_pad(fixed_lung, fixed_crop, use_patient_coords=False)
-                    moving_ct = crop_or_pad(moving_ct, moving_crop, use_patient_coords=False)
-                    moving_lung = crop_or_pad(moving_lung, moving_crop, use_patient_coords=False)
+                    fixed_ct = crop_or_pad(fixed_ct, fixed_crop, use_world_coords=False)
+                    fixed_lung = crop_or_pad(fixed_lung, fixed_crop, use_world_coords=False)
+                    moving_ct = crop_or_pad(moving_ct, moving_crop, use_world_coords=False)
+                    moving_lung = crop_or_pad(moving_lung, moving_crop, use_world_coords=False)
 
                 # Save files for 'voxelmorph'.
                 fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')

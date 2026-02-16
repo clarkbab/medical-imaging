@@ -9,21 +9,22 @@ from mymi.typing import *
 from ..maths import round
 
 def from_ct_dicoms(
-    cts: List[CtDicom] = [],
+    cts: Union[List[CtDicom], DirPath],
     check_consistency: bool = True,
-    dirpath: Optional[str] = None) -> Tuple[CtImageArray, Spacing3D, Point3D]:
+    ) -> Tuple[CtImageArray, Spacing3D, Point3D]:
     # Load from dirpath if present.
-    if dirpath is not None:
+    if isinstance(cts, str):
+        dirpath = cts
         cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
 
     # Check CT consistency.
     if check_consistency:
         # TODO: this doesn't work - xy_pos is a list of tuples.
-        xy_pos = [c.ImagePositionPatient[:2] for c in cts]
-        xy_pos = round(xy_pos, tol=TOLERANCE_MM)
-        xy_pos = np.unique(xy_pos)
-        if len(xy_pos) > 1:
-            raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_pos}.")
+        xy_poses = np.array([c.ImagePositionPatient[:2] for c in cts])
+        xy_poses = round(xy_poses, tol=TOLERANCE_MM)
+        xy_poses = np.unique(xy_poses, axis=0)
+        if xy_poses.shape[0] > 1:
+            raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_poses}.")
         z_pos = list(sorted([c.ImagePositionPatient[2] for c in cts]))
         z_pos = round(z_pos, tol=TOLERANCE_MM)
         z_diffs = np.diff(z_pos)
