@@ -2,19 +2,32 @@
     name = "MyMI"
     version = "0.0.1"
 
+[[tool.poetry.source]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+priority = "explicit"
+
 [tool.poetry.dependencies]
 python = ">=3.8"
 
-fire = "*"
-jupyterlab = "*"
-nibabel = "*"
-numpy = "*"
-pandas = "*"
-pydicom = "*"
-pynrrd = "*"
-pytorch_lightning = "*"
-SimpleITK = "*"
-surface_distance = { git = "ssh://git@github.com/google-deepmind/surface-distance.git" }
-torch = "*"
-torchio = "*"
-unigradicon = "*"
+colorlog = "6.10.1"
+diffdrr = "0.6.0"
+fairscale = "0.4.13"
+fire = "0.7.1"
+gputil = "1.4.0"
+jupyterlab = "4.5.1"
+nibabel = "5.3.3"
+numpy = "2.3.5"
+opencv-python = "4.12.0.88"
+pandas = "2.2.3"
+pdf2image = "1.17.0"
+pydicom = "3.0.1"
+pynrrd = "1.1.3"
+pytorch_lightning = "2.6.0"
+scikit-image = "0.26.0"
+seaborn = "0.13.2"
+SimpleITK = "2.5.3"
+surface_distance = { git = "https://git@github.com/google-deepmind/surface-distance" }
+torch = { version = "2.10.0", source = "pytorch-cu128" }
+torchio = "0.21.3"
+unigradicon = "1.0.4"

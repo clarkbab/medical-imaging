@@ -364,7 +364,7 @@ def plot_tiff_dirpath(
     return_images: bool = False,
     title_fontsize: float = 10,
     **kwargs,
-    ) -> Optional[List[PIL.Image]]:
+    ) -> Optional[List[PIL.Image.Image]]:
     # Get tiff files and angles (by filename).
     files = os.listdir(dirpath)
     tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
@@ -441,7 +441,7 @@ def plot_tiff_filepath(
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
     **kwargs,
-    ) -> Optional[PIL.Image]:
+    ) -> Optional[PIL.Image.Image]:
     if show_hist:
         _, axs = plt.subplots(1, 2, figsize=(12, 4))
         ax, hist_ax = axs
