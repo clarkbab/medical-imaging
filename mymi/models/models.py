@@ -18,7 +18,8 @@ def load_model(
     ckpt: ModelCheckpoint,
     device: Optional[torch.device] = None,
     state: Literal['train', 'eval'] = 'eval',
-    **kwargs) -> Union[torch.nn.Module, torch.device, Dict[str, float]]:
+    **kwargs,
+    ) -> Union[torch.nn.Module, torch.device, Dict[str, float]]:
     # Create model.
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

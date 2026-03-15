@@ -7,7 +7,7 @@ from mymi.typing import *
 from mymi.utils import *
 
 from .data import plot_histogram as ph
-from .patients import plot_patient_histogram as pph, plot_patient as pp
+from .patients import plot_patient_histogram as pph, plot_patients as pp
 from .registration import plot_registration as pr
 from .series import plot_series as ps
 
@@ -64,18 +64,18 @@ def plot_study_histogram(
         plot_series_histogram(series, ax=ax)
 
 @delegates(pp)
-def plot_patient(dataset, *args, **kwargs) -> None:
+def plot_patients(dataset, *args, **kwargs) -> None:
     set = NiftiDataset(dataset)
     fns = {
-        'ct_series': lambda study, data_id: study.series(data_id, 'ct'),
+        'ct_series': lambda study, series_id: study.series(series_id, 'ct'),
         'default_dose': lambda study: study.default_dose,
         'default_landmarks': lambda study: study.default_landmarks,
         'default_regions': lambda study: study.default_regions,
         'dose_series': lambda study, series: study.series(series, 'dose'),
         'has_dose': lambda study: study.has_dose,
-        'landmarks_data': lambda series, landmark_ids: series.data(landmark=landmark_ids),
+        'landmarks_data': lambda series, landmarks: series.data(landmark=landmarks),
         'landmark_series': lambda study, series: study.series(series, 'landmarks'),
-        'regions_data': lambda series, region_ids: series.data(region=region_ids),
+        'regions_data': lambda series, regions: series.data(regions=regions, return_regions=True),
         'region_series': lambda study, series: study.series(series, 'regions'),
         'study_datetime': lambda study: None,  # Not currently available, might be able to store in nifti metadata: https://pycad.medium.com/store-the-metadata-in-nifti-and-nrrd-8aa4c6d942b5
     }

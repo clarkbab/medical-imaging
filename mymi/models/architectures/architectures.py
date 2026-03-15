@@ -4,58 +4,56 @@ from mymi.utils import *
 from mymi.typing import *
 
 from .mednext import create_mednext_v1
-from .unet3d import UNet3D
+from .unet import UNet2D, UNet3D
 
-def get_module(
+def get_model(
     arch: str,
-    n_output_channels: int) -> torch.nn.Module:
-    if arch == 'unet3d:m':
+    n_output_channels: int,
+    **kwargs,
+    ) -> torch.nn.Module:
+    if arch == 'unet2d:m':
+        logging.info(f"Using UNet2D (M) with {n_output_channels} channels.")
+        return UNet2D(n_output_channels, **kwargs)
+    elif arch == 'unet2d:l':
+        logging.info(f"Using UNet2D (L) with {n_output_channels} channels.")
+        return UNet2D(n_output_channels, n_features=64, **kwargs)
+    elif arch == 'unet2d:xl':
+        logging.info(f"Using UNet2D (XL) with {n_output_channels} channels.")
+        return UNet2D(n_output_channels, n_features=128, **kwargs)
+    elif arch == 'unet3d:m':
         logging.info(f"Using UNet3D (M) with {n_output_channels} channels.")
-        return UNet3D(n_output_channels)
+        return UNet3D(n_output_channels, **kwargs)
     elif arch == 'unet3d:l':
         logging.info(f"Using UNet3D (L) with {n_output_channels} channels.")
-        return UNet3D(n_output_channels, n_features=64)
+        return UNet3D(n_output_channels, n_features=64, **kwargs)
     elif arch == 'unet3d:xl':
         logging.info(f"Using UNet3D (XL) with {n_output_channels} channels.")
-        return UNet3D(n_output_channels, n_features=128)
+        return UNet3D(n_output_channels, n_features=128, **kwargs)
     elif arch == 'mednext:s':
         logging.info(f"Using MedNeXt (S) with {n_output_channels} channels.")
-        return create_mednext_v1(1, n_output_channels, 'S')
+        return create_mednext_v1(1, n_output_channels, 'S', **kwargs)
     elif arch == 'mednext:b':
         logging.info(f"Using MedNeXt (B) with {n_output_channels} channels.")
-        return create_mednext_v1(1, n_output_channels, 'B')
+        return create_mednext_v1(1, n_output_channels, 'B', **kwargs)
     elif arch == 'mednext:m':
         logging.info(f"Using MedNeXt (M) with {n_output_channels} channels.")
-        return create_mednext_v1(1, n_output_channels, 'M')
+        return create_mednext_v1(1, n_output_channels, 'M', **kwargs)
     elif arch == 'mednext:l':
         logging.info(f"Using MedNeXt (L) with {n_output_channels} channels.")
-        return create_mednext_v1(1, n_output_channels, 'L')
+        return create_mednext_v1(1, n_output_channels, 'L', **kwargs)
     else:
         raise ValueError(f"Unknown architecture '{arch}'.")
 
 def layer_summary(
     arch: str,
-    *args,
+    n_output_channels: int,
     leafs_only: bool = True,
     params_only: bool = False,
-    **kwargs) -> pd.DataFrame:
-    if arch == 'unet3d:m':
-        model = UNet3D(*args, **kwargs)
-    elif arch == 'unet3d:l':
-        model = UNet3D(*args, n_features=64, **kwargs)
-    elif arch == 'unet3d:xl':
-        model = UNet3D(*args, n_features=128, **kwargs)
-    elif arch == 'mednext:s':
-        model = create_mednext_v1(*args, 'S', **kwargs)
-    elif arch == 'mednext:b':
-        model = create_mednext_v1(*args, 'B', **kwargs)
-    elif arch == 'mednext:m':
-        model = create_mednext_v1(*args, 'M', **kwargs)
-    elif arch == 'mednext:l':
-        model = create_mednext_v1(*args, 'L', **kwargs)
-    else:
-        raise ValueError(f'Unknown arch: {arch}.')
+    **kwargs,
+    ) -> pd.DataFrame:
+    model = get_model(arch, n_output_channels, **kwargs)
 
+    # Summarise layers.
     cols = {
         'module': str,
         'module-type': str,

@@ -21,7 +21,7 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
     for i, p in tqdm(enumerate(pat_ids), total=len(pat_ids)):
         # Save fixed (inhale) image.
         filepath = os.path.join(basepath, p, 'mhd', f'{inhale_phase:02}.mhd')
-        data, spacing, origin = sitk_load_image(filepath)
+        data, spacing, origin = sitk_load_volume(filepath)
         if not dry_run:
             filepath = os.path.join(dest_set.path, 'data', 'patients', p, fixed_study, 'ct', 'series_0.nii.gz')
             save_nifti(data, filepath, spacing=spacing, origin=origin)
@@ -29,7 +29,7 @@ def convert_popi_to_nifti(dry_run: bool = False) -> None:
         # Save moving (exhale) image.
         exhale_phase = exhale_phases[i]
         filepath = os.path.join(basepath, p, 'mhd', f'{exhale_phase:02}.mhd')
-        data, spacing, origin = sitk_load_image(filepath)
+        data, spacing, origin = sitk_load_volume(filepath)
         if not dry_run:
             filepath = os.path.join(dest_set.path, 'data', 'patients', p, moving_study, 'ct', 'series_0.nii.gz')
             save_nifti(data, filepath, spacing=spacing, origin=origin)

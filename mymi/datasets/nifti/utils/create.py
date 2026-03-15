@@ -13,12 +13,43 @@ def create_ct(
     study: StudyID,
     series: NiftiSeriesID,
     data: CtImageArray,
-    spacing: Spacing3D,
-    origin: Point3D,
-    dry_run: bool = True) -> None:
+    affine: Affine,
+    makeitso: bool = False) -> None:
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'data', 'patients', pat_id, study, 'ct', f'{series}.nii.gz')
-    with_makeitso(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating CT at {filepath}.")
+    filepath = os.path.join(set.path, 'data', 'patients', pat, study, 'ct', f'{series}.nii.gz')
+    with_makeitso(
+        makeitso,
+        lambda: save_nifti(data, affine, filepath),
+        f"Creating CT at {filepath}."
+    )
+
+def create_index(
+    dataset: DatasetID,
+    index: pd.DataFrame,
+    makeitso: bool = False,
+    ) -> None:
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(set.path, 'index.csv')
+    with_makeitso(
+        makeitso,
+        lambda: save_csv(index, filepath),
+        f"Creating index at {filepath}."
+    )
+
+def create_info(
+    dataset: DatasetID,
+    pat: PatientID,
+    study: StudyID,
+    data: Any,
+    makeitso: bool = False,
+    ) -> None:
+    set = NiftiDataset(dataset)
+    filepath = os.path.join(set.path, 'data', 'patients', pat, study, 'info.json')
+    with_makeitso(
+        makeitso,
+        lambda: save_json(data, filepath),
+        f"Saving info at {filepath}."
+    )
 
 def create_region(
     dataset: DatasetID,
@@ -27,12 +58,16 @@ def create_region(
     series: NiftiSeriesID,
     region: RegionID,
     data: LabelArray,
-    spacing: Spacing3D,
-    origin: Point3D,
-    dry_run: bool = True) -> None:
+    affine: Affine,
+    makeitso: bool = False,
+    ) -> None:
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'data', 'patients', pat_id, study, 'regions', series, f'{region}.nii.gz')
-    with_makeitso(dry_run, lambda: save_nifti(data, filepath, spacing=spacing, origin=origin), f"Creating region at {filepath}.")
+    filepath = os.path.join(set.path, 'data', 'patients', pat, study, 'regions', series, f'{region}.nii.gz')
+    with_makeitso(
+        makeitso,
+        lambda: save_nifti(data, affine, filepath),
+        f"Creating region at {filepath}."
+    )
 
 def create_registration_moved_image(
     dataset: DatasetID,

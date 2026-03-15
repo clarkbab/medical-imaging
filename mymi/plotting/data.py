@@ -866,6 +866,16 @@ def plot_dataframe(
     if show_figure:
         fig.show()
 
+def plot_hist(
+    data: np.ndarray | torch.Tensor,
+    ax: mpl.axes.Axes | None = None
+    ) -> None:
+    if isinstance(data, torch.Tensor):
+        data = data.cpu().numpy()
+    if ax is None:
+        ax = plt.gca()
+    ax.hist(data.flatten(), bins=50, color='gray')
+
 def plot_histogram(
     data: Union[ImageArray, str],
     ax: Optional[mpl.axes.Axes] = None,
@@ -877,7 +887,7 @@ def plot_histogram(
     # Handle arguments.
     if isinstance(data, str):
         if data.endswith('.nii.gz'):
-            data, _, _ = load_nifti(data)
+            data, _ = load_nifti(data)
     if ax is None:
         ax = plt.gca()
         show = True

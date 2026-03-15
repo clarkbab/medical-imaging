@@ -1,50 +1,50 @@
 import nibabel as nib
+import numpy as np
 import os
 from typing import *
 
 from mymi.typing import *
+from mymi.utils import create_affine
 
 from .args import arg_to_list
 from .python import delegates
 
-def from_nifti(img: nib.nifti1.Nifti1Image) -> Tuple[ImageArray, Spacing3D, Point3D]:
+def from_nifti(
+    img: nib.nifti1.Nifti1Image,
+    ) -> Tuple[Volume, Affine]:
     data = img.get_fdata()
     affine = img.affine
-    spacing = tuple(np.array([affine[0, 0], affine[1, 1], affine[2, 2]]).tolist())
-    origin = tuple(np.array([affine[0, 3], affine[1, 3], affine[2, 3]]).tolist())
-    return data, spacing, origin
+    return data, affine
 
 def to_nifti(
     data: ImageArray,
-    spacing: Spacing3D,
-    origin: Point3D) -> nib.nifti1.Nifti1Image:
+    affine: Affine,
+    ) -> nib.nifti1.Nifti1Image:
     # Convert data types.
     if data.dtype == bool:
         data = data.astype(np.uint32)
-
-    # Create coordinate transform.
-    affine = np.array([
-        [spacing[0], 0, 0, origin[0]],
-        [0, spacing[1], 0, origin[1]],
-        [0, 0, spacing[2], origin[2]],
-        [0, 0, 0, 1]])
-    
     return nib.nifti1.Nifti1Image(data, affine)
 
 def save_nifti(
     data: ImageArray,
+    affine: Affine,
     filepath: str,
-    spacing: Spacing3D = (1, 1, 1),
-    origin: Point3D = (0, 0, 0)) -> None:
-    assert filepath.endswith('.nii.gz'), "Filepath must end with .nii.gz"
-    img = to_nifti(data, spacing, origin)
+    ) -> None:
+    if isinstance(data, torch.Tensor):
+        data = data.cpu().numpy()
+    assert filepath.endswith('.nii.gz') or filepath.endswith('.nii'), "Filepath must end with .nii or .nii.gz"
+    img = to_nifti(data, affine)
     dirname = os.path.dirname(filepath)
     if dirname != '':
         os.makedirs(dirname, exist_ok=True)
     nib.save(img, filepath)
 
 def save_numpy(
-    data: ImageArray,
-    filepath: str) -> None:
-    assert filepath.endswith('.npz'), "Filepath must end with .npz"
-    np.savez_compressed(filepath, data=data)
+    data: np.ndarray,
+    filepath: str,
+    ) -> None:
+    assert filepath.endswith('.npy') or filepath.endswith('.npz'), "Filepath must end with .npy or .npz"
+    if filepath.endswith('.npz'):
+        np.savez_compressed(filepath, data=data)
+    else:
+        np.save(filepath, data)

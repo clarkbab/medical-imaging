@@ -9,6 +9,109 @@ from mymi.constants import *
 from mymi.typing import *
 from mymi.utils import *
 
+CONTOUR_FORMATS = ['POINT', 'CLOSED_PLANAR']
+CONTOUR_METHOD = 'SKIMAGE'
+# CONTOUR_METHOD = 'OPENCV'
+
+def from_rtstruct_dicom(
+    rtstruct: FilePath | RtStructDicom,
+    affine: Affine | None = None,
+    cts: DirPath | List[CtDicom] = None,
+    origin: Point3D | None = None,
+    regions: str | Literal['all'] = 'all',
+    size: Size3D | None = None,
+    ) -> LabelVolumeBatch:
+    if isinstance(rtstruct, str):
+        rtstruct = dcm.dcmread(rtstruct, force=False)
+    if cts is None:
+        assert size is not None
+        assert affine is not None
+    else:
+        # Set shape and affine from CT if provided.
+        ct_data, affine = from_ct_dicom(cts)
+        size = ct_data.shape
+    spacing = affine_spacing(affine)
+    origin = affine_origin(affine)
+    regions = arg_to_list(regions, str, exceptions='all')
+
+    # Load the contour data.
+    roi_infos = rtstruct.StructureSetROISequence
+    roi_contours = rtstruct.ROIContourSequence
+    if len(roi_infos) != len(roi_contours):
+        raise ValueError(f"Length of 'StructureSetROISequence' and 'ROIContourSequence' must be the same, got '{len(roi_infos)}' and '{len(roi_contours)}' respectively.")
+    info_map = dict((info.ROIName, contour) for contour, info in zip(roi_contours, roi_infos))
+    if regions == 'all':
+        regions = list(info_map.keys())
+
+    # Add regions data.
+    regions = list(sorted(regions))
+    data = np.zeros(shape=(len(regions), *size), dtype=np.bool_)
+    for i, r in enumerate(regions):
+        if r not in info_map:
+            raise ValueError(f"RTSTRUCT doesn't contain ROI '{r}'.")
+        roi_contour = info_map[r]
+
+        # Skip label if no contour sequence.
+        contour_seq = getattr(roi_contour, 'ContourSequence', None)
+        if not contour_seq:
+            raise ValueError(f"'ContourSequence' not found for ROI '{r}'.")
+
+        # Filter contours without data.
+        contour_seq = filter(lambda c: hasattr(c, 'ContourData'), contour_seq)
+
+        # Sort contour sequence by z-axis.
+        contour_seq = sorted(contour_seq, key=lambda c: c.ContourData[2])
+
+        # Convert points into voxel data.
+        for j, contour in enumerate(contour_seq):
+            # Get contour data.
+            contour_data = np.array(contour.ContourData)
+
+            # This code handles 'CLOSED_PLANAR' and 'POINT' types.
+            if not contour.ContourGeometricType in CONTOUR_FORMATS:
+                raise ValueError(f"Expected one of '{CONTOUR_FORMATS}' ContourGeometricTypes, got '{contour.ContourGeometricType}' for contour '{j}', ROI '{r}'.")
+
+            # Coords are stored in flat array.
+            if contour_data.size % 3 != 0:
+                raise ValueError(f"Size of 'contour_data' (array of points in 3D) should be divisible by 3.")
+            points = np.array(contour_data).reshape(-1, 3)
+
+            # Convert from physical coordinates to array indices.
+            x_indices = (points[:, 0] - origin[0]) / spacing[0]
+            y_indices = (points[:, 1] - origin[1]) / spacing[1]
+            x_indices = np.around(x_indices)                    # Round to avoid truncation errors.
+            y_indices = np.around(y_indices)
+
+            # Convert to 'cv2' format.
+            indices = np.stack((y_indices, x_indices), axis=1)  # (y, x) as 'cv.fillPoly' expects rows, then columns.
+            indices = indices.astype('int32')                   # 'cv.fillPoly' expects 'int32' input points.
+            pts = [np.expand_dims(indices, axis=0)]
+
+            # Get all voxels on the boundary and interior described by the indices.
+            slice_data = np.zeros(shape=size[:2], dtype='uint8')   # 'cv.fillPoly' expects to write to 'uint8' mask.
+            cv.fillPoly(img=slice_data, pts=pts, color=1)
+            slice_data = slice_data.astype(np.bool_)
+
+            # Get z index of slice.
+            z_idx = int((points[0, 2] - origin[2]) / spacing[2])
+            if z_idx > size[2] - 1:
+                # Happened with 'PMCC-COMP:PMCC_AI_GYN_011' - Kidney_L...
+                continue
+
+            # Write slice data to label, using XOR.
+            data[i, :, :, z_idx][slice_data == True] = np.invert(data[i, :, :, z_idx][slice_data == True])
+
+    return data
+
+def list_rtstruct_regions(
+    rtstruct: FilePath | RtStructDicom,
+) -> List[Region]:
+    if isinstance(rtstruct, str):
+        rtstruct = dcm.dcmread(rtstruct, force=False)
+    roi_infos = rtstruct.StructureSetROISequence
+    regions = list(info.ROIName for info in roi_infos)
+    return regions
+
 def to_rtstruct_dicom(
     ref_cts: List[CtDicom],
     landmarks_data: Optional[LandmarksFrame] = None,

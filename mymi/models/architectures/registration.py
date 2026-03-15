@@ -1,7 +1,7 @@
 import torch
 from typing import *
 
-from .unet3d import UNet3D
+from .unet import UNet3D
 
 class Resampler(torch.nn.Module):
     def __init__(self) -> None:

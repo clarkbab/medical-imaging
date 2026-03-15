@@ -1,1 +1,0 @@
-# This does preserve parallel lines.

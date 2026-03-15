@@ -60,9 +60,11 @@ def figsize_to_inches(figsize: Tuple[float, float]) -> Tuple[float, float]:
     figsize = figsize[0] * cm_to_inch if figsize[0] is not None else None, figsize[1] * cm_to_inch if figsize[1] is not None else None
     return figsize
 
-def get_aspect(
+def get_view_aspect(
     view: Axis,
-    spacing: Spacing3D) -> float:
+    affine: Affine,
+    ) -> float:
+    spacing = affine_spacing(affine)
     if view == 0:
         aspect = spacing[2] / spacing[1]
     elif view == 1:
@@ -74,6 +76,7 @@ def get_aspect(
 def get_idx(
     size: Size3D,
     view: Axis,
+    affine: Affine | None = None,
     centre: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     centre_other: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]] = None,
     dose_data: Optional[DoseImageArray] = None,
@@ -81,9 +84,20 @@ def get_idx(
     idx_mm: Optional[float] = None,
     landmarks_data: Optional[LandmarksFrame] = None,
     landmarks_data_other: Optional[LandmarksFrame] = None,
-    origin: Optional[Point3D] = None,
-    regions_data: Optional[RegionArrays] = None,
-    spacing: Optional[Spacing3D] = None) -> int:
+    label_data: LabelVolumeBatch | None = None,
+    ) -> int:
+    if isinstance(centre, str):
+        if centre.startswith('label:'):
+            assert label_data is not None, "Cannot specify 'label:<channel>' centre without 'label_data'."
+            label_channel = int(centre.split(':')[1])
+            idx = foreground_fov_centre(label_data[label_channel], use_world_coords=False)[view]
+        else:
+            raise ValueError(f"Unrecognised string centre '{centre}'.")
+    else:
+        idx = int(np.round(size[view] / 2))
+
+    return idx
+
     if centre is not None or centre_other is not None:
         lm_data = landmarks_data_other if centre is None else landmarks_data
         centre = centre_other if centre is None else centre
@@ -95,14 +109,14 @@ def get_idx(
         elif isinstance(centre, (LandmarkID, RegionID)):
             if lm_data is not None and centre in list(lm_data['landmark-id']):
                 centre_point = lm_data[lm_data['landmark-id'] == centre][list(range(3))].iloc[0]
-                idx = point_to_image_coords(centre_point, spacing, origin)[view]
+                idx = point_to_image_coords(centre_point, affine)[view]
             elif regions_data is not None and centre in regions_data:
                 idx = foreground_fov_centre(regions_data[centre], use_world_coords=False)[view]
             else:
                 raise ValueError(f"No centre '{centre}' found in 'landmarks/regions_data'.")
         elif isinstance(centre, LandmarkSeries):
             centre_point = tuple(centre[list(range(3))])
-            idx = point_to_image_coords(centre_point, spacing, origin)[view]
+            idx = point_to_image_coords(centre_point, affine)[view]
         elif isinstance(centre, RegionArray):
             idx = foreground_fov_centre(centre, use_world_coords=False)[view]
         else:
@@ -117,6 +131,8 @@ def get_idx(
         if centre is not None:
             raise ValueError(f"Cannot specify both 'centre' and 'idx_mm'.")
         # Find nearest voxel index to mm position.
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine)
         idx = int(np.round((idx_mm - origin[view]) / spacing[view]))
     else:
         # raise ValueError(f"Either 'centre', 'idx' or 'idx_mm' must be specified.")
@@ -141,9 +157,9 @@ def get_view_origin(
     return (origin_x, origin_y)
 
 def get_view_slice(
+    view: Axis,
     data: Union[ImageArray, VectorImageArray],
     idx: int,
-    view: Axis,
     ) -> Tuple[SliceArray, int]:
     n_dims = len(data.shape)
     if n_dims == 4:
@@ -170,8 +186,9 @@ def get_view_slice(
     return slice_data, idx
 
 def get_view_xy(
-    data: Union[Spacing3D, Point3D],
-    view: Axis) -> Tuple[float, float]:
+    view: Axis,
+    data: Tuple[float, float, float],
+    ) -> Tuple[float, float]:
     if view == 0:
         res = (data[1], data[2])
     elif view == 1:
@@ -181,10 +198,10 @@ def get_view_xy(
     return res
 
 def get_v_min_max(
-    data: Optional[ImageArray] = None,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
-    window: Optional[Union[str, Tuple[Optional[float], Optional[float]]]] = None,
+    data: ImageArray | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    window: Tuple[float | None, float | None] | str | None = None,
     ) -> Tuple[float, float]:
     if vmin is not None and vmax is not None:
         return vmin, vmax
@@ -206,7 +223,7 @@ def get_v_min_max(
         else:
             width, level = (0, 0)
     else:
-        raise ValueError(f"Unrecognised type for 'window' ({type(window)}).")
+        raise ValueError(f"Unrecognised type for 'window' ({window}).")
 
     if data is not None:
         # Check that CT data isn't going to be hidden.
@@ -267,8 +284,7 @@ def plot_landmarks_data(
     ax: mpl.axes.Axes,
     idx: int,
     size: Size3D,
-    spacing: Spacing3D,
-    origin: Point3D,
+    affine: Affine,
     view: Axis, 
     crop: Optional[Box2D] = None,
     dose_data: Optional[DoseImageArray] = None,
@@ -297,11 +313,11 @@ def plot_landmarks_data(
 
     # Add sampled dose intensities.
     if show_landmark_doses and dose_data is not None:
-        landmarks_data = sample(dose_data, landmarks_data, landmarks_col='dose', origin=origin, spacing=spacing)
+        landmarks_data = sample(dose_data, landmarks_data, landmarks_col='dose', affine=affine)
 
     # Convert landmarks to image coords.
     if landmarks_use_world_coords:
-        landmarks_data = landmarks_to_image_coords(landmarks_data, spacing, origin)
+        landmarks_data = landmarks_to_image_coords(landmarks_data, affine)
 
     # Take subset of n closest landmarks landmarks.
     landmarks_data['dist'] = np.abs(landmarks_data[view] - idx)
@@ -337,7 +353,7 @@ def plot_landmarks_data(
             ax.text(x, y, text, fontsize=fontsize_landmarks, color=colour)
 
 def plot_regions_data(
-    data: RegionArrays,
+    data: LabelVolumeBatch,
     ax: mpl.axes.Axes,
     idx: int,
     aspect: float,
@@ -346,28 +362,32 @@ def plot_regions_data(
     crop: Optional[Box2D] = None,
     escape_latex: bool = False,
     legend_show_all_regions: bool = False,
+    labels: List[RegionID] | None = None,
     show_extent: bool = False,
     show_boundary: bool = True,
     use_cca: bool = False,
-    view: Axis = 0) -> bool:
-
-    regions = list(data.keys()) 
-    if colours is None:
-        colours = sns.color_palette('colorblind', n_colors=len(regions))
-    else:
-        colours = arg_to_list(colours, (str, tuple))
+    view: Axis = 0,
+    ) -> bool:
 
     if not ax:
         ax = plt.gca()
+    # Get palette.
+    n_regions = len(data)
+    if colours is None:
+        colours = sns.color_palette('colorblind', n_colors=n_regions)
+    else:
+        colours = arg_to_list(colours, (str, tuple))
 
     # Plot each region.
+    if labels is None:
+        labels = list(range(n_regions))
     show_legend = False
-    for region, colour in zip(regions, colours):
+    for i, (l, c) in enumerate(zip(labels, colours)):
         # Define cmap.
-        cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), colour))
+        cmap = mpl.colors.ListedColormap(((1, 1, 1, 0), c))
 
         # Convert data to 'imshow' co-ordinate system.
-        slice_data, _ = get_view_slice(data[region], idx, view)
+        slice_data, _ = get_view_slice(view, data[i], idx)
 
         # Crop image.
         if crop:
@@ -375,9 +395,9 @@ def plot_regions_data(
 
         # Plot extent.
         if show_extent:
-            fov_box = foreground_fov(data[region])
+            fov_box = foreground_fov(data[i])
             if fov_box is not None:
-                label = f'{region} extent' if box_intesects_view_plane(fov_box, view, idx) else f'{region} extent (offscreen)'
+                label = f'{l} extent' if box_intesects_view_plane(fov_box, view, idx) else f'{region} extent (offscreen)'
                 plot_box_slice(fov_box, view, ax=ax, colour=colour, crop=crop, label=label, linestyle='dashed')
                 show_legend = True
 
@@ -393,9 +413,9 @@ def plot_regions_data(
 
         # Plot region.
         ax.imshow(slice_data, alpha=alpha, aspect=aspect, cmap=cmap, interpolation='none', origin=get_view_origin(view)[1])
-        label = escape_latex_fn(region) if escape_latex else region
-        ax.plot(0, 0, c=colour, label=label)
-        ax.contour(slice_data, colors=[colour], levels=[.5], linestyles='solid')
+        label = escape_latex_fn(l) if escape_latex else l
+        ax.plot(0, 0, c=c, label=label)
+        ax.contour(slice_data, colors=[c], levels=[.5], linestyles='solid')
 
         # # Set ticks.
         # if crop is not None:

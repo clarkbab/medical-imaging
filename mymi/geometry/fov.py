@@ -7,14 +7,12 @@ from mymi.utils import *
 @alias_kwargs(('uwc', 'use_world_coords'))
 def foreground_fov(
     data: LabelArray,
-    spacing: Optional[Spacing] = None,
-    origin: Optional[Point] = None,
+    affine: Affine | None = None,
     use_world_coords: bool = True) -> Optional[Box]:
     if data.sum() == 0:
         return None
     if use_world_coords:
-        assert spacing is not None
-        assert origin is not None
+        assert affine is not None
 
     # Get fov of foreground objects.
     non_zero = np.argwhere(data != 0).astype(int)
@@ -23,6 +21,8 @@ def foreground_fov(
         return fov_vox
 
     # Get fov in mm.
+    spacing = affine_spacing(affine)
+    origin = affine_origin(affine)
     fov_min_vox, fov_max_vox = fov_vox
     fov_min_mm = tuple(np.array(fov_min_vox) * spacing + origin)
     fov_max_mm = tuple(np.array(fov_max_vox) * spacing + origin)
@@ -58,22 +58,22 @@ def foreground_fov_width(
     return fov_w
 
 def fov(
-    data: Union[ImageArray, ImageTensor],
-    spacing: Optional[Spacing] = None,
-    origin: Optional[Point] = None,
+    size: Size,
+    affine: Optional[Affine] = None,
     raise_error: bool = True,
-    use_world_coords: bool = True) -> Box:
+    use_world_coords: bool = True,
+    ) -> Box:
     if use_world_coords:
-        assert spacing is not None
-        assert origin is not None
+        assert affine is not None
 
     # Get fov in voxels.
-    n_dims = len(data.shape)
-    if spacing is not None:
+    n_dims = len(size)
+    if affine is not None:
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine)
         assert len(spacing) == n_dims, f"Expected spacing to have {n_dims} dimensions, got {spacing}."
-    if origin is not None:
         assert len(origin) == n_dims, f"Expected origin to have {n_dims} dimensions, got {origin}."
-    fov_vox = ((0,) * n_dims, data.shape)
+    fov_vox = ((0,) * n_dims, size)
     if not use_world_coords:
         return fov_vox
 
@@ -87,13 +87,12 @@ def fov(
 
 @alias_kwargs(('uwc', 'use_world_coords'))
 def fov_centre(
-    data: Union[ImageArray, ImageTensor],
+    size: Size,
     use_world_coords: bool = True,
-    **kwargs) -> Optional[Union[Pixel, Voxel]]:
+    **kwargs,
+    ) -> Point:
     # Get FOV.
-    fov_d = fov(data, use_world_coords=use_world_coords, **kwargs)
-    if fov_d is None:
-        return None
+    fov_d = fov(size, use_world_coords=use_world_coords, **kwargs)
 
     # Get FOV centre.
     fov_c = np.array(fov_d).sum(axis=0) / 2

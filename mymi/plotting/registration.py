@@ -3,7 +3,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import *
 
-from .patients import plot_single_patient
+from .patients import plot_patient
 from .plotting import *
 
 def plot_registration(
@@ -542,7 +542,7 @@ def plot_single_registration(
             study=studies[i],
             view=view,
         )
-        plot_single_patient(ct_datas[i].shape, spacings[i], **okwargs, **kwargs)
+        plot_patient(ct_datas[i].shape, spacings[i], **okwargs, **kwargs)
 
     # # Add moved landmarks to moving image.
     # if show_moving and show_moved_landmarks and moved_landmarks_data is not None:
@@ -571,8 +571,8 @@ def plot_single_registration(
         moving_grid = __create_grid(moving_ct_data.shape, moving_spacing, include=include)
         moving_idx = get_idx(sizes[0], view, centre=centres[0], idx=idxs[0], landmarks_data=moving_landmarks_data, spacing=spacings[0], origin=origins[0])
         if show_moving:
-            grid_slice, _ = get_view_slice(moving_grid, moving_idx, view)
-            aspect = get_aspect(view, moving_spacing)
+            grid_slice, _ = get_view_slice(view, moving_grid, moving_idx)
+            aspect = get_view_aspect(view, moving_spacing)
             origin = get_view_origin(view)[1]
             axs[n_cols].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
@@ -585,20 +585,20 @@ def plot_single_registration(
             moved_grid = itk_transform_image(moving_grid, transform, fixed_ct_data.shape, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing)
         elif transform_format == 'sitk':
             moved_grid = resample(moving_grid, origin=moving_origin, output_origin=fixed_origin, output_size=fixed_ct_data.shape, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-        grid_slice, _ = get_view_slice(moved_grid, moving_idx, view)
-        aspect = get_aspect(view, fixed_spacing)
+        grid_slice, _ = get_view_slice(view, moved_grid, moving_idx)
+        aspect = get_view_aspect(view, fixed_spacing)
         origin = get_view_origin(view)[1]
         axs[2 * n_cols - 1].imshow(grid_slice, aspect=aspect, cmap='gray', origin=origin)
 
         if show_region_overlay:
             # Plot fixed/moved regions.
-            aspect = get_aspect(view, fixed_spacing)
+            aspect = get_view_aspect(view, fixed_spacing)
             okwargs = dict(
                 alpha=alpha_region,
                 crop=fixed_crop,
                 view=view,
             )
-            background, _ = get_view_slice(np.zeros(shape=fixed_ct_data.shape), idxs[2], view)
+            background, _ = get_view_slice(view, np.zeros(shape=fixed_ct_data.shape), idxs[2])
             if fixed_crop is not None:
                 background = crop_fn(background, transpose_box(fixed_crop), use_world_coords=False)
             axs[2 * n_cols - 2].imshow(background, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])

@@ -85,7 +85,7 @@ def load_json(filepath: str) -> Any:
 @delegates(from_nifti)
 def load_nifti(
     filepath: str,
-    **kwargs) -> Tuple[ImageArray, Spacing3D, Point3D]:
+    **kwargs) -> Tuple[Volume, Affine]:
     assert filepath.endswith('.nii') or filepath.endswith('.nii.gz'), "Filepath must end with .nii or .nii.gz"
     img = nib.load(filepath)
     return from_nifti(img, **kwargs)
@@ -93,11 +93,14 @@ def load_nifti(
 def load_numpy(
     filepath: str,
     keys: Union[str, List[str]] = 'data') -> Union[ImageArray, List[ImageArray]]:
-    assert filepath.endswith('.npz'), "Filepath must end with .npz"
-    keys = arg_to_list(keys, str)
+    assert filepath.endswith('.npy') or filepath.endswith('.npz'), "Filepath must end with .npy or .npz"
     data = np.load(filepath)
-    items = [data[k] for k in keys]
-    items = items[0] if len(items) == 1 else items
+    if filepath.endswith('.npz'):
+        keys = arg_to_list(keys, str)
+        items = [data[k] for k in keys]
+        items = items[0] if len(items) == 1 else items
+    else:
+        items = data
     return items
 
 def load_yaml(filepath: str) -> Any:
@@ -149,7 +152,7 @@ def save_yaml(
     with open(filepath, 'w') as f:
         yaml.dump(data, f)
 
-def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray, Spacing, Point]:
+def sitk_load_volume(filepath: FilePath) -> Tuple[ImageArray, Affine]:
     img = sitk.ReadImage(filepath)
     if filepath.endswith('.nii') or filepath.endswith('.nii.gz'):
         # ITK assumes loaded nifti data is using RAS+ coordinates, so they set negative origins
@@ -160,10 +163,10 @@ def sitk_load_image(filepath: FilePath) -> Tuple[ImageArray, Spacing, Point]:
         img.SetOrigin(origin)
     return from_sitk_image(img)
 
-def sitk_save_image(
+def sitk_save_volume(
     data: ImageArray,
-    spacing: Spacing3D,
-    origin: Point3D,
-    filepath: FilePath) -> None:
-    img = to_sitk_image(data, spacing, origin)
+    affine: Affine,
+    filepath: FilePath,
+    **kwargs) -> None:
+    img = to_sitk_image(data, affine, **kwargs)
     sitk.WriteImage(img, filepath)

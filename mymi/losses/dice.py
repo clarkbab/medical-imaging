@@ -24,7 +24,8 @@ class DiceLoss(nn.Module):
         weights: Optional[torch.Tensor] = None,
         reduce_channels: bool = False,
         reduction: Literal['mean', 'sum'] = 'mean',
-        sc_channel: Optional[int] = None) -> torch.Tensor:
+        sc_channel: Optional[int] = None,
+        ) -> torch.Tensor:
         """
         returns: the dice loss.
         args:

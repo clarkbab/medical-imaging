@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime
 import numpy as np
 import os
@@ -6,31 +7,50 @@ import pydicom as dcm
 from mymi.constants import *
 from mymi.typing import *
 
+from ..affine import create_affine
 from ..maths import round
 
-def from_ct_dicoms(
-    cts: Union[List[CtDicom], DirPath],
-    check_consistency: bool = True,
-    ) -> Tuple[CtImageArray, Spacing3D, Point3D]:
-    # Load from dirpath if present.
+def from_ct_dicom(
+    # DirPath | List[CtDicom] -> (CtVolume, Affine), FilePath -> CtSlice.
+    cts: FilePath | DirPath | List[CtDicom],
+    check_orientation: bool = True,
+    check_xy_positions: bool = True,
+    check_z_spacing: bool = True,
+    ) -> CtSlice | Tuple[CtVolume, Affine]:
+    # Load from filepath/dirpath if present.
     if isinstance(cts, str):
-        dirpath = cts
-        cts = [dcm.dcmread(os.path.join(dirpath, f), force=False) for f in os.listdir(dirpath) if f.endswith('.dcm')]
+        if os.path.isfile(cts):
+            # Load single CT slice.
+            ct = dcm.dcmread(cts, force=False) 
+        else:
+            # Load multiple CT slices.
+            cts = [dcm.dcmread(os.path.join(cts, f), force=False) for f in os.listdir(cts) if f.endswith('.dcm')]
 
-    # Check CT consistency.
-    if check_consistency:
-        # TODO: this doesn't work - xy_pos is a list of tuples.
+    # Check that standard orientation is used.
+    # TODO: Handle non-standard orientation.
+    if check_orientation:
+        for c in cts:
+            assert c.PatientPosition == 'HFS', f"CT slice has non-standard 'PatientPosition' value: {c.PatientPosition}. Only 'HFS' is supported."
+            if c.ImageOrientationPatient != [1, 0, 0, 0, 1, 0]:
+                raise ValueError(f"CT slice has non-standard 'ImageOrientationPatient' value: {c.ImageOrientationPatient}. Only axial slices with orientation [1, 0, 0, 0, 1, 0] are supported.")
+
+    # Make sure x/y positions are the same for all slices.
+    if check_xy_positions:
         xy_poses = np.array([c.ImagePositionPatient[:2] for c in cts])
         xy_poses = round(xy_poses, tol=TOLERANCE_MM)
         xy_poses = np.unique(xy_poses, axis=0)
         if xy_poses.shape[0] > 1:
             raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' x/y values: {xy_poses}.")
-        z_pos = list(sorted([c.ImagePositionPatient[2] for c in cts]))
-        z_pos = round(z_pos, tol=TOLERANCE_MM)
-        z_diffs = np.diff(z_pos)
-        z_diffs = np.unique(z_diffs)
-        if len(z_diffs) > 1:
-            raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' z spacings: {z_diffs}.")
+
+    # Get z spacings.
+    z_pos = list(sorted([c.ImagePositionPatient[2] for c in cts]))
+    z_pos = round(z_pos, tol=TOLERANCE_MM)
+    z_diffs = np.diff(z_pos)
+    z_freqs = Counter(z_diffs)
+    if check_z_spacing and len(z_freqs.keys()) > 1:
+        raise ValueError(f"CT slices have inconsistent 'ImagePositionPatient' z spacing frequencies: {z_freqs}.")
+    # If we're ignoring multiple diffs, then take the most frequent diff.
+    z_diff = sorted(z_freqs.items(), key=lambda i: i[1])[-1][0] 
 
     # Sort CTs by z position, smallest first.
     cts = list(sorted(cts, key=lambda c: c.ImagePositionPatient[2]))
@@ -53,7 +73,7 @@ def from_ct_dicoms(
     spacing = (
         float(cts[0].PixelSpacing[0]),
         float(cts[0].PixelSpacing[1]),
-        float(np.abs(cts[1].ImagePositionPatient[2] - cts[0].ImagePositionPatient[2]))
+        z_diff,
     )
 
     # Create CT data - sorted by z-position.
@@ -66,7 +86,9 @@ def from_ct_dicoms(
         # Add slice data.
         data[:, :, i] = slice_data
 
-    return data, spacing, origin
+    affine = create_affine(spacing, origin)
+
+    return data, affine
 
 def to_ct_dicoms(
     data: CtImageArray, 

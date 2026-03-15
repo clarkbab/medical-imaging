@@ -14,24 +14,17 @@ from .split import HoldoutSplit
 class TrainingDataset(Dataset):
     def __init__(
         self,
-        name: str,
+        id: DatasetID,
         **kwargs):
-        self.__index = None
-        self.__name = name
-        self.__global_id = f"TRAINING:{self.__name}"
-        self.__params = None
-        self.__path = os.path.join(config.directories.datasets, 'training', self.__name)
-        if not os.path.exists(self.__path):
-            raise ValueError(f"Training dataset '{self.__global_id}' does not exist.")
-
-    @property
-    def description(self) -> str:
-        return self.__global_id
+        self._path = os.path.join(config.directories.datasets, 'training', id)
+        if not os.path.exists(self._path):
+            raise ValueError(f"No training dataset '{id}' found at path: {self._path}")
+        super().__init__(id)
 
     @property
     def index(self) -> str:
         if self.__index is None:
-            filepath = os.path.join(self.__path, 'index.csv')
+            filepath = os.path.join(self._path, 'index.csv')
             self.__index = pd.read_csv(filepath)
             str_types = [
                 'origin-study-id',
@@ -42,10 +35,6 @@ class TrainingDataset(Dataset):
                 if t in self.__index.columns:
                     self.__index[t] = self.__index[t].astype(str)
         return self.__index
-
-    @property
-    def name(self) -> str:
-        return self.__name
     
     @property
     def label_types(self) -> List[str]:
@@ -88,10 +77,6 @@ class TrainingDataset(Dataset):
                 if e in self.__params:
                     self.__params[e] = eval(self.__params[e])
         return self.__params
-
-    @property
-    def path(self) -> str:
-        return self.__path
     
     @property
     def regions(self) -> List[Region]:
@@ -111,14 +96,7 @@ class TrainingDataset(Dataset):
     def spacing(self) -> Spacing3D:
         return self.params['spacing']
 
-    @property
-    def type(self) -> DatasetType:
-        return DatasetType.TRAINING
-
     def split(
         self,
         name: str) -> HoldoutSplit:
         return HoldoutSplit(self, name)
-
-    def __str__(self) -> str:
-        return self.__global_id

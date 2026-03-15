@@ -203,7 +203,7 @@ def convert_to_nifti(
                     # a 'recreate' tag, which will remove existing patient data.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'ct', f'{nifti_series}.nii.gz')
                     if convert_ct and not os.path.exists(filepath):
-                        save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
+                        save_nifti(series.data, series.affine, filepath)
 
                     # Add index entry.
                     data = {
@@ -237,7 +237,7 @@ def convert_to_nifti(
                     # Create Nifti MR.
                     filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'mr', f'{nifti_series}.nii.gz')
                     if convert_mr and not os.path.exists(filepath):
-                        save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
+                        save_nifti(series.data, series.affine, filepath)
 
                     # Add index entry.
                     data = {
@@ -276,7 +276,7 @@ def convert_to_nifti(
                     for r, data in regions_data.items():
                         filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'regions', nifti_series, f'{r}.nii.gz')
                         if not os.path.exists(filepath):
-                            save_nifti(data, filepath, spacing=ref_ct.spacing, origin=ref_ct.origin)
+                            save_nifti(data, ref_ct.affine, filepath)
 
                     # Add index entry.
                     data = {
@@ -340,7 +340,7 @@ def convert_to_nifti(
                 # Create RTDOSE NIFTI.
                 filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'dose', f'{nifti_series}.nii.gz')
                 if convert_dose and not os.path.exists(filepath):
-                    save_nifti(series.data, filepath, spacing=series.spacing, origin=series.origin)
+                    save_nifti(series.data, series.affine, filepath)
 
                 # Add index entry.
                 data = {

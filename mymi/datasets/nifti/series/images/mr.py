@@ -33,9 +33,9 @@ class NiftiMrSeries(NiftiImageSeries):
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
                 if self.__filepath.endswith('.nii') or self.__filepath.endswith('.nii.gz'):
-                    self.__data, self.__spacing, self.__origin = load_nifti(self.__filepath)
+                    self.__data, self.__affine = load_nifti(self.__filepath)
                 elif self.__filepath.endswith('.nrrd'):
-                    self.__data, self.__spacing, self.__origin = load_nrrd(self.__filepath)
+                    self.__data, self.__affine = load_nrrd(self.__filepath)
                 else:
                     raise ValueError(f'Unsupported file format: {self.__filepath}')
             return fn(self, *args, **kwargs)

@@ -18,6 +18,8 @@ from typing import *
 # Can we just use "CtImageArray" for numpy arrays and "CtImageArrayTensor" where necessary.
 # As most of our code operatures with numpy arrays.
 
+Affine = np.ndarray
+Angle = int | float
 Number = Union[int, float]
 Axis = Literal[0, 1, 2]
 AxisName = Literal['sagittal', 'coronal', 'axial']
@@ -47,6 +49,24 @@ Colour = Union[str, Tuple[float, float, float]]
 CtDicom = dcm.dataset.FileDataset
 SliceArray = np.ndarray     # CT slices.
 CtSlice = SliceArray
+Image = np.ndarray | torch.Tensor
+ProjImage = np.ndarray | torch.Tensor
+BatchProjImage = np.ndarray | torch.Tensor
+LabelImage = Image
+ProjLabelImage = np.ndarray | torch.Tensor
+Volume = Image
+LabelVolume = LabelImage
+Slice = Image
+LabelSlice = LabelImage
+SliceBatch = Image      # (N, X, Y)
+SliceBatchChannel = Image     # (N, C, X, Y)
+LabelSliceBatch = LabelImage    # (N, X, Y)
+LabelSliceBatchChannel = LabelImage   # (N, C, X, Y)
+VolumeBatch = Image     # (N, X, Y, Z)
+VolumeBatchChannel = Image    # (N, C, X, Y, Z)
+CtVolume = Volume
+LabelVolumeBatch = LabelImage    # (N, X, Y, Z)
+LabelVolumeBatchChannel = LabelImage   # (N, C, X, Y, Z)
 ImageArray = np.ndarray     # CT volumes.
 SizeArray = np.ndarray
 SpacingArray = np.ndarray   # D
@@ -121,6 +141,7 @@ SpatialDim = Literal[2, 3]
 # In some instances, we have to specify that the function should take a tensor
 # or array. We don't want to have to keep shifting data on/off gpus by converting
 # between tuples and tensors in every function.
+Spacing1D = float
 Spacing2D = Tuple[float, float]
 Spacing3D = Tuple[float, float, float]
 Spacing = Union[Spacing2D, Spacing3D]
@@ -133,7 +154,7 @@ StudyIDs = Union[StudyID, List[StudyID], Literal['all']]
 ImageTensor = torch.Tensor
 ImageTensors = Union[ImageTensor, List[ImageTensor]]
 ImageTensor3D = ImageTensor
-ImageGrid = Tuple[Union[SizeArray, SizeTensor], Union[SpacingArray, SpacingTensor], Union[PointArray, PointTensor]]
+GridParams = Tuple[Affine, Size]
 TrainingInterval = str
 Transform = sitk.Transform
 VectorImageArray = np.ndarray   # Deformation field.

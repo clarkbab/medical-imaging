@@ -64,10 +64,10 @@ def plot_heatmap(
 
     # Get aspect ratio.
     if not aspect:
-        aspect = get_aspect(view, spacing) 
+        aspect = get_view_aspect(view, spacing) 
 
     # Get slice data.
-    heatmap_slice, _ = get_view_slice(heatmap, idx, view)
+    heatmap_slice, _ = get_view_slice(view, heatmap, idx)
 
     # Crop the image.
     if crop is not None:
@@ -87,7 +87,7 @@ def plot_heatmap(
         for pred_label, pred in pred_data.items():
             if pred.sum() != 0:
                 # Get slice data.
-                pred_slice, _ = get_view_slice(pred, idx, view)
+                pred_slice, _ = get_view_slice(view, pred, idx)
 
                 # Crop the image.
                 if crop:

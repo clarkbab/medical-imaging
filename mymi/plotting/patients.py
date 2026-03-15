@@ -12,9 +12,9 @@ from .data import plot_histograms
 from .plotting import *
 
 @alias_kwargs(('uwc', 'use_world_coords'))
-def plot_single_patient(
+def plot_patient(
     size: Size3D,
-    spacing: Spacing3D,
+    affine: Affine | None = None,
     alpha_region: float = 0.5,
     aspect: Optional[float] = None,
     ax: Optional[mpl.axes.Axes] = None,
@@ -51,10 +51,10 @@ def plot_single_patient(
     linewidth: float = 0.5,
     linewidth_legend: float = 8,
     norm: Optional[Tuple[float, float]] = None,
-    origin: Optional[Point3D] = None,
     pat_id: Optional[PatientID] = None,
     postproc: Optional[Callable[[np.ndarray], np.ndarray]] = None,
     regions_data: Optional[RegionArrays] = None,         # All regions are plotted.
+    region_labels: List[RegionID] | None = None,
     region_series: Optional[SeriesID] = None,
     region_series_date: Optional[str] = None,
     savepath: Optional[str] = None,
@@ -97,7 +97,7 @@ def plot_single_patient(
         show_figure = False
 
     # Convert to integer index in image coords.
-    idx = get_idx(size, view, centre=centre, centre_other=centre_other, idx=idx, idx_mm=idx_mm, dose_data=dose_data, landmarks_data=landmarks_data, landmarks_data_other=landmarks_data_other, regions_data=regions_data, spacing=spacing, origin=origin)
+    idx = get_idx(size, view, affine=affine, centre=centre, centre_other=centre_other, idx=idx, idx_mm=idx_mm, dose_data=dose_data, landmarks_data=landmarks_data, landmarks_data_other=landmarks_data_other, label_data=regions_data)
 
     # Convert crop to Box2D.
     crop_vox_xy = None
@@ -105,18 +105,18 @@ def plot_single_patient(
         if isinstance(crop, str):
             if landmarks_data is not None and crop in list(landmarks_data['landmark-id']):
                 lm_data = landmarks_data[landmarks_data['landmark-id'] == crop].iloc[0]
-                crop_vox_xy = __get_landmark_crop(lm_data, crop_margin_mm, size, spacing, origin, view)
+                crop_vox_xy = __get_landmark_crop(lm_data, crop_margin_mm, size, affine, view)
             elif regions_data is not None and crop in regions_data:
-                crop_vox_xy = __get_region_crop(regions_data[crop], crop_margin_mm, spacing, origin, view)
+                crop_vox_xy = __get_region_crop(regions_data[crop], crop_margin_mm, affine, view)
         elif isinstance(crop, LandmarkSeries):
-            crop_vox_xy = __get_landmark_crop(crop, crop_margin_mm, size, spacing, origin, view)
+            crop_vox_xy = __get_landmark_crop(crop, crop_margin_mm, size, affine, view)
         elif isinstance(crop, RegionArray):
-            crop_vox_xy = __get_region_crop(crop, crop_margin_mm, spacing, origin, view)
+            crop_vox_xy = __get_region_crop(crop, crop_margin_mm, affine, view)
         else:
             crop_vox_xy = tuple(*zip(crop))    # API accepts ((xmin, xmax), (ymin, ymax)) - convert to Box2D.
             crop_vox_xy = replace_box_none(crop_vox_xy, size, use_world_coords=False)
     else:
-        crop_vox_xy = ((0, 0), get_view_xy(size, view))  # Default to full image size.
+        crop_vox_xy = ((0, 0), get_view_xy(view, size))  # Default to full image size.
 
     # Only apply aspect ratio if no transforms are being presented otherwise
     # we might end up with skewed images.
@@ -124,12 +124,12 @@ def plot_single_patient(
         if transform:
             aspect = 1
         else:
-            aspect = get_aspect(view, spacing) 
+            aspect = get_view_aspect(view, affine) 
 
     # Plot CT data.
     if ct_data is not None and show_ct:
         # Plot CT slice.
-        ct_slice, _ = get_view_slice(ct_data, idx, view)
+        ct_slice, _ = get_view_slice(view, ct_data, idx)
         ct_slice = crop_fn(ct_slice, transpose_box(crop_vox_xy), use_world_coords=False)
         vmin, vmax = get_v_min_max(window=window, data=ct_data)
         ax.imshow(ct_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1], vmin=vmin, vmax=vmax)
@@ -145,7 +145,7 @@ def plot_single_patient(
             ax.imshow(hw_slice, alpha=1.0, aspect=aspect, cmap=cmap, interpolation='none', origin=get_view_origin(view)[1])
     else:
         # Plot black background.
-        empty_slice = np.zeros(get_view_xy(size, view))
+        empty_slice = np.zeros(get_view_xy(view, size))
         empty_slice = crop_fn(empty_slice, transpose_box(crop_vox_xy), use_world_coords=False)
         ax.imshow(empty_slice, cmap='gray', aspect=aspect, interpolation='none', origin=get_view_origin(view)[1])
 
@@ -156,11 +156,11 @@ def plot_single_patient(
             if crosshairs not in list(landmarks_data['landmark-id']):
                 raise ValueError(f"Landmark '{crosshairs}' not found in 'landmarks_data'.")
             lm_data = landmarks_data[landmarks_data['landmark-id'] == crosshairs]
-            lm_data = landmarks_to_image_coords(lm_data, spacing, origin).iloc[0]
-            crosshairs = get_view_xy(lm_data[list(range(3))], view)
+            lm_data = landmarks_to_image_coords(lm_data, affine).iloc[0]
+            crosshairs = get_view_xy(view, lm_data[list(range(3))])
         elif use_world_coords and isinstance(crosshairs, Point2D):
             # Passed crosshairs should be in same coordinates as image axes. Convert to image coords
-            crosshairs = (np.array(crosshairs) - get_view_xy(origin, view)) / get_view_xy(spacing, view)
+            crosshairs = (np.array(crosshairs) - get_view_xy(view, origin)) / get_view_xy(view, affine)
 
         crosshairs = np.array(crosshairs) - crop_vox_xy[0]
         ax.axvline(x=crosshairs[0], color='yellow', linewidth=linewidth, linestyle='dashed')
@@ -168,7 +168,7 @@ def plot_single_patient(
         ch_label = crosshairs.copy()
         ch_label = ch_label + crop_vox_xy[0]
         if use_world_coords:
-            ch_label = ch_label * get_view_xy(spacing, view) + get_view_xy(origin, view)
+            ch_label = ch_label * get_view_xy(view, affine) + get_view_xy(view, origin)
             ch_label = f'({ch_label[0]:.1f}, {ch_label[1]:.1f})'
         else:
             ch_label = f'({ch_label[0]}, {ch_label[1]})'
@@ -178,7 +178,7 @@ def plot_single_patient(
     # Plot dose data.
     isodoses = arg_to_list(isodoses, float)
     if dose_data is not None and (show_dose or len(isodoses) > 0):
-        dose_slice, _ = get_view_slice(dose_data, idx, view)
+        dose_slice, _ = get_view_slice(view, dose_data, idx)
         dose_slice = crop_fn(dose_slice, transpose_box(crop_vox_xy), use_world_coords=False)
 
         # Create colormap with varying alpha - so 0 Gray is transparent.
@@ -215,10 +215,10 @@ def plot_single_patient(
 
     # Plot landmarks.
     if landmarks_data is not None:
-        plot_landmarks_data(landmarks_data, ax, idx, size, spacing, origin, view, crop=crop_vox_xy, dose_data=dose_data, **kwargs)
+        plot_landmarks_data(landmarks_data, ax, idx, size, affine, view, crop=crop_vox_xy, dose_data=dose_data, **kwargs)
 
     if landmarks_data_other is not None:
-        plot_landmarks_data(landmarks_data_other, ax, idx, size, spacing, origin, view, colour='red', crop=crop_vox_xy, dose_data=dose_data, **kwargs)
+        plot_landmarks_data(landmarks_data_other, ax, idx, size, affine, view, colour='red', crop=crop_vox_xy, dose_data=dose_data, **kwargs)
 
     if regions_data is not None:
         # Plot regions.
@@ -231,7 +231,7 @@ def plot_single_patient(
             show_extent=show_extent,
             view=view,
         )
-        should_show_legend = plot_regions_data(regions_data, ax, idx, aspect, **okwargs)
+        should_show_legend = plot_regions_data(regions_data, ax, idx, aspect, labels=region_labels, **okwargs)
 
         # Create legend.
         if show_legend and should_show_legend:
@@ -248,13 +248,7 @@ def plot_single_patient(
 
     if show_x_label:
         # Add 'x-axis' label.
-        if view == 0:
-            spacing_x = spacing[1]
-        elif view == 1: 
-            spacing_x = spacing[0]
-        elif view == 2:
-            spacing_x = spacing[0]
-
+        spacing_x = get_view_xy(view, affine)[0]
         if use_world_coords:
             ax.set_xlabel('mm')
         else:
@@ -262,13 +256,7 @@ def plot_single_patient(
 
     if show_y_label:
         # Add 'y-axis' label.
-        if view == 0:
-            spacing_y = spacing[2]
-        elif view == 1:
-            spacing_y = spacing[2]
-        elif view == 2:
-            spacing_y = spacing[1]
-
+        spacing_y = get_view_xy(view, affine)[1]
         if use_world_coords:
             ax.set_ylabel('mm')
         else:
@@ -282,10 +270,12 @@ def plot_single_patient(
 
     # Adjust tick labels.
     axes_xs = [ax.get_xaxis(), ax.get_yaxis()]
-    sizes_xy = get_view_xy(size, view)
+    sizes_xy = get_view_xy(view, size)
     crop_min_xy, crop_max_xy = crop_vox_xy
-    spacing_xy = get_view_xy(spacing, view)
-    origin_xy = get_view_xy(origin, view)
+    spacing = affine_spacing(affine)
+    origin = affine_origin(affine)
+    spacing_xy = get_view_xy(view, spacing)
+    origin_xy = get_view_xy(view, origin)
     for a, sp, o, cm, cx in zip(axes_xs, spacing_xy, origin_xy, crop_min_xy, crop_max_xy):
         # Ticks are in image coords, labels could be either image/patient coords.
         tick_spacing_vox = int(np.diff(a.get_ticklocs())[0])    # Use spacing from default layout.
@@ -413,7 +403,7 @@ def plot_patient_histogram(
 # Studies/series are flattened and plotting in columns.
 # Anything that applies to a series (e.g. region) can be passed
 # as a list of lists.
-def plot_patient(
+def plot_patients(
     dataset: Dataset,
     dataset_fns: Dict[str, Callable],
     pat: PatientIDs = 'all',
@@ -427,7 +417,7 @@ def plot_patient(
     loadpath: Union[str, List[str]] = [],
     modality: Optional[Union[DicomModality, NiftiModality]] = None,    # Can be used instead of 'serieses'.
     region: Optional[Union[RegionIDs, List[RegionIDs]]] = None,
-    region_labels: Dict[str, str] = {},
+    region_labels_map: Dict[str, str] = {},
     region_series: Optional[SeriesID] = None,
     savepath: Optional[FilePath] = None,
     series: Optional[SeriesIDs] = None,
@@ -460,9 +450,9 @@ def plot_patient(
     loaded_region_serieses = []
     ct_datas = []
     dose_datas = []
-    spacings = []
-    origins = []
+    affines = []
     regions_datas = []
+    region_labels = []
     landmarks_datas = []
     landmarks_datas_other = []
     centre_datas = []
@@ -490,9 +480,9 @@ def plot_patient(
         row_dose_series_dates = []
         row_landmark_serieses = []
         row_region_serieses = []
-        row_spacings = []
-        row_origins = []
+        row_affines = []
         row_regions_datas = []
+        row_region_labels = []
         row_landmarks_datas = []
         row_landmarks_datas_other = []
         row_centre_datas = []
@@ -574,8 +564,7 @@ def plot_patient(
                 # Load image data (e.g. CT/MR).
                 ct_series = dataset_fns['ct_series'](pat_study, ss)
                 row_ct_datas.append(ct_series.data)
-                row_spacings.append(ct_series.spacing)
-                row_origins.append(ct_series.origin)
+                row_affines.append(ct_series.affine)
 
                 # Get landmarks data.
                 if sl is not None:
@@ -600,8 +589,10 @@ def plot_patient(
                 else:
                     r_series = dataset_fns['default_regions'](pat_study)
                 row_region_serieses.append(r_series.id if r_series is not None else None)
-                rdata = dataset_fns['regions_data'](r_series, srr) if r_series is not None and srr is not None else None
+                rdata, rlabels = dataset_fns['regions_data'](r_series, srr) if r_series is not None and srr is not None else (None, None)
+                print(rdata.shape, rlabels)
                 row_regions_datas.append(rdata)
+                row_region_labels.append(rlabels)
 
                 # Load dose data from the same study - and resample to image spacing.
                 if (show_dose or len(isodoses) > 0) and dataset_fns['has_dose'](pat_study):
@@ -638,7 +629,7 @@ def plot_patient(
                         if pat_study.has_landmark(centre):
                             c = pat_study.landmarks_data(landmark=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
                         elif pat_study.has_region(centre):
-                            c = pat_study.regions_data(region=centre)[centre] if rdata is None or centre not in rdata else centre
+                            c = pat_study.regions_data(regions=centre)[0][0] if rdata is None or centre not in rdata else centre
                         else:
                             raise ValueError(f"Study {pat_study} has no landmark/regions with ID '{centre}' for 'centre'.")
                 row_centre_datas.append(c)
@@ -651,7 +642,7 @@ def plot_patient(
                             if rdata is not None and crop in rdata:
                                 c = crop    # Pass string, it will be read from 'regions_data' by 'plot_patient'.
                             else:
-                                c = pat_study.regions_data(region=crop)[crop]  # Load RegionLabel.
+                                c = pat_study.regions_data(regions=crop)[0][0]  # Load RegionLabel.
                         elif pat_study.has_landmark(crop):
                             if lm_data is not None and crop in list(lm_data['landmark-id']):
                                 c = crop
@@ -663,9 +654,11 @@ def plot_patient(
 
         # Apply region labels.
         # This should maybe be moved to base 'plot_patient'? All of the dataset-specific plotting functions
-        # use this. Of course 'plot_patient' API would change to include 'region_labels' as an argument.
+        # use this. Of course 'plot_patient' API would change to include 'region_labels_map' as an argument.
         for i in range(len(row_serieses)):
-            row_regions_datas[i], row_centre_datas[i], row_crop_datas[i] = __map_regions(region_labels, row_regions_datas[i], row_centre_datas[i], row_crop_datas[i])
+            row_centre_datas[i], row_crop_datas[i], row_region_labels[i] = __map_regions(region_labels_map, row_centre_datas[i], row_crop_datas[i], row_region_labels[i])
+        print('mapped regions')
+        print(row_region_labels)
 
         loaded_studies.append(row_studies)
         loaded_study_dates.append(row_study_dates)
@@ -676,9 +669,9 @@ def plot_patient(
         loaded_region_serieses.append(row_region_serieses)
         ct_datas.append(row_ct_datas)
         dose_datas.append(row_dose_datas)
-        spacings.append(row_spacings)
-        origins.append(row_origins)
+        affines.append(row_affines)
         regions_datas.append(row_regions_datas)
+        region_labels.append(row_region_labels)
         landmarks_datas.append(row_landmarks_datas)
         landmarks_datas_other.append(row_landmarks_datas_other)
         centre_datas.append(row_centre_datas)
@@ -686,6 +679,7 @@ def plot_patient(
 
     # Plot.
     okwargs = dict(
+        affines=affines,
         centres=centre_datas,
         crops=crop_datas,
         ct_datas=ct_datas,
@@ -696,14 +690,13 @@ def plot_patient(
         landmarks_datas=landmarks_datas,
         landmarks_datas_other=landmarks_datas_other,
         landmark_serieses=loaded_landmark_serieses,
-        origins=origins,
         regions_datas=regions_datas,
+        region_labels=region_labels,
         region_serieses=loaded_region_serieses,
         savepath=savepath,
         serieses=loaded_serieses,
         show_progress=show_progress,
         show_dose=show_dose,
-        spacings=spacings,
         study_dates=loaded_study_dates,
         study=loaded_studies,
     )
@@ -715,6 +708,7 @@ def plot_patient(
 def plot_patients_matrix(
     # Allows us to plot multiple patients (rows) and patient studies, series, and views (columns).
     pat_ids: Union[str, List[str]],
+    affines: Affine | List[Affine | List[Affine]] | None = None,
     ax: Optional[mpl.axes.Axes] = None,
     centres: Optional[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID, List[Union[LandmarkSeries, LandmarkID, Literal['dose'], RegionArray, RegionID]], List[Union[LandmarkSeries, LandmarkID, RegionArray, RegionID, List[Union[LandmarkSeries, LandmarkID, RegionArray, RegionID]]]]]] = None,
     crops: Optional[Union[str, np.ndarray, Box2D, List[Union[str, np.ndarray, Box2D]]]] = None,
@@ -726,13 +720,12 @@ def plot_patients_matrix(
     landmarks_datas: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
     landmarks_datas_other: Optional[Union[LandmarksFrame, List[LandmarksFrame], List[Union[LandmarksFrame, List[LandmarksFrame]]]]] = None,
     landmark_serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
-    origins: Union[Point3D, List[Point3D], List[Union[Point3D, List[Point3D]]]] = None,
-    regions_datas: Optional[Union[RegionArrays, List[RegionArrays], List[Union[RegionArrays, List[RegionArrays]]]]] = None,
+    regions_datas: LabelVolumeBatch | List[LabelVolumeBatch | List[LabelVolumeBatch]] | None = None,
+    region_labels: str | List[str] | None = None,
     region_serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     savepath: Optional[str] = None,
     serieses: Union[SeriesIDs, List[SeriesIDs]] = None,
     show_progress: bool = False,
-    spacings: Union[Spacing3D, List[Spacing3D], List[Union[Spacing3D, List[Spacing3D]]]] = None,
     study_dates: Union[str, List[str]] = None,
     study: Union[StudyIDs, List[StudyIDs]] = None,
     transpose_images: bool = False,
@@ -744,7 +737,7 @@ def plot_patients_matrix(
     studies = arg_to_list(study, StudyID, broadcast=n_rows)
     study_dates = arg_to_list(study_dates, str, broadcast=n_rows)
     serieses = arg_to_list(serieses, SeriesID, broadcast=n_rows)
-    spacings = arg_to_list(spacings, Spacing3D, broadcast=n_rows)
+    affines = arg_to_list(affines, Affine, broadcast=n_rows)
     centres = arg_to_list(centres, (None, LandmarkSeries, LandmarkID, RegionArray, RegionID), broadcast=n_rows)
     crops = arg_to_list(crops, (None, LandmarkID, Box2D, RegionID), broadcast=n_rows)
     ct_datas = arg_to_list(ct_datas, (None, CtImageArray), broadcast=n_rows)
@@ -754,7 +747,8 @@ def plot_patients_matrix(
     landmarks_datas = arg_to_list(landmarks_datas, (None, LandmarksFrame), broadcast=n_rows)
     landmarks_datas_other = arg_to_list(landmarks_datas_other, (None, LandmarksFrame), broadcast=n_rows)
     landmark_serieses = arg_to_list(landmark_serieses, SeriesID, broadcast=n_rows)
-    regions_datas = arg_to_list(regions_datas, (None, RegionArrays), broadcast=n_rows)
+    regions_datas = arg_to_list(regions_datas, (None, np.ndarray), broadcast=n_rows)
+    region_labelses = arg_to_list(region_labels, (str, None), broadcast=n_rows)
     region_serieses = arg_to_list(region_serieses, SeriesID, broadcast=n_rows)
     views = arg_to_list(view, int, literals={ 'all': tuple(range(3)) })
     n_series_max = np.max([len(ss) for ss in serieses])
@@ -794,9 +788,9 @@ def plot_patients_matrix(
             dose_data = dose_datas[i][seriesx] if isinstance(dose_datas[i], list) else dose_datas[i]
             dose_series = dose_serieses[i][seriesx] if isinstance(dose_serieses[i], list) else dose_serieses[i]
             dose_series_date = dose_series_dates[i][seriesx] if isinstance(dose_series_dates[i], list) else dose_series_dates[i]
-            spacing = spacings[i][seriesx] if isinstance(spacings[i], list) else spacings[i]
-            origin = origins[i][seriesx] if isinstance(origins[i], list) else origins[i]
+            affine = affines[i][seriesx] if isinstance(affines[i], list) else affines[i]
             regions_data = regions_datas[i][seriesx] if isinstance(regions_datas[i], list) else regions_datas[i]
+            region_labels = region_labelses[i][seriesx] if isinstance(region_labelses[i], list) else region_labelses[i]
             landmarks_data = landmarks_datas[i][seriesx] if isinstance(landmarks_datas[i], list) else landmarks_datas[i]
             landmarks_data_other = landmarks_datas_other[i][seriesx] if isinstance(landmarks_datas_other[i], list) else landmarks_datas_other[i]
             landmark_series = landmark_serieses[i][seriesx] if isinstance(landmark_serieses[i], list) else landmark_serieses[i]
@@ -808,9 +802,9 @@ def plot_patients_matrix(
             study_date = study_dates[i][seriesx] if isinstance(study_dates[i], list) else study_dates[i]
             view = views[view_idx] if len(views) > 1 else views[0]
 
-            plot_single_patient(
+            plot_patient(
                 ct_data.shape,
-                spacing,
+                affine=affine,
                 ax=axs[i][j] if not transpose_images else axs[j][i],
                 centre=centre,
                 close_figure=False,
@@ -822,9 +816,9 @@ def plot_patients_matrix(
                 landmarks_data=landmarks_data,
                 landmarks_data_other=landmarks_data_other,
                 landmark_series=landmark_series,
-                origin=origin,
                 pat_id=pat_id,
                 regions_data=regions_data,
+                region_labels=region_labels,
                 region_series=region_series,
                 series=series,
                 study_date=study_date,
@@ -849,8 +843,7 @@ def __get_landmark_crop(
     landmark: LandmarkSeries,
     margin_mm: float,
     size: Size3D,
-    spacing: Spacing3D,
-    origin: Point3D,
+    affine: Affine,
     view: Axis) -> Box2D:
     # Add crop margin.
     landmark = landmark[range(3)].to_numpy()
@@ -858,6 +851,8 @@ def __get_landmark_crop(
     max_mm = landmark + margin_mm
 
     # Convert to image coords.
+    spacing = affine_spacing(affine)
+    origin = affine_origin(affine)
     min_vox = tuple(np.floor((min_mm - origin) / spacing).astype(int))
     max_vox = tuple(np.ceil((max_mm - origin) / spacing).astype(int))
 
@@ -866,42 +861,45 @@ def __get_landmark_crop(
     max_vox = tuple(int(v) for v in np.clip(max_vox, a_min=None, a_max=size))
 
     # Select 2D component.
-    min_vox = get_view_xy(min_vox, view)
-    max_vox = get_view_xy(max_vox, view)
+    min_vox = get_view_xy(view, min_vox)
+    max_vox = get_view_xy(view, max_vox)
 
     return min_vox, max_vox
 
 def __map_regions(
-    region_labels: Dict[str, str],
-    regions_data: Optional[Dict[str, np.ndarray]],
-    centre: Optional[str],
-    crop: Optional[str]) -> Tuple[Dict[str, np.ndarray], Optional[str], Optional[str]]:
+    mapping: Dict[str, str],
+    centre: str | None = None,
+    crop: str | None = None,
+    region_labels: List[Region] | None = None,
+    ) -> Tuple[Dict[str, np.ndarray], Optional[str], Optional[str]]:
 
-    # Apply region labels to 'regions_data' and 'centre/crop' keys.
-    if regions_data is not None:
-        for old, new in region_labels.items():
-            regions_data[new] = regions_data.pop(old)
-    if centre is not None and type(centre) == str and centre in region_labels:
+    # Apply to region labels, centre and crop.
+    if region_labels is not None:
+        for i, r in enumerate(region_labels):
+            if r in mapping:
+                region_labels[i] = mapping[r]
+    if centre is not None and isinstance(centre, str) and centre in region_labels:
         centre = region_labels[centre] 
-    if centre is not None and type(crop) == str and crop in region_labels:
+    if crop is not None and isinstance(crop, str) and crop in region_labels:
         crop = region_labels[crop]
 
-    return regions_data, centre, crop
+    return centre, crop, region_labels
 
 def __get_region_crop(
     data: RegionArray,
     margin_mm: float,
-    spacing: Spacing3D,
-    origin: Point3D,
+    affine: Affine,
     view: Axis) -> Box2D:
     # Get region extent.
-    fov_min_mm, fov_max_mm = foreground_fov(data, spacing=spacing, origin=origin)
+    fov_min_mm, fov_max_mm = foreground_fov(data, affine=affine)
 
     # Add crop margin.
     min_mm = np.array(fov_min_mm) - margin_mm
     max_mm = np.array(fov_max_mm) + margin_mm
 
     # Convert to image coords.
+    spacing = affine_spacing(affine)
+    origin = affine_origin(affine)
     min_vox = tuple(np.floor((min_mm - origin) / spacing).astype(int))
     max_vox = tuple(np.ceil((max_mm - origin) / spacing).astype(int))
 
@@ -910,7 +908,7 @@ def __get_region_crop(
     max_vox = tuple(int(v) for v in np.clip(max_vox, a_min=None, a_max=data.shape))     # Should be inclusive to maintain symmetry.
 
     # Select 2D component.
-    min_vox = get_view_xy(min_vox, view)
-    max_vox = get_view_xy(max_vox, view)
+    min_vox = get_view_xy(view, min_vox)
+    max_vox = get_view_xy(view, max_vox)
 
     return min_vox, max_vox

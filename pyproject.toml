@@ -5,6 +5,7 @@
 [tool.poetry.dependencies]
 python = ">=3.8"
 
+fire = "*"
 jupyterlab = "*"
 nibabel = "*"
 numpy = "*"

@@ -8,4 +8,5 @@ from .pddca import *
 from .registration import *
 from .training import *
 from .unigradicon import *
+from .valkim import *
 from .voxelmorph_pp import *

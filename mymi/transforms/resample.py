@@ -150,10 +150,8 @@ def __spatial_sample(
     points: Union[LandmarksFrame, Point3D, Points3D],
     fill: Union[float, Literal['min']] = 'min',
     landmarks_col: str = 'sample',
-    origin: Optional[Point3D] = None,
     sample_size: SizeMM3D = (0, 0, 0),  # Defaults to point sample.
     sample_spacing: Spacing3D = (1, 1, 1),
-    spacing: Optional[Spacing3D] = None,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
     **kwargs) -> Union[ImageArray, Tuple[ImageArray, sitk.Transform]]:
 
@@ -165,11 +163,6 @@ def __spatial_sample(
         spacing = tuple(float(s) for s in spacing)
 
     # Create 'sitk' image and set parameters.
-    kwargs = {}
-    if spacing is not None:
-        kwargs['spacing'] = spacing
-    if origin is not None:
-        kwargs['origin'] = origin
     img = to_sitk_image(data, **kwargs)
 
     # Create resample filter.

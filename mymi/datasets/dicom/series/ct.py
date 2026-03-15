@@ -35,6 +35,10 @@ class DicomCtSeries(DicomSeries):
                 self.__load_data()
             return fn(self, *args, **kwargs)
         return wrapper
+
+    @property
+    def affine(self) -> Affine:
+        return self.__affine
     
     # Could return 'CTFile' objects - this would align with other series, but would create a lot of objects in memory.
     @property
@@ -52,8 +56,9 @@ class DicomCtSeries(DicomSeries):
     @ensure_loaded
     def fov(
         self,
-        **kwargs) -> Fov3D:
-        return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
+        **kwargs,
+        ) -> Fov3D:
+        return fov(self.__data.shape, affine=self.__affine, **kwargs)
 
     @property
     def filepath(self) -> str:
@@ -66,12 +71,12 @@ class DicomCtSeries(DicomSeries):
     def __load_data(self) -> None:
         # Consistency is checked during indexing.
         # TODO: Change 'check_consistency' to be more granular and set based on the index policy.
-        self.__data, self.__spacing, self.__origin = from_ct_dicoms(self.dicoms, check_consistency=False)
+        self.__data, self.__affine = from_ct_dicom(self.dicoms)
 
     @property
     @ensure_loaded
     def origin(self) -> Point3D:
-        return self.__origin
+        return affine_origin(self.__affine)
 
     @property
     @ensure_loaded
@@ -81,7 +86,7 @@ class DicomCtSeries(DicomSeries):
     @property
     @ensure_loaded
     def spacing(self) -> Spacing3D:
-        return self.__spacing
+        return affine_spacing(self.__affine)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

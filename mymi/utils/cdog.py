@@ -8,8 +8,11 @@ import numpy as np
 import os
 import pandas as pd
 import PIL
-from PIL import Image, TiffTags
+from skimage import exposure
 from typing import *
+
+from mymi.typing import *
+from mymi.utils import arg_to_list
 
 from .pandas import append_row
 
@@ -26,13 +29,13 @@ def get_base_pixel(
 
     raise ValueError(f"No base_pixel found with value: {base_flag}")
 
-def get_metadata_props(
-    metadata: np.ndarray,
-    version: Literal['v2.7', 'v3.0', 'v4.0'],
+def get_metadata(
+    metadata_img: np.ndarray,
+    cdog_version: Literal['v2.7', 'v3.0', 'v4.0'],
     base_flag: int = int('0xCAFE', 16),
     ) -> Dict[str, Any]:
-    base_pixel = get_base_pixel(metadata, base_flag=base_flag)
-    prop_df = load_prop_df(version)
+    base_pixel = get_base_pixel(metadata_img, base_flag=base_flag)
+    prop_df = load_prop_df(cdog_version)
     props = {}
 
     # Add datetimes.
@@ -49,29 +52,32 @@ def get_metadata_props(
     
     for p, t in prop_types.items():
         if t == 'datetime':
-            v = load_timestamp(metadata, base_flag=base_flag, base_pixel=base_pixel, prop=p, prop_df=prop_df)
+            v = load_timestamp(metadata_img, base_flag=base_flag, base_pixel=base_pixel, prop=p, prop_df=prop_df)
         elif t == 'double':
-            v = load_double(metadata, base_flag=base_flag, base_pixel=base_pixel, prop=p, prop_df=prop_df)
+            v = load_double(metadata_img, base_flag=base_flag, base_pixel=base_pixel, prop=p, prop_df=prop_df)
         else:
             raise ValueError(f"Unrecognised type '{t}'.")
-
-        # Change units.
-        if p == 'PixelHeight' or p == 'PixelWidth':
-            v = v * 10  # Convert from cm to mm.
             
         props[p] = v
+
+    # Extract parameters required for DRR creation.
+    props['det-offset'] = (float(np.round(props['KVDetectorLat'] * 10)), float(np.round(props['KVDetectorLng'] * 10)))
+    props['det-spacing'] = (float(props['PixelWidth'] * 10), float(props['PixelHeight'] * 10))
+    props['kv-source-angle'] = float(np.round(props['KVSourceRtn'] % 360, decimals=3))
+    props['sid'] = float(np.round(props['KVSourceVrt'] * 10))
+    props['sdd'] = float(np.round((np.abs(props['KVDetectorVrt']) + props['KVSourceVrt']) * 10))
 
     return props
 
 def get_prop_offset(
     prop: str,
     prop_df: Optional[pd.DataFrame] = None,
-    version: Optional[Literal['v2.7', 'v3.0', 'v4.0']] = None,
+    cdog_version: Optional[Literal['v2.7', 'v3.0', 'v4.0']] = None,
     ) -> int:
-    if prop_df is None and version is None:
-        raise ValueError("Must pass 'prop_df' or 'version' to get offset.")
+    if prop_df is None and cdog_version is None:
+        raise ValueError("Must pass 'prop_df' or 'cdog_version' to get offset.")
     if prop_df is None:
-        prop_df = load_prop_df(version)
+        prop_df = load_prop_df(cdog_version)
         
     row = prop_df[prop_df['prop'] == prop]
     if len(row) == 0:
@@ -101,7 +107,7 @@ def get_prop_pixel(
 def get_row_stats(
     filepath: str,
     ) -> pd.DataFrame:
-    img = Image.open(filepath)
+    img = PIL.Image.open(filepath)
     data = np.array(img).T
 
     # How can we determine image vs. metadata rows?
@@ -190,13 +196,13 @@ def infer_image_size(
     # raise ValueError(f"Couldn't infer image size for: {filepath}")
 
 # Returns image metadata and pixel data.
-def load_cdog(
+def load_tiff(
     filepath: str,
-    n_image_rows: Optional[int] = None,
-    version: Optional[str] = None,
-    ) -> Tuple[Dict[str, Any], np.ndarray]:
+    invert_intensities: bool = True,
+    cdog_version: Optional[str] = None,
+    ) -> Tuple[Slice, Dict[str, Any]]:
     # Load image.
-    img = Image.open(filepath)
+    img = PIL.Image.open(filepath)
     data = np.array(img).T
 
     # Get TIFF metadata.
@@ -205,28 +211,31 @@ def load_cdog(
 
     # Build our own metadata.
     metadata = {}
-    metadata['size-x'], metadata['size-y'] = infer_image_size(data, filepath)
+    metadata['det-size'] = infer_image_size(data, filepath)
 
-    # Extract metadata.
-    metadata_image = data[:, metadata['size-y']:]
+    # Extract metadata from .
+    metadata_image = data[:, metadata['det-size'][1]:]
     metadata['image'] = metadata_image  # For debugging only.
     base_pixel = get_base_pixel(metadata_image)
-    if version is not None:
-        metadata['version'] = version
+    if cdog_version is not None:
+        metadata['cdog-version'] = cdog_version
     else:
-        metadata['version'] = infer_cdog_version(metadata_image)
-    props = get_metadata_props(metadata_image, metadata['version'])
-    metadata |= props
+        metadata['cdog-version'] = infer_cdog_version(metadata_image)
+    mdata = get_metadata(metadata_image, metadata['cdog-version'])
+    metadata |= mdata
 
     # Extract image data.
-    image_data = data[:, :metadata['size-y']]
+    image_data = data[:, :metadata['det-size'][1]]
 
-    return metadata, image_data
+    if invert_intensities:
+        image_data = np.max(image_data) - image_data
 
-def load_cdog_df(
+    return image_data, metadata
+
+def load_tiff_df(
     filepath: str,
     ) -> pd.DataFrame:
-    m, d = load_cdog(filepath)
+    d, m = load_tiff(filepath)
     cols = {
         'prop': str,
         'type': str,
@@ -281,10 +290,10 @@ def load_double(
     return val
 
 def load_prop_df(
-    version: Literal['v2.7', 'v3.0', 'v4.0'],
+    cdog_version: Literal['v2.7', 'v3.0', 'v4.0'],
     ) -> pd.DataFrame:
     basepath = r"E:\Brett\data\mymi\files\rtf"
-    v_str = version.replace('v', '').replace('.', '_')
+    v_str = cdog_version.replace('v', '').replace('.', '_')
     filepath = os.path.join(basepath, f"XIImagePropertyMapHET{v_str}.csv")
     df = pd.read_csv(filepath, index_col=False, names=['prop', 'datatype', 'byte-offset', 'unsure'], skiprows=7)
     return df
@@ -331,16 +340,21 @@ def load_timestamp(
 
     return precise_timestamp
 
-def plot_cdog(
-    path: str,
+def plot_tiff(
+    path: FilePath | DirPath | List[FilePath],
     **kwargs,
     ) -> None:
-    if os.path.isdir(path):
-        plot_cdog_dirpath(path, **kwargs)
-    else:
-        plot_cdog_filepath(path, **kwargs)
+    if isinstance(path, str) and os.path.isdir(path):
+        plot_tiff_dirpath(path, **kwargs)
+        return
 
-def plot_cdog_dirpath(
+    filepaths = arg_to_list(path, str)
+    n_rows = len(filepaths)
+    _, axs = plt.subplots(n_rows, 1, figsize=(6, 4 * n_rows), gridspec_kw={ 'hspace': 0.6 }, squeeze=False)
+    for i in range(n_rows):
+        plot_tiff_filepath(filepaths[i], ax=axs[i, 0], **kwargs)
+
+def plot_tiff_dirpath(
     dirpath: str,
     angle_range: Tuple[Optional[float], Optional[float]] = (None, None),
     arc: Optional[int] = 0,
@@ -400,12 +414,12 @@ def plot_cdog_dirpath(
 
     for i, f in enumerate(tiff_filepaths):
         if return_images:
-            image = plot_cdog_filepath(f, return_image=True, title_fontsize=title_fontsize, **kwargs)
+            image = plot_tiff_filepath(f, return_image=True, title_fontsize=title_fontsize, **kwargs)
             images.append(image)
         else:
             row = i // n_cols
             col = i % n_cols
-            plot_cdog_filepath(f, ax=axs[row, col], title_fontsize=title_fontsize, **kwargs)
+            plot_tiff_filepath(f, ax=axs[row, col], title_fontsize=title_fontsize, **kwargs)
 
     if return_images:
         return images
@@ -415,17 +429,24 @@ def plot_cdog_dirpath(
     for i in range(n_unused):
         axs.flat[-i - 1].set_visible(False)
 
-def plot_cdog_filepath(
+def plot_tiff_filepath(
     filepath: str,
     ax: Optional[mpl.axes.Axes] = None,
-    invert: bool = True,
+    hist_eq: bool = False,
+    normalise: bool = False,
     return_image: bool = False,
+    show_hist: bool = False,
     title_fontsize: float = 10,
-    version: Optional[str] = None,
+    cdog_version: Optional[str] = None,
     vmin: Optional[float] = None,
-    vmax: Optional[float] = 1200,
+    vmax: Optional[float] = None,
+    **kwargs,
     ) -> Optional[PIL.Image]:
-    if ax is None:
+    if show_hist:
+        _, axs = plt.subplots(1, 2, figsize=(12, 4))
+        ax, hist_ax = axs
+        show = True
+    elif ax is None:
         ax = plt.gca()
         show = True
     else:
@@ -434,25 +455,30 @@ def plot_cdog_filepath(
     f_arc = '_'.join(filename.split('_')[:2])
     f_frame = filename.split('_')[2]
     f_angle = filename.split('_')[-1].replace('.tiff', '')
-    metadata, data = load_cdog(filepath, version=version)
-    if version is None:
-        version = metadata['version']
-    cmap = 'gray_r' if invert else 'gray'
-    if vmax is None:
-        vmax = np.percentile(data, 99)
-    img = ax.imshow(data.T, cmap=cmap, vmin=vmin, vmax=vmax)
+    data, info = load_tiff(filepath, cdog_version=cdog_version, **kwargs)
+    if cdog_version is None:
+        cdog_version = info['cdog-version']
+    aspect = info['det-size'][1] / info['det-size'][0]
+    if normalise:
+        data = (data - data.min()) / (data.max() - data.min())
+    if hist_eq:
+        data = exposure.equalize_hist(data)
+    
+    img = ax.imshow(data.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
+    if show_hist:
+        hist_ax.hist(data.flatten(), bins=50, color='gray')
     # cbar = fig.colorbar(img)
-    title = f"CDOG ({version}) TIFF image ({metadata['size-x']} x {metadata['size-y']})\n\
+    title = f"CDOG ({cdog_version}) TIFF image ({info['det-size'][0]} x {info['det-size'][1]})\n\
 Arc: {f_arc}, frame: {f_frame}, angle: {f_angle}\n\
 Imin/max: {data.min()}/{data.max()}, Vmin/max: {vmin}/{vmax}\n\
-MV source angle: {metadata['GantryRtn']:.3f}\n\
-kV source/det. angle: {metadata['KVSourceRtn']:.3f}/{metadata['KVDetectorRtn']:.3f}"
+MV source angle: {info['GantryRtn']:.3f}\n\
+kV source/det. angle: {info['kv-source-angle']:.3f}/{info['KVDetectorRtn']:.3f}"
     ax.set_title(title, fontsize=title_fontsize)
     # plt.axis('off')
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_xlabel(f"LR [{metadata['PixelWidth']}mm]")
-    ax.set_ylabel(f"SI [{metadata['PixelHeight']}mm]")
+    ax.set_xlabel(f"LR [{info['det-spacing'][0]}mm]")
+    ax.set_ylabel(f"SI [{info['det-spacing'][1]}mm]")
 
     if return_image:
         fig = plt.gcf()
@@ -460,12 +486,12 @@ kV source/det. angle: {metadata['KVSourceRtn']:.3f}/{metadata['KVDetectorRtn']:.
         fig.savefig(buffer, bbox_inches='tight', dpi=100, format='png')
         plt.close(fig)
         buffer.seek(0)
-        return np.asarray(Image.open(buffer))
+        return np.asarray(PIL.Image.open(buffer))
 
     if show:
         plt.show()
 
-def plot_cdog_gif(
+def plot_tiff_gif(
     dirpath: str,
     *args,
     arc: int = 0,
@@ -485,7 +511,7 @@ def plot_cdog_gif(
 
     if overwrite or not os.path.exists(filepath):
         # Get tiff images.
-        png_images = plot_cdog_dirpath(dirpath, *args, arc=arc, return_images=True, **kwargs)
+        png_images = plot_tiff_dirpath(dirpath, *args, arc=arc, return_images=True, **kwargs)
 
         # Save gif.
         frames = png_images
@@ -495,10 +521,10 @@ def plot_cdog_gif(
 
     display(IPythonImage(filename=filepath, width=500))
 
-def plot_cdog_hist(
+def plot_tiff_hist(
     filepath: str,
     **kwargs,
     ) -> None:
-    _, data = load_cdog(filepath)
+    data, _ = load_tiff(filepath)
     plt.hist(data)
     plt.show()

@@ -14,7 +14,7 @@ from mymi.utils import *
 def create_region_counts(dataset: DatasetID) -> None:
     pr_df = get_region_counts(dataset)
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filepath = os.path.join(set.path, 'reports', 'region-counts.csv')
     save_csv(pr_df, filepath)
 
 def create_region_summary(
@@ -151,7 +151,7 @@ def load_region_counts(
     regions: RegionIDs = 'all',
     exists_only: bool = False) -> Union[pd.DataFrame, bool]:
     set = NiftiDataset(dataset)
-    filepath = os.path.join(set.path, 'reports', 'region-count.csv')
+    filepath = os.path.join(set.path, 'reports', 'region-counts.csv')
     if os.path.exists(filepath):
         if exists_only:
             return True

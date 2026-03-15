@@ -1,8 +1,14 @@
 from dataclasses import dataclass, field
 import numpy as np
+import os
 from pathlib import Path
 import struct
 from typing import Any, Tuple
+
+from mymi.typing import *
+
+from .args import arg_to_list
+from .projections import reverse_angles
 
 @dataclass
 class XimHistogramInfo:
@@ -22,28 +28,58 @@ class XimInfo:
     histogram: XimHistogramInfo = field(default_factory=XimHistogramInfo)
     properties: dict[str, Any] = field(default_factory=dict)
 
-def read_xim(
+def load_xim_angles_and_files(
+    dirpath: DirPath,
+    angle_type: Literal['kv-detector', 'kv-source', 'mv-source'],
+    closest_to: int | float | List[int | float] | None = None,
+    n_angles: int | None = None,
+    sort_by_angle: bool = True,
+    start: int = 0,
+    **kwargs,
+    ) -> List[float]:
+    closest_to = arg_to_list(closest_to, (int, float, None))
+
+    # Get files.
+    files = os.listdir(dirpath)
+    files = [f for f in files if f.endswith(".xim")]
+    files = list(sorted(files))
+    if n_angles is None:
+        n_angles = len(files) - start
+    
+    # Load filenames and angles.
+    angles_files = {}
+    for i in range(start, start + n_angles):
+        filename = files[i]
+        filepath = os.path.join(dirpath, filename)
+        try:
+            _, info = load_xim(filepath, load_pixel_data=False, **kwargs)
+        except Exception as e:
+            print(f"Error reading {filepath}, projection {i}: {e}")
+            continue
+        angles_files[info[f'{angle_type}-angle']] = filename
+
+    # Filter by closest_to.
+    if closest_to is not None:
+        angles = np.array(list(angles_files.keys()))
+        idxs_to_keep = []
+        for c in closest_to:
+            angle_diffs = np.abs(angles - c)
+            idx = np.argmin(angle_diffs)
+            idxs_to_keep.append(idx)
+        angles_files = dict(t for i, t in enumerate(angles_files.items()) if i in idxs_to_keep)
+
+    if sort_by_angle:
+        angles_files = dict(sorted(angles_files.items()))
+
+    return angles_files
+
+def load_xim(
     filepath: str | Path,
-    read_pixel_data: bool = True,
-    ) -> Tuple[XimInfo, np.ndarray | None]:
-    """
-    Read a Varian XIM image file.
-
-    Parameters
-    ----------
-    filepath : str or Path
-        Full path to the .xim file.
-    read_pixel_data : bool, optional
-        Whether to decode the pixel data (default True). Set to False to read
-        only the header/properties.
-
-    Returns
-    -------
-    info : XimInfo
-        Header information and properties.
-    image : np.ndarray or None
-        2-D image array (width × height), or None if read_pixel_data is False.
-    """
+    flip_lr: bool = True,
+    invert_intensities: bool = True,
+    load_pixel_data: bool = True,
+    reverse_gantry_angle: bool = True,
+    ) -> Tuple[np.ndarray | None, XimInfo]:
     filepath = Path(filepath)
     info = XimInfo(file_name=str(filepath))
 
@@ -77,7 +113,7 @@ def read_xim(
 
             compressed_pixel_buffer_size = struct.unpack("<i", fid.read(4))[0]
 
-            if read_pixel_data:
+            if load_pixel_data:
                 # First row + first pixel of second row are stored raw (int32)
                 seed_count = width + 1
                 n_compressed = num_pixels - seed_count
@@ -147,7 +183,7 @@ def read_xim(
             # Uncompressed
             uncompressed_pixel_buffer_size = struct.unpack("<i", fid.read(4))[0]
 
-            if read_pixel_data:
+            if load_pixel_data:
                 if info.bytes_per_pixel == 1:
                     count = uncompressed_pixel_buffer_size
                     pixel_data = np.frombuffer(fid.read(count), dtype=np.int8)
@@ -203,4 +239,32 @@ def read_xim(
 
             info.properties[prop_name] = prop_value
 
-    return info, pixel_data
+    # Add projection properies.
+    metadata = {}
+    # I think that .xim files encode MV gantry using a CCW+ convention. This may not
+    # be true for all machines, so have the option to flip. See the discussion at:
+    # "PRJ-LEARN:\ProjectData\Brett\XIM angles confusion.docx".
+    mv_source_angle = float(np.round(info.properties['GantryRtn'] % 360, decimals=3))
+    if reverse_gantry_angle:
+        mv_source_angle = reverse_angles(mv_source_angle)
+    metadata['mv-source-angle'] = mv_source_angle
+    # Note! The .xim files KvSource/DetectorRtn properties may not be reliable, use GantryRtn.
+    # We saw 'KVSourceRtn' always at 0 for Orange - Prostate - Pat01 - Fx01.
+    # metadata['kv-detector-angle'] = float(np.round(info.properties['KVDetectorRtn'] % 360, decimals=3))
+    # metadata['kv-source-angle'] = float(np.round(info.properties['KVSourceRtn'] % 360, decimals=3))
+    # Calculate based on MV gantry.
+    metadata['kv-source-angle'] = float(np.round((mv_source_angle - 90) % 360, decimals=3))
+    metadata['kv-detector-angle'] = float(np.round((mv_source_angle + 90) % 360, decimals=3))
+    metadata['sid'] = float(np.round(info.properties['KVSourceVrt']) * 10)
+    metadata['sdd'] = float(np.round((np.abs(info.properties['KVDetectorVrt']) + info.properties['KVSourceVrt']) * 10))
+    metadata['det-offset'] = (float(np.round(np.abs(info.properties['KVDetectorLat'] * 10))), float(np.round(np.abs(info.properties['KVDetectorLng'] * 10))))
+    metadata['det-size'] = (info.image_width, info.image_height)
+    metadata['det-spacing'] = (info.properties['PixelWidth'] * 10, info.properties['PixelHeight'] * 10)
+    metadata['properties'] = info.properties
+
+    if flip_lr and pixel_data is not None:
+        pixel_data = np.flip(pixel_data, axis=0)
+    if invert_intensities and pixel_data is not None:
+        pixel_data = np.max(pixel_data) - pixel_data
+
+    return pixel_data, metadata

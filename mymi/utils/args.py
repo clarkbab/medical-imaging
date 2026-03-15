@@ -54,35 +54,49 @@ def arg_broadcast(
     return arg
 
 def arg_to_list(
-    arg: Optional[Any],
-    arg_types: Union[Any, List[Any]],
-    broadcast: int = 1,      # Expand a matching type to multiple elements, e.g. None -> [None, None, None].
-    literals: Dict[str, Tuple[Any]] = {},
-    out_type: Optional[Any] = None,
-    return_matched: bool = False) -> List[Any]:
-    # Convert arg types to list.
-    if not isinstance(arg_types, list) and not isinstance(arg_types, tuple):
-        arg_types = [arg_types]
+    arg: Any | None,
+    types: Any | List[Any],     # Check if 'arg' matches any of these types.
+    broadcast: int = 1,         # Expand a match to multiple elements, e.g. None -> [None, None, None].
+    exceptions: Any | List[Any] | None = None,
+    literals: Dict[Any, List[Any]] | None = None,   # Check if 'arg' matches any of these literal values.
+    out_type: Any | None = None,    # Convert a match to a different output type.
+    return_matched: bool = False,   # Return whether the match was successful.
+    ) -> List[Any]:
+    # Convert types to list.
+    if not isinstance(types, list) and not isinstance(types, tuple):
+        types = [types]
+    if exceptions is not None and not isinstance(exceptions, list) and not isinstance(exceptions, tuple):
+        exceptions = [exceptions]
+
+    # Check exceptions.
+    if exceptions is not None:
+        for e in exceptions:
+            if isinstance(arg, type(e)) and arg == e:
+                if return_matched:
+                    return arg, False
+                else:
+                    return arg
     
     # Check literal matches.
-    literal_types = (int, str) 
-    for t in literal_types:
-        if isinstance(arg, t) and arg in literals:
-            arg = literals[arg]
-            # If arg is a function, run it now. This means the function
-            # is not evaluated every time 'arg_to_list' is called, only when
-            # the arg matches the appropriate literal (e.g. 'all').
-            if isinstance(arg, Callable):
-                arg = arg()
+    if literals is not None:
+        for k, v in literals.items():
+            if isinstance(arg, type(k)) and arg == k:
+                arg = v
 
-            if not return_matched:
-                return arg
-            else:
-                return arg, matched
+                # If arg is a function, run it now. This means the function
+                # is not evaluated every time 'arg_to_list' is called, only when
+                # the arg matches the appropriate literal (e.g. 'all').
+                if isinstance(arg, Callable):
+                    arg = arg()
+
+                if return_matched:
+                    return arg, True
+                else:
+                    return arg
 
     # Check types.
     matched = False
-    for t in arg_types:
+    for t in types:
         if isinstance_generic(arg, t):
             matched = True
             arg = [arg] * broadcast
@@ -92,7 +106,7 @@ def arg_to_list(
     if matched and out_type is not None:
         arg = [out_type(a) for a in arg]
 
-    if not return_matched:
-        return arg
-    else:
+    if return_matched:
         return arg, matched
+    else:
+        return arg

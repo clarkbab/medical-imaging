@@ -279,10 +279,11 @@ def reverse_xy(data: Union[Sequence, np.ndarray]) -> Union[Sequence, np.ndarray]
 
 def transpose_image(
     data: Union[ImageArray, VectorImageArray],
-    vector: bool = False) -> Union[ImageArray, VectorImageArray]:
+    vector: bool = False,
+    n_vector_elements: int = 3) -> Union[ImageArray, VectorImageArray]:
     # Transposes spatial coordinates, whilst maintaining vector dimension as first dim.
-    if vector and data.shape[0] != 3:
-        raise ValueError(f"Expected vector dimension first, got {data.shape}.")
+    if vector and data.shape[0] != n_vector_elements:
+        raise ValueError(f"Expected vector dimension first ({n_vector_elements}), got {data.shape}.")
     data = np.transpose(data)
     if vector:
         data = np.moveaxis(data, -1, 0)
@@ -294,7 +295,7 @@ def with_makeitso(
     msg: str = None) -> None:
     if not makeitso:
         if msg is not None:
-            logging.info(f"Would: {msg}")
+            logging.info(f"Would run: {msg}")
     else:
         f()
         if msg is not None:

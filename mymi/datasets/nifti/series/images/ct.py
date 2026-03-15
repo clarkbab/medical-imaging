@@ -34,13 +34,18 @@ class NiftiCtSeries(NiftiImageSeries):
         def wrapper(self, *args, **kwargs):
             if not has_private_attr(self, '__data'):
                 if self.__filepath.endswith('.nii') or self.__filepath.endswith('.nii.gz'):
-                    self.__data, self.__spacing, self.__origin = load_nifti(self.__filepath)
+                    self.__data, self.__affine = load_nifti(self.__filepath)
                 elif self.__filepath.endswith('.nrrd'):
-                    self.__data, self.__spacing, self.__origin = load_nrrd(self.__filepath)
+                    self.__data, self.__affine = load_nrrd(self.__filepath)
                 else:
                     raise ValueError(f'Unsupported file format: {self.__filepath}')
             return fn(self, *args, **kwargs)
         return wrapper
+
+    @property
+    @ensure_loaded
+    def affine(self) -> Affine:
+        return self.__affine
 
     @property
     @ensure_loaded
@@ -61,12 +66,12 @@ class NiftiCtSeries(NiftiImageSeries):
     def fov(
         self,
         **kwargs) -> Fov3D:
-        return fov(self.__data, spacing=self.__spacing, origin=self.__origin, **kwargs)
+        return fov(self.__data, self.__affine, **kwargs)
 
     @property
     @ensure_loaded
     def origin(self) -> Point3D:
-        return self.__origin
+        return affine_origin(self.__affine)
 
     @property
     @ensure_loaded
@@ -76,7 +81,7 @@ class NiftiCtSeries(NiftiImageSeries):
     @property
     @ensure_loaded
     def spacing(self) -> np.ndarray:
-        return self.__spacing
+        return affine_spacing(self.__affine)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

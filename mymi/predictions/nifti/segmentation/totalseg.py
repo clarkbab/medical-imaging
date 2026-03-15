@@ -17,27 +17,28 @@ def create_totalseg_predictions(
     combine_regions: Dict[str, RegionID] = {},
     dry_run: bool = True,
     overwrite_labels: bool = False,
-    pat_ids: PatientIDs = 'all',
+    pat: PatientIDs = 'all',
     rename_regions: Union[Dict[RegionID, RegionID], Callable[[RegionID], RegionID]] = {},
-    task_regions: Dict[str, Union[str, List[str], Literal['all']]] = {},
     save_as_labels: bool = False,
-    splits: Splits = 'all',
-    study: StudyIDs = 'all') -> None:
+    series: SeriesID = 'series_0',
+    study: StudyIDs = 'all',
+    task_regions: Dict[str, Union[str, List[str], Literal['all']]] = {},
+    ) -> None:
     roi_subset_tasks = ['total', 'total_mr']
 
     # Load patient IDs.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat_ids=pat_ids, splits=splits)
+    pat_ids = set.list_patients(pat=pat)
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)
-        pat_studys = pat.list_studies(study=studys)
+        pat_studys = pat.list_studies(study=study)
         for s in tqdm(pat_studys, leave=False):
             study = pat.study(s)
 
             # Either save as predictions or labels.
             if save_as_labels:
-                save_dir = os.path.join(set.path, 'data', 'patients', p, s, 'regions', 'series_1')
+                save_dir = os.path.join(set.path, 'data', 'patients', p, s, 'regions', series)
             else:
                 save_dir = os.path.join(set.path, 'data', 'predictions', 'segmentation', p, s, 'totalseg')
 
@@ -54,16 +55,16 @@ def create_totalseg_predictions(
                     # Totalseg doesn't handle nrrd.
                     input_filepath = study.ct_filepath
                     if input_filepath.endswith('.nrrd'):
-                        d, s, o = load_nrrd(input_filepath)
+                        d, a = load_nrrd(input_filepath)
                         dest_filepath = os.path.join(output_dir, input_filepath.split('/')[-1].replace('.nrrd', '.nii.gz'))
                         logging.info(f"Copying NRRD to NIFTI: {input_filepath} -> {dest_filepath}")
-                        save_nifti(d, dest_filepath, spacing=s, origin=o)
+                        save_nifti(d, a, dest_filepath)
                         input_filepath = dest_filepath
 
                     # Convert data from LPS to RAS, as required by totalseg.
-                    d, s, o = load_nifti(input_filepath)
+                    d, a = load_nifti(input_filepath)
                     d = np.flip(d, axis=(0, 1))  # Flip x and y axes.
-                    save_nifti(d, input_filepath, spacing=s, origin=o)
+                    save_nifti(d, a, input_filepath)
 
                     # Make total seg predictions.
                     command = [
@@ -129,9 +130,9 @@ def create_totalseg_predictions(
                     files = os.listdir(output_dir)
                     for f in files:
                         filepath = os.path.join(output_dir, f)
-                        d, s, o = load_nifti(filepath)
+                        d, a = load_nifti(filepath)
                         d = np.flip(d, axis=(0, 1))
-                        save_nifti(d, filepath, spacing=s, origin=o)
+                        save_nifti(d, a, filepath)
 
                     # Copy predictions to the output directory.
                     files = os.listdir(output_dir)

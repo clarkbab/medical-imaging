@@ -1,15 +1,11 @@
 import numpy as np
 import SimpleITK as sitk
 
+from mymi.typing import *
+
 def dice(
-    a: np.ndarray,
-    b: np.ndarray) -> float:
-    """
-    returns: the dice coefficient.
-    args:
-        a: an X x Y x Z boolean array.
-        b: an X x Y x Z boolean array.
-    """
+    a: LabelSlice | LabelVolume,
+    b: LabelSlice | LabelVolume) -> float:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'dice' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
 
