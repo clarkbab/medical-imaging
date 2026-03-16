@@ -24,17 +24,18 @@ class DiceLoss(nn.Module):
         weights: Optional[torch.Tensor] = None,
         reduce_channels: bool = False,
         reduction: Literal['mean', 'sum'] = 'mean',
-        sc_channel: Optional[int] = None,
         ) -> torch.Tensor:
         """
         returns: the dice loss.
         args:
-            pred: the B x C x X x Y x Z batch of network predictions probabilities.
-            label: the B x C x X x Y x Z batch of one-hot-encoded labels.
+            pred: the B x C x <spatial> batch of network prediction probabilities (2D or 3D).
+            label: the B x C x <spatial> batch of one-hot-encoded labels (2D or 3D).
         """
+        if pred.dim() not in (4, 5):
+            raise ValueError(f"DiceLoss expects 4D (2D) or 5D (3D) pred tensor, got shape {tuple(pred.shape)}.")
         if label.shape != pred.shape:
             if label.shape != (pred.shape[0], *pred.shape[2:]):
-                raise ValueError(f"DiceLoss expects label to be one-hot-encoded and match prediction shape, or categorical and match on all dimensions except channels.")
+                raise ValueError(f"DiceLoss expects label shape {tuple(pred.shape)} (one-hot) or {(pred.shape[0], *pred.shape[2:])} (categorical), got {tuple(label.shape)}.")
 
             # One-hot encode the label.
             label = label.long()    # 'F.one_hot' Expects dtype 'int64'.
@@ -51,52 +52,9 @@ class DiceLoss(nn.Module):
                     raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         assert reduction in ('mean', 'sum')
 
-        # Separate 'SpinalCord' and 'background' channels if necessary.
-        # If all regions are present, the 'background' will be the inverse of the union of all regions.
-        # To encourage a long 'SpinalCord' prediction, we have to discount any loss due to voxels below
-        # the ground truth for 'SpinalCord' for both 'SpinalCord' and 'background' classes.
-        if sc_channel is not None:
-            assert sc_channel >= 1
-            # Split 'SpinalCord' and 'background' channels out from main data.
-            bk_pred = pred[:, 0]
-            sc_pred = pred[:, sc_channel]
-            bk_label = label[:, 0]
-            sc_label = label[:, sc_channel]
-            pred_a = pred[:, 1:sc_channel]
-            label_a = label[:, 1:sc_channel]
-            pred_b = pred[:, (sc_channel + 1):]
-            label_b = label[:, (sc_channel + 1):]
-            pred = torch.concat((pred_a, pred_b), dim=1)
-            label = torch.concat((label_a, label_b), dim=1)
-
-            # Separate 'SpinalCord' and 'background' labels along batch dimension as each will have different 'label_min_z'.
-            bk_preds = []
-            sc_preds = []
-            bk_labels = []
-            sc_labels = []
-            for i in range(batch_size):
-                # Remove all voxels below 'label_min_z' from loss calculation.
-                # We don't want to penalise the model for predicting further in inferior
-                # direction than the label.
-                label_min_z = torch.argwhere(sc_label[i]).min(axis=0).values[2].item()
-                bk_pred_i = bk_pred[i, :, :, label_min_z:]
-                sc_pred_i = sc_pred[i, :, :, label_min_z:]
-                bk_label_i = bk_label[i, :, :, label_min_z:]
-                sc_label_i = sc_label[i, :, :, label_min_z:]
-                bk_preds.append(bk_pred_i)
-                sc_preds.append(sc_pred_i)
-                bk_labels.append(bk_label_i)
-                sc_labels.append(sc_label_i)
-
-        # Flatten spatial dimensions (X, Y, Z).
+        # Flatten spatial dimensions.
         pred = pred.flatten(start_dim=2)
         label = label.flatten(start_dim=2)
-        if sc_channel is not None:
-            for i in range(batch_size):
-                bk_preds[i] = bk_preds[i].flatten()
-                sc_preds[i] = sc_preds[i].flatten()
-                bk_labels[i] = bk_labels[i].flatten()
-                sc_labels[i] = sc_labels[i].flatten()
 
         # Smooth the label.
         label = label.type(torch.float32)
@@ -108,27 +66,6 @@ class DiceLoss(nn.Module):
         intersection = (pred * smoothed_label).sum(dim=2)
         denominator = (pred + smoothed_label).sum(dim=2)
         loss = 1 - (2. * intersection + self.__epsilon) / (denominator + self.__epsilon)
-
-        if sc_channel is not None:
-            sc_losses = []
-            bk_losses = []
-            for i in range(batch_size):
-                # Calculate 'SpinalCord' loss.
-                bk_intersection = (bk_preds[i] * bk_labels[i]).sum()
-                sc_intersection = (sc_preds[i] * sc_labels[i]).sum()
-                bk_denominator = (bk_preds[i] + bk_labels[i]).sum()
-                sc_denominator = (sc_preds[i] + sc_labels[i]).sum()
-                bk_loss = -(2. * bk_intersection + self.__epsilon) / (bk_denominator + self.__epsilon)
-                sc_loss = -(2. * sc_intersection + self.__epsilon) / (sc_denominator + self.__epsilon)
-                bk_losses.append(bk_loss)
-                sc_losses.append(sc_loss)
-
-            # Insert result back into main dice results.
-            loss_a = loss[:, :sc_channel]
-            bk_loss = torch.tensor(bk_losses).unsqueeze(1)
-            sc_loss = torch.tensor(sc_losses).unsqueeze(1)
-            loss_b = loss[:, sc_channel:]
-            loss = torch.concat((bk_loss, loss_a, sc_loss, loss_b), dim=1)
 
         # Apply mask across channels.
         if mask is not None:
@@ -177,16 +114,18 @@ class DML1Loss(nn.Module):
         """
         returns: the dice loss.
         args:
-            pred: the B x C x X x Y x Z batch of network predictions probabilities.
-            label: the B x C x X x Y x Z batch of one-hot-encoded labels.
+            pred: the B x C x <spatial> batch of network prediction probabilities (2D or 3D).
+            label: the B x C x <spatial> batch of one-hot-encoded labels (2D or 3D).
         """
+        if pred.dim() not in (4, 5):
+            raise ValueError(f"DML1Loss expects 4D (2D) or 5D (3D) pred tensor, got shape {tuple(pred.shape)}.")
         if label.dtype != torch.bool:
-            raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
+            raise ValueError(f"DML1Loss expects boolean label. Got '{label.dtype}'.")
         if pred.dtype == torch.bool:
             raise ValueError(f"Pred should have float type, not bool.")
         if label.shape != pred.shape:
             if label.shape != (pred.shape[0], *pred.shape[2:]):
-                raise ValueError(f"DiceLoss expects label to be one-hot-encoded and match prediction shape, or categorical and match on all dimensions except channels.")
+                raise ValueError(f"DML1Loss expects label shape {tuple(pred.shape)} (one-hot) or {(pred.shape[0], *pred.shape[2:])} (categorical), got {tuple(label.shape)}.")
 
             # One-hot encode the label.
             label = label.long()    # 'F.one_hot' Expects dtype 'int64'.
@@ -203,7 +142,7 @@ class DML1Loss(nn.Module):
                     raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         assert reduction in ('mean', 'sum')
 
-        # Flatten spatial dimensions (X, Y, Z).
+        # Flatten spatial dimensions.
         pred = pred.flatten(start_dim=2)
         label = label.flatten(start_dim=2)
 
@@ -270,16 +209,18 @@ class DML2Loss(nn.Module):
         """
         returns: the dice loss.
         args:
-            pred: the B x C x X x Y x Z batch of network predictions probabilities.
-            label: the B x C x X x Y x Z batch of one-hot-encoded labels.
+            pred: the B x C x <spatial> batch of network prediction probabilities (2D or 3D).
+            label: the B x C x <spatial> batch of one-hot-encoded labels (2D or 3D).
         """
+        if pred.dim() not in (4, 5):
+            raise ValueError(f"DML2Loss expects 4D (2D) or 5D (3D) pred tensor, got shape {tuple(pred.shape)}.")
         if label.dtype != torch.bool:
-            raise ValueError(f"DiceLoss expects boolean label. Got '{label.dtype}'.")
+            raise ValueError(f"DML2Loss expects boolean label. Got '{label.dtype}'.")
         if pred.dtype == torch.bool:
             raise ValueError(f"Pred should have float type, not bool.")
         if label.shape != pred.shape:
             if label.shape != (pred.shape[0], *pred.shape[2:]):
-                raise ValueError(f"DiceLoss expects label to be one-hot-encoded and match prediction shape, or categorical and match on all dimensions except channels.")
+                raise ValueError(f"DML2Loss expects label shape {tuple(pred.shape)} (one-hot) or {(pred.shape[0], *pred.shape[2:])} (categorical), got {tuple(label.shape)}.")
 
             # One-hot encode the label.
             label = label.long()    # 'F.one_hot' Expects dtype 'int64'.
@@ -296,7 +237,7 @@ class DML2Loss(nn.Module):
                     raise ValueError(f"Weights (batch={b}) must sum to 1. Got '{weight_sum}' (weights={weights[b]}).")
         assert reduction in ('mean', 'sum')
 
-        # Flatten spatial dimensions (X, Y, Z).
+        # Flatten spatial dimensions.
         pred = pred.flatten(start_dim=2)
         label = label.flatten(start_dim=2)
 

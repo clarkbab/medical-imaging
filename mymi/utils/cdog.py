@@ -12,8 +12,9 @@ from skimage import exposure
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import arg_to_list
 
+from .args import arg_to_list
+from .io import resolve_filepath
 from .pandas import append_row
 
 def get_base_pixel(
@@ -292,7 +293,7 @@ def load_double(
 def load_prop_df(
     cdog_version: Literal['v2.7', 'v3.0', 'v4.0'],
     ) -> pd.DataFrame:
-    basepath = r"E:\Brett\data\mymi\files\rtf"
+    basepath = resolve_filepath('files:rtf')
     v_str = cdog_version.replace('v', '').replace('.', '_')
     filepath = os.path.join(basepath, f"XIImagePropertyMapHET{v_str}.csv")
     df = pd.read_csv(filepath, index_col=False, names=['prop', 'datatype', 'byte-offset', 'unsure'], skiprows=7)

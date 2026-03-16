@@ -1,5 +1,5 @@
 from augmed import Pipeline, RandomAffine
-from augmed.utils import save_json, to_tensor
+from augmed.utils import save_json, to_numpy, to_tensor
 import numpy as np
 import os
 import shutil
@@ -11,7 +11,7 @@ from mymi.datasets.nifti import load as load_nifti_dataset
 from mymi.datasets.nifti.utils import create_ct, create_index
 from mymi.datasets.training import create as create_training, exists as exists_training, load as load_training
 from mymi import logging
-from mymi.utils import create_projections as create_projections_fn, load_json, load_nifti, load_tiff, from_rtplan_dicom, save_json, save_nifti, save_numpy, with_makeitso
+from mymi.utils import create_projections as create_projections_fn, load_json, load_nifti, load_tiff, from_rtplan_dicom, save_nifti, save_numpy, with_makeitso
 
 def create_valkim_preprocessed_dataset(
     makeitso: bool = False,
@@ -87,6 +87,7 @@ def create_valkim_training_dataset(
     n_val_angles: int = 3,
     n_val_volumes: int = 3,
     ) -> None:
+    logging.log_args("Creating VALKIM training dataset")
     dataset = 'VALKIM-PP'
     inh_series = 'series_0'
     exh_series = 'series_5'
@@ -112,7 +113,7 @@ def create_valkim_training_dataset(
 
     # Copy non-augmented volumes as the training data.
     if create_train_volumes:
-        for p in tqdm(pat_ids, desc="Creating training data.."):
+        for p in tqdm(pat_ids, desc="Creating training volumes for patients"):
             # Load volumes.
             pat = nifti_set.patient(p)
             inhale_series = pat.study('study_0').ct_series(inh_series)
@@ -147,7 +148,6 @@ def create_valkim_training_dataset(
 
     # Create augmentation pipeline.
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print(f"Using device: {device}")
     pipeline = Pipeline([
         RandomAffine(r=10, s=[0.8, 1.2], t=20),
     ], device=device)
@@ -155,7 +155,7 @@ def create_valkim_training_dataset(
 
     # === Create augmented volumes ===
     if create_val_volumes:
-        for p in tqdm(pat_ids, desc="Creating validation data augmented volumes.."):
+        for p in tqdm(pat_ids, desc="Creating augmented validation volumes for patients"):
             # Load volumes.
             pat = nifti_set.patient(p)
             inhale_series = pat.study('study_0').ct_series(inh_series)
@@ -188,18 +188,20 @@ def create_valkim_training_dataset(
                 # What is the GPU behaviour?
                 # Assigning each tensor to a device is tedious, a transform should accept a device (during init or call)
                 # which overrides the device of the input array/tensor.
-                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, grid_params_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_grid=True, return_params=True)
+                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, affine_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_affine=True, return_params=True)
 
                 # Save volumes.
-                inh_ct_t = inh_ct_t.cpu().numpy()
-                exh_ct_t = exh_ct_t.cpu().numpy()
-                affine_t = grid_params_t[0][1].cpu().numpy()
+                inh_ct_t = to_numpy(inh_ct_t)
+                exh_ct_t = to_numpy(exh_ct_t)
+                affine_t = to_numpy(affine_t)
                 filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
                 save_nifti(inh_ct_t, affine_t, filepath)
                 filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
                 save_nifti(exh_ct_t, affine_t, filepath)
 
                 # Save labels.
+                inh_labels_t = to_numpy(inh_labels_t)
+                exh_labels_t = to_numpy(exh_labels_t)
                 filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
                 save_nifti(inh_labels_t, affine_t, filepath)
                 filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
@@ -215,7 +217,7 @@ def create_valkim_training_dataset(
 
     # === Create projections ===
     if create_val_projections:
-        for p in tqdm(pat_ids, desc="Creating validation data projections.."):
+        for p in tqdm(pat_ids, desc="Creating val projections for patients"):
             # Load treatment isocentre from planning CT.
             filepath = info[p]['rtplan']
             plan_info = from_rtplan_dicom(filepath)

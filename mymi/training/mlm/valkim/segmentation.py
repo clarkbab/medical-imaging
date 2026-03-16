@@ -51,9 +51,46 @@ def train_segmentation(
     ])
     print(transform_train)
 
+    # Load projection geometry.
+    info = {
+        'PAT1': {
+            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient01\243-RT LUNG Plan\RP.000000.dcm",
+            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient01\Fx01\kV\Ch1_1_7357_289.97.tiff",
+        },
+        'PAT2': {
+            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient02\361-LT LUNG Plan\RP.000000.dcm",
+            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient02\Fx01\kV\Ch1_1_4526_249.98.tiff",
+        }
+    }
+
+    # Does this change between fractions??
+    filepath = info[pat]['treatment-image']
+    _, tiff_info = load_tiff(filepath)
+
+    filepath = info[pat]['rtplan']
+    plan_info = from_rtplan_dicom(filepath)
+
+    # Set projection parameters.
+    isocentre = plan_info['isocentre']
+    sid = tiff_info['sid']
+    sdd = tiff_info['sdd']
+    det_size = tiff_info['det-size']
+    det_spacing = tiff_info['det-spacing']
+    det_offset = tiff_info['det-offset']
+    print(f"Projection geometry: isocentre={isocentre}, sid={sid}, sdd={sdd}, det_size={det_size}, det_spacing={det_spacing}, det_offset={det_offset}")
+    geometry = dict(
+        isocentre=isocentre,
+        sid=sid,
+        sdd=sdd,
+        det_size=det_size,
+        det_spacing=det_spacing,
+        det_offset=det_offset,
+    )
+
     # Create data loaders.
     loader_kwargs = dict(
         batch_size=batch_size,
+        projection_geometry=geometry,
         transform_train=transform_train,
     )
     tl, vl = DRRLoader.build_loaders(dataset, pat, **loader_kwargs)
@@ -101,10 +138,13 @@ def train_segmentation(
         # Training loop.
         model.train()
         train_iter = iter(tl)
-        train_iter.create_projections(e)
-        for xs, ys in tqdm(train_iter, desc=f'Epoch {e}/{n_epochs} (train)', leave=False):
+        train_iter._dataset.create_projections(e)
+        for xs, ys, angles in tqdm(train_iter, desc=f'Epoch {e}/{n_epochs} (train)', leave=False):
             xs = xs.to(device)
             ys = ys.to(device)
+
+            # Single-channel prediction.
+            ys = ys[:, :2]
 
             # Perform training update.
             ys_pred = model(xs)
@@ -128,9 +168,12 @@ def train_segmentation(
         model.eval()
         val_iter = iter(vl)
         epoch_val_losses = []
-        for xs, ys in tqdm(val_iter, desc=f'Epoch {e}/{n_epochs} (val)', leave=False):
+        for xs, ys, angles in tqdm(val_iter, desc=f'Epoch {e}/{n_epochs} (val)', leave=False):
             xs = xs.to(device)
             ys = ys.to(device)
+
+            # Single-channel prediction.
+            ys = ys[:, :2]
 
             # Make prediction.
             ys_pred = model(xs)
@@ -201,13 +244,15 @@ def train_segmentation(
 
         # Save mean validation loss.
         mean_val_loss = np.mean(epoch_val_losses)
-        run.log({ 'val/loss-epoch-mean': mean_val_loss }, step=step)
+        if use_logging:
+            run.log({ 'val/loss-epoch-mean': mean_val_loss }, step=step)
         val_losses.append(mean_val_loss)
 
         # Save best model/s.
         if len(val_losses) >= val_loss_smoothing:
             smoothed_val_loss = np.mean(val_losses[-val_loss_smoothing:])
-            run.log({ 'val/loss-ma': smoothed_val_loss }, step=step)
+            if use_logging:
+                run.log({ 'val/loss-ma': smoothed_val_loss }, step=step)
             if smoothed_val_loss < min_val_loss:
                 min_val_loss = smoothed_val_loss
 

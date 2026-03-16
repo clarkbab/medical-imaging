@@ -5,5 +5,7 @@ kwargs = dict(
     create_val_volumes=True,
     create_val_projections=True,
     makeitso=True,
+    n_val_angles=100,
+    n_val_volumes=10,
 )
 create_valkim_training_dataset(**kwargs)

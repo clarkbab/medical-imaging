@@ -1,5 +1,4 @@
 from augmed import Transform
-from augmed.utils import save_json, to_tensor
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
@@ -10,6 +9,7 @@ from mymi.datasets.training import TrainingDataset
 from mymi import logging
 from mymi.typing import *
 from mymi.utils import *
+from augmed.utils import save_json, to_tensor
 
 from .random_sampler import RandomSampler
 
@@ -107,9 +107,9 @@ class TrainingSet(Dataset):
         affine = inh_affine
 
         # Augment the volumes.
-        inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, grid_params_t, params = self.__transform(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_grid=True, return_params=True)
-        inh_ct_affine_t = grid_params_t[0][1]
-        exh_ct_affine_t = grid_params_t[1][1]
+        inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, affine_t, params = self.__transform(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_affine=True, return_params=True)
+        inh_ct_affine_t = affine_t
+        exh_ct_affine_t = affine_t
         assert torch.all(inh_ct_affine_t == affine), "Inhale affine was modified by the transform. This should not happen as the transform should only apply spatial transforms to the data, not the affine. Check the transform implementation."
         assert torch.all(exh_ct_affine_t == affine), "Exhale affine was modified by the transform. This should not happen as the transform should only apply spatial transforms to the data, not the affine. Check the transform implementation."
 
@@ -178,6 +178,13 @@ class TrainingSet(Dataset):
 
         if self.__standardise:
             data = (data - np.mean(data)) / np.std(data)
+
+        # Add singleton channel dimension.
+        data = data[None, ...]
+
+        # Add background class.
+        label_bkg = 1 - np.expand_dims(labels.sum(axis=0).clip(0, 1), axis=0)
+        labels = np.concatenate([label_bkg, labels], axis=0)
 
         return data, labels, angle
 
@@ -252,6 +259,13 @@ class ValidationDataset(Dataset):
 
         if self.__standardise:
             data = (data - np.mean(data)) / np.std(data)
+
+        # Add singleton channel dimension.
+        data = data[None, ...]
+
+        # Add background class.
+        label_bkg = 1 - np.expand_dims(labels.sum(axis=0).clip(0, 1), axis=0)
+        labels = np.concatenate([label_bkg, labels], axis=0)
 
         return data, labels, angle
 
