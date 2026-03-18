@@ -13,7 +13,7 @@ from mymi.utils import *
 from ..dataset import CT_FROM_REGEXP, Dataset, DatasetType
 from ..dicom import DicomDataset
 from ..mixins import IndexMixin
-from ..region_map import RegionMap
+from ..regions_map import RegionsMap
 from .patient import NiftiPatient
 
 class NiftiDataset(IndexMixin, Dataset):
@@ -225,9 +225,9 @@ class NiftiDataset(IndexMixin, Dataset):
         # Load region map.
         filepath = os.path.join(self._path, 'region-map.yaml')
         if os.path.exists(filepath):
-            self.__region_map = RegionMap(load_yaml(filepath))
+            self.__regions_map = RegionsMap(load_yaml(filepath))
         else:
-            self.__region_map = None
+            self.__regions_map = None
 
     # Copied from 'mymi/reports/dataset/nift.py' to avoid circular dependency.
     def __load_patient_regions_report(
@@ -272,12 +272,12 @@ class NiftiDataset(IndexMixin, Dataset):
         else:
             ct_from = None
 
-        return NiftiPatient(self, id, ct_from=ct_from, index=index, excluded_labels=exc_df, region_map=self.__region_map, **kwargs)
+        return NiftiPatient(self, id, ct_from=ct_from, index=index, excluded_labels=exc_df, regions_map=self.__regions_map, **kwargs)
 
     @property
     @Dataset.ensure_loaded
-    def region_map(self) -> Optional[RegionMap]:
-        return self.__region_map
+    def regions_map(self) -> Optional[RegionsMap]:
+        return self.__regions_map
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

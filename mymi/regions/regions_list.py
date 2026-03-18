@@ -6,7 +6,7 @@ from mymi import config
 from mymi.typing import *
 from mymi.utils import *
 
-EXPANDED_REGION_MAP = {
+EXPANDED_regions_map = {
     'Lungs': ['Lung_Lower_Lobe_L', 'Lung_Lower_Lobe_R', 'Lung_Middle_Lobe_R', 'Lung_Upper_Lobe_L', 'Lung_Upper_Lobe_R'],
     'Ribs': ['Rib_L_1', 'Rib_L_2', 'Rib_L_3', 'Rib_L_4', 'Rib_L_5', 'Rib_L_6', 'Rib_L_7', 'Rib_L_8', 'Rib_L_9', 'Rib_L_10', 'Rib_L_11', 'Rib_L_12', 'Rib_R_1', 'Rib_R_2', 'Rib_R_3', 'Rib_R_4', 'Rib_R_5', 'Rib_R_6', 'Rib_R_7', 'Rib_R_8', 'Rib_R_9', 'Rib_R_10', 'Rib_R_11', 'Rib_R_12'],
     'Vertebrae': ['Vertebrae_C1', 'Vertebrae_C2', 'Vertebrae_C3', 'Vertebrae_C4', 'Vertebrae_C5', 'Vertebrae_C6', 'Vertebrae_C7', 'Vertebrae_L1', 'Vertebrae_L2', 'Vertebrae_L3', 'Vertebrae_L4', 'Vertebrae_L5', 'Vertebrae_T1', 'Vertebrae_T2', 'Vertebrae_T3', 'Vertebrae_T4', 'Vertebrae_T5', 'Vertebrae_T6', 'Vertebrae_T7', 'Vertebrae_T8', 'Vertebrae_T9', 'Vertebrae_T10', 'Vertebrae_T11', 'Vertebrae_T12', 'Vertebrae_S1'],

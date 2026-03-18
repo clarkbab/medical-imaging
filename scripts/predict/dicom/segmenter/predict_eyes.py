@@ -52,7 +52,7 @@ for pat_id in pat_ids:
     pat = set.patient(pat_id)
     rtstruct_gt = pat.default_rtstruct.rtstruct
     info_gt = RtStructConverter.get_roi_info(rtstruct_gt)
-    region_map_gt = dict((set.to_internal(data['name']), id) for id, data in info_gt.items())
+    regions_map_gt = dict((set.to_internal(data['name']), id) for id, data in info_gt.items())
 
     # Create RTSTRUCT.
     cts = pat.get_cts()
@@ -64,15 +64,15 @@ for pat_id in pat_ids:
         pred = load_multi_segmenter_prediction(dataset, pat_id, model)
             
         # Match ROI number to ground truth, otherwise assign next available integer.
-        if region not in region_map_gt:
+        if region not in regions_map_gt:
             max_roi_number = 10000
             for j in range(1, max_roi_number):  # Starting counting at 1 - this will be viewed in DICOM viewer.
-                if j not in region_map_gt.values():
-                    region_map_gt[region] = j
+                if j not in regions_map_gt.values():
+                    regions_map_gt[region] = j
                     break
                 elif j == 999:
                     raise ValueError(f"Ran out of available ROI IDs - max is {max_roi_id}.")
-        roi_number = region_map_gt[region]
+        roi_number = regions_map_gt[region]
 
         # Add ROI data.
         roi_data = ROIData(

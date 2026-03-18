@@ -51,7 +51,7 @@ def create_dose_evaluation(
 
     # Get sets.
     sets = dict((d, ds.get(d, 'dicom')) for d in datasets)
-    region_maps = dict((d, sets[d].region_map) for d in datasets)
+    regions_maps = dict((d, sets[d].regions_map) for d in datasets)
 
     # Create dataframe.
     cols = {
@@ -78,9 +78,9 @@ def create_dose_evaluation(
 
         # Load ground truth map from region name to ROI number - predictions should have same mapping.
         info_gt = RtStructConverter.get_roi_info(rtstruct_gt.rtstruct)
-        region_map_gt = region_maps[row.dataset]
-        if region_map_gt is not None:
-            info_gt = dict((region_map_gt.to_internal(name), int(id)) for id, name in info_gt)
+        regions_map_gt = regions_maps[row.dataset]
+        if regions_map_gt is not None:
+            info_gt = dict((regions_map_gt.to_internal(name), int(id)) for id, name in info_gt)
         else:
             info_gt = dict((name, int(id)) for id, name in info_gt)
 
@@ -105,10 +105,10 @@ def create_dose_evaluation(
             # Get ROI info. 
             info = RtStructConverter.get_roi_info(rtstruct)
             def to_internal(name):
-                if region_maps[row.dataset] is None:
+                if regions_maps[row.dataset] is None:
                     return name
                 else:
-                    return region_maps[row.dataset].to_internal(name)
+                    return regions_maps[row.dataset].to_internal(name)
             info = dict((to_internal(name), int(id)) for id, name in info)
 
             for region in row.regions.split(','):

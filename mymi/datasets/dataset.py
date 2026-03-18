@@ -4,7 +4,7 @@ from typing import *
 from mymi.typing import *
 from mymi.utils import load_yaml
 
-from .region_map import * 
+from .regions_map import * 
 
 CT_FROM_REGEXP = r'^__CT_FROM_(.*)__$'
 

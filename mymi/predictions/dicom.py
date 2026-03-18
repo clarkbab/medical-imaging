@@ -149,7 +149,7 @@ def load_segmenter_predictions(
 
     # Load ref CTs.
     set = ds.get(dataset, 'dicom')
-    region_map = set.region_map
+    regions_map = set.regions_map
     patient = set.patient(pat_id)
     ref_cts = patient.get_cts()
 
@@ -158,10 +158,10 @@ def load_segmenter_predictions(
     rtstruct = dcm.dcmread(filepath)
     region_names = RtStructConverter.get_roi_names(rtstruct)
     def to_internal(name):
-        if region_map is None:
+        if regions_map is None:
             return name
         else:
-            return region_map.to_internal(name)
+            return regions_map.to_internal(name)
     name_map = dict((to_internal(name), name) for name in region_names)
 
     # Extract data.

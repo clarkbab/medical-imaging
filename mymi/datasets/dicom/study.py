@@ -7,7 +7,7 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ..mixins import IndexWithErrorsMixin
-from ..region_map import RegionMap
+from ..regions_map import RegionsMap
 from ..study import Study
 from .series import *
 
@@ -22,8 +22,8 @@ class DicomStudy(IndexWithErrorsMixin, Study):
         index_errors: pd.DataFrame,
         config: Optional[Dict[str, Any]] = None,
         ct_from: Optional['DicomStudy'] = None,
-        region_map: Optional[RegionMap] = None):
-        super().__init__(dataset, pat, id, config=config, ct_from=ct_from, region_map=region_map)
+        regions_map: Optional[RegionsMap] = None):
+        super().__init__(dataset, pat, id, config=config, ct_from=ct_from, regions_map=regions_map)
         self.__ct_from = ct_from
         self._index = index
         self._index_errors = index_errors
@@ -140,7 +140,7 @@ class DicomStudy(IndexWithErrorsMixin, Study):
                 else:
                     ref_ct = ref_study.default_series('ct')
 
-            return DicomRtStructSeries(self._dataset, self._pat, self, id, ref_ct, index, index_policy, config=self._config, region_map=self._region_map, **kwargs)
+            return DicomRtStructSeries(self._dataset, self._pat, self, id, ref_ct, index, index_policy, config=self._config, regions_map=self._regions_map, **kwargs)
 
     def series_modality(
         self,

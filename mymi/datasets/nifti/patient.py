@@ -10,7 +10,7 @@ from mymi.utils import *
 from ..dicom import DicomDataset, DicomPatient
 from ..mixins import IndexMixin
 from ..patient import Patient
-from ..region_map import RegionMap
+from ..regions_map import RegionsMap
 from .study import NiftiStudy
 
 class NiftiPatient(IndexMixin, Patient):
@@ -21,8 +21,8 @@ class NiftiPatient(IndexMixin, Patient):
         ct_from: Optional['NiftiPatient'] = None,
         index: Optional[pd.DataFrame] = None,
         excluded_labels: Optional[List[str]] = None,
-        region_map: Optional[RegionMap] = None) -> None:
-        super().__init__(dataset, id, ct_from=ct_from, index=index, region_map=region_map)
+        regions_map: Optional[RegionsMap] = None) -> None:
+        super().__init__(dataset, id, ct_from=ct_from, index=index, regions_map=regions_map)
         self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset.id, 'data', 'patients', self._id)
         if not os.path.exists(self.__path):
             raise ValueError(f"No nifti patient '{self._id}' found at path: {self.__path}")
@@ -92,7 +92,7 @@ class NiftiPatient(IndexMixin, Patient):
         else:
             ct_from = None
 
-        return NiftiStudy(self._dataset, self, id, ct_from=ct_from, index=index, region_map=self._region_map, **kwargs)
+        return NiftiStudy(self._dataset, self, id, ct_from=ct_from, index=index, regions_map=self._regions_map, **kwargs)
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)
@@ -108,7 +108,7 @@ setattr(NiftiPatient, 'list_series', lambda self, *args, **kwargs: self.default_
 
 # Add image properties from 'default_study'.
 mods = ['ct', 'dose', 'mr']
-props = ['data', 'fov', 'origin', 'size', 'spacing']
+props = ['affine', 'data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
     setattr(NiftiPatient, f'{m}_filepath', property(lambda self, m=m: getattr(self.default_study, f'{m}_filepath') if self.default_study is not None else None))
     for p in props:

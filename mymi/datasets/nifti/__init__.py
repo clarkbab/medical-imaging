@@ -44,13 +44,14 @@ def load(name: str) -> NiftiDataset:
 
 def recreate(
     name: str,
-    makeitso: bool = False) -> NiftiDataset:
+    makeitso: bool = False,
+    ) -> NiftiDataset:
     destroy(name, makeitso=makeitso)
     if not makeitso:
         if exists(name):
             return NiftiDataset(name)
         else:
             # Creating is fine with makeitso=False.
-            create(name)
+            return create(name)
     else:
         return create(name)

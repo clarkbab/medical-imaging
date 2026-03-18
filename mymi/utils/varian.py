@@ -7,8 +7,8 @@ from typing import Any, Tuple
 
 from mymi.typing import *
 
+from .angles import reverse_angles
 from .args import arg_to_list
-from .projections import reverse_angles
 
 @dataclass
 class XimHistogramInfo:
@@ -37,7 +37,7 @@ def load_xim_angles_and_files(
     start: int = 0,
     **kwargs,
     ) -> List[float]:
-    closest_to = arg_to_list(closest_to, (int, float, None))
+    closest_to = arg_to_list(closest_to, (int, float))
 
     # Get files.
     files = os.listdir(dirpath)

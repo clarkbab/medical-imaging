@@ -7,7 +7,7 @@ from mymi.typing import *
 from mymi.utils import *
 
 from ....dicom import DicomDataset, DicomRtStructSeries
-from ....region_map import RegionMap
+from ....regions_map import RegionsMap
 from .image import NiftiImageSeries
 
 class NiftiRegionsSeries(NiftiImageSeries):
@@ -18,7 +18,7 @@ class NiftiRegionsSeries(NiftiImageSeries):
         study: 'NiftiStudy',
         id: SeriesID,
         index: Optional[pd.DataFrame] = None,
-        region_map: Optional[RegionMap] = None,
+        regions_map: Optional[RegionsMap] = None,
         ) -> None:
         super().__init__('regions', dataset, pat, study, id, index=index)
         extensions = ['.nii', '.nii.gz', '.nrrd']
@@ -26,8 +26,11 @@ class NiftiRegionsSeries(NiftiImageSeries):
         if not os.path.exists(dirpath):
             raise ValueError(f"No NiftiRegionsSeries found for study '{self._study.id}'. Dirpath: {dirpath}")
         self.__dirpath = dirpath
-        self.__region_map = region_map
+        self.__regions_map = regions_map
 
+    @alias_kwargs([
+        ('r', 'regions'),
+    ])
     def data(
         self,
         regions: Region | List[Region] | Literal['all'] = 'all',
@@ -92,7 +95,7 @@ class NiftiRegionsSeries(NiftiImageSeries):
         regions = [r for r in regions if self.has_region(r)]  # Filter out missing regions.
         # Region mapping is many-to-one, so we could get multiple files on disk for the same mapped region.
         image_extensions = ['.nii', '.nii.gz', '.nrrd']
-        disk_ids = self.__region_map.inv_map_region(regions, disk_regions=self.list_regions(use_mapping=False)) if self.__region_map is not None else regions
+        disk_ids = self.__regions_map.inv_map_region(regions, disk_regions=self.list_regions(use_mapping=False)) if self.__regions_map is not None else regions
         disk_ids = arg_to_list(disk_ids, str)
         # Check all possible file extensions.
         filepaths = [os.path.join(self.__dirpath, f'{i}{e}') for i in disk_ids for e in image_extensions if os.path.exists(os.path.join(self.__dirpath, f'{i}{e}'))]
@@ -119,8 +122,8 @@ class NiftiRegionsSeries(NiftiImageSeries):
         ids = [i.replace(e, '') for i in ids for e in image_extensions if i.endswith(e)]
 
         # Apply region mapping.
-        if use_mapping and self.__region_map is not None:
-            ids = [self.__region_map.map_region(i) if self.__region_map is not None else i for i in ids]
+        if use_mapping and self.__regions_map is not None:
+            ids = [self.__regions_map.map_region(i) if self.__regions_map is not None else i for i in ids]
 
         # Filter on 'only'.
         if region != 'all':

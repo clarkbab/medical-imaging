@@ -37,6 +37,14 @@ def exists(name: str) -> bool:
 
 def recreate(
     name: str,
-    dry_run: bool = True) -> DicomDataset:
-    destroy(name, dry_run=dry_run)
-    return create(name)
+    makeitso: bool = False,
+    ) -> DicomDataset:
+    destroy(name, makeitso=makeitso)
+    if not makeitso:
+        if exists(name):
+            return DicomDataset(name)
+        else:
+            # Creating is fine with makeitso=False.
+            return create(name)
+    else:
+        return create(name)

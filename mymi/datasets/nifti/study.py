@@ -7,7 +7,7 @@ from mymi.typing import *
 
 from ..dicom import DicomDataset, DicomStudy
 from ..mixins import IndexMixin
-from ..region_map import RegionMap
+from ..regions_map import RegionsMap
 from ..study import Study
 from .series import *
 
@@ -19,8 +19,8 @@ class NiftiStudy(IndexMixin, Study):
         id: StudyID,
         ct_from: Optional['NiftiStudy'] = None,
         index: Optional[pd.DataFrame] = None,
-        region_map: Optional[RegionMap] = None) -> None:
-        super().__init__(dataset, pat, id, ct_from=ct_from, index=index, region_map=region_map)
+        regions_map: Optional[RegionsMap] = None) -> None:
+        super().__init__(dataset, pat, id, ct_from=ct_from, index=index, regions_map=regions_map)
         self.__path = os.path.join(config.directories.datasets, 'nifti', self._dataset.id, 'data', 'patients', self._pat.id, self._id)
         if not os.path.exists(self.__path):
             raise ValueError(f"No nifti study '{self._id}' found at path: {self.__path}")
@@ -65,7 +65,7 @@ class NiftiStudy(IndexMixin, Study):
         elif modality == 'regions':
             id = handle_idx_prefix(id, lambda: self.list_series('regions'))
             index = self._index[(self._index['dataset'] == self._dataset.id) & (self._index['patient-id'] == self._pat.id) & (self._index['study-id'] == self._id) & (self._index['series-id'] == id) & (self._index['modality'] == 'regions')].copy() if self._index is not None else None
-            return NiftiRegionsSeries(self._dataset, self._pat, self, id, index=index, region_map=self._region_map)
+            return NiftiRegionsSeries(self._dataset, self._pat, self, id, index=index, regions_map=self._regions_map)
         else:
             raise ValueError(f"Unknown NiftiSeries modality '{modality}'.")
 
@@ -161,7 +161,7 @@ setattr(NiftiStudy, 'region_filepaths', lambda self, region: self.default_series
 
 # Add image property shortcuts from 'default_series(mod)'.
 mods = ['ct', 'mr', 'dose']
-props = ['data', 'fov', 'origin', 'size', 'spacing']
+props = ['affine', 'data', 'fov', 'origin', 'size', 'spacing']
 for m in mods:
     for p in props:
         setattr(NiftiStudy, f'{m}_{p}', property(lambda self, m=m, p=p: getattr(self.default_series(m), p) if self.default_series(m) is not None else None))

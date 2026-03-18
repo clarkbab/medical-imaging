@@ -9,7 +9,7 @@ from mymi.regions import regions_to_list
 from mymi.typing import *
 from mymi.utils import *
 
-from ....region_map import RegionMap
+from ....regions_map import RegionsMap
 from ..ct import DicomCtSeries
 from ..series import DicomSeries
 from .rtstruct_converter import RtStructConverter
@@ -27,12 +27,12 @@ class DicomRtStructSeries(DicomSeries):
         index: pd.Series,
         index_policy: Dict[str, Any],
         config: Optional[Dict[str, Any]] = None,
-        region_map: Optional[RegionMap] = None) -> None:
+        regions_map: Optional[RegionsMap] = None) -> None:
         super().__init__('rtstruct', dataset, pat, study, id, config=config)
         self.__filepath = os.path.join(conf.directories.datasets, 'dicom', dataset.id, 'data', 'patients', index['filepath'])
         self.__modality = 'rtstruct'
         self.__ref_ct = ref_ct
-        self.__region_map = region_map
+        self.__regions_map = regions_map
 
     @property
     def dicom(self) -> CtDicom:
@@ -154,7 +154,7 @@ class DicomRtStructSeries(DicomSeries):
             landmark_regexp = self.landmark_regexp
 
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
-        if self.__region_map is None:
+        if self.__regions_map is None:
             use_mapping = False
 
         # Get unmapped region names.
@@ -177,7 +177,7 @@ class DicomRtStructSeries(DicomSeries):
             if return_numbers:
                 numbers = []    # We might need to return roi numbers for dose calculation or other applications that require rtstruct access.
             for i, id in enumerate(ids):
-                mapped_id = self.__region_map.map_region(id)
+                mapped_id = self.__regions_map.map_region(id)
 
                 if mapped_id == id:  # No mapping occurred.
                     mapped_ids.append(id)
@@ -265,7 +265,7 @@ class DicomRtStructSeries(DicomSeries):
         **kwargs) -> RegionArrays:
 
         # If not 'region-map.csv' exists, set 'use_mapping=False'.
-        if self.__region_map is None:
+        if self.__regions_map is None:
             use_mapping = False
 
         # Get patient regions. If 'use_mapping=True', return unmapped region names too - we'll

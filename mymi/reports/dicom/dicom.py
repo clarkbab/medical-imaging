@@ -151,9 +151,9 @@ def load_patient_regions_report(
 def get_mapped_duplicates(dataset: str) -> pd.DataFrame:
     # Allows us to check 'region-map.csv' mapping for duplicates rather than running 
     # 'create_patient_regions_report(..., use_mapping=True)' which will break on each duplicate.
-    region_map = DicomDataset(dataset).region_map
+    regions_map = DicomDataset(dataset).regions_map
     df = load_patient_regions_report(dataset, use_mapping=False)
-    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: region_map.to_internal(row['region'], pat=row['patient-id'])[0], axis=1)
+    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: regions_map.to_internal(row['region'], pat=row['patient-id'])[0], axis=1)
     df = df.groupby('patient-id')['mapped'].apply(list).reset_index()
     df['mapped'] = df['mapped'].apply(lambda regions: [i for i, count in Counter(regions).items() if count > 1])
     df['duplicates'] = df['mapped'].apply(lambda dups: len(dups) > 0)

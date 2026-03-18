@@ -18,7 +18,7 @@ def from_rtstruct_dicom(
     affine: Affine | None = None,
     cts: DirPath | List[CtDicom] = None,
     origin: Point3D | None = None,
-    regions: str | Literal['all'] = 'all',
+    regions: RegionID | List[RegionID] | Literal['all'] = 'all',
     size: Size3D | None = None,
     ) -> LabelVolumeBatch:
     if isinstance(rtstruct, str):
@@ -44,7 +44,6 @@ def from_rtstruct_dicom(
         regions = list(info_map.keys())
 
     # Add regions data.
-    regions = list(sorted(regions))
     data = np.zeros(shape=(len(regions), *size), dtype=np.bool_)
     for i, r in enumerate(regions):
         if r not in info_map:

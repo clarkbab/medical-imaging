@@ -1,6 +1,6 @@
 from mymi.typing import *
 
-from .region_map import RegionMap
+from .regions_map import RegionsMap
 
 class Study:
     def __init__(
@@ -10,13 +10,13 @@ class Study:
         id: StudyID,
         config: Optional[Dict[str, Any]] = None,
         ct_from: Optional['Study'] = None,
-        region_map: Optional[RegionMap] = None) -> None:
+        regions_map: Optional[RegionsMap] = None) -> None:
         self._dataset = dataset
         self._config = config
         self._pat = pat
         self._id = str(id)
         self._ct_from = ct_from
-        self._region_map = region_map
+        self._regions_map = regions_map
 
     @property
     def ct_from(self) -> Optional['Study']:
@@ -36,8 +36,8 @@ class Study:
     patient = pat
 
     @property
-    def region_map(self) -> Optional[RegionMap]:
-        return self._region_map
+    def regions_map(self) -> Optional[RegionsMap]:
+        return self._regions_map
 
     def __repr__(self) -> str:
         return str(self)

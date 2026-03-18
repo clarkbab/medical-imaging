@@ -6,7 +6,8 @@ from mymi.utils import *
 
 def ncc(
     a: np.ndarray,
-    b: np.ndarray) -> float:
+    b: np.ndarray,
+    ) -> float:
     if a.shape != b.shape:
         raise ValueError(f"Metric 'ncc' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
     if (a.dtype != np.float32 and a.dtype != np.float64) or (b.dtype != np.float32 and b.dtype != np.float64):

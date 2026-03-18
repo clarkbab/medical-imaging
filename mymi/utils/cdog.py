@@ -13,7 +13,6 @@ from typing import *
 
 from mymi.typing import *
 
-from .args import arg_to_list
 from .io import resolve_filepath
 from .pandas import append_row
 
@@ -196,8 +195,59 @@ def infer_image_size(
     #         return size_x, y + 1
     # raise ValueError(f"Couldn't infer image size for: {filepath}")
 
-# Returns image metadata and pixel data.
 def load_tiff(
+    filepath: FilePath | DirPath,
+    **kwargs,
+    ) -> Tuple[List[Slice], List[Dict[str, Any]]]:
+    if os.path.isdir(filepath):
+        data, info = load_tiff_dirpath(filepath, **kwargs)
+    else:
+        data, info = load_tiff_filepath(filepath, **kwargs)
+    return data, info
+
+def load_tiff_dirpath(
+    dirpath: DirPath,
+    angle_range: Tuple[float | None, float | None] = (None, None),
+    arc: int | None = 0,
+    n_angles: int | None = None,
+    **kwargs,
+    ) -> Tuple[List[Slice], List[Dict[str, Any]]]:
+    # Get tiff files and angles (by filename).
+    files = os.listdir(dirpath)
+    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
+    tiff_angles = np.array([float(f.split('_')[-1].replace('.tiff', '')) for f in tiff_files])
+
+    # Filter tiff files by arc.
+    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
+    arc = arcs[arc]
+    tiff_angles = [a for f, a in zip(tiff_files, tiff_angles) if f.startswith(arc)]
+    tiff_files = [f for f in tiff_files if f.startswith(arc)]
+
+    # Filter by angle range.
+    if angle_range[0] is not None:
+        indices = np.where(np.array(tiff_angles) >= angle_range[0])[0]
+        tiff_angles = [tiff_angles[i] for i in indices]
+        tiff_files = [tiff_files[i] for i in indices]
+    if angle_range[1] is not None:
+        indices = np.where(np.array(tiff_angles) < angle_range[1])[0]
+        tiff_angles = [tiff_angles[i] for i in indices]
+        tiff_files = [tiff_files[i] for i in indices]
+
+    # Only include subset of angles - split evenly across the range.
+    if n_angles is not None:
+        # tiff_angle_range = np.abs(tiff_angles[-1] - tiff_angles[0])     # Assumes arm can't reverse within an arc?
+        # print(tiff_angle_range)
+        # print(plot_freq)
+        plot_freq = np.max([len(tiff_files) // n_angles, 1])
+        tiff_files = [f for i, f in enumerate(tiff_files) if i % plot_freq == 0] 
+
+    # Load tiff files.
+    filepaths = [os.path.join(dirpath, f) for f in tiff_files]
+    data, info = zip(*[load_tiff_filepath(f, **kwargs) for f in filepaths])
+    return data, info
+
+# Returns image metadata and pixel data.
+def load_tiff_filepath(
     filepath: str,
     invert_intensities: bool = True,
     cdog_version: Optional[str] = None,
@@ -212,6 +262,10 @@ def load_tiff(
 
     # Build our own metadata.
     metadata = {}
+    filename = os.path.basename(filepath)
+    metadata['arc'] = '_'.join(filename.split('_')[:2])
+    metadata['frame'] = filename.split('_')[2]
+    metadata['angle'] = filename.split('_')[-1].replace('.tiff', '')
     metadata['det-size'] = infer_image_size(data, filepath)
 
     # Extract metadata from .
@@ -342,87 +396,108 @@ def load_timestamp(
     return precise_timestamp
 
 def plot_tiff(
-    path: FilePath | DirPath | List[FilePath],
-    **kwargs,
-    ) -> None:
-    if isinstance(path, str) and os.path.isdir(path):
-        plot_tiff_dirpath(path, **kwargs)
+    data: List[Slice] | Slice,
+    info: List[Dict[str, Any]] | Dict[str, Any],
+    ax: Optional[mpl.axes.Axes] = None,
+    hist_eq: bool = False,
+    n_cols: int = 3,
+    normalise: bool = False,
+    return_image: bool = False,
+    show_hist: bool = False,
+    title_fontsize: float = 10,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    ) -> Optional[PIL.Image.Image | List[PIL.Image.Image]]:
+    if not isinstance(data, list):
+        data = [data]
+    if not isinstance(info, list):
+        info = [info]
+
+    n_images = len(data)
+    if n_images == 1 and not return_image:
+        if show_hist:
+            _, axs = plt.subplots(1, 2, figsize=(12, 4))
+            ax, hist_ax = axs
+            show = True
+        elif ax is None:
+            ax = plt.gca()
+            show = True
+        else:
+            show = False
+
+        d, inf = data[0], info[0]
+        cdog_version = inf['cdog-version']
+        aspect = inf['det-size'][1] / inf['det-size'][0]
+        if normalise:
+            d = (d - d.min()) / (d.max() - d.min())
+        if hist_eq:
+            d = exposure.equalize_hist(d)
+
+        ax.imshow(d.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
+        if show_hist:
+            hist_ax.hist(d.flatten(), bins=50, color='gray')
+        # cbar = fig.colorbar(img)
+        title = f"CDOG ({cdog_version}) TIFF image ({inf['det-size'][0]} x {inf['det-size'][1]})\n\
+Arc: {inf['arc']}, frame: {inf['frame']}, angle: {inf['angle']}\n\
+Imin/max: {d.min()}/{d.max()}, Vmin/max: {vmin}/{vmax}\n\
+MV source angle: {inf['GantryRtn']:.3f}\n\
+kV source/det. angle: {inf['kv-source-angle']:.3f}/{inf['KVDetectorRtn']:.3f}"
+        ax.set_title(title, fontsize=title_fontsize)
+        # plt.axis('off')
+        for s in ax.spines.values():
+            s.set_visible(False)
+        ax.set_xlabel(f"LR [{inf['det-spacing'][0]}mm]")
+        ax.set_ylabel(f"SI [{inf['det-spacing'][1]}mm]")
+
+        if show:
+            plt.show()
         return
 
-    filepaths = arg_to_list(path, str)
-    n_rows = len(filepaths)
-    _, axs = plt.subplots(n_rows, 1, figsize=(6, 4 * n_rows), gridspec_kw={ 'hspace': 0.6 }, squeeze=False)
-    for i in range(n_rows):
-        plot_tiff_filepath(filepaths[i], ax=axs[i, 0], **kwargs)
-
-def plot_tiff_dirpath(
-    dirpath: str,
-    angle_range: Tuple[Optional[float], Optional[float]] = (None, None),
-    arc: Optional[int] = 0,
-    max_plots: Optional[int] = 100,
-    n_cols: int = 3,
-    n_angles: Optional[int] = None,     # Approx. as we'll use consistent spacing to cover the 'angle_range'.
-    return_images: bool = False,
-    title_fontsize: float = 10,
-    **kwargs,
-    ) -> Optional[List[PIL.Image.Image]]:
-    # Get tiff files and angles (by filename).
-    files = os.listdir(dirpath)
-    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
-    tiff_angles = np.array([float(f.split('_')[-1].replace('.tiff', '')) for f in tiff_files])
-
-    # Filter tiff files by arc.
-    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
-    arc = arcs[arc]
-    tiff_angles = [a for f, a in zip(tiff_files, tiff_angles) if f.startswith(arc)]
-    tiff_files = [f for f in tiff_files if f.startswith(arc)]
-
-    # Filter by angle range.
-    if angle_range[0] is not None:
-        indices = np.where(np.array(tiff_angles) >= angle_range[0])[0]
-        tiff_angles = [tiff_angles[i] for i in indices]
-        tiff_files = [tiff_files[i] for i in indices]
-    if angle_range[1] is not None:
-        indices = np.where(np.array(tiff_angles) < angle_range[1])[0]
-        tiff_angles = [tiff_angles[i] for i in indices]
-        tiff_files = [tiff_files[i] for i in indices]
-
-    # Only include subset of angles - split evenly across the range.
-    if n_angles is not None:
-        # tiff_angle_range = np.abs(tiff_angles[-1] - tiff_angles[0])     # Assumes arm can't reverse within an arc?
-        # print(tiff_angle_range)
-        # print(plot_freq)
-        plot_freq = np.max([len(tiff_files) // n_angles, 1])
-        tiff_files = [f for i, f in enumerate(tiff_files) if i % plot_freq == 0] 
-
-    # Remove plots if too many.
-    if max_plots is not None and len(tiff_files) > max_plots:
-        tiff_files = tiff_files[:max_plots]
-        print(f"Truncated to {max_plots} ('max_plots') images.")
-
-    # Full paths.
-    tiff_filepaths = [os.path.join(dirpath, f) for f in tiff_files]
-
-    print(f"Plotting {len(tiff_filepaths)} TIFF images.")
-
-    # Plot images.
-    if return_images:
+    if return_image:
         images = []
-    else:
-        n_images = len(tiff_filepaths)
+
+    if not return_image:
         n_rows = int(np.ceil(n_images / n_cols))
         _, axs = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), gridspec_kw={ 'hspace': 0.6 }, squeeze=False)
 
-    for i, f in enumerate(tiff_filepaths):
-        if return_images:
-            image = plot_tiff_filepath(f, return_image=True, title_fontsize=title_fontsize, **kwargs)
-            images.append(image)
+    for i in range(n_images):
+        d, inf = data[i], info[i]
+        cdog_version = inf['cdog-version']
+        aspect = inf['det-size'][1] / inf['det-size'][0]
+        if normalise:
+            d = (d - d.min()) / (d.max() - d.min())
+        if hist_eq:
+            d = exposure.equalize_hist(d)
+
+        if return_image:
+            fig, ax_i = plt.subplots(1, 1, figsize=(6, 4))
         else:
             row = i // n_cols
             col = i % n_cols
-            plot_tiff_filepath(f, ax=axs[row, col], title_fontsize=title_fontsize, **kwargs)
+            ax_i = axs[row, col]
 
-    if return_images:
+        ax_i.imshow(d.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
+        # cbar = fig.colorbar(img)
+        title = f"CDOG ({cdog_version}) TIFF image ({inf['det-size'][0]} x {inf['det-size'][1]})\n\
+Arc: {inf['arc']}, frame: {inf['frame']}, angle: {inf['angle']}\n\
+Imin/max: {d.min()}/{d.max()}, Vmin/max: {vmin}/{vmax}\n\
+MV source angle: {inf['GantryRtn']:.3f}\n\
+kV source/det. angle: {inf['kv-source-angle']:.3f}/{inf['KVDetectorRtn']:.3f}"
+        ax_i.set_title(title, fontsize=title_fontsize)
+        # plt.axis('off')
+        for s in ax_i.spines.values():
+            s.set_visible(False)
+        ax_i.set_xlabel(f"LR [{inf['det-spacing'][0]}mm]")
+        ax_i.set_ylabel(f"SI [{inf['det-spacing'][1]}mm]")
+
+        if return_image:
+            buffer = io.BytesIO()
+            fig.savefig(buffer, bbox_inches='tight', dpi=100, format='png')
+            plt.close(fig)
+            buffer.seek(0)
+            images.append(np.asarray(PIL.Image.open(buffer)))
+
+    if return_image:
         return images
 
     n_plots = n_rows * n_cols
@@ -430,72 +505,10 @@ def plot_tiff_dirpath(
     for i in range(n_unused):
         axs.flat[-i - 1].set_visible(False)
 
-def plot_tiff_filepath(
-    filepath: str,
-    ax: Optional[mpl.axes.Axes] = None,
-    hist_eq: bool = False,
-    normalise: bool = False,
-    return_image: bool = False,
-    show_hist: bool = False,
-    title_fontsize: float = 10,
-    cdog_version: Optional[str] = None,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
-    **kwargs,
-    ) -> Optional[PIL.Image.Image]:
-    if show_hist:
-        _, axs = plt.subplots(1, 2, figsize=(12, 4))
-        ax, hist_ax = axs
-        show = True
-    elif ax is None:
-        ax = plt.gca()
-        show = True
-    else:
-        show = False
-    filename = os.path.basename(filepath)
-    f_arc = '_'.join(filename.split('_')[:2])
-    f_frame = filename.split('_')[2]
-    f_angle = filename.split('_')[-1].replace('.tiff', '')
-    data, info = load_tiff(filepath, cdog_version=cdog_version, **kwargs)
-    if cdog_version is None:
-        cdog_version = info['cdog-version']
-    aspect = info['det-size'][1] / info['det-size'][0]
-    if normalise:
-        data = (data - data.min()) / (data.max() - data.min())
-    if hist_eq:
-        data = exposure.equalize_hist(data)
-    
-    img = ax.imshow(data.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
-    if show_hist:
-        hist_ax.hist(data.flatten(), bins=50, color='gray')
-    # cbar = fig.colorbar(img)
-    title = f"CDOG ({cdog_version}) TIFF image ({info['det-size'][0]} x {info['det-size'][1]})\n\
-Arc: {f_arc}, frame: {f_frame}, angle: {f_angle}\n\
-Imin/max: {data.min()}/{data.max()}, Vmin/max: {vmin}/{vmax}\n\
-MV source angle: {info['GantryRtn']:.3f}\n\
-kV source/det. angle: {info['kv-source-angle']:.3f}/{info['KVDetectorRtn']:.3f}"
-    ax.set_title(title, fontsize=title_fontsize)
-    # plt.axis('off')
-    for s in ax.spines.values():
-        s.set_visible(False)
-    ax.set_xlabel(f"LR [{info['det-spacing'][0]}mm]")
-    ax.set_ylabel(f"SI [{info['det-spacing'][1]}mm]")
-
-    if return_image:
-        fig = plt.gcf()
-        buffer = io.BytesIO()
-        fig.savefig(buffer, bbox_inches='tight', dpi=100, format='png')
-        plt.close(fig)
-        buffer.seek(0)
-        return np.asarray(PIL.Image.open(buffer))
-
-    if show:
-        plt.show()
-
 def plot_tiff_gif(
-    dirpath: str,
-    *args,
-    arc: int = 0,
+    data: List[Slice],
+    info: List[Dict[str, Any]],
+    filepath: str,
     end_time: float = 5,
     frame_time: float = 0.5,
     loop: bool = True,
@@ -503,16 +516,9 @@ def plot_tiff_gif(
     width: float = 500,
     **kwargs,
     ) -> None:
-    # Get filepath.
-    files = os.listdir(dirpath)
-    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
-    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
-    arc_str = arcs[arc]
-    filepath = os.path.join(dirpath, f"{arc_str}.gif")
-
     if overwrite or not os.path.exists(filepath):
         # Get tiff images.
-        png_images = plot_tiff_dirpath(dirpath, *args, arc=arc, return_images=True, **kwargs)
+        png_images = plot_tiff(data, info, return_image=True, **kwargs)
 
         # Save gif.
         frames = png_images

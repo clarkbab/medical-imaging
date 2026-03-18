@@ -8,7 +8,7 @@ from mymi.regions import is_region
 from mymi.typing import *
 from mymi.utils import *
 
-class RegionMap:
+class RegionsMap:
     def __init__(
         self,
         data: Dict[RegionID, RegionID]) -> None:

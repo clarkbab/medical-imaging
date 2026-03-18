@@ -34,6 +34,16 @@ def exists(name: str) -> bool:
     ds_path = os.path.join(config.directories.datasets, 'raw', name)
     return os.path.exists(ds_path)
 
-def recreate(name: str) -> None:
-    destroy(name)
-    return create(name)
+def recreate(
+    name: str,
+    makeitso: bool = False,
+    ) -> RawDataset:
+    destroy(name, makeitso=makeitso)
+    if not makeitso:
+        if exists(name):
+            return RawDataset(name)
+        else:
+            # Creating is fine with makeitso=False.
+            return create(name)
+    else:
+        return create(name)

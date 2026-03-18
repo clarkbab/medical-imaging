@@ -8,10 +8,11 @@ import torch
 from tqdm import tqdm
 
 from mymi.datasets.nifti import load as load_nifti_dataset
-from mymi.datasets.nifti.utils import create_ct, create_index
+from mymi.datasets.nifti.utils import create_ct, create_index, create_region
 from mymi.datasets.training import create as create_training, exists as exists_training, load as load_training
 from mymi import logging
-from mymi.utils import create_projections as create_projections_fn, load_json, load_nifti, load_tiff, from_rtplan_dicom, save_nifti, save_numpy, with_makeitso
+from mymi.processing import create_ctorch_projections
+from mymi.utils import load_json, load_nifti, load_tiff, from_rtplan_dicom, save_nifti, save_numpy, with_makeitso
 
 def create_valkim_preprocessed_dataset(
     makeitso: bool = False,
@@ -21,10 +22,12 @@ def create_valkim_preprocessed_dataset(
     # Only patients 1/2 have fiducials mask.
     pat_ids = ['PAT1', 'PAT2']
     marker_regions = ['Fiducial_1', 'Fiducial_2', 'Fiducial_3']
-    regions = ['Carina', 'Chestwall', 'Chestwall_LT', 'Chestwall_RT', 'GreatVes', 'GTV_Inh', 'GTV_Exh', 'Heart', 'Liver', 'Lung_L', 'Lung_R', 'Nerve_Root', 'Oesophagus', 'Spinal_Cord', 'Spleen', 'Stomach']
+    structure_regions = ['Carina', 'Chestwall', 'Chestwall_LT', 'Chestwall_RT', 'GreatVes', 'GTV_Inh', 'GTV_Exh', 'Heart', 'Liver', 'Lung_L', 'Lung_R', 'Nerve_Root', 'Oesophagus', 'Spinal_Cord', 'Spleen', 'Stomach']
+    regions = marker_regions + structure_regions
     inh_series = 'series_0'
     exh_series = 'series_5'
-    reg_series = 'series_0'
+    input_reg_series = 'series_0'
+    avg_reg_series = 'series_10'     # Give it a new number as it doesn't match any of the CT series.
     old_set = load_nifti_dataset(dataset)
 
     # Copy index.
@@ -53,7 +56,7 @@ def create_valkim_preprocessed_dataset(
             exhale_ct_affine = exhale_series.affine
 
             # Load regions data.
-            regions_series = study.regions_series(reg_series)
+            regions_series = study.regions_series(input_reg_series)
             f = regions_series.dicom.filepath
             assert '/RS.000000.dcm' in f, f
             regions_data = regions_series.data(regions=regions)
@@ -69,15 +72,14 @@ def create_valkim_preprocessed_dataset(
             create_ct(dataset_pp, p, s, exh_series, exhale_ct_data, exhale_ct_affine, makeitso=makeitso)
 
             # Copy regions.
-            filepaths = regions_series.filepaths(regions + marker_regions)
-            for f in filepaths:
-                new_f = f.replace(dataset, dataset_pp)
-                os.makedirs(os.path.dirname(new_f), exist_ok=True)
-                with_makeitso(
-                    makeitso,
-                    lambda: shutil.copy(f, new_f),
-                    f"Copying {f} to {new_f}."
-                )
+            assert np.all(inhale_ct_affine == exhale_ct_affine)
+            for r, d in zip(regions, regions_data):
+                if r == 'GTV_Inh':
+                    create_region(dataset_pp, p, s, inh_series, 'GTV', d, inhale_ct_affine, makeitso=makeitso)
+                elif r == 'GTV_Exh':
+                    create_region(dataset_pp, p, s, exh_series, 'GTV', d, exhale_ct_affine, makeitso=makeitso)
+                else:
+                    create_region(dataset_pp, p, s, avg_reg_series, r, d, inhale_ct_affine, makeitso=makeitso)
 
 def create_valkim_training_dataset(
     create_train_volumes: bool = True,
@@ -262,7 +264,7 @@ def create_valkim_training_dataset(
                 save_json(kv_source_angles, filepath)
 
                 # Create projections.
-                inh_ct_proj, inh_labels_proj = create_projections_fn(
+                inh_ct_proj, inh_labels_proj = create_ctorch_projections(
                     inh_ct.astype(np.float32),
                     affine.astype(np.float32),
                     isocentre,
@@ -275,7 +277,7 @@ def create_valkim_training_dataset(
                     labels=inh_labels.astype(np.float32),
                 )
 
-                exh_ct_proj, exh_labels_proj = create_projections_fn(
+                exh_ct_proj, exh_labels_proj = create_ctorch_projections(
                     exh_ct.astype(np.float32),
                     affine.astype(np.float32),
                     isocentre,

@@ -13,7 +13,9 @@ from mymi.loaders import DRRLoader
 from mymi import logging
 from mymi.losses import DiceLoss
 from mymi.models import get_model, load_model
+from mymi.training.utils.lr_find import run_lr_find
 from mymi.utils import *
+
 
 def train_segmentation(
     dataset: str,
@@ -22,17 +24,24 @@ def train_segmentation(
     model: str,
     n_epochs: int,
     lr_init: float,
+    n_train_angles: int = 3,
+    n_val_angles: int = 3,
+    n_val_volumes: int = 3,
     arch: str = 'unet3d:m',
     batch_size: int = 32,
     log_images: bool = False,
     loss_fn: Literal['dice'] = 'dice',
+    lr_find: bool = False,
+    lr_find_min_lr: float = 1e-7,
+    lr_find_max_lr: float = 1,
+    lr_find_n_iter: int = 100,
     random_seed: int = 42,
     resume: bool = False,
     resume_ckpt: str = 'last',
     use_logging: bool = True,
     val_image_interval: str = 'epoch:5',
     ) -> None:
-    logging.arg_log('Training registration model', ('dataset', 'project', 'model'), (dataset, project, model))
+    logging.log_args('Training VALKIM segmentation model')
     model_name = model  # Use model for actual model.
 
     # Set seed for reproducible runs.
@@ -90,6 +99,9 @@ def train_segmentation(
     # Create data loaders.
     loader_kwargs = dict(
         batch_size=batch_size,
+        n_train_angles=n_train_angles,
+        n_val_angles=n_val_angles,
+        n_val_volumes=n_val_volumes,
         projection_geometry=geometry,
         transform_train=transform_train,
     )
@@ -110,6 +122,20 @@ def train_segmentation(
     else:
         raise ValueError(f"Unknown loss function '{loss_fn}'.")
     logging.info(f"Using loss {loss_fn}.")
+
+    # --- LR Find ---
+    if lr_find:
+        run_lr_find(
+            model=model,
+            train_loader=tl,
+            loss_fn=loss_fn,
+            device=device,
+            model_name=model_name,
+            min_lr=lr_find_min_lr,
+            max_lr=lr_find_max_lr,
+            n_iter=lr_find_n_iter,
+        )
+        return
 
     # Create optimiser.
     optimiser = torch.optim.AdamW(model.parameters(), lr=lr_init) 
@@ -137,8 +163,8 @@ def train_segmentation(
     for e in range(start_epoch, n_epochs):
         # Training loop.
         model.train()
+        tl.dataset.create_projections(e)
         train_iter = iter(tl)
-        train_iter._dataset.create_projections(e)
         for xs, ys, angles in tqdm(train_iter, desc=f'Epoch {e}/{n_epochs} (train)', leave=False):
             xs = xs.to(device)
             ys = ys.to(device)

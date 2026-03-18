@@ -70,19 +70,33 @@ def arg_log(
     message = action + ' with ' + ', '.join([f"{arg_name}={arg_val}" for arg_name, arg_val in zip(arg_names, arg_vals)]) + '.'
     info(message)
 
+def _format_arg(val: Any) -> str:
+    """Format a value for logging, abbreviating arrays and tensors to type+shape."""
+    import numpy as np
+    try:
+        import torch
+        is_tensor = isinstance(val, torch.Tensor)
+    except ImportError:
+        is_tensor = False
+    if isinstance(val, np.ndarray):
+        return f"ndarray(shape={val.shape}, dtype={val.dtype})"
+    if is_tensor:
+        return f"Tensor(shape={tuple(val.shape)}, dtype={val.dtype})"
+    return repr(val)
+
 def log_args(message: str = '') -> None:
     frame = inspect.currentframe().f_back
     func_name = frame.f_code.co_name
     arg_info = inspect.getargvalues(frame)
     parts = []
     for name in arg_info.args:
-        parts.append(f"{name}={arg_info.locals[name]!r}")
+        parts.append(f"{name}={_format_arg(arg_info.locals[name])}")
     if arg_info.varargs and arg_info.locals.get(arg_info.varargs):
         for val in arg_info.locals[arg_info.varargs]:
-            parts.append(repr(val))
+            parts.append(_format_arg(val))
     if arg_info.keywords and arg_info.locals.get(arg_info.keywords):
         for k, v in arg_info.locals[arg_info.keywords].items():
-            parts.append(f"{k}={v!r}")
+            parts.append(f"{k}={_format_arg(v)}")
     fn_str = f"{func_name}({', '.join(parts)})"
     if message:
         info(f"{message}: {fn_str}")

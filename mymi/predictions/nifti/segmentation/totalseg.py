@@ -15,12 +15,13 @@ def create_totalseg_predictions(
     # Currently only totalseg groupings are supported, e.g. 'lung'.
     # See options: https://github.com/wasserth/TotalSegmentator/blob/211c2bd73386a0a48847d70678315bb326dbcd54/totalsegmentator/bin/totalseg_combine_masks.py#L34
     combine_regions: Dict[str, RegionID] = {},
+    ct_series: SeriesID = 'series_0',
     dry_run: bool = True,
     overwrite_labels: bool = False,
     pat: PatientIDs = 'all',
+    regions_series: SeriesID = 'series_0',
     rename_regions: Union[Dict[RegionID, RegionID], Callable[[RegionID], RegionID]] = {},
     save_as_labels: bool = False,
-    series: SeriesID = 'series_0',
     study: StudyIDs = 'all',
     task_regions: Dict[str, Union[str, List[str], Literal['all']]] = {},
     ) -> None:
@@ -35,12 +36,13 @@ def create_totalseg_predictions(
         pat_studys = pat.list_studies(study=study)
         for s in tqdm(pat_studys, leave=False):
             study = pat.study(s)
+            input_series = study.ct_series(ct_series)
 
             # Either save as predictions or labels.
             if save_as_labels:
-                save_dir = os.path.join(set.path, 'data', 'patients', p, s, 'regions', series)
+                save_dir = os.path.join(set.path, 'data', 'patients', p, s, 'regions', regions_series)
             else:
-                save_dir = os.path.join(set.path, 'data', 'predictions', 'segmentation', p, s, 'totalseg')
+                save_dir = os.path.join(set.path, 'data', 'predictions', 'segmentation', p, s, regions_series, 'totalseg')
 
             # Write totalseg predictions to a temporary directory. This is because we don't (necessarily) want all of the
             # predictions and we can copy just those we do want. We can't limit the predicted masks to a subset of
@@ -53,7 +55,7 @@ def create_totalseg_predictions(
 
                     # Create temp nifti files if '.nrrd' files are present.
                     # Totalseg doesn't handle nrrd.
-                    input_filepath = study.ct_filepath
+                    input_filepath = input_series.filepath
                     if input_filepath.endswith('.nrrd'):
                         d, a = load_nrrd(input_filepath)
                         dest_filepath = os.path.join(output_dir, input_filepath.split('/')[-1].replace('.nrrd', '.nii.gz'))
@@ -80,7 +82,7 @@ def create_totalseg_predictions(
                     logging.info(command)
                     subprocess.run(command)
 
-                    if study.ct_filepath.endswith('.nrrd'):
+                    if input_series.filepath.endswith('.nrrd'):
                         # Remove temp nifti file.
                         logging.info(f"Removing temporary NIFTI input file: {input_filepath}")
                         os.remove(input_filepath)

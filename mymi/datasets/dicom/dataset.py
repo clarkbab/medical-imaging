@@ -15,7 +15,7 @@ from mymi.utils import *
 
 from ..dataset import CT_FROM_REGEXP, Dataset, DatasetType
 from ..mixins import IndexWithErrorsMixin
-from ..region_map import RegionMap
+from ..regions_map import RegionsMap
 from .index import INDEX_COLS, ERROR_INDEX_COLS, build_index as build_index_base, exists as index_exists
 from .patient import DicomPatient
 
@@ -138,7 +138,7 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         index = self._index[self._index['patient-id'] == str(id)]
         index_errors = self._index_errors[self._index_errors['patient-id'] == str(id)]
         ct_from = self._ct_from.patient(id) if self._ct_from is not None and self._ct_from.has_patient(id) else None
-        return DicomPatient(self, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, region_map=self.__region_map, **kwargs)
+        return DicomPatient(self, id, index, self._index_policy, index_errors, config=self._config, ct_from=ct_from, regions_map=self.__regions_map, **kwargs)
 
     @Dataset.ensure_loaded
     def list_regions(
@@ -211,14 +211,14 @@ class DicomDataset(Dataset, IndexWithErrorsMixin):
         # Load region map.
         filepath = os.path.join(self._path, 'region-map.yaml')
         if os.path.exists(filepath):
-            self.__region_map = RegionMap(load_yaml(filepath))
+            self.__regions_map = RegionsMap(load_yaml(filepath))
         else:
-            self.__region_map = None
+            self.__regions_map = None
 
     @property
     @Dataset.ensure_loaded
-    def region_map(self) -> RegionMap:
-        return self.__region_map
+    def regions_map(self) -> RegionsMap:
+        return self.__regions_map
 
     def __str__(self) -> str:
         return super().__str__(self.__class__.__name__)

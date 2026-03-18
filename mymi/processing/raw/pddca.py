@@ -5,10 +5,12 @@ from tqdm import tqdm
 from mymi.datasets import RawDataset
 from mymi.datasets.nifti import recreate as recreate_nifti
 
-def convert_pddca_to_nifti() -> None:
+def convert_pddca_to_nifti(
+    makeitso: bool = False,
+    ) -> None:
     dataset = 'PDDCA'
     set = RawDataset(dataset)
-    dset = recreate_nifti(dataset)
+    dset = recreate_nifti(dataset, makeitso=makeitso)
     patpath = os.path.join(set.path, 'data')
     pat_ids = os.listdir(patpath)
     for p in tqdm(pat_ids):
@@ -22,6 +24,6 @@ def convert_pddca_to_nifti() -> None:
         # Copy regions.
         for r in os.listdir(os.path.join(patpath, p, 'structures')):
             srcpath = os.path.join(patpath, p, 'structures', r)
-            destpath = os.path.join(studypath, 'regions', 'series_1', r)
+            destpath = os.path.join(studypath, 'regions', 'series_0', r)
             os.makedirs(os.path.dirname(destpath), exist_ok=True)
             shutil.copy(srcpath, destpath)
