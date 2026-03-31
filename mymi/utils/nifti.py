@@ -53,6 +53,9 @@ def save_numpy(
         data = data.detach().cpu().numpy()
     filepath = _resolve_filepath(filepath)
     assert filepath.endswith('.npy') or filepath.endswith('.npz'), "Filepath must end with .npy or .npz"
+    dirname = os.path.dirname(filepath)
+    if dirname != '':
+        os.makedirs(dirname, exist_ok=True)
     if filepath.endswith('.npz'):
         np.savez_compressed(filepath, data=data)
     else:

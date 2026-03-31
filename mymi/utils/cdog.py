@@ -8,11 +8,15 @@ import numpy as np
 import os
 import pandas as pd
 import PIL
+import seaborn as sns
 from skimage import exposure
+import tempfile
+from tqdm import tqdm
 from typing import *
 
 from mymi.typing import *
 
+from .args import arg_to_list
 from .io import resolve_filepath
 from .pandas import append_row
 
@@ -195,6 +199,13 @@ def infer_image_size(
     #         return size_x, y + 1
     # raise ValueError(f"Couldn't infer image size for: {filepath}")
 
+def list_tiff_arcs(
+    dirpath: DirPath,
+    ) -> List[str]:
+    tiff_files = list(sorted([f for f in os.listdir(dirpath) if f.endswith('.tiff')]))
+    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
+    return arcs
+
 def load_tiff(
     filepath: FilePath | DirPath,
     **kwargs,
@@ -210,6 +221,7 @@ def load_tiff_dirpath(
     angle_range: Tuple[float | None, float | None] = (None, None),
     arc: int | None = 0,
     n_angles: int | None = None,
+    n_frames: int | None = None,
     **kwargs,
     ) -> Tuple[List[Slice], List[Dict[str, Any]]]:
     # Get tiff files and angles (by filename).
@@ -241,10 +253,18 @@ def load_tiff_dirpath(
         plot_freq = np.max([len(tiff_files) // n_angles, 1])
         tiff_files = [f for i, f in enumerate(tiff_files) if i % plot_freq == 0] 
 
+    # Get first n frames.
+    if n_frames is not None:
+        tiff_files = tiff_files[:n_frames]
+
     # Load tiff files.
     filepaths = [os.path.join(dirpath, f) for f in tiff_files]
-    data, info = zip(*[load_tiff_filepath(f, **kwargs) for f in filepaths])
-    return data, info
+    datas, infos = [], []
+    for f in tqdm(filepaths, desc="Loading TIFF files"):
+        data, info = load_tiff_filepath(f, **kwargs)
+        datas.append(data)
+        infos.append(info)
+    return datas, infos
 
 # Returns image metadata and pixel data.
 def load_tiff_filepath(
@@ -263,6 +283,7 @@ def load_tiff_filepath(
     # Build our own metadata.
     metadata = {}
     filename = os.path.basename(filepath)
+    metadata['filepath'] = filepath
     metadata['arc'] = '_'.join(filename.split('_')[:2])
     metadata['frame'] = filename.split('_')[2]
     metadata['angle'] = filename.split('_')[-1].replace('.tiff', '')
@@ -395,138 +416,200 @@ def load_timestamp(
 
     return precise_timestamp
 
+def plot_arc_ranges(
+    dirpath: DirPath,
+    arc: int | Literal['all'] = 'all',
+    ) -> None:
+    # Get all arc names from directory.
+    files = os.listdir(dirpath)
+    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
+    all_arcs = list(np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files]))
+
+    if arc != 'all':
+        all_arcs = [all_arcs[arc]]
+
+    # For each arc, get min/max angle from filenames.
+    arc_ranges = []
+    for a in all_arcs:
+        arc_files = [f for f in tiff_files if f.startswith(a)]
+        angles = [float(f.split('_')[-1].replace('.tiff', '')) for f in arc_files]
+        arc_ranges.append((a, min(angles), max(angles)))
+
+    # Plot concentric arcs on a polar axes.
+    cb_palette = sns.color_palette('colorblind')
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(6, 6))
+
+    ring_width = 0.15
+    inner_radius = 0.4
+
+    for idx, (name, start_angle, end_angle) in enumerate(arc_ranges):
+        color = cb_palette[idx % len(cb_palette)]
+        radius = inner_radius + idx * (ring_width + 0.05)
+
+        # Convert degrees to radians (0° at top, clockwise).
+        theta_start = np.deg2rad(start_angle)
+        theta_end = np.deg2rad(end_angle)
+
+        # Draw arc as a filled polar bar.
+        theta_span = theta_end - theta_start
+        ax.bar(
+            x=theta_start + theta_span / 2,
+            height=ring_width,
+            width=theta_span,
+            bottom=radius,
+            color=color,
+            alpha=0.7,
+            label=f"{name} ({start_angle:.1f}° - {end_angle:.1f}°)",
+            edgecolor='white',
+            linewidth=0.5,
+        )
+
+    # Style the polar plot.
+    ax.set_theta_zero_location('N')
+    ax.set_theta_direction(-1)
+    ax.set_ylim(0, inner_radius + len(arc_ranges) * (ring_width + 0.05) + 0.1)
+    ax.set_yticks([])
+    ax.set_xticks(np.deg2rad(np.arange(0, 360, 30)))
+    ax.set_xticklabels([f"{a}°" for a in range(0, 360, 30)])
+    ax.set_title('Arc Angular Ranges', pad=20)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.35, 1.1), fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
+
 def plot_tiff(
-    data: List[Slice] | Slice,
-    info: List[Dict[str, Any]] | Dict[str, Any],
-    ax: Optional[mpl.axes.Axes] = None,
+    data: Slice,
+    info: Dict[str, Any],
+    ax: mpl.axes.Axes | None = None,
     hist_eq: bool = False,
-    n_cols: int = 3,
     normalise: bool = False,
+    other_info: List[Dict[str, Any]] | None = None,
     return_image: bool = False,
     show_hist: bool = False,
+    show_waveform: bool = True,
     title_fontsize: float = 10,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
     ) -> Optional[PIL.Image.Image | List[PIL.Image.Image]]:
-    if not isinstance(data, list):
-        data = [data]
-    if not isinstance(info, list):
-        info = [info]
+    if show_waveform:
+        fig = plt.figure(figsize=(16, 6))
+        gs = fig.add_gridspec(2, 2, width_ratios=[2, 1])
+        ax = fig.add_subplot(gs[:, 0])
+        amp_ax = fig.add_subplot(gs[0, 1])
+        phase_ax = fig.add_subplot(gs[1, 1])
+        show = True
+    elif show_hist:
+        _, axs = plt.subplots(1, 2, figsize=(12, 4))
+        ax, hist_ax = axs
+        show = True
+    elif ax is None:
+        _, ax = plt.subplots()
+        show = True
+    else:
+        show = False
 
-    n_images = len(data)
-    if n_images == 1 and not return_image:
-        if show_hist:
-            _, axs = plt.subplots(1, 2, figsize=(12, 4))
-            ax, hist_ax = axs
-            show = True
-        elif ax is None:
-            ax = plt.gca()
-            show = True
-        else:
-            show = False
+    # Normalise data.
+    aspect = info['det-size'][1] / info['det-size'][0]
+    if normalise:
+        data = (data - data.min()) / (data.max() - data.min())
+    if hist_eq:
+        data = exposure.equalize_hist(data)
 
-        d, inf = data[0], info[0]
-        cdog_version = inf['cdog-version']
-        aspect = inf['det-size'][1] / inf['det-size'][0]
-        if normalise:
-            d = (d - d.min()) / (d.max() - d.min())
-        if hist_eq:
-            d = exposure.equalize_hist(d)
+    # Plot slice.
+    ax.imshow(data.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
 
-        ax.imshow(d.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
-        if show_hist:
-            hist_ax.hist(d.flatten(), bins=50, color='gray')
-        # cbar = fig.colorbar(img)
-        title = f"CDOG ({cdog_version}) TIFF image ({inf['det-size'][0]} x {inf['det-size'][1]})\n\
-Arc: {inf['arc']}, frame: {inf['frame']}, angle: {inf['angle']}\n\
-Imin/max: {d.min()}/{d.max()}, Vmin/max: {vmin}/{vmax}\n\
-MV source angle: {inf['GantryRtn']:.3f}\n\
-kV source/det. angle: {inf['kv-source-angle']:.3f}/{inf['KVDetectorRtn']:.3f}"
-        ax.set_title(title, fontsize=title_fontsize)
-        # plt.axis('off')
-        for s in ax.spines.values():
-            s.set_visible(False)
-        ax.set_xlabel(f"LR [{inf['det-spacing'][0]}mm]")
-        ax.set_ylabel(f"SI [{inf['det-spacing'][1]}mm]")
+    # Plot histogram.
+    if show_hist:
+        hist_ax.hist(data.flatten(), bins=50, color='gray')
 
-        if show:
-            plt.show()
-        return
+    # Plot waveforms.
+    if show_waveform:
+        # Plot other slices' amplitude/phase.
+        cb_palette = sns.color_palette('colorblind')
+        if other_info is not None:
+            base_color = cb_palette[1]
+            cmap = sns.light_palette(base_color, as_cmap=True)
+            n = len(other_info)
+            for idx, i in enumerate(other_info):
+                color = cmap((idx + 1) / (n + 1))
+                angle = i['kv-source-angle']
+                amp_ax.scatter(angle, i['MMAmplitude0'], color=color, zorder=0)
+                phase_ax.scatter(angle, i['MMPhase0'], color=color, zorder=0)
 
-    if return_image:
-        images = []
+        # Plot current slice's amplitude/phase.
+        angle = info['kv-source-angle']
+        amp_ax.scatter(angle, info['MMAmplitude0'], color=cb_palette[0], zorder=1)
+        phase_ax.scatter(angle, info['MMPhase0'], color=cb_palette[0], zorder=1)
 
-    if not return_image:
-        n_rows = int(np.ceil(n_images / n_cols))
-        _, axs = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4 * n_rows), gridspec_kw={ 'hspace': 0.6 }, squeeze=False)
+        amp_ax.set_xlim(0, 360)
+        amp_ax.set_ylabel('MMAmplitude0')
+        amp_ax.set_title('Amplitude', fontsize=title_fontsize)
+        phase_ax.set_xlim(0, 360)
+        phase_ax.set_ylim(0, 360)
+        phase_ax.set_xlabel('kV source angle [degrees]')
+        phase_ax.set_ylabel('MMPhase0')
+        phase_ax.set_title('Phase', fontsize=title_fontsize)
 
-    for i in range(n_images):
-        d, inf = data[i], info[i]
-        cdog_version = inf['cdog-version']
-        aspect = inf['det-size'][1] / inf['det-size'][0]
-        if normalise:
-            d = (d - d.min()) / (d.max() - d.min())
-        if hist_eq:
-            d = exposure.equalize_hist(d)
-
-        if return_image:
-            fig, ax_i = plt.subplots(1, 1, figsize=(6, 4))
-        else:
-            row = i // n_cols
-            col = i % n_cols
-            ax_i = axs[row, col]
-
-        ax_i.imshow(d.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
-        # cbar = fig.colorbar(img)
-        title = f"CDOG ({cdog_version}) TIFF image ({inf['det-size'][0]} x {inf['det-size'][1]})\n\
-Arc: {inf['arc']}, frame: {inf['frame']}, angle: {inf['angle']}\n\
-Imin/max: {d.min()}/{d.max()}, Vmin/max: {vmin}/{vmax}\n\
-MV source angle: {inf['GantryRtn']:.3f}\n\
-kV source/det. angle: {inf['kv-source-angle']:.3f}/{inf['KVDetectorRtn']:.3f}"
-        ax_i.set_title(title, fontsize=title_fontsize)
-        # plt.axis('off')
-        for s in ax_i.spines.values():
-            s.set_visible(False)
-        ax_i.set_xlabel(f"LR [{inf['det-spacing'][0]}mm]")
-        ax_i.set_ylabel(f"SI [{inf['det-spacing'][1]}mm]")
-
-        if return_image:
-            buffer = io.BytesIO()
-            fig.savefig(buffer, bbox_inches='tight', dpi=100, format='png')
-            plt.close(fig)
-            buffer.seek(0)
-            images.append(np.asarray(PIL.Image.open(buffer)))
+    # Add annotation.
+    cdog_version = info['cdog-version']
+    title = f"CDOG ({cdog_version}) TIFF image ({info['det-size'][0]} x {info['det-size'][1]})\n\
+Arc: {info['arc']}, frame: {info['frame']}, angle: {info['angle']}\n\
+Imin/max: {data.min()}/{data.max()}, Vmin/max: {vmin}/{vmax}\n\
+MV source angle: {info['GantryRtn']:.3f}\n\
+kV source/det. angle: {info['kv-source-angle']:.3f}/{info['KVDetectorRtn']:.3f}"
+    ax.set_title(title, fontsize=title_fontsize)
+    # plt.axis('off')
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.set_xlabel(f"LR [{info['det-spacing'][0]}mm]")
+    ax.set_ylabel(f"SI [{info['det-spacing'][1]}mm]")
 
     if return_image:
-        return images
-
-    n_plots = n_rows * n_cols
-    n_unused = n_plots - n_images
-    for i in range(n_unused):
-        axs.flat[-i - 1].set_visible(False)
+        buf = io.BytesIO()
+        ax.figure.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(ax.figure)
+        buf.seek(0)
+        return PIL.Image.open(buf).copy()
+    elif show:
+        plt.show()
 
 def plot_tiff_gif(
-    data: List[Slice],
-    info: List[Dict[str, Any]],
-    filepath: str,
-    end_time: float = 5,
+    data: List[Slice] | None = None,
+    info: List[Dict[str, Any]] | None = None,
     frame_time: float = 0.5,
     loop: bool = True,
+    n_frames: int | None = None,
     overwrite: bool = False,
-    width: float = 500,
+    pause_time: float = 5,
+    savepath: FilePath | None = None,
+    width: int = 1000,
     **kwargs,
     ) -> None:
-    if overwrite or not os.path.exists(filepath):
-        # Get tiff images.
-        png_images = plot_tiff(data, info, return_image=True, **kwargs)
+    if savepath is not None and os.path.exists(savepath) and not overwrite:
+        with open(savepath, 'rb') as f:
+            display(IPythonImage(data=f.read(), format='png', width=width))
+        return
 
-        # Save gif.
-        frames = png_images
-        frames_per_second = 1 / frame_time
-        frames = frames + [frames[-1]] * int(end_time / frame_time)
-        imageio.mimsave(filepath, frames, fps=frames_per_second, loop=0 if loop else None)
+    if savepath is None:
+        savepath = tempfile.NamedTemporaryFile(suffix='.apng', delete=False).name
 
-    display(IPythonImage(filename=filepath, width=500))
+    # Get tiff images.
+    png_images = []
+    for i, (d, inf) in tqdm(enumerate(zip(data, info)), total=len(data), desc="Creating GIF frames"):
+        other_info = info[:i] + info[i+1:]
+        png_image = plot_tiff(d, inf, other_info=other_info, return_image=True, **kwargs)
+        png_images.append(png_image)
+        if n_frames is not None and i + 1 >= n_frames:
+            break
+
+    # Save animated PNG (avoids GIF's 256-colour palette limitation).
+    frames = png_images
+    frames_per_second = 1 / frame_time
+    frames = frames + [frames[-1]] * int(pause_time / frame_time)
+    imageio.mimsave(savepath, frames, fps=frames_per_second, loop=0 if loop else None)
+
+    with open(savepath, 'rb') as f:
+        display(IPythonImage(data=f.read(), format='png', width=width))
 
 def plot_tiff_hist(
     filepath: str,

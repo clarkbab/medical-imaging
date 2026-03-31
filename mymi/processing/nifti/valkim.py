@@ -2,7 +2,6 @@ from augmed import Pipeline, RandomAffine
 from augmed.utils import save_json, to_numpy, to_tensor
 import numpy as np
 import os
-import shutil
 from skimage.restoration import inpaint_biharmonic
 import torch
 from tqdm import tqdm
@@ -26,7 +25,6 @@ def create_valkim_preprocessed_dataset(
     regions = marker_regions + structure_regions
     inh_series = 'series_0'
     exh_series = 'series_5'
-    input_reg_series = 'series_0'
     avg_reg_series = 'series_10'     # Give it a new number as it doesn't match any of the CT series.
     old_set = load_nifti_dataset(dataset)
 
@@ -56,7 +54,7 @@ def create_valkim_preprocessed_dataset(
             exhale_ct_affine = exhale_series.affine
 
             # Load regions data.
-            regions_series = study.regions_series(input_reg_series)
+            regions_series = study.regions_series(avg_reg_series)
             f = regions_series.dicom.filepath
             assert '/RS.000000.dcm' in f, f
             regions_data = regions_series.data(regions=regions)
@@ -80,6 +78,14 @@ def create_valkim_preprocessed_dataset(
                     create_region(dataset_pp, p, s, exh_series, 'GTV', d, exhale_ct_affine, makeitso=makeitso)
                 else:
                     create_region(dataset_pp, p, s, avg_reg_series, r, d, inhale_ct_affine, makeitso=makeitso)
+
+            # Copy other images.
+            other_series = [1, 2, 3, 4, 6, 7, 8, 9]
+            for s in other_series:
+                ct_data = study.ct_series(f'series_{s}').data
+                ct_data = inpaint_biharmonic(ct_data, markers_data, split_into_regions=False)
+                ct_affine = study.ct_series(f'series_{s}').affine
+                create_ct(dataset_pp, p, s, f'series_{s}', ct_data, ct_affine, makeitso=makeitso)
 
 def create_valkim_training_dataset(
     create_train_volumes: bool = True,
