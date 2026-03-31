@@ -40,6 +40,7 @@ def create_diffdrr_projections(
     det_spacing: Spacing2D,
     det_offset: Point2D,
     kv_source_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
+    couch_shift: Point3D = (0.0, 0.0, 0.0),
     labels: LabelVolumeBatch | None = None,
     n_angles_batch: int | None = 20,
     patch_size: int = 128,
@@ -58,7 +59,7 @@ def create_diffdrr_projections(
     # Move the treatment isocentre to the origin.
     spacing = affine_spacing(affine)
     origin = affine_origin(affine)
-    origin = tuple(np.array(origin) - treatment_iso)
+    origin = tuple(np.array(origin) - treatment_iso - couch_shift)
     affine = create_affine(spacing, origin)
 
     # Create torchio objects.
@@ -157,6 +158,9 @@ def create_diffdrr_projections(
 def create_igt_projections(
     volume: Volume,
     affine: AffineMatrix3D,
+    # This is the point (in planning CT coords) around which the projections are created.
+    # That's if we're trying to simulate projections that would be acquired during treatment.
+    # For CBCT, we might need to apply a treatment iso offset.
     treatment_iso: Point3D,
     sid: float,
     sdd: float,
@@ -164,6 +168,9 @@ def create_igt_projections(
     det_spacing: Spacing2D,
     det_offset: Point2D,
     kv_source_angles: List[float],
+    # For half-fan CBCT, the patient is centred laterally before the CBCT image is acquired to
+    # avoid collision.
+    couch_shift: Point3D = (0.0, 0.0, 0.0),
     dirpath: DirPath | None = None,
     labels: LabelVolumeBatch | None = None,
     recreate: bool = True,
@@ -194,15 +201,15 @@ def create_igt_projections(
     if labels is not None:
         labels = np.flip(labels, axis=-1)
 
-    # Move the treatment isocentre to the origin.
+    # Move the volume to the treatment isocentre.
     spacing = affine_spacing(affine)
     origin = affine_origin(affine)
     origin = np.array(origin)
-    origin[0] = origin[0] - treatment_iso[0]
-    origin[1] = origin[1] - treatment_iso[1]
+    origin[0] = origin[0] - treatment_iso[0] - couch_shift[0]
+    origin[1] = origin[1] - treatment_iso[1] - couch_shift[1]
     # Need to adjust the z origin because of flipped axis.
     max_z_loc = origin[2] + (volume.shape[2] - 1) * spacing[2]
-    origin[2] = treatment_iso[2] - max_z_loc
+    origin[2] = treatment_iso[2] + couch_shift[2] - max_z_loc
 
     # Reorder axes to (x, z, y) - required by IGT.
     # Is this IEC geometry?
@@ -314,6 +321,7 @@ def create_ctorch_projections(
     det_spacing: Spacing2D,
     det_offset: Point2D,
     kv_source_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
+    couch_shift: Point3D = (0.0, 0.0, 0.0),
     labels: BatchLabelImage3D | None = None,
     n_angles_batch: int | None = 20,
     ) -> BatchImage2D | Tuple[BatchImage2D, BatchChannelLabelImage2D]:
@@ -342,7 +350,7 @@ def create_ctorch_projections(
     SAD, SDD = [sid], [sdd] # source-axis-distance, source-detector-distance
     
     image_centre = fov_centre(volume.shape, affine=affine)
-    offset = np.array(image_centre) - treatment_iso
+    offset = np.array(image_centre) - treatment_iso - couch_shift
     offset[2] = -offset[2]  # Z-axis is flipped.
     xOfst, yOfst, zOfst = [offset[0]], [offset[1]], [offset[2]] # image center offset
     uOfst, vOfst = [det_offset[0]], [det_offset[1]] # detecor center offset
