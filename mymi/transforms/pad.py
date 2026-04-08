@@ -1,32 +1,36 @@
+from dicomset.utils.geometry import affine_origin, affine_spacing
+from dicomset.typing import *
 import numpy as np
 import torch
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.assertions import assert_image
+from mymi.utils.decorators import alias_kwargs, handle_non_spatial_dims
+from mymi.utils.python import delegates
 
 from .transforms import assert_box_width
 
-@alias_kwargs(('uwc', 'use_world_coords'))
 def __spatial_pad(
-    image: ImageArray,
-    bounding_box: Union[Box2D, Box3D],
-    fill: Union[float, Literal['min']] = 'min',
-    origin: Optional[Union[Point2D, Point3D]] = None,
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_world_coords: bool = True) -> ImageArray:
-    assert_box_width(bounding_box)
+    image: Image,
+    box: Box,
+    affine: AffineMatrix | None = None,
+    fill: float | Literal['min'] = 'min',
+    ) -> Image:
+    assert_box_width(box)
     fill = image.min() if fill == 'min' else fill
     if isinstance(fill, torch.Tensor):
         fill = fill.item()
 
     # Convert box to voxel coordinates.
-    if use_world_coords:
-        min_mm, max_mm = bounding_box
+    if affine is not None:
+        min_mm, max_mm = box
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine)
         min = tuple(np.round((np.array(min_mm) - origin) / spacing).astype(int))
         max = tuple(np.round((np.array(max_mm) - origin) / spacing).astype(int))
     else:
-        min, max = bounding_box
+        min, max = box
 
     # Perform padding - clip if padding is less than zero.
     size = np.array(image.shape)
@@ -45,8 +49,10 @@ def __spatial_pad(
 
 @delegates(__spatial_pad)
 def pad(
-    image: ImageArray,
-    *args, **kwargs) -> ImageArray:
+    image: Image,
+    *args, 
+    **kwargs,
+    ) -> Image:
     assert_image(image)
     return handle_non_spatial_dims(__spatial_pad, image, *args, **kwargs)
 
@@ -65,10 +71,10 @@ def __spatial_centre_pad(
     to_pad = np.array(size) - image.shape
     box_min = -np.ceil(np.abs(to_pad / 2)).astype(int)
     box_max = box_min + size
-    bounding_box = (box_min, box_max)
+    box = (box_min, box_max)
 
     # Perform padding.
-    output = __spatial_pad(image, bounding_box, use_world_coords=False, **kwargs)
+    output = __spatial_pad(image, box, use_world_coords=False, **kwargs)
 
     return output
 

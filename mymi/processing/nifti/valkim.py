@@ -1,25 +1,30 @@
 from augmed import Pipeline, RandomAffine
 from augmed.utils import save_json, to_numpy, to_tensor
+from dicomset.nifti import create as create_nifti_dataset, load as load_nifti_dataset
+from dicomset.utils.dicom import from_rtplan_dicom
+from dicomset.utils.io import load_nifti, save_nifti, save_numpy
+from dicomset.utils.logging import logger
+from dicomset.nifti.utils import create_ct, create_index, create_region
+from dicomset.training import create as create_training, exists as exists_training, load as load_training
 import numpy as np
 import os
+import shutil
 from skimage.restoration import inpaint_biharmonic
 import torch
 from tqdm import tqdm
 
-from mymi.datasets.nifti import load as load_nifti_dataset
-from mymi.datasets.nifti.utils import create_ct, create_index, create_region
-from mymi.datasets.training import create as create_training, exists as exists_training, load as load_training
-from mymi import logging
-from mymi.processing import create_ctorch_projections
-from mymi.utils import load_json, load_nifti, load_tiff, from_rtplan_dicom, save_nifti, save_numpy, with_makeitso
+from mymi.processing.projections import create_ctorch_projections
+from mymi.transforms import pad
+from mymi.utils.cdog import load_tiff
 
 def create_valkim_preprocessed_dataset(
-    makeitso: bool = False,
+    recreate: bool = False,
     ) -> None:
     dataset = 'VALKIM'
     dataset_pp = 'VALKIM-PP'
     # Only patients 1/2 have fiducials mask.
     pat_ids = ['PAT1', 'PAT2']
+    # pat_ids = ['PAT2']
     marker_regions = ['Fiducial_1', 'Fiducial_2', 'Fiducial_3']
     structure_regions = ['Carina', 'Chestwall', 'Chestwall_LT', 'Chestwall_RT', 'GreatVes', 'GTV_Inh', 'GTV_Exh', 'Heart', 'Liver', 'Lung_L', 'Lung_R', 'Nerve_Root', 'Oesophagus', 'Spinal_Cord', 'Spleen', 'Stomach']
     regions = marker_regions + structure_regions
@@ -27,11 +32,17 @@ def create_valkim_preprocessed_dataset(
     exh_series = 'series_5'
     avg_reg_series = 'series_10'     # Give it a new number as it doesn't match any of the CT series.
     old_set = load_nifti_dataset(dataset)
+    new_set = create_nifti_dataset(dataset_pp, recreate=recreate)
 
     # Copy index.
     index = old_set.index()
     index = index[index['patient-id'].isin(pat_ids)]
-    create_index(dataset_pp, index, makeitso=makeitso)
+    create_index(dataset_pp, index)
+
+    # Copy regions map.
+    srcpath = os.path.join(old_set.path, 'regions_map.yaml')
+    destpath = os.path.join(new_set.path, 'regions_map.yaml')
+    shutil.copy(srcpath, destpath)
 
     for p in tqdm(pat_ids):
         pat = old_set.patient(p)
@@ -52,40 +63,49 @@ def create_valkim_preprocessed_dataset(
             assert ' 50%' in f, f
             exhale_ct_data = exhale_series.data
             exhale_ct_affine = exhale_series.affine
+            assert np.all(inhale_ct_affine == exhale_ct_affine), f"Expected inhale/exhale affines to match, got {inhale_ct_affine} and {exhale_ct_affine} for patient {p} study {s}."
 
             # Load regions data.
             regions_series = study.regions_series(avg_reg_series)
             f = regions_series.dicom.filepath
             assert '/RS.000000.dcm' in f, f
-            regions_data = regions_series.data(regions=regions)
+            print(regions)
+            regions_data, regions_ids = regions_series.data(rid=regions, return_regions=True)
+            print(regions_ids)
+            print(regions_data.shape)
 
             # Blur inhale/exhale using marker masks from average CT.
-            markers_data = regions_series.data(regions=marker_regions)
+            markers_data = regions_series.data(rid=marker_regions)
             markers_data = markers_data.sum(axis=0) > 0
             inhale_ct_data = inpaint_biharmonic(inhale_ct_data, markers_data, split_into_regions=False)
             exhale_ct_data = inpaint_biharmonic(exhale_ct_data, markers_data, split_into_regions=False)
 
             # Save images.
-            create_ct(dataset_pp, p, s, inh_series, inhale_ct_data, inhale_ct_affine, makeitso=makeitso)
-            create_ct(dataset_pp, p, s, exh_series, exhale_ct_data, exhale_ct_affine, makeitso=makeitso)
+            create_ct(dataset_pp, p, s, inh_series, inhale_ct_data, inhale_ct_affine)
+            create_ct(dataset_pp, p, s, exh_series, exhale_ct_data, exhale_ct_affine)
 
             # Copy regions.
-            assert np.all(inhale_ct_affine == exhale_ct_affine)
-            for r, d in zip(regions, regions_data):
+            for r, d in zip(regions_ids, regions_data):
                 if r == 'GTV_Inh':
-                    create_region(dataset_pp, p, s, inh_series, 'GTV', d, inhale_ct_affine, makeitso=makeitso)
+                    create_region(dataset_pp, p, s, inh_series, 'GTV', d, inhale_ct_affine)
                 elif r == 'GTV_Exh':
-                    create_region(dataset_pp, p, s, exh_series, 'GTV', d, exhale_ct_affine, makeitso=makeitso)
+                    create_region(dataset_pp, p, s, exh_series, 'GTV', d, exhale_ct_affine)
                 else:
-                    create_region(dataset_pp, p, s, avg_reg_series, r, d, inhale_ct_affine, makeitso=makeitso)
+                    create_region(dataset_pp, p, s, avg_reg_series, r, d, inhale_ct_affine)
 
             # Copy other images.
-            other_series = [1, 2, 3, 4, 6, 7, 8, 9]
-            for s in other_series:
-                ct_data = study.ct_series(f'series_{s}').data
+            other_series = [1, 2, 3, 4, 6, 7, 8, 9, 10]
+            print(markers_data.shape)
+            for sr in other_series:
+                ct_data = study.ct_series(f'series_{sr}').data
+                ct_affine = study.ct_series(f'series_{sr}').affine
+                assert np.all(ct_affine == inhale_ct_affine), f"Expected affine of series_{sr} to match inhale/exhale affines, got {ct_affine} and {inhale_ct_affine} for patient {p} study {s}."
+                if ct_data.shape != markers_data.shape:
+                    ct_data = pad(ct_data, ((0, 0, 0), markers_data.shape))
+                print(ct_data.shape)
                 ct_data = inpaint_biharmonic(ct_data, markers_data, split_into_regions=False)
-                ct_affine = study.ct_series(f'series_{s}').affine
-                create_ct(dataset_pp, p, s, f'series_{s}', ct_data, ct_affine, makeitso=makeitso)
+                ct_affine = study.ct_series(f'series_{sr}').affine
+                create_ct(dataset_pp, p, s, f'series_{sr}', ct_data, ct_affine)
 
 def create_valkim_training_dataset(
     create_train_volumes: bool = True,
@@ -131,8 +151,8 @@ def create_valkim_training_dataset(
             inh_affine = inhale_series.affine
             exh_ct = exhale_series.data
             exh_affine = exhale_series.affine
-            inh_labels, inh_label_names = reg_series.data(regions=inh_regions, return_regions=True)
-            exh_labels, exh_label_names = reg_series.data(regions=exh_regions, return_regions=True)
+            inh_labels, inh_label_names = reg_series.data(rid=inh_regions, return_regions=True)
+            exh_labels, exh_label_names = reg_series.data(rid=exh_regions, return_regions=True)
 
             trainpath = os.path.join(training_set.path, 'data', 'training', p)
             volpath = os.path.join(trainpath, 'volumes')
@@ -173,8 +193,8 @@ def create_valkim_training_dataset(
             inh_affine = inhale_series.affine
             exh_ct = exhale_series.data
             exh_affine = exhale_series.affine
-            inh_labels, inh_label_names = reg_series.data(regions=inh_regions, return_regions=True)
-            exh_labels, exh_label_names = reg_series.data(regions=exh_regions, return_regions=True)
+            inh_labels, inh_label_names = reg_series.data(rid=inh_regions, return_regions=True)
+            exh_labels, exh_label_names = reg_series.data(rid=exh_regions, return_regions=True)
 
             valpath = os.path.join(training_set.path, 'data', 'validation', p)
             volpath = os.path.join(valpath, 'volumes')

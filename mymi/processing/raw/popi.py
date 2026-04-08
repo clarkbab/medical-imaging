@@ -1,9 +1,10 @@
 import os
 from tqdm import tqdm
 
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate as recreate_nifti
-from mymi.utils import *
+from dicomset import RawDataset
+from dicomset.nifti import recreate as recreate_nifti
+from mymi.utils.io import save_csv, sitk_load_volume
+from mymi.utils.nifti import save_nifti
 
 def convert_popi_to_nifti(dry_run: bool = False) -> None:
     dataset = 'POPI'

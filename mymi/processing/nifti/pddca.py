@@ -1,10 +1,10 @@
-from mymi.datasets import NiftiDataset
-from mymi.datasets.nifti import recreate as recreate_nifti
-from mymi.datasets.nifti.utils import create_ct, create_region
-from mymi.geometry import foreground_fov
+from dicomset import NiftiDataset
+from dicomset.nifti import recreate as recreate_nifti
+from dicomset.nifti.utils import create_ct, create_region
+from dicomset.utils.geometry import foreground_fov
 from mymi.regions import regions_to_list
 from mymi.transforms import crop
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 def create_pddca_cropped_dataset(
     dry_run: bool = True,

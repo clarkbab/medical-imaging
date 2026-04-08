@@ -1,4 +1,4 @@
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 
 from ..dicom import convert_to_dicom as convert_to_dicom_base
 

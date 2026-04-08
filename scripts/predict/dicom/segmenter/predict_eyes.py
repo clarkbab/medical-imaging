@@ -7,8 +7,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import config
-from mymi.datasets import DicomDataset
-from mymi.datasets.dicom import ROIData, RtStructConverter
+from dicomset import DicomDataset
+from dicomset.dicom import ROIData, RtStructConverter
 from mymi import logging
 from mymi.predictions.dicom import create_all_multi_segmenter_predictions, load_multi_segmenter_prediction
 

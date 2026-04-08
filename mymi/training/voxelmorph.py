@@ -9,7 +9,7 @@ os.environ['VXM_BACKEND'] = 'pytorch'
 sys.path.append(VXM_PATH)
 
 from mymi import config
-from mymi.datasets import TrainingDataset
+from dicomset import TrainingDataset
 from mymi import logging
 from mymi.typing import *
 

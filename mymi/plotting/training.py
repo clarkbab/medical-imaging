@@ -1,8 +1,8 @@
 from typing import *
 
-from mymi.datasets import TrainingDataset
+from dicomset import TrainingDataset
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 from ..plotting import *
 

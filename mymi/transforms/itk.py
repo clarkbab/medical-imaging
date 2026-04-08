@@ -4,7 +4,8 @@ import os
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.itk import from_itk_image, to_itk_image
+from mymi.utils.utils import reverse_xy
 
 def load_itk_transform(
     filepath: str) -> itk.Transform:

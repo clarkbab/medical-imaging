@@ -4,7 +4,9 @@ import scipy
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import load_nifti
+from mymi.utils.utils import escape_filepath
 
 from .plotting import *
 

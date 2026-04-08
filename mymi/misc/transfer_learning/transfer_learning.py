@@ -16,7 +16,8 @@ from mymi.evaluations.datasets.nifti import load_segmenter_evaluation
 from mymi import logging
 from mymi.metrics import higher_is_better
 from mymi.regions import RegionNames
-from mymi.utils import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_to_list, encode
+from mymi.utils.args import arg_assert_literal, arg_assert_literal_list, arg_broadcast, arg_to_list
+from mymi.utils.utils import encode
 
 DEFAULT_MAX_NFEV = int(1e6)
 DEFAULT_METRIC_LEGEND_LOCS = {

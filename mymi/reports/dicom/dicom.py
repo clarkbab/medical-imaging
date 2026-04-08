@@ -6,12 +6,14 @@ import pytorch_lightning as pl
 from tqdm import tqdm
 from typing import List, Optional, Union
 
-from mymi.datasets.dicom import DicomDataset
-from mymi.geometry import fov
+from dicomset.dicom import DicomDataset
+from dicomset.utils.geometry import fov
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_csv
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def create_evaluation_report(
     name: str,
@@ -153,7 +155,7 @@ def get_mapped_duplicates(dataset: str) -> pd.DataFrame:
     # 'create_patient_regions_report(..., use_mapping=True)' which will break on each duplicate.
     regions_map = DicomDataset(dataset).regions_map
     df = load_patient_regions_report(dataset, use_mapping=False)
-    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: regions_map.to_internal(row['region'], pat=row['patient-id'])[0], axis=1)
+    df['mapped'] = df[['patient-id', 'region']].apply(lambda row: regions_map.to_internal(row['region'], patient_id=row['patient-id'])[0], axis=1)
     df = df.groupby('patient-id')['mapped'].apply(list).reset_index()
     df['mapped'] = df['mapped'].apply(lambda regions: [i for i, count in Counter(regions).items() if count > 1])
     df['duplicates'] = df['mapped'].apply(lambda dups: len(dups) > 0)
@@ -205,7 +207,7 @@ def get_region_summary(
     dataset: str,
     region: Regions) -> pd.DataFrame:
     set = DicomDataset(dataset)
-    pat_ids = set.list_patients(region=region)
+    pat_ids = set.list_patients(region_id=region)
 
     cols = {
         'patient': str,
@@ -232,7 +234,7 @@ def get_region_summary(
 
         # Get region data.
         pat_regions = set.patient(pat).list_regions(whitelist=regions)
-        rs_data = set.patient(pat).regions_data(region=pat_regions)
+        rs_data = set.patient(pat).regions_data(region_id=pat_regions)
 
         # Add extents for all regions.
         for r in rs_data.keys():

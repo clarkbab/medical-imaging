@@ -2,9 +2,9 @@ import numpy as np
 import SimpleITK as sitk
 from typing import *
 
-from mymi.geometry import fov_centre
+from dicomset.utils.geometry import fov_centre
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 class RandomFlip:
     def __init__(

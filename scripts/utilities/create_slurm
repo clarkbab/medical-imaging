@@ -10,7 +10,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(root_dir)
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.slurm import create_slurm
 
 CPU_PARTITIONS =[
     'sapphire'

@@ -2,7 +2,6 @@ import numpy as np
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
 
 def ncc(
     a: np.ndarray,

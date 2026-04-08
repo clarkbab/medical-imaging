@@ -4,7 +4,7 @@ import pandas as pd
 
 from mymi import config
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 EXPANDED_regions_map = {
     'Lungs': ['Lung_Lower_Lobe_L', 'Lung_Lower_Lobe_R', 'Lung_Middle_Lobe_R', 'Lung_Upper_Lobe_L', 'Lung_Upper_Lobe_R'],

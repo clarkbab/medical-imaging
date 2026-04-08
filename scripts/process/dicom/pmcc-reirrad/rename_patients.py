@@ -1,4 +1,4 @@
-from mymi.datasets.dicom import rename_patients
+from dicomset.dicom import rename_patients
 
 dataset = 'PMCC-REIRRAD'
 def rename_fn(old_pat_id: str) -> str:

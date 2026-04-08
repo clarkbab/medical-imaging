@@ -7,13 +7,18 @@ import torch
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.models import load_model
 from mymi.models.architectures import RegMod
 from mymi.regions import regions_to_list
 from mymi.transforms import crop, resample, sitk_load_transform, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import load_files_csv, load_nifti, save_csv
+from mymi.utils.nifti import save_nifti
+from mymi.utils.sitk import dvf_to_sitk_transform
+from mymi.utils.timer import Timer
+from mymi.utils.utils import p_landmarks
 
 def create_patient_registration(
     dataset: str,
@@ -575,7 +580,7 @@ def warp_patients_data(
 
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat=pat, group=group)
+    pat_ids = set.list_patients(patient_id=pat, group=group)
 
     # Make predictions.
     for p in tqdm(pat_ids):

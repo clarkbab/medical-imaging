@@ -5,9 +5,12 @@ import SimpleITK as sitk
 from tqdm import tqdm
 
 from mymi import config
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate
-from mymi.utils import *
+from dicomset import RawDataset
+from dicomset.nifti import recreate
+from mymi.utils.io import save_csv
+from mymi.utils.nifti import save_nifti
+from mymi.utils.sitk import from_sitk_image
+from mymi.utils.utils import encode
 
 from ...processing import fill_border_padding, fill_contiguous_padding
 

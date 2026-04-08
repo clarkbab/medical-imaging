@@ -1,6 +1,6 @@
 # cspm_grid evaluate_models.py --params 'model' --values "['corrfield','deeds','identity','plastimatch','unigradicon','unigradicon-io','velocity-dmp','velocity-edmp']"
 from mymi.evaluations.nifti import create_registration_evaluation
-from mymi.utils import parse_arg
+from mymi.utils.slurm import parse_arg
 
 model = parse_arg('model', str)
 model = ['velocity-dmp', 'velocity-edmp', 'velocity-rir', 'velocity-sg_c', 'velocity-sg_lm']

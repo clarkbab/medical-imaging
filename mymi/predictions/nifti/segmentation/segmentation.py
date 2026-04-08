@@ -1,3 +1,6 @@
+from dicomset import NiftiDataset, TrainingDataset
+from dicomset.utils.geometry import fov_centre
+from dicomset.utils.misc import is_windows
 from itertools import chain
 import numpy as np
 import os
@@ -9,16 +12,8 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import config
-from mymi.datasets import NiftiDataset, TrainingDataset
-from mymi.geometry import get_box, fov_centre
-from mymi.loaders import MultiLoader
 from mymi import logging
-from mymi.models import replace_ckpt_alias
-from mymi.models.lightning_modules import Segmenter
-from mymi.processing import largest_cc_4D
-from mymi.regions import RegionNames, get_region_patch_size, regions_to_list, truncate_spine
 from mymi.typing import *
-from mymi.utils import *
 
 def get_multi_segmenter_prediction_nnunet_bootstrap(
     dataset: str,

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_files_csv, save_csv
 
 def replace_metrics(
     model: ModelName,

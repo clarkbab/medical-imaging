@@ -1,7 +1,7 @@
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.utils import escape_filepath
 
 from .plotting import *
 

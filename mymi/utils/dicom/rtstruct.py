@@ -7,7 +7,9 @@ from typing import *
 
 from mymi.constants import *
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.affine import affine_origin, affine_spacing
+from mymi.utils.args import arg_to_list
+from mymi.utils.dicom import add_landmarks_data, add_regions_data, from_ct_dicom, from_rtstruct_dicom, get_contour_coords, list_rtstruct_regions, to_rtstruct_dicom
 
 CONTOUR_FORMATS = ['POINT', 'CLOSED_PLANAR']
 CONTOUR_METHOD = 'SKIMAGE'

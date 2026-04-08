@@ -1,4 +1,4 @@
-from mymi.utils import is_windows
+from mymi.utils.utils import is_windows
 
 from .segmenter_grad_norm import *
 if not is_windows():

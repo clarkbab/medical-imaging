@@ -1,4 +1,4 @@
-from mymi.datasets.dicom import DicomStudy
+from dicomset.dicom import DicomStudy
 from mymi.processing.dicom import convert_to_nifti
 
 dataset = 'VALKIM'

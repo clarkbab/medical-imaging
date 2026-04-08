@@ -11,7 +11,8 @@ from typing import List, Literal, Optional, Tuple, Union
 from mymi import config
 from mymi import logging
 from mymi import typing
-from mymi.utils import append_row, load_files_csv, save_csv
+from mymi.utils.io import load_files_csv, save_csv
+from mymi.utils.pandas import append_row
 
 # To download images from PACS, your desktop must have a static IP configured
 # and a record should be created in PACS admin to allow your images to be downloaded

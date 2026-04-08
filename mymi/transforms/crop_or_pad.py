@@ -1,26 +1,30 @@
+from dicomset.utils import affine_origin, affine_spacing, fov
 import numpy as np
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.assertions import assert_image
+from mymi.utils.decorators import handle_non_spatial_dims
+from mymi.utils.python import delegates
 
-from .transforms import assert_box_width
+from .transforms import assert_box_width, replace_box_none
 
 def __spatial_crop_or_pad(
     image: ImageArray,
     bounding_box: Union[BoxMM2D, BoxMM3D],
+    affine: AffineMatrix | None = None,
     fill: Union[float, Literal['min']] = 'min',
-    origin: Optional[Union[Point2D, Point3D]] = None,
     return_inverse: bool = False,
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_world_coords: bool = True) -> ImageArray:
-    bounding_box = replace_box_none(bounding_box, image.shape, spacing=spacing, origin=origin, use_world_coords=use_world_coords)
+    ) -> ImageArray:
+    bounding_box = replace_box_none(bounding_box, image.shape, affine=affine)
     assert_box_width(bounding_box)
     fill = np.min(image) if fill == 'min' else fill
 
     # Convert box to image coordinates.
     min, max = bounding_box
-    if use_world_coords:
+    if affine is not None:
+        origin = affine_origin(affine)
+        spacing = affine_spacing(affine)
         min = tuple(np.round((np.array(min) - origin) / spacing).astype(int))
         max = tuple(np.round((np.array(max) - origin) / spacing).astype(int))
 
@@ -29,13 +33,7 @@ def __spatial_crop_or_pad(
     spatial_size = image.shape[1:] if n_dims == 4 else image.shape
     if return_inverse:
         # Calculate the inverse bounding box.
-        if use_world_coords:
-            inv_box = extent(image, spacing=spacing, origin=origin)
-        else:
-            inv_min = tuple(-np.array(min))
-            new_spatial_size = np.array(max) - min
-            inv_max = tuple(spatial_size + new_spatial_size - max)
-            inv_box = (inv_min, inv_max)
+        inv_box = fov(image.shape, affine=affine) 
 
     # Perform padding.
     pad_min = (-np.array(min)).clip(0)
@@ -84,10 +82,10 @@ def __spatial_centre_crop_or_pad(
     if use_world_coords:
         assert origin is not None
         assert spacing is not None
-        fov = np.array(spatial_size) * spacing
-        to_crop = fov - size
+        fov_max = np.array(spatial_size) * spacing
+        to_crop = fov_max - size
         box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int) + origin
-        box_max = box_min + fov
+        box_max = box_min + fov_max
     else:
         to_crop = np.array(spatial_size) - size
         box_min = np.sign(to_crop) * np.ceil(np.abs(to_crop / 2)).astype(int)

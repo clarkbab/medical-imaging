@@ -1,14 +1,17 @@
+from dicomset import NiftiDataset
+import os
 import shutil
 import subprocess
 import tempfile
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_nifti
+from mymi.utils.nifti import save_nifti
+from mymi.utils.nrrd import load_nrrd
 
 def create_totalseg_predictions(
     dataset: str,
@@ -29,11 +32,11 @@ def create_totalseg_predictions(
 
     # Load patient IDs.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(pat=pat)
+    pat_ids = set.list_patients(patient_id=pat)
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)
-        pat_studys = pat.list_studies(study=study)
+        pat_studys = pat.list_studies(study_id=study)
         for s in tqdm(pat_studys, leave=False):
             study = pat.study(s)
             input_series = study.ct_series(ct_series)
@@ -64,9 +67,12 @@ def create_totalseg_predictions(
                         input_filepath = dest_filepath
 
                     # Convert data from LPS to RAS, as required by totalseg.
+                    # Copy to a temp file so we don't modify the actual input data on disk.
                     d, a = load_nifti(input_filepath)
                     d = np.flip(d, axis=(0, 1))  # Flip x and y axes.
-                    save_nifti(d, a, input_filepath)
+                    temp_input_filepath = os.path.join(output_dir, 'input_ras.nii.gz')
+                    save_nifti(d, a, temp_input_filepath)
+                    input_filepath = temp_input_filepath
 
                     # Make total seg predictions.
                     command = [

@@ -2,9 +2,10 @@ import os
 import torch
 from tqdm import tqdm
 
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate
-from mymi.utils import *
+from dicomset import RawDataset
+from dicomset.nifti import recreate
+from mymi.utils.io import load_nifti, save_csv
+from mymi.utils.nifti import save_nifti
 
 from ...processing import fill_border_padding, fill_contiguous_padding
 
@@ -16,7 +17,7 @@ def convert_lung250m_4b_to_nifti() -> None:
     fill = -2000
     rset = RawDataset(rdataset)
     set = recreate(dataset)
-    from mymi.datasets import NiftiDataset
+    from dicomset import NiftiDataset
     set = NiftiDataset(dataset)
 
     # Create holdout split file.

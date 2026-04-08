@@ -7,7 +7,6 @@ from typing import *
 from mymi import config
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
 
 LAST_CKPT_REGEX = r'^last(-v([0-9]+))?$'
 

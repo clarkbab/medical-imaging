@@ -1,8 +1,9 @@
 import os
 from tqdm import tqdm
 
-from mymi.datasets import NiftiDataset
-from mymi.utils import *
+from dicomset import NiftiDataset
+from mymi.utils.io import load_nifti
+from mymi.utils.nifti import save_nifti
 
 def convert_old_pmcc_hn() -> None:
     datasets = ['PMCC-HN-TRAIN-OLD', 'PMCC-HN-TEST-OLD']
@@ -17,7 +18,7 @@ def convert_old_pmcc_hn() -> None:
         regions = os.listdir(filepath)
 
         # Create dataset.
-        from mymi.datasets.nifti import recreate
+        from dicomset.nifti import recreate
         nset = recreate(d.replace('-OLD', ''))
 
         fixed_study = 'study_1'
@@ -65,7 +66,7 @@ def convert_old_replan() -> None:
     regions = os.listdir(filepath)
 
     # Create dataset.
-    from mymi.datasets.nifti import recreate
+    from dicomset.nifti import recreate
     nset = recreate('PMCC-HN-REPLAN')
 
     fixed_study = 'study_1'

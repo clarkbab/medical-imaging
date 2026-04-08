@@ -1,6 +1,6 @@
 import torch
 
-from mymi.utils import *
+from mymi.utils.pandas import append_row
 from mymi.typing import *
 
 from .mednext import create_mednext_v1

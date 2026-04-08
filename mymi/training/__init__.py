@@ -9,7 +9,8 @@ from tqdm import tqdm
 from mymi import config
 from mymi.models import replace_ckpt_alias
 from mymi.typing import ModelName
-from mymi.utils import append_row, arg_to_list
+from mymi.utils.args import arg_to_list
+from mymi.utils.pandas import append_row
 
 from .registration import *
 from .segmentation import *

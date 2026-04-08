@@ -1,10 +1,11 @@
 import matplotlib as mpl
 from typing import *
 
-from mymi.datasets.nifti import NiftiDataset, NiftiImageSeries, NiftiLandmarksSeries, NiftiModality, NiftiPatient, NiftiRegionsSeries, NiftiStudy
+from dicomset.nifti import NiftiDataset, NiftiImageSeries, NiftiLandmarksSeries, NiftiModality, NiftiPatient, NiftiRegionsSeries, NiftiStudy
 from mymi.predictions.nifti import load_registration, load_segmenter_predictions
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.python import delegates
 
 from .data import plot_histogram as ph
 from .patients import plot_patient_histogram as pph, plot_patients as pp
@@ -16,7 +17,7 @@ def plot_dataset_histogram(
     pat: PatientIDs = 'all',
     # TODO: Allow studies/series to be specified per patient?
     **kwargs) -> None:
-    pat_ids = dataset.list_patients(pat=pat)
+    pat_ids = dataset.list_patients(patient_id=pat)
     n_rows = len(pat_ids)
 
     # Get the number of columns.
@@ -73,7 +74,7 @@ def plot_patients(dataset, *args, **kwargs) -> None:
         'default_regions': lambda study: study.default_regions,
         'dose_series': lambda study, series: study.series(series, 'dose'),
         'has_dose': lambda study: study.has_dose,
-        'landmarks_data': lambda series, landmarks: series.data(landmark=landmarks),
+        'landmarks_data': lambda series, landmarks: series.data(landmark_id=landmarks),
         'landmark_series': lambda study, series: study.series(series, 'landmarks'),
         'regions_data': lambda series, regions: series.data(regions=regions, return_regions=True),
         'region_series': lambda study, series: study.series(series, 'regions'),

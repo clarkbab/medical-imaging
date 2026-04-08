@@ -9,12 +9,11 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import datasets as ds
-from mymi.datasets.training import TrainingDataset
+from dicomset.training import TrainingDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import resample, sitk_transform_points
 from mymi.typing import *
-from mymi.utils import *
 
 from .random_sampler import RandomSampler
 

@@ -3,15 +3,17 @@ import shutil
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets.dicom import DicomDataset, create, exists, recreate as recreate_dicom
-from mymi.datasets.nifti import NiftiDataset
+from dicomset.dicom import DicomDataset, create, exists, recreate as recreate_dicom
+from dicomset.nifti import NiftiDataset
 from mymi import logging
 from mymi.predictions.nifti import load_registration
 from mymi.regions import regions_to_list
 from mymi.transforms import sitk_save_transform
 from mymi.transforms.dataset.nifti import rigid_registration
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.dicom import to_ct_dicoms, to_rtdose_dicom, to_rtstruct_dicom
+from mymi.utils.io import save_csv
+from mymi.utils.nifti import save_nifti
 from ..processing import write_flag
 
 def convert_registration_predictions_to_dicom(

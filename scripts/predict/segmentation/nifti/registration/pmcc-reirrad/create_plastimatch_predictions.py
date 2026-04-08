@@ -1,5 +1,5 @@
 from mymi.predictions.nifti import create_plastimatch_predictions
-from mymi.utils import parse_arg
+from mymi.utils.slurm import parse_arg
 
 pat_ids = parse_arg('pat_ids', arg_type=str, default='all')
 

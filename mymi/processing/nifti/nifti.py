@@ -16,20 +16,21 @@ from typing import *
 
 from mymi import config
 from mymi import datasets as ds
-from mymi.datasets import DicomDataset, NiftiDataset
-from mymi.datasets.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
-from mymi.datasets.nifti import create_region
-from mymi.datasets.training import TrainingDataset, exists as exists_training
-from mymi.datasets.training import create as create_training
-from mymi.datasets.training import recreate as recreate_training
-from mymi.geometry import fov_centre
+from dicomset import DicomDataset, NiftiDataset
+from dicomset.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
+from dicomset.nifti import create_region
+from dicomset.training import TrainingDataset, exists as exists_training
+from dicomset.training import create as create_training
+from dicomset.training import recreate as recreate_training
+from dicomset.utils.geometry import fov_centre
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.processing.processing import convert_brain_crop_to_training as convert_brain_crop_to_training_base
 from mymi.regions import RegionColours, RegionList, RegionNames, regions_to_list
 from mymi.transforms import resample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.pandas import append_row
 
 from ...processing import write_flag
 
@@ -294,7 +295,7 @@ def convert_replan_to_training(
             params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    pat_ids = set.list_patients(region=regions)
+    pat_ids = set.list_patients(region_id=regions)
 
     # Get exclusions.
     exc_df = set.excluded_labels
@@ -504,7 +505,7 @@ def convert_population_lens_crop_to_training(
             params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    pat_ids = set.list_patients(region=regions)
+    pat_ids = set.list_patients(region_id=regions)
 
     # Get exclusions.
     exc_df = set.excluded_labels
@@ -540,7 +541,7 @@ def convert_population_lens_crop_to_training(
                 pat_id_mt = pat_id
                 input = pat.ct_data
                 input_spacing = pat.ct_spacing
-                regions_data = pat.regions_data(region=regions, regions_ignore_missing=True) 
+                regions_data = pat.regions_data(region_id=regions, regions_ignore_missing=True) 
 
             # Resample input.
             if spacing is not None:
@@ -565,7 +566,7 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_region(region):
-                            regions_data = pat.regions_data(region=region)[region]
+                            regions_data = pat.regions_data(region_id=region)[region]
                             region_extent = extent(regions_data)
                             if region_extent[0][2] < min_z:
                                 min_z = region_extent[0][2]
@@ -581,7 +582,7 @@ def convert_population_lens_crop_to_training(
                     regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
                     for region in regions:
                         if pat.has_region(region):
-                            rdata = pat.regions_data(region=region)[region]
+                            rdata = pat.regions_data(region_id=region)[region]
                             extent_centre = fov_centre(rdata)
                             centre_z = extent_centre[2]
                             break
@@ -791,7 +792,7 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_region(eye_region):
-                    regions_data = pat.regions_data(region=eye_region)[eye_region]
+                    regions_data = pat.regions_data(region_id=eye_region)[eye_region]
                     region_extent = extent(regions_data)
                     if region_extent[0][2] < min_z:
                         min_z = region_extent[0][2]
@@ -822,7 +823,7 @@ def convert_replan_to_lens_crop(
             eye_regions = ['Eye_L', 'Eye_R', 'Lens_L', 'Lens_R']
             for eye_region in eye_regions:
                 if pat.has_region(eye_region):
-                    rdata = pat.regions_data(region=eye_region)[eye_region]
+                    rdata = pat.regions_data(region_id=eye_region)[eye_region]
                     extent_centre = fov_centre(rdata)
                     centre_z = extent_centre[2]
                     break
@@ -898,7 +899,7 @@ def create_excluded_brainstem(
     df = pd.DataFrame(columns=cols.keys())
 
     # Get patient with 'Brain' label.
-    pat_ids = dest_set.list_patients(region='Brain')
+    pat_ids = dest_set.list_patients(region_id='Brain')
     for pat_id in tqdm(pat_ids):
         # Skip if no 'Brainstem'.
         pat = dest_set.patient(pat_id)
@@ -906,7 +907,7 @@ def create_excluded_brainstem(
             continue
 
         # Load label data.
-        data = pat.regions_data(region=['Brain', 'Brainstem'])
+        data = pat.regions_data(region_id=['Brain', 'Brainstem'])
 
         # Perform exclusion.
         brain_data = data['Brain'] & ~data['Brainstem']

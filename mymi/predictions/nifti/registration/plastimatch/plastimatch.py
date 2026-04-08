@@ -4,13 +4,16 @@ import subprocess
 import tempfile
 from tqdm import tqdm
 
-from mymi.datasets import NiftiDataset
-from mymi.geometry import get_centre_of_mass
+from dicomset import NiftiDataset
+from dicomset.utils.geometry import get_centre_of_mass
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import crop_or_pad, dvf_to_sitk_transform, resample, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import save_csv, save_text
+from mymi.utils.nifti import save_nifti
+from mymi.utils.sitk import dvf_to_sitk_transform
+from mymi.utils.timer import Timer
 
 def create_plastimatch_predictions(
     dataset: str,

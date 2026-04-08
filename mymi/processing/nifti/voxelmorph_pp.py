@@ -3,11 +3,12 @@ import os
 import SimpleITK as sitk
 from tqdm import tqdm
 
-from mymi.datasets import NiftiDataset
-from mymi.datasets.nifti import recreate
-from mymi.geometry import get_centre_of_mass
+from dicomset import NiftiDataset
+from dicomset.nifti import recreate
+from dicomset.utils.geometry import get_centre_of_mass
 from mymi.transforms import crop_or_pad, crop_or_pad_landmarks, resample
-from mymi.utils import *
+from mymi.utils.io import save_csv
+from mymi.utils.nifti import save_nifti
 
 def create_vxmpp_preprocessed_dataset(
     dataset: str,

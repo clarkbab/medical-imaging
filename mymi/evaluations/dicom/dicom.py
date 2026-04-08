@@ -9,12 +9,14 @@ from typing import List, Optional, Union
 
 from mymi import config
 from mymi import datasets as ds
-from mymi.datasets.dicom import RtStructConverter
+from dicomset.dicom import RtStructConverter
 from mymi import logging
 from mymi.metrics import dice
 from mymi.models import replace_ckpt_alias
 from mymi import typing
-from mymi.utils import append_row, encode, load_files_csv, save_csv
+from mymi.utils.io import load_files_csv, save_csv
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def load_segmenter_dose_evaluation(
     datasets: Union[str, List[str]],

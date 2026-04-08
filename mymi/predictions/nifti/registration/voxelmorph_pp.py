@@ -4,13 +4,16 @@ import tempfile
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets.nifti import NiftiDataset
-from mymi.geometry import get_centre_of_mass
+from dicomset.nifti import NiftiDataset
+from dicomset.utils.geometry import get_centre_of_mass
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import *
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import save_csv
+from mymi.utils.nifti import save_nifti
+from mymi.utils.sitk import dvf_to_sitk_transform
 
 VXM_PP_PATH = os.path.join(os.environ['CODE'], 'VoxelMorphPlusPlus')
 

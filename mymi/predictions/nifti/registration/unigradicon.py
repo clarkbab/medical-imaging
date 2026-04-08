@@ -7,12 +7,17 @@ from tqdm import tqdm
 from typing import *
 import unigradicon as ugi
 
-from mymi.datasets.nifti import NiftiDataset
+from dicomset.nifti import NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import load_itk_transform, sitk_load_transform, resample, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import save_csv
+from mymi.utils.itk import from_itk_image
+from mymi.utils.nifti import save_nifti
+from mymi.utils.sitk import to_sitk_image
+from mymi.utils.timer import Timer
+from mymi.utils.utils import reverse_xy
 
 def load_finetuned_model(
     dataset: DatasetID,

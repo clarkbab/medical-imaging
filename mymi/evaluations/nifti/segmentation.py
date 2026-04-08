@@ -6,7 +6,7 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import config
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.loaders import get_holdout_split
 from mymi.metrics import dice, distances, extent_centre_distance, get_encaps_dist_mm
 from mymi.models import replace_ckpt_alias
@@ -14,7 +14,10 @@ from mymi.predictions.nifti import load_segmenter_predictions
 from mymi import logging
 from mymi.regions import RegionList, get_region_patch_size, get_region_tolerance, regions_to_list
 from mymi.typing import *
-from mymi.utils import append_row, arg_to_list, encode, load_files_csv, save_csv
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import load_files_csv, save_csv
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def get_segmenter_patient_evaluation(
     dataset: str,

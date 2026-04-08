@@ -1,39 +1,53 @@
+from dicomset.typing import AffineMatrix, Image
+from dicomset.utils import affine_origin, affine_spacing
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.assertions import assert_image
+from mymi.utils.decorators import handle_non_spatial_dims
+from mymi.utils.points import landmarks_to_data
+from mymi.utils.python import delegates
+from mymi.utils.sitk import from_sitk_image, to_sitk_image
 
 from .transforms import assert_box_width
 
 def __spatial_resample(
-    data: Optional[Union[ImageArray, ImageTensor3D]] = None,
+    data: Image | None = None,
+    affine: AffineMatrix | None = None,
     fill: Union[float, Literal['min']] = 'min',
-    image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
-    origin: Point3D = (0, 0, 0),
+    image: DicomSeries | NiftiImageSeries | None = None,
+    output_affine: AffineMatrix | None = None, 
     output_image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,
-    output_origin: Optional[Point3D] = None,    # Defaults to input image origin.
     output_size: Optional[Size3D] = None,       # Unless specified, is set to maintain image FOV.
-    output_spacing: Optional[Spacing3D] = None,     # Defaults to input image spacing.
     return_transform: bool = False,
-    spacing: Spacing3D = (1, 1, 1),
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
     ) -> Union[ImageArray, ImageTensor3D, Tuple[Union[ImageArray, ImageTensor3D], sitk.Transform]]:
-    # Use 'image' and 'output_image' to get data/spacing/origin if provided.
+    # Get input data and affine.
     if data is None:
         if image is None:
             raise ValueError("Either 'data' or 'image' must be provided.")
         else:
             data = image.data
-            spacing = image.spacing
-            origin = image.origin
+            spacing = image.spacing 
+            origin = image.origin 
+    else:
+        assert affine is not None, "Affine must be provided when data is provided."
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine) 
     data_type = type(data)
     if output_image is not None:
         output_size = output_image.size
         output_spacing = output_image.spacing
-        output_origin = output_image.origin
+        output_origin = output_image.origin 
+    elif output_affine is not None:
+        output_spacing = affine_spacing(output_affine)
+        output_origin = affine_origin(output_affine)
+    else:
+        output_spacing = None
+        output_origin = None
 
     # Convert to sitk datatypes.
     is_boolean = data.dtype == bool
@@ -41,13 +55,9 @@ def __spatial_resample(
         data = data.astype(np.uint8) 
     origin = tuple(float(o) for o in origin)
     spacing = tuple(float(s) for s in spacing)
-    if output_origin is not None:
-        output_origin = tuple(float(o) for o in output_origin)
-    if output_spacing is not None:
-        output_spacing = tuple(float(s) for s in output_spacing)
 
     # Create 'sitk' image.
-    img = to_sitk_image(data, origin=origin, spacing=spacing)
+    img = to_sitk_image(data, affine=affine)
 
     # Create resample filter.
     filter = sitk.ResampleImageFilter()
@@ -84,7 +94,7 @@ def __spatial_resample(
     img = filter.Execute(img)
 
     # Get output data.
-    image, _, _ = from_sitk_image(img)
+    image, _ = from_sitk_image(img)
 
     # Manage types.
     if is_boolean:

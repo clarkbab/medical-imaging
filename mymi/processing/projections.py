@@ -1,5 +1,7 @@
 from augmed.typing import *
 from augmed.utils import to_tensor
+from dicomset.utils.args import arg_to_list
+from dicomset.utils.geometry import affine_origin, affine_spacing, create_affine, fov_centre
 from CTorch.utils.geometry import CircGeom3D
 from CTorch.projector.projector_interface import Projector
 from diffdrr.data import read
@@ -15,14 +17,10 @@ import torchio as tio
 from tqdm import tqdm
 from typing import *
 
-from mymi.geometry import fov_centre
 from mymi import logging
 from mymi.processing.ct import fill_ct_background, has_ct_background
 from mymi.typing import *
-from mymi.utils import (
-    arg_to_list, create_affine, affine_origin, affine_spacing, sitk_load_volume, 
-    sitk_save_volume, point_to_image_coords, reverse_angles,
-)
+from mymi.utils.io import sitk_load_volume, sitk_save_volume
 
 # Where can this method go wrong?
 # 1. When the 'kv_source_angles' don't use the clockwise positive, (CW+, looking foot -> head) convention.

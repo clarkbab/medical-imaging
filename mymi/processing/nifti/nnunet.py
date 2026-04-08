@@ -5,12 +5,12 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import config
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.loaders import get_holdout_split
 from mymi import logging
 from mymi.transforms import resample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.nifti import save_nifti
 
 # This is nnU-Net's v1 data format.
 def convert_to_nnunet_single_region_v1(
@@ -128,7 +128,7 @@ def convert_to_nnunet_multi_region(
 
     # Get regions.
     set = NiftiDataset(dataset)
-    regions = set.list_regions(region=region)
+    regions = set.list_regions(region_id=region)
 
     # Create the dataset.
     filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')

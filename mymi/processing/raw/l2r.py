@@ -2,9 +2,10 @@ import os
 import shutil
 from tqdm import tqdm
 
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate
-from mymi.utils import *
+from dicomset import RawDataset
+from dicomset.nifti import recreate
+from mymi.utils.io import load_nifti, save_csv
+from mymi.utils.nifti import save_nifti
 
 def convert_l2r_lung_ct_to_nifti() -> None:
     dataset = 'L2R-LUNG-CT'

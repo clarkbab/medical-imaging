@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional
 
 from mymi.metrics import mean_intensity, snr
-from mymi.geometry import fov, fov_width
+from dicomset.utils.geometry import fov, fov_width
 from mymi.processing import largest_cc_3D
 from mymi.typing import *
 

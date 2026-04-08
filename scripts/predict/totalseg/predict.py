@@ -9,7 +9,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '
 sys.path.append(root_dir)
 
 from mymi import logging
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 def predict(
     dataset: str,

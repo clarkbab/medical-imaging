@@ -13,22 +13,24 @@ from typing import *
 from uuid import uuid1
 
 from mymi import config
-from mymi.datasets import DicomDataset, NiftiDataset
-from mymi.geometry import fov, fov_centre
+from dicomset import DicomDataset, NiftiDataset
+from dicomset.utils.geometry import fov, fov_centre
 from mymi import logging
 from mymi.metrics import mean_intensity, snr
 from mymi.plotting.nifti import plot_patients
 from mymi.processing import largest_cc_3D, get_object, one_hot_encode
 from mymi.regions import regions_to_list as regions_to_list
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def get_region_overlap_summary(
     dataset: str,
     region: str) -> DataFrame:
     # List patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(labels='all', region=region)
+    pat_ids = set.list_patients(labels='all', region_id=region)
 
     cols = {
         'dataset': str,
@@ -86,7 +88,7 @@ def create_region_contrast_report(
 
     # Load data.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(region=region)
+    pat_ids = set.list_patients(region_id=region)
 
     for pat_id in tqdm(pat_ids):
         # Load CT and region data.
@@ -94,7 +96,7 @@ def create_region_contrast_report(
         if not pat.has_region(region):
             continue
         ct_data = pat.ct_data
-        regions_data = pat.regions_data(region=region)[region]
+        regions_data = pat.regions_data(region_id=region)[region]
 
         # Get OAR label and margin label.
         regions_data_margin = np.logical_xor(binary_dilation(regions_data, iterations=3), regions_data)
@@ -112,7 +114,7 @@ def create_region_contrast_report(
 
         # Calculate region noise.
         if pat.has_region(noise_region):
-            noise_data = pat.regions_data(region=noise_region)[noise_region]
+            noise_data = pat.regions_data(region_id=noise_region)[noise_region]
             noise_data_eroded = binary_erosion(noise_data, iterations=3)
             if noise_data_eroded.sum() == 0:
                 raise ValueError(f"Eroded noise data for region '{noise_region}' is empty, choose a larger region.")
@@ -270,7 +272,7 @@ def get_ct_info_summary(
     region: Optional[Regions] = None) -> pd.DataFrame:
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(region=region)
+    pat_ids = set.list_patients(region_id=region)
 
     cols = {
         'dataset': str,
@@ -497,7 +499,7 @@ def create_region_figures(
 
     # Get patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(labels=labels, region=region)
+    pat_ids = set.list_patients(labels=labels, region_id=region)
 
     # Get excluded regions.
     exc_df = set.excluded_labels
@@ -758,7 +760,7 @@ def get_object_summary(
     pat = NiftiDataset(dataset).patient(pat_id)
 
     spacing = pat.ct_spacing
-    label = pat.regions_data(region=region)[region]
+    label = pat.regions_data(region_id=region)[region]
     objs, n_objs = label_objects(label, structure=np.ones((3, 3, 3)))
     objs = one_hot_encode(objs)
     

@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 
 from mymi import config
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.transforms import resample
 from mymi.typing import *
 

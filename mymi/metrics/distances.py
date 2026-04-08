@@ -2,9 +2,9 @@ import numpy as np
 from surface_distance import *
 from typing import *
 
-from mymi.geometry import fov_centre
+from dicomset.utils.geometry import fov_centre
 from mymi.typing import *
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 def distances(
     a: LabelSlice | LabelVolume,

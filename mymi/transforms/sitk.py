@@ -4,7 +4,8 @@ import SimpleITK as sitk
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_nifti
+from mymi.utils.sitk import dvf_to_sitk_transform
 
 def sitk_load_transform(
     filepath: str) -> sitk.Transform:

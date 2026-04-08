@@ -8,15 +8,19 @@ import seaborn as sns
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import Dataset
-from mymi.geometry import get_box, get_centre_of_mass, foreground_fov, foreground_fov_centre
+from dicomset import Dataset
+from dicomset.utils.geometry import com, foreground_fov, foreground_fov_centre
 from mymi import logging
 from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop as crop_fn, itk_transform_image, replace_box_none, resample, sample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.affine import affine_origin, affine_spacing
+from mymi.utils.args import arg_to_list
+from mymi.utils.colours import to_rgb
+from mymi.utils.points import landmarks_from_data, landmarks_to_image_coords, point_to_image_coords
+from mymi.utils.utils import escape_filepath, get_axis_name
 
 def box_intersects_view_plane(
     box: Box3D,
@@ -104,7 +108,7 @@ def get_idx(
         if isinstance(centre, str) and centre == 'dose':
             if dose_data is None:
                 raise ValueError("Cannot use 'dose' centre without 'dose_data'.")
-            centre = get_centre_of_mass(dose_data, use_world_coords=False)
+            centre = com(dose_data, use_world_coords=False)
             idx = centre[view]
         elif isinstance(centre, (LandmarkID, RegionID)):
             if lm_data is not None and centre in list(lm_data['landmark-id']):

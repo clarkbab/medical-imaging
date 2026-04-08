@@ -1,5 +1,5 @@
 from mymi.predictions.nifti import create_registrations
-from mymi.utils import parse_arg
+from mymi.utils.slurm import parse_arg
 
 loss_lambda = parse_arg('loss_lambda', float, 0.02)
 

@@ -1,10 +1,11 @@
 import os
 from typing import *
 
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_csv
+from mymi.utils.pandas import append_row
 
 def get_custom_holdout_split(
     dataset: str,

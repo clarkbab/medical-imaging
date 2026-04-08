@@ -10,13 +10,15 @@ from time import time
 from typing import *
 from tqdm import tqdm
 
-from mymi.datasets.dataset import CT_FROM_REGEXP
-from mymi.datasets.dicom import DicomDataset, DicomStudy
-from mymi.datasets.nifti import NiftiDataset, create as create_nifti, exists as exists_nifti, recreate as recreate_nifti
+from dicomset.dataset import CT_FROM_REGEXP
+from dicomset.dicom import DicomDataset, DicomStudy
+from dicomset.nifti import NiftiDataset, create as create_nifti, exists as exists_nifti, recreate as recreate_nifti
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_csv, save_csv
+from mymi.utils.nifti import save_nifti
+from mymi.utils.pandas import append_row
 
 from ..processing import write_flag
 
@@ -57,11 +59,11 @@ def convert_to_nifti(
 
     # Load all patients.
     dicom_set = DicomDataset(dataset)
-    okwargs = dict(group=group, pat=pat)
+    okwargs = dict(group=group, patient_id=pat)
     if filter_pats_by_landmarks and landmark is not None: 
-        okwargs['landmark'] = landmark
+        okwargs['landmark_id'] = landmark
     if filter_pats_by_regions and region is not None:
-        okwargs['region'] = region
+        okwargs['region_id'] = region
     resolved_pat_ids = dicom_set.list_patients(**okwargs)
 
     # Create NIFTI dataset.
@@ -272,7 +274,7 @@ def convert_to_nifti(
                         nifti_series = sr
 
                     ref_ct = series.ref_ct
-                    regions_data = series.regions_data(region=region, regions_ignore_missing=True)
+                    regions_data = series.regions_data(region_id=region, regions_ignore_missing=True)
                     for r, data in regions_data.items():
                         filepath = os.path.join(nifti_set.path, 'data', 'patients', ap, nifti_study, 'regions', nifti_series, f'{r}.nii.gz')
                         if not os.path.exists(filepath):
@@ -295,7 +297,7 @@ def convert_to_nifti(
 
                 # Create landmarks.
                 if landmark is not None:
-                    lm_df = series.landmarks_data(landmark=landmark, show_ids=False)
+                    lm_df = series.landmarks_data(landmark_id=landmark, show_ids=False)
                     if lm_df is not None:
                         # Get Nifti series ID.
                         if anonymise_series:

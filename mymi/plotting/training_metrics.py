@@ -8,7 +8,7 @@ from typing import *
 
 from mymi.reports import load_training_metrics
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 GRADIENT_METRICS = [
     # 'gradient-output-mean',

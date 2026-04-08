@@ -1,7 +1,8 @@
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.utils import escape_filepath
 
 from .patients import plot_patient
 from .plotting import *
@@ -46,7 +47,7 @@ def plot_registration(
         plot_saved(loadpath)
         return
     set = dataset_type(dataset)
-    fixed_pat_ids = set.list_patients(exclude=exclude_fixed_pat, group=group, pat=fixed_pat)
+    fixed_pat_ids = set.list_patients(exclude=exclude_fixed_pat, group=group, patient_id=fixed_pat)
     if moving_pat is None:
         moving_pat_ids = fixed_pat_ids
     else:
@@ -107,11 +108,11 @@ def plot_registration(
                 dose_data = None
             dose_datas.append(dose_data)
             if landmark is not None:
-                landmarks_data = study.landmarks_data(landmark=landmark)
+                landmarks_data = study.landmarks_data(landmark_id=landmark)
             else:
                 landmarks_data = None
             if region is not None:
-                regions_data = study.regions_data(labels=labels, region=region)
+                regions_data = study.regions_data(labels=labels, region_id=region)
             else:
                 regions_data = None
 
@@ -121,9 +122,9 @@ def plot_registration(
                 if isinstance(c, (LandmarkID, RegionID)):
                     # Load 'centre' data if not already in 'landmarks/regions_data'.
                     if study.has_landmark(c):
-                        oc = study.landmarks_data(landmark=centre).iloc[0] if landmarks_data is None or centre not in list(landmarks_data['landmark-id']) else centre
+                        oc = study.landmarks_data(landmark_id=centre).iloc[0] if landmarks_data is None or centre not in list(landmarks_data['landmark-id']) else centre
                     elif study.has_region(centre):
-                        oc = study.regions_data(region=centre)[centre] if regions_data is None or centre not in regions_data else centre
+                        oc = study.regions_data(region_id=centre)[centre] if regions_data is None or centre not in regions_data else centre
                     else:
                         raise ValueError(f"Study {study} has no landmark/regions with ID '{centre}' for 'centre'.")
                 else:
@@ -135,7 +136,7 @@ def plot_registration(
             if crop is not None:
                 if type(crop) == str:
                     if regions_data is None or crop not in regions_data:
-                        ocrop = study.regions_data(region=crop)[crop]
+                        ocrop = study.regions_data(region_id=crop)[crop]
                     else:
                         ocrop = crop
                 else:

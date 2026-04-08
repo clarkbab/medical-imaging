@@ -2,7 +2,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 
-from mymi.datasets import TrainingDataset
+from dicomset import TrainingDataset
 from mymi.transforms import centre_pad
 from mymi import logging
 

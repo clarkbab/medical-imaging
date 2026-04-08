@@ -1,9 +1,9 @@
+from dicomset.utils import affine_origin, affine_spacing
 import numpy as np
 from typing import *
 
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
 
 def assert_box_width(box: Union[Box2D, Box3D]) -> None:
     # Check box width.
@@ -16,25 +16,24 @@ def assert_box_width(box: Union[Box2D, Box3D]) -> None:
 def replace_box_none(
     bounding_box: Union[Box2D, Box3D],
     size: Union[Size2D, Size3D],
-    origin: Optional[Union[Point2D, Point3D]] = None,
-    spacing: Optional[Union[Spacing2D, Spacing3D]] = None,
-    use_world_coords: bool = True) -> Tuple[Box2D, Box3D]:
-    if use_world_coords:
-        assert spacing is not None
-        assert origin is not None
-
+    affine: AffineMatrix | None = None,
+    ) -> Tuple[Box2D, Box3D]:
     # Replace 'None' values.
     n_dims = len(size)
     min, max = bounding_box
     min, max = list(min), list(max)
     for i in range(n_dims):
         if min[i] is None:
-            if use_world_coords:
+            if affine is not None:
+                origin = affine_origin(affine)
+
                 min[i] = origin[i]
             else:
                 min[i] = 0
         if max[i] is None:
-            if use_world_coords:
+            if affine is not None:
+                spacing = affine_spacing(affine)
+                origin = affine_origin(affine)
                 max[i] = size[i] * spacing[i] + origin[i]
             else:
                 max[i] = size[i]

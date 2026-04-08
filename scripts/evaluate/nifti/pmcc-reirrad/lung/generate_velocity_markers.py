@@ -1,7 +1,7 @@
 import os
 
 from mymi import datasets as ds
-from mymi.datasets.dicom import DicomStudy
+from dicomset.dicom import DicomStudy
 
 def study_sort(s: DicomStudy) -> int:
     assert s.has_rtstruct

@@ -6,7 +6,7 @@ from typing import *
 from mymi import config
 from mymi.regions import RegionNames
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_files_csv
 
 def load_training_metrics(
     model: ModelName) -> pd.DataFrame:

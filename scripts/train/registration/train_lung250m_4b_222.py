@@ -1,5 +1,5 @@
 from mymi.training import train_registration
-from mymi.utils import parse_arg
+from mymi.utils.slurm import parse_arg
 
 # Overridden args.
 loss_lambda = parse_arg('loss_lambda', float, 0.02)

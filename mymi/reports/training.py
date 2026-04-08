@@ -9,12 +9,14 @@ from typing import *
 from uuid import uuid1
 
 from mymi import config
-from mymi.datasets import TrainingDataset
-from mymi.geometry import fov, fov_centre
+from dicomset import TrainingDataset
+from dicomset.utils.geometry import fov, fov_centre
 from mymi import logging
 from mymi.processing import get_object, one_hot_encode
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def create_ct_figures_report(
     dataset: str,
@@ -52,7 +54,7 @@ def create_ct_figures_report(
 
     # Get patients.
     set = TrainingDataset(dataset)
-    sample_ids = set.list_samples(region=region)
+    sample_ids = set.list_samples(region_id=region)
 
     for sample_id in sample_ids:
         # Load input.
@@ -306,7 +308,7 @@ def get_region_counts(
     }
     df = pd.DataFrame(columns=cols.keys())
     for region in regions:
-        n_samples = len(set.list_samples(region=region))
+        n_samples = len(set.list_samples(region_id=region))
         data = {
             'dataset': dataset,
             'region': region,

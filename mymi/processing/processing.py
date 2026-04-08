@@ -10,13 +10,13 @@ from time import time
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import TrainingDataset
-from mymi.datasets.training import create as create_training, exists as exists_training, recreate as recreate_training
+from dicomset import TrainingDataset
+from dicomset.training import create as create_training, exists as exists_training, recreate as recreate_training
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import crop_foreground, resample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.pandas import append_row
 
 def convert_brain_crop_to_training(
     set: 'Dataset',
@@ -81,7 +81,7 @@ def convert_brain_crop_to_training(
             params_df.to_csv(filepath, index=False)
 
     # Load patients.
-    pat_ids = set.list_patients(region=regions)
+    pat_ids = set.list_patients(region_id=regions)
 
     # Get exclusions.
     exc_df = set.excluded_labels
@@ -165,7 +165,7 @@ def convert_brain_crop_to_training(
                         continue
 
                 # Load label data.
-                label = patient.regions_data(region=region)[region]
+                label = patient.regions_data(region_id=region)[region]
 
                 # Resample data.
                 if spacing is not None:

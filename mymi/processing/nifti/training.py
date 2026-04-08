@@ -4,14 +4,16 @@ from time import time
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
-from mymi.datasets.training import recreate
+from dicomset import NiftiDataset
+from dicomset.training import recreate
 from mymi.loaders import get_holdout_split
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import pad, resample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import save_csv
+from mymi.utils.pandas import append_row
 
 def convert_to_registration_training_holdout(
     dataset: str,

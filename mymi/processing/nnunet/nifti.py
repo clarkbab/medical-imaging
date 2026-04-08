@@ -2,12 +2,13 @@ import os
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi import logging
 from mymi.processing import one_hot_encode
 from mymi.transforms import crop, resample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_nifti
+from mymi.utils.nifti import save_nifti
 
 def convert_predictions_to_nifti_single_region(
     dataset: str,

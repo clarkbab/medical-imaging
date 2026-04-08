@@ -4,14 +4,18 @@ import os
 import shutil
 from tqdm import tqdm
 
-from mymi.datasets.nifti import NiftiDataset, create, exists, recreate as recreate_nifti
-from mymi.datasets.nifti.utils import *
-from mymi.geometry import get_centre_of_mass, foreground_fov
+from dicomset.nifti import NiftiDataset, create, exists, recreate as recreate_nifti
+from dicomset.nifti.utils import *
+from dicomset.utils.geometry import get_centre_of_mass, foreground_fov
 from mymi import logging
 from mymi.predictions.nifti import load_registration
 from mymi.transforms import crop_or_pad, resample, sitk_transform_points
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import load_csv, save_csv
+from mymi.utils.nifti import save_nifti
+from mymi.utils.numpy import to_tuple
+from mymi.utils.pandas import append_row
 
 def convert_registrations_from_lung_preprocessed(
     dataset: DatasetID,

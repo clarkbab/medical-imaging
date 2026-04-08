@@ -2,8 +2,8 @@ import os
 import shutil
 from tqdm import tqdm
 
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate as recreate_nifti
+from dicomset import RawDataset
+from dicomset.nifti import recreate as recreate_nifti
 
 def convert_pddca_to_nifti(
     makeitso: bool = False,

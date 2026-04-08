@@ -4,9 +4,9 @@ import os
 from tqdm import tqdm
 
 from mymi import config
-from mymi.datasets.dicom import DicomDataset
+from dicomset.dicom import DicomDataset
 from mymi import plotting
-from mymi.utils import filterOnPatIDs
+from mymi.utils.utils import filterOnPatIDs
 from mymi import typing
 
 def generate_dataset_regions_report(

@@ -2,7 +2,10 @@ import numpy as np
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.assertions import assert_image
+from mymi.utils.decorators import handle_non_spatial_dims
+from mymi.utils.points import landmarks_to_data
+from mymi.utils.python import delegates
 
 from .transforms import *
 

@@ -4,7 +4,7 @@ import torch
 import unigradicon as ugi
 
 from mymi.constants import *
-from mymi.datasets import TrainingDataset
+from dicomset import TrainingDataset
 from mymi.loaders.data_augmentation import RandomAffine, RandomFlip
 from mymi import logging
 from mymi.transforms import resample

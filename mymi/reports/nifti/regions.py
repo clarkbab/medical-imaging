@@ -4,12 +4,15 @@ import pandas as pd
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
-from mymi.geometry import foreground_fov_width, foreground_fov, largest_cc
+from dicomset import NiftiDataset
+from dicomset.utils.geometry import foreground_fov_width, foreground_fov, largest_cc
 from mymi.metrics import mean_intensity, snr
 from mymi.regions import regions_to_list
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.assertions import assert_writeable
+from mymi.utils.io import load_csv, save_csv
+from mymi.utils.pandas import append_row
 
 def create_region_counts(dataset: DatasetID) -> None:
     pr_df = get_region_counts(dataset)
@@ -29,7 +32,7 @@ def create_region_summary(
         assert_writeable(filepath)
 
         # Check if there are patients with this region.
-        n_pats = len(set.list_patients(region=r))
+        n_pats = len(set.list_patients(region_id=r))
         if n_pats == 0:
             # Allows us to pass all regions from Spartan 'array' job.
             logging.error(f"No patients with region '{r}' found for dataset '{set}'.")
@@ -72,7 +75,7 @@ def get_region_summary(
     labels: Literal['included', 'excluded', 'all'] = 'included') -> pd.DataFrame:
     # List patients.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(region=region)
+    pat_ids = set.list_patients(region_id=region)
 
     cols = {
         'patient-id': str,

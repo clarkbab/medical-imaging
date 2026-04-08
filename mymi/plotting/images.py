@@ -5,7 +5,14 @@ import seaborn as sns
 from typing import *
 
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.affine import affine_origin, affine_spacing
+from mymi.utils.args import arg_to_list
+from mymi.utils.decorators import alias_kwargs
+from mymi.utils.dicom import from_ct_dicom
+from mymi.utils.io import load_nifti, load_numpy, sitk_load_volume
+from mymi.utils.nrrd import load_nrrd
+from mymi.utils.python import delegates
+from mymi.utils.utils import get_axis_name
 
 from .plotting import get_view_aspect, get_idx, get_view_origin, get_view_slice, get_view_xy, get_v_min_max, plot_landmarks_data
 

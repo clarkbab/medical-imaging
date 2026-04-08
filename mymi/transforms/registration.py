@@ -3,7 +3,7 @@ from typing import *
 
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.sitk import from_sitk_image, to_sitk_image
 
 def rigid_image_registration(
     moving_image: ImageArray,

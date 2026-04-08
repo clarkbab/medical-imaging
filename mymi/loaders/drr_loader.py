@@ -7,10 +7,11 @@ from tqdm import tqdm
 from typing import *
 
 from mymi import datasets as ds
-from mymi.datasets.training import TrainingDataset
+from dicomset.training import TrainingDataset
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.io import load_json, load_nifti, load_numpy, save_json
+from mymi.utils.python import has_private_attr
 from augmed.utils import save_json, to_tensor
 
 from .random_sampler import RandomSampler

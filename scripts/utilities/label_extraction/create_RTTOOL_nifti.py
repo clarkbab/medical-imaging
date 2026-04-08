@@ -12,7 +12,7 @@ filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(filepath))))
 sys.path.append(mymi_dir)
 from mymi import datasets as ds
-from mymi.datasets.nifti import recreate
+from dicomset.nifti import recreate
 
 n_patients = 20
 hn1_regions = ['Brain', 'Cochlea-Left', 'Cochlea-Right', 'Oral-Cavity', 'Parotid-Left', 'Parotid-Right', 'Spinal-Cord', 'Submandibular-Gland-Left', 'Submandibular-Gland-Right']

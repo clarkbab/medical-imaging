@@ -8,13 +8,16 @@ from typing import List, Optional, Union
 from uuid import uuid1
 
 from mymi import config
-from mymi.datasets.training import TrainingDataset 
+from dicomset.training import TrainingDataset 
 from mymi.loaders import MultiLoader
 from mymi.loaders.data_augmentation import get_transforms
 from mymi import logging
 from mymi.plotting import plot_patient
 from mymi.typing import PatientID, Regions
-from mymi.utils import append_row, arg_to_list, encode, load_files_csv, save_csv
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import load_files_csv, save_csv
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import encode
 
 def get_multi_loader_manifest(
     dataset: Union[str, List[str]],

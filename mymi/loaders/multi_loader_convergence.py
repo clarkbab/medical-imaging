@@ -11,12 +11,12 @@ from typing import Callable, List, Optional, Tuple, Union
 
 from mymi.typing import Spacing3D, Region, Regions
 from mymi import datasets as ds
-from mymi.datasets.training import TrainingDataset
+from dicomset.training import TrainingDataset
 from mymi import logging
 from torchio.transforms import Transform
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 from .random_sampler import RandomSampler
 
@@ -135,12 +135,12 @@ class MultiLoaderConvergence:
                 if load_all_samples:
                     set_samples = set.list_groups(sort_by_sample_id=True)
                 else:
-                    set_samples = set.list_groups(region=regions, sort_by_sample_id=True)
+                    set_samples = set.list_groups(region_id=regions, sort_by_sample_id=True)
             else:
                 if load_all_samples:
                     set_samples = set.list_samples()
                 else:
-                    set_samples = set.list_samples(region=regions)
+                    set_samples = set.list_samples(region_id=regions)
 
             for sample_id in set_samples:
                 samples.append((i, sample_id))
@@ -530,7 +530,7 @@ class TrainingSet(Dataset):
                 # Load region data.
                 sample = set.sample(s_i)
                 regions = sample.list_regions(regions=self.__regions)
-                input, labels = sample.pair(region=regions)
+                input, labels = sample.pair(region_id=regions)
                 self.__data.append((input, labels))
 
     def __len__(self):
@@ -556,7 +556,7 @@ class TrainingSet(Dataset):
         if self.__preload_data:
             input, labels = self.__data[index]
         else:
-            input, labels = sample.pair(region=regions)
+            input, labels = sample.pair(region_id=regions)
 
         # Apply data hook.
         if self.__data_hook is not None:

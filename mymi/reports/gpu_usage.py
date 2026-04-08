@@ -9,7 +9,8 @@ from typing import Any, List, Optional, Union
 
 from mymi import config
 from mymi import logging
-from mymi.utils import append_row, gpu_count, gpu_usage_nvml
+from mymi.utils.pandas import append_row
+from mymi.utils.utils import gpu_count, gpu_usage_nvml
 
 DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 

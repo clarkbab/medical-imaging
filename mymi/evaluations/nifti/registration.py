@@ -4,13 +4,15 @@ import pandas as pd
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.metrics import dice, distances, tre
 from mymi.predictions.nifti import load_registration
 from mymi.regions import regions_to_list
 from mymi.transforms import sample
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import save_csv
+from mymi.utils.pandas import append_row
     
 def load_registration_evaluation(
     dataset: str,
@@ -70,7 +72,7 @@ def get_registration_landmark_evaluation(
 
     if moved_landmarks is not None:
         # Load moving landmarks.
-        moving_landmarks = moving_study.landmarks_data(landmark=landmark, sample_dose=moving_study.has_dose)
+        moving_landmarks = moving_study.landmarks_data(landmark_id=landmark, sample_dose=moving_study.has_dose)
 
         # Merge on landmark IDs.
         merged_df = moving_landmarks.merge(moved_landmarks, on=['landmark-id'], how='inner', suffixes=['_moving', '_moved'])
@@ -96,7 +98,7 @@ def get_registration_landmark_evaluation(
 
         # Rather than moving the dose (resampling) and then sampling at fixed landmarks (2x samplings),
         # we can just move the fixed landmarks and sample the moving dose (1x sampling).
-        moving_landmarks = moving_study.landmarks_data(landmark=landmark, sample_dose=True)
+        moving_landmarks = moving_study.landmarks_data(landmark_id=landmark, sample_dose=True)
         moved_landmarks = sample(moving_study.dose_data, moved_landmarks, spacing=moving_study.dose_spacing, origin=moving_study.dose_origin, landmarks_col='dose')
         assert np.all(moving_landmarks['landmark-id'].values == moved_landmarks['landmark-id'].values)
         dose_errors = list((moved_landmarks['dose'] - moving_landmarks['dose']).values)
@@ -136,7 +138,7 @@ def get_registration_region_evaluation(
         return {}
 
     # Load fixed region data.
-    fixed_regions_data = fixed_study.regions_series(fixed_series).data(region=region)
+    fixed_regions_data = fixed_study.regions_series(fixed_series).data(region_id=region)
 
     # Get labels.
     pred = moved_regions_data[region]
@@ -195,7 +197,7 @@ def create_registration_evaluation(
 
     # Add evaluations to dataframe.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(exclude=exclude_pat, group=group, pat=pat)
+    pat_ids = set.list_patients(exclude=exclude_pat, group=group, patient_id=pat)
     fixed_study_id = fixed_study
     moving_study_id = moving_study
 

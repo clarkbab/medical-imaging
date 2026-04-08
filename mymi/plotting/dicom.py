@@ -1,5 +1,5 @@
 from mymi.constants import *
-from mymi.datasets.dicom import DicomDataset
+from dicomset.dicom import DicomDataset
 
 from ..plotting import plot_patients as pp, plot_patient_histogram as pph  
 

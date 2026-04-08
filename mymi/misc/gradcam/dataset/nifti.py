@@ -6,13 +6,13 @@ from typing import Any, Dict, List, Optional, Union
 from tqdm import tqdm
 
 from mymi import config
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.loaders import MultiLoader
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import Segmenter
 from mymi.typing import Spacing3D, ModelName, Region, Regions
-from mymi.utils import arg_broadcast, arg_to_list
+from mymi.utils.args import arg_broadcast, arg_to_list
 
 from ..gradcam import get_segmenter_heatmap as get_segmenter_heatmap_base
 

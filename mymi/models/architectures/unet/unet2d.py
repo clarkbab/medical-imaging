@@ -6,7 +6,7 @@ from typing import *
 
 from mymi.misc.checkpointing import get_checkpoints, get_level_checkpoints
 from mymi import logging
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
 
 CUDA_INT_MAX = 2 ** 31 - 1
 PRINT_ENABLED = False

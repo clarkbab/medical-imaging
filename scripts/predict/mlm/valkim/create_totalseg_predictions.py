@@ -1,4 +1,4 @@
-from mymi.predictions.nifti import create_totalseg_predictions
+from mymi.predictions.nifti.segmentation import create_totalseg_predictions
 
 dataset = 'VALKIM-PP'
 pats = ['PAT1', 'PAT2']

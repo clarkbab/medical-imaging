@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mymi import config
 from mymi import datasets as ds
-from mymi.datasets.dicom import DicomDataset, ROIData, RtStructConverter
+from dicomset.dicom import DicomDataset, ROIData, RtStructConverter
 from mymi import logging
 from mymi.models import replace_ckpt_alias
 from mymi.models.lightning_modules import MultiSegmenter, Segmenter
@@ -17,7 +17,9 @@ from mymi.processing import largest_cc_4D
 from mymi.regions import RegionColours, regions_to_list
 from mymi.transforms import crop, pad, resample
 from mymi.typing import Box3D, Size3D, Spacing3D, ModelName, PatientID, Regions
-from mymi.utils import Timer, arg_broadcast, arg_to_list, encode
+from mymi.utils.args import arg_broadcast, arg_to_list
+from mymi.utils.timer import Timer
+from mymi.utils.utils import encode
 
 def create_all_multi_segmenter_predictions(
     dataset: Union[str, List[str]],

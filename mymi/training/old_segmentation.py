@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 from typing import *
 
 from mymi import config
-from mymi.datasets import TrainingDataset
+from dicomset import TrainingDataset
 from mymi.loaders import HoldoutLoader
 from mymi.loaders.data_augmentation import RandomAffine, get_transforms
 from mymi import logging

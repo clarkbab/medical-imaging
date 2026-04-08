@@ -12,7 +12,7 @@ filepath = pathlib.Path(__file__).resolve()
 mymi_dir = up(up(up(up(filepath))))
 sys.path.append(mymi_dir)
 from mymi import datasets as ds
-from mymi.datasets.nifti import recreate
+from dicomset.nifti import recreate
 from mymi import logging
 
 n_patients = 20
@@ -42,7 +42,7 @@ for pat in tqdm(pats):
         spacing = patient.ct_spacing()
         origin = patient.ct_origin()
         image = patient.ct_data()
-        label = patient.regions_data(region=region)[region]
+        label = patient.regions_data(region_id=region)[region]
 
         # Save image.
         affine = np.array([

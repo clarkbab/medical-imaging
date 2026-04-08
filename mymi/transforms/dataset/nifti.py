@@ -1,7 +1,7 @@
 import SimpleITK as sitk
 from typing import *
 
-from mymi.datasets import NiftiDataset
+from dicomset import NiftiDataset
 from mymi.typing import *
 
 from ..registration import rigid_image_registration

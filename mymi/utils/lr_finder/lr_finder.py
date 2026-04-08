@@ -13,7 +13,7 @@ from mymi import config
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.typing import Regions
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 def load_data(
     model_name: str,

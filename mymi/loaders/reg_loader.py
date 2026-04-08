@@ -11,12 +11,12 @@ from typing import Callable, List, Optional, Tuple, Union
 
 from mymi.typing import Spacing3D, Region, Regions
 from mymi import datasets as ds
-from mymi.datasets.training import TrainingDataset
+from dicomset.training import TrainingDataset
 from mymi import logging
 from torchio.transforms import Transform
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop_or_pad
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 from .random_sampler import RandomSampler
 

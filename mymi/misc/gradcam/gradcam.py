@@ -11,7 +11,7 @@ from mymi.models.lightning_modules import Segmenter
 from mymi.regions import regions_to_list
 from mymi.transforms import centre_crop, centre_pad, crop, pad, resample
 from mymi.typing import Spacing3D, ModelName, Regions
-from mymi.utils import arg_to_list
+from mymi.utils.args import arg_to_list
 
 def get_segmenter_heatmap(
     input: np.ndarray,

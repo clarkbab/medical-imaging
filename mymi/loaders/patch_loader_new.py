@@ -7,8 +7,8 @@ from torchio import LabelMap, ScalarImage, Subject
 from typing import Callable, List, Optional, Tuple, Union
 
 from mymi import typing
-from mymi.datasets import get as get_ds
-from mymi.datasets.training import TrainingDataset
+from dicomset import get as get_ds
+from dicomset.training import TrainingDataset
 
 class PatchLoader:
     @staticmethod

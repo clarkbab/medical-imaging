@@ -4,7 +4,8 @@ from tqdm import tqdm
 from mymi import datasets as ds
 from mymi.metrics import dice, distances
 from mymi.regions import *
-from mymi.utils import *
+from mymi.utils.io import save_csv
+from mymi.utils.pandas import append_row
 
 # Load fixed regions.
 dataset = 'PMCC-REIRRAD'
@@ -26,7 +27,7 @@ for p in tqdm(pat_ids):
     fixed_spacing = fixed_study.ct_spacing
     fixed_regions_series = fixed_study.regions_series('series_1')
     assert '/C2/' in fixed_regions_series.dicom.filepath, fixed_regions_series.dicom.filepath
-    fixed_regions = fixed_regions_series.data(region='rl:pmcc-reirrad-hn')
+    fixed_regions = fixed_regions_series.data(region_id='rl:pmcc-reirrad-hn')
 
     # Get series IDs for moved regions.
     model_series = {}
@@ -39,7 +40,7 @@ for p in tqdm(pat_ids):
     # Evaluate moved regions for each model.
     regions = regions_to_list('rl:pmcc-reirrad-hn')
     for m in models:
-        moved_regions = model_series[m].data(region='rl:pmcc-reirrad-hn')
+        moved_regions = model_series[m].data(region_id='rl:pmcc-reirrad-hn')
         for r in regions:
             if r in fixed_regions and r in moved_regions:
                 fdata = fixed_regions[r]

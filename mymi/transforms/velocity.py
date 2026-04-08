@@ -4,7 +4,8 @@ import struct
 
 from mymi import logging
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.sitk import to_sitk_image
+from mymi.utils.utils import transpose_image
 
 def load_velocity_bdf_transform(
     filepath: str,

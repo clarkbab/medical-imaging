@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from mymi import datasets as ds
 from mymi.metrics import tre
-from mymi.utils import *
+from mymi.utils.io import load_csv, save_csv
 
 # Get rigid model propagated C2 landmarks.
 dataset = 'PMCC-REIRRAD'

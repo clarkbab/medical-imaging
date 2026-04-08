@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from mymi import datasets as ds
 from mymi.transforms import sample
-from mymi.utils import *
+from mymi.utils.io import save_csv
 
 lm_delta = 1e-3
 set = ds.get('PMCC-REIRRAD', 'nifti')

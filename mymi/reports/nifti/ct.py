@@ -3,8 +3,9 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-from mymi.datasets import NiftiDataset
-from mymi.utils import *
+from dicomset import NiftiDataset
+from mymi.utils.args import arg_to_list
+from mymi.utils.pandas import append_row
 
 def create_ct_summary(dataset: str) -> None:
     # Get regions.

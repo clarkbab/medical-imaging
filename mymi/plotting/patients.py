@@ -3,10 +3,15 @@ import torchio
 from typing import *
 
 from mymi.constants import *
-from mymi.datasets import DicomModality, NiftiModality
-from mymi.geometry import foreground_fov
+from dicomset import DicomModality, NiftiModality
+from dicomset.utils.geometry import foreground_fov
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.affine import affine_origin, affine_spacing
+from mymi.utils.args import arg_to_list
+from mymi.utils.decorators import alias_kwargs
+from mymi.utils.points import landmarks_to_image_coords
+from mymi.utils.python import flatten_list
+from mymi.utils.utils import escape_filepath, get_axis_name
 
 from .data import plot_histograms
 from .plotting import *
@@ -362,7 +367,7 @@ def plot_patient_histogram(
     study: StudyIDs = 'all',
     **kwargs) -> None:
     set = dataset_type(dataset)
-    pat_ids = set.list_patients(pat=pat)
+    pat_ids = set.list_patients(patient_id=pat)
     n_rows = len(pat_ids)
 
     # Get n_cols.
@@ -370,7 +375,7 @@ def plot_patient_histogram(
     studieses = []
     for p in pat_ids:
         pat = set.patient(p)
-        study_ids = pat.list_studies(study=study)
+        study_ids = pat.list_studies(study_id=study)
         studieses.append(ids)
         if len(ids) > n_cols:
             n_cols = len(ids)
@@ -435,7 +440,7 @@ def plot_patients(
 
     # Get patient IDs.
     arg_pat_ids = pat
-    pat_ids = dataset.list_patients(pat=pat)
+    pat_ids = dataset.list_patients(patient_id=pat)
     if len(pat_ids) == 0:
         raise ValueError(f"No patients found for dataset '{dataset}' with IDs '{arg_pat_ids}'.")
 
@@ -627,7 +632,7 @@ def plot_patients(
                         # If data isn't in landmarks/regions_data then pass the data as 'centre', otherwise 'centre' can reference 
                         # the data in 'landmarks/regions_data'.
                         if pat_study.has_landmark(centre):
-                            c = pat_study.landmarks_data(landmark=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
+                            c = pat_study.landmarks_data(landmark_id=centre).iloc[0] if lm_data is None or centre not in list(lm_data['landmark-id']) else centre
                         elif pat_study.has_region(centre):
                             c = pat_study.regions_data(regions=centre)[0][0] if rdata is None or centre not in rdata else centre
                         else:
@@ -647,7 +652,7 @@ def plot_patients(
                             if lm_data is not None and crop in list(lm_data['landmark-id']):
                                 c = crop
                             else:
-                                c = pat_study.landmarks_data(landmark=crop).iloc[0]    # Load LandmarkSeries.
+                                c = pat_study.landmarks_data(landmark_id=crop).iloc[0]    # Load LandmarkSeries.
                         else:
                             raise ValueError(f"Study '{pat_study}' has no landmark/region ID '{crop}' for crop.")
                 row_crop_datas.append(c)

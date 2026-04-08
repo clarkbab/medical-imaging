@@ -1,6 +1,6 @@
-from mymi.processing.nifti import create_valkim_preprocessed_dataset
+from mymi.processing.nifti.valkim import create_valkim_preprocessed_dataset
 
 kwargs = dict(
-    makeitso=True,
+    recreate=True,
 )
 create_valkim_preprocessed_dataset(**kwargs)

@@ -1,9 +1,10 @@
 import os
 from tqdm import tqdm
 
-from mymi.datasets import RawDataset
-from mymi.datasets.nifti import recreate
-from mymi.utils import *
+from dicomset import RawDataset
+from dicomset.nifti import recreate
+from mymi.utils.nifti import save_nifti
+from mymi.utils.nrrd import load_nrrd
 
 def convert_hanseg_to_nifti() -> None:
     dataset = 'HANSEG'

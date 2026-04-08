@@ -2,12 +2,14 @@ import os
 from tqdm import tqdm
 from typing import *
 
-from mymi.datasets import DicomDataset, NiftiDataset
+from dicomset import DicomDataset, NiftiDataset
 from mymi import logging
 from mymi.regions import regions_to_list
 from mymi.transforms import resample, sitk_save_transform, sitk_transform_points, load_velocity_transform
 from mymi.typing import *
-from mymi.utils import *
+from mymi.utils.args import arg_to_list
+from mymi.utils.io import save_csv
+from mymi.utils.nifti import save_nifti
 
 def convert_velocity_registrations_to_nifti(
     dataset: str,
@@ -23,7 +25,7 @@ def convert_velocity_registrations_to_nifti(
     methods = arg_to_list(method, str)
     dicom_set = DicomDataset(dataset)
     nifti_set = NiftiDataset(dataset)
-    pat_ids = dicom_set.list_patients(pat=pat)
+    pat_ids = dicom_set.list_patients(patient_id=pat)
     fixed_study_id = fixed_study
     moving_study_id = moving_study
     for p in tqdm(pat_ids):
@@ -69,7 +71,7 @@ def convert_velocity_registrations_to_nifti(
                 for r in regions:
                     if not moving_study.has_region(r):
                         continue
-                    moving_region = moving_study.regions_data(region=r)[r]
+                    moving_region = moving_study.regions_data(region_id=r)[r]
                     moved_region = resample(moving_region, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
                     filepath = os.path.join(nifti_set.path, 'data', 'predictions', 'registration', 'patients', p_dest, fixed_study.id, p_dest, moving_study.id, 'regions', r, f'{model}.nii.gz')
                     save_nifti(moved_region, filepath, spacing=fixed_spacing, origin=fixed_origin)
@@ -79,7 +81,7 @@ def convert_velocity_registrations_to_nifti(
             # non-invertible transform
             fixed_lm_series = fixed_study.landmarks_series(landmarks_series)
             print(fixed_lm_series.filepath)
-            lm_df = fixed_lm_series.data(landmark=landmark)
+            lm_df = fixed_lm_series.data(landmark_id=landmark)
             lm_data = lm_df[list(range(3))].to_numpy()
             lm_data_t = sitk_transform_points(lm_data, transform) 
             lm_df[list(range(3))] = lm_data_t

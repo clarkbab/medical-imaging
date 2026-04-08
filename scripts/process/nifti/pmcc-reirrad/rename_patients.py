@@ -1,4 +1,4 @@
-from mymi.datasets.nifti import rename_patients
+from dicomset.nifti import rename_patients
 
 dataset = 'PMCC-REIRRAD-CP'
 pat_map = {

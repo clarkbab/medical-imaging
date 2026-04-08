@@ -14,7 +14,8 @@ from mymi.losses import MSELoss, NCCLoss, SpatialSmoothingLoss
 from mymi.losses.voxelmorph import Grad
 from mymi.models import load_model
 from mymi.models.architectures import RegMod
-from mymi.utils import *
+from mymi.utils.interval import interval_matches
+from mymi.utils.utils import get_axis_name
 
 def train_registration(
     dataset: str,

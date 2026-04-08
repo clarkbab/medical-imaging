@@ -8,13 +8,14 @@ from typing import *
 import wandb
 
 from mymi import config
-from mymi.geometry import fov_centre
+from dicomset.utils.geometry import fov_centre
 from mymi.loaders import DRRLoader
 from mymi import logging
 from mymi.losses import DiceLoss
 from mymi.models import get_model, load_model
 from mymi.training.utils.lr_find import run_lr_find
-from mymi.utils import *
+from mymi.utils.dicom import from_rtplan_dicom
+from mymi.utils.interval import interval_matches
 
 
 def train_segmentation(

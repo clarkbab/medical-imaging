@@ -1,5 +1,5 @@
 from mymi.reports.nifti import create_region_summary
-from mymi.utils import parse_arg
+from mymi.utils.slurm import parse_arg
 
 dataset = 'PDDCA'
 region = parse_arg('region', str)

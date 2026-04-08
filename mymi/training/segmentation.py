@@ -13,7 +13,7 @@ from mymi import logging
 from mymi.losses import MSELoss, NCCLoss, SpatialSmoothingLoss
 from mymi.losses.voxelmorph import Grad
 from mymi.models import get_model, load_model
-from mymi.utils import *
+from mymi.utils.interval import interval_matches
 
 def train_segmentation(
     dataset: str,
