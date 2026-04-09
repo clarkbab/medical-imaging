@@ -1,3 +1,4 @@
+from dicomset.typing import *
 from dicomset.utils import affine_origin, affine_spacing, fov
 import numpy as np
 from typing import *

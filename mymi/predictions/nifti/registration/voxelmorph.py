@@ -1,24 +1,20 @@
 import os
-import subprocess
-import sys
-import tempfile
 from tqdm import tqdm
 from typing import *
 
-VXM_PATH = os.path.join(os.environ['CODE'], 'voxelmorph')
-os.environ['VXM_BACKEND'] = 'pytorch'
-sys.path.append(VXM_PATH)
-
 from mymi import config
 from dicomset.nifti import NiftiDataset
+from dicomset.utils import create_affine
 from mymi import logging
+from mymi.predictions.registration import register_voxelmorph
 from mymi.regions import regions_to_list
-from mymi.transforms import *
+from mymi.transforms import sitk_load_transform, resample, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils.args import arg_to_list
 from mymi.utils.io import save_csv
-from mymi.utils.nifti import save_nifti, save_numpy
-from mymi.utils.sitk import dvf_to_sitk_transform
+from mymi.utils.nifti import save_nifti
+
+VXM_PATH = os.path.join(os.environ['CODE'], 'voxelmorph')
 
 def create_voxelmorph_predictions(
     dataset: str,
@@ -44,81 +40,41 @@ def create_voxelmorph_predictions(
         pat_landmarks = arg_to_list(landmarks, Landmark, literals={ 'all': pat.list_landmarks })
         fixed_study = pat.study(fixed_study)
         moving_study = pat.study(moving_study)
-        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study, p, moving_study)
+        pred_base_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', p, fixed_study.id, p, moving_study.id)
         transform_path = os.path.join(pred_base_path, 'transform', f'{modelname}.hdf5')
         
         if register_ct:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Resample images to model spacing.
-                fixed_ct = fixed_study.ct_data
-                fixed_ct_resampled = resample(fixed_ct, output_spacing=model_spacing, spacing=fixed_study.ct_spacing)
-                moving_ct = moving_study.ct_data
-                moving_ct_resampled = resample(moving_ct, output_spacing=model_spacing, spacing=moving_study.ct_spacing)
+            # Prepare data.
+            fixed_ct = fixed_study.ct_data
+            moving_ct = moving_study.ct_data
+            fixed_affine = create_affine(fixed_study.ct_spacing, fixed_study.ct_origin)
+            moving_affine = create_affine(moving_study.ct_spacing, moving_study.ct_origin)
 
-                # Pad images if required.
-                if pad_shape is not None:
-                    resampled_size = fixed_ct_resampled.shape
-                    fixed_ct_resampled = centre_pad(fixed_ct_resampled, pad_shape, fill=-2000, use_world_coords=False)
-                    moving_ct_resampled = centre_pad(moving_ct_resampled, pad_shape, fill=-2000, use_world_coords=False)
+            # Core registration.
+            transform = register_voxelmorph(
+                fixed_ct, moving_ct, fixed_affine, moving_affine,
+                model_path=model_path,
+                model_spacing=model_spacing,
+                vxm_path=VXM_PATH,
+                pad_shape=pad_shape)
 
-                # Save files for 'voxelmorph'.
-                fixed_path = os.path.join(temp_dir, 'fixed.nii.gz')
-                save_nifti(fixed_ct_resampled, fixed_path, spacing=model_spacing, origin=fixed_study.ct_origin)
-                moving_path = os.path.join(temp_dir, 'moving.nii.gz')
-                save_nifti(moving_ct_resampled, moving_path, spacing=model_spacing, origin=moving_study.ct_origin)
-                moved_path = os.path.join(temp_dir, 'moved.npz')
-                dvf_path = os.path.join(temp_dir, 'dvf.npz')
+            # Save transform.
+            os.makedirs(os.path.dirname(transform_path), exist_ok=True)
+            sitk_save_transform(transform, transform_path)
 
-                # Call voxelmorph script - for transform only.
-                print('Running VoxelMorph...')
-                command = [
-                    'python', os.path.join(VXM_PATH, 'scripts', 'torch', 'register.py'),
-                    '--fixed', fixed_path,
-                    '--gpu', '0',
-                    '--model', model_path,  
-                    '--moving', moving_path,
-                    '--moved', moved_path,
-                    '--warp', dvf_path,
-                ]
-                logging.info(command)
-                subprocess.run(command)
-                print('VoxelMorph finished.')
-                print(moved_path)
-
-                # Load, resample, save DVF.
-                # Transform goes from fixed -> moving image.
-                model_origin = (0, 0, 0)
-                to_model_t = create_sitk_affine_transform(origin=fixed_study.ct_origin, output_origin=model_origin)
-                dvf = np.load(dvf_path)['vol']
-                if pad_shape is not None:
-                    dvf = centre_crop(dvf, resampled_size, use_world_coords=False)
-                save_numpy(dvf, 'dvf.npz')
-                assert dvf.shape[0] == 3
-                # VXM DVF is on the scale of image voxels in the image - need to convert to mm.
-                dvf = np.moveaxis(dvf, 0, -1)
-                dvf = dvf * np.array(model_spacing)  # Convert to mm.
-                dvf = np.moveaxis(dvf, -1, 0)
-                dvf_t = dvf_to_sitk_transform(dvf, model_spacing, model_origin)
-                to_image_t = create_sitk_affine_transform(origin=model_origin, output_origin=moving_study.ct_origin)
-                transforms = [to_image_t, dvf_t, to_model_t]    # Reverse order.
-                transform = sitk.CompositeTransform(transforms)
-                sitk_save_transform(transform, transform_path)
-
-                # Move image manually using transform - only requires one resampling.
-                moved_ct = resample(moving_ct, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
-                # moved_ct = load_numpy(moved_path, keys='vol')
-                moved_path = os.path.join(pred_base_path, 'ct', f'{modelname}.nii.gz')
-                save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
+            # Save moved CT.
+            moved_ct = resample(moving_ct, affine=moving_affine, output_affine=fixed_affine, transform=transform)
+            moved_path = os.path.join(pred_base_path, 'ct', f'{modelname}.nii.gz')
+            os.makedirs(os.path.dirname(moved_path), exist_ok=True)
+            save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
         if regions is not None:
             transform = sitk_load_transform(transform_path)
 
-            # Load labels, apply transform and save. 
             for r in pat_regions:
                 if not moving_study.has_region(r):
                     continue
 
-                # Create moved region label.
                 moving_label = moving_study.regions_data(regions=r)[r]
                 moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                 moved_path = os.path.join(pred_base_path, 'regions', r, f'{modelname}.nii.gz')

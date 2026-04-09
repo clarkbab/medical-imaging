@@ -1,3 +1,4 @@
+from dicomset.typing import *
 import numpy as np
 import SimpleITK as sitk
 from typing import *
@@ -7,26 +8,27 @@ from mymi.typing import *
 from .affine import create_affine, affine_origin, affine_spacing
 from .utils import transpose_image
 
-def from_sitk_image(img: sitk.Image) -> Tuple[ImageArray, Affine]:
+def from_sitk_image(
+    img: sitk.Image,
+    ) -> Tuple[ImageArray, Affine]:
     data = sitk.GetArrayFromImage(img)
     # SimpleITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
     data = data.transpose()
-    spacing = tuple(img.GetSpacing())
-    origin = tuple(img.GetOrigin())
+    spacing = img.GetSpacing()
+    origin = img.GetOrigin()
     affine = create_affine(spacing, origin)
     return data, affine
 
 def to_sitk_image(
-    data: Union[ImageArray, VectorImageArray],   # We use LPS coordinates - the same as SimpleITK!
-    affine: Affine,
+    data: ChannelImage | Image,
+    affine: AffineMatrix | None = None,
     vector: bool = False,
-    n_vector_elements: int = 3) -> sitk.Image:
+    n_vector_elements: int = 3,
+    ) -> sitk.Image:
     # Convert to SimpleITK data types.
     if data.dtype == bool:
         data = data.astype(np.uint8)
-    spacing = affine_spacing(affine)
-    origin = affine_origin(affine)
     
     # SimpleITK **sometimes** flips the data coordinates (x, y, z) -> (z, y, x) when converting from numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -43,17 +45,20 @@ def to_sitk_image(
         moveaxis_fn = np.moveaxis if isinstance(data, np.ndarray) else torch.moveaxis
         data = moveaxis_fn(data, 0, -1)
     img = sitk.GetImageFromArray(data, isVector=vector)
-    img.SetSpacing(spacing)
-    img.SetOrigin(origin)
+    if affine is not None:
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine)
+        img.SetSpacing(spacing)
+        img.SetOrigin(origin)
 
     return img
 
 def dvf_to_sitk_transform(
-    dvf: VectorImageArray,   # (3, X, Y, Z)
-    spacing: Spacing3D = (1, 1, 1),
-    origin: Point3D = (0, 0, 0)) -> sitk.Transform:
+    dvf: ChannelImage,
+    affine: AffineMatrix | None = None,
+    ) -> sitk.Transform:
     dvf = dvf.astype(np.float64)
     assert dvf.shape[0] == 3
-    dvf_sitk = to_sitk_image(dvf, spacing, origin, vector=True)
+    dvf_sitk = to_sitk_image(dvf, affine=affine, vector=True)
     dvf_transform = sitk.DisplacementFieldTransform(dvf_sitk)
     return dvf_transform

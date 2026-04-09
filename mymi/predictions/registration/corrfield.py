@@ -5,6 +5,7 @@ import os
 import SimpleITK as sitk
 import subprocess
 import shutil
+import sys
 import tempfile
 from tqdm import tqdm
 from typing import Optional, Tuple
@@ -29,7 +30,7 @@ def register_corrfield(
     preprocess_images: bool = True,
     crop_margin_mm: float = 10,
     keep_temp: bool = False,
-    ) -> Tuple[Image3D, sitk.Transform]:
+    ) -> sitk.Transform:
     assert np.all(moving_affine == fixed_affine), "Fixed/moving affines must match."
     affine = fixed_affine
     spacing = affine_spacing(affine)
@@ -101,7 +102,7 @@ def register_corrfield(
     cf_path = os.path.join(temp_dir, 'corrfield')
     os.makedirs(cf_path, exist_ok=True)
     cf_out_path = os.path.join(cf_path, 'corrfield')
-    command = ['python', r'D:\Brett\code\corrfield\corrfield\corrfield.py'] if is_windows() else ['corrfield']
+    command = [sys.executable, r'D:\Brett\code\corrfield\corrfield\corrfield.py'] if is_windows() else ['corrfield']
     command += [
         '-F', fixed_path,
         '-M', moving_path,
@@ -110,7 +111,10 @@ def register_corrfield(
         command += ['-m', fixed_label_path]
     command += ['-O', cf_out_path]
     logger.info(command)
-    subprocess.run(command)
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error(result.stderr)
+        raise RuntimeError(f"Corrfield failed with return code {result.returncode}")
 
     # Load DVF.
     cf_dvf_path = os.path.join(cf_path, 'corrfield.nii.gz')
@@ -136,10 +140,7 @@ def register_corrfield(
     if not keep_temp:
         shutil.rmtree(temp_dir)
 
-    # Create moved image.
-    moved_ct = resample(moving_ct, affine=affine, output_affine=affine, transform=transform)
-
-    return moved_ct, transform
+    return transform
 
 # def create_corrfield_predictions(
 #     dataset: str,

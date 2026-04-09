@@ -98,7 +98,7 @@ def get_inner_args(
     return visitor.args, visitor.kwargs
 
 def delegates(*inner_fns: Callable) -> Callable:
-    if is_windows() or not python_version(gte='3.9'):
+    if not python_version(gte='3.9'):
         # Ast unparse is not available in Python < 3.9.
         return lambda f: f
 

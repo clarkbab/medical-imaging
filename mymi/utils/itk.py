@@ -1,10 +1,12 @@
+from dicomset.typing import *
+from dicomset.utils import affine_spacing, affine_origin, create_affine
 import itk
 import numpy as np
 from typing import *
 
-from mymi.typing import *
-
-def from_itk_image(img: itk.Image) -> Tuple[ImageArray, Spacing3D, Point3D]:
+def from_itk_image(
+    img: itk.Image,
+    ) -> Tuple[Image, AffineMatrix3D]:
     data = itk.GetArrayFromImage(img)
     # ITK always flips the data coordinates (x, y, z) -> (z, y, x) when converting to numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -16,22 +18,21 @@ def from_itk_image(img: itk.Image) -> Tuple[ImageArray, Spacing3D, Point3D]:
     origin = list(img.GetOrigin())
     origin[0], origin[1] = -origin[0], -origin[1]
     origin = tuple(origin)
-    return data, spacing, origin
+    affine = create_affine(spacing, origin)
+    return data, affine
 
 def load_itk_image(filepath: str) -> itk.Image:
     return itk.imread(filepath)
 
 def to_itk_image(
-    data: ImageArray,
-    spacing: Spacing3D,
-    origin: Point3D,
+    data: Image3D,
+    affine: AffineMatrix3D | None = None,
     vector: bool = False,
-    reverse_xy: bool = False) -> itk.Image:
+    reverse_xy: bool = False,
+    ) -> itk.Image:
     # Convert to ITK types.
     if data.dtype == bool:
         data = data.astype(np.uint8)
-    spacing = tuple(float(s) for s in spacing)
-    origin = tuple(float(o) for o in origin)
     
     # ITK **sometimes** flips the data coordinates (x, y, z) -> (z, y, x) when converting from numpy.
     # See C- (row-major) vs. Fortran- (column-major) style indexing.
@@ -47,7 +48,10 @@ def to_itk_image(
         # Move our channels to last dim - for itk.
         data = np.moveaxis(data, 0, -1)
     img = itk.GetImageFromArray(data, is_vector=vector)
-    img.SetSpacing(spacing)
-    img.SetOrigin(origin)
+    if affine is not None:
+        spacing = affine_spacing(affine)
+        origin = affine_origin(affine)
+        img.SetSpacing(spacing)
+        img.SetOrigin(origin)
 
     return img

@@ -1,3 +1,5 @@
+from dicomset.dicom import DicomSeries
+from dicomset.nifti import NiftiImageSeries
 from dicomset.typing import AffineMatrix, Image
 from dicomset.utils import affine_origin, affine_spacing
 import numpy as np

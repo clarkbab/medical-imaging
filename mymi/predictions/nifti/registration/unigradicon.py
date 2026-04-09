@@ -8,16 +8,15 @@ from typing import *
 import unigradicon as ugi
 
 from dicomset.nifti import NiftiDataset
+from dicomset.utils import create_affine
 from mymi import logging
+from mymi.predictions.registration import register_unigradicon
 from mymi.regions import regions_to_list
 from mymi.transforms import load_itk_transform, sitk_load_transform, resample, sitk_save_transform, sitk_transform_points
 from mymi.typing import *
 from mymi.utils.io import save_csv
-from mymi.utils.itk import from_itk_image
 from mymi.utils.nifti import save_nifti
-from mymi.utils.sitk import to_sitk_image
 from mymi.utils.timer import Timer
-from mymi.utils.utils import reverse_xy
 
 def load_finetuned_model(
     dataset: DatasetID,
@@ -248,47 +247,34 @@ def create_unigradicon_predictions(
             # Load details.
             moving_pat_id, moving_study = p, 'study_0'
             fixed_pat_id, fixed_study = p, 'study_1'
-            # moving/fixed_series = 'series_0' implicit.
             moving_pat = set.patient(moving_pat_id)
             fixed_pat = set.patient(fixed_pat_id)
             moving_study = moving_pat.study(moving_study)
             fixed_study = fixed_pat.study(fixed_study)
-            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study, moving_pat_id, moving_study)
-            moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
+            reg_path = os.path.join(set.path, 'data', 'predictions', 'registration', 'patients', fixed_pat_id, fixed_study.id, moving_pat_id, moving_study.id)
+
+            # Prepare data.
+            fixed_ct = fixed_study.ct_data
+            moving_ct = moving_study.ct_data
+            fixed_affine = create_affine(fixed_study.ct_spacing, fixed_study.ct_origin)
+            moving_affine = create_affine(moving_study.ct_spacing, moving_study.ct_origin)
+
+            # Core registration.
+            transform = register_unigradicon(
+                fixed_ct, moving_ct, fixed_affine, moving_affine,
+                use_io=use_io)
+
+            # Save transform.
             transform_path = os.path.join(reg_path, 'transform', f'{model}.hdf5')
+            os.makedirs(os.path.dirname(transform_path), exist_ok=True)
+            sitk_save_transform(transform, transform_path)
 
-            # Register CT images.
+            # Save moved CT.
             if create_moved_ct:
+                moved_ct = resample(moving_ct, affine=moving_affine, output_affine=fixed_affine, transform=transform)
+                moved_path = os.path.join(reg_path, 'ct', f'{model}.nii.gz')
                 os.makedirs(os.path.dirname(moved_path), exist_ok=True)
-                os.makedirs(os.path.dirname(transform_path), exist_ok=True)
-                io_iterations = 50 if use_io else None
-                command = [
-                    'unigradicon-register',
-                    '--moving', moving_study.ct_filepath,
-                    '--moving_modality', 'ct',
-                    '--fixed', fixed_study.ct_filepath,
-                    '--fixed_modality', 'ct',
-                    '--warped_moving_out', moved_path,
-                    '--transform_out', transform_path,
-                    '--io_iterations', str(io_iterations)
-                ]
-                logging.info(command)
-                subprocess.run(command)
-
-                # Convert transform to sitk.
-                t_itk = load_itk_transform(transform_path)[0]
-                transform = convert_transform_to_sitk(t_itk)
-                sitk_save_transform(transform, transform_path)
-
-                # Apply transform to moving CT.
-                fixed_ct = fixed_study.ct_data
-                fixed_spacing = fixed_study.ct_spacing
-                fixed_origin = fixed_study.ct_origin
-                moving_ct = moving_study.ct_data
-                moving_spacing = moving_study.ct_spacing
-                moving_origin = moving_study.ct_origin
-                moved_ct = resample(moving_ct, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
-                save_nifti(moved_ct, moved_path, spacing=fixed_spacing, origin=fixed_origin)
+                save_nifti(moved_ct, moved_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
             # Register regions.
             if regions is not None:
@@ -297,20 +283,11 @@ def create_unigradicon_predictions(
                     if not moving_study.has_region(r):
                         continue
 
-                    # Load data.
-                    fixed_ct = fixed_study.ct_data
-                    fixed_spacing = fixed_study.ct_spacing
-                    fixed_origin = fixed_study.ct_origin
                     moving_label = moving_study.regions_data(regions=r)[r]
-                    moving_spacing = moving_study.ct_spacing
-                    moving_origin = moving_study.ct_origin
-                    transform = sitk_load_transform(transform_path)
-
-                    # Perform transform.
-                    moved_label = resample(moving_label, origin=moving_origin, output_origin=fixed_origin, output_spacing=fixed_spacing, spacing=moving_spacing, transform=transform)
+                    moved_label = resample(moving_label, origin=moving_study.ct_origin, output_origin=fixed_study.ct_origin, output_spacing=fixed_study.ct_spacing, spacing=moving_study.ct_spacing, transform=transform)
                     moved_label_path = os.path.join(reg_path, 'regions', r, f'{model}.nii.gz')
                     os.makedirs(os.path.dirname(moved_label_path), exist_ok=True)
-                    save_nifti(moved_label, moved_label_path, spacing=fixed_spacing, origin=fixed_origin)
+                    save_nifti(moved_label, moved_label_path, spacing=fixed_study.ct_spacing, origin=fixed_study.ct_origin)
 
                     # # Perform region warp.
                     # moving_region_path = moving_study.region_path(r)
@@ -354,62 +331,3 @@ def create_unigradicon_predictions(
     if use_timing:
         filepath = os.path.join(set.path, 'data', 'predictions', 'registration', 'timing', f'{model}.csv')
         timer.save(filepath)
-
-# Because ITK/SimpleITK load nifti files with negative x/y directions and origins,
-# the transform is configured to work with this input space. Which is different from
-# how nibabel loads nifti files. ITK expects nifti files to use RAS but we write them
-# using LPS.
-# Here we flip the transform components to work with nibabel/our coordinate system.
-def convert_transform_to_sitk(t: itk.Transform) -> sitk.Transform:
-    # Applied in reverse order in composite transform.
-    t0 = itk.down_cast(t.GetNthTransform(0))    # Affine 2 - network to image space
-    t1 = itk.down_cast(t.GetNthTransform(1))    # DVF - network to network space
-    t2 = itk.down_cast(t.GetNthTransform(2))    # Affine 1 - image to network space
-
-    affine_transforms = [t0, t2]
-
-    new_ts = []
-    for at in affine_transforms:
-        new_at = itk_centred_affine_to_sitk(at)
-        new_ts.append(new_at)
-
-    # Convert DVF to sitk.
-    dvf_image_itk = t1.GetDisplacementField()
-    dvf_data, dvf_spacing, dvf_origin = from_itk_image(dvf_image_itk)
-    # We need to reverse DVF x/y components because our affines are mapping into the negative x/y space.
-    dvf_data[0], dvf_data[1] = -dvf_data[0], -dvf_data[1]
-    dvf_image_sitk = to_sitk_image(dvf_data, dvf_spacing, dvf_origin, vector=True)
-    dir = np.array(dvf_image_sitk.GetDirection())
-    dir = reverse_xy(dir)
-    dvf_image_sitk.SetDirection(dir)
-    dvf_sitk = sitk.DisplacementFieldTransform(dvf_image_sitk)
-    new_ts.insert(1, dvf_sitk)
-
-    new_t = sitk.CompositeTransform(new_ts)
-    return new_t
-
-def itk_centred_affine_to_sitk(t: itk.CenteredAffineTransform) -> sitk.AffineTransform:
-    # Get parameters
-    dim = t.GetInputSpaceDimension()
-    matrix = np.array(t.GetMatrix()).reshape((dim, dim))
-    translation = np.array(t.GetTranslation())
-    centre = np.array(t.GetCenter())
-    
-    # Reverse all x/y params except the scaling.
-    # This will map into a network space with negative x/y directions.
-    translation[0], translation[1] = -translation[0], -translation[1]
-    centre[0], centre[1] = -centre[0], -centre[1]
-
-    # Create a SimpleITK AffineTransform
-    sitk_transform = sitk.AffineTransform(dim)
-
-    # Set the center first
-    sitk_transform.SetCenter(centre.tolist())
-
-    # Set matrix (flattened)
-    sitk_transform.SetMatrix(matrix.flatten().tolist())
-
-    # Set translation
-    sitk_transform.SetTranslation(translation.tolist())
-
-    return sitk_transform
