@@ -8,6 +8,9 @@ dataset = 'VALKIM-PP'
 pat_ids = ['PAT1', 'PAT2', 'PAT3']
 inh_series = 'series_0'
 exh_series = 'series_5'
+int_phases = ['series_1', 'series_2', 'series_3', 'series_4',
+    'series_6', 'series_7', 'series_8', 'series_9']
+methods = ['affine', 'corrfield', 'linear', 'rigid']
 set = ds.get(dataset, 'nifti')
 
 for p in tqdm(pat_ids):
@@ -21,23 +24,17 @@ for p in tqdm(pat_ids):
     exh_gtv = pat.regions_series(exh_series).data(r='GTV')[0]
 
     # Load intermediate phases.
-    # int_phases = ['series_1', 'series_2', 'series_3', 'series_4',
-    #     'series_6', 'series_7', 'series_8', 'series_9']
-    int_phases = ['series_1', 'series_2', 'series_3', 'series_4']
     int_cts = [pat.ct_series(s).data for s in int_phases]
     int_affines = [pat.ct_series(s).affine for s in int_phases]
 
-    # Add other phases.
-    moved_gtvs = []
-    linear_moved_gtvs = []
-    for s in int_phases:
-        # Load corrfield registered GTV.
-        moved_gtv, _ = load_registered_regions(dataset, pat.id, 'corrfield', 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
-        moved_gtvs.append(moved_gtv)
-
-        # Load linear registered GTV.
-        moved_gtv, _ = load_registered_regions(dataset, pat.id, 'linear', 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
-        linear_moved_gtvs.append(moved_gtv)
+    # Load registered GTVs for each method and phase.
+    method_moved_gtvs = {}
+    for m in methods:
+        moved_gtvs = []
+        for s in int_phases:
+            moved_gtv, _ = load_registered_regions(dataset, pat.id, m, 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
+            moved_gtvs.append(moved_gtv)
+        method_moved_gtvs[m] = moved_gtvs
 
     # Save inhale dicom files.
     dirpath = f'files:mlm/valkim/gt/{pat.id}/phase_0/ct'
@@ -66,7 +63,7 @@ for p in tqdm(pat_ids):
         save_dicom(ct_dicoms, dirpath)
         
         filepath = f'files:mlm/valkim/gt/{pat.id}/phase_{phase}/rtstruct.dcm'
-        moved_labels = np.stack([moved_gtvs[i], linear_moved_gtvs[i], exh_gtv], axis=0)
-        region_ids = ['GTV (corrfield)', 'GTV (linear)', 'GTV (exhale)']
+        moved_labels = np.stack([method_moved_gtvs[m][i] for m in methods] + [exh_gtv], axis=0)
+        region_ids = [f'GTV ({m})' for m in methods] + ['GTV (exhale)']
         rtstruct = to_rtstruct_dicom(moved_labels, region_ids, ct_dicoms, series_desc=f'Phase {phase}', series_number=phase)
         save_dicom(rtstruct, filepath)

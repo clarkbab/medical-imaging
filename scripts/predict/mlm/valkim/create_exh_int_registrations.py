@@ -1,24 +1,28 @@
 import dicomset as ds
 from dicomset.nifti.utils import create_registration_transform, create_registered_regions, create_registered_image
+from dicomset.utils import create_box_label, combine_boxes, foreground_fov
 from tqdm import tqdm
 
-from mymi.predictions.registration import register_corrfield, register_linear, register_plastimatch, register_unigradicon
+from mymi.predictions.registration import register_affine, register_corrfield, register_linear, register_plastimatch, register_rigid, register_unigradicon
 from mymi.transforms import resample
 
 # methods = ['corrfield', 'plastimatch', 'unigradicon', 'unigradicon-io']
-methods = ['corrfield', 'linear']
+# methods = ['corrfield', 'linear']
 # methods = ['unigradicon', 'unigradicon-io']
+methods = ['rigid', 'affine']
 
 dataset = 'VALKIM-PP'
-other_series = ['series_1', 'series_2', 'series_3', 'series_4']
+# other_series = ['series_1', 'series_2', 'series_3', 'series_4']
 # other_series = ['series_9', 'series_8', 'series_7', 'series_6']
+other_series = ['series_1', 'series_2', 'series_3', 'series_4',
+                'series_9', 'series_8', 'series_7', 'series_6']
 t_vals = [0.2, 0.4, 0.6, 0.8]
 # other_series = ['series_1']
 inh_series = 'series_0'
 exh_series = 'series_5'
 set = ds.get(dataset, 'nifti')
-# pat_ids = ['PAT1', 'PAT2', 'PAT3']
-pat_ids = ['PAT1']
+pat_ids = ['PAT1', 'PAT2', 'PAT3']
+# pat_ids = ['PAT1']
 regions = ['GTV', 'ts_Lung']
 other_regions = ['ts_Lung']    # No GTV label for intermediate phases - yet...
 
@@ -41,9 +45,20 @@ for p in tqdm(pat_ids):
         fixed_affine = other_affine
         moving_affine = exh_affine
 
+        # Create box that encompasses both inhale/exhale GTV.
+        inh_gtv_fov = foreground_fov(inh_labels[0], affine=inh_affine)
+        exh_gtv_fov = foreground_fov(exh_labels[0], affine=inh_affine)
+        gtv_fov = combine_boxes(inh_gtv_fov, exh_gtv_fov)
+        margin = (10, 10, 10)
+        gtv_fov[0] -= margin
+        gtv_fov[1] += margin
+        gtv_area = create_box_label(other_ct.shape, gtv_fov, affine=other_affine)
+
         for m in methods:
             # Register <method>.
-            if m == 'corrfield':
+            if m == 'affine':
+                transform = register_affine(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_mask=gtv_area, moving_mask=gtv_area)
+            elif m == 'corrfield':
                 assert other_regions[0] == 'ts_Lung', "Currently hardcoded to use the first region as the lung mask for corrfield registration."
                 assert regions[1] == 'ts_Lung', "Currently hardcoded to use the second region as the lung mask for corrfield registration."                
                 fixed_lung_mask = other_labels[0]
@@ -56,6 +71,8 @@ for p in tqdm(pat_ids):
                 moved_gtv = register_linear(inh_gtv, exh_gtv, fixed_affine, moving_affine, t=t)   
             elif m == 'plastimatch':
                 transform = register_plastimatch(fixed_ct, moving_ct, fixed_affine, moving_affine)
+            elif m == 'rigid':
+                transform = register_rigid(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_mask=gtv_area, moving_mask=gtv_area)
             elif m == 'unigradicon':
                 transform = register_unigradicon(fixed_ct, moving_ct, fixed_affine, moving_affine)
             elif m == 'unigradicon-io':

@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 # Compare methods.
-methods = ['corrfield', 'plastimatch', 'unigradicon', 'unigradicon-io']
+methods = ['affine', 'corrfield', 'plastimatch', 'rigid', 'unigradicon', 'unigradicon-io']
 
 cols = {
     'patient-id': str,
