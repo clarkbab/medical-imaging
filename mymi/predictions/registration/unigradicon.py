@@ -25,6 +25,7 @@ def register_unigradicon(
     io_iterations: int = 50,
     keep_temp: bool = False,
     ) -> sitk.Transform:
+    logger.log_method() 
     fixed_spacing = affine_spacing(fixed_affine)
     fixed_origin = affine_origin(fixed_affine)
     moving_spacing = affine_spacing(moving_affine)

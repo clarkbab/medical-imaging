@@ -1,7 +1,7 @@
 from dicomset.dicom import DicomSeries
 from dicomset.nifti import NiftiImageSeries
 from dicomset.typing import AffineMatrix, Image
-from dicomset.utils import affine_origin, affine_spacing
+from dicomset.utils import affine_origin, affine_spacing, logger
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
@@ -27,6 +27,8 @@ def __spatial_resample(
     return_transform: bool = False,
     transform: Optional[sitk.Transform] = None,     # This transforms points not intensities. I.e. positive transform will move image in negative direction.
     ) -> Union[ImageArray, ImageTensor3D, Tuple[Union[ImageArray, ImageTensor3D], sitk.Transform]]:
+    logger.log_method()
+
     # Get input data and affine.
     if data is None:
         if image is None:

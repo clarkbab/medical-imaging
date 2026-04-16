@@ -70,7 +70,7 @@ def create_training_projections(
     save_json(kv_source_angles, filepath)
 
     # Generate projections.
-    inh_ct_proj, inh_labels_proj = create_ctorch_projections(
+    inh_ct_proj, inh_labels_proj = project_ctorch(
         inh_ct, affine,
         projection_geometry['isocentre'],
         projection_geometry['sid'],
@@ -81,7 +81,7 @@ def create_training_projections(
         kv_source_angles,
         labels=inh_labels,
     )
-    exh_ct_proj, exh_labels_proj = create_ctorch_projections(
+    exh_ct_proj, exh_labels_proj = project_ctorch(
         exh_ct, affine,
         projection_geometry['isocentre'],
         projection_geometry['sid'],

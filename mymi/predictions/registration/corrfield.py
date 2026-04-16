@@ -31,6 +31,7 @@ def register_corrfield(
     crop_margin_mm: float = 10,
     keep_temp: bool = False,
     ) -> sitk.Transform:
+    logger.log_method()
     assert np.all(moving_affine == fixed_affine), "Fixed/moving affines must match."
     affine = fixed_affine
     spacing = affine_spacing(affine)
@@ -47,7 +48,7 @@ def register_corrfield(
         if len(np.unique(spacing)) > 1:
             model_spacing = (1, 1, 1)
             model_affine = create_affine(model_spacing, origin)
-            logger.info(f"Applying isotropic resampling from {spacing} to {model_spacing}.")
+            logger.info(f"Applying resampling from {spacing} to {model_spacing}.")
 
             fixed_data = resample(fixed_ct, affine=affine, output_affine=model_affine)
             fixed_label = resample(fixed_lung_mask, affine=affine, output_affine=model_affine)

@@ -80,7 +80,7 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_ct = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
+                create_registered_image(dest_dataset, p, m, moved_ct, 'ct', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move region data.
             if regions is not None:
@@ -95,7 +95,7 @@ def convert_registrations_from_lung_preprocessed(
                             transform=transform,
                         )
                         moved_label = resample(l, **okwargs)
-                        create_registration_moved_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
+                        create_registered_region(dest_dataset, p, r, m, moved_label, fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move landmarks.
             if landmarks is not None:
@@ -105,7 +105,7 @@ def convert_registrations_from_lung_preprocessed(
                     moved_landmarks_data = sitk_transform_points(fixed_landmarks_data, transform)
                     landmark_cols = ['landmark-id', 0, 1, 2]    # Don't save patient-id/study-id cols.
                     moved_landmarks_data = moved_landmarks_data[landmark_cols]
-                    create_registration_moved_landmarks(dest_dataset, p, m, moved_landmarks_data, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
+                    create_registered_landmarks(dest_dataset, p, m, moved_landmarks_data, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
             # Move dose.
             if convert_dose and moving_study.has_dose:
@@ -115,7 +115,7 @@ def convert_registrations_from_lung_preprocessed(
                     transform=transform,
                 )
                 moved_dose = resample(**okwargs)
-                create_registration_moved_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
+                create_registered_image(dest_dataset, p, m, moved_dose, 'dose', fixed_study.ct_spacing, fixed_study.ct_origin, fixed_study=fixed_study, moving_study=moving_study, **kwargs)
 
 def convert_to_lung_preprocessed_dataset(
     dataset: str,

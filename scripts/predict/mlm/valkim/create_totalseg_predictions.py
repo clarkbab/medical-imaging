@@ -1,10 +1,12 @@
 from mymi.predictions.nifti.segmentation import create_totalseg_predictions
 
 dataset = 'VALKIM-PP'
-# pats = ['PAT1', 'PAT2']
-pats = ['PAT3']
+pats = ['PAT1', 'PAT2', 'PAT3']
+# pats = ['PAT3']
 # Fill in both inhale/exhale series.
-series = ['series_0', 'series_5']
+# series = ['series_0', 'series_5']
+# series = ['series_1', 'series_2', 'series_3', 'series_4']
+series = ['series_6', 'series_7', 'series_8', 'series_9']
 
 for p in pats:
     for s in series:

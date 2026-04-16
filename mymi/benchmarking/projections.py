@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from mymi import logging
 from mymi.typing import *
-from mymi.processing import create_ctorch_projections, create_diffdrr_projections, create_igt_projections
+from mymi.processing import project_ctorch, project_diffdrr, project_igt
 
 def benchmark_projections(
     volume: Volume,
@@ -34,7 +34,7 @@ def benchmark_projections(
         methods = arg_to_list(methods, str)
 
     method_fns = {
-        'igt': lambda: create_igt_projections(
+        'igt': lambda: project_igt(
             volume,
             affine,
             treatment_iso,
@@ -48,7 +48,7 @@ def benchmark_projections(
             labels=labels,
             recreate=True,
         ),
-        'diffdrr': lambda: create_diffdrr_projections(
+        'diffdrr': lambda: project_diffdrr(
             volume,
             affine,
             treatment_iso,
@@ -61,7 +61,7 @@ def benchmark_projections(
             labels=labels,
             patch_size=diffdrr_patch_size,
         ),
-        'ctorch': lambda: create_ctorch_projections(
+        'ctorch': lambda: project_ctorch(
             volume,
             affine,
             treatment_iso,

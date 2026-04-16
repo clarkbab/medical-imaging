@@ -20,6 +20,7 @@ from typing import *
 from mymi import logging
 from mymi.processing.ct import fill_ct_background, has_ct_background
 from mymi.typing import *
+from mymi.utils.angles import reverse_angles
 from mymi.utils.io import sitk_load_volume, sitk_save_volume
 
 # Where can this method go wrong?
@@ -28,7 +29,7 @@ from mymi.utils.io import sitk_load_volume, sitk_save_volume
 #    look reversed. This is because MV gantry 0/180 are the same in both coordinate systems.
 #    I found that .xim files used a counter-clockwise positive, (CCW+) convention and had to be corrected
 #    before using this code.
-def create_diffdrr_projections(
+def project_diffdrr(
     volume: Volume,
     affine: AffineMatrix3D,
     treatment_iso: Point3D,
@@ -153,7 +154,7 @@ def create_diffdrr_projections(
     else:
         return volume_proj
 
-def create_igt_projections(
+def project_igt(
     volume: Volume,
     affine: AffineMatrix3D,
     # This is the point (in planning CT coords) around which the projections are created.
@@ -309,7 +310,7 @@ def create_igt_projections(
     else:
         return ct_fp
 
-def create_ctorch_projections(
+def project_ctorch(
     volume: Image3D,
     affine: AffineMatrix3D,
     treatment_iso: Point3D,

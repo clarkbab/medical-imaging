@@ -3,13 +3,14 @@ from typing import List, Literal
 
 from .args import arg_to_list
 
-def convert_angles(
-    angles: List[float],
+def convert_angle(
+    angles: float | List[float],
     from_: Literal['kv-detector', 'kv-source', 'mv-detector', 'mv-source'],
     to: Literal['kv-detector', 'kv-source', 'mv-detector', 'mv-source'],
     machine: Literal['elekta', 'varian'],
     scale: Literal['degrees', 'radians'] = 'degrees',
-    ) -> List[float]:
+    ) -> float | List[float]:
+    angles, was_single = arg_to_list(angles, (int, float), return_matched=True)
     angle_360 = 2 * np.pi if scale == 'radians' else 360
     angle_180 = angle_360 / 2
     angle_90 = angle_360 / 4
@@ -41,7 +42,10 @@ def convert_angles(
     # Convert angles.
     offset = mv_offset + to_offset
     angles = [float(np.round((a + offset) % angle_360, decimals=3)) for a in angles]
-    return angles
+    if was_single:
+        return angles[0]
+    else:
+        return angles
 
 def reverse_angles(
     angles: float | List[float],

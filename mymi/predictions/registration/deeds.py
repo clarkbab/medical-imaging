@@ -41,7 +41,7 @@ def register_deeds(
         if len(np.unique(spacing)) > 1:
             model_spacing = (1, 1, 1)
             model_affine = create_affine(model_spacing, origin)
-            logger.info(f"Applying isotropic resampling from {spacing} to {model_spacing}.")
+            logger.info(f"Applying resampling from {spacing} to {model_spacing}.")
 
             fixed_data = resample(fixed_ct, affine=affine, output_affine=model_affine)
             fixed_label = resample(fixed_lung_mask, affine=affine, output_affine=model_affine)

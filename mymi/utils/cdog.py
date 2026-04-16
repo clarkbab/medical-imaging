@@ -1,4 +1,7 @@
 import datetime
+from importlib.metadata import metadata
+from dicomset.typing import *
+from dicomset.utils import bubble_args, to_list
 import imageio
 import io
 from IPython.display import Image as IPythonImage, display
@@ -16,9 +19,12 @@ from typing import *
 
 from mymi.typing import *
 
+from .angles import convert_angle
 from .args import arg_to_list
 from .io import resolve_filepath
 from .pandas import append_row
+
+KV_FOLDERS = ['KIM-KV', 'kV']
 
 def get_base_pixel(
     metadata: np.ndarray,
@@ -33,7 +39,7 @@ def get_base_pixel(
 
     raise ValueError(f"No base_pixel found with value: {base_flag}")
 
-def get_metadata(
+def __load_tiff_metadata(
     metadata_img: np.ndarray,
     cdog_version: Literal['v2.7', 'v3.0', 'v4.0'],
     base_flag: int = int('0xCAFE', 16),
@@ -67,7 +73,6 @@ def get_metadata(
     # Extract parameters required for DRR creation.
     props['det-offset'] = (float(np.round(props['KVDetectorLat'] * 10)), float(np.round(props['KVDetectorLng'] * 10)))
     props['det-spacing'] = (float(props['PixelWidth'] * 10), float(props['PixelHeight'] * 10))
-    props['kv-source-angle'] = float(np.round(props['KVSourceRtn'] % 360, decimals=3))
     props['sid'] = float(np.round(props['KVSourceVrt'] * 10))
     props['sdd'] = float(np.round((np.abs(props['KVDetectorVrt']) + props['KVSourceVrt']) * 10))
 
@@ -169,7 +174,10 @@ def infer_cdog_version(
         'v4.0': 10988,
     }
     for v, o in start_time_offsets.items():
-        ts = load_timestamp(metadata, prop_offset=o)
+        try:
+            ts = load_timestamp(metadata, prop_offset=o)
+        except (OSError, OverflowError, ValueError):
+            continue
         if ts.year >= 2010:
             return v
 
@@ -200,113 +208,192 @@ def infer_image_size(
     # raise ValueError(f"Couldn't infer image size for: {filepath}")
 
 def list_tiff_arcs(
-    dirpath: DirPath,
-    ) -> List[str]:
-    tiff_files = list(sorted([f for f in os.listdir(dirpath) if f.endswith('.tiff')]))
-    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
+    fraction_path: DirPath,
+    ) -> List[int]:
+    # Get kV folder.
+    kv_dirpath = None
+    for f in KV_FOLDERS:
+        tmp_dirpath = os.path.join(fraction_path, f)
+        if os.path.isdir(tmp_dirpath):
+            kv_dirpath = tmp_dirpath
+            break
+    if kv_dirpath is None:
+        raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
+
+    files = os.listdir(kv_dirpath)
+    files = [f for f in files if f.endswith('.tiff')]
+    arcs = [int(f.split('_')[1]) for f in files]
+    arcs = to_list(np.unique(arcs))
     return arcs
 
-def load_tiff(
-    filepath: FilePath | DirPath,
+def list_tiff_fractions(
+    pat_path: DirPath,
+    ) -> List[int]:
+    entries = sorted(os.listdir(pat_path))
+    fractions = [int(e.replace('Fx', '')) for e in entries if e.startswith('Fx') and os.path.isdir(os.path.join(pat_path, e))]
+    return fractions
+
+def list_tiff_images(
+    fraction_path: DirPath,
+    arc: int | List[int] | Literal['all'] = 'all',
+    ) -> List[FilePath]:
+    # Get kV folder.
+    kv_dirpath = None
+    for f in KV_FOLDERS:
+        tmp_dirpath = os.path.join(fraction_path, f)
+        if os.path.isdir(tmp_dirpath):
+            kv_dirpath = tmp_dirpath
+            break
+    if kv_dirpath is None:
+        raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
+
+    # Load all images in the arc.
+    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(kv_dirpath)})
+    files = [f for f in os.listdir(kv_dirpath) if f.endswith('.tiff')]
+    files = list(sorted([f for f in files if int(f.split('_')[1]) in arcs]))
+    filepaths = [os.path.join(kv_dirpath, f) for f in files]
+    return filepaths
+
+def load_tiff_arc(
+    fraction_path: DirPath,
+    arc: int,
     **kwargs,
-    ) -> Tuple[List[Slice], List[Dict[str, Any]]]:
-    if os.path.isdir(filepath):
-        data, info = load_tiff_dirpath(filepath, **kwargs)
-    else:
-        data, info = load_tiff_filepath(filepath, **kwargs)
-    return data, info
-
-def load_tiff_dirpath(
-    dirpath: DirPath,
-    angle_range: Tuple[float | None, float | None] = (None, None),
-    arc: int | None = 0,
-    n_angles: int | None = None,
-    n_frames: int | None = None,
-    **kwargs,
-    ) -> Tuple[List[Slice], List[Dict[str, Any]]]:
-    # Get tiff files and angles (by filename).
-    files = os.listdir(dirpath)
-    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
-    tiff_angles = np.array([float(f.split('_')[-1].replace('.tiff', '')) for f in tiff_files])
-
-    # Filter tiff files by arc.
-    arcs = list([str(a) for a in np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files])])
-    arc = arcs[arc]
-    tiff_angles = [a for f, a in zip(tiff_files, tiff_angles) if f.startswith(arc)]
-    tiff_files = [f for f in tiff_files if f.startswith(arc)]
-
-    # Filter by angle range.
-    if angle_range[0] is not None:
-        indices = np.where(np.array(tiff_angles) >= angle_range[0])[0]
-        tiff_angles = [tiff_angles[i] for i in indices]
-        tiff_files = [tiff_files[i] for i in indices]
-    if angle_range[1] is not None:
-        indices = np.where(np.array(tiff_angles) < angle_range[1])[0]
-        tiff_angles = [tiff_angles[i] for i in indices]
-        tiff_files = [tiff_files[i] for i in indices]
-
-    # Only include subset of angles - split evenly across the range.
-    if n_angles is not None:
-        # tiff_angle_range = np.abs(tiff_angles[-1] - tiff_angles[0])     # Assumes arm can't reverse within an arc?
-        # print(tiff_angle_range)
-        # print(plot_freq)
-        plot_freq = np.max([len(tiff_files) // n_angles, 1])
-        tiff_files = [f for i, f in enumerate(tiff_files) if i % plot_freq == 0] 
-
-    # Get first n frames.
-    if n_frames is not None:
-        tiff_files = tiff_files[:n_frames]
-
-    # Load tiff files.
-    filepaths = [os.path.join(dirpath, f) for f in tiff_files]
+    ) -> Tuple[List[Image2D], List[Dict[str, Any]]]:
+    filepaths = list_tiff_images(fraction_path, arc=arc)
     datas, infos = [], []
-    for f in tqdm(filepaths, desc="Loading TIFF files"):
-        data, info = load_tiff_filepath(f, **kwargs)
+    for f in filepaths:
+        data, info = load_tiff_image(f, **kwargs)
         datas.append(data)
         infos.append(info)
     return datas, infos
 
+def load_tiff_fraction(
+    fraction_path: DirPath,
+    arc: int | List[int] | Literal['all'] = 'all',
+    **kwargs,
+    ) -> Tuple[List[List[Image2D]], List[List[Dict[str, Any]]]]:
+    # Look for kV images.
+    kv_dirpath = None
+    for f in KV_FOLDERS:
+        tmp_dirpath = os.path.join(fraction_path, f)
+        if os.path.isdir(tmp_dirpath):
+            kv_dirpath = tmp_dirpath
+            break
+    if kv_dirpath is None:
+        raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
+
+    # Load all arcs in the fraction.
+    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(kv_dirpath)})
+    arc_datas, arc_infos = [], []
+    for a in arcs:
+        datas, infos = load_tiff_arc(fraction_path, arc=a, **kwargs)
+        arc_datas.append(datas)
+        arc_infos.append(infos)
+    return arc_datas, arc_infos
+
+def load_tiff_patient(
+    pat_path: DirPath,
+    fraction: int | List[int] | Literal['all'] = 'all',
+    **kwargs,
+    ) -> Tuple[List[List[List[Image2D]]], List[List[List[Dict[str, Any]]]]]:
+    fractions = arg_to_list(fraction, int, literals={'all': lambda: list_tiff_fractions(pat_path)})
+    all_datas, all_infos = [], []
+    for fx in fractions:
+        fx_dirpath = os.path.join(pat_path, f"Fx{fx:02d}")
+        fx_datas, fx_infos = load_tiff_fraction(fx_dirpath, **kwargs)
+        all_datas.append(fx_datas)
+        all_infos.append(fx_infos)
+    return all_datas, all_infos
+
 # Returns image metadata and pixel data.
-def load_tiff_filepath(
-    filepath: str,
-    invert_intensities: bool = True,
+def load_tiff_image(
+    filepath: FilePath | DirPath,
+    arc: int | None = None,
+    frame: int | None = None,
+    filename_angle: Literal['kv-source', 'kv-detector', 'mv-source', 'mv-detector'] = 'kv-source',
     cdog_version: Optional[str] = None,
-    ) -> Tuple[Slice, Dict[str, Any]]:
-    # Load image.
-    img = PIL.Image.open(filepath)
-    data = np.array(img).T
+    invert_intensities: bool = True,
+    load_image: bool = True,
+    machine: Literal['elekta', 'varian'] | None = None,
+    ) -> Tuple[Image2D | None, Dict[str, Any]]:
+    # Get filepath.
+    if os.path.isdir(filepath):
+        if arc is None or frame is None:
+            raise ValueError(f"If 'filepath' is a directory, 'arc' and 'frame' must be passed.")
+        filepath = list_tiff_images(filepath, arc=arc)[frame]
 
-    # Get TIFF metadata.
-    # We don't really need this, just checks the data type for future calcs.
-    # tiff_metadata = load_tiff_metadata(img)
-
-    # Build our own metadata.
-    metadata = {}
+    # Add filename metadata.
+    info = {}
     filename = os.path.basename(filepath)
-    metadata['filepath'] = filepath
-    metadata['arc'] = '_'.join(filename.split('_')[:2])
-    metadata['frame'] = filename.split('_')[2]
-    metadata['angle'] = filename.split('_')[-1].replace('.tiff', '')
-    metadata['det-size'] = infer_image_size(data, filepath)
+    info['dirpath'] = os.path.dirname(filepath)
+    info['filepath'] = filepath
+    info['filename-arc'] = int(filename.split('_')[1])
+    info['filename-frame'] = int(filename.split('_')[2])
+    info['filename-angle'] = float(filename.split('_')[-1].replace('.tiff', ''))
 
-    # Extract metadata from .
-    metadata_image = data[:, metadata['det-size'][1]:]
-    metadata['image'] = metadata_image  # For debugging only.
-    base_pixel = get_base_pixel(metadata_image)
-    if cdog_version is not None:
-        metadata['cdog-version'] = cdog_version
-    else:
-        metadata['cdog-version'] = infer_cdog_version(metadata_image)
-    mdata = get_metadata(metadata_image, metadata['cdog-version'])
-    metadata |= mdata
+    if load_image:
+        # Load image.
+        img = PIL.Image.open(filepath)
+        data = np.array(img).T
+
+        # Figure this out first to get metadata size.
+        info['det-size'] = infer_image_size(data, filepath)
+
+        # Extract metadata from image.
+        metadata_image = data[:, info['det-size'][1]:]
+        info['image'] = metadata_image  # For debugging only.
+        base_pixel = get_base_pixel(metadata_image)
+        if cdog_version is not None:
+            info['cdog-version'] = cdog_version
+        else:
+            info['cdog-version'] = infer_cdog_version(metadata_image)
+        mdata = __load_tiff_metadata(metadata_image, info['cdog-version'])
+        info |= mdata
+
+    # Filename angle is ground truth. Calculate other angles based on this.
+    # Infer machine from the tiff file?
+    if machine is None:
+        if load_image:
+            machine = 'varian' if 'KVCollimatorX1' in info else 'elekta'
+        else:
+            raise ValueError(f"Can't infer machine if 'load_image=False', must pass 'machine'.")
+    info['kv-source-angle'] = convert_angle(info['filename-angle'], filename_angle, 'kv-source', machine)
+    info['kv-detector-angle'] = convert_angle(info['filename-angle'], filename_angle, 'kv-detector', machine)
+    info['mv-source-angle'] = convert_angle(info['filename-angle'], filename_angle, 'mv-source', machine)
+    info['mv-detector-angle'] = convert_angle(info['filename-angle'], filename_angle, 'mv-detector', machine)
+
+    if not load_image:
+        return None, info
 
     # Extract image data.
-    image_data = data[:, :metadata['det-size'][1]]
+    data = data[:, :info['det-size'][1]]
 
     if invert_intensities:
-        image_data = np.max(image_data) - image_data
+        data = np.max(data) - data
 
-    return image_data, metadata
+    return data, info
+
+@bubble_args(
+    load_tiff_arc,
+    load_tiff_fraction,
+    load_tiff_image,
+    load_tiff_patient,
+)
+def load_tiff(
+    filepath: FilePath | DirPath,
+    arc: int | None = None,
+    **kwargs,
+    ) -> Tuple:
+    if not os.path.isdir(filepath):
+        data, info = load_tiff_image(filepath, **kwargs)
+    elif os.path.basename(filepath).startswith('Fx'):
+        if arc is not None:
+            data, info = load_tiff_arc(filepath, arc=arc, **kwargs)
+        else:
+            data, info = load_tiff_fraction(filepath, **kwargs)
+    else:
+        data, info = load_tiff_patient(filepath, **kwargs)
+    return data, info
 
 def load_tiff_df(
     filepath: str,
@@ -416,69 +503,204 @@ def load_timestamp(
 
     return precise_timestamp
 
-def plot_arc_ranges(
-    dirpath: DirPath,
-    arc: int | Literal['all'] = 'all',
+def plot_tiff_fraction(
+    arc_infos: List[List[Dict[str, Any]]],
+    arrow_spacing: float = 0.1,
+    ax: mpl.axes.Axes | None = None,
+    display_angle: str = 'kv-source-angle',
+    min_sub_arc_deg: float = 5.0,
+    title: str | None = None,
     ) -> None:
-    # Get all arc names from directory.
-    files = os.listdir(dirpath)
-    tiff_files = list(sorted([f for f in files if f.endswith('.tiff')]))
-    all_arcs = list(np.unique(['_'.join(f.split('_')[:2]) for f in tiff_files]))
+    # Build arc angle data from loaded infos.
+    arc_data = {}
+    arcs = []
+    for infos in arc_infos:
+        if len(infos) == 0:
+            continue
+        a = infos[0]['filename-arc']
+        arcs.append(a)
+        angles = [info[display_angle] for info in infos]
 
-    if arc != 'all':
-        all_arcs = [all_arcs[arc]]
+        # Remove consecutive duplicates.
+        unique_angles = [angles[0]]
+        for ang in angles[1:]:
+            if ang != unique_angles[-1]:
+                unique_angles.append(ang)
 
-    # For each arc, get min/max angle from filenames.
-    arc_ranges = []
+        # Split into sub-arcs at direction changes.
+        sub_arcs = []
+        if len(unique_angles) >= 2:
+            sub_start = unique_angles[0]
+            prev_cw = unique_angles[1] > unique_angles[0]
+            for j in range(2, len(unique_angles)):
+                if unique_angles[j] == unique_angles[j - 1]:
+                    continue
+                curr_cw = unique_angles[j] > unique_angles[j - 1]
+                if curr_cw != prev_cw:
+                    sub_arcs.append((sub_start, unique_angles[j - 1], prev_cw))
+                    sub_start = unique_angles[j - 1]
+                    prev_cw = curr_cw
+            sub_arcs.append((sub_start, unique_angles[-1], prev_cw))
+        else:
+            sub_arcs.append((unique_angles[0], unique_angles[0], True))
+
+        # Merge sub-arcs that are shorter than min_sub_arc_deg (noise/jitter).
+        merged = True
+        while merged:
+            merged = False
+            for i in range(len(sub_arcs)):
+                span = abs(sub_arcs[i][1] - sub_arcs[i][0])
+                if span < min_sub_arc_deg and len(sub_arcs) > 1:
+                    if i + 1 < len(sub_arcs):
+                        nxt = sub_arcs[i + 1]
+                        sub_arcs[i + 1] = (sub_arcs[i][0], nxt[1], nxt[2])
+                        sub_arcs.pop(i)
+                    else:
+                        prv = sub_arcs[i - 1]
+                        sub_arcs[i - 1] = (prv[0], sub_arcs[i][1], prv[2])
+                        sub_arcs.pop(i)
+                    merged = True
+                    break
+
+        arc_data[a] = sub_arcs
+
+    # Build full range of arc indices so missing arcs leave empty rings.
+    all_arcs = list(range(max(arcs) + 1))
+    arc_ring_counts = {}
     for a in all_arcs:
-        arc_files = [f for f in tiff_files if f.startswith(a)]
-        angles = [float(f.split('_')[-1].replace('.tiff', '')) for f in arc_files]
-        arc_ranges.append((a, min(angles), max(angles)))
+        arc_ring_counts[a] = len(arc_data[a]) if a in arc_data else 1
 
     # Plot concentric arcs on a polar axes.
     cb_palette = sns.color_palette('colorblind')
-    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(6, 6))
+    show = ax is None
+    if ax is None:
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(6, 6))
 
     ring_width = 0.15
+    sub_ring_width = ring_width / 3
+    arc_gap = 0.05
+    sub_ring_gap = 0.01
     inner_radius = 0.4
 
-    for idx, (name, start_angle, end_angle) in enumerate(arc_ranges):
-        color = cb_palette[idx % len(cb_palette)]
-        radius = inner_radius + idx * (ring_width + 0.05)
+    # Compute the starting radius for each arc.
+    arc_radii = {}
+    current_radius = inner_radius
+    for a in all_arcs:
+        arc_radii[a] = current_radius
+        n_rings = arc_ring_counts[a]
+        if n_rings == 1:
+            current_radius += ring_width + arc_gap
+        else:
+            current_radius += n_rings * (sub_ring_width + sub_ring_gap) - sub_ring_gap + arc_gap
 
-        # Convert degrees to radians (0° at top, clockwise).
-        theta_start = np.deg2rad(start_angle)
-        theta_end = np.deg2rad(end_angle)
+    for a in all_arcs:
+        if a not in arc_data:
+            continue
 
-        # Draw arc as a filled polar bar.
-        theta_span = theta_end - theta_start
-        ax.bar(
-            x=theta_start + theta_span / 2,
-            height=ring_width,
-            width=theta_span,
-            bottom=radius,
-            color=color,
-            alpha=0.7,
-            label=f"{name} ({start_angle:.1f}° - {end_angle:.1f}°)",
-            edgecolor='white',
-            linewidth=0.5,
-        )
+        sub_arcs = arc_data[a]
+        color = cb_palette[(a - 1) % len(cb_palette)]
+        base_radius = arc_radii[a]
+        n_sub = len(sub_arcs)
+
+        for si, (start_angle, end_angle, clockwise) in enumerate(sub_arcs):
+            if clockwise:
+                theta_span_deg = (end_angle - start_angle) % 360
+            else:
+                theta_span_deg = (start_angle - end_angle) % 360
+            theta_start = np.deg2rad(start_angle)
+            theta_span = np.deg2rad(theta_span_deg)
+
+            if n_sub == 1:
+                rw = ring_width
+                radius = base_radius
+            else:
+                rw = sub_ring_width
+                radius = base_radius + si * (sub_ring_width + sub_ring_gap)
+
+            theta_mid = theta_start + theta_span / 2 if clockwise else theta_start - theta_span / 2
+            if si == 0:
+                overall_start = sub_arcs[0][0]
+                overall_end = sub_arcs[-1][1]
+                label = f"{a} ({overall_start:.1f}° → {overall_end:.1f}°"
+                if n_sub > 1:
+                    label += f", {n_sub} segs"
+                label += ")"
+            else:
+                label = None
+            ax.bar(
+                x=theta_mid,
+                height=rw,
+                width=theta_span,
+                bottom=radius,
+                color=color,
+                alpha=0.7,
+                label=label,
+                edgecolor='white',
+                linewidth=0.5,
+            )
+
+            # Add directional arrows.
+            arrow_radius = radius + rw / 2
+            angular_spacing = np.rad2deg(arrow_spacing / arrow_radius)
+            delta = np.deg2rad(2) if clockwise else np.deg2rad(-2)
+            n_arrows = int(theta_span_deg / angular_spacing)
+            for i in range(n_arrows):
+                if clockwise:
+                    a_deg = start_angle + i * angular_spacing
+                else:
+                    a_deg = start_angle - i * angular_spacing
+                a_rad = np.deg2rad(a_deg)
+                ax.annotate(
+                    '',
+                    xy=(a_rad + delta, arrow_radius),
+                    xytext=(a_rad - delta, arrow_radius),
+                    arrowprops=dict(arrowstyle='->', color=color, lw=1.5),
+                )
 
     # Style the polar plot.
     ax.set_theta_zero_location('N')
     ax.set_theta_direction(-1)
-    ax.set_ylim(0, inner_radius + len(arc_ranges) * (ring_width + 0.05) + 0.1)
+    ax.set_ylim(0, current_radius + 0.1)
     ax.set_yticks([])
     ax.set_xticks(np.deg2rad(np.arange(0, 360, 30)))
     ax.set_xticklabels([f"{a}°" for a in range(0, 360, 30)])
-    ax.set_title('Arc Angular Ranges', pad=20)
+    if title is None:
+        # Infer fraction name from dirpath.
+        if len(arc_infos) > 0 and len(arc_infos[0]) > 0:
+            parts = os.path.normpath(arc_infos[0][0]['dirpath']).split(os.sep)
+            title = parts[-2]
+    ax.set_title(title, pad=20)
     ax.legend(loc='upper right', bbox_to_anchor=(1.35, 1.1), fontsize=8)
+
+    if show:
+        plt.tight_layout()
+        plt.show()
+
+def plot_tiff_patient(
+    info: List[List[List[Dict[str, Any]]]],
+    n_cols: int = 4,
+    **kwargs,
+    ) -> None:
+    n_fractions = len(info)
+    n_rows = int(np.ceil(n_fractions / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, subplot_kw={'projection': 'polar'}, figsize=(5 * n_cols, 5 * n_rows))
+    axes = np.atleast_2d(axes)
+
+    for i, arc_infos in enumerate(info):
+        row, col = divmod(i, n_cols)
+        ax = axes[row, col]
+        plot_tiff_fraction(arc_infos, ax=ax, **kwargs)
+
+    # Hide unused axes.
+    for i in range(n_fractions, n_rows * n_cols):
+        row, col = divmod(i, n_cols)
+        axes[row, col].set_visible(False)
 
     plt.tight_layout()
     plt.show()
 
-def plot_tiff(
-    data: Slice,
+def plot_tiff_image(
+    data: Image2D,
     info: Dict[str, Any],
     ax: mpl.axes.Axes | None = None,
     hist_eq: bool = False,
@@ -553,10 +775,10 @@ def plot_tiff(
     # Add annotation.
     cdog_version = info['cdog-version']
     title = f"CDOG ({cdog_version}) TIFF image ({info['det-size'][0]} x {info['det-size'][1]})\n\
-Arc: {info['arc']}, frame: {info['frame']}, angle: {info['angle']}\n\
+Filename - arc: {info['filename-arc']}, frame: {info['filename-frame']}, angle: {info['filename-angle']}\n\
 Imin/max: {data.min()}/{data.max()}, Vmin/max: {vmin}/{vmax}\n\
-MV source angle: {info['GantryRtn']:.3f}\n\
-kV source/det. angle: {info['kv-source-angle']:.3f}/{info['KVDetectorRtn']:.3f}"
+MV source/det: {info['mv-source-angle']:.1f}°/{info['mv-detector-angle']:.1f}°\n\
+kV source/det: {info['kv-source-angle']:.1f}°/{info['kv-detector-angle']:.1f}°"
     ax.set_title(title, fontsize=title_fontsize)
     # plt.axis('off')
     for s in ax.spines.values():
@@ -573,31 +795,33 @@ kV source/det. angle: {info['kv-source-angle']:.3f}/{info['KVDetectorRtn']:.3f}"
     elif show:
         plt.show()
 
-def plot_tiff_gif(
-    data: List[Slice] | None = None,
-    info: List[Dict[str, Any]] | None = None,
+def plot_gif(
+    plot_fn: Callable,
+    datas: List[Any],
+    infos: List[Dict[str, Any]],
     frame_time: float = 0.5,
+    load: bool = True,
     loop: bool = True,
     n_frames: int | None = None,
     overwrite: bool = False,
     pause_time: float = 5,
-    savepath: FilePath | None = None,
     width: int = 1000,
     **kwargs,
     ) -> None:
-    if savepath is not None and os.path.exists(savepath) and not overwrite:
+    # Load from disk.
+    arc = infos[0]['filename-arc']
+    dirpath = infos[0]['dirpath']
+    savepath = os.path.join(dirpath, f"arc_{arc}.apng")
+    if load and not overwrite and os.path.exists(savepath):
         with open(savepath, 'rb') as f:
             display(IPythonImage(data=f.read(), format='png', width=width))
         return
 
-    if savepath is None:
-        savepath = tempfile.NamedTemporaryFile(suffix='.apng', delete=False).name
-
-    # Get tiff images.
+    # Generate frames.
     png_images = []
-    for i, (d, inf) in tqdm(enumerate(zip(data, info)), total=len(data), desc="Creating GIF frames"):
-        other_info = info[:i] + info[i+1:]
-        png_image = plot_tiff(d, inf, other_info=other_info, return_image=True, **kwargs)
+    total = len(datas) if n_frames is None else min(len(datas), n_frames)
+    for i, (d, inf) in tqdm(enumerate(zip(datas, infos)), total=total, desc="Creating GIF frames"):
+        png_image = plot_fn(d, inf, return_image=True, **kwargs)
         png_images.append(png_image)
         if n_frames is not None and i + 1 >= n_frames:
             break
@@ -610,6 +834,17 @@ def plot_tiff_gif(
 
     with open(savepath, 'rb') as f:
         display(IPythonImage(data=f.read(), format='png', width=width))
+
+def plot_tiff_gif(
+    datas: List[Image2D] | None = None,
+    infos: List[Dict[str, Any]] | None = None,
+    **kwargs,
+    ) -> None:
+    def _plot_tiff_frame(d, inf, **kw):
+        other_info = [x for x in infos if x is not inf]
+        return plot_tiff_image(d, inf, other_info=other_info, **kw)
+
+    plot_gif(_plot_tiff_frame, datas, infos, **kwargs)
 
 def plot_tiff_hist(
     filepath: str,

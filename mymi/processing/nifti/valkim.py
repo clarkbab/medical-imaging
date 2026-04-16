@@ -16,7 +16,7 @@ import torch
 from tqdm import tqdm
 from typing import List
 
-from mymi.processing.projections import create_ctorch_projections
+from mymi.processing.projections import project_ctorch
 from mymi.transforms import pad
 from mymi.utils.cdog import load_tiff
 
@@ -39,7 +39,9 @@ def create_valkim_preprocessed_dataset(
     new_set = create_nifti_dataset(dataset_pp, recreate=recreate_dataset)
 
     # Copy index.
-    create_index(dataset_pp, old_set.index())
+    index = old_set.index()
+    index['dataset'] = dataset_pp
+    create_index(dataset_pp, index)
 
     # Copy regions map.
     srcpath = os.path.join(old_set.path, 'regions_map.yaml')
@@ -293,7 +295,7 @@ def create_valkim_training_dataset(
                 save_json(kv_source_angles, filepath)
 
                 # Create projections.
-                inh_ct_proj, inh_labels_proj = create_ctorch_projections(
+                inh_ct_proj, inh_labels_proj = project_ctorch(
                     inh_ct.astype(np.float32),
                     affine.astype(np.float32),
                     isocentre,
@@ -306,7 +308,7 @@ def create_valkim_training_dataset(
                     labels=inh_labels.astype(np.float32),
                 )
 
-                exh_ct_proj, exh_labels_proj = create_ctorch_projections(
+                exh_ct_proj, exh_labels_proj = project_ctorch(
                     exh_ct.astype(np.float32),
                     affine.astype(np.float32),
                     isocentre,

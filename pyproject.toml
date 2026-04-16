@@ -38,5 +38,5 @@ explicit = true
 [tool.uv.sources]
 augmed = { path = "../AugMed", editable = true }
 dicomset = { path = "../DicomSet", editable = true }
-surface-distance = { git = "https://github.com/google-deepmind/surface-distance" }
+surface-distance = { path = "../surface-distance", editable = true }
 torch = { index = "pytorch-cu121" }

@@ -6,30 +6,6 @@ from dicomset.utils.geometry import fov_centre
 from mymi.typing import *
 from mymi.utils.args import arg_to_list
 
-def distances(
-    a: LabelSlice | LabelVolume,
-    b: LabelSlice | LabelVolume,
-    spacing: Spacing2D | Spacing3D,
-    tols: int | float | List[Union[int, float]] = [],
-    ) -> Dict[str, float]:
-    if a.shape != b.shape:
-        raise ValueError(f"Metric 'distances' expects arrays of equal shape. Got '{a.shape}' and '{b.shape}'.")
-    if a.sum() == 0 or b.sum() == 0:
-        raise ValueError(f"Metric 'distances' can't be calculated on empty sets. Got cardinalities '{a.sum()}' and '{b.sum()}'.")
-    tols = arg_to_list(tols, (int, float))
-
-    a, b = a.astype(np.bool_), b.astype(np.bool_)
-    surf_dists = compute_surface_distances(a, b, spacing) 
-    metrics = {
-        'hd': compute_robust_hausdorff(surf_dists, 100),
-        'msd': np.mean(compute_average_surface_distance(surf_dists)),
-        'hd-95': compute_robust_hausdorff(surf_dists, 95)
-    }
-    for t in tols:
-        metrics[f'surface-dice-tol-{t}'] = compute_surface_dice_at_tolerance(surf_dists, t)
-
-    return metrics
-
 def apl(
     surf_dists: Tuple[np.ndarray, np.array],
     spacing: Spacing3D,
