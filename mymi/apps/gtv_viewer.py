@@ -1,4 +1,4 @@
-from dicomset.dicom.utils import from_ct_dicom, from_rtstruct_dicom
+from dicomset.dicom.utils import from_ct_dicom, from_rtstruct_dicom, list_rtstruct_regions
 from dicomset.utils import affine_spacing, centre_of_mass, foreground_fov, foreground_fov_centre, volume
 import streamlit as st
 import streamlit.components.v1 as components
@@ -10,8 +10,7 @@ import pandas as pd
 import re
 import os
 
-DATA_DIR = r"D:\Brett\data\mymi\files\mlm\valkim\gt"
-
+DATA_DIR = r"D:\Brett\data\mymi\files\mlm\valkim\gt\registrations"
 
 def phase_label(folder_name):
     m = re.search(r'(\d+)', folder_name)
@@ -117,7 +116,8 @@ def _load_phase(data_dir, patient, phase):
         return None
 
     ct_data, affine = from_ct_dicom(ct_dir)
-    label_data, regions = from_rtstruct_dicom(rtstruct_path, ct_data.shape, affine, region_id='all', return_regions=True)
+    regions = list_rtstruct_regions(rtstruct_path)
+    label_data, _ = from_rtstruct_dicom(rtstruct_path, ct_data.shape, affine, region_id=regions)
 
     volumes = []
     centroids = []

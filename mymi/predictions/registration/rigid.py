@@ -1,4 +1,5 @@
 from dicomset.typing import *
+from dicomset.utils import affine_spacing, foreground_fov_width
 from dicomset.utils.logging import logger
 from typing import Literal, Optional, Tuple
 import numpy as np
@@ -60,7 +61,7 @@ def register_rigid(
 
     # Optimizer settings.
     registration_method.SetOptimizerAsGradientDescent(
-        learningRate=0.5, numberOfIterations=1000,
+        learningRate=0.1, numberOfIterations=1000,
         convergenceMinimumValue=1e-6, convergenceWindowSize=10)
     registration_method.SetOptimizerScalesFromPhysicalShift()
     weights = [1.0] * 6
@@ -70,9 +71,27 @@ def register_rigid(
         weights[1] = 0.0
     registration_method.SetOptimizerWeights(weights)
 
-    # Multi-resolution framework.
-    registration_method.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
-    registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
+    # Multi-resolution framework — adapt levels to mask extent.
+    if fixed_mask is not None:
+        spacing = affine_spacing(fixed_affine)
+        fov_width = foreground_fov_width(fixed_mask, affine=fixed_affine)
+        min_extent = float(np.min(fov_width)) if fov_width is not None else 0
+        # Need at least ~16 voxels at coarsest level to be useful.
+        # shrink=4 needs ~64mm, shrink=2 needs ~32mm.
+        if min_extent >= 64:
+            shrink_factors = [4, 2, 1]
+            smoothing_sigmas = [2, 1, 0]
+        elif min_extent >= 32:
+            shrink_factors = [2, 1]
+            smoothing_sigmas = [1, 0]
+        else:
+            shrink_factors = [1]
+            smoothing_sigmas = [0]
+    else:
+        shrink_factors = [4, 2, 1]
+        smoothing_sigmas = [2, 1, 0]
+    registration_method.SetShrinkFactorsPerLevel(shrinkFactors=shrink_factors)
+    registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=smoothing_sigmas)
     registration_method.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
     registration_method.SetInitialTransform(initial_transform, inPlace=False)

@@ -1,7 +1,7 @@
 import datetime
 from importlib.metadata import metadata
 from dicomset.typing import *
-from dicomset.utils import bubble_args, to_list
+from dicomset.utils import bubble_args, logger, to_list
 import imageio
 import io
 from IPython.display import Image as IPythonImage, display
@@ -14,7 +14,7 @@ import PIL
 import seaborn as sns
 from skimage import exposure
 import tempfile
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from typing import *
 
 from mymi.typing import *
@@ -25,6 +25,36 @@ from .io import resolve_filepath
 from .pandas import append_row
 
 KV_FOLDERS = ['KIM-KV', 'kV']
+
+# CT windowing presets: (width, level).
+WINDOW_PRESETS = {
+    'bone': (1800, 400),
+    'brain': (80, 40),
+    'liver': (150, 30),
+    'lung': (1500, -600),
+    'mediastinum': (350, 50),
+    'tissue': (400, 50),
+}
+
+def __resolve_window(
+    window: Window | None,
+    vmin: float | None,
+    vmax: float | None,
+    ) -> tuple[float | None, float | None]:
+    if window is not None:
+        assert vmin is None, "vmin must be None if window is specified."
+        assert vmax is None, "vmax must be None if window is specified."
+    if window is None:
+        return vmin, vmax
+    if isinstance(window, str):
+        if window not in WINDOW_PRESETS:
+            raise ValueError(f"Unknown window preset '{window}'. Expected one of {list(WINDOW_PRESETS.keys())}.")
+        width, level = WINDOW_PRESETS[window]
+    else:
+        width, level = window
+    vmin = level - width / 2
+    vmax = level + width / 2
+    return vmin, vmax
 
 def get_base_pixel(
     metadata: np.ndarray,
@@ -248,7 +278,7 @@ def list_tiff_images(
         raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
 
     # Load all images in the arc.
-    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(kv_dirpath)})
+    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(fraction_path)})
     files = [f for f in os.listdir(kv_dirpath) if f.endswith('.tiff')]
     files = list(sorted([f for f in files if int(f.split('_')[1]) in arcs]))
     filepaths = [os.path.join(kv_dirpath, f) for f in files]
@@ -257,12 +287,15 @@ def list_tiff_images(
 def load_tiff_arc(
     fraction_path: DirPath,
     arc: int,
+    n_frames: int | None = None,
     **kwargs,
     ) -> Tuple[List[Image2D], List[Dict[str, Any]]]:
     filepaths = list_tiff_images(fraction_path, arc=arc)
+    if n_frames is not None:
+        filepaths = filepaths[:n_frames]
     datas, infos = [], []
-    for f in filepaths:
-        data, info = load_tiff_image(f, **kwargs)
+    for f in tqdm(filepaths, desc=f"Loading frames"):
+        data, info = load_tiff_frame(f, **kwargs)
         datas.append(data)
         infos.append(info)
     return datas, infos
@@ -283,7 +316,7 @@ def load_tiff_fraction(
         raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
 
     # Load all arcs in the fraction.
-    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(kv_dirpath)})
+    arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(fraction_path)})
     arc_datas, arc_infos = [], []
     for a in arcs:
         datas, infos = load_tiff_arc(fraction_path, arc=a, **kwargs)
@@ -306,16 +339,18 @@ def load_tiff_patient(
     return all_datas, all_infos
 
 # Returns image metadata and pixel data.
-def load_tiff_image(
+def load_tiff_frame(
     filepath: FilePath | DirPath,
     arc: int | None = None,
     frame: int | None = None,
     filename_angle: Literal['kv-source', 'kv-detector', 'mv-source', 'mv-detector'] = 'kv-source',
-    cdog_version: Optional[str] = None,
+    cdog_version: str | None = None,
     invert_intensities: bool = True,
     load_image: bool = True,
     machine: Literal['elekta', 'varian'] | None = None,
     ) -> Tuple[Image2D | None, Dict[str, Any]]:
+    with run_once():
+        logger.warn(f"Loading frames with 'filename_angle={filename_angle}' and 'machine={machine}'.")
     # Get filepath.
     if os.path.isdir(filepath):
         if arc is None or frame is None:
@@ -376,7 +411,7 @@ def load_tiff_image(
 @bubble_args(
     load_tiff_arc,
     load_tiff_fraction,
-    load_tiff_image,
+    load_tiff_frame,
     load_tiff_patient,
 )
 def load_tiff(
@@ -385,7 +420,7 @@ def load_tiff(
     **kwargs,
     ) -> Tuple:
     if not os.path.isdir(filepath):
-        data, info = load_tiff_image(filepath, **kwargs)
+        data, info = load_tiff_frame(filepath, **kwargs)
     elif os.path.basename(filepath).startswith('Fx'):
         if arc is not None:
             data, info = load_tiff_arc(filepath, arc=arc, **kwargs)
@@ -699,7 +734,7 @@ def plot_tiff_patient(
     plt.tight_layout()
     plt.show()
 
-def plot_tiff_image(
+def plot_tiff_frame(
     data: Image2D,
     info: Dict[str, Any],
     ax: mpl.axes.Axes | None = None,
@@ -712,6 +747,7 @@ def plot_tiff_image(
     title_fontsize: float = 10,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
+    window: Window | None = None,
     ) -> Optional[PIL.Image.Image | List[PIL.Image.Image]]:
     if show_waveform:
         fig = plt.figure(figsize=(16, 6))
@@ -736,6 +772,9 @@ def plot_tiff_image(
         data = (data - data.min()) / (data.max() - data.min())
     if hist_eq:
         data = exposure.equalize_hist(data)
+
+    # Resolve window to vmin/vmax.
+    vmin, vmax = __resolve_window(window, vmin, vmax)
 
     # Plot slice.
     ax.imshow(data.T, aspect=aspect, cmap='gray', vmin=vmin, vmax=vmax)
@@ -842,7 +881,7 @@ def plot_tiff_gif(
     ) -> None:
     def _plot_tiff_frame(d, inf, **kw):
         other_info = [x for x in infos if x is not inf]
-        return plot_tiff_image(d, inf, other_info=other_info, **kw)
+        return plot_tiff_frame(d, inf, other_info=other_info, **kw)
 
     plot_gif(_plot_tiff_frame, datas, infos, **kwargs)
 

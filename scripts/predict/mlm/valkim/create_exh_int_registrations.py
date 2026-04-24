@@ -13,10 +13,8 @@ methods = ['rigid', 'affine']
 
 dataset = 'VALKIM-PP'
 # other_series = ['series_1', 'series_2', 'series_3', 'series_4']
-# other_series = ['series_9', 'series_8', 'series_7', 'series_6']
-other_series = ['series_1', 'series_2', 'series_3', 'series_4',
-                'series_9', 'series_8', 'series_7', 'series_6']
-t_vals = [0.2, 0.4, 0.6, 0.8]
+other_series = ['series_1', 'series_2', 'series_3', 'series_4', 'series_9', 'series_8', 'series_7', 'series_6']
+t_vals = [0.2, 0.4, 0.6, 0.8, 0.2, 0.4, 0.6, 0.8]
 # other_series = ['series_1']
 inh_series = 'series_0'
 exh_series = 'series_5'
