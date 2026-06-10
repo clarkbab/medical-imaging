@@ -3,10 +3,6 @@ from augmed.utils import to_tensor, to_numpy
 from dicomset.utils import logger, hist_eq as hist_eq_fn, plot_slice
 from dicomset.utils.args import arg_to_list
 from dicomset.utils.geometry import affine_origin, affine_spacing, create_affine, fov_centre
-from CTorch.utils.geometry import CircGeom3D
-from CTorch.projector.projector_interface import Projector
-from diffdrr.data import read
-from diffdrr.drr import DRR
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,6 +38,9 @@ def project_diffdrr(
     progress_callback: Callable[[int, int], None] | None = None,
     verbose: bool = False,
     ) -> SliceBatch | Tuple[SliceBatch, LabelSliceBatch]:
+    from diffdrr.data import read
+    from diffdrr.drr import DRR
+
     if verbose:
         logger.log_method('Creating DiffDRR projections')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -354,6 +353,9 @@ def project_ctorch(
     progress_callback: Callable[[int, int], None] | None = None,
     verbose: bool = False,
     ) -> BatchImage2D | Tuple[BatchImage2D, BatchChannelLabelImage2D]:
+    from CTorch.utils.geometry import CircGeom3D
+    from CTorch.projector.projector_interface import Projector
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     volume = to_tensor(volume, device=device, dtype=torch.float32)
     affine = to_tensor(affine, device=volume.device, dtype=torch.float32)
@@ -494,6 +496,7 @@ def load_dicom_projections(
     return data, info
 
 # Converts between different angle types for different machines.
+# This assumes that angles are already in IEC61217 format.
 def convert_angles(
     angles: float | List[float],
     from_: Literal['kv-detector', 'kv-source', 'mv-detector', 'mv-source'],

@@ -33,7 +33,7 @@ class XimInfo:
 
 def load_xim_angles_and_files(
     dirpath: DirPath,
-    angle_type: Literal['kv-detector', 'kv-source', 'mv-source'],
+    angle_type: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-detector',
     closest_to: int | float | List[int | float] | None = None,
     n_angles: int | None = None,
     progress_callback=None,
