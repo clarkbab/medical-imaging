@@ -33,7 +33,7 @@ def convert_registrations_from_lung_preprocessed(
     set = NiftiDataset(dataset)
     dest_set = NiftiDataset(dest_dataset)
     filepath = os.path.join(set.path, 'data', 'crops.csv')
-    df = load_csv(filepath, parse_cols=['crop'])
+    df = load_csv(filepath, eval_cols=['crop'])
 
     models = arg_to_list(models, ModelID)
     pat_ids = set.list_patients(pat_ids=pat_ids)

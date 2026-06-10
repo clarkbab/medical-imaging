@@ -101,13 +101,13 @@ def create_dataset(
         use_gpu: use GPU for matrix calculations.
     """
     # Load patients.
-    source_ds = ds.get(dataset, 'dicom')
+    source_ds = ds.load(dataset, 'dicom')
     pats = source_ds.list_patients()
 
     # Re/create pred dataset.
     pred_ds_name = output_dataset if output_dataset else f"{dataset}-pred"
     recreate(pred_ds_name)
-    ds_pred = ds.get(pred_ds_name, type_str='dicom')
+    ds_pred = ds.load(pred_ds_name, type_str='dicom')
 
     # Create RTSTRUCT info.
     rt_info = {
@@ -150,7 +150,7 @@ def load_segmenter_predictions(
         regions = [regions]
 
     # Load ref CTs.
-    set = ds.get(dataset, 'dicom')
+    set = ds.load(dataset, 'dicom')
     regions_map = set.regions_map
     patient = set.patient(pat_id)
     ref_cts = patient.get_cts()

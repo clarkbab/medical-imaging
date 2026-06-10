@@ -20,7 +20,7 @@ def get_sample_localiser_prediction(
     loc_spacing: typing.Spacing3D,
     device: Optional[torch.device] = None) -> None:
     # Load data.
-    set = ds.get(dataset, 'training')
+    set = ds.load(dataset, 'training')
     sample = set.sample(sample_idx)
     input = sample.input
     spacing = sample.spacing

@@ -52,7 +52,7 @@ def create_dose_evaluation(
     pdf = pdf.drop_duplicates()
 
     # Get sets.
-    sets = dict((d, ds.get(d, 'dicom')) for d in datasets)
+    sets = dict((d, ds.load(d, 'dicom')) for d in datasets)
     regions_maps = dict((d, sets[d].regions_map) for d in datasets)
 
     # Create dataframe.
@@ -155,7 +155,7 @@ def evaluate_model(
         logging.info('Evaluating on CPU...')
 
     # Load dataset.
-    set = ds.get(dataset, 'dicom')
+    set = ds.load(dataset, 'dicom')
     pats = set.list_patients(regions=region)
 
     # Load model if not already loaded.

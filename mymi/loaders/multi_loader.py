@@ -470,7 +470,7 @@ class TrainingSet(Dataset):
             assert spacing is not None, 'Spacing is required when transform applied to dataloader.'
         
         # Load datasets.
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__sets = [ds.load(dataset, 'training') for dataset in datasets]
 
         # Record number of samples.
         self.__n_samples = len(samples)
@@ -626,7 +626,7 @@ class TestSet(Dataset):
         datasets: List[str],
         samples: List[Tuple[int, int]],
         load_origin: bool = True):
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__sets = [ds.load(dataset, 'training') for dataset in datasets]
         self.__load_origin = load_origin
 
         # Record number of samples.

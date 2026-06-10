@@ -293,7 +293,7 @@ class TestSet(Dataset):
         datasets: List[str],
         samples: List[Tuple[int, int]],
         load_origin: bool = True):
-        self.__sets = [ds.get(dataset, 'training') for dataset in datasets]
+        self.__sets = [ds.load(dataset, 'training') for dataset in datasets]
         self.__load_origin = load_origin
 
         # Record number of samples.

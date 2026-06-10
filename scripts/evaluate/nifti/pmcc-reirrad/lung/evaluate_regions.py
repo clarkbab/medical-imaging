@@ -1,17 +1,15 @@
+import dicomset as ds
+from dicomset.utils import dice, distances, save_csv, append_row, region_to_list, load_csv, to_numpy, crop
+import numpy as np
+import os
 import pandas as pd
 from tqdm import tqdm
 
-from mymi import datasets as ds
-from mymi.metrics import dice, distances
-from mymi.regions import *
-from mymi.utils.io import save_csv
-from mymi.utils.pandas import append_row
-
 # Load fixed regions.
 dataset = 'PMCC-REIRRAD'
-models = ['velocity-dmp', 'velocity-edmp', 'velocity-rir', 'velocity-sg_c', 'velocity-sg_lm']
-set = ds.get(dataset, 'nifti')
-pat_ids = set.list_patients(group='lung')
+models = ['velocity-dmp', 'velocity-edmp', 'velocity-rir', 'velocity-sg_c', 'velocity-sg_lm', 'velocity-lm']
+set = ds.load(dataset, 'nifti')
+pat_ids = set.list_patients(g='lung')
 cols = {
     'patient-id': str,
     'region': str,
@@ -20,14 +18,17 @@ cols = {
     'value': float,
 }
 res_df = pd.DataFrame(columns=cols.keys())
+dset = ds.load('PMCC-REIRRAD', 'dicom')
+filepath = os.path.join(dset.path, 'files', 'reg_fovs.csv')
+fov_df = load_csv(filepath)
 for p in tqdm(pat_ids):
     pat = set.patient(p)
     moving_study = pat.study('i:0')
     fixed_study = pat.study('i:1')
-    fixed_spacing = fixed_study.ct_spacing
-    fixed_regions_series = fixed_study.regions_series('series_1')
+    fixed_affine = fixed_study.ct_affine
+    fixed_regions_series = fixed_study.regions_series('series_0')
     assert '/C2/' in fixed_regions_series.dicom.filepath, fixed_regions_series.dicom.filepath
-    fixed_regions = fixed_regions_series.data(region_id='rl:pmcc-reirrad-lung')
+    fixed_regions, fixed_regions_data = fixed_regions_series.data(r='l:lung')
 
     # Get series IDs for moved regions.
     model_series = {}
@@ -37,14 +38,30 @@ for p in tqdm(pat_ids):
             if f"/{m.split('-')[1]}.dcm" in series.dicom.filepath:
                 model_series[m] = series
 
+    # Load the lm model FOV.
+    pat_info = fov_df[fov_df['patient-id'] == pat.id].iloc[0]
+    fov_origin = to_numpy(pat_info[['origin-x', 'origin-y', 'origin-z']].tolist())
+    fov_width = to_numpy(pat_info[['fov-width-mm-x', 'fov-width-mm-y', 'fov-width-mm-z']].tolist())
+    pat_fov = np.stack([
+        fov_origin,
+        fov_origin + fov_width,
+    ], axis=0)
+
     # Evaluate moved regions for each model.
-    regions = regions_to_list('rl:pmcc-reirrad-lung')
-    for m in models:
-        moved_regions = model_series[m].data(region_id='rl:pmcc-reirrad-lung')
+    regions = region_to_list('l:lung', region_map=set.region_map)
+    for m in tqdm(models, leave=False):
+        moved_regions, moved_regions_data = model_series[m].data(r='l:lung')
         for r in regions:
             if r in fixed_regions and r in moved_regions:
-                fdata = fixed_regions[r]
-                mdata = moved_regions[r]
+                fdata = fixed_regions_data[fixed_regions.index(r)]
+                mdata = moved_regions_data[moved_regions.index(r)]
+                print(fdata.shape, fdata.sum())
+                print(mdata.shape, mdata.sum())
+
+                fdata = crop(fdata, pat_fov, affine=fixed_affine)
+                mdata = crop(mdata, pat_fov, affine=fixed_affine)
+
+
                 dice_val = dice(mdata, fdata)
                 data = {
                     'patient-id': pat.id,
@@ -55,7 +72,7 @@ for p in tqdm(pat_ids):
                 }
                 res_df = append_row(res_df, data)
     
-                dists = distances(mdata, fdata, fixed_spacing, tol=[1])
+                dists = distances(mdata, fdata, affine=fixed_affine, tol=[1])
                 for met, v in dists.items():
                     data = {
                         'patient-id': pat.id,

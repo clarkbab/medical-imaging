@@ -5,7 +5,7 @@ from tqdm import tqdm
 makeitso = True
 
 dataset = 'VALKIM-PP'
-set = ds.get(dataset, 'nifti')
+set = ds.load(dataset, 'nifti')
 pat_ids = ['PAT1', 'PAT2', 'PAT3']
 exh_series = 'series_5'
 int_phases = ['series_1', 'series_2', 'series_3', 'series_4', 'series_6', 'series_7', 'series_8', 'series_9']

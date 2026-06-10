@@ -1,17 +1,17 @@
+from dicomset.utils import create_affine, spatial_transpose, to_sitk_image
 import numpy as np
 import SimpleITK as sitk
 import struct
 
 from mymi import logging
 from mymi.typing import *
-from mymi.utils.sitk import to_sitk_image
-from mymi.utils.utils import transpose_image
 
 def load_velocity_bdf_transform(
     filepath: str,
     # Velocity '.bdf' file does not preserve the DICOM 'ImageOffsetPatient' origin.
     # We need to pass this manually.
-    fixed_origin: Point3D) -> sitk.Transform:
+    fixed_origin: Point3D,
+    ) -> sitk.Transform:
     logging.info(f"Loading velocity transform at: {filepath}")
 
     # Read ".bdf" file.
@@ -74,11 +74,12 @@ def load_velocity_bdf_transform(
     image = np.array(image)
     image = np.reshape(image, (*reversed(size), 3))
     image = np.moveaxis(image, -1, 0)
-    image = transpose_image(image, vector=True)
+    image = spatial_transpose(image, dim=3)
 
     # Create transform.
     # The 'origin' is not stored in the '.bdf' file, so we need to use the fixed image origin.
-    image = to_sitk_image(image, spacing=spacing, origin=fixed_origin, vector=True)
+    fixed_affine = create_affine(spacing, fixed_origin)
+    image = to_sitk_image(image, affine=fixed_affine, dim=3)
     transform = sitk.DisplacementFieldTransform(image)
 
     # Is rigid transform baked into the BDF file??
@@ -208,10 +209,11 @@ def load_velocity_transform(filepath: FilePath) -> sitk.Transform:
         dvf_image = np.array(dvf_image)
         dvf_image = np.reshape(dvf_image, (*reversed(grid_size), n_dims))
         dvf_image = np.moveaxis(dvf_image, -1, 0)
-        dvf_image = transpose_image(dvf_image, vector=True)
+        dvf_image = spatial_transpose(dvf_image, dim=3)
 
         # Create transform.
-        dvf_image = to_sitk_image(dvf_image.astype(np.float64), spacing=grid_spacing, origin=grid_origin, vector=True)
+        grid_affine = create_affine(grid_spacing, grid_origin)
+        dvf_image = to_sitk_image(dvf_image.astype(np.float64), affine=grid_affine, dim=3)
         dvf_transform = sitk.DisplacementFieldTransform(dvf_image)
 
         # Create composite transform.

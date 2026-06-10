@@ -1,5 +1,5 @@
 from dicomset.dicom import DicomStudy
-from mymi.processing.dicom import convert_to_nifti
+from dicomset.dicom.utils import convert_to_nifti
 
 def study_sort(s: DicomStudy) -> int:
     if not s.has_rtstruct:
@@ -13,17 +13,16 @@ def study_sort(s: DicomStudy) -> int:
 
 dataset = 'PMCC-REIRRAD'
 kwargs = dict(
-    dry_run=False,
+    anonymise_patients=False,
     # group='hn',
-    pat=[
-        'PMCC_ReIrrad_L14',
-    ],
-    recreate=False,
-    recreate_ct=True,
-    recreate_dose=True,
-    recreate_patient=False,
+    recreate_ct=False,
+    recreate_dataset=False,
+    recreate_dose=False,
     recreate_landmarks=True,
-    # region='rl:pmcc-reirrad-lung',
-    study_sort=study_sort,
+    recreate_regions=False,
+    recreate_patients=False,
+    # recreate_patient_id='PMCC_ReIrrad_H17:',
+    region_id='l:hn+lung',
+    sort_studies=study_sort,
 )
 convert_to_nifti(dataset, **kwargs)

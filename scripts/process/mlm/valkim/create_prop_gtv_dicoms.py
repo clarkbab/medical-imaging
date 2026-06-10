@@ -11,7 +11,7 @@ exh_series = 'series_5'
 int_phases = ['series_1', 'series_2', 'series_3', 'series_4',
     'series_6', 'series_7', 'series_8', 'series_9']
 methods = ['affine', 'corrfield', 'linear', 'rigid']
-set = ds.get(dataset, 'nifti')
+set = ds.load(dataset, 'nifti')
 
 for p in tqdm(pat_ids):
     # Load inhale/exhale data.

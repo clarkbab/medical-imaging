@@ -21,7 +21,7 @@ def load_csv(
     filters: Dict[str, Any] = {},
     map_cols: Dict[str, str] = {},
     map_types: Dict[str, Any] = {},
-    parse_cols: Union[str, List[str]] = [],
+    eval_cols: Union[str, List[str]] = [],
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     if filepath.startswith('files:'):
         filepath = os.path.join(config.dirs.files, filepath[6:])
@@ -44,8 +44,8 @@ def load_csv(
     df = df.rename(columns=map_cols)
 
     # Evaluate columns as literals.
-    parse_cols = arg_to_list(parse_cols, str)
-    for c in parse_cols:
+    eval_cols = arg_to_list(eval_cols, str)
+    for c in eval_cols:
         df[c] = df[c].apply(lambda s: ast.literal_eval(s))
 
     # Apply filters.

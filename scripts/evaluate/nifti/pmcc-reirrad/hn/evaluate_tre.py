@@ -1,9 +1,9 @@
+import dicomset as ds
+from dicomset.utils import save_csv, to_numpy, load_csv, crop_points, logger
 import numpy as np
+import os
 import pandas as pd
 from tqdm import tqdm
-
-from mymi import datasets as ds
-from mymi.utils.io import save_csv
 
 # Load patient.
 dataset = 'PMCC-REIRRAD'
@@ -13,17 +13,37 @@ models = [
     'edmp',
     'sg_c',
     'sg_lm',
+    'lm',
 ]
-set = ds.get(dataset, 'nifti')
-dset = ds.get(dataset, 'dicom')
-pat_ids = set.list_patients(group='hn')
+set = ds.load(dataset, 'nifti')
+dset = ds.load(dataset, 'dicom')
+pat_ids = set.list_patients(g='hn')
+dset = ds.load('PMCC-REIRRAD', 'dicom')
+filepath = os.path.join(dset.path, 'files', 'reg_fovs.csv')
+fov_df = load_csv(filepath)
 dfs = []
 for p in tqdm(pat_ids):
+    # set.build_index()
+    pat = set.patient(p)
+    moving_study = pat.study('i:0')
+    fixed_study = pat.study('i:1')
+
+    # Load the lm model FOV.
+    pat_info = fov_df[fov_df['patient-id'] == pat.id].iloc[0]
+    fov_origin = to_numpy(pat_info[['origin-x', 'origin-y', 'origin-z']].tolist())
+    fov_width = to_numpy(pat_info[['fov-width-mm-x', 'fov-width-mm-y', 'fov-width-mm-z']].tolist())
+    pat_fov = np.stack([
+        fov_origin,
+        fov_origin + fov_width,
+    ], axis=0)
+
+    # Get landmarks within the FOV.
+    lm_series = fixed_study.landmarks_series('i:-1')
+    assert '/C2_PROP/RTSTRUCT/lm.dcm' in lm_series.dicom.filepath
+    lm_df = lm_series.data()
+    lm_df = crop_points(lm_df, pat_fov)
+
     for m in models:
-        # set.build_index()
-        pat = set.patient(p)
-        moving_study = pat.study('i:0')
-        fixed_study = pat.study('i:1')
         
         # Compare to Velocity TREs.
         filepath = os.path.join(dset.path, 'data', 'velocity', pat.id, f"{m}.txt")
@@ -45,6 +65,14 @@ for p in tqdm(pat_ids):
         df.insert(0, 'patient-id', p)
         df.insert(2, 'model', m)
         df.insert(3, 'metric', 'tre')
+
+        # Filter by landmarks in the fov.
+        tmp_len = len(df)
+        df = df[df['landmark-id'].isin(lm_df['landmark-id'])]
+        n_removed = tmp_len - len(df)
+        if n_removed > 0:
+            logger.warn(f"Removed {n_removed} landmarks from {p} {m}.")
+
         dfs.append(df)
 
 df = pd.concat(dfs, axis=0)

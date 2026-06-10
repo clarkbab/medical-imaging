@@ -10,7 +10,7 @@ from mymi import datasets as ds
 
 # Convert data.
 dataset = 'LUNG-4DCT'
-set = ds.get(dataset, 'nifti')
+set = ds.load(dataset, 'nifti')
 datapath = os.path.join(set.path, 'data')
 
 # Move CT.

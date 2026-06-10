@@ -5,7 +5,7 @@ from tqdm import tqdm
 from typing import *
 
 from dicomset import DicomDataset
-from dicomset.dicom import ROIData, RtStructConverter, recreate as recreate_dicom
+from dicomset.dicom import recreate as recreate_dicom
 from mymi import logging
 from mymi.typing import *
 from mymi.utils.dicom import to_ct_dicoms, to_rtdose_dicom, to_rtstruct_dicom

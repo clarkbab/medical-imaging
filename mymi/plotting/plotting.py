@@ -8,9 +8,9 @@ import seaborn as sns
 from tqdm import tqdm
 from typing import *
 
-from dicomset.utils.geometry import com, foreground_fov, foreground_fov_centre
+from dicomset.utils.geometry import centre_of_mass, foreground_fov, foreground_fov_centre
 from mymi import logging
-from mymi.processing import largest_cc_3D
+# from mymi.processing import largest_cc_3D
 from mymi.regions import get_region_patch_size
 from mymi.regions import truncate_spine as truncate
 from mymi.transforms import crop_or_pad_box, crop_point, crop as crop_fn, itk_transform_image, replace_box_none, resample, sample
@@ -107,7 +107,7 @@ def get_idx(
         if isinstance(centre, str) and centre == 'dose':
             if dose_data is None:
                 raise ValueError("Cannot use 'dose' centre without 'dose_data'.")
-            centre = com(dose_data, use_world_coords=False)
+            centre = centre_of_mass(dose_data, use_world_coords=False)
             idx = centre[view]
         elif isinstance(centre, (LandmarkID, RegionID)):
             if lm_data is not None and centre in list(lm_data['landmark-id']):

@@ -14,7 +14,7 @@ def study_sort(s: DicomStudy) -> int:
 
 # Generate marker files.
 dataset = 'PMCC-REIRRAD'
-dset = ds.get(dataset, 'dicom')
+dset = ds.load(dataset, 'dicom')
 pat_ids = dset.list_patients(group='lung')
 
 for p in pat_ids:

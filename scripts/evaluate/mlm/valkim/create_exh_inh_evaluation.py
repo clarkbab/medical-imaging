@@ -21,7 +21,7 @@ df = pd.DataFrame(columns=cols.keys())
 dataset = 'VALKIM-PP'
 inh_series = 'series_0'
 exh_series = 'series_5'
-set = ds.get(dataset, 'nifti')
+set = ds.load(dataset, 'nifti')
 pat_ids = ['PAT1', 'PAT2', 'PAT3']
 regions = ['GTV', 'ts_Lung']
 

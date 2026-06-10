@@ -1,8 +1,9 @@
+import dicomset as ds
+from dicomset.utils import save_csv, logger, crop_points, load_csv, to_numpy
 import numpy as np
+import os
 import pandas as pd
-
-from mymi import datasets as ds
-from mymi.utils.io import save_csv
+from tqdm import tqdm
 
 # Load patient.
 dataset = 'PMCC-REIRRAD'
@@ -12,17 +13,43 @@ models = [
     'edmp',
     'sg_c',
     'sg_lm',
+    'lm',
 ]
-set = ds.get(dataset, 'nifti')
-dset = ds.get(dataset, 'dicom')
-pat_ids = set.list_patients(group='lung')
+set = ds.load(dataset, 'nifti')
+dset = ds.load(dataset, 'dicom')
+pat_ids = set.list_patients(g='lung')
+dset = ds.load('PMCC-REIRRAD', 'dicom')
+filepath = os.path.join(dset.path, 'files', 'reg_fovs.csv')
+fov_df = load_csv(filepath)
 dfs = []
-for m in models:
-    for p in pat_ids:
-        # set.build_index()
-        pat = set.patient(p)
-        moving_study = pat.study('i:0')
-        fixed_study = pat.study('i:1')
+for p in tqdm(pat_ids):
+    # set.build_index()
+    pat = set.patient(p)
+    moving_study = pat.study('i:0')
+    fixed_study = pat.study('i:1')
+
+    # Load the lm model FOV.
+    pat_info = fov_df[fov_df['patient-id'] == pat.id].iloc[0]
+    fov_origin = to_numpy(pat_info[['origin-x', 'origin-y', 'origin-z']].tolist())
+    fov_width = to_numpy(pat_info[['fov-width-mm-x', 'fov-width-mm-y', 'fov-width-mm-z']].tolist())
+    pat_fov = np.stack([
+        fov_origin,
+        fov_origin + fov_width,
+    ], axis=0)
+
+    # Get landmarks within the FOV.
+    lm_series = fixed_study.landmarks_series('i:0')
+    assert '/C2/RTSTRUCT.dcm' in lm_series.dicom.filepath
+    lm_df = lm_series.data()
+    tmp_len = len(lm_df)
+    tmp_landmark_ids = lm_df['landmark-id'].tolist()
+    lm_df = crop_points(lm_df, pat_fov)
+    n_removed = tmp_len - len(lm_df)
+    if n_removed > 0:
+        rem_ids = [i for i in tmp_landmark_ids if i not in lm_df['landmark-id'].tolist()]
+        logger.warn(f"Removed {n_removed} fixed landmarks from {p}: {rem_ids}")
+
+    for m in models:
         
         # Compare to Velocity TREs.
         filepath = os.path.join(dset.path, 'data', 'velocity', pat.id, f"{m}.txt")
@@ -44,6 +71,14 @@ for m in models:
         df.insert(0, 'patient-id', p)
         df.insert(2, 'model', m)
         df.insert(3, 'metric', 'tre')
+
+        # Filter by landmarks in the fov.
+        tmp_len = len(df)
+        df = df[df['landmark-id'].isin(lm_df['landmark-id'])]
+        n_removed = tmp_len - len(df)
+        if n_removed > 0:
+            logger.warn(f"Removed {n_removed} landmarks from {p} {m}.")
+
         dfs.append(df)
 
 df = pd.concat(dfs, axis=0)

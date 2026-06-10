@@ -21,7 +21,7 @@ def evaluate_localiser_predictions(
     logging.info(f"Evaluating predictions for dataset '{dataset}', partitions '{partitions}', region '{region}' using localiser '{localiser}'.")
 
     # Load dataset.
-    set = ds.get(dataset, 'training')
+    set = ds.load(dataset, 'training')
 
     # Convert partitions arg to list.
     if type(partitions) == str:
@@ -104,7 +104,7 @@ def get_localiser_evaluation(
     dataset: str,
     partition: str,
     localiser: Tuple[str, str, str]) -> np.ndarray:
-    set = ds.get(dataset, 'nifti')
+    set = ds.load(dataset, 'nifti')
     filepath = os.path.join(set.path, 'evaluation', partition, 'localiser', *localiser, 'eval.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Evaluation for dataset '{set}', partition '{partition}', localiser '{localiser}' not found.")

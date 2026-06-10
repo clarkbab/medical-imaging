@@ -19,7 +19,7 @@ n_patients = 20
 regions = ['Brain', 'Cochlea_L', 'Cochlea_R', 'OralCavity', 'Parotid_L', 'Parotid_R', 'SpinalCord', 'Submandibular_L', 'Submandibular_R']
 
 dataset = 'HN1'
-set = ds.get(dataset, 'dicom')
+set = ds.load(dataset, 'dicom')
 pats = set.list_patients()[:n_patients]
 
 dest_dataset = 'HN1-MYMI'

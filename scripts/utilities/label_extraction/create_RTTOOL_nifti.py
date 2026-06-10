@@ -20,7 +20,7 @@ regions = ['Brain', 'Cochlea_L', 'Cochlea_R', 'OralCavity', 'Parotid_L', 'Paroti
 assert len(hn1_regions) == len(regions)
 
 dataset = 'HN1'
-set = ds.get(dataset, 'dicom')
+set = ds.load(dataset, 'dicom')
 pats = set.list_patients()[:n_patients]
 
 dest_dataset = 'HN1-RTTOOL'
