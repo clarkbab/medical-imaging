@@ -18,7 +18,7 @@ runs = open(filepath, 'r').readlines()
 runs = [r.rstrip() for r in runs]
 
 for run in runs:
-    filepath = os.path.join(config.directories.reports, run)
+    filepath = os.path.join(config.dirs.reports, run)
     if not os.path.exists(filepath):
         continue
 

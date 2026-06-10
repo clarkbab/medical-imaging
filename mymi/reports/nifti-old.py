@@ -470,7 +470,7 @@ def create_totalseg_prediction_figures(dataset: str) -> None:
         )
         for view, page_coord in zip(views, img_coords):
             # Add image to report.
-            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            filepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
             kwargs = dict(
                 centre=centre,
                 region='all',
@@ -640,7 +640,7 @@ def create_region_figures(
         )
         for view, page_coord in zip(views, img_coords):
             # Set figure.
-            savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            savepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
             plot_patients(dataset, pat_id, centre=region, colour=['y'], crop=region, labels=labels, region=region, show_extent=True, savepath=savepath, view=view, **kwargs)
 
             # Add image to report.
@@ -667,7 +667,7 @@ def create_region_figures(
                     plot_patients(dataset, pat_id, centre=region, colours=['y'], postproc=postproc, labels=labels, region=region, show_extent=True, view=view, **kwargs)
 
                     # Save temp file.
-                    filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                    filepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
                     plt.savefig(filepath)
                     plt.close()
 
@@ -740,7 +740,7 @@ def create_registration_figures_report(
 
         for view, (x, y) in zip(views, img_coords):
             # Save temporary figure.
-            savepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            savepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
             plot_registration(dataset, fixed_pat_id, moving_pat_id, savepath=savepath, show=False, view=view, **kwargs)
 
             # Add image to report.

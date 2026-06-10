@@ -11,7 +11,7 @@ from mymi import config
 keep_n = 1
 for_real = False
 
-modelspath = config.directories.models
+modelspath = config.dirs.models
 models = os.listdir(modelspath)
 for model in models:
     runspath = os.path.join(modelspath, model)

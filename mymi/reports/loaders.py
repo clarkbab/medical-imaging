@@ -107,7 +107,7 @@ def create_multi_loader_manifest(
     df = get_multi_loader_manifest(datasets, check_processed=check_processed, load_all_samples=load_all_samples, n_folds=n_folds, region=regions, test_fold=test_fold, **kwargs)
 
     # Save manifest.
-    filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}.csv')
+    filepath = os.path.join(config.dirs.reports, 'loader-manifests', encode(datasets), encode(regions), f'load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -132,7 +132,7 @@ def load_multi_loader_manifest(
         regions = list(sorted(np.unique(regions)))
 
     # Load file.
-    filepath = os.path.join(config.directories.reports, 'loader-manifests', encode(datasets), encode(regions), f'load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}.csv')
+    filepath = os.path.join(config.dirs.reports, 'loader-manifests', encode(datasets), encode(regions), f'load-all-samples-{load_all_samples}-n-folds-{n_folds}-test-fold-{test_fold}-use-split-file-{use_split_file}.csv')
     df = pd.read_csv(filepath)
     df = df.astype({ 'origin-patient-id': str, 'sample-id': str })
 
@@ -251,7 +251,7 @@ def create_multi_loader_figures(
                 )
                 for view, page_coord in zip(views, img_coords):
                     # Set figure.
-                    filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                    filepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
                     plot_patients(desc_b[0], size, spacing, centre=region, ct_data=x_b[0, 0].numpy(), regions_data=regions_data, savepath=filepath, show=False, show_extent=True, view=view)
 
                     # Add image to report.
@@ -262,7 +262,7 @@ def create_multi_loader_figures(
 
     # Save PDF.
     filename = 'figures-aug.pdf' if use_augmentation else 'figures.pdf'
-    filepath = os.path.join(config.directories.reports, 'loader-figures', encode(datasets), encode(regions), filename)
+    filepath = os.path.join(config.dirs.reports, 'loader-figures', encode(datasets), encode(regions), filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     pdf.output(filepath, 'F')
  

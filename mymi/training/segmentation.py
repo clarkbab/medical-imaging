@@ -39,7 +39,7 @@ def train_segmentation(
     # Set seed for reproducible runs.
     torch.manual_seed(random_seed)
 
-    ckpt_path = os.path.join(config.directories.models, project, model_name)
+    ckpt_path = os.path.join(config.dirs.models, project, model_name)
     if os.path.exists(ckpt_path) and not resume:
         # Clean up old run files.
         logging.info(f"Removing old checkpoint directory {ckpt_path}.")
@@ -86,7 +86,7 @@ def train_segmentation(
     # Set up logging.
     if use_logging:
         run = wandb.init(
-            dir=config.directories.reports,
+            dir=config.dirs.reports,
             entity="clarkbab",
             project=project,
             name=model_name,
@@ -158,7 +158,7 @@ def train_segmentation(
                 }, step=step)
 
                 # Log images.
-                if interval_matches(epoch, step, val_image_interval, len(val_iter)):
+                if interval_matches(step, val_image_interval, len(val_iter)):
                     for i, r in enumerate(regions):
                         channel = i + 1
 

@@ -49,7 +49,7 @@ class Voxelmorph(pl.LightningModule):
         # Check that model training has finished.
         if check_epochs:
             last_model = replace_ckpt_alias((model_name, run_name, 'last'))
-            filepath = os.path.join(config.directories.models, last_model[0], last_model[1], f'{last_model[2]}.ckpt')
+            filepath = os.path.join(config.dirs.models, last_model[0], last_model[1], f'{last_model[2]}.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
             n_epochs_complete = state['epoch'] + 1
             if n_epochs_complete < n_epochs:
@@ -57,7 +57,7 @@ class Voxelmorph(pl.LightningModule):
 
         # Load model.
         model_name, run_name, checkpoint = replace_ckpt_alias((model_name, run_name, checkpoint))
-        filepath = os.path.join(config.directories.models, model_name, run_name, f"{checkpoint}.ckpt")
+        filepath = os.path.join(config.dirs.models, model_name, run_name, f"{checkpoint}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"Checkpoint '{checkpoint}' not found for voxelmorph run '{model_name}:{run_name}'.")
         localiser = Localiser.load_from_checkpoint(filepath, **kwargs)

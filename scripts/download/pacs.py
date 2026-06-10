@@ -348,7 +348,7 @@ def parse_date(s: str) -> datetime:
 def study_folder(
     pat_id: typing.PatientID,
     study: str):
-    return os.path.join(config.directories.files, 'patient-specific-models', 'data', 'dcmFiles', str(pat_id), study)
+    return os.path.join(config.dirs.files, 'patient-specific-models', 'data', 'dcmFiles', str(pat_id), study)
 
 def series_folder(
     pat_id: typing.PatientID,

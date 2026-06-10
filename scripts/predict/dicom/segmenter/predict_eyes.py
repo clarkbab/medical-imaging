@@ -84,9 +84,9 @@ for pat_id in pat_ids:
         RtStructConverter.add_roi_contour(rtstruct_pred, roi_data, cts)
 
         # Save pred RTSTRUCT.
-        filepath = os.path.join(config.directories.predictions, 'dicom', f'{pat_id}.dcm')
+        filepath = os.path.join(config.dirs.predictions, 'dicom', f'{pat_id}.dcm')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         rtstruct_pred.save_as(filepath)
 
 logging.info(f"Finished creating RTSTRUCT DICOMs.")
-logging.info(f"RTSTRUCT DICOMs saved to {os.path.join(config.directories.predictions, 'dicom')}.")
+logging.info(f"RTSTRUCT DICOMs saved to {os.path.join(config.dirs.predictions, 'dicom')}.")

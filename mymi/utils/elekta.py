@@ -1,7 +1,11 @@
+from dicomset.typing import *
+from dicomset.utils import hist_eq as hist_eq_fn
 from dataclasses import dataclass, field
 import numpy as np
 import os
+import pandas as pd
 from pathlib import Path
+import pylinac as plc
 import struct
 from typing import Dict, List, Literal, Tuple
 from xml.etree import ElementTree
@@ -9,6 +13,7 @@ from xml.etree import ElementTree
 from mymi.logging import logger
 
 from .args import arg_to_list
+from .projections import convert_angles
 
 ELEKTA_DET_SIZE_X = 409.6  # mm
 ELEKTA_DET_SIZE_Y = 409.6  # mm
@@ -66,14 +71,23 @@ class HisFrameInfo:
     pixel_factor: float = 0.0
     filename: str = ""            # Corresponding .his filename (populated by load_his_angles_and_files).
 
+# In PA x-ray imaging, the source is posterior and the detector is anterior. The images
+# are viewed from detector to source, so patient right appears on the left and vice versa.
+# Ref: https://www.glowm.com/atlas-page/atlasid/chestXray.html
+# So for our kV x-ray images, if we have kv source to the patient's right (270 degrees)
+# then the kv detector will be to the patient's left (90 degrees). Then it will look like
+# we're standing at the patient's left. To make this work for the sample treatment images,
+# I needed to flip_lr the image.
 def load_his(
     filepath: str | Path,
     flip_lr: bool = True,
     frame_info: HisFrameInfo | None = None,
+    hist_eq: bool = False,
     load_pixel_data: bool = True,
+    scale: Literal['IEC61217', 'ELEKTA_IEC'] = 'IEC61217',
     sid: float = ELEKTA_XVI_SID,
     sdd: float = ELEKTA_XVI_SDD,
-) -> Tuple[np.ndarray | None, Dict]:
+    ) -> Tuple[Image2D | None, pd.Series]:
     filepath = Path(filepath)
 
     with open(filepath, "rb") as fid:
@@ -170,30 +184,52 @@ def load_his(
     metadata['sid'] = sid
     metadata['sdd'] = sdd
     metadata['his-info'] = info
+    metadata['machine'] = 'elekta'
 
     # Load per-frame geometry from _Frames.xml (unless already provided).
     if frame_info is None:
         xml_path = filepath.parent / "_Frames.xml"
-        if xml_path.exists():
+        if not xml_path.exists():
+            logger.warning(f"No '_Frames.xml' found at '{xml_path}' — angle metadata will be missing.")
+        else:
             all_frames = load_his_frames_xml(xml_path)
             seq = _seq_from_filename(filepath.name)
-            if seq is not None:
+            if seq is None:
+                logger.warning(f"Could not extract sequence number from filename '{filepath.name}' — angle metadata will be missing.")
+            else:
                 for f in all_frames:
                     if f.seq == seq:
                         frame_info = f
                         break
+                if frame_info is None:
+                    logger.warning(f"No frame with seq={seq} found in '{xml_path}' — angle metadata will be missing.")
 
     if frame_info is not None:
-        metadata['mv-source-angle'] = float(np.round(frame_info.mv_source_angle % 360, decimals=3))
-        metadata['kv-source-angle'] = float(np.round((frame_info.mv_source_angle + 90) % 360, decimals=3))
-        metadata['kv-detector-angle'] = float(np.round((frame_info.mv_source_angle - 90) % 360, decimals=3))
-        metadata['det-offset'] = (-frame_info.u_centre, frame_info.v_centre)
+        mv_source_angle = float(np.round(frame_info.mv_source_angle % 360, decimals=3))
+        # Convert to IEC61217 if needed.
+        if scale != 'IEC61217':
+            mv_source_angle, _, _ = plc.core.scale.convert(
+                input_scale=getattr(plc.core.scale.MachineScale, scale),
+                output_scale=plc.core.scale.MachineScale.IEC61217,
+                gantry=mv_source_angle,
+                collimator=0,
+                rotation=0,
+            )
+        metadata['mv-source-angle'] = mv_source_angle
+        metadata['kv-source-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-source', machine='elekta')
+        metadata['kv-detector-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-detector', machine='elekta')
+        metadata['det-offset'] = (frame_info.u_centre, frame_info.v_centre)
         metadata['frame-info'] = frame_info
 
     if pixel_data is not None:
         if flip_lr:
             pixel_data = np.flip(pixel_data, axis=0)
+        pixel_data = np.flip(pixel_data, axis=1)
 
+    if hist_eq and pixel_data is not None:
+        pixel_data = hist_eq_fn(pixel_data)
+
+    metadata = pd.Series(metadata)
     return pixel_data, metadata
 
 def load_his_frames_xml(
@@ -247,13 +283,21 @@ def load_his_angles_and_files(
     angle_type: Literal['kv-detector', 'kv-source', 'mv-source'] = 'mv-source',
     closest_to: int | float | List[int | float] | None = None,
     n_angles: int | None = None,
+    scale: Literal['IEC61217', 'ELEKTA_IEC'] = 'IEC61217',
     sort_by_angle: bool = True,
     start: int = 0,
-) -> Dict[float, str]:
+    ) -> Tuple[Dict[float, str], Dict[str, 'HisFrameInfo']]:
+    """Returns (angles_files, frame_info_by_filename).
+
+    angles_files maps gantry angle → .his filename (basename).
+    frame_info_by_filename maps .his filename (basename) → HisFrameInfo so
+    callers can pass frame_info directly to load_his, avoiding a repeated
+    _Frames.xml parse on each call.
+    """
     dirpath = Path(dirpath)
     closest_to = arg_to_list(closest_to, (int, float))
 
-    # Parse _Frames.xml.
+    # Parse _Frames.xml once.
     xml_path = dirpath / "_Frames.xml"
     if not xml_path.exists():
         raise FileNotFoundError(
@@ -269,21 +313,25 @@ def load_his_angles_and_files(
         if seq is not None:
             seq_to_file[seq] = fname
 
-    # Build angle → filename dict.
-    # Derive the requested angle type from the MV gantry angle.
+    # Build angle → filename dict and filename → HisFrameInfo dict.
     angles_files: Dict[float, str] = {}
+    fi_by_name: Dict[str, HisFrameInfo] = {}
     for f in frame_infos:
         if f.seq not in seq_to_file:
             continue
         f.filename = seq_to_file[f.seq]
-        mv_angle = f.mv_source_angle
-        if angle_type == 'mv-source':
-            angle = float(np.round(mv_angle % 360, decimals=3))
-        elif angle_type == 'kv-source':
-            angle = float(np.round((mv_angle + 90) % 360, decimals=3))
-        elif angle_type == 'kv-detector':
-            angle = float(np.round((mv_angle - 90) % 360, decimals=3))
+        mv_angle = float(np.round(f.mv_source_angle % 360, decimals=3))
+        if scale != 'IEC61217':
+            mv_angle, _, _ = plc.core.scale.convert(
+                input_scale=getattr(plc.core.scale.MachineScale, scale),
+                output_scale=plc.core.scale.MachineScale.IEC61217,
+                gantry=mv_angle,
+                collimator=0,
+                rotation=0,
+            )
+        angle = convert_angles(mv_angle, from_='mv-source', to=angle_type, machine='elekta')
         angles_files[angle] = f.filename
+        fi_by_name[f.filename] = f
 
     # Apply start / n_angles slicing.
     items = list(angles_files.items())
@@ -307,7 +355,10 @@ def load_his_angles_and_files(
     if sort_by_angle:
         angles_files = dict(sorted(angles_files.items()))
 
-    return angles_files
+    # Restrict frame_info_by_file to only the selected files.
+    frame_info_by_file = {fname: fi_by_name[fname] for fname in angles_files.values() if fname in fi_by_name}
+
+    return angles_files, frame_info_by_file
 
 def _xml_text(parent, tag: str, default: str = "") -> str:
     """Get text content of a child element, or *default* if missing."""

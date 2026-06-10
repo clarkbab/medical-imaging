@@ -1,10 +1,10 @@
+from dicomset import config
 import json
 import os
 import re
 import torch
 from typing import *
 
-from mymi import config
 from mymi import logging
 from mymi.typing import *
 
@@ -26,7 +26,7 @@ def load_model(
 
     # Load model state.
     ckpt = replace_ckpt_alias(project, model, ckpt)
-    filepath = os.path.join(config.directories.models, project, model, f'{ckpt}.ckpt')
+    filepath = os.path.join(config.dirs.models, project, model, f'{ckpt}.ckpt')
     ckpt_data = torch.load(filepath, map_location=device)
     logging.info(f"Loading model {project}/{model} ({module}) from epoch={ckpt_data['epoch']}.")
     loaded_model.load_state_dict(ckpt_data['model'])
@@ -50,7 +50,7 @@ def replace_ckpt_alias(
     if ckpt == 'best': 
         # Read model checkpoints from directory.
         # Remove 'last' and sort to get best checkpoint.
-        ckpts_path = os.path.join(config.directories.models, project, model)
+        ckpts_path = os.path.join(config.dirs.models, project, model)
         if not os.path.exists(ckpts_path):
             raise ValueError(f"No model {project}/{model} exists.")
         ckpts = [c for c in os.listdir(ckpts_path) if '.ckpt' in c and c != 'last.ckpt']
@@ -62,13 +62,13 @@ def replace_ckpt_alias(
         if ckpt_version is not None:
             if ckpt_version > 0:
                 ckpt = f'last-v{ckpt_version}'
-                filepath = os.path.join(config.directories.models, *model[:2], f'{ckpt}.ckpt')
+                filepath = os.path.join(config.dirs.models, *model[:2], f'{ckpt}.ckpt')
                 if not os.path.exists(filepath):
                     raise ValueError(f"No '{ckpt}' checkpoint exists for model '{model[0]}', run '{model[1]}'. Filepath: {filepath}.")
 
         # Get latest 'last' checkpoint.
         else:
-            filepath = os.path.join(config.directories.models, project, model)
+            filepath = os.path.join(config.dirs.models, project, model)
             if not os.path.exists(filepath):
                 raise ValueError(f"No model {project}/{model} exists.")
             ckpts = os.listdir(filepath)

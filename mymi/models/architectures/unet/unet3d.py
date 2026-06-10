@@ -91,11 +91,11 @@ class Submodule(torch.nn.Module):
             #     print(f"Layer {layer.name} has nan output.")
             #     import os
             #     from mymi import config
-            #     filepath = os.path.join(config.directories.temp, f'{i}-input.npy')
+            #     filepath = os.path.join(config.dirs.temp, f'{i}-input.npy')
             #     np.save(filepath, x_in)
-            #     filepath = os.path.join(config.directories.temp, f'{i}-output.npy')
+            #     filepath = os.path.join(config.dirs.temp, f'{i}-output.npy')
             #     np.save(filepath, x.detach().cpu().numpy())
-            #     filepath = os.path.join(config.directories.temp, f'{i}-layer.ckpt')
+            #     filepath = os.path.join(config.dirs.temp, f'{i}-layer.ckpt')
             #     torch.save(layer.state_dict(), filepath)
 
             # Add 'x' to 'x_res'.

@@ -123,7 +123,7 @@ def create_bootstrap_predictions(
         preds[:, :5] = np.nan
         
     # Save data.
-    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
+    filepath = os.path.join(config.dirs.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
     np.savez_compressed(filepath, data=preds, params=params)
@@ -164,7 +164,7 @@ def create_bootstrap_samples(
                 n_trains = boot_df.reset_index()['n-train'].values
                 
                 # Save data.
-                filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
+                filepath = os.path.join(config.dirs.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
                 if not os.path.exists(os.path.dirname(filepath)):
                     os.makedirs(os.path.dirname(filepath))
                 np.savez_compressed(filepath, data=boot_data, n_trains=n_trains)
@@ -241,7 +241,7 @@ def load_bootstrap_predictions(
     datasets = arg_to_list(dataset, str)
     arg_assert_literal(stat, ('mean', 'q1', 'q3'))
 
-    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
+    filepath = os.path.join(config.dirs.files, 'transfer-learning', 'data', 'bootstrap', 'preds', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
     if include_params:
@@ -277,7 +277,7 @@ def load_bootstrap_samples(
     n_samples: int = DEFAULT_N_SAMPLES):
     datasets = arg_to_list(dataset, str)
 
-    filepath = os.path.join(config.directories.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
+    filepath = os.path.join(config.dirs.files, 'transfer-learning', 'data', 'bootstrap', 'samples', encode(datasets), region, model_type, metric, stat, f'samples-{n_samples}.npz')
     f = np.load(filepath)
     data = f['data']
     if include_n_trains:

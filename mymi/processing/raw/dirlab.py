@@ -274,7 +274,7 @@ def read_dirlab_image(
         ("ElementDataFile = " + os.path.abspath(binary_file_name) + "\n").encode(),
     ]
     
-    filepath = os.path.join(config.directories.temp, f"tmp-{binary_file_name.split('/')[-1].replace('.img', '')}.mhd")
+    filepath = os.path.join(config.dirs.temp, f"tmp-{binary_file_name.split('/')[-1].replace('.img', '')}.mhd")
     with open(filepath, 'wb') as tmp:
         tmp.writelines(header)
         tmp.close()

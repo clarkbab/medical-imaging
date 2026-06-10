@@ -82,7 +82,7 @@ def create_all_multi_segmenter_predictions(
     # Save timing data.
     if use_timing:
         model_name = replace_ckpt_alias(model) if type(model) == tuple else model.name
-        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, 'timing.csv')
+        filepath = os.path.join(config.dirs.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 

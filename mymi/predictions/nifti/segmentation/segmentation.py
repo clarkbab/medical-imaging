@@ -345,7 +345,7 @@ def create_multi_segmenter_prediction_nnunet_bootstrap(
         # Save segmentation.
         if savepath is None:
             crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
+            savepath = os.path.join(config.dirs.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
@@ -390,7 +390,7 @@ def create_multi_segmenter_prediction(
         # Save segmentation.
         if savepath is None:
             crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
-            savepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
+            savepath = os.path.join(config.dirs.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model_name, f'pred{crop_type_str}.npz')
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
@@ -450,7 +450,7 @@ def create_segmenter_prediction(
         else:
             filename = 'pred.npz'
         if savepath is None:
-            savepath = os.path.join(config.directories.predictions, 'data', 'segmenter', dataset, pat_id, *localiser, *segmenter.name, filename)
+            savepath = os.path.join(config.dirs.predictions, 'data', 'segmenter', dataset, pat_id, *localiser, *segmenter.name, filename)
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
         np.savez_compressed(savepath, data=pred)
 
@@ -504,7 +504,7 @@ def create_all_multi_segmenter_predictions(
 
     # Save timing data.
     if timing:
-        filepath = os.path.join(config.directories.predictions, 'timing', 'localiser', encode(datasets), *model.name, f'timing-device-{device.type}.csv')
+        filepath = os.path.join(config.dirs.predictions, 'timing', 'localiser', encode(datasets), *model.name, f'timing-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -589,7 +589,7 @@ def create_multi_segmenter_predictions_nnunet_bootstrap(
             'use_grouping': kwargs.get('use_grouping', False),
             'use_split_file': kwargs.get('use_split_file', False),
         }
-        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
+        filepath = os.path.join(config.dirs.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -671,7 +671,7 @@ def create_multi_segmenter_predictions(
             'use_grouping': kwargs.get('use_grouping', False),
             'use_split_file': kwargs.get('use_split_file', False),
         }
-        filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
+        filepath = os.path.join(config.dirs.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model_name, encode(params), 'timing.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -687,7 +687,7 @@ def get_institutional_localiser(
         localiser = (f'localiser-{region}', f'clinical-fold-{test_fold}-samples-{n_train}', 'best')
         localiser = replace_ckpt_alias(localiser)
         filename = f'eval-folds-{n_folds}-test-{test_fold}'
-        filepath = os.path.join(config.directories.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
+        filepath = os.path.join(config.dirs.evaluations, 'localiser', *localiser, encode(datasets), f'{filename}.csv')
         df = pd.read_csv(filepath, dtype={'patient-id': str})
         pdf = df[['dataset', 'patient-id']].drop_duplicates()
         pdf = pdf[(pdf['dataset'] == dataset) & (pdf['patient-id'] == str(pat_id))]
@@ -735,7 +735,7 @@ def create_segmenter_predictions_v2(
     orig_localiser = (f'localiser-{region}', 'public-1gpu-150epochs', 'best')
     orig_localiser = replace_ckpt_alias(orig_localiser)
     filename = f'eval-folds-{n_folds}-test-{test_fold}'
-    filepath = os.path.join(config.directories.evaluations, 'segmenter', *orig_localiser, *segmenter.name, encode(datasets), f'{filename}.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'segmenter', *orig_localiser, *segmenter.name, encode(datasets), f'{filename}.csv')
     orig_df = pd.read_csv(filepath, dtype={'patient-id': str})
     orig_df = orig_df[['dataset', 'patient-id']].drop_duplicates()
 
@@ -756,7 +756,7 @@ def create_segmenter_predictions_v2(
 
     # Save timing data.
     if timing:
-        filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
+        filepath = os.path.join(config.dirs.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter.name, f'timing-folds-{n_folds}-test-{test_fold}-device-{device.type}.csv')
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         timer.save(filepath)
 
@@ -773,7 +773,7 @@ def load_multi_segmenter_prediction(
 
     # Load prediction.
     crop_type_str = f'-{crop_type}' if crop_type != 'brain' else ''
-    filepath = os.path.join(config.directories.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, f'pred{crop_type_str}.npz')
+    filepath = os.path.join(config.dirs.predictions, 'data', 'multi-segmenter', dataset, pat_id, *model, f'pred{crop_type_str}.npz')
     if os.path.exists(filepath):
         if exists_only:
             return True
@@ -832,7 +832,7 @@ def load_multi_segmenter_prediction_timings(
         'use_grouping': kwargs.get('use_grouping', False),
         'use_split_file': kwargs.get('use_split_file', False),
     }
-    filepath = os.path.join(config.directories.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model, encode(params), 'timing.csv')
+    filepath = os.path.join(config.dirs.predictions, 'timing', 'multi-segmenter', encode(datasets), encode(regions), *model, encode(params), 'timing.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"Multi-segmenter prediction timings not found for dataset '{dataset}', region '{region}', model '{model}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath)
@@ -879,7 +879,7 @@ def load_segmenter_predictions_timings(
     segmenter = replace_ckpt_alias(segmenter)
 
     # Load prediction.
-    filepath = os.path.join(config.directories.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
+    filepath = os.path.join(config.dirs.predictions, 'timing', 'segmenter', encode(datasets), region, *localiser, *segmenter, f'timing-folds-{n_folds}-test-{test_fold}-device-{device}.csv')
     if not os.path.exists(filepath):
         raise ValueError(f"Prediction timings not found for datasets '{datasets}', region '{region}', localiser '{localiser}' and segmenter '{segmenter}'. Filepath: {filepath}.")
     df = pd.read_csv(filepath)

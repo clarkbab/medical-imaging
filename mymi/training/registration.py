@@ -40,7 +40,7 @@ def train_registration(
     # Set seed for reproducible runs.
     torch.manual_seed(random_seed)
 
-    ckpt_path = os.path.join(config.directories.models, project, model_name)
+    ckpt_path = os.path.join(config.dirs.models, project, model_name)
     if os.path.exists(ckpt_path) and not resume:
         # Clean up old run files.
         logging.info(f"Removing old checkpoint directory {ckpt_path}.")
@@ -97,7 +97,7 @@ def train_registration(
     # Set up logging.
     if use_logging:
         run = wandb.init(
-            dir=config.directories.reports,
+            dir=config.dirs.reports,
             entity="clarkbab",
             project=project,
             name=model_name,
@@ -174,7 +174,7 @@ def train_registration(
                 }, step=step)
 
                 # Log images.
-                if interval_matches(epoch, step, val_image_interval, len(val_iter)):
+                if interval_matches(step, val_image_interval, len(val_iter)):
                     # Show coronal slices.
                     view = 1
                     slice_idx = input.shape[view + 2] // 2

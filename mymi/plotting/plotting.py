@@ -8,7 +8,6 @@ import seaborn as sns
 from tqdm import tqdm
 from typing import *
 
-from dicomset import Dataset
 from dicomset.utils.geometry import com, foreground_fov, foreground_fov_centre
 from mymi import logging
 from mymi.processing import largest_cc_3D

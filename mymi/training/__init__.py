@@ -12,13 +12,8 @@ from mymi.typing import ModelName
 from mymi.utils.args import arg_to_list
 from mymi.utils.pandas import append_row
 
-from .registration import *
-from .segmentation import *
-from .unigradicon import *
-from .voxelmorph import *
-
 def load_run_manifest(model: Tuple[str, str]) -> DataFrame:
-    filepath = os.path.join(config.directories.runs, *model)
+    filepath = os.path.join(config.dirs.runs, *model)
     latest_run = list(sorted(os.listdir(filepath)))[-1]
     filepath = os.path.join(filepath, latest_run, 'multi-loader-manifest.csv')
     df = pd.read_csv(filepath)
@@ -42,7 +37,7 @@ def get_n_epochs(
     for model in models:
         try:
             model = replace_ckpt_alias(model, **kwargs)
-            filepath = os.path.join(config.directories.models, *model[:2], f'{model[2]}.ckpt')
+            filepath = os.path.join(config.dirs.models, *model[:2], f'{model[2]}.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
             n_epochs = state['epoch'] + 1       # Starts at 0.
             exists = True

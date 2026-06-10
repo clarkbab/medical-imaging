@@ -8,7 +8,7 @@ kwargs = dict(
     idx=0.5,
     pat_ids='group:0:2',
     regions='all',
-    savepath=os.path.join(config.directories.files, 'MULTIORG', 'hanseg-g0.pdf'),
+    savepath=os.path.join(config.dirs.files, 'MULTIORG', 'hanseg-g0.pdf'),
     show_legend=False,
     show_progress=True,
     study='all',
@@ -18,5 +18,5 @@ kwargs = dict(
 plot_patients(dataset, **kwargs)
 
 kwargs['pat_ids'] = 'group:1:2'
-kwargs['savepath'] = os.path.join(config.directories.files, 'MULTIORG', 'hanseg-g1.pdf')
+kwargs['savepath'] = os.path.join(config.dirs.files, 'MULTIORG', 'hanseg-g1.pdf')
 plot_patients(dataset, **kwargs)

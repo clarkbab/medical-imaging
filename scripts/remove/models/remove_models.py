@@ -21,7 +21,7 @@ for type in types:
         print(f'model - {id}')
 
         # Get model folder.
-        run_folder = os.path.join(config.directories.models, f'{type}-{region}')
+        run_folder = os.path.join(config.dirs.models, f'{type}-{region}')
         if not os.path.exists(run_folder):
             continue
 

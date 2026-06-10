@@ -1,3 +1,4 @@
+from dicomset.utils import assert_shapes_equal
 import torch
 from typing import *
 
@@ -14,7 +15,9 @@ class MSELoss(torch.nn.Module):
     def forward(
         self,
         pred: torch.Tensor,
-        label: torch.Tensor) -> torch.Tensor:
+        label: torch.Tensor,
+        ) -> torch.Tensor:
+        assert_shapes_equal(pred, label)
         if self.__pad_threshold is not None:
             # Select subset of voxels that are both not padding. I.e. padding should not be involved
             # in the similarity calculation.
@@ -24,3 +27,18 @@ class MSELoss(torch.nn.Module):
             label = label[indices]
         mse = ((pred - label) ** 2).mean()
         return mse
+
+class CircularMSELoss(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        logging.info(f"Initialising CircularMSE loss.")
+
+    def forward(
+        self,
+        pred: torch.Tensor,
+        label: torch.Tensor,
+        ) -> torch.Tensor:
+        assert_shapes_equal(pred, label)
+        diff = torch.abs(pred - label)
+        diff = torch.min(diff, 1 - diff)
+        return (diff ** 2).mean()

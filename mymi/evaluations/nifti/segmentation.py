@@ -100,7 +100,7 @@ def create_all_multi_segmenter_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -159,7 +159,7 @@ def create_replan_evaluation(
         'use_grouping': kwargs.get('use_grouping', False),
         'use_split_file': kwargs.get('use_split_file', False),
     }
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter-replan', encode(datasets), encode(regions), encode(params), 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter-replan', encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
     
@@ -230,7 +230,7 @@ def create_multi_segmenter_evaluation(
         'use_grouping': kwargs.get('use_grouping', False),
         'use_split_file': kwargs.get('use_split_file', False),
     }
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter', *model, encode(datasets), encode(regions), encode(params), 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 

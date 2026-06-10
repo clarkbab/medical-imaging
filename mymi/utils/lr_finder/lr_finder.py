@@ -18,7 +18,7 @@ from mymi.utils.args import arg_to_list
 def load_data(
     model_name: str,
     run_name: str) -> Dict[str, np.ndarray]:
-    filepath = os.path.join(config.directories.models, model_name, run_name, 'lr-finder.json')
+    filepath = os.path.join(config.dirs.models, model_name, run_name, 'lr-finder.json')
     if not os.path.exists(filepath):
         raise ValueError(f"Model '{model_name}', run '{run_name}' does not exist. Filepath: {filepath}.")
     return json.load(open(filepath))

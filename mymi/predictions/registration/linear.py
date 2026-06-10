@@ -65,3 +65,4 @@ def register_linear_v2(
     result = binary_erosion(filled, iterations=n_iter)
     # Ensure interpolated surface voxels are always included.
     return result | surface_grid
+

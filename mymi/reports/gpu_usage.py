@@ -55,7 +55,7 @@ def record_gpu_usage(
             pass
 
     # Save results.
-    filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}.csv')
+    filepath = os.path.join(config.dirs.reports, 'gpu-usage', f'{name}.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
@@ -64,10 +64,10 @@ def load_gpu_usage(
     check_timing: bool = True) -> pd.DataFrame:
     # Check for 'timing' file - indicates successful training run.
     if check_timing:
-        filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}-time.csv')
+        filepath = os.path.join(config.dirs.reports, 'gpu-usage', f'{name}-time.csv')
         if not os.path.exists(filepath):
             raise ValueError(f"Timing file doesn't exist for '{name}'. Training run didn't complete.")
-    filepath = os.path.join(config.directories.reports, 'gpu-usage', f'{name}.csv') 
+    filepath = os.path.join(config.dirs.reports, 'gpu-usage', f'{name}.csv') 
     return pd.read_csv(filepath)
 
 def max_gpu_usage(name: str) -> Union[float, List[float]]:

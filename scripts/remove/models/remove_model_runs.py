@@ -28,7 +28,7 @@ for type in types:
 
         for run in runs:
             # Get run folder.
-            run_folder = os.path.join(config.directories.models, f'{type}-{region}', run)
+            run_folder = os.path.join(config.dirs.models, f'{type}-{region}', run)
             if not os.path.exists(run_folder):
                 continue
 

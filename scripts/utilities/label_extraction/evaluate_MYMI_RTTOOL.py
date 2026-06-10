@@ -80,6 +80,6 @@ for pat in tqdm(pats):
 df = df.astype(cols)
 
 # Save evaluation.
-filepath = os.path.join(config.directories.files, f'{mymi_name}-{rttool_name}-evaluation.csv')
+filepath = os.path.join(config.dirs.files, f'{mymi_name}-{rttool_name}-evaluation.csv')
 os.makedirs(os.path.dirname(filepath), exist_ok=True)
 df.to_csv(filepath, index=False)

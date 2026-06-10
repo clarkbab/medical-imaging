@@ -77,7 +77,7 @@ def convert_replan_to_nnunet_ref_model(
     exc_df = set.excluded_labels
 
     # Create the datasets.
-    filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
+    filepath = os.path.join(config.dirs.datasets, 'nnunet', 'raw')
     regions = regions_to_list(regions)
     all_regions = regions_to_list('RL:PMCC_REPLAN')
     for r in regions:

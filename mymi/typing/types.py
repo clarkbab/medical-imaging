@@ -156,6 +156,7 @@ ImageTensors = Union[ImageTensor, List[ImageTensor]]
 ImageTensor3D = ImageTensor
 GridParams = Tuple[Affine, Size]
 TrainingInterval = str
+TrainingStep = int
 Transform = sitk.Transform
 VectorImageArray = np.ndarray   # Deformation field.
 VectorImageTensor = torch.Tensor    # By default has size: C, X, Y, Z.

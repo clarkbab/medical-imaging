@@ -14,6 +14,7 @@ def plot_gif(
     plot_fn: Callable[..., PIL.Image.Image] | None = None,
     plot_args: List[Tuple[Any, ...]] | None = None,
     plot_kwargs: List[Dict[str, Any]] | None = None,
+    figsize: Tuple[float, float] | None = None,
     frame_time: float = 0.5,
     loop: bool = True,
     n_frames: int | None = None,
@@ -21,7 +22,9 @@ def plot_gif(
     pause_time: float = 5,
     player: bool = True,
     savepath: FilePath | None = None,
-    width: int = 1000,
+    show_progress: bool = True,
+    width: int | None = None,
+    show: bool = True,
     ) -> None:
     def _to_png_bytes(frame: Any) -> bytes:
         img = frame if isinstance(frame, PIL.Image.Image) else PIL.Image.fromarray(frame)
@@ -104,23 +107,39 @@ def plot_gif(
         ]))
 
     if savepath is not None and os.path.exists(savepath) and not overwrite:
-        if player:
-            cached_frames = imageio.mimread(savepath, memtest=False)
-            if n_frames is not None:
-                cached_frames = cached_frames[:n_frames]
-            frame_bytes = [_to_png_bytes(frame) for frame in cached_frames]
-            _display_player(frame_bytes)
-            return
-        with open(savepath, 'rb') as f:
-            display(IPythonImage(data=f.read(), format='png', width=width))
-        return
+        if show:
+            if player:
+                cached_frames = imageio.mimread(savepath, memtest=False)
+                if n_frames is not None:
+                    cached_frames = cached_frames[:n_frames]
+                frame_bytes = [_to_png_bytes(frame) for frame in cached_frames]
+                if width is None:
+                    width = PIL.Image.open(io.BytesIO(frame_bytes[0])).width
+                _display_player(frame_bytes)
+                return
+            with open(savepath, 'rb') as f:
+                img_bytes = f.read()
+            _w = width if width is not None else PIL.Image.open(io.BytesIO(img_bytes)).width
+            display(IPythonImage(data=img_bytes, format='png', width=_w))
+        return  # File already exists and overwrite=False — nothing to generate.
+
+    if plot_fn is None:
+        raise ValueError(f"'savepath' not found: {savepath}. Provide 'plot_fn' to generate it.")
 
     if savepath is None:
         savepath = tempfile.NamedTemporaryFile(suffix='.apng', delete=False).name
     else:
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
 
-    n_frames = n_frames if n_frames is not None else (len(plot_args) if plot_args is not None else len(plot_kwargs))
+    if n_frames is None:
+        if plot_args is not None:
+            n_frames = len(plot_args)
+        elif plot_kwargs is not None:
+            n_frames = len(plot_kwargs)
+        elif savepath is not None and os.path.exists(savepath):
+            n_frames = len(imageio.mimread(savepath, memtest=False))
+        else:
+            raise TypeError("'n_frames' cannot be inferred: provide 'plot_args', 'plot_kwargs', or 'n_frames'.")
     if plot_args is None:
         plot_args = [() for _ in range(n_frames)]
     else:
@@ -133,8 +152,11 @@ def plot_gif(
 
     # Generate frames by calling the plotting function with per-frame args/kwargs.
     png_images = []
-    for i, (frame_args, frame_kwargs) in tqdm(enumerate(zip(plot_args, plot_kwargs)), total=n_frames, desc="Creating GIF frames"):
-        png_image = plot_fn(*frame_args, **frame_kwargs)
+    for i, (frame_args, frame_kwargs) in tqdm(enumerate(zip(plot_args, plot_kwargs)), total=n_frames, desc="Creating video frames", disable=not show_progress):
+        frame_kwargs = dict(frame_kwargs)  # Copy to avoid mutating input
+        if figsize is not None:
+            frame_kwargs['figsize'] = figsize
+        png_image = plot_fn(*frame_args, **frame_kwargs, return_image=True)
         png_images.append(png_image)
 
     # Save animated PNG (avoids GIF's 256-colour palette limitation).
@@ -143,11 +165,15 @@ def plot_gif(
     frames = frames + [frames[-1]] * int(pause_time / frame_time)
     imageio.mimsave(savepath, frames, fps=frames_per_second, loop=0 if loop else None)
 
-    if player:
-        # Build PNG bytes for each frame for fast widget updates.
-        frame_bytes = [_to_png_bytes(img) for img in png_images]
-        _display_player(frame_bytes)
-        return
-
-    with open(savepath, 'rb') as f:
-        display(IPythonImage(data=f.read(), format='png', width=width))
+    if show:
+        if player:
+            # Build PNG bytes for each frame for fast widget updates.
+            frame_bytes = [_to_png_bytes(img) for img in png_images]
+            if width is None:
+                width = PIL.Image.open(io.BytesIO(frame_bytes[0])).width
+            _display_player(frame_bytes)
+            return
+        with open(savepath, 'rb') as f:
+            img_bytes = f.read()
+        _w = width if width is not None else PIL.Image.open(io.BytesIO(img_bytes)).width
+        display(IPythonImage(data=img_bytes, format='png', width=_w))

@@ -65,7 +65,7 @@ def generate_dataset_regions_report(
 
                 # Save temp file.
                 filename = f"patient-{pat}-region-{region}-view-{v}.png"
-                filepath = os.path.join(config.directories.temp, filename)
+                filepath = os.path.join(config.dirs.temp, filename)
                 plt.savefig(filepath)
 
                 # Add image to report.
@@ -79,5 +79,5 @@ def generate_dataset_regions_report(
         filename = report_name
     else:
         filename = f"report-{dataset}.pdf"
-    filepath = os.path.join(config.directories.files, filename) 
+    filepath = os.path.join(config.dirs.files, filename) 
     report.output(filepath, 'F')

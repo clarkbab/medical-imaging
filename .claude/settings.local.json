@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"/l/LEARN/Nepean/Lung/Patient Images/PAT01/FX0\" -maxdepth 4 2>/dev/null | head -80)",
+      "Read(//l/LEARN/Nepean/Lung/Patient Images/PAT01/FX0/**)",
+      "Bash(ls \"/l/LEARN/Nepean/Lung/\" 2>/dev/null)",
+      "Read(//l/LEARN/Nepean/Lung//**)",
+      "Bash(grep -n \"def from_rtstruct_dicom\" /d/Brett/code/DicomSet/dicomset/dicom/utils.py)",
+      "Read(//d/Brett/code/DicomSet/dicomset/dicom/**)",
+      "Read(//d/Brett/code/DicomSet/**)",
+      "Bash(xargs grep -l \"from_rtstruct_dicom\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Brett\\\\code\\\\contour-alignment-tool\" -Recurse -Include \"*.m\", \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(New-Item -ItemType Directory -Force \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\mymi\\\\apps\\\\.streamlit\")",
+      "Bash(Out-Null)",
+      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\mymi\\\\apps\\\\.streamlit\")",
+      "Bash(nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu --format=csv,noheader)",
+      "Bash(python -c ' *)",
+      "Bash(cd /d \"d:\\\\Brett\\\\code\\\\medical-imaging\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c \"from dicomset.utils import load_dicom; help\\(load_dicom\\)\")",
+      "Bash(New-Item -ItemType File -Path \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\scripts\\\\train\\\\mlm\\\\valkim\\\\train_pix2pix.py\" -Force)",
+      "PowerShell(New-Item -ItemType File -Path \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\scripts\\\\train\\\\mlm\\\\valkim\\\\train_pix2pix.py\" -Force)",
+      "Bash(python \"d:/Brett/code/medical-imaging/mymi/apps/fix_path_source.py\")",
+      "Bash(python d:/Brett/code/medical-imaging/mymi/apps/fix_path_source.py)",
+      "Bash(del \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\mymi\\\\apps\\\\fix_path_source.py\")",
+      "Bash(python -c \"import sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); content = open\\('d:/Brett/code/medical-imaging/mymi/apps/contour_alignment.py', encoding='utf-8'\\).read\\(\\); hits = [l.strip\\(\\) for l in content.splitlines\\(\\) if '_path_source' in l]; print\\('\\\\n'.join\\(hits\\) if hits else 'CLEAN'\\)\")",
+      "Bash(python -)",
+      "Read(//mnt/d/Brett/code/**)"
+    ]
+  }
+}

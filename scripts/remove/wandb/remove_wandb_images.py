@@ -19,7 +19,7 @@ first_n_epochs = 1000
 steps_per_epoch = 30
 first_n_steps = first_n_epochs * steps_per_epoch
 
-run_folder = os.path.join(config.directories.reports, 'wandb')
+run_folder = os.path.join(config.dirs.reports, 'wandb')
 runs = os.listdir(run_folder)
 runs = [r for r in runs if re.match(RUN_REGEXP, r) is not None]
 

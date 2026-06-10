@@ -1,7 +1,7 @@
 import torch
 
-from mymi.utils.pandas import append_row
-from mymi.typing import *
+from dicomset.utils import append_row, logger
+from dicomset.typing import *
 
 from .mednext import create_mednext_v1
 from .unet import UNet2D, UNet3D
@@ -12,34 +12,34 @@ def get_model(
     **kwargs,
     ) -> torch.nn.Module:
     if arch == 'unet2d:m':
-        logging.info(f"Using UNet2D (M) with {n_output_channels} channels.")
+        logger.info(f"Using UNet2D (M) with {n_output_channels} channels.")
         return UNet2D(n_output_channels, **kwargs)
     elif arch == 'unet2d:l':
-        logging.info(f"Using UNet2D (L) with {n_output_channels} channels.")
+        logger.info(f"Using UNet2D (L) with {n_output_channels} channels.")
         return UNet2D(n_output_channels, n_features=64, **kwargs)
     elif arch == 'unet2d:xl':
-        logging.info(f"Using UNet2D (XL) with {n_output_channels} channels.")
+        logger.info(f"Using UNet2D (XL) with {n_output_channels} channels.")
         return UNet2D(n_output_channels, n_features=128, **kwargs)
     elif arch == 'unet3d:m':
-        logging.info(f"Using UNet3D (M) with {n_output_channels} channels.")
+        logger.info(f"Using UNet3D (M) with {n_output_channels} channels.")
         return UNet3D(n_output_channels, **kwargs)
     elif arch == 'unet3d:l':
-        logging.info(f"Using UNet3D (L) with {n_output_channels} channels.")
+        logger.info(f"Using UNet3D (L) with {n_output_channels} channels.")
         return UNet3D(n_output_channels, n_features=64, **kwargs)
     elif arch == 'unet3d:xl':
-        logging.info(f"Using UNet3D (XL) with {n_output_channels} channels.")
+        logger.info(f"Using UNet3D (XL) with {n_output_channels} channels.")
         return UNet3D(n_output_channels, n_features=128, **kwargs)
     elif arch == 'mednext:s':
-        logging.info(f"Using MedNeXt (S) with {n_output_channels} channels.")
+        logger.info(f"Using MedNeXt (S) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'S', **kwargs)
     elif arch == 'mednext:b':
-        logging.info(f"Using MedNeXt (B) with {n_output_channels} channels.")
+        logger.info(f"Using MedNeXt (B) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'B', **kwargs)
     elif arch == 'mednext:m':
-        logging.info(f"Using MedNeXt (M) with {n_output_channels} channels.")
+        logger.info(f"Using MedNeXt (M) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'M', **kwargs)
     elif arch == 'mednext:l':
-        logging.info(f"Using MedNeXt (L) with {n_output_channels} channels.")
+        logger.info(f"Using MedNeXt (L) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'L', **kwargs)
     else:
         raise ValueError(f"Unknown architecture '{arch}'.")

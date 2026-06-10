@@ -25,19 +25,15 @@ def to_nifti(
         data = data.astype(np.uint32)
     return nib.nifti1.Nifti1Image(data, affine)
 
-def _resolve_filepath(filepath: FilePath) -> FilePath:
-    if filepath.startswith('files:'):
-        filepath = os.path.join(config.directories.files, filepath[6:])
-    return filepath
-
 def save_nifti(
     data: ImageArray,
     affine: Affine,
     filepath: str,
+    overwrite: bool = False,
     ) -> None:
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
-    filepath = _resolve_filepath(filepath)
+    filepath = resolve_filepath(filepath)
     assert filepath.endswith('.nii.gz') or filepath.endswith('.nii'), "Filepath must end with .nii or .nii.gz"
     img = to_nifti(data, affine)
     dirname = os.path.dirname(filepath)

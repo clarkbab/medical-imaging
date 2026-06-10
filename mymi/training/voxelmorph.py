@@ -19,7 +19,7 @@ def train_voxelmorph(
     pad_shape: Optional[Size3D] = None) -> None:
     set = TrainingDataset(dataset)
     index_path = os.path.join(set.path, 'vxm-index.txt')
-    model_path = os.path.join(config.directories.models, 'voxelmorph', f'{dataset}-{model}')
+    model_path = os.path.join(config.dirs.models, 'voxelmorph', f'{dataset}-{model}')
     if os.path.exists(model_path):
         shutil.rmtree(model_path)    # Clear out old runs.
 

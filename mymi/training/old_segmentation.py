@@ -70,7 +70,7 @@ def train_segmenter(
         resume_model = resume_model if resume_model is not None else model_name
         resume_run = resume_run if resume_run is not None else run_name
         resume_ckpt = replace_ckpt_alias(resume_model, resume_run, resume_ckpt, ckpt_version=resume_ckpt_version)
-        ckpt_path = os.path.join(config.directories.models, resume_model, resume_run, f'{resume_ckpt}.ckpt')
+        ckpt_path = os.path.join(config.dirs.models, resume_model, resume_run, f'{resume_ckpt}.ckpt')
         opt_kwargs['ckpt_path'] = ckpt_path
 
     # Get augmentation transforms.
@@ -136,13 +136,13 @@ def train_segmenter(
         logger = pl.loggers.WandbLogger(
             project=model_name,
             name=run_name,
-            save_dir=config.directories.reports)
+            save_dir=config.dirs.reports)
         # logger.watch(model, log='all') # Caused multi-GPU training to hang.
     else:
         logger = False
 
     # Create callbacks.
-    ckpts_path = os.path.join(config.directories.models, model_name, run_name)
+    ckpts_path = os.path.join(config.dirs.models, model_name, run_name)
     callbacks = [
         # EarlyStopping(
         #     monitor='val/loss',

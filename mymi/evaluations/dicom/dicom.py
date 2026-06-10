@@ -27,7 +27,7 @@ def load_segmenter_dose_evaluation(
     use_model_manifest: bool = False) -> pd.DataFrame:
     localiser = replace_ckpt_alias(localiser, use_manifest=use_model_manifest)
     segmenter = replace_ckpt_alias(segmenter, use_manifest=use_model_manifest)
-    filepath = os.path.join(config.directories.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{n_folds}-test-{test_fold}.csv') 
+    filepath = os.path.join(config.dirs.evaluations, 'segmenter', *localiser, *segmenter, encode(datasets), f'dose-eval-folds-{n_folds}-test-{test_fold}.csv') 
     if not os.path.exists(filepath):
         raise ValueError(f"Segmenter dose evaluation for datasets '{datasets}', localiser '{localiser}' and segmenter '{segmenter}' not found.")
     data = pd.read_csv(filepath, dtype={'patient-id': str})

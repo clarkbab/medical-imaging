@@ -1,12 +1,13 @@
+from dicomset import config
 import ast
 import nibabel as nib
 import os
 import pandas as pd
 import json
 from typing import *
+import torch
 import yaml
 
-from mymi import config
 from mymi.typing import *
 
 from .args import arg_to_list
@@ -23,7 +24,7 @@ def load_csv(
     parse_cols: Union[str, List[str]] = [],
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
     if filepath.startswith('files:'):
-        filepath = os.path.join(config.directories.files, filepath[6:])
+        filepath = os.path.join(config.dirs.files, filepath[6:])
     if os.path.exists(filepath):
         if exists_only:
             return True
@@ -59,7 +60,7 @@ def load_files_csv(
     map_cols: Dict[str, str] = {},
     map_types: Dict[str, Any] = {},
     **kwargs: Dict[str, str]) -> Optional[pd.DataFrame]:
-    filepath = os.path.join(config.directories.files, *path)
+    filepath = os.path.join(config.dirs.files, *path)
     if not os.path.exists(filepath):
         if exists_only:
             return False
@@ -109,7 +110,7 @@ def load_yaml(filepath: str) -> Any:
 
 def resolve_filepath(filepath: FilePath) -> FilePath:
     if filepath.startswith('files:'):
-        filepath = os.path.join(config.directories.files, filepath[6:])
+        filepath = os.path.join(config.dirs.files, filepath[6:])
     return filepath
 
 def save_csv(
@@ -128,13 +129,21 @@ def save_csv(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         data.to_csv(filepath, index=index)
 
+class JSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # if isinstance(obj, torch.Tensor):
+        #     return obj.tolist()
+        if isinstance(obj, torch.device):
+            return str(obj)
+        return super().default(obj)
+
 def save_json(
     data: Any,
     filepath: str) -> None:
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     assert filepath.split('.')[-1] == 'json'
     with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f, indent=4, cls=JSONEncoder)
 
 def save_text(
     data: str,

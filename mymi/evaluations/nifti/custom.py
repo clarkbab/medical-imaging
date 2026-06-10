@@ -213,14 +213,14 @@ def create_nnunet_single_region_evaluation(
     df = df.astype(cols)
 
     # Save evaluation.
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', 'nnunet', 'single-region', region, f'fold-{fold}', 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter', 'nnunet', 'single-region', region, f'fold-{fold}', 'eval.csv')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     df.to_csv(filepath, index=False)
 
 def load_nnunet_evaluation(
     dataset: str,
     fold: int) -> Union[np.ndarray, bool]:
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', 'nnunet', f'fold-{fold}', 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter', 'nnunet', f'fold-{fold}', 'eval.csv')
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     return df
 
@@ -228,6 +228,6 @@ def load_nnunet_single_region_evaluation(
     dataset: str,
     region: str,
     fold: int) -> Union[np.ndarray, bool]:
-    filepath = os.path.join(config.directories.evaluations, 'multi-segmenter', 'nnunet', 'single-region', region, f'fold-{fold}', 'eval.csv')
+    filepath = os.path.join(config.dirs.evaluations, 'multi-segmenter', 'nnunet', 'single-region', region, f'fold-{fold}', 'eval.csv')
     df = pd.read_csv(filepath, dtype={'patient-id': str})
     return df

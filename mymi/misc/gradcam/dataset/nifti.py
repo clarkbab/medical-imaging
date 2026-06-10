@@ -58,7 +58,7 @@ def create_segmenter_heatmap(
         logging.info(f"got {len(heatmap)} heatmaps")
         for layer, heatmap in zip(layers, heatmaps):
             logging.info(f"saving heatmap for layer {layer}")
-            filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model_name, f'{target_region}-layer-{layer}.npz')
+            filepath = os.path.join(config.dirs.heatmaps, dataset, pat_id, *model_name, f'{target_region}-layer-{layer}.npz')
             logging.info(f"filepath: {filepath}")
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             np.savez_compressed(filepath, data=heatmap)
@@ -120,7 +120,7 @@ def load_multi_segmenter_heatmap(
     layers = arg_to_list(layer, str)
     heatmaps = []
     for layer in layers:
-        filepath = os.path.join(config.directories.heatmaps, dataset, pat_id, *model, f'{target_region}-layer-{layer}.npz')
+        filepath = os.path.join(config.dirs.heatmaps, dataset, pat_id, *model, f'{target_region}-layer-{layer}.npz')
         if not os.path.exists(filepath):
             if exists_only:
                 return False

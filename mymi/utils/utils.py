@@ -58,7 +58,7 @@ def encode(o: Any) -> str:
 def escape_filepath(f: str) -> str:
     if f.split(':')[0] == 'files':
         f = f.split(':')[1]
-        f = os.path.join(config.directories.files, f)
+        f = os.path.join(config.dirs.files, f)
     return f
 
 def get_axis_name(

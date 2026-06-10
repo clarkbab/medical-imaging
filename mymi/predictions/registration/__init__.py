@@ -2,6 +2,7 @@ from .affine import register_affine
 from .corrfield import register_corrfield
 from .deeds import register_deeds
 from .linear import register_linear, register_linear_v2
+from mymi.processing.interpolation import interpolate_masks_radial, interpolate_masks_radial_3d
 from .plastimatch import register_plastimatch
 from .rigid import register_rigid
 from .unigradicon import register_unigradicon

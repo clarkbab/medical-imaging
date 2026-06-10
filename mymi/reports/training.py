@@ -74,7 +74,7 @@ def create_ct_figures_report(
         for axis, page_coord in zip(axes, img_coords):
             # Save figure.
             z = input.shape[axis] // 2
-            filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+            filepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
             plot_patients(dataset, sample_id, savepath=filepath, z=z, view=axis)
             plt.close()
 
@@ -279,7 +279,7 @@ def create_region_figures(
                         plot_sample_regions(dataset, partition, s, centre=region, colours=['y'], postproc=postproc, regions=region, show_extent=True, view=view, window=(3000, 500))
 
                         # Save temp file.
-                        filepath = os.path.join(config.directories.temp, f'{uuid1().hex}.png')
+                        filepath = os.path.join(config.dirs.temp, f'{uuid1().hex}.png')
                         plt.savefig(filepath)
                         plt.close()
 

@@ -1,0 +1,63 @@
+{
+  "image_settings": {
+    "contour_color": "#ff3c3c",
+    "contour_linestyle": "solid",
+    "hist_eq": true,
+    "zoom_step": 10
+  },
+  "projection_method": "CTorch",
+  "site": {
+    "name": "L:/LEARN/Nepean/Lung",
+    "auto_select": false,
+  },
+  "patient": {
+    "name": "PAT01",
+    "auto_select": true,
+    "depends_on": "site",
+  },
+  "fraction": {
+    "name": "Fx01",
+    "auto_select": true,
+    "depends_on": "patient",
+  },
+  "ct": {
+    "name": "L:/LEARN/Nepean/Lung/Patient Plans/PAT01/CT",
+    "auto_select": true,
+    "depends_on": "patient",
+  },
+  "rtplan": {
+    "name": "L:/LEARN/Nepean/Lung/Patient Plans/PAT01/Plan/rtplan.dcm",
+    "auto_select": true,
+    "depends_on": "patient",
+  },
+  "rtstruct": {
+    "name": "L:/LEARN/Nepean/Lung/Patient Plans/PAT01/Structure Set/rtstruct.dcm",
+    "auto_select": true,
+    "depends_on": "patient",
+  },
+  "region": {
+    "name": "GTV",
+    "auto_select": true,
+    "depends_on": "rtstruct",
+  },
+  "imaging_type": {
+    "name": "CBCT",
+    "auto_select": true,
+    "depends_on": "fraction",
+  },
+  "session": {
+    "name": "CBCT1",
+    "auto_select": true,
+    "depends_on": "imaging_type",
+  },
+  "prospective": {
+    "name": false,
+    "auto_select": true,
+    "depends_on": "patient",
+  },
+  "treatment_images": {
+    "name": "L:/LEARN/Nepean/Lung/Patient Images/PAT01/Fx01/CBCT/CBCT1/CBCT Projections",
+    "auto_select": true,
+    "depends_on": "session",
+  }
+}

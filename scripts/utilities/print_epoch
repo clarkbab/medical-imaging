@@ -16,7 +16,7 @@ def print_epoch(
     ckpt: str = 'last') -> None:
     # Get number of epochs.
     model = replace_ckpt_alias((model, run, ckpt))
-    filepath = os.path.join(config.directories.models, *model[:2], f'{model[2]}.ckpt')
+    filepath = os.path.join(config.dirs.models, *model[:2], f'{model[2]}.ckpt')
     state = torch.load(filepath, map_location=torch.device('cpu'))
     n_epochs = state['epoch'] + 1       # Starts at 0.
 

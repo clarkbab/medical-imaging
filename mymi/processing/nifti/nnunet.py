@@ -35,7 +35,7 @@ def convert_to_nnunet_single_region_v1(
     all_regions = set.list_regions()
 
     # Create the datasets.
-    filepath = os.path.join(config.directories.datasets, 'nnunet', 'v1', 'raw', 'nnUNet_raw_data')
+    filepath = os.path.join(config.dirs.datasets, 'nnunet', 'v1', 'raw', 'nnUNet_raw_data')
     regionx = all_regions.index(region)
     dataset_id = first_dataset_id + regionx
     dest_dataset = f"Task{dataset:03}_SINGLE_REGION_{region}"
@@ -131,7 +131,7 @@ def convert_to_nnunet_multi_region(
     regions = set.list_regions(region_id=region)
 
     # Create the dataset.
-    filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
+    filepath = os.path.join(config.dirs.datasets, 'nnunet', 'raw')
     dest_dataset = f"Dataset{nnunet_dataset:03}_{dataset}_MULTI_REGION"
     datapath = os.path.join(filepath, dest_dataset)
     if os.path.exists(datapath):
@@ -223,7 +223,7 @@ def convert_to_nnunet_single_region(
     all_regions = set.list_regions()
 
     # Create the datasets.
-    filepath = os.path.join(config.directories.datasets, 'nnunet', 'raw')
+    filepath = os.path.join(config.dirs.datasets, 'nnunet', 'raw')
     regionx = all_regions.index(region)
     dataset_id = first_dataset_id + regionx
     dest_dataset = f"Dataset{dataset:03}_SINGLE_REGION_{region}"

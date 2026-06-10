@@ -51,6 +51,6 @@ def convert_to_training_unigradicon(
 
     # Save images as torch file.
     images = [torch.tensor(i)[None, None] for i in images]
-    filepath = os.path.join(config.directories.datasets, 'training', dataset, 'data', 'unigradicon', 'train-samples.pt')
+    filepath = os.path.join(config.dirs.datasets, 'training', dataset, 'data', 'unigradicon', 'train-samples.pt')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     torch.save([images, spacings], filepath)

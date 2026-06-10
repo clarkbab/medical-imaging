@@ -143,7 +143,7 @@ class SegmenterPCGrad(pl.LightningModule):
         # Check that model training has finished.
         if check_epochs:
             last_model = replace_ckpt_alias((model[0], model[1], 'last'))
-            filepath = os.path.join(config.directories.models, last_model[0], last_model[1], f'{last_model[2]}.ckpt')
+            filepath = os.path.join(config.dirs.models, last_model[0], last_model[1], f'{last_model[2]}.ckpt')
             state = torch.load(filepath, map_location=torch.device('cpu'))
             n_epochs_complete = state['epoch'] + 1
             if n_epochs_complete < n_epochs:
@@ -151,7 +151,7 @@ class SegmenterPCGrad(pl.LightningModule):
 
         # Load model.
         model = replace_ckpt_alias(model)
-        filepath = os.path.join(config.directories.models, model[0], model[1], f"{model[2]}.ckpt")
+        filepath = os.path.join(config.dirs.models, model[0], model[1], f"{model[2]}.ckpt")
         if not os.path.exists(filepath):
             raise ValueError(f"SegmenterPCGrad '{model}' not found.")
 
@@ -513,7 +513,7 @@ class SegmenterPCGrad(pl.LightningModule):
 
     def on_train_batch_end(self, *_) -> None:
         if self.__save_training_metrics and self.__interval_matches(self.__metrics_save_interval):
-            filepath = os.path.join(config.directories.models, self.__name[0], self.__name[1], 'training-metrics.csv')
+            filepath = os.path.join(config.dirs.models, self.__name[0], self.__name[1], 'training-metrics.csv')
             save_csv(self.__training_metrics, filepath)
 
     def save_loss(

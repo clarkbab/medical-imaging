@@ -31,7 +31,7 @@ for type in types:
             print(f'model - {id}')
 
             # Get checkpoints.
-            run_folder = os.path.join(config.directories.models, f'{type}-{region}', run)
+            run_folder = os.path.join(config.dirs.models, f'{type}-{region}', run)
             if not os.path.exists(run_folder):
                 continue
             del_ckpts = list(sorted(os.listdir(run_folder)))

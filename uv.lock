@@ -231,6 +231,7 @@ dependencies = [
     { name = "jaxtyping" },
     { name = "numpy" },
     { name = "pyyaml" },
+    { name = "scikit-image" },
     { name = "torch" },
 ]
 
@@ -239,6 +240,7 @@ requires-dist = [
     { name = "jaxtyping" },
     { name = "numpy" },
     { name = "pyyaml" },
+    { name = "scikit-image" },
     { name = "torch" },
 ]
 
@@ -267,6 +269,9 @@ dependencies = [
     { name = "unittest2" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9c/f8/bff7e5eaf85b064a85bf8827a6bda04e92e2ff4d2e908c45033344886b44/batchgenerators-0.25.1.tar.gz", hash = "sha256:4663a7f393bf1681d7675648362ba3f11b2a9474fb17228a92aac5d1ad28bb39", size = 76970, upload-time = "2024-11-07T06:56:32.595Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/9b/80dd928c6a3a8873677d2aba70274cbe2e411c3f260d063396d50fd5ace4/batchgenerators-0.25.1-py3-none-any.whl", hash = "sha256:edaa428031692eeac06371e12d08f9895cd743d72dc0a33c53acc9d2aad7f74a", size = 100740, upload-time = "2026-05-12T06:56:06.509Z" },
+]
 
 [[package]]
 name = "batchgeneratorsv2"
@@ -619,12 +624,13 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "scikit-image" },
     { name = "simpleitk" },
+    { name = "torch", marker = "extra == 'torch'" },
     { name = "totalsegmentator", marker = "extra == 'pred-seg'" },
     { name = "tqdm" },
     { name = "twine", marker = "extra == 'dev'" },
     { name = "unigradicon", marker = "extra == 'pred-reg'" },
 ]
-provides-extras = ["dev", "pred-seg", "pred-reg"]
+provides-extras = ["dev", "pred-seg", "pred-reg", "torch"]
 
 [[package]]
 name = "diffdrr"
@@ -1919,7 +1925,7 @@ requires-dist = [
     { name = "scikit-image", specifier = "==0.24.0" },
     { name = "seaborn", specifier = "==0.13.2" },
     { name = "simpleitk", specifier = "==2.5.3" },
-    { name = "surface-distance", git = "https://github.com/google-deepmind/surface-distance" },
+    { name = "surface-distance", editable = "../surface-distance" },
     { name = "torch", specifier = "==2.5.1", index = "https://download.pytorch.org/whl/cu121" },
     { name = "torchio", specifier = "==0.19.1" },
     { name = "totalsegmentator", specifier = "==2.13.0" },
@@ -3079,8 +3085,15 @@ wheels = [
 [[package]]
 name = "surface-distance"
 version = "0.1"
-source = { git = "https://github.com/google-deepmind/surface-distance#1f805cea446805e559badc80dd27f34175e4173d" }
+source = { editable = "../surface-distance" }
 dependencies = [
+    { name = "absl-py" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
     { name = "absl-py" },
     { name = "numpy" },
     { name = "scipy" },
@@ -3234,8 +3247,8 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp310-cp310-linux_x86_64.whl", hash = "sha256:92af92c569de5da937dd1afb45ecfdd598ec1254cf2e49e3d698cb24d71aae14" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp310-cp310-win_amd64.whl", hash = "sha256:9b22d6d98aa56f9317902dec0e066814a6edba1aada90110ceea2bb0678df22f" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp310-cp310-linux_x86_64.whl", hash = "sha256:92af92c569de5da937dd1afb45ecfdd598ec1254cf2e49e3d698cb24d71aae14", upload-time = "2024-10-29T23:15:46Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp310-cp310-win_amd64.whl", hash = "sha256:9b22d6d98aa56f9317902dec0e066814a6edba1aada90110ceea2bb0678df22f", upload-time = "2024-10-29T23:16:21Z" },
 ]
 
 [[package]]

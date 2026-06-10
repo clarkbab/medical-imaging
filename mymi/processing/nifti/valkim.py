@@ -1,29 +1,30 @@
 from augmed import Pipeline, RandomAffine
+from augmed.utils import save_json
 from dicomset.nifti.utils import create_dataset as create_nifti_dataset, load_dataset as load_nifti_dataset
 from dicomset.typing import *
 from dicomset.utils.args import arg_to_list
 from dicomset.utils.conversion import to_numpy, to_tensor
 from dicomset.dicom.utils import from_rtplan_dicom
-from dicomset.utils.io import load_nifti, save_json, save_nifti, save_numpy
+from dicomset.utils.io import load_json, load_nifti, save_nifti, save_numpy
 from dicomset.utils.logging import logger
 from dicomset.nifti.utils import create_ct, create_index, create_region
-from dicomset.training.utils import create_dataset as create_training_dataset
+from dicomset.training.utils import create_dataset as create_ds_training_dataset
 import numpy as np
 import os
 import shutil
 from skimage.restoration import inpaint_biharmonic
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from typing import List
 
 from mymi.processing.projections import project_ctorch
 from mymi.transforms import pad
-from mymi.utils.cdog import load_tiff
+from mymi.utils.cdog import load_raw_frame
 
-def create_valkim_preprocessed_dataset(
+def create_preprocessed_dataset(
     blur_markers: bool = True,
     patient_id: PatientID | List[PatientID] = ['PAT1', 'PAT2', 'PAT3'],
-    recreate_dataset: bool = False,
+    recreate: bool = False,
     ) -> None:
     dataset = 'VALKIM'
     dataset_pp = 'VALKIM-PP'
@@ -36,7 +37,7 @@ def create_valkim_preprocessed_dataset(
     exh_series = 'series_5'
     avg_reg_series = 'series_10'     # Give it a new number as it doesn't match any of the CT series.
     old_set = load_nifti_dataset(dataset)
-    new_set = create_nifti_dataset(dataset_pp, recreate=recreate_dataset)
+    new_set = create_nifti_dataset(dataset_pp, recreate=recreate)
 
     # Copy index.
     index = old_set.index()
@@ -115,34 +116,23 @@ def create_valkim_training_dataset(
     create_train_volumes: bool = True,
     create_val_projections: bool = True,
     create_val_volumes: bool = True,
-    makeitso: bool = False,
     n_val_angles: int = 3,
     n_val_volumes: int = 3,
-    recreate_dataset: bool = False,
+    recreate: bool = False,
     ) -> None:
-    logger.log_args("Creating VALKIM training dataset")
+    logger.log_method("Creating VALKIM training dataset")
     dataset = 'VALKIM-PP'
+    dest_dataset = 'VALKIM-PP-DYNAMIC'
     inh_series = 'series_0'
     exh_series = 'series_5'
     roi_series = 'series_0'
     min_angle = 0
     max_angle = 360
     nifti_set = load_nifti_dataset(dataset)
-    training_set = create_training_dataset(dataset, makeitso=makeitso, recreate=recreate_dataset)
+    training_set = create_ds_training_dataset(dest_dataset, recreate=recreate)
     pat_ids = nifti_set.list_patients()
-    inh_regions = ['GTV_Inh', 'Lung_L', 'Lung_R']
-    exh_regions = ['GTV_Exh', 'Lung_L', 'Lung_R']
-
-    info = {
-        'PAT1': {
-            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient01\243-RT LUNG Plan\RP.000000.dcm",
-            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient01\Fx01\kV\Ch1_1_7357_289.97.tiff",
-        },
-        'PAT2': {
-            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient02\361-LT LUNG Plan\RP.000000.dcm",
-            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient02\Fx01\kV\Ch1_1_4526_249.98.tiff",
-        }
-    }
+    regions = ['GTV', 'ts_Lung']
+    info = nifti_set.params['patient-info']
 
     # Copy non-augmented volumes as the training data.
     if create_train_volumes:
@@ -151,13 +141,14 @@ def create_valkim_training_dataset(
             pat = nifti_set.patient(p)
             inhale_series = pat.study('study_0').ct_series(inh_series)
             exhale_series = pat.study('study_0').ct_series(exh_series)
-            reg_series = pat.study('study_0').regions_series(roi_series)
+            inh_reg_series = pat.study('study_0').regions_series(inh_series)
+            exh_reg_series = pat.study('study_0').regions_series(exh_series)
             inh_ct = inhale_series.data
             inh_affine = inhale_series.affine
             exh_ct = exhale_series.data
             exh_affine = exhale_series.affine
-            inh_labels, inh_label_names = reg_series.data(r=inh_regions, return_regions=True)
-            exh_labels, exh_label_names = reg_series.data(r=exh_regions, return_regions=True)
+            inh_labels, inh_label_names = inh_reg_series.data(r=regions, return_regions=True)
+            exh_labels, exh_label_names = exh_reg_series.data(r=regions, return_regions=True)
 
             trainpath = os.path.join(training_set.path, 'data', 'training', p)
             volpath = os.path.join(trainpath, 'volumes')
@@ -165,26 +156,26 @@ def create_valkim_training_dataset(
 
             # Save volumes.
             filepath = os.path.join(volpath, f"inh_ct.nii.gz")
-            save_nifti(inh_ct, inh_affine, filepath)
+            save_nifti(inh_ct, inh_affine, filepath, overwrite=True)
             filepath = os.path.join(volpath, f"exh_ct.nii.gz")
-            save_nifti(exh_ct, exh_affine, filepath)
+            save_nifti(exh_ct, exh_affine, filepath, overwrite=True)
 
             # Save labels.
             filepath = os.path.join(volpath, f"inh_labels.npy")
-            save_numpy(inh_labels, filepath)
+            save_numpy(inh_labels, filepath, overwrite=True)
             filepath = os.path.join(volpath, f"exh_labels.npy")
-            save_numpy(exh_labels, filepath)
+            save_numpy(exh_labels, filepath, overwrite=True)
             filepath = os.path.join(volpath, f"inh_label_names.json")
-            save_json(inh_label_names, filepath)
+            save_json(inh_label_names, filepath, overwrite=True)
             filepath = os.path.join(volpath, f"exh_label_names.json")
-            save_json(exh_label_names, filepath)
+            save_json(exh_label_names, filepath, overwrite=True)
 
     # Create augmentation pipeline.
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     pipeline = Pipeline([
         RandomAffine(r=10, s=[0.8, 1.2], t=20),
     ], device=device)
-    print(pipeline)
+    logger.info(f"Using pipeline: {pipeline}")
 
     # === Create augmented volumes ===
     if create_val_volumes:
@@ -193,13 +184,14 @@ def create_valkim_training_dataset(
             pat = nifti_set.patient(p)
             inhale_series = pat.study('study_0').ct_series(inh_series)
             exhale_series = pat.study('study_0').ct_series(exh_series)
-            reg_series = pat.study('study_0').regions_series(roi_series)
+            inh_reg_series = pat.study('study_0').regions_series(inh_series)
+            exh_reg_series = pat.study('study_0').regions_series(exh_series)
             inh_ct = inhale_series.data
             inh_affine = inhale_series.affine
             exh_ct = exhale_series.data
             exh_affine = exhale_series.affine
-            inh_labels, inh_label_names = reg_series.data(r=inh_regions, return_regions=True)
-            exh_labels, exh_label_names = reg_series.data(r=exh_regions, return_regions=True)
+            inh_labels, inh_label_names = inh_reg_series.data(r=regions, return_regions=True)
+            exh_labels, exh_label_names = exh_reg_series.data(r=regions, return_regions=True)
 
             valpath = os.path.join(training_set.path, 'data', 'validation', p)
             volpath = os.path.join(valpath, 'volumes')
@@ -221,32 +213,33 @@ def create_valkim_training_dataset(
                 # What is the GPU behaviour?
                 # Assigning each tensor to a device is tedious, a transform should accept a device (during init or call)
                 # which overrides the device of the input array/tensor.
-                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, affine_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_affine=True, return_params=True)
+                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, grid_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_grid=True, return_params=True)
 
                 # Save volumes.
                 inh_ct_t = to_numpy(inh_ct_t)
                 exh_ct_t = to_numpy(exh_ct_t)
+                _, affine_t = grid_t
                 affine_t = to_numpy(affine_t)
                 filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
-                save_nifti(inh_ct_t, affine_t, filepath)
+                save_nifti(inh_ct_t, affine_t, filepath, overwrite=True)
                 filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
-                save_nifti(exh_ct_t, affine_t, filepath)
+                save_nifti(exh_ct_t, affine_t, filepath, overwrite=True)
 
                 # Save labels.
                 inh_labels_t = to_numpy(inh_labels_t)
                 exh_labels_t = to_numpy(exh_labels_t)
                 filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
-                save_nifti(inh_labels_t, affine_t, filepath)
+                save_nifti(inh_labels_t, affine_t, filepath, overwrite=True)
                 filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
-                save_nifti(exh_labels_t, affine_t, filepath)
+                save_nifti(exh_labels_t, affine_t, filepath, overwrite=True)
                 filepath = os.path.join(volpath, f"inh_label_names_{i}.json")
-                save_json(inh_label_names, filepath)
+                save_json(inh_label_names, filepath, overwrite=True)
                 filepath = os.path.join(volpath, f"exh_label_names_{i}.json")
-                save_json(exh_label_names, filepath)
+                save_json(exh_label_names, filepath, overwrite=True)
 
                 # Save params.
                 filepath = os.path.join(volpath, f"params_{i}.json")
-                save_json(params, filepath)
+                save_json(params, filepath, overwrite=True)
 
     # === Create projections ===
     if create_val_projections:
@@ -258,7 +251,7 @@ def create_valkim_training_dataset(
             # Load other projection geometry from .tiff files.
             # Does this change between fractions??
             filepath = info[p]['treatment-image']
-            _, tiff_info = load_tiff(filepath)
+            _, tiff_info = load_raw_frame(filepath)
 
             # Set projection parameters.
             isocentre = plan_info['isocentre']
@@ -334,3 +327,332 @@ def create_valkim_training_dataset(
                 save_json(inh_label_names, filepath)
                 filepath = os.path.join(projpath, f"exh_label_names_{i}.json")
                 save_json(exh_label_names, filepath)
+
+    create_train_volumes: bool = True,
+    create_val_projections: bool = True,
+    create_val_volumes: bool = True,
+    n_train_angles: int = 3,
+    n_train_volumes: int = 3,
+    n_val_angles: int = 3,
+    n_val_volumes: int = 3,
+    recreate: bool = True,
+    ) -> None:
+    logger.log_method("Creating VALKIM static training dataset")
+    dataset = 'VALKIM-PP'
+    dest_dataset = 'VALKIM-PP-STATIC'
+    inh_series = 'series_0'
+    exh_series = 'series_5'
+    min_angle = 0
+    max_angle = 360
+    nifti_set = load_nifti_dataset(dataset)
+    training_set = create_ds_training_dataset(dest_dataset, recreate=recreate)
+    pat_ids = nifti_set.list_patients()
+    pat_ids = pat_ids[:2]
+    regions = ['GTV', 'ts_Lung']
+    info = nifti_set.params['patient-info']
+
+    # Create augmentation pipeline.
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    pipeline = Pipeline([
+        RandomAffine(r=10, s=[0.8, 1.2], t=20),
+    ], device=device)
+    logger.info(f"Using pipeline: {pipeline}")
+
+    # === Create augmented training volumes ===
+    if create_train_volumes:
+        for p in tqdm(pat_ids, desc="Creating augmented training volumes for patients"):
+            # Load volumes.
+            pat = nifti_set.patient(p)
+            inhale_series = pat.study('study_0').ct_series(inh_series)
+            exhale_series = pat.study('study_0').ct_series(exh_series)
+            inh_regions_series = pat.study('study_0').regions_series(inh_series)
+            exh_regions_series = pat.study('study_0').regions_series(exh_series)
+            inh_ct = inhale_series.data
+            inh_affine = inhale_series.affine
+            exh_ct = exhale_series.data
+            exh_affine = exhale_series.affine
+            inh_labels, inh_label_names = inh_regions_series.data(r=regions, rr=True)
+            exh_labels, exh_label_names = exh_regions_series.data(r=regions, rr=True)
+
+            trainpath = os.path.join(training_set.path, 'data', 'training', p)
+            volpath = os.path.join(trainpath, 'volumes')
+            os.makedirs(volpath, exist_ok=True)
+
+            # Speed up the transforms.
+            device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+            inh_ct = to_tensor(inh_ct, device=device)
+            exh_ct = to_tensor(exh_ct, device=device)
+            inh_labels = to_tensor(inh_labels, device=device)
+            exh_labels = to_tensor(exh_labels, device=device)
+
+            assert np.all(inh_affine == exh_affine)
+            affine = inh_affine
+
+            # Transform inhale/exhale volumes.
+            for i in tqdm(range(n_train_volumes), leave=False):
+                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, grid_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_grid=True, return_params=True)
+
+                # Save volumes.
+                inh_ct_t = to_numpy(inh_ct_t)
+                exh_ct_t = to_numpy(exh_ct_t)
+                _, affine_t = grid_t
+                affine_t = to_numpy(affine_t)
+                filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
+                save_nifti(inh_ct_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
+                save_nifti(exh_ct_t, affine_t, filepath, overwrite=True)
+
+                # Save labels.
+                inh_labels_t = to_numpy(inh_labels_t)
+                exh_labels_t = to_numpy(exh_labels_t)
+                filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
+                save_nifti(inh_labels_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
+                save_nifti(exh_labels_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"inh_label_names_{i}.json")
+                save_json(inh_label_names, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_label_names_{i}.json")
+                save_json(exh_label_names, filepath, overwrite=True)
+
+                # Save params.
+                filepath = os.path.join(volpath, f"params_{i}.json")
+                save_json(params, filepath, overwrite=True)
+
+    # === Create training projections ===
+    if create_train_projections:
+        for p in tqdm(pat_ids, desc="Creating train projections for patients"):
+            # Load treatment isocentre from planning CT.
+            filepath = info[p]['rtplan']
+            plan_info = from_rtplan_dicom(filepath)
+
+            # Load other projection geometry from .tiff files.
+            filepath = info[p]['treatment-image']
+            _, tiff_info = load_raw_frame(filepath)
+
+            # Set projection parameters.
+            isocentre = plan_info['isocentre']
+            sid = tiff_info['sid']
+            sdd = tiff_info['sdd']
+            det_size = tiff_info['det-size']
+            det_spacing = tiff_info['det-spacing']
+            det_offset = tiff_info['det-offset']
+            print(isocentre, sid, sdd, det_size, det_spacing, det_offset)
+
+            trainpath = os.path.join(training_set.path, 'data', 'training', p)
+            volpath = os.path.join(trainpath, 'volumes')
+            projpath = os.path.join(trainpath, 'projections')
+            os.makedirs(projpath, exist_ok=True)
+
+            for i in range(n_train_volumes):
+                # Load inhale/exhale volumes and labels.
+                filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
+                inh_ct, affine = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
+                exh_ct, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
+                inh_labels, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
+                exh_labels, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"inh_label_names_{i}.json")
+                inh_label_names = load_json(filepath)
+                filepath = os.path.join(volpath, f"exh_label_names_{i}.json")
+                exh_label_names = load_json(filepath)
+
+                # Sample kV source angles from a uniform distribution.
+                # kv_source_angles = list(np.random.uniform(min_angle, max_angle, n_train_angles))
+                # Don't use a uniform distrbution for static dataset - replicate the cGAN
+                # project sampling strategy.
+                kv_source_angles = np.linspace(min_angle, max_angle, n_train_angles).tolist()
+                filepath = os.path.join(projpath, f"angles_{i}.json")
+                save_json(kv_source_angles, filepath, overwrite=True)
+
+                # Create projections.
+                inh_ct_proj, inh_labels_proj = project_ctorch(
+                    inh_ct.astype(np.float32),
+                    affine.astype(np.float32),
+                    isocentre,
+                    sid,
+                    sdd,
+                    det_size,
+                    det_spacing,
+                    det_offset,
+                    kv_source_angles,
+                    labels=inh_labels.astype(np.float32),
+                    threshold_labels=False,
+                )
+
+                exh_ct_proj, exh_labels_proj = project_ctorch(
+                    exh_ct.astype(np.float32),
+                    affine.astype(np.float32),
+                    isocentre,
+                    sid,
+                    sdd,
+                    det_size,
+                    det_spacing,
+                    det_offset,
+                    kv_source_angles,
+                    labels=exh_labels.astype(np.float32),
+                    threshold_labels=False,
+                )
+
+                # Save the projections.
+                filepath = os.path.join(projpath, f"inh_ct_{i}.npy")
+                save_numpy(inh_ct_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_ct_{i}.npy")
+                save_numpy(exh_ct_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"inh_labels_{i}.npy")
+                save_numpy(inh_labels_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_labels_{i}.npy")
+                save_numpy(exh_labels_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"inh_label_names_{i}.json")
+                save_json(inh_label_names, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_label_names_{i}.json")
+                save_json(exh_label_names, filepath, overwrite=True)
+
+    # === Create augmented validation volumes ===
+    if create_val_volumes:
+        for p in tqdm(pat_ids, desc="Creating augmented validation volumes for patients"):
+            # Load volumes.
+            pat = nifti_set.patient(p)
+            inhale_series = pat.study('study_0').ct_series(inh_series)
+            exhale_series = pat.study('study_0').ct_series(exh_series)
+            inh_reg_series = pat.study('study_0').regions_series(inh_series)
+            exh_reg_series = pat.study('study_0').regions_series(exh_series)
+            inh_ct = inhale_series.data
+            inh_affine = inhale_series.affine
+            exh_ct = exhale_series.data
+            exh_affine = exhale_series.affine
+            inh_labels, inh_label_names = inh_reg_series.data(r=regions, return_regions=True)
+            exh_labels, exh_label_names = exh_reg_series.data(r=regions, return_regions=True)
+
+            valpath = os.path.join(training_set.path, 'data', 'validation', p)
+            volpath = os.path.join(valpath, 'volumes')
+            os.makedirs(volpath, exist_ok=True)
+
+            # Speed up the transforms.
+            device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+            inh_ct = to_tensor(inh_ct, device=device)
+            exh_ct = to_tensor(exh_ct, device=device)
+            inh_labels = to_tensor(inh_labels, device=device)
+            exh_labels = to_tensor(exh_labels, device=device)
+
+            assert np.all(inh_affine == exh_affine)
+            affine = inh_affine
+
+            # Transform inhale/exhale volumes.
+            for i in tqdm(range(n_val_volumes), leave=False):
+                inh_ct_t, exh_ct_t, inh_labels_t, exh_labels_t, grid_t, params = pipeline(inh_ct, exh_ct, inh_labels, exh_labels, affine=affine, return_grid=True, return_params=True)
+
+                # Save volumes.
+                inh_ct_t = to_numpy(inh_ct_t)
+                exh_ct_t = to_numpy(exh_ct_t)
+                _, affine_t = grid_t
+                affine_t = to_numpy(affine_t)
+                filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
+                save_nifti(inh_ct_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
+                save_nifti(exh_ct_t, affine_t, filepath, overwrite=True)
+
+                # Save labels.
+                inh_labels_t = to_numpy(inh_labels_t)
+                exh_labels_t = to_numpy(exh_labels_t)
+                filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
+                save_nifti(inh_labels_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
+                save_nifti(exh_labels_t, affine_t, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"inh_label_names_{i}.json")
+                save_json(inh_label_names, filepath, overwrite=True)
+                filepath = os.path.join(volpath, f"exh_label_names_{i}.json")
+                save_json(exh_label_names, filepath, overwrite=True)
+
+                # Save params.
+                filepath = os.path.join(volpath, f"params_{i}.json")
+                save_json(params, filepath, overwrite=True)
+
+    # === Create projections ===
+    if create_val_projections:
+        for p in tqdm(pat_ids, desc="Creating val projections for patients"):
+            # Load treatment isocentre from planning CT.
+            filepath = info[p]['rtplan']
+            plan_info = from_rtplan_dicom(filepath)
+
+            # Load other projection geometry from .tiff files.
+            filepath = info[p]['treatment-image']
+            _, tiff_info = load_raw_frame(filepath)
+
+            # Set projection parameters.
+            isocentre = plan_info['isocentre']
+            sid = tiff_info['sid']
+            sdd = tiff_info['sdd']
+            det_size = tiff_info['det-size']
+            det_spacing = tiff_info['det-spacing']
+            det_offset = tiff_info['det-offset']
+            print(isocentre, sid, sdd, det_size, det_spacing, det_offset)
+
+            valpath = os.path.join(training_set.path, 'data', 'validation', p)
+            volpath = os.path.join(valpath, 'volumes')
+            projpath = os.path.join(valpath, 'projections')
+            os.makedirs(projpath, exist_ok=True)
+
+            for i in range(n_val_volumes):
+                # Load inhale/exhale volumes and labels.
+                filepath = os.path.join(volpath, f"inh_ct_{i}.nii.gz")
+                inh_ct, affine = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"exh_ct_{i}.nii.gz")
+                exh_ct, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"inh_labels_{i}.nii.gz")
+                inh_labels, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"exh_labels_{i}.nii.gz")
+                exh_labels, _ = load_nifti(filepath)
+                filepath = os.path.join(volpath, f"inh_label_names_{i}.json")
+                inh_label_names = load_json(filepath)
+                filepath = os.path.join(volpath, f"exh_label_names_{i}.json")
+                exh_label_names = load_json(filepath)
+
+                # Sample kV source angles from a uniform distribution.
+                kv_source_angles = list(np.random.uniform(min_angle, max_angle, n_val_angles))
+                filepath = os.path.join(projpath, f"angles_{i}.json")
+                save_json(kv_source_angles, filepath, overwrite=True)
+
+                # Create projections.
+                inh_ct_proj, inh_labels_proj = project_ctorch(
+                    inh_ct.astype(np.float32),
+                    affine.astype(np.float32),
+                    isocentre,
+                    sid,
+                    sdd,
+                    det_size,
+                    det_spacing,
+                    det_offset,
+                    kv_source_angles,
+                    labels=inh_labels.astype(np.float32),
+                    threshold_labels=False,
+                )
+
+                exh_ct_proj, exh_labels_proj = project_ctorch(
+                    exh_ct.astype(np.float32),
+                    affine.astype(np.float32),
+                    isocentre,
+                    sid,
+                    sdd,
+                    det_size,
+                    det_spacing,
+                    det_offset,
+                    kv_source_angles,
+                    labels=exh_labels.astype(np.float32),
+                    threshold_labels=False,
+                )
+
+                # Save the projections.
+                filepath = os.path.join(projpath, f"inh_ct_{i}.npy")
+                save_numpy(inh_ct_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_ct_{i}.npy")
+                save_numpy(exh_ct_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"inh_labels_{i}.npy")
+                save_numpy(inh_labels_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_labels_{i}.npy")
+                save_numpy(exh_labels_proj, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"inh_label_names_{i}.json")
+                save_json(inh_label_names, filepath, overwrite=True)
+                filepath = os.path.join(projpath, f"exh_label_names_{i}.json")
+                save_json(exh_label_names, filepath, overwrite=True)

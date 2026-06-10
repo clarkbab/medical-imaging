@@ -10,12 +10,12 @@ from mymi.utils.io import load_files_csv
 
 def load_training_metrics(
     model: ModelName) -> pd.DataFrame:
-    filepath = os.path.join(config.directories.models, model[0], model[1], 'training-metrics.csv')
+    filepath = os.path.join(config.dirs.models, model[0], model[1], 'training-metrics.csv')
     return load_files_csv(filepath)
 
 def list_checkpoints(
     name: str,
     run: str) -> List[str]:
-    ckptspath = os.path.join(config.directories.models, name, run)
+    ckptspath = os.path.join(config.dirs.models, name, run)
     ckpts = list(sorted([c.replace('.ckpt', '') for c in os.listdir(ckptspath)]))
     return ckpts

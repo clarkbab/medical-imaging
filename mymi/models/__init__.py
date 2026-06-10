@@ -24,7 +24,7 @@ def get_segmenter(
 def print_checkpoint(model: ModelName) -> None:
     # Load data.
     checkpoint = f'{model[2]}.ckpt'
-    path = os.path.join(config.directories.models, *model[:2], checkpoint)
+    path = os.path.join(config.dirs.models, *model[:2], checkpoint)
     data = torch.load(path, map_location=torch.device('cpu'))
 
     # Print data.

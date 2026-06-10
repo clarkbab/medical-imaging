@@ -1,4 +1,5 @@
 from augmed import Pipeline, RandomAffine
+from dicomset.nifti.utils import load_dataset as load_nifti_dataset
 import numpy as np
 import os
 import shutil
@@ -16,7 +17,6 @@ from mymi.models import get_model, load_model
 from mymi.training.utils.lr_find import run_lr_find
 from mymi.utils.dicom import from_rtplan_dicom
 from mymi.utils.interval import interval_matches
-
 
 def train_segmentation(
     dataset: str,
@@ -48,7 +48,7 @@ def train_segmentation(
     # Set seed for reproducible runs.
     torch.manual_seed(random_seed)
 
-    ckpt_path = os.path.join(config.directories.models, project, model_name)
+    ckpt_path = os.path.join(config.dirs.models, project, model_name)
     if os.path.exists(ckpt_path) and not resume:
         # Clean up old run files.
         logging.info(f"Removing old checkpoint directory {ckpt_path}.")
@@ -62,16 +62,7 @@ def train_segmentation(
     print(transform_train)
 
     # Load projection geometry.
-    info = {
-        'PAT1': {
-            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient01\243-RT LUNG Plan\RP.000000.dcm",
-            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient01\Fx01\kV\Ch1_1_7357_289.97.tiff",
-        },
-        'PAT2': {
-            'rtplan': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\PlanningFiles\Patient02\361-LT LUNG Plan\RP.000000.dcm",
-            'treatment-image': r"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient02\Fx01\kV\Ch1_1_4526_249.98.tiff",
-        }
-    }
+    info = load_nifti_dataset('VALKIM-PP').params['patient-info']
 
     # Does this change between fractions??
     filepath = info[pat]['treatment-image']
@@ -147,7 +138,7 @@ def train_segmentation(
     # Set up logging.
     if use_logging:
         run = wandb.init(
-            dir=config.directories.reports,
+            dir=config.dirs.reports,
             entity="clarkbab",
             project=project,
             name=model_name,
@@ -218,7 +209,7 @@ def train_segmentation(
                 }, step=step)
 
                 # Log images.
-                if log_images and interval_matches(e, step, val_image_interval, len(val_iter)):
+                if log_images and interval_matches(step, val_image_interval, len(val_iter)):
                     regions = ['GTV']
                     for i, r in enumerate(regions):
                         c = i + 1

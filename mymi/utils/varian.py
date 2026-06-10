@@ -1,14 +1,17 @@
 from dataclasses import dataclass, field
+from dicomset.utils import hist_eq as hist_eq_fn
+from dicomset.typing import *
 import numpy as np
 import os
 from pathlib import Path
+import pylinac as plc
 import struct
 from typing import Any, Tuple
 
 from mymi.typing import *
 
-from .angles import reverse_angles
 from .args import arg_to_list
+from .projections import convert_angles, reverse_angles
 
 @dataclass
 class XimHistogramInfo:
@@ -33,6 +36,7 @@ def load_xim_angles_and_files(
     angle_type: Literal['kv-detector', 'kv-source', 'mv-source'],
     closest_to: int | float | List[int | float] | None = None,
     n_angles: int | None = None,
+    progress_callback=None,
     sort_by_angle: bool = True,
     start: int = 0,
     **kwargs,
@@ -45,7 +49,7 @@ def load_xim_angles_and_files(
     files = list(sorted(files))
     if n_angles is None:
         n_angles = len(files) - start
-    
+
     # Load filenames and angles.
     angles_files = {}
     for i in range(start, start + n_angles):
@@ -55,8 +59,12 @@ def load_xim_angles_and_files(
             _, info = load_xim(filepath, load_pixel_data=False, **kwargs)
         except Exception as e:
             print(f"Error reading {filepath}, projection {i}: {e}")
+            if progress_callback is not None:
+                progress_callback(i - start + 1, n_angles)
             continue
         angles_files[info[f'{angle_type}-angle']] = filename
+        if progress_callback is not None:
+            progress_callback(i - start + 1, n_angles)
 
     # Filter by closest_to.
     if closest_to is not None:
@@ -76,10 +84,11 @@ def load_xim_angles_and_files(
 def load_xim(
     filepath: str | Path,
     flip_lr: bool = True,
+    hist_eq: bool = False,
     invert_intensities: bool = True,
     load_pixel_data: bool = True,
-    reverse_gantry_angle: bool = True,
-    ) -> Tuple[np.ndarray | None, XimInfo]:
+    scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'IEC61217',
+    ) -> Tuple[Image2D | None, pd.Series]:
     filepath = Path(filepath)
     info = XimInfo(file_name=str(filepath))
 
@@ -239,32 +248,43 @@ def load_xim(
 
             info.properties[prop_name] = prop_value
 
-    # Add projection properies.
+    # Add projection properties.
     metadata = {}
-    # I think that .xim files encode MV gantry using a CCW+ convention. This may not
-    # be true for all machines, so have the option to flip. See the discussion at:
-    # "PRJ-LEARN:\ProjectData\Brett\XIM angles confusion.docx".
-    mv_source_angle = float(np.round(info.properties['GantryRtn'] % 360, decimals=3))
-    if reverse_gantry_angle:
-        mv_source_angle = reverse_angles(mv_source_angle)
+    mv_source_angle = info.properties['GantryRtn']
+    # Convert to IEC61217 if needed.
+    if scale != 'IEC61217':
+        mv_source_angle, _, _ = plc.core.scale.convert(
+            input_scale=getattr(plc.core.scale.MachineScale, scale),
+            output_scale=plc.core.scale.MachineScale.IEC61217,
+            gantry=mv_source_angle,
+            collimator=0,
+            rotation=0,
+        )
     metadata['mv-source-angle'] = mv_source_angle
     # Note! The .xim files KvSource/DetectorRtn properties may not be reliable, use GantryRtn.
     # We saw 'KVSourceRtn' always at 0 for Orange - Prostate - Pat01 - Fx01.
     # metadata['kv-detector-angle'] = float(np.round(info.properties['KVDetectorRtn'] % 360, decimals=3))
     # metadata['kv-source-angle'] = float(np.round(info.properties['KVSourceRtn'] % 360, decimals=3))
     # Calculate based on MV gantry.
-    metadata['kv-source-angle'] = float(np.round((mv_source_angle - 90) % 360, decimals=3))
-    metadata['kv-detector-angle'] = float(np.round((mv_source_angle + 90) % 360, decimals=3))
+    metadata['kv-source-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-source', machine='varian')
+    metadata['kv-detector-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-detector', machine='varian')
     metadata['sid'] = float(np.round(info.properties['KVSourceVrt']) * 10)
     metadata['sdd'] = float(np.round((np.abs(info.properties['KVDetectorVrt']) + info.properties['KVSourceVrt']) * 10))
     metadata['det-offset'] = (float(np.round(np.abs(info.properties['KVDetectorLat'] * 10))), float(np.round(np.abs(info.properties['KVDetectorLng'] * 10))))
     metadata['det-size'] = (info.image_width, info.image_height)
     metadata['det-spacing'] = (info.properties['PixelWidth'] * 10, info.properties['PixelHeight'] * 10)
     metadata['properties'] = info.properties
+    metadata['machine'] = 'varian'
 
     if flip_lr and pixel_data is not None:
         pixel_data = np.flip(pixel_data, axis=0)
+    if pixel_data is not None:
+        pixel_data = np.flip(pixel_data, axis=1)
     if invert_intensities and pixel_data is not None:
         pixel_data = np.max(pixel_data) - pixel_data
 
+    if hist_eq and pixel_data is not None:
+        pixel_data = hist_eq_fn(pixel_data)
+
+    metadata = pd.Series(metadata)
     return pixel_data, metadata

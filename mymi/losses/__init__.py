@@ -1,3 +1,4 @@
+from .cosine import *
 from .dice import *
 from .dice_with_focal import *
 from .focal import *

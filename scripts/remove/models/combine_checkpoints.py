@@ -36,7 +36,7 @@ for model_type in model_types:
                     model = f'{model_type}-{region}'
                     run = f'{model_method}-fold-{fold}-samples-{n_train}'
                     print(model, run)
-                    ckptspath = os.path.join(config.directories.models, model, run)
+                    ckptspath = os.path.join(config.dirs.models, model, run)
                     lastpath = os.path.join(ckptspath, 'last.ckpt')
                     state = torch.load(lastpath, map_location=torch.device('cpu'))
                     epoch = state['epoch']
@@ -47,7 +47,7 @@ for model_type in model_types:
                     for n_epoch in n_epochs:
                         # Check that run has finished.
                         run = f'{model_method}-fold-{fold}-samples-{n_train}-{n_epoch}epochs'
-                        ckptspath = os.path.join(config.directories.models, model, run)
+                        ckptspath = os.path.join(config.dirs.models, model, run)
                         lastpath = os.path.join(ckptspath, 'last.ckpt')
                         state = torch.load(lastpath, map_location=torch.device('cpu'))
                         epoch = state['epoch']

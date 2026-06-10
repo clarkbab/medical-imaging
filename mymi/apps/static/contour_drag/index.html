@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:transparent;overflow:hidden;font-family:sans-serif}
+#toolbar{display:flex;align-items:center;gap:4px;padding:3px 2px;flex-wrap:wrap}
+#toolbar button{
+  padding:2px 8px;font-size:12px;cursor:pointer;
+  border:1px solid #aaa;border-radius:3px;background:#f7f7f7;line-height:1.5;
+}
+#toolbar button:hover{background:#e0e0e0}
+#toolbar button.active{background:#1f77b4;color:#fff;border-color:#1f77b4}
+#toolbar .sep{width:1px;height:18px;background:#ccc;margin:0 2px}
+#toolbar .lbl{font-size:11px;color:#666}
+#wrap{display:flex;gap:4px;width:100%}
+.cpanel{display:flex;flex-direction:column;flex:1;min-width:0}
+#wrap.prospective .cpanel:last-child{display:none}
+#toolbar.prospective #btn-pan,#toolbar.prospective #btn-deform{display:none}
+.crow{display:flex}
+.xrow{display:flex}
+#ya1,#ya2{display:block;width:38px;flex-shrink:0}
+#c1,#c2{display:block;flex:1;min-width:0}
+#xa1,#xa2{display:block;flex:1;min-width:0;height:20px}
+.yspacer{width:38px;flex-shrink:0;height:20px}
+</style></head><body>
+<div id="toolbar">
+  <span class="lbl">Mode:</span>
+  <button id="btn-pan" class="active" title="Drag to move contour overlay">Move contour (M)</button>
+  <button id="btn-box" title="Draw box to zoom into">Zoom window (Z)</button>
+  <button id="btn-deform" title="Deform contour (not yet implemented)">Deform contour (D)</button>
+  <div class="sep"></div>
+  <span class="lbl">Zoom:</span>
+  <button onclick="zoomBtn(-1)" onmouseup="this.blur()" title="Zoom in">+</button>
+  <button onclick="zoomBtn(1)" onmouseup="this.blur()" title="Zoom out">&minus;</button>
+  <button onclick="resetZoom()" onmouseup="this.blur()" title="Reset zoom">&#8635; Reset</button>
+</div>
+<div id="wrap">
+  <div class="cpanel">
+    <div class="crow"><canvas id="ya1"></canvas><canvas id="c1"></canvas></div>
+    <div class="xrow"><div class="yspacer"></div><canvas id="xa1"></canvas></div>
+  </div>
+  <div class="cpanel">
+    <div class="crow"><canvas id="c2"></canvas><canvas id="ya2"></canvas></div>
+    <div class="xrow"><canvas id="xa2"></canvas><div class="yspacer"></div></div>
+  </div>
+</div>
+<script src="drag.js"></script>
+</body></html>
