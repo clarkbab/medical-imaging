@@ -59,6 +59,36 @@ def plot_gif(
             description='Reverse',
             tooltip='Play frames in reverse order',
         )
+        fps_input = widgets.BoundedFloatText(
+            value=round(1.0 / frame_time, 2),
+            min=0.1,
+            max=60.0,
+            step=0.5,
+            description='FPS:',
+            tooltip='Playback speed in frames per second',
+            layout=widgets.Layout(width='120px'),
+        )
+
+        first_button = widgets.Button(
+            description='⏮',
+            tooltip='First frame',
+            layout=widgets.Layout(width='48px'),
+        )
+        prev_button = widgets.Button(
+            description='◀',
+            tooltip='Previous frame',
+            layout=widgets.Layout(width='48px'),
+        )
+        next_button = widgets.Button(
+            description='▶',
+            tooltip='Next frame',
+            layout=widgets.Layout(width='48px'),
+        )
+        last_button = widgets.Button(
+            description='⏭',
+            tooltip='Last frame',
+            layout=widgets.Layout(width='48px'),
+        )
 
         _timer = [None]
 
@@ -75,7 +105,7 @@ def plot_gif(
             elif next_val < frame_slider.min:
                 next_val = frame_slider.max if loop else frame_slider.min
             frame_slider.value = next_val
-            _timer[0] = threading.Timer(frame_time, _advance)
+            _timer[0] = threading.Timer(1.0 / fps_input.value, _advance)
             _timer[0].start()
 
         def _on_play_toggle(change):
@@ -93,15 +123,37 @@ def plot_gif(
         def _on_reverse(_change):
             image_widget.value = frame_bytes[frame_slider.value]
 
+        def _on_first(_):
+            frame_slider.value = frame_slider.min
+
+        def _on_prev(_):
+            if frame_slider.value > frame_slider.min:
+                frame_slider.value -= 1
+            elif loop:
+                frame_slider.value = frame_slider.max
+
+        def _on_next(_):
+            if frame_slider.value < frame_slider.max:
+                frame_slider.value += 1
+            elif loop:
+                frame_slider.value = frame_slider.min
+
+        def _on_last(_):
+            frame_slider.value = frame_slider.max
+
         play_toggle.observe(_on_play_toggle, names='value')
         frame_slider.observe(_on_frame_change, names='value')
         reverse_toggle.observe(_on_reverse, names='value')
+        first_button.on_click(_on_first)
+        prev_button.on_click(_on_prev)
+        next_button.on_click(_on_next)
+        last_button.on_click(_on_last)
 
         # Autoplay immediately when rendered.
         play_toggle.value = True
 
         display(widgets.VBox([
-            widgets.HBox([play_toggle, reverse_toggle]),
+            widgets.HBox([play_toggle, first_button, prev_button, next_button, last_button, reverse_toggle, fps_input]),
             frame_slider,
             image_widget,
         ]))

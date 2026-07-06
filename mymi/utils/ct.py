@@ -1,4 +1,4 @@
-from dicomset.utils import to_numpy, logger, to_tensor
+from dicomset.utils import to_numpy, logger, to_tensor, affine_spacing, fov_width
 from dicomset.typing import *
 from typing import Optional, Tuple
 import torch
@@ -29,20 +29,36 @@ def infer_air_hu(
 def has_ct_background(
     data: Image,
     background_threshold: float = BACKGROUND_HU_THRESHOLD,
-) -> bool:
+    ) -> bool:
     data = to_numpy(data)
     return bool(np.any(data <= background_threshold))
 
 def fill_ct_background(
-    data: Image,
+    ct: Image,
+    affine: AffineMatrix3D | None = None,
     air_hu: float | None = None,
     background_threshold: float = BACKGROUND_HU_THRESHOLD,
-) -> Image:
-    data, return_type = to_tensor(data, dtype=torch.float32, return_type=True)
+    ) -> Image:
+    ct, return_type = to_tensor(ct, dtype=torch.float32, return_type=True)
     if air_hu is None:
-        air_hu = infer_air_hu(data, background_threshold=background_threshold)
-    data = data.clone()
-    data[data <= background_threshold] = air_hu
+        air_hu = infer_air_hu(ct, background_threshold=background_threshold)
+    ct = ct.clone()
+    if affine is not None:
+        spacing = to_numpy(affine_spacing(affine))
+        assert spacing[0] == spacing[1], "spacing must be isotropic in axial plane"
+        fov_mm = fov_width(ct.shape[:2], affine)
+        radius_px = float(fov_mm[0]) / 2 / spacing[0]
+        nx, ny = ct.shape[0], ct.shape[1]
+        cx, cy = (nx - 1) / 2.0, (ny - 1) / 2.0
+        xs = np.arange(nx, dtype=np.float64) - cx
+        ys = np.arange(ny, dtype=np.float64) - cy
+        xx, yy = np.meshgrid(xs, ys, indexing='ij')
+        outside = torch.from_numpy(xx ** 2 + yy ** 2 > (radius_px - 1) ** 2)
+        if ct.ndim == 3:
+            outside = outside.unsqueeze(-1).expand_as(ct)
+        ct[outside] = air_hu
+    else:
+        ct[ct <= background_threshold] = air_hu
     if return_type is np.ndarray:
-        data = to_numpy(data)
-    return data
+        ct = to_numpy(ct)
+    return ct

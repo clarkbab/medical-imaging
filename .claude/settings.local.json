@@ -26,7 +26,9 @@
       "Bash(del \"d:\\\\Brett\\\\code\\\\medical-imaging\\\\mymi\\\\apps\\\\fix_path_source.py\")",
       "Bash(python -c \"import sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); content = open\\('d:/Brett/code/medical-imaging/mymi/apps/contour_alignment.py', encoding='utf-8'\\).read\\(\\); hits = [l.strip\\(\\) for l in content.splitlines\\(\\) if '_path_source' in l]; print\\('\\\\n'.join\\(hits\\) if hits else 'CLEAN'\\)\")",
       "Bash(python -)",
-      "Read(//mnt/d/Brett/code/**)"
+      "Read(//mnt/d/Brett/code/**)",
+      "Bash(find /d/Brett/code/contour-alignment-tool -type f | head -100)",
+      "Read(//d/Brett/code/contour-alignment-tool/**)"
     ]
   }
 }

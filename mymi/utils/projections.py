@@ -30,7 +30,7 @@ def project_diffdrr(
     det_size: Size2D,
     det_spacing: Spacing2D,
     det_offset: Point2D,
-    kv_detector_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
+    kv_source_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
     couch_shift: Point3D = (0.0, 0.0, 0.0),
     labels: LabelVolumeBatch | None = None,
     n_angles_batch: int | None = 20,
@@ -52,7 +52,11 @@ def project_diffdrr(
     couch_shift = to_tensor(couch_shift, device=volume.device, dtype=torch.float32)
     if labels is not None:
         assert len(labels.shape) == 4, f"Expected labels to have shape (C, X, Y, Z), got {labels.shape}."
-    kv_detector_angles = arg_to_list(kv_detector_angles, float)
+    kv_source_angles = arg_to_list(kv_source_angles, float)
+    # DiffDRR uses the detector angles.
+    # 'machine doesn't matter for this conversion'
+    kv_detector_angles = convert_angles(kv_source_angles, from_='kv-source', to='kv-detector', machine='varian')
+
     # TODO: Check which voxel is the treatment isocentre, if it's too
     # far from centre the DRR might look whacky.
     # treatment_iso_vox = point_to_image_coords(treatment_iso, affine)
@@ -60,12 +64,8 @@ def project_diffdrr(
     #     image centre voxel {tuple(s//2 for s in volume.shape)}.")
 
     # Move the treatment isocentre to the origin.
-    print(affine.device)
     spacing = affine_spacing(affine)
     origin = affine_origin(affine)
-    print(origin.device)
-    print(treatment_iso.device)
-    print(couch_shift.device)
     origin = origin - treatment_iso - couch_shift
     affine = create_affine(spacing, origin)
 
@@ -159,12 +159,15 @@ def project_diffdrr(
         if progress_callback:
             progress_callback(i + 1, n_label_iter)
 
+    # This was required to match treatment images. I believe this is because
+    # the projection codes assumes a cameras-eye-view instead of beams-eye-view.
+    volume_proj = np.flip(volume_proj, axis=1)
     volume_proj = np.flip(volume_proj, axis=-1)
-    if labels is not None:
-        labels_proj = np.flip(labels_proj, axis=-1)
 
     if labels is not None:
         labels_proj = np.stack(labels_proj, axis=1)
+        labels_proj = np.flip(labels_proj, axis=2)
+        labels_proj = np.flip(labels_proj, axis=-1)
         return volume_proj, labels_proj
     else:
         return volume_proj
@@ -182,7 +185,7 @@ def project_igt(
     det_size: Size2D,
     det_spacing: Spacing2D,
     det_offset: Point2D,
-    kv_detector_angles: List[float],
+    kv_source_angles: List[float],
     # For half-fan CBCT, the patient is centred laterally before the CBCT image is acquired to
     # avoid collision.
     couch_shift: Point3D = (0.0, 0.0, 0.0),
@@ -204,11 +207,14 @@ def project_igt(
 
     # Fill in any synthetic background voxels (e.g. -8000 HU cylinder).
     if has_ct_background(volume):
-        volume = fill_ct_background(volume)
+        volume = fill_ct_background(volume, affine)
 
     # Does IGT use a counter-clockwise positive, (CCW+) angular convention?
     # Needed this to look right.
-    kv_detector_angles = reverse_angles(kv_detector_angles)
+    kv_source_angles = reverse_angles(kv_source_angles)
+    # IGT uses kv_detector angles.
+    # 'machine doesn't matter for this conversion'
+    kv_detector_angles = convert_angles(kv_source_angles, from_='kv-source', to='kv-detector', machine='varian')
 
     # Flip data along z axis - required by IGT.
     # This was something that just worked.
@@ -320,6 +326,9 @@ def project_igt(
     # Load results.
     ct_fp, _ = sitk_load_volume(ct_fp_filepath)
     ct_fp = np.moveaxis(ct_fp, -1, 0)
+    # This was required to match treatment images. I believe this is because
+    # the projection codes assumes a cameras-eye-view instead of beams-eye-view.
+    ct_fp = np.flip(ct_fp, axis=1)
     ct_fp = np.flip(ct_fp, axis=-1)
     if labels is not None:
         labels_fp = np.zeros((len(kv_detector_angles), len(labels), *det_size), dtype=np.bool_)
@@ -331,10 +340,90 @@ def project_igt(
             roi_fp[roi_fp != 0] = 1
             roi_fp = roi_fp.astype(np.bool_)
             labels_fp[:, i] = roi_fp
-            labels_fp = np.flip(labels_fp, axis=-1)
+        labels_fp = np.flip(labels_fp, axis=2)
+        labels_fp = np.flip(labels_fp, axis=-1)
         return ct_fp, labels_fp
     else:
         return ct_fp
+
+def project_points(
+    points: Points3D,
+    treatment_iso: Point3D,
+    sid: float,
+    sdd: float,
+    det_size: Size2D,
+    det_spacing: Spacing2D,
+    det_offset: Point2D,
+    kv_source_angles: float | List[float],
+    ) -> BatchPixels:
+    """Project 3D points to 2D pixel coordinates for a rotating kV source / flat-panel detector.
+
+    Geometry (IEC61217):
+      - kv_source_angle θ=0°: source directly above patient (+y), rotates clockwise (CW+) viewed from +z.
+      - Source position at θ: S = (sid·sin θ, sid·cos θ, 0) relative to isocentre.
+      - Detector u-axis (horizontal): (cos θ, -sin θ, 0).
+      - Detector v-axis (vertical):   (0, 0, 1)  — positive toward patient head.
+      - det_offset: physical shift of the detector panel from the beam axis (mm).
+        Positive u0 shifts the panel in the +u direction (half-fan).
+
+    Returns
+    -------
+    pixels : (n_angles, N, 2) pixel coordinates (u, v), 0-indexed, (0,0) at top-left.
+        Points behind the source plane are returned as NaN.
+    """
+    points, return_type = to_tensor(points, dtype=torch.float64, return_type=True)
+    if points.ndim == 1:
+        points = points.unsqueeze(0)                    # (1, 3)
+    treatment_iso = to_tensor(treatment_iso, dtype=torch.float64)
+    kv_source_angles = arg_to_list(kv_source_angles, float)
+
+    n_angles = len(kv_source_angles)
+    nu, nv = int(det_size[0]), int(det_size[1])
+    du, dv = float(det_spacing[0]), float(det_spacing[1])
+    u0, v0 = float(det_offset[0]), float(det_offset[1])
+
+    # Translate points into the isocentre frame.
+    pts = points - treatment_iso                        # (n_points, 3)
+
+    thetas = torch.tensor(np.deg2rad(kv_source_angles), dtype=torch.float64)
+    cos_t  = torch.cos(thetas)                          # (n_angles,)
+    sin_t  = torch.sin(thetas)
+    zeros  = torch.zeros(n_angles, dtype=torch.float64)
+
+    # Source positions: (n_angles, 3)
+    sources = torch.stack([sid * sin_t, sid * cos_t, zeros], dim=1)
+    # Detector u-axis: (n_angles, 3)
+    u_hats  = torch.stack([cos_t, -sin_t, zeros], dim=1)
+    # Beam normal (source → isocentre): (n_angles, 3)
+    beam_ns = -sources / sid
+
+    v_hat   = torch.tensor([0.0, 0.0, 1.0], dtype=torch.float64)
+    pixels  = torch.full((n_angles, points.shape[0], 2), float('nan'), dtype=torch.float64)
+
+    for i in range(n_angles):
+        src      = sources[i]   # (3,)
+        u_hat_i  = u_hats[i]   # (3,)
+        beam_n_i = beam_ns[i]  # (3,)
+
+        # Vectors from source to each point: (n_points, 3)
+        d = pts - src
+
+        # Projection distance along beam axis — must be > 0 for a valid projection.
+        dot_beam = d @ beam_n_i                         # (n_points,)
+        mag = sdd / dot_beam
+        mag[dot_beam <= 0] = float('nan')
+
+        # Position on detector plane in mm (origin = beam axis).
+        u_mm = mag * (d @ u_hat_i)
+        v_mm = mag * (d @ v_hat)
+
+        # Convert to pixel coordinates; det_offset shifts the panel from the beam axis.
+        pixels[i, :, 0] = (u_mm - u0) / du + nu / 2
+        pixels[i, :, 1] = (v_mm - v0) / dv + nv / 2
+
+    if return_type is np.ndarray:
+        pixels = to_numpy(pixels)
+    return pixels
 
 def project_ctorch(
     volume: Image3D,
@@ -345,8 +434,9 @@ def project_ctorch(
     det_size: Size2D,
     det_spacing: Spacing2D,
     det_offset: Point2D,
-    kv_detector_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
+    kv_source_angles: float | List[float],    # We pass these instead of MV gantry, as the relative position changes between machines.
     couch_shift: Point3D = (0.0, 0.0, 0.0),
+    fill_background: bool = True,
     labels: BatchLabelImage3D | None = None,
     n_angles_batch: int | None = 20,
     threshold_labels: bool = True,
@@ -367,8 +457,11 @@ def project_ctorch(
     if labels is not None:
         assert len(labels.shape) == 4, f"Expected labels to have shape (C, X, Y, Z), got {labels.shape}."
         labels = to_tensor(labels, device=volume.device, dtype=torch.bool)
-    kv_detector_angles = arg_to_list(kv_detector_angles, float)
-    kv_detector_angles = to_numpy(kv_detector_angles)
+    kv_source_angles = arg_to_list(kv_source_angles, float)
+    kv_source_angles = to_numpy(kv_source_angles)
+    # Ctorch uses kV detector angles.
+    # 'machine doesn't matter for this conversion'
+    kv_detector_angles = convert_angles(kv_source_angles, from_='kv-source', to='kv-detector', machine='varian')
     if verbose:
         logger.log_method('Creating CTorch projections')
     # TODO: Check which voxel is the treatment isocentre, if it's too
@@ -378,8 +471,8 @@ def project_ctorch(
     #     image centre voxel {tuple(s//2 for s in volume.shape)}.")
 
     # Fill in any synthetic background voxels (e.g. -8000 HU cylinder).
-    if has_ct_background(volume):
-        volume = fill_ct_background(volume)
+    if fill_background and has_ct_background(volume):
+        volume = fill_ct_background(volume, affine)
 
     nx, ny, nz = volume.shape
     dx, dy, dz = [float(v) for v in affine_spacing(affine)]
@@ -409,7 +502,7 @@ def project_ctorch(
 
     # Split angles into batches if requested.
     if not kv_detector_angles:
-        raise ValueError('kv_detector_angles is empty — cannot project with zero angles')
+        raise ValueError('kv_source_angles is empty — cannot project with zero angles')
     if n_angles_batch is None:
         batches = [kv_detector_angles]
     else:
@@ -450,16 +543,19 @@ def project_ctorch(
     # Concatenate batches along the angles dimension.
     volume_proj = torch.cat(volume_proj_chunks, dim=0)
     del volume_proj_chunks
+    # This was required to match treatment images. I believe this is because
+    # the projection codes assumes a cameras-eye-view instead of beams-eye-view.
+    volume_proj = torch.flip(volume_proj, dims=[1])
     volume_proj = torch.flip(volume_proj, dims=[-1])
 
     if labels is not None:
         labels_proj = torch.cat(labels_proj_chunks, dim=0)
+        labels_proj = torch.flip(labels_proj, dims=[2])
         labels_proj = torch.flip(labels_proj, dims=[-1])
         del labels_proj_chunks
         return volume_proj, labels_proj
     else:
         return volume_proj
-
 
 def load_dicom_projections(
     filepath: FilePath,
@@ -559,10 +655,12 @@ def plot_treatment_image(
     ax: mpl.axes.Axes | None = None,
     hist_eq: bool = True,
     labels: BatchLabelImage2D | None = None,
+    points: BatchPoints2D | None = None,
     normalise: bool = False,
     title_fontsize: float = 10,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
+    **kwargs,
     ) -> None:
     if ax is None:
         _, ax = plt.subplots()
@@ -578,16 +676,18 @@ def plot_treatment_image(
     det_size = info['det-size']
     aspect = det_size[1] / det_size[0]
     det_spacing = info['det-spacing']
-    angle = info.get('kv-detector-angle')
-    title = "Treatment image" + f" (kV det. angle={angle:.1f}°)" if angle is not None else ''
+    angle = info.get('kv-source-angle')
+    title = f"Treatment image"
+    if angle is not None:
+        title += f" (kV source. angle={angle:.1f}°)"
+    title += f"\nFile: {info.get('filename', 'N/A')}"
 
-    plot_slice(data, ax=ax, aspect=aspect, labels=labels, alpha=alpha_label,
+    plot_slice(data, ax=ax, aspect=aspect, labels=labels, points=points, alpha=alpha_label,
                title=title, title_fontsize=title_fontsize, x_label=f"LR [{det_spacing[0]}mm]", y_label=f"SI [{det_spacing[1]}mm]",
-               vmin=vmin, vmax=vmax)
+               vmin=vmin, vmax=vmax, **kwargs)
 
     if show:
         plt.show()
-
 
 def plot_drr(
     data: Image2D,
@@ -613,8 +713,8 @@ def plot_drr(
     det_size = info['det-size']
     aspect = det_size[1] / det_size[0]
     det_spacing = info['det-spacing']
-    angle = info.get('kv-detector-angle')
-    title = "DRR image" + f" (kV det. angle={angle:.1f}°)" if angle is not None else ''
+    angle = info.get('kv-source-angle')
+    title = "DRR image" + f" (kV source. angle={angle:.1f}°)" if angle is not None else ''
 
     plot_slice(data, ax=ax, aspect=aspect, title=title, title_fontsize=title_fontsize,
                x_label=f"LR [{det_spacing[0]}mm]", y_label=f"SI [{det_spacing[1]}mm]",
@@ -622,7 +722,6 @@ def plot_drr(
 
     if show:
         plt.show()
-
 
 def plot_breath(
     info: pd.Series,
@@ -641,7 +740,7 @@ def plot_breath(
     if all_info is not None:
         id_key = next((k for k in ('filepath', 'filename') if k in info.index), None)
         other_info = all_info[all_info[id_key] != info[id_key]] if id_key else all_info
-        other_angles = np.deg2rad(other_info['kv-detector-angle'].values)
+        other_angles = np.deg2rad(other_info['kv-source-angle'].values)
         other_amps = np.array(other_info['MMAmplitude0'].values)
         other_phases = np.array(other_info['MMPhase0'].values)
         base_color = cb_palette[1]
@@ -654,7 +753,7 @@ def plot_breath(
             axs[0].scatter(other_angles[i], other_amps[i], color=colors[i], s=30, alpha=0.7, edgecolor='none')
             axs[1].scatter(other_angles[i], other_phases[i], color=colors[i], s=30, alpha=0.7, edgecolor='none')
 
-    angle = np.deg2rad(info['kv-detector-angle'])
+    angle = np.deg2rad(info['kv-source-angle'])
     amp = info['MMAmplitude0']
     phase = info['MMPhase0']
     axs[0].scatter(angle, amp, color=cb_palette[0], s=60, label='Current frame', zorder=10, edgecolor='black')
@@ -676,13 +775,13 @@ def plot_breath(
     if show:
         plt.show()
 
-
 def plot_projection(
     data: Image2D,
     info: pd.Series,
     all_info: pd.DataFrame | None = None,
     drr: Image2D | None = None,
     labels: BatchLabelImage2D | None = None,
+    points: BatchPoints2D | None = None,
     alpha_label: float = 0.3,
     figsize: tuple | None = None,
     hist_eq: bool = True,
@@ -691,6 +790,7 @@ def plot_projection(
     title_fontsize: float = 10,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
+    **kwargs,
     ) -> None:
     import io
     from PIL import Image as PILImage
@@ -705,9 +805,9 @@ def plot_projection(
 
     col = 0
     image_ax = fig.add_subplot(gs[0, col])
-    plot_treatment_image(data, info, ax=image_ax, labels=labels, alpha_label=alpha_label,
+    plot_treatment_image(data, info, ax=image_ax, labels=labels, points=points, alpha_label=alpha_label,
                          hist_eq=hist_eq, normalise=normalise, title_fontsize=title_fontsize,
-                         vmin=vmin, vmax=vmax)
+                         vmin=vmin, vmax=vmax, **kwargs)
     image_ax.set_aspect('auto')
     col += 1
 

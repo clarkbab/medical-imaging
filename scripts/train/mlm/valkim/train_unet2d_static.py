@@ -13,9 +13,12 @@ from tqdm import tqdm
 from typing import *
 import wandb
 
+from dicomset.utils.metrics import dice as dice_metric
+
 from mymi.loaders.mlm import StaticLoader
 from mymi.losses import DiceLoss
 from mymi.models import get_model, load_model
+from mymi.training.utils import add_background
 from mymi.training.utils.lr_find import run_lr_find_unet2d
 from mymi.utils.interval import interval_matches
 
@@ -132,9 +135,9 @@ def train_unet2d_static(
 
     start_epoch = ckpt_info['epoch'] + 1 if resume else 0
     step = ckpt_info['step'] + 1 if resume else 0
-    val_losses = ckpt_info['val-losses'] if resume else []
-    min_val_loss = ckpt_info['min-val-loss'] if resume else np.inf
-    val_loss_smoothing = 1
+    val_dices = ckpt_info.get('val-dices', []) if resume else []
+    max_val_dice = ckpt_info.get('max-val-dice', -np.inf) if resume else -np.inf
+    val_dice_smoothing = 1
     n_best_ckpts = 1
     best_ckpts = ckpt_info['best-ckpts'] if resume else []
     for e in range(start_epoch, n_epochs):
@@ -146,7 +149,7 @@ def train_unet2d_static(
                 print(f'[train] first batch shapes xs={tuple(xs.shape)} ys={tuple(ys.shape)}')
             xs = xs.to(device)
             ys = ys.to(device)
-            ys = ys[:, :n_output_channels]
+            ys = add_background(ys, foreground_channels=[0])
 
             ys_pred = model(xs)
             loss = loss_fn(ys_pred, ys)
@@ -179,7 +182,7 @@ def train_unet2d_static(
                 axes[2].axis('off')
                 fig.tight_layout()
 
-                filename = f'epoch-{e:04d}-step-{step:06d}-train-{i:03d}-GTV.png'
+                filename = f'epoch-{e:04d}-step-{step:06d}.png'
                 if log_images_local:
                     fig.savefig(os.path.join(train_image_save_dir, filename), dpi=150, bbox_inches='tight')
                 else:
@@ -191,29 +194,34 @@ def train_unet2d_static(
         # Validation loop.
         model.eval()
         val_iter = iter(vl)
-        epoch_val_losses = []
+        epoch_val_dice_scores = []
         if e == start_epoch:
             print(f'[train] validation_loader_len={len(vl)}')
         for i, (xs, ys, angles) in enumerate(tqdm(val_iter, desc=f'Epoch {e}/{n_epochs} (val)', leave=False, total=len(vl))):
             xs = xs.to(device)
             ys = ys.to(device)
-            ys = ys[:, :n_output_channels]
+            ys = add_background(ys, foreground_channels=[0])
 
             with torch.no_grad():
                 ys_pred = model(xs)
                 loss = loss_fn(ys_pred, ys)
 
-            epoch_val_losses += [loss.item()]
+            pred_binary = (ys_pred[:, 1].cpu().numpy() > 0.5)
+            gt_binary = ys[:, 1].cpu().numpy().astype(bool)
+            batch_dice_scores = dice_metric(pred_binary, gt_binary, dim=2)
+            batch_mean_dice = np.mean(batch_dice_scores)
+            epoch_val_dice_scores += [batch_mean_dice]
 
             if use_logging:
                 run.log({
                     'epoch': e,
                     'step': step,
                     'val/loss': loss.item(),
+                    'val/dice': batch_mean_dice,
                 }, step=step)
 
             # Log val images.
-            if log_images and interval_matches(step, val_image_interval, len(vl)) and i < n_val_images:
+            if log_images and interval_matches(step, val_image_interval, len(tl)) and i < n_val_images:
                 x_slice = xs[0, 0].cpu().numpy()
                 y_slice = ys[0, 1].cpu().numpy()
                 y_pred_slice = (ys_pred[0, 1].detach().cpu().numpy() > 0.5).astype(np.float32)
@@ -230,28 +238,26 @@ def train_unet2d_static(
                 axes[2].axis('off')
                 fig.tight_layout()
 
-                filename = f'epoch-{e:04d}-step-{step:06d}-val-{i:03d}-GTV.png'
+                filename = f'epoch-{e:04d}-step-{step:06d}-batch-{i:03d}-GTV.png'
                 if log_images_local:
                     fig.savefig(os.path.join(val_image_save_dir, filename), dpi=150, bbox_inches='tight')
                 else:
                     run.log({'val/image-GTV': wandb.Image(fig)}, step=step)
                 plt.close(fig)
 
-        # Save mean validation loss.
-        mean_val_loss = np.mean(epoch_val_losses)
-        if use_logging:
-            run.log({'val/loss-epoch-mean': mean_val_loss}, step=step)
-        val_losses.append(mean_val_loss)
+        # Compute smoothed dice for model selection.
+        mean_val_dice = np.mean(epoch_val_dice_scores)
+        val_dices.append(mean_val_dice)
 
         # Save best model/s.
-        if len(val_losses) >= val_loss_smoothing:
-            smoothed_val_loss = np.mean(val_losses[-val_loss_smoothing:])
+        if len(val_dices) >= val_dice_smoothing:
+            smoothed_val_dice = np.mean(val_dices[-val_dice_smoothing:])
             if use_logging:
-                run.log({'val/loss-ma': smoothed_val_loss}, step=step)
-            if smoothed_val_loss < min_val_loss:
-                min_val_loss = smoothed_val_loss
+                run.log({'val/dice-ma': smoothed_val_dice}, step=step)
+            if smoothed_val_dice > max_val_dice:
+                max_val_dice = smoothed_val_dice
 
-                ckpt = f'loss={min_val_loss:.6f}_epoch={e}_step={step}'
+                ckpt = f'dice={max_val_dice:.6f}_epoch={e}_step={step}'
                 best_ckpts.insert(0, ckpt)
                 if len(best_ckpts) > n_best_ckpts:
                     old_ckpt = best_ckpts.pop()
@@ -261,11 +267,11 @@ def train_unet2d_static(
                 ckpt_data = {
                     'best-ckpts': best_ckpts,
                     'epoch': e,
-                    'min-val-loss': min_val_loss,
+                    'max-val-dice': max_val_dice,
                     'model': model.state_dict(),
                     'optimiser': optimiser.state_dict(),
                     'step': step,
-                    'val-losses': val_losses,
+                    'val-dices': val_dices,
                 }
                 filepath = os.path.join(ckpt_path, f'{ckpt}.ckpt')
                 torch.save(ckpt_data, filepath)
@@ -276,11 +282,11 @@ def train_unet2d_static(
         ckpt_data = {
             'best-ckpts': best_ckpts,
             'epoch': e,
-            'min-val-loss': min_val_loss,
+            'max-val-dice': max_val_dice,
             'model': model.state_dict(),
             'optimiser': optimiser.state_dict(),
             'step': step,
-            'val-losses': val_losses,
+            'val-dices': val_dices,
         }
         filepath = os.path.join(ckpt_path, 'last.ckpt')
         torch.save(ckpt_data, filepath)
@@ -292,7 +298,7 @@ if __name__ == '__main__':
 
     pat_id = 'PAT1'
     arch = 'unet2d:m'
-    version = '002'
+    version = '007'
     model = f"{arch.replace(':', '_')}-{pat_id}-{version}"
 
     train_unet2d_static(
@@ -317,7 +323,7 @@ if __name__ == '__main__':
         random_seed=42,
         resume=False,
         threshold_labels=True,
-        train_image_interval='step:200',
+        train_image_interval='step:400',
         val_image_interval='step:epoch_start',
         use_logging=True,
     )

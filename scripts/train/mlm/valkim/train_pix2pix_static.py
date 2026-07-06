@@ -1,6 +1,6 @@
 from dicomset import config
 from augmed import Pipeline, RandomAffine
-from dicomset.utils import fov_centre, logger
+from dicomset.utils import logger
 from dicomset.dicom.utils import from_rtplan_dicom
 from dicomset.nifti.utils import load_dataset as load_nifti_dataset
 from dicomset.training import TrainingDataset
@@ -18,6 +18,8 @@ from typing import *
 import wandb
 
 from types import SimpleNamespace
+
+from dicomset.utils.metrics import dice as dice_metric
 
 from mymi.loaders.mlm import StaticLoader
 from mymi.models.architectures.cgan.pix2pix2d import Pix2PixModel
@@ -204,9 +206,9 @@ def train_pix2pix_static(
     # Checkpoints are saved at the end of the epoch/step, so need to increment values by 1.
     start_epoch = ckpt_info['epoch'] + 1 if resume else 0
     step = ckpt_info['step'] + 1 if resume else 0
-    val_losses = ckpt_info['val-losses'] if resume else [] # Calculating moving average for checkpointing - less noisy.
-    min_val_loss = ckpt_info['min-val-loss'] if resume else np.inf
-    val_loss_smoothing = 1
+    val_dices = ckpt_info.get('val-dices', []) if resume else []
+    max_val_dice = ckpt_info.get('max-val-dice', -np.inf) if resume else -np.inf
+    val_dice_smoothing = 1
     n_best_ckpts = 1
     best_ckpts = ckpt_info['best-ckpts'] if resume else []
     for e in range(start_epoch, n_epochs):
@@ -266,7 +268,7 @@ def train_pix2pix_static(
                 axes[2].axis('off')
                 fig.tight_layout()
 
-                filename = f'epoch-{e:04d}-step-{step:06d}-train-{i:03d}.png'
+                filename = f'epoch-{e:04d}-step-{step:06d}.png'
                 if log_images_local:
                     fig.savefig(os.path.join(train_image_save_dir, filename), dpi=150, bbox_inches='tight')
                 else:
@@ -279,7 +281,7 @@ def train_pix2pix_static(
         # Validation loop.
         model.eval()
         val_iter = iter(vl)
-        epoch_val_losses = []
+        epoch_val_dice_scores = []
         if e == start_epoch:
             print(f'[train] validation_loader_len={len(vl)}')
         for i, (xs, ys, angles) in enumerate(tqdm(val_iter, desc=f'Epoch {e}/{n_epochs} (val)', leave=False, total=len(vl))):
@@ -290,73 +292,59 @@ def train_pix2pix_static(
             model.test()
             val_l1_loss = model.criterionL1(model.fake_B, model.real_B).item() * lambda_L1
 
-            epoch_val_losses += [val_l1_loss]
+            pred_binary = (model.fake_B[:, 0].detach().cpu().numpy() > 0.5)
+            gt_binary = (model.real_B[:, 0].cpu().numpy() > 0.5)
+            batch_dice_scores = dice_metric(pred_binary, gt_binary, dim=2)
+            batch_mean_dice = np.mean(batch_dice_scores)
+            epoch_val_dice_scores += [batch_mean_dice]
+
+            if use_logger:
+                run.log({
+                    'epoch': e,
+                    'step': step,
+                    'val/loss': val_l1_loss,
+                    'val/dice': batch_mean_dice,
+                }, step=step)
 
             # Log images.
-            if log_images and interval_matches(step, val_image_interval, len(val_iter), step_match_length=n_val_images):
-                regions = ['GTV']
-                for j, r in enumerate(regions):
-                    # Log first batch item only.
-                    x_slice = model.real_A[0, 0].cpu().numpy()
-                    y_slice = model.real_B[0, j].cpu().numpy()
-                    y_pred_slice = model.fake_B[0, j].detach().cpu().numpy()
+            if log_images and interval_matches(step, val_image_interval, len(tl)) and i < n_val_images:
+                x_slice = model.real_A[0, 0].cpu().numpy()
+                y_slice = model.real_B[0, 0].cpu().numpy()
+                y_pred_slice = model.fake_B[0, 0].detach().cpu().numpy()
 
-                    # Get centre of extent of ground truth.
-                    centre_vox = fov_centre(y_slice.shape)
-                    if centre_vox is None:
-                        continue
+                fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+                axes[0].imshow(x_slice.T, cmap='gray', origin='lower')
+                axes[0].set_title('Input')
+                axes[0].axis('off')
+                axes[1].imshow(y_slice.T, cmap='gray', vmin=0, vmax=1, origin='lower')
+                axes[1].set_title('Ground Truth (GTV)')
+                axes[1].axis('off')
+                axes[2].imshow(y_pred_slice.T, cmap='gray', vmin=0, vmax=1, origin='lower')
+                axes[2].set_title('Prediction (GTV)')
+                axes[2].axis('off')
+                fig.tight_layout()
 
-                    title = f'region:{r}'
-                    masks = {
-                        'ground_truth': {
-                            'mask_data': y_slice,
-                            'class_labels': regions,
-                        },
-                        'predictions': {
-                            'mask_data': y_pred_slice,
-                            'class_labels': regions,
-                        }
-                    }
+                filename = f'epoch-{e:04d}-step-{step:06d}-batch-{i:03d}-GTV.png'
+                if log_images_local:
+                    fig.savefig(os.path.join(val_image_save_dir, filename), dpi=150, bbox_inches='tight')
+                else:
+                    run.log({'val/image-GTV': wandb.Image(fig)}, step=step)
+                plt.close(fig)
 
-                    if log_images_local:
-                        fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-                        axes[0].imshow(x_slice.T, cmap='gray', origin='lower')
-                        axes[0].set_title('Input')
-                        axes[0].axis('off')
-                        axes[1].imshow(y_slice.T, cmap='gray', vmin=0, vmax=1, origin='lower')
-                        axes[1].set_title(f'Ground Truth ({r})')
-                        axes[1].axis('off')
-                        axes[2].imshow(y_pred_slice.T, cmap='gray', vmin=0, vmax=1, origin='lower')
-                        axes[2].set_title(f'Prediction ({r})')
-                        axes[2].axis('off')
-                        fig.tight_layout()
-                        filename = f'epoch-{e:04d}-step-{step:06d}-{r}.png'
-                        fig.savefig(os.path.join(val_image_save_dir, filename), dpi=150, bbox_inches='tight')
-                        plt.close(fig)
-                    else:
-                        run.log({
-                            title: wandb.Image(
-                                x_slice.T,
-                                masks=masks,
-                            )
-                        }, step=step)
-
-        # Save mean validation loss.
-        mean_val_loss = np.mean(epoch_val_losses)
-        if use_logger:
-            run.log({ 'val/loss-epoch-mean': mean_val_loss }, step=step)
-        val_losses.append(mean_val_loss)
+        # Compute smoothed dice for model selection.
+        mean_val_dice = np.mean(epoch_val_dice_scores)
+        val_dices.append(mean_val_dice)
 
         # Save best model/s.
-        if len(val_losses) >= val_loss_smoothing:
-            smoothed_val_loss = np.mean(val_losses[-val_loss_smoothing:])
+        if len(val_dices) >= val_dice_smoothing:
+            smoothed_val_dice = np.mean(val_dices[-val_dice_smoothing:])
             if use_logger:
-                run.log({ 'val/loss-ma': smoothed_val_loss }, step=step)
-            if smoothed_val_loss < min_val_loss:
-                min_val_loss = smoothed_val_loss
+                run.log({ 'val/dice-ma': smoothed_val_dice }, step=step)
+            if smoothed_val_dice > max_val_dice:
+                max_val_dice = smoothed_val_dice
 
                 # Update 'best_ckpts'.
-                ckpt = f'loss={min_val_loss:.6f}_epoch={e}_step={step}'
+                ckpt = f'dice={max_val_dice:.6f}_epoch={e}_step={step}'
                 best_ckpts.insert(0, ckpt)
                 if len(best_ckpts) > n_best_ckpts:
                     old_ckpt = best_ckpts.pop()
@@ -364,16 +352,16 @@ def train_pix2pix_static(
                     os.remove(filepath)
 
                 # Save model.
-                ckpt_data = { 
+                ckpt_data = {
                     'best-ckpts': best_ckpts,
                     'epoch': e,
-                    'min-val-loss': min_val_loss,
+                    'max-val-dice': max_val_dice,
                     'netG': model.netG.state_dict(),
                     'netD': model.netD.state_dict(),
                     'optimizer_G': model.optimizer_G.state_dict(),
                     'optimizer_D': model.optimizer_D.state_dict(),
                     'step': step,
-                    'val-losses': val_losses,     # Required for moving average.
+                    'val-dices': val_dices,
                 }
                 filepath = os.path.join(ckpt_path, f'{ckpt}.ckpt')
                 torch.save(ckpt_data, filepath)
@@ -384,13 +372,13 @@ def train_pix2pix_static(
         ckpt_data = {
             'best-ckpts': best_ckpts,
             'epoch': e,
-            'min-val-loss': min_val_loss,
+            'max-val-dice': max_val_dice,
             'netG': model.netG.state_dict(),
             'netD': model.netD.state_dict(),
             'optimizer_G': model.optimizer_G.state_dict(),
             'optimizer_D': model.optimizer_D.state_dict(),
             'step': step,
-            'val-losses': val_losses,     # Required for moving average.
+            'val-dices': val_dices,
         }
         filepath = os.path.join(ckpt_path, 'last.ckpt')
         torch.save(ckpt_data, filepath)
@@ -399,7 +387,7 @@ def train_pix2pix_static(
 
 if __name__ == '__main__':
     pat_id = 'PAT1'
-    version = '004'
+    version = '008'
     train_pix2pix_static(
         dataset='VALKIM-PP-STATIC',
         pat=pat_id,
@@ -436,7 +424,7 @@ if __name__ == '__main__':
         output_nc=1,
         random_seed=42,
         resume=False,
-        train_image_interval='step:200',
-        val_image_interval='epoch:1',
+        train_image_interval='step:400',
+        val_image_interval='step:epoch_start',
         use_logger=True,
     )

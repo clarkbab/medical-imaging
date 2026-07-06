@@ -11,7 +11,7 @@ from typing import Any, Tuple
 from mymi.typing import *
 
 from .args import arg_to_list
-from .projections import convert_angles, reverse_angles
+from .projections import convert_angles, plot_projection, reverse_angles
 
 @dataclass
 class XimHistogramInfo:
@@ -83,11 +83,14 @@ def load_xim_angles_and_files(
 
 def load_xim(
     filepath: str | Path,
-    flip_lr: bool = True,
+    # This is just a convention, we could flip the image and make it look
+    # like we're standing at the detector, looking toward the source, but
+    # KIM convention is from source -> detector so let's go with that.
+    flip_lr: bool = False,
     hist_eq: bool = False,
     invert_intensities: bool = True,
     load_pixel_data: bool = True,
-    scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'IEC61217',
+    scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'VARIAN_STANDARD',
     ) -> Tuple[Image2D | None, pd.Series]:
     filepath = Path(filepath)
     info = XimInfo(file_name=str(filepath))
@@ -288,3 +291,21 @@ def load_xim(
 
     metadata = pd.Series(metadata)
     return pixel_data, metadata
+
+def plot_xim_closest_to(
+    dirpath: DirPath,
+    angle: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-source',
+    closest_to: 'Number | List[Number]' = [0, 90, 180, 270, 360],
+    **kwargs,
+    ) -> None:
+    angles_files = load_xim_angles_and_files(dirpath, angle, closest_to=closest_to, **kwargs)
+
+    datas = []
+    infos = []
+    for f in angles_files.values():
+        data, info = load_xim(os.path.join(dirpath, f))
+        datas.append(data)
+        infos.append(info)
+
+    for d, i in zip(datas, infos):
+        plot_projection(d, i)

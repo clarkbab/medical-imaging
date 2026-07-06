@@ -1,7 +1,6 @@
 import dicomset as ds
-from dicomset.utils import arg_to_list
+from dicomset.utils import arg_to_list, logger, save_numpy
 from dicomset.dicom.utils import from_rtplan_dicom
-from dicomset.utils import save_numpy
 import numpy as np
 import os
 from tqdm import tqdm
@@ -53,7 +52,7 @@ for p in tqdm(range(len(pat_ids))):
         for a in tqdm(pat_arcs, leave=False):
             # Load the arc data.
             data, info = load_tiff_arc(fracpath, arc=a, filename_angle=filename_angle)
-            kv_det_angles = info['kv-detector-angle'].values
+            kv_source_angles = info['kv-source-angle'].values
             breathing_phases = info['MMPhase0'].values
             phases_4dct = [to_4dct_phase(p) for p in breathing_phases]
 
@@ -61,25 +60,29 @@ for p in tqdm(range(len(pat_ids))):
             # Map from 4DCT phase to treatment image frames.
             n_phases = 10
             phases = list(range(n_phases))
-            phase_frames = [[i for i, (_, (tp, _)) in enumerate(zip(kv_det_angles, phases_4dct)) if tp == p] for p in phases]
+            phase_frames = [[i for i, (_, (tp, _)) in enumerate(zip(kv_source_angles, phases_4dct)) if tp == p] for p in phases]
 
             # Create placeholder for projection images and labels.
-            n_angles = len(kv_det_angles)
+            n_angles = len(kv_source_angles)
             det_size = info['det-size'].values[0]
             ct_proj = np.zeros((n_angles, *det_size))
-            n_label_channels = 2
+            n_label_channels = 5
             labels_proj = np.zeros((n_angles, n_label_channels, *det_size))
 
             # Create projections by phase.
             for ph in tqdm(phases, desc='Projecting phases', leave=False):
+                print('Projecting phase: ', ph)
+                regions = ['GTV' if ph in (0, 5) else 'cf_GTV', 'bc_Marker_1', 'bc_Marker_2', 'bc_Marker_3', 'ts_Lung']
+
                 # Load phase data.
                 # Inh/exh phases have real GTVs, intermediate phases have corrfield-propagated GTV.
-                regions = ['GTV', 'ts_Lung'] if ph in (0, 5) else ['cf_GTV', 'ts_Lung']
                 assert len(regions) == n_label_channels
                 phase_series = f'series_{ph}'
                 phase_ct = pat.ct_series(phase_series).data
                 phase_affine = pat.ct_series(phase_series).affine
-                phase_regions, phase_labels = pat.regions_series(phase_series).data(r=regions)
+                phase_regions, phase_labels = pat.regions_series(phase_series).data(r=regions, sort_regions=False)
+                print(phase_regions)
+                assert phase_regions == regions
 
                 # Check that all images share projection geometry.
                 frames = phase_frames[ph]
@@ -104,13 +107,14 @@ for p in tqdm(range(len(pat_ids))):
                     assert np.allclose(odet_offset, det_offset), f"Detector offset mismatch: {odet_offset} vs {det_offset}"
                 print('Geometry matched!')
                 
-                phase_angles = [kv_det_angles[i] for i in frames]
+                phase_angles = [kv_source_angles[i] for i in frames]
                 ct_proj_phase, labels_proj_phase = project_ctorch(phase_ct, phase_affine, treatment_iso,
                     sid, sdd, det_size, det_spacing, det_offset, phase_angles, labels=phase_labels)
                 ct_proj[frames] = ct_proj_phase
                 labels_proj[frames] = labels_proj_phase
 
-            dirpath = os.path.join(set.path, 'data', 'projections', pat.id, f'Fx{f:02d}')
+            logger.info(f'Saving projections for {pat_id} Fx{f:02d} Arc{a:02d}')
+            dirpath = os.path.join(set.path, 'data', 'projections', pat.id, f'Fx{f:02d}', f'Arc{a:02d}')
             os.makedirs(dirpath, exist_ok=True)
             save_numpy(data, os.path.join(dirpath, 'treatment_binned.npz'))
             save_numpy(ct_proj, os.path.join(dirpath, 'ct_proj_binned.npz'))

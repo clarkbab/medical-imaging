@@ -1,0 +1,122 @@
+flowchart LR
+    Q1["🔍 Question 1\nIs the patient symptomatic?"]
+    Q1 -->|Yes| Q2["🔍 Question 2\nFever above 38°C?"]
+    Q1 -->|No| O1["✅ Outcome\nMonitor & discharge"]
+    Q2 -->|Yes| I1["⚡ Intermediate\nRun blood tests"]
+    Q2 -->|No| O2["✅ Outcome\nRest & hydrate"]
+    I1 --> Q3["🔍 Question 3\nAbnormal results?"]
+    Q3 -->|Yes| O3["🏥 Outcome\nAdmit for treatment"]
+    Q3 -->|No| O4["✅ Outcome\nSend home with meds"]
+
+flowchart LR
+    Q1["🔍 Patient has markers?"]
+    Q1 --> |Yes| Q2["🔍 Patient is free-breathing?"]
+    Q2 --> |Yes| O1["✅ Perform (4) for each 4DCT phase"]
+    O1 --> Q3["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q3 --> |Yes| O2["✅ Perform (5) for each intermediate 4DCT phase"]
+    
+flowchart TD
+    Q1["🔍 Patient has markers?"]
+    Q1 --> |Yes| Q2["🔍 Patient is free-breathing?"]
+    Q2 --> |Yes| O1["✅ Perform (volumetric marker delineation) for each 4DCT phase"]
+    Q2 --> |No| O6["✅ Perform (volumetric marker delineation) for pCT"]
+    O1 --> Q3["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q3 --> |Yes| O2["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    O2 --> Q4
+    Q3 --> |No| Q4["🔍 Patient has breathing signal?"]
+    Q4 --> |No| O7["✅ Generate synthetic breathing signal"]
+    O7 --> O8
+    Q4 --> |Yes| O8["✅ Performed (forward projection) from 4DCT -> 2D"]
+    O8 --> O9["✅ Perform (correction using marker positions) "]
+    O6 --> O10["✅ Perform (forward projection) from pCT -> 2D"]
+    O10 --> O9
+
+flowchart TD
+    Q1["🔍 Patient has markers?"]
+    Q1 --> |Yes| O11["✅ Perform (marker segmentation) on IF images"]
+    O11 --> Q2
+    Q2["🔍 Patient is free-breathing?"]
+    Q2 --> |Yes| O1["✅ Perform (volumetric marker delineation) for each 4DCT phase"]
+    Q2 --> |No| O6["✅ Perform (volumetric marker delineation) for pCT"]
+    O1 --> Q3["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q3 --> |Yes| O2["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    O2 --> Q4
+    Q3 --> |No| Q4["🔍 Patient has breathing signal?"]
+    Q4 --> |No| O7["✅ Generate synthetic breathing signal"]
+    O7 --> O8
+    Q4 --> |Yes| O8["✅ Perform (forward projection) from 4DCT -> 2D"]
+    O8 --> O9["✅ Perform (correction using marker positions) "]
+    O6 --> O10["✅ Perform (forward projection) from pCT -> 2D"]
+    O10 --> O9
+    O9 --> O12["Manual correction using CAT?"]
+
+    Q1 --> |No| Q5["🔍 Patient is free-breathing?"]
+    Q5 --> |Yes| Q6["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q6 --> |Yes| O13["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    O13 --> Q7["🔍 Patient has breathing signal?"]
+    Q7 --> |Yes| O14
+    Q7 --> |No| Q8["✅ Generate synthetic breathing signal"]
+    Q8 --> |Yes| O14["✅ Perform (forward projection) from 4DCT -> 2D"]
+    Q5 --> |No| O15["✅ Perform (forward projection) from pCT -> 2D"]
+    
+flowchart TD
+    Q1["🔍 Patient has markers?"]
+    Q1 --> |Yes| O11["✅ Perform (marker segmentation) on IF images"]
+    O11 --> Q2
+    Q2["🔍 Patient is free-breathing?"]
+    Q2 --> |Yes| O1["✅ Perform (volumetric marker delineation) for each 4DCT phase"]
+    Q2 --> |No| O6["✅ Perform (volumetric marker delineation) for pCT"]
+    O1 --> Q3["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q3 --> |Yes| O2["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    O2 --> Q4
+    Q3 --> |No| Q4["🔍 Patient has breathing signal?"]
+    Q4 --> |No| O7["✅ Generate synthetic breathing signal"]
+    O7 --> O8
+    Q4 --> |Yes| O8["✅ Perform (forward projection) from 4DCT -> 2D"]
+    O8 --> O9["✅ Perform (correction using marker positions) "]
+    O6 --> O10["✅ Perform (forward projection) from pCT -> 2D"]
+    O10 --> O9
+    O9 --> O12["✅ Perform (manual correction) using CAT"]
+
+    Q1 --> |No| Q5["🔍 Patient is free-breathing?"]
+    Q5 --> |Yes| Q6["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q6 --> |Yes| O13["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    Q6 --> |No| Q7
+    O13 --> Q7["🔍 Patient has breathing signal?"]
+    Q7 --> |Yes| O14
+    Q7 --> |No| O16["✅ Generate synthetic breathing signal"]
+    O16 --> O14["✅ Perform (forward projection) from 4DCT -> 2D"]
+    Q5 --> |No| O15["✅ Perform (forward projection) from pCT -> 2D"]
+    O14 --> O12
+    O15 --> O12
+ 
+ flowchart TD
+    Q1["🔍 Patient has markers?"]
+    Q1 --> |Yes| O11["✅ Perform (marker segmentation) on IF images"]
+    O11 --> Q2
+    Q2["🔍 Patient is free-breathing?"]
+    Q2 --> |Yes| O1["✅ Perform (volumetric marker delineation) for each 4DCT phase"]
+    Q2 --> |No| O6["✅ Perform (volumetric marker delineation) for pCT"]
+    O1 --> Q3["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q3 --> |Yes| O2["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    O2 --> Q4
+    Q3 --> |No| Q4["🔍 Patient has breathing signal?"]
+    Q4 --> |No| O7["✅ Generate synthetic breathing signal"]
+    O7 --> O8
+    Q4 --> |Yes| O8["✅ Perform (forward projection) from 4DCT -> 2D"]
+    O8 --> O9["✅ Perform (correction using marker positions) "]
+    O6 --> O10["✅ Perform (forward projection) from pCT -> 2D"]
+    O10 --> O9
+    O9 --> O17["✅ Perform (qual eval) of marker-corrected projections"]
+    
+    Q1 --> |No| Q5["🔍 Patient is free-breathing?"]
+    Q5 --> |Yes| Q6["🔍 GTV labels are missing from intermediate 4DCT phases?"]
+    Q6 --> |Yes| O13["✅ Perform (GTV contour propagation) for each intermediate 4DCT phase"]
+    Q6 --> |No| Q7
+    O13 --> Q7["🔍 Patient has breathing signal?"]
+    Q7 --> |Yes| O14
+    Q7 --> |No| O16["✅ Generate synthetic breathing signal"]
+    O16 --> O14["✅ Perform (forward projection) from 4DCT -> 2D"]
+    Q5 --> |No| O15["✅ Perform (forward projection) from pCT -> 2D"]
+    O14 --> O12["✅ Perform (manual correction) using CAT"]
+    O15 --> O12

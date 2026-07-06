@@ -80,7 +80,10 @@ class HisFrameInfo:
 # I needed to flip_lr the image.
 def load_his(
     filepath: str | Path,
-    flip_lr: bool = True,
+    # This is just a convention, we could flip the image and make it look
+    # like we're standing at the detector, looking toward the source, but
+    # KIM convention is from source -> detector so let's go with that.
+    flip_lr: bool = False,
     frame_info: HisFrameInfo | None = None,
     hist_eq: bool = False,
     load_pixel_data: bool = True,
@@ -177,6 +180,7 @@ def load_his(
 
     # ---- Build metadata dict (mirrors load_xim output) ---------------------
     metadata: Dict = {}
+    metadata['filename'] = os.path.basename(filepath)
     metadata['det-size'] = (info.size_x, info.size_y)
     metadata['det-spacing'] = (info.pixel_spacing_x, info.pixel_spacing_y)
     metadata['integration-time'] = info.integration_time
@@ -280,7 +284,7 @@ def load_his_frames_xml(
 
 def load_his_angles_and_files(
     dirpath: str | Path,
-    angle_type: Literal['kv-detector', 'kv-source', 'mv-source'] = 'mv-source',
+    angle_type: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-source',
     closest_to: int | float | List[int | float] | None = None,
     n_angles: int | None = None,
     scale: Literal['IEC61217', 'ELEKTA_IEC'] = 'IEC61217',
@@ -359,6 +363,26 @@ def load_his_angles_and_files(
     frame_info_by_file = {fname: fi_by_name[fname] for fname in angles_files.values() if fname in fi_by_name}
 
     return angles_files, frame_info_by_file
+
+def plot_his_closest_to(
+    dirpath: str | Path,
+    angle: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-source',
+    closest_to: 'Number | List[Number]' = [0, 90, 180, 270, 360],
+    **kwargs,
+    ) -> None:
+    from .projections import plot_projection
+    angles_files, frame_info_by_file = load_his_angles_and_files(dirpath, angle, closest_to=closest_to, **kwargs)
+
+    datas = []
+    infos = []
+    for f in angles_files.values():
+        fi = frame_info_by_file.get(f)
+        data, info = load_his(Path(dirpath) / f, frame_info=fi)
+        datas.append(data)
+        infos.append(info)
+
+    for d, i in zip(datas, infos):
+        plot_projection(d, i)
 
 def _xml_text(parent, tag: str, default: str = "") -> str:
     """Get text content of a child element, or *default* if missing."""

@@ -51,12 +51,12 @@ for p in tqdm(range(len(pat_ids))):
         for a in tqdm(pat_arcs, leave=False):
             # Load arc data.
             data, info = load_tiff_arc(fracpath, arc=a, filename_angle=filename_angle)
-            kv_det_angles = info['kv-detector-angle'].values
+            kv_source_angles = info['kv-source-angle'].values
             breathing_phases = info['MMPhase0'].values
             phases_4dct = [to_4dct_phase(p) for p in breathing_phases]
 
             # Create placeholders for projection images and labels.
-            n_angles = len(kv_det_angles)
+            n_angles = len(kv_source_angles)
             det_size = info.iloc[0]['det-size']
             ct_proj = np.zeros((n_angles, *det_size))
             n_label_channels = 2
@@ -96,7 +96,7 @@ for p in tqdm(range(len(pat_ids))):
                 print(treatment_iso, sid, sdd, det_size, det_spacing, det_offset)
 
                 ct_proj_i, labels_proj_i = project_ctorch(phase_ct, phase_affine, treatment_iso,
-                    sid, sdd, det_size, det_spacing, det_offset, [kv_det_angles[i]],
+                    sid, sdd, det_size, det_spacing, det_offset, [kv_source_angles[i]],
                     labels=interp_labels)
                 ct_proj[[i]] = ct_proj_i
                 labels_proj[[i]] = labels_proj_i

@@ -1,4 +1,4 @@
-from augmed import RandomCrop, Transform
+from augmed import Transform
 import numpy as np
 import os
 import time
@@ -104,7 +104,6 @@ class TrainingSet(Dataset):
         self.__debug_every = 25
         input_size = 600
         output_size = 512
-        self.__crop = RandomCrop(size=output_size, centre_offset=(input_size - output_size) / 2)
 
         dirpath = os.path.join(dataset.path, 'data', 'training', pat, 'projections')
         self.__inh_ct_files = _filter_files(_list_proj_files(dirpath, 'inh_ct_', '.npy'), n_volumes, n_angles)
@@ -186,9 +185,6 @@ class TrainingSet(Dataset):
                 angle = load_json(self.__angle_files[idx])
                 load_time = time.perf_counter() - load_start
                 load_kind = 'on_demand'
-
-        # Crop from 600 - 512 with jitter.
-        data, labels = self.__crop(data, labels)
 
         torch_start = time.perf_counter()
         data = torch.from_numpy(data).float()

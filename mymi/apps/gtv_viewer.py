@@ -17,6 +17,13 @@ def phase_label(folder_name):
     return m.group(1) if m else folder_name
 
 
+_PHASE_SUFFIXES = {'0': ' (Full Inhale)', '5': ' (Full Exhale)'}
+
+def phase_title(folder_name):
+    num = phase_label(folder_name)
+    return f"Phase {num}{_PHASE_SUFFIXES.get(num, '')}"
+
+
 def get_view_aspect(view, affine):
     spacing = affine_spacing(affine)
     if view == 0:
@@ -117,7 +124,7 @@ def _load_phase(data_dir, patient, phase):
 
     ct_data, affine = from_ct_dicom(ct_dir)
     regions = list_rtstruct_regions(rtstruct_path)
-    label_data, _ = from_rtstruct_dicom(rtstruct_path, ct_data.shape, affine, region_id=regions)
+    _, label_data = from_rtstruct_dicom(rtstruct_path, ct_data.shape, affine, region_id=regions, landmark_id=None)
 
     volumes = []
     centroids = []
@@ -352,7 +359,8 @@ def render_slice_viewer():
     colours = sns.color_palette('colorblind', n_colors=len(all_regions))
 
     # --- Render phase grid ---
-    n_phases = len(phases)
+    visible_phases = [p for p in phases if st.session_state.get(f"phase_{p}", True)]
+    n_phases = len(visible_phases)
     n_rows = (n_phases + N_COLS - 1) // N_COLS
 
     for row_idx in range(n_rows):
@@ -362,7 +370,7 @@ def render_slice_viewer():
             if phase_idx >= n_phases:
                 break
 
-            phase = phases[phase_idx]
+            phase = visible_phases[phase_idx]
             pdata = phase_data[phase]
             ct_data = pdata['ct']
             affine = pdata['affine']
@@ -408,7 +416,7 @@ def render_slice_viewer():
                     ax.imshow(label_crop, alpha=0.3, aspect=aspect, cmap=cmap, interpolation='none', origin=origin_y)
                     ax.contour(label_crop, colors=[colour], levels=[.5], linestyles='solid')
 
-                ax.set_title(phase_label(phase), fontsize=10)
+                ax.set_title(phase_title(phase), fontsize=10)
                 ax.axis('off')
                 fig.tight_layout(pad=0.5)
                 st.pyplot(fig)

@@ -7,14 +7,18 @@ from dicomset.dicom.utils import from_rtplan_dicom
 from dicomset.utils.io import load_json, load_nifti, save_nifti, save_numpy
 from dicomset.utils.logging import logger
 import numpy as np
-import os
+import os 
 import shutil
 import torch
-import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-TRAIN_SIZE = (600, 600)
-VAL_SIZE = (512, 512)
+CROP_SIZE = (512, 512)
+
+def center_crop(t, size):
+    h, w = t.shape[-2], t.shape[-1]
+    sh = (h - size[0]) // 2
+    sw = (w - size[1]) // 2
+    return t[..., sh:sh + size[0], sw:sw + size[1]]
 
 from mymi.utils.cdog import load_tiff
 from mymi.utils.projections import project_ctorch
@@ -47,7 +51,14 @@ def create_static_training_dataset(
     # Create augmentation pipeline.
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     pipeline = Pipeline([
-        RandomAffine(r=10, s=[0.8, 1.2], t=20),
+        # RandomAffine(r=10, s=[0.8, 1.2], t=20),
+        # Matlab augmentation defines, e.g. translation_LR = 5/3 which is the 
+        # standard dev of the gaussian used for drawing. This ensure that ~99.7%
+        # of samples fall within +/-5mm.
+        # TODO: Could we expand our ranges in a smarter way,
+        # so that I could write "RandomAffine(r=5, t=[5, 5, 10])" for example?
+        # RandomAffine(r=5, t=[-5, 5, -5, 5, -10, 10])
+        RandomAffine(r=5, t=[5, 5, 10], dist='gaussian'),
         RandomElastic(),
     ], device=device)
     logger.info(f"Using pipeline: {pipeline}")
@@ -158,10 +169,10 @@ def create_static_training_dataset(
                 exh_label_names = load_json(filepath)
 
                 # Sample kV detector angles from a uniform distribution.
-                # kv_detector_angles = list(np.random.uniform(min_angle, max_angle, n_train_angles))
+                # kv_source_angles = list(np.random.uniform(min_angle, max_angle, n_train_angles))
                 # Don't use a uniform distrbution for static dataset - replicate the cGAN
                 # project sampling strategy.
-                kv_detector_angles = np.linspace(min_angle, max_angle, n_train_angles).tolist()
+                kv_source_angles = np.linspace(min_angle, max_angle, n_train_angles).tolist()
 
                 # Create projections.
                 inh_ct_proj, inh_labels_proj = project_ctorch(
@@ -173,12 +184,12 @@ def create_static_training_dataset(
                     det_size,
                     det_spacing,
                     det_offset,
-                    kv_detector_angles,
+                    kv_source_angles,
                     labels=inh_labels.astype(np.float32),
                     threshold_labels=False,
                 )
-                inh_ct_proj = F.interpolate(inh_ct_proj.unsqueeze(1).float(), size=TRAIN_SIZE, mode='bilinear', align_corners=False).squeeze(1)
-                inh_labels_proj = F.interpolate(inh_labels_proj.float(), size=TRAIN_SIZE, mode='nearest')
+                inh_ct_proj = center_crop(inh_ct_proj, CROP_SIZE)
+                inh_labels_proj = center_crop(inh_labels_proj, CROP_SIZE)
 
                 exh_ct_proj, exh_labels_proj = project_ctorch(
                     exh_ct.astype(np.float32),
@@ -189,15 +200,15 @@ def create_static_training_dataset(
                     det_size,
                     det_spacing,
                     det_offset,
-                    kv_detector_angles,
+                    kv_source_angles,
                     labels=exh_labels.astype(np.float32),
                     threshold_labels=False,
                 )
-                exh_ct_proj = F.interpolate(exh_ct_proj.unsqueeze(1).float(), size=TRAIN_SIZE, mode='bilinear', align_corners=False).squeeze(1)
-                exh_labels_proj = F.interpolate(exh_labels_proj.float(), size=TRAIN_SIZE, mode='nearest')
+                exh_ct_proj = center_crop(exh_ct_proj, CROP_SIZE)
+                exh_labels_proj = center_crop(exh_labels_proj, CROP_SIZE)
 
                 # Save each projection separately.
-                for j, angle in enumerate(kv_detector_angles):
+                for j, angle in enumerate(kv_source_angles):
                     filepath = os.path.join(projpath, f"inh_ct_{i}_{j}.npy")
                     save_numpy(inh_ct_proj[j], filepath, overwrite=True)
                     filepath = os.path.join(projpath, f"exh_ct_{i}_{j}.npy")
@@ -318,7 +329,7 @@ def create_static_training_dataset(
                 exh_label_names = load_json(filepath)
 
                 # Sample kV detector angles from a uniform distribution.
-                kv_detector_angles = list(np.random.uniform(min_angle, max_angle, n_val_angles))
+                kv_source_angles = list(np.random.uniform(min_angle, max_angle, n_val_angles))
 
                 # Create projections.
                 inh_ct_proj, inh_labels_proj = project_ctorch(
@@ -330,12 +341,12 @@ def create_static_training_dataset(
                     det_size,
                     det_spacing,
                     det_offset,
-                    kv_detector_angles,
+                    kv_source_angles,
                     labels=inh_labels.astype(np.float32),
                     threshold_labels=False,
                 )
-                inh_ct_proj = F.interpolate(inh_ct_proj.unsqueeze(1).float(), size=VAL_SIZE, mode='bilinear', align_corners=False).squeeze(1)
-                inh_labels_proj = F.interpolate(inh_labels_proj.float(), size=VAL_SIZE, mode='nearest')
+                inh_ct_proj = center_crop(inh_ct_proj, CROP_SIZE)
+                inh_labels_proj = center_crop(inh_labels_proj, CROP_SIZE)
 
                 exh_ct_proj, exh_labels_proj = project_ctorch(
                     exh_ct.astype(np.float32),
@@ -346,16 +357,16 @@ def create_static_training_dataset(
                     det_size,
                     det_spacing,
                     det_offset,
-                    kv_detector_angles,
+                    kv_source_angles,
                     labels=exh_labels.astype(np.float32),
                     threshold_labels=False,
                 )
-                exh_ct_proj = F.interpolate(exh_ct_proj.unsqueeze(1).float(), size=VAL_SIZE, mode='bilinear', align_corners=False).squeeze(1)
-                exh_labels_proj = F.interpolate(exh_labels_proj.float(), size=VAL_SIZE, mode='nearest')
+                exh_ct_proj = center_crop(exh_ct_proj, CROP_SIZE)
+                exh_labels_proj = center_crop(exh_labels_proj, CROP_SIZE)
 
                 # Save each projection separately.
                 # This means we can load at random for shuffled batches.
-                for j, angle in enumerate(kv_detector_angles):
+                for j, angle in enumerate(kv_source_angles):
                     filepath = os.path.join(projpath, f"inh_ct_{i}_{j}.npy")
                     save_numpy(inh_ct_proj[j], filepath, overwrite=True)
                     filepath = os.path.join(projpath, f"exh_ct_{i}_{j}.npy")

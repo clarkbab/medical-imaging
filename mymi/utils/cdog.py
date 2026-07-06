@@ -3,6 +3,7 @@ import dicomset as ds
 import io
 from PIL import Image as PILImage
 from dicomset.utils import filter_lists, sort_lists
+import pylinac as plc
 from importlib.metadata import metadata
 from multiprocessing.util import info
 from dicomset.typing import *
@@ -288,6 +289,58 @@ def list_tiff(
     tiff_filepaths = [os.path.join(kv_dirpath, f) for f in tiff_files]
     return tiff_filepaths
 
+def load_tiff_angles_and_files(
+    dirpath: DirPath,
+    angle_type: Literal['kv-detector', 'kv-source', 'mv-detector', 'mv-source'] = 'kv-detector',
+    closest_to: int | float | List[int | float] | None = None,
+    n_angles: int | None = None,
+    progress_callback=None,
+    sort_by_angle: bool = True,
+    start: int = 0,
+    **kwargs,
+    ) -> Dict[float, str]:
+    closest_to = arg_to_list(closest_to, (int, float))
+
+    # Get files.
+    files = os.listdir(dirpath)
+    files = [f for f in files if f.endswith(".tiff")]
+    files = list(sorted(files))
+    if n_angles is None:
+        n_angles = len(files) - start
+
+    # Load filenames and angles.
+    angles_files = {}
+    for i in tqdm(range(start, start + n_angles)):
+        filename = files[i]
+        filepath = os.path.join(dirpath, filename)
+        try:
+            # We need to load data for .tiff files as the metadata is embedded into
+            # the image.
+            _, info = load_tiff(filepath, load_data=True, **kwargs)
+        except Exception as e:
+            print(f"Error reading {filepath}, projection {i}: {e}")
+            if progress_callback is not None:
+                progress_callback(i - start + 1, n_angles)
+            continue
+        angles_files[info[f'{angle_type}-angle']] = filename
+        if progress_callback is not None:
+            progress_callback(i - start + 1, n_angles)
+
+    # Filter by closest_to.
+    if closest_to is not None:
+        angles = np.array(list(angles_files.keys()))
+        idxs_to_keep = []
+        for c in closest_to:
+            angle_diffs = np.abs(angles - c)
+            idx = np.argmin(angle_diffs)
+            idxs_to_keep.append(idx)
+        angles_files = dict(t for i, t in enumerate(angles_files.items()) if i in idxs_to_keep)
+
+    if sort_by_angle:
+        angles_files = dict(sorted(angles_files.items()))
+
+    return angles_files
+
 def plot_arc_shroud(
     shroud: Image2D,
     aspect: float = 0.1,
@@ -513,6 +566,26 @@ def load_tiff_fraction_shrouds(
         infos.append(info)
     return shrouds, infos
 
+def plot_tiff_closest_to(
+    dirpath: DirPath,
+    angle: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-source',
+    closest_to: Number | List[Number] = [0, 90, 180, 270, 360],
+    **kwargs,
+    ) -> None:
+    angles_files = load_tiff_angles_and_files(dirpath, angle, closest_to=closest_to, **kwargs)
+
+    tiff_files = list(angles_files.values())
+
+    datas = []
+    infos = []
+    for f in tiff_files:
+        data, info = load_tiff(os.path.join(dirpath, f))
+        datas.append(data)
+        infos.append(info)
+
+    for d, i in zip(datas, infos):
+        plot_projection(d, i)
+
 def load_tiff_fraction(
     fraction_path: DirPath,
     arc: int | List[int] | Literal['all'] = 'all',
@@ -549,7 +622,7 @@ def process_fraction(
     kv_dirpath = get_kv_path(fraction_path)
 
     # Make sure all arcs contain consecutive frames.
-    assert_arc_jumps(fraction_path)
+    assert_arc_no_jumps(fraction_path)
 
     # Process all arcs in the fraction. 
     arcs = arg_to_list(arc, int, literals={'all': lambda: list_raw_arcs(fraction_path)})
@@ -582,17 +655,24 @@ def process_tiff_patient(
         process_fraction(fx_dirpath, show_progress=show_progress, **kwargs)
 
 # Returns image metadata and pixel data.
+# For tiff files, the gantry angle is encoded in the filename.
+# However, for some files (e.g. VALKIM pats 1/2), the angle is the
+# kV source angle - use 'filename_angle' to change this.
 def load_tiff(
     filepath: FilePath | DirPath,
     arc: int | None = None,
     frame: int | None = None,
-    filename_angle: Literal['kv-source', 'kv-detector', 'mv-source', 'mv-detector'] = 'kv-source',
+    filename_angle: Literal['kv-source', 'kv-detector', 'mv-source', 'mv-detector'] = 'mv-source',
     # Blank refers to empty metadata.
     cdog_version: str | Literal['blank'] | None = None,
-    flip_lr: bool = True,
+    # This is just a convention, we could flip the image and make it look
+    # like we're standing at the detector, looking toward the source, but
+    # KIM convention is from source -> detector so let's go with that.
+    flip_lr: bool = False,
     invert_intensity: bool = True,
     load_data: bool = True,
     machine: Literal['elekta', 'varian'] | None = None,
+    scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'IEC61217',
     ) -> Tuple[Image2D | None, pd.Series]:
     # with run_once():
     # logger.warn(f"Loading frames with 'filename_angle={filename_angle}' and 'machine={machine}'.")
@@ -610,6 +690,16 @@ def load_tiff(
     info['filename-arc'] = int(filename.split('_')[1])
     info['filename-frame'] = int(filename.split('_')[2])
     info['filename-angle'] = float(filename.split('_')[-1].replace('.tiff', ''))
+
+    # Convert the angle to the desired scale.
+    if scale != 'IEC61217':
+        info['filename-angle'], _, _ = plc.core.scale.convert(
+            input_scale=getattr(plc.core.scale.MachineScale, scale),
+            output_scale=plc.core.scale.MachineScale.IEC61217,
+            gantry=info['filename-angle'],
+            collimator=0,
+            rotation=0,
+        )
 
     if load_data:
         # Load image.
@@ -1226,7 +1316,7 @@ def get_kv_path(fraction_path: DirPath) -> DirPath:
             return kv_dirpath
     raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
 
-def assert_arc_jumps(
+def assert_arc_no_jumps(
     fraction_path: DirPath,
     ) -> None:
     # Get processed arc splits.
