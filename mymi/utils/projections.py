@@ -3,6 +3,7 @@ from augmed.utils import to_tensor, to_numpy
 from dicomset.utils import logger, hist_eq as hist_eq_fn, plot_slice
 from dicomset.utils.args import arg_to_list
 from dicomset.utils.geometry import affine_origin, affine_spacing, create_affine, fov_centre
+from dicomset.typing import *
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np

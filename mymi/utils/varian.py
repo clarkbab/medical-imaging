@@ -253,6 +253,8 @@ def load_xim(
 
     # Add projection properties.
     metadata = {}
+    if not 'GantryRtn' in info.properties:
+        raise ValueError(f"No 'GantryRtn' param for .xim file: {filepath}")
     mv_source_angle = info.properties['GantryRtn']
     # Convert to IEC61217 if needed.
     if scale != 'IEC61217':

@@ -10,24 +10,21 @@ from mymi.utils.projections import plot_projection
 
 dataset = 'VALKIM-PP'
 set = ds.load(dataset, 'nifti')
-pat_ids = ['PAT1', 'PAT2', 'PAT3', 'PAT4']
-pat_ids = ['PAT1']
+pat_ids = [1, 2, 3, 4]
+pat_ids = [1]
 fractions = 'all'
 fractions = [1]
 arcs = 'all'
 arcs = [1]
 frames = None
-filename_angles = ['kv-source', 'kv-source', '?', 'mv-source']
-pat_ids_valkim = [f'Patient{int(p.replace("PAT", "")):02d}' for p in pat_ids]
+filename_angles = {1: 'kv-source', 2: 'kv-source', 3: '?', 4: 'mv-source'}
 
-for p in tqdm(range(len(pat_ids))):
-    pat_id = pat_ids[p]
-    pat = set.patient(pat_id)
+for p in tqdm(pat_ids):
+    pat = set.patient(f'PAT{p}')
     filename_angle = filename_angles[p]
     print(pat)
 
-    pat_id_valkim = pat_ids_valkim[p]
-    patpath = rf"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\{pat_id_valkim}"
+    patpath = rf"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient{p:02d}"
     pat_fractions = arg_to_list(fractions, int, literals={'all': list_tiff_fractions(patpath)})
     print(f'Found fractions: {pat_fractions}')
 
@@ -43,7 +40,7 @@ for p in tqdm(range(len(pat_ids))):
             arc_data, arc_info = load_tiff_arc(fracpath, arc=a, filename_angle=filename_angle)
 
             # Load already-generated projection data.
-            projpath = os.path.join(set.path, 'data', 'projections', pat_id, f'Fx{f:02d}', f'Arc{a:02d}')
+            projpath = os.path.join(set.path, 'data', 'projections', f'PAT{p}', f'Fx{f:02d}', f'Arc{a:02d}')
             ct_proj = load_numpy(os.path.join(projpath, 'ct_proj_binned_corrected.npz'))
             labels_proj = load_numpy(os.path.join(projpath, 'labels_proj_binned_corrected.npz'))
 

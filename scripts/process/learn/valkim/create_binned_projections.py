@@ -15,18 +15,16 @@ dataset = 'VALKIM-PP'
 inh_series = 'series_0'
 exh_series = 'series_5'
 set = ds.load(dataset, 'nifti')
-pat_ids = ['PAT1', 'PAT2', 'PAT3', 'PAT4']
-pat_ids = ['PAT1']
+pat_ids = [1, 2, 3, 4]
+pat_ids = [1]
 fractions = 'all'
 fractions = [1]
 arcs = 'all'
 arcs = [1]
-filename_angles = ['kv-source', 'kv-source', '?', 'mv-source']
-pat_ids_valkim = [f'Patient{int(p.replace("PAT", "")):02d}' for p in pat_ids]
+filename_angles = {1: 'kv-source', 2: 'kv-source', 3: '?', 4: 'mv-source'}
 
-for p in tqdm(range(len(pat_ids))):
-    pat_id = pat_ids[p]
-    pat = set.patient(pat_id)
+for p in tqdm(pat_ids):
+    pat = set.patient(f'PAT{p}')
     filename_angle = filename_angles[p]
     print(pat)
 
@@ -36,8 +34,7 @@ for p in tqdm(range(len(pat_ids))):
     treatment_iso = rtplan_info['isocentre']
 
     # Get the fractions for this patient.
-    pat_id_valkim = pat_ids_valkim[p]
-    patpath = rf"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\{pat_id_valkim}"
+    patpath = rf"R:\2RESEARCH\1_ClinicalData\VALKIM\RNSH\Treatment files\Patient{p:02d}"
     pat_fractions = arg_to_list(fractions, int, literals={'all': list_tiff_fractions(patpath)})
     print(f'Found fractions: {pat_fractions}')
 
@@ -113,7 +110,7 @@ for p in tqdm(range(len(pat_ids))):
                 ct_proj[frames] = ct_proj_phase
                 labels_proj[frames] = labels_proj_phase
 
-            logger.info(f'Saving projections for {pat_id} Fx{f:02d} Arc{a:02d}')
+            logger.info(f'Saving projections for PAT{p} Fx{f:02d} Arc{a:02d}')
             dirpath = os.path.join(set.path, 'data', 'projections', pat.id, f'Fx{f:02d}', f'Arc{a:02d}')
             os.makedirs(dirpath, exist_ok=True)
             save_numpy(data, os.path.join(dirpath, 'treatment_binned.npz'))

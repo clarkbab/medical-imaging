@@ -1,4 +1,4 @@
-from dicomset.utils import create_affine, spatial_transpose, to_sitk_image
+from dicomset.utils import create_affine, transpose, to_sitk_image
 import numpy as np
 import SimpleITK as sitk
 import struct
@@ -74,7 +74,7 @@ def load_velocity_bdf_transform(
     image = np.array(image)
     image = np.reshape(image, (*reversed(size), 3))
     image = np.moveaxis(image, -1, 0)
-    image = spatial_transpose(image, dim=3)
+    image = transpose(image, dim=3)
 
     # Create transform.
     # The 'origin' is not stored in the '.bdf' file, so we need to use the fixed image origin.
@@ -209,7 +209,7 @@ def load_velocity_transform(filepath: FilePath) -> sitk.Transform:
         dvf_image = np.array(dvf_image)
         dvf_image = np.reshape(dvf_image, (*reversed(grid_size), n_dims))
         dvf_image = np.moveaxis(dvf_image, -1, 0)
-        dvf_image = spatial_transpose(dvf_image, dim=3)
+        dvf_image = transpose(dvf_image, dim=3)
 
         # Create transform.
         grid_affine = create_affine(grid_spacing, grid_origin)
