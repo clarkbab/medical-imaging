@@ -1,6 +1,6 @@
 from .mednext import MedNeXt
 
-def create_mednextv1_small(num_input_channels, num_classes, kernel_size=3, ds=False):
+def create_mednextv1_small(num_input_channels, num_classes, kernel_size=3, ds=False, dim='3d'):
 
     return MedNeXt(
         in_channels = num_input_channels, 
@@ -9,13 +9,14 @@ def create_mednextv1_small(num_input_channels, num_classes, kernel_size=3, ds=Fa
         exp_r=2,                         
         kernel_size=kernel_size,         
         deep_supervision=ds,             
+        dim=dim,
         do_res=True,                     
         do_res_up_down = True,
         block_counts = [2,2,2,2,2,2,2,2,2]
     )
 
 
-def create_mednextv1_base(num_input_channels, num_classes, kernel_size=3, ds=False):
+def create_mednextv1_base(num_input_channels, num_classes, kernel_size=3, ds=False, dim='3d'):
 
     return MedNeXt(
         in_channels = num_input_channels, 
@@ -24,13 +25,14 @@ def create_mednextv1_base(num_input_channels, num_classes, kernel_size=3, ds=Fal
         exp_r=[2,3,4,4,4,4,4,3,2],       
         kernel_size=kernel_size,         
         deep_supervision=ds,             
+        dim=dim,
         do_res=True,                     
         do_res_up_down = True,
         block_counts = [2,2,2,2,2,2,2,2,2]
     )
 
 
-def create_mednextv1_medium(num_input_channels, num_classes, kernel_size=3, ds=False):
+def create_mednextv1_medium(num_input_channels, num_classes, kernel_size=3, ds=False, dim='3d'):
 
     return MedNeXt(
         in_channels = num_input_channels, 
@@ -39,6 +41,7 @@ def create_mednextv1_medium(num_input_channels, num_classes, kernel_size=3, ds=F
         exp_r=[2,3,4,4,4,4,4,3,2],       
         kernel_size=kernel_size,         
         deep_supervision=ds,             
+        dim=dim,
         do_res=True,                     
         do_res_up_down = True,
         block_counts = [3,4,4,4,4,4,4,4,3],
@@ -46,7 +49,7 @@ def create_mednextv1_medium(num_input_channels, num_classes, kernel_size=3, ds=F
     )
 
 
-def create_mednextv1_large(num_input_channels, num_classes, kernel_size=3, ds=False):
+def create_mednextv1_large(num_input_channels, num_classes, kernel_size=3, ds=False, dim='3d'):
 
     return MedNeXt(
         in_channels = num_input_channels, 
@@ -55,6 +58,7 @@ def create_mednextv1_large(num_input_channels, num_classes, kernel_size=3, ds=Fa
         exp_r=[3,4,8,8,8,8,8,4,3],                          
         kernel_size=kernel_size,                     
         deep_supervision=ds,             
+        dim=dim,
         do_res=True,                     
         do_res_up_down = True,
         block_counts = [3,4,8,8,8,8,8,4,3],
@@ -63,7 +67,7 @@ def create_mednextv1_large(num_input_channels, num_classes, kernel_size=3, ds=Fa
 
 
 def create_mednext_v1(num_input_channels, num_classes, model_id, kernel_size=3,
-                      deep_supervision=False):
+                      deep_supervision=False, dim='3d'):
 
     model_dict = {
         'S': create_mednextv1_small,
@@ -73,7 +77,7 @@ def create_mednext_v1(num_input_channels, num_classes, model_id, kernel_size=3,
         }
     
     return model_dict[model_id](
-        num_input_channels, num_classes, kernel_size, deep_supervision
+        num_input_channels, num_classes, kernel_size, deep_supervision, dim=dim
         )
 
 

@@ -104,6 +104,8 @@ def _load_persisted_state() -> None:
         ('show_margin', 'show_margin', True),
         ('margin_width_mm', 'margin_width_mm', 10.0),
         ('onscreen_threshold', 'onscreen_threshold', 50.0),
+        ('show_conf_panel', 'show_conf_panel', True),
+        ('check_z_spacing', 'check_z_spacing', True),
     ]:
         if _skey not in st.session_state:
             st.session_state[_skey] = img.get(_jkey, _default)
@@ -153,6 +155,8 @@ def _save_persisted_state(log_key: str = '') -> None:
             'show_margin':        st.session_state.get('show_margin', True),
             'margin_width_mm':    st.session_state.get('margin_width_mm', 10.0),
             'onscreen_threshold': st.session_state.get('onscreen_threshold', 50.0),
+            'show_conf_panel':    st.session_state.get('show_conf_panel', True),
+            'check_z_spacing':    st.session_state.get('check_z_spacing', True),
         }
         # site is always user-set; refresh name from session state.
         p['site'] = {'name': st.session_state.get('data_dir', ''), 'auto_select': False}
@@ -632,13 +636,15 @@ def _ct_cache_hash(ct_dir: str) -> str:
     return h.hexdigest()[:16]
 
 
-def load_ct(ct_dir: str, progress_callback=None, on_cache_start=None, on_cache_done=None):
+def load_ct(ct_dir: str, check_z_spacing: bool = True,
+            progress_callback=None, on_cache_start=None, on_cache_done=None):
     ct_hash = _ct_cache_hash(ct_dir)
     npz_path = os.path.join(ct_dir, f'ct_{ct_hash}.npz')
     if os.path.isfile(npz_path):
         loaded = np.load(npz_path)
         return loaded['data'], loaded['affine']
-    ct_volume, affine = from_ct_dicom(ct_dir, progress_callback=progress_callback)
+    ct_volume, affine = from_ct_dicom(ct_dir, progress_callback=progress_callback,
+                                      check_z_spacing=check_z_spacing)
     if on_cache_start:
         on_cache_start()
     save_numpy({'data': ct_volume, 'affine': affine}, npz_path)
@@ -1005,7 +1011,7 @@ def render_drr_display():
             st.plotly_chart(_histogram_fig(drr_disp, *st.session_state[d_key]), width='stretch')
 
     # -- Images with drag-and-drop contour overlay --
-    img_label = f'{proj_idx}/{n_angles}, kv det. angle={angle:.1f}°'
+    img_label = f'{proj_idx}/{n_angles}, kv source angle={angle:.1f}°'
 
     y_bnd, x_bnd = get_contour_boundary(mask)
     _img_w = int(drr_disp.shape[1])
@@ -1157,8 +1163,10 @@ def render_drr_display():
             st.session_state[f'_oy_{_i}'] = offset_y
 
     # Confidence + offset panel (fixed-position overlay in parent page) — retrospective only.
+    # Always render so the JS can show/hide the DOM overlay; passing visible=False hides it.
     if not _prospective:
         _panel_result = _confidence_panel(
+            visible=st.session_state.get('show_conf_panel', True),
             confidence=st.session_state.get(f'_conf_{_i}', 0),
             clinical=st.session_state.get(f'_clin_{_i}', False),
             offset_x=offset_x,
@@ -1719,6 +1727,10 @@ def _render_image_settings():
     st.selectbox('Contour linestyle', ['Solid', 'Dashed', 'Dotted'], key='contour_linestyle',
                  on_change=_on_img_settings_change)
     st.color_picker('Contour colour', value='#ff3c3c', key='contour_color', on_change=_on_img_settings_change)
+    if not st.session_state.get('prospective_mode', False):
+        st.toggle('Show offset/confidence panel', value=True, key='show_conf_panel',
+                  on_change=_on_img_settings_change,
+                  help='Show or hide the floating offset and confidence panel.')
     if st.session_state.get('prospective_mode', False):
         st.toggle('Show margin', value=True, key='show_margin', on_change=_on_img_settings_change)
         st.number_input('Margin width (mm)', value=st.session_state.get('margin_width_mm', 10.0),
@@ -1756,6 +1768,8 @@ def _render_proj_geometry():
         if _auto_machine and st.session_state.get('_proj_machine_auto_dir') != _curr_pdir_m:
             st.session_state['_proj_machine_auto_dir'] = _curr_pdir_m
             st.session_state['proj_machine'] = _auto_machine
+            if _auto_machine == 'Varian':
+                st.session_state['proj_scale'] = 'VARIAN_STANDARD'
 
     st.selectbox('Machine', ['Elekta', 'Varian'], key='proj_machine',
                  on_change=_on_proj_machine_change)
@@ -1813,7 +1827,7 @@ def _render_proj_geometry():
         st.selectbox('Imaging type', ['kV', 'Megavoltage', 'CBCT'], key='imaging_type')
         _n_proj_label = f'Number of projections' if _prospective else f'Number of projections (total={_proj_count})'
         st.number_input(_n_proj_label, min_value=1, step=1, key='n_proj')
-        if _prospective:
+        if _prospective or st.session_state.get('_angles_from_files') is False:
             st.number_input('Detector start angle (°)', format='%.1f', step=1.0, key='angle_start')
             st.number_input('Detector stop angle (°)', format='%.1f', step=1.0, key='angle_stop')
         _det_options = list(_DETECTOR_SIZES.keys())
@@ -1915,8 +1929,9 @@ def render_sidebar():
         if 'fraction' not in st.session_state:
             st.session_state['fraction'] = _fracs[0]
             _mark_path_auto('fraction')
+        _frac_val = st.session_state.get('fraction', _fracs[0])
         st.selectbox('Fraction', _fracs,
-                     index=_fracs.index(st.session_state.get('fraction', _fracs[0])),
+                     index=_fracs.index(_frac_val) if _frac_val in _fracs else 0,
                      key='fraction',
                      on_change=_on_plan_fraction_change)
 
@@ -1930,6 +1945,9 @@ def render_sidebar():
     st.button('Browse RTSTRUCT file', on_click=_browse_file, args=('rtstruct_path', 'Select RTSTRUCT file'))
     st.text_input('RTPLAN file', key='plan_path', on_change=_on_plan_path_change)
     st.button('Browse RTPLAN file', on_click=_browse_file, args=('plan_path', 'Select RTPLAN file'))
+    st.toggle('Check CT z-spacing', value=True, key='check_z_spacing',
+              help='Raise an error if CT slice z-spacing is irregular. '
+                   'Disable if loading fails due to non-uniform slice spacing.')
 
     if st.button('Finalise planning data'):
         _mark_path_manual('ct_dir')
@@ -1999,7 +2017,7 @@ label[role="switch"][aria-checked="true"] > div:first-of-type { background-color
                     if _cur_treat_fx not in _img_fractions:
                         _cur_treat_fx = _default_fx
                     st.selectbox('Fraction', _img_fractions,
-                                 index=_img_fractions.index(_cur_treat_fx), key='treat_fraction',
+                                 index=_img_fractions.index(_cur_treat_fx) if _cur_treat_fx in _img_fractions else 0, key='treat_fraction',
                                  on_change=_on_treat_fraction_change)
                     _fx_dir = os.path.join(_pat_images_dir, st.session_state.get('fraction', _default_fx))
 
@@ -2043,10 +2061,17 @@ label[role="switch"][aria-checked="true"] > div:first-of-type { background-color
             if 'treatment_images' not in st.session_state:
                 st.session_state.treatment_images = ''
             _ti_auto = st.session_state.get('_persisted', {}).get('treatment_images', {}).get('auto_select', True)
-            if _auto_proj_dir and (not st.session_state.treatment_images or
-                                   (_ti_auto and st.session_state.treatment_images != _auto_proj_dir)):
-                st.session_state.treatment_images = _auto_proj_dir
-                _mark_path_auto('treatment_images')
+            if _auto_proj_dir:
+                if _ti_auto or not st.session_state.treatment_images:
+                    # Always explicitly write in auto mode so the text input widget is
+                    # guaranteed to reflect the detected path on every render.  Writing
+                    # the same value is a no-op for reruns but forces Streamlit to mark
+                    # the widget value as freshly set, preventing the blank-field bug
+                    # that occurs when the value was carried over from a previous session.
+                    st.session_state.treatment_images = _auto_proj_dir
+                    _mark_path_auto('treatment_images')
+            # Clear the autofill guard (no longer needed with the always-write approach).
+            st.session_state.pop('_ti_autofill_guard', None)
 
             st.text_input('Treatment images folder', key='treatment_images', on_change=_on_treatment_images_change)
             st.button('Browse treatment images folder', on_click=_browse_folder,
@@ -2157,6 +2182,35 @@ with st.sidebar:
     _render_proj_geometry()
     _render_image_settings()
 
+# Inject JS so every text input on the page shows its full value as a native
+# OS-level tooltip (white rectangular box) when the user hovers over the field.
+stc.html("""
+<script>
+(function () {
+  function patch() {
+    document.querySelectorAll(
+      '[data-testid="stTextInput"] input'
+    ).forEach(function (inp) {
+      inp.title = inp.value || '';
+      if (!inp._titlePatched) {
+        inp._titlePatched = true;
+        inp.addEventListener('input', function () { inp.title = inp.value || ''; });
+      }
+    });
+  }
+  // Patch immediately and again after fragments have rendered.
+  patch();
+  setTimeout(patch, 400);
+  setTimeout(patch, 1200);
+  // Re-patch whenever the DOM changes (fragment rerenders, navigation, etc.)
+  if (!window._titlePatchObserver) {
+    window._titlePatchObserver = new MutationObserver(function () { patch(); });
+    window._titlePatchObserver.observe(document.body, { childList: true, subtree: true });
+  }
+})();
+</script>
+""", height=1)
+
 if _geo_err := st.session_state.get('_geometry_error'):
     st.error('Failed to load projection geometry')
     st.code(_geo_err, language='python')
@@ -2205,7 +2259,7 @@ section[data-testid="stSidebar"] { opacity: 0.4; pointer-events: none; }
             _load_n = min(_n_proj, len(projection_files))
             _his_bar = st.progress(0, text='Loading .his files...')
             _angles_files, _frame_infos_by_file = load_his_angles_and_files(
-                _projections_dir, angle_type='kv-detector', sort_by_angle=False,
+                _projections_dir, angle_type='kv-source', sort_by_angle=False,
                 scale=_scale, n_angles=_n_proj)
             _his_bar.progress(100, text='Loading .his files...')
             angle_list = list(_angles_files.keys())
@@ -2224,7 +2278,7 @@ section[data-testid="stSidebar"] { opacity: 0.4; pointer-events: none; }
                 pct = int(current / total * 100) if total else 100
                 _xim_bar.progress(pct, text=f'Loading .xim files... ({current}/{total})')
             _angles_files = load_xim_angles_and_files(
-                _projections_dir, angle_type='kv-detector', sort_by_angle=False,
+                _projections_dir, angle_type='kv-source', sort_by_angle=False,
                 scale=_scale, n_angles=_n_proj, progress_callback=_xim_progress)
             _xim_bar.progress(100, text='Loading .xim files...')
             angle_list = list(_angles_files.keys())
@@ -2249,7 +2303,7 @@ section[data-testid="stSidebar"] { opacity: 0.4; pointer-events: none; }
                 _load_data = (_t_idx == 0)
                 _, _t_info = load_tiff(_t_f, filename_angle=_tiff_filename_angle,
                                        machine=_machine, load_data=_load_data)
-                _angles_files[_t_info['kv-detector-angle']] = os.path.basename(_t_f)
+                _angles_files[_t_info['kv-source-angle']] = os.path.basename(_t_f)
                 _pct = int((_t_idx + 1) / len(_tiff_files) * 100)
                 _tiff_bar.progress(_pct, text=f'Loading .tiff files... ({_t_idx + 1}/{len(_tiff_files)})')
             angle_list = list(_angles_files.keys())
@@ -2290,7 +2344,8 @@ section[data-testid="stSidebar"] { opacity: 0.4; pointer-events: none; }
             if cache_bar[0] is not None:
                 cache_bar[0].progress(100, text='CT cached.')
 
-        ct_volume, affine = load_ct(ct_dir, progress_callback=_ct_progress,
+        ct_volume, affine = load_ct(ct_dir, check_z_spacing=st.session_state.get('check_z_spacing', True),
+                                    progress_callback=_ct_progress,
                                     on_cache_start=_on_cache_start, on_cache_done=_on_cache_done)
         ct_bar.progress(100, text='CT loaded.')
 
@@ -2320,7 +2375,7 @@ section[data-testid="stSidebar"] { opacity: 0.4; pointer-events: none; }
 
         def _proj_progress(current: int, total: int) -> None:
             pct = int(current / total * 100) if total else 100
-            proj_bar.progress(pct, text=f'Creating projections (device={_device})... ({current}/{total})')
+            proj_bar.progress(pct, text=f'Creating projections (device={_device})... ({current}/{total} batches)')
 
         if _method == 'CTorch':
             drrs, label_projs = project_ctorch(

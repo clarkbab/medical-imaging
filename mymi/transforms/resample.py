@@ -19,7 +19,7 @@ from .transforms import assert_box_width
 def __spatial_resample(
     data: Image | None = None,
     affine: AffineMatrix | None = None,
-    fill: Union[float, Literal['min']] = 'min',
+    fill: Union[float, Literal['mean', 'median', 'min']] = 'min',
     image: DicomSeries | NiftiImageSeries | None = None,
     output_affine: AffineMatrix | None = None, 
     output_image: Optional[Union['DicomSeries', 'NiftiImageSeries']] = None,

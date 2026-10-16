@@ -1,5 +1,5 @@
 import dicomset as ds
-from dicomset.dicom.utils import save_dicom, to_ct_dicom, to_rtstruct_dicom
+from dicomset.utils import save_dicom, to_ct_dicom, to_rtstruct_dicom
 from dicomset.nifti.utils import load_registered_regions
 import numpy as np
 from tqdm import tqdm
@@ -10,7 +10,7 @@ inh_series = 'series_0'
 exh_series = 'series_5'
 int_phases = ['series_1', 'series_2', 'series_3', 'series_4',
     'series_6', 'series_7', 'series_8', 'series_9']
-methods = ['affine', 'corrfield', 'linear', 'rigid']
+methods = ['affine', 'corrfield', 'deeds', 'linear', 'rigid']
 set = ds.load(dataset, 'nifti')
 
 for p in tqdm(pat_ids):
@@ -18,10 +18,10 @@ for p in tqdm(pat_ids):
     pat = set.patient(p)
     inh_ct = pat.ct_series(inh_series).data
     inh_affine = pat.ct_series(inh_series).affine
-    inh_gtv = pat.regions_series(inh_series).data(r='GTV')[0]
+    inh_gtv = pat.regions_series(inh_series).data(r='GTV')
     exh_ct = pat.ct_series(exh_series).data
     exh_affine = pat.ct_series(exh_series).affine
-    exh_gtv = pat.regions_series(exh_series).data(r='GTV')[0]
+    exh_gtv = pat.regions_series(exh_series).data(r='GTV')
 
     # Load intermediate phases.
     int_cts = [pat.ct_series(s).data for s in int_phases]
@@ -32,7 +32,7 @@ for p in tqdm(pat_ids):
     for m in methods:
         moved_gtvs = []
         for s in int_phases:
-            moved_gtv, _ = load_registered_regions(dataset, pat.id, m, 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
+            _, moved_gtv, _ = load_registered_regions(dataset, pat.id, m, 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
             moved_gtvs.append(moved_gtv)
         method_moved_gtvs[m] = moved_gtvs
 

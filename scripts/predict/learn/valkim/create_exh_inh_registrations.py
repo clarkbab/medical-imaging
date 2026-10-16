@@ -1,13 +1,15 @@
 import dicomset as ds
-from dicomset.nifti.utils import create_registration_transform, create_registered_regions, create_registered_image, load_registration_transform, load_registered_image, load_registered_regions
+from dicomset.nifti.utils import create_registration_transform, create_registration_moved_image, create_registration_moved_regions
 from dicomset.utils import create_box_label, combine_boxes, foreground_fov
 from tqdm import tqdm
 
-from mymi.predictions.registration import register_affine, register_corrfield, register_plastimatch, register_rigid, register_unigradicon
+from mymi.predictions.registration import register_affine, register_corrfield, register_plastimatch, register_rigid, register_unigradicon, \
+    register_deeds
 from mymi.transforms import resample
 
 methods = ['corrfield', 'plastimatch', 'unigradicon', 'unigradicon-io']
 methods = ['rigid', 'affine']
+methods = ['corrfield']
 
 dataset = 'VALKIM-PP'
 inh_series = 'series_0'
@@ -19,12 +21,10 @@ regions = ['GTV', 'ts_Lung']
 
 for p in tqdm(pat_ids):
     pat = set.patient(p)
-    inh_ct = pat.ct_series(inh_series).data
-    inh_affine = pat.ct_series(inh_series).affine
-    inh_labels = pat.regions_series(inh_series).data(r=regions)
-    exh_ct = pat.ct_series(exh_series).data
-    exh_affine = pat.ct_series(exh_series).affine
-    exh_labels = pat.regions_series(exh_series).data(r=regions)
+    inh_ct, inh_affine = pat.ct_series(inh_series).image
+    inh_labels = pat.regions_series(inh_series).data(r=regions, rr=False)
+    exh_ct, exh_affine = pat.ct_series(exh_series).image
+    exh_labels = pat.regions_series(exh_series).data(r=regions, rr=False)
 
     # Set registration params.
     fixed_ct = inh_ct
@@ -50,6 +50,10 @@ for p in tqdm(pat_ids):
         if m == 'affine':
             transform = register_affine(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_mask=gtv_area, moving_mask=gtv_area)
         elif m == 'corrfield':
+            transform = register_corrfield(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_lung_mask=fixed_lung_mask, moving_lung_mask=moving_lung_mask, keep_temp=False)
+        elif m == 'deeds':
+            transform = register_deeds(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_lung_mask=fixed_lung_mask, moving_lung_mask=moving_lung_mask, keep_temp=False)
+        elif m == 'corrfield':
             transform = register_corrfield(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_lung_mask=fixed_lung_mask, moving_lung_mask=moving_lung_mask, keep_temp=False, use_io=False)
         elif m == 'plastimatch':
             transform = register_plastimatch(fixed_ct, moving_ct, fixed_affine, moving_affine, keep_temp=False, use_io=False)
@@ -62,6 +66,6 @@ for p in tqdm(pat_ids):
 
         create_registration_transform(dataset, pat.id, m, transform, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
         moved_ct = resample(exh_ct, affine=exh_affine, output_affine=inh_affine, transform=transform)
-        create_registered_image(dataset, pat.id, m, moved_ct, fixed_affine, 'ct', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
+        create_registration_moved_image(dataset, pat.id, m, moved_ct, fixed_affine, 'ct', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
         moved_labels = resample(exh_labels, affine=exh_affine, output_affine=inh_affine, transform=transform)
-        create_registered_regions(dataset, pat.id, m, moved_labels, fixed_affine, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
+        create_registration_moved_regions(dataset, pat.id, m, moved_labels, fixed_affine, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)

@@ -100,10 +100,15 @@ def register_deeds(
         '-O', output_prefix,
     ]
     logger.info(command)
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.error(result.stderr)
-        raise RuntimeError(f"Deeds failed with return code {result.returncode}")
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    output_lines = []
+    for line in process.stdout:
+        line = line.rstrip()
+        output_lines.append(line)
+        logger.info(f"[deedsBCV] {line}")
+    process.wait()
+    if process.returncode != 0:
+        raise RuntimeError(f"Deeds failed with return code {process.returncode}. Output:\n" + "\n".join(output_lines))
 
     # Load DVF.
     dvf_path = os.path.join(temp_dir, 'output_dense_disp.nii.gz')

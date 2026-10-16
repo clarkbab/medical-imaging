@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
-from dicomset.utils import hist_eq as hist_eq_fn
+from datetime import datetime, timedelta
+from dicomset.utils import hist_eq as hist_eq_fn, load_csv, load_numpy, logger, save_csv, save_numpy
 from dicomset.typing import *
 import numpy as np
 import os
 from pathlib import Path
 import pylinac as plc
 import struct
+from tqdm.auto import tqdm
 from typing import Any, Tuple
 
 from mymi.typing import *
@@ -30,6 +32,75 @@ class XimInfo:
     compression_indicator: int = 0
     histogram: XimHistogramInfo = field(default_factory=XimHistogramInfo)
     properties: dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class HncInfo:
+    file_name: str = ""
+    file_type: str = ""
+    file_length: int = 0
+    actual_file_length: int = 0
+    checksum_spec: str = ""
+    checksum: int = 0
+    creation_date: str = ""
+    creation_time: str = ""
+    patient_id: str = ""
+    patient_ser: int = 0
+    series_id: str = ""
+    series_ser: int = 0
+    slice_id: str = ""
+    slice_ser: int = 0
+    size_x: int = 0
+    size_y: int = 0
+    slice_z_pos: float = 0.0
+    modality: str = ""
+    window: int = 0
+    level: int = 0
+    pixel_offset: int = 0
+    image_type: str = ""
+    gantry_rtn: float = 0.0
+    sad: float = 0.0
+    sfd: float = 0.0
+    coll_x1: float = 0.0
+    coll_x2: float = 0.0
+    coll_y1: float = 0.0
+    coll_y2: float = 0.0
+    coll_rtn: float = 0.0
+    field_x: float = 0.0
+    field_y: float = 0.0
+    blade_x1: float = 0.0
+    blade_x2: float = 0.0
+    blade_y1: float = 0.0
+    blade_y2: float = 0.0
+    idu_pos_lng: float = 0.0
+    idu_pos_lat: float = 0.0
+    idu_pos_vrt: float = 0.0
+    idu_pos_rtn: float = 0.0
+    patient_support_angle: float = 0.0
+    table_top_eccentric_angle: float = 0.0
+    couch_vrt: float = 0.0
+    couch_lng: float = 0.0
+    couch_lat: float = 0.0
+    idu_resolution_x: float = 0.0
+    idu_resolution_y: float = 0.0
+    image_resolution_x: float = 0.0
+    image_resolution_y: float = 0.0
+    energy: float = 0.0
+    dose_rate: float = 0.0
+    xray_kv: float = 0.0
+    xray_ma: float = 0.0
+    meterset_exposure: float = 0.0
+    acq_adjustment: float = 0.0
+    ct_projection_angle: float = 0.0
+    cbct_positive_angle: float = 0.0
+    ct_norm_chamber: float = 0.0
+    gating_time_tag: float = 0.0
+    gating_4d_info_x: float = 0.0
+    gating_4d_info_y: float = 0.0
+    gating_4d_info_z: float = 0.0
+    gating_4d_info_time: float = 0.0
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+    unused_field: float = 0.0
 
 def load_xim_angles_and_files(
     dirpath: DirPath,
@@ -81,6 +152,60 @@ def load_xim_angles_and_files(
 
     return angles_files
 
+def load_xim_arc(
+    dirpath: DirPath,
+    load_data: bool = True,
+    raw: bool = False,
+    show_progress: bool = True,
+    **kwargs,
+    ) -> Tuple[BatchImage2D | None, pd.DataFrame]:
+    if raw:
+        files = sorted(f for f in os.listdir(dirpath) if f.endswith('.xim'))
+        images, infos = [], []
+        for filename in tqdm(files, desc='Loading .xim files', disable=not show_progress):
+            filepath = os.path.join(dirpath, filename)
+            try:
+                pixel_data, info = load_xim(filepath, **kwargs)
+            except Exception as e:
+                logger.warn(f"Skipping '{filename}': {e}")
+                continue
+            images.append(pixel_data)
+            infos.append(info)
+        if len(images) == 0:
+            logger.warn(f"No valid .xim files found in '{dirpath}'.")
+            return None, pd.DataFrame()
+        images = np.stack(images, axis=0)
+        infos = pd.DataFrame(infos).reset_index(drop=True)
+    else:
+        proc_dirpath = dirpath + '_proc'
+        if load_data:
+            images = load_numpy(os.path.join(proc_dirpath, 'images.npz'))
+        else:
+            images = None
+        infos = load_csv(os.path.join(proc_dirpath, 'info.csv'), eval_cols=['det-offset', 'det-size', 'det-spacing'])
+    return images, infos
+
+def process_xim_session(
+    dirpath: DirPath,
+    show_progress: bool = True,
+    **kwargs,
+    ) -> None:
+    # Load raw .xim files.
+    images, infos = load_xim_arc(dirpath, raw=True, show_progress=show_progress, **kwargs)
+    if images is None:
+        return
+
+    # Save to _proc folder.
+    proc_dirpath = dirpath + '_proc'
+    os.makedirs(proc_dirpath, exist_ok=True)
+
+    logger.info(f"Saving processed xim session to '{proc_dirpath}'.")
+    save_numpy(images, os.path.join(proc_dirpath, 'images.npz'))
+
+    # Drop complex columns not suitable for CSV.
+    infos = infos.drop(columns=['properties'], errors='ignore')
+    save_csv(infos, os.path.join(proc_dirpath, 'info.csv'))
+
 def load_xim(
     filepath: str | Path,
     # This is just a convention, we could flip the image and make it look
@@ -88,7 +213,7 @@ def load_xim(
     # KIM convention is from source -> detector so let's go with that.
     flip_lr: bool = False,
     hist_eq: bool = False,
-    invert_intensities: bool = True,
+    invert_intensities: bool = False,
     load_pixel_data: bool = True,
     scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'VARIAN_STANDARD',
     ) -> Tuple[Image2D | None, pd.Series]:
@@ -280,6 +405,10 @@ def load_xim(
     metadata['det-spacing'] = (info.properties['PixelWidth'] * 10, info.properties['PixelHeight'] * 10)
     metadata['properties'] = info.properties
     metadata['machine'] = 'varian'
+    metadata['start-time'] = datetime.fromtimestamp(info.properties['StartTime']) + timedelta(microseconds=info.properties.get('StartTimeRemainder', 0) / 1000)
+    metadata['stop-time'] = datetime.fromtimestamp(info.properties['StopTime']) + timedelta(microseconds=info.properties.get('StopTimeRemainder', 0) / 1000)
+    metadata['start-time-s'] = info.properties['StartTime'] + info.properties.get('StartTimeRemainder', 0) / 1e9
+    metadata['stop-time-s'] = info.properties['StopTime'] + info.properties.get('StopTimeRemainder', 0) / 1e9
 
     if flip_lr and pixel_data is not None:
         pixel_data = np.flip(pixel_data, axis=0)
@@ -311,3 +440,126 @@ def plot_xim_closest_to(
 
     for d, i in zip(datas, infos):
         plot_projection(d, i)
+
+def load_hnc(
+    filepath: str | Path,
+    flip_lr: bool = False,
+    hist_eq: bool = False,
+    invert_intensities: bool = False,
+    load_pixel_data: bool = True,
+    ) -> Tuple[np.ndarray | None, pd.Series]:
+    filepath = Path(filepath)
+    info = HncInfo(file_name=str(filepath))
+
+    with open(filepath, "rb") as fid:
+        # ---- Header (512 bytes total) --------------------------------------
+        info.file_type           = fid.read(32).decode("ascii", errors="replace").rstrip("\x00")
+        info.file_length         = struct.unpack("<I", fid.read(4))[0]
+        info.actual_file_length  = filepath.stat().st_size
+        info.checksum_spec       = fid.read(4).decode("ascii", errors="replace").rstrip("\x00")
+        info.checksum            = struct.unpack("<I", fid.read(4))[0]
+        info.creation_date       = fid.read(8).decode("ascii", errors="replace").rstrip("\x00")
+        info.creation_time       = fid.read(8).decode("ascii", errors="replace").rstrip("\x00")
+        info.patient_id          = fid.read(16).decode("ascii", errors="replace").rstrip("\x00")
+        info.patient_ser         = struct.unpack("<I", fid.read(4))[0]
+        info.series_id           = fid.read(16).decode("ascii", errors="replace").rstrip("\x00")
+        info.series_ser          = struct.unpack("<I", fid.read(4))[0]
+        info.slice_id            = fid.read(16).decode("ascii", errors="replace").rstrip("\x00")
+        info.slice_ser           = struct.unpack("<I", fid.read(4))[0]
+        info.size_x              = struct.unpack("<I", fid.read(4))[0]
+        info.size_y              = struct.unpack("<I", fid.read(4))[0]
+        info.slice_z_pos         = struct.unpack("<d", fid.read(8))[0]
+        info.modality            = fid.read(16).decode("ascii", errors="replace").rstrip("\x00")
+        info.window              = struct.unpack("<I", fid.read(4))[0]
+        info.level               = struct.unpack("<I", fid.read(4))[0]
+        info.pixel_offset        = struct.unpack("<I", fid.read(4))[0]
+        info.image_type          = fid.read(4).decode("ascii", errors="replace").rstrip("\x00")
+        info.gantry_rtn          = struct.unpack("<d", fid.read(8))[0]
+        info.sad                 = struct.unpack("<d", fid.read(8))[0]
+        info.sfd                 = struct.unpack("<d", fid.read(8))[0]
+        info.coll_x1             = struct.unpack("<d", fid.read(8))[0]
+        info.coll_x2             = struct.unpack("<d", fid.read(8))[0]
+        info.coll_y1             = struct.unpack("<d", fid.read(8))[0]
+        info.coll_y2             = struct.unpack("<d", fid.read(8))[0]
+        info.coll_rtn            = struct.unpack("<d", fid.read(8))[0]
+        info.field_x             = struct.unpack("<d", fid.read(8))[0]
+        info.field_y             = struct.unpack("<d", fid.read(8))[0]
+        info.blade_x1            = struct.unpack("<d", fid.read(8))[0]
+        info.blade_x2            = struct.unpack("<d", fid.read(8))[0]
+        info.blade_y1            = struct.unpack("<d", fid.read(8))[0]
+        info.blade_y2            = struct.unpack("<d", fid.read(8))[0]
+        info.idu_pos_lng         = struct.unpack("<d", fid.read(8))[0]
+        info.idu_pos_lat         = struct.unpack("<d", fid.read(8))[0]
+        info.idu_pos_vrt         = struct.unpack("<d", fid.read(8))[0]
+        info.idu_pos_rtn         = struct.unpack("<d", fid.read(8))[0]
+        info.patient_support_angle       = struct.unpack("<d", fid.read(8))[0]
+        info.table_top_eccentric_angle   = struct.unpack("<d", fid.read(8))[0]
+        info.couch_vrt           = struct.unpack("<d", fid.read(8))[0]
+        info.couch_lng           = struct.unpack("<d", fid.read(8))[0]
+        info.couch_lat           = struct.unpack("<d", fid.read(8))[0]
+        info.idu_resolution_x    = struct.unpack("<d", fid.read(8))[0]
+        info.idu_resolution_y    = struct.unpack("<d", fid.read(8))[0]
+        info.image_resolution_x  = struct.unpack("<d", fid.read(8))[0]
+        info.image_resolution_y  = struct.unpack("<d", fid.read(8))[0]
+        info.energy              = struct.unpack("<d", fid.read(8))[0]
+        info.dose_rate           = struct.unpack("<d", fid.read(8))[0]
+        info.xray_kv             = struct.unpack("<d", fid.read(8))[0]
+        info.xray_ma             = struct.unpack("<d", fid.read(8))[0]
+        info.meterset_exposure   = struct.unpack("<d", fid.read(8))[0]
+        info.acq_adjustment      = struct.unpack("<d", fid.read(8))[0]
+        info.ct_projection_angle = struct.unpack("<d", fid.read(8))[0]
+        info.cbct_positive_angle = (info.ct_projection_angle + 270.0) % 360.0
+        info.ct_norm_chamber     = struct.unpack("<d", fid.read(8))[0]
+        info.gating_time_tag     = struct.unpack("<d", fid.read(8))[0]
+        info.gating_4d_info_x    = struct.unpack("<d", fid.read(8))[0]
+        info.gating_4d_info_y    = struct.unpack("<d", fid.read(8))[0]
+        info.gating_4d_info_z    = struct.unpack("<d", fid.read(8))[0]
+        info.gating_4d_info_time = struct.unpack("<d", fid.read(8))[0]
+        info.offset_x            = struct.unpack("<d", fid.read(8))[0]
+        info.offset_y            = struct.unpack("<d", fid.read(8))[0]
+        info.unused_field        = struct.unpack("<d", fid.read(8))[0]
+
+        # ---- Pixel data ----------------------------------------------------
+        pixel_data: np.ndarray | None = None
+        if load_pixel_data:
+            n_pixels = info.size_x * info.size_y
+            remaining = info.actual_file_length - fid.tell()
+            if remaining % n_pixels != 0:
+                raise ValueError(
+                    f"Incompatible HNC file format: {remaining} remaining bytes "
+                    f"not divisible by {n_pixels} pixels in '{filepath}'."
+                )
+            bytes_per_pixel = remaining // n_pixels
+            if bytes_per_pixel == 1:
+                pixel_data = np.frombuffer(fid.read(n_pixels), dtype=np.uint8)
+            elif bytes_per_pixel == 2:
+                pixel_data = np.frombuffer(fid.read(n_pixels * 2), dtype=np.uint16)
+            elif bytes_per_pixel == 4:
+                pixel_data = np.frombuffer(fid.read(n_pixels * 4), dtype=np.uint32)
+            else:
+                raise ValueError(
+                    f"Incompatible HNC file format: {bytes_per_pixel} bytes/pixel "
+                    f"in '{filepath}'."
+                )
+            pixel_data = pixel_data.reshape((info.size_x, info.size_y), order="F")
+
+    metadata = pd.Series({
+        'mv-source-angle':      info.gantry_rtn,
+        'ct-projection-angle':  info.ct_projection_angle,
+        'cbct-positive-angle':  info.cbct_positive_angle,
+        'sid':                  info.sad,
+        'sdd':                  info.sfd,
+        'det-size':             (info.size_x, info.size_y),
+        'det-spacing':          (info.idu_resolution_x, info.idu_resolution_y),
+        'info':                 info,
+        'machine':              'varian',
+    })
+
+    if flip_lr and pixel_data is not None:
+        pixel_data = np.flip(pixel_data, axis=0)
+    if invert_intensities and pixel_data is not None:
+        pixel_data = np.max(pixel_data) - pixel_data
+    if hist_eq and pixel_data is not None:
+        pixel_data = hist_eq_fn(pixel_data)
+
+    return pixel_data, metadata

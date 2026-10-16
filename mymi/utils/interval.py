@@ -2,7 +2,7 @@ from mymi.typing import *
 
 # Cases:
 # - step:200, matches steps 0, 200, 400, etc.
-# - epoch:50, matches every step in epoch 0, 50, 100, etc.
+# - epoch:50, matches the first 'step_match_length' steps of epoch 0, 50, 100, etc.
 # - epoch:5,step:50, matches epoch=0,step=0,50,100,etc. , epoch=5,step=0,50,100,etc.
 # - epoch:start, matches every step in the first epoch.
 # - step:epoch_start, matches the first step in every epoch.
@@ -40,7 +40,7 @@ def interval_matches(
             interval_step = int(terms[1])
             return step % interval_step < step_match_length
         elif terms[0] == 'epoch':
-            return epoch % int(terms[1]) < epoch_match_length
+            return (epoch % int(terms[1]) < epoch_match_length) and (step % n_steps_per_epoch < step_match_length)
     elif len(terms) == 4:
         epoch_matches = epoch % int(terms[1]) < epoch_match_length
         if terms[3] == 'epoch_start':

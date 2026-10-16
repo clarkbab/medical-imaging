@@ -2,6 +2,7 @@ from .cosine import *
 from .dice import *
 from .dice_with_focal import *
 from .focal import *
+from .kl import *
 from .smoothing import *
 from .mse import *
 from .ncc import *

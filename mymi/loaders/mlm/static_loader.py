@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from typing import *
 
 from dicomset.training import TrainingDataset
-from dicomset.utils import hist_eq as hist_eq_fn, load_json, load_numpy
+from dicomset.utils import load_json, load_numpy, minmax
 from dicomset.typing import *
 
 def _list_proj_files(dirpath: str, prefix: str, ext: str) -> List[Tuple[int, int, str]]:
@@ -87,7 +87,6 @@ class TrainingSet(Dataset):
         self,
         dataset: TrainingDataset,
         pat: PatientID,
-        hist_eq: bool = True,
         n_volumes: int | None = None,
         n_angles: int | None = None,
         normalise: bool = False,
@@ -96,7 +95,7 @@ class TrainingSet(Dataset):
         transform: Transform | None = None,
         ) -> None:
         self.__normalise = normalise
-        self.__hist_eq = hist_eq
+        self.__hist_eq = False
         self.__threshold_labels = threshold_labels
         self.__transform = transform
         self.__preload = preload
@@ -134,19 +133,8 @@ class TrainingSet(Dataset):
         print(self.__inh_ct_proj.shape, self.__inh_labels_proj.shape, self.__exh_ct_proj.shape, self.__exh_labels_proj.shape, self.__kv_source_angles.shape)
 
     def _load_ct_file(self, filepath: str) -> np.ndarray:
-        load_start = time.perf_counter()
-        data = load_numpy(filepath)
-        load_time = time.perf_counter() - load_start
-
-        hist_time = 0.0
-        if self.__hist_eq:
-            hist_start = time.perf_counter()
-            data = hist_eq_fn(data)
-            hist_time = time.perf_counter() - hist_start
-
-        # if self.__debug_n < 3:
-        #     print(f'[TrainingSet] load_ct_file path={os.path.basename(filepath)} load={load_time:.3f}s hist_eq={hist_time:.3f}s shape={tuple(data.shape)} dtype={data.dtype}')
-        return data
+        data = load_numpy(filepath).astype(np.float32)
+        return minmax(data)
 
     def __getitem__(
         self,
@@ -218,7 +206,6 @@ class ValidationDataset(Dataset):
         self,
         dataset: TrainingDataset,
         pat: PatientID,
-        hist_eq: bool = True,
         n_volumes: int | None = None,
         n_angles: int | None = None,
         normalise: bool = False,
@@ -227,7 +214,7 @@ class ValidationDataset(Dataset):
         ) -> None:
         self.__normalise = normalise
         self.__preload = preload
-        self.__hist_eq = hist_eq
+        self.__hist_eq = False
         self.__threshold_labels = threshold_labels
         self.__debug_n = 0
         self.__debug_every = 25
@@ -259,19 +246,8 @@ class ValidationDataset(Dataset):
         print(self.__inh_ct_proj.shape, self.__inh_labels_proj.shape, self.__exh_ct_proj.shape, self.__exh_labels_proj.shape, self.__kv_source_angles.shape)
 
     def _load_ct_file(self, filepath: str) -> np.ndarray:
-        load_start = time.perf_counter()
-        data = load_numpy(filepath)
-        load_time = time.perf_counter() - load_start
-
-        hist_time = 0.0
-        if self.__hist_eq and hist_eq_fn is not None:
-            hist_start = time.perf_counter()
-            data = hist_eq_fn(data)
-            hist_time = time.perf_counter() - hist_start
-
-        # if self.__debug_n < 3:
-        #     print(f'[ValidationDataset] load_ct_file path={os.path.basename(filepath)} load={load_time:.3f}s hist_eq={hist_time:.3f}s shape={tuple(data.shape)} dtype={data.dtype}')
-        return data
+        data = load_numpy(filepath).astype(np.float32)
+        return minmax(data)
 
     def __getitem__(
         self,

@@ -6,6 +6,7 @@ from dicomset.utils.conversion import to_numpy, to_tensor
 from dicomset.dicom.utils import from_rtplan_dicom
 from dicomset.utils.io import load_json, load_nifti, save_nifti, save_numpy
 from dicomset.utils.logging import logger
+from dicomset.utils import minmax
 import numpy as np
 import os 
 import shutil
@@ -44,8 +45,8 @@ def create_static_training_dataset(
     nifti_set = load_nifti_dataset(dataset)
     training_set = create_ds_training_dataset(dest_dataset, recreate=recreate)
     pat_ids = nifti_set.list_patients()
-    pat_ids = pat_ids[:2]
-    regions = ['GTV', 'ts_Lung']
+    pat_ids = ['PAT1']
+    regions = ['GTV', 'bc_Marker_1', 'bc_Marker_2', 'bc_Marker_3', 'ts_Lung']
     info = nifti_set.params['patient-info']
 
     # Create augmentation pipeline.
@@ -186,7 +187,7 @@ def create_static_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=inh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 inh_ct_proj = center_crop(inh_ct_proj, CROP_SIZE)
                 inh_labels_proj = center_crop(inh_labels_proj, CROP_SIZE)
@@ -202,7 +203,7 @@ def create_static_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=exh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 exh_ct_proj = center_crop(exh_ct_proj, CROP_SIZE)
                 exh_labels_proj = center_crop(exh_labels_proj, CROP_SIZE)
@@ -343,7 +344,7 @@ def create_static_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=inh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 inh_ct_proj = center_crop(inh_ct_proj, CROP_SIZE)
                 inh_labels_proj = center_crop(inh_labels_proj, CROP_SIZE)
@@ -359,7 +360,7 @@ def create_static_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=exh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 exh_ct_proj = center_crop(exh_ct_proj, CROP_SIZE)
                 exh_labels_proj = center_crop(exh_labels_proj, CROP_SIZE)

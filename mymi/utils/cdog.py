@@ -30,7 +30,7 @@ from .projections import convert_angles, plot_projection
 from .args import arg_to_list
 from .io import resolve_filepath
 from .pandas import append_row
-from .plotting import plot_gif
+from .plotting import play_video
 
 KV_FOLDERS = ['KIM-KV', 'kV']
 
@@ -113,6 +113,20 @@ def __load_metadata(
     props['det-spacing'] = (float(props['PixelWidth'] * 10), float(props['PixelHeight'] * 10))
     props['sid'] = float(np.round(props['KVSourceVrt'] * 10))
     props['sdd'] = float(np.round((np.abs(props['KVDetectorVrt']) + props['KVSourceVrt']) * 10))
+
+    # Convert time format.
+    # 'datetime.timestamp()' can raise OSError (errno 22) on Windows for out-of-range/garbage
+    # datetimes (e.g. corrupted metadata) - fall back to Unix epoch rather than crashing the batch.
+    try:
+        props['start-time-s'] = props['StartTime'].timestamp()
+    except OSError as e:
+        logger.error(f"Error converting 'StartTime' to timestamp: {e}. Returning Unix epoch.")
+        props['start-time-s'] = 0.0
+    try:
+        props['stop-time-s'] = props['StopTime'].timestamp()
+    except OSError as e:
+        logger.error(f"Error converting 'StopTime' to timestamp: {e}. Returning Unix epoch.")
+        props['stop-time-s'] = 0.0
 
     return props
 
@@ -203,7 +217,7 @@ def get_row_stats(
 
 def infer_cdog_version(
     metadata: np.ndarray
-    ) -> Literal['v2.7', 'v3.0', 'v4.0']:
+    ) -> Literal['v2.7', 'v3.0', 'v4.0', 'blank']:
     # Check the 'StartTime' property for something > 2010.
     # Is this robust?
     start_time_offsets = {
@@ -219,7 +233,10 @@ def infer_cdog_version(
         if ts.year >= 2010:
             return v
 
-    raise ValueError(f"Couldn't infer CDOG version from passed metadata image.")
+    # Some images (e.g. iTOOLS-generated tiffs) have no embedded CDOG metadata at all -
+    # treat these as 'blank' rather than failing the whole batch.
+    logger.error(f"Couldn't infer CDOG version from passed metadata image. Defaulting to 'blank'.")
+    return 'blank'
 
 # Infers the actual image size - excluding metadata rows.
 # Image rows are much smoother than metadata rows. Determine metadata rows by
@@ -284,8 +301,8 @@ def list_tiff(
     tiff_files = list(sorted([f for f in os.listdir(kv_dirpath) if f.endswith('.tiff')]))
     arcs = [int(f.split('_')[1]) for f in tiff_files]
     frames = [int(f.split('_')[2]) for f in tiff_files]
-    tiff_files, arcs, frames = filter_lists([tiff_files, arcs, frames], lambda taf: taf[1] == arc)
-    tiff_files, arcs, frames = sort_lists([tiff_files, arcs, frames], key=lambda taf: taf[2])
+    tiff_files, arcs, frames = filter_lists(tiff_files, arcs, frames, key=lambda taf: taf[1] == arc)
+    tiff_files, arcs, frames = sort_lists(tiff_files, arcs, frames, key=lambda taf: taf[2])
     tiff_filepaths = [os.path.join(kv_dirpath, f) for f in tiff_files]
     return tiff_filepaths
 
@@ -341,13 +358,14 @@ def load_tiff_angles_and_files(
 
     return angles_files
 
-def plot_arc_shroud(
+def plot_tiff_arc_shroud(
     shroud: Image2D,
     aspect: float = 0.1,
     ax: mpl.axes.Axes | None = None,
     figsize: Tuple[float, float] | None = None,
     frames: List[int] | None = None,
     signals: np.ndarray | None = None,  # Could be 2d, first dimension is for multiple signals.
+    signals_normalise: bool = True,
     **kwargs,
     ) -> None:
     if ax is None:
@@ -362,14 +380,15 @@ def plot_arc_shroud(
         if signals.ndim == 1:
             signals = signals[np.newaxis, :]
         assert signals.shape[1] == shroud.shape[0], f"Length of signal must match number of frames in shroud. Got len(signal)={signals.shape[1]}, shroud.shape[0]={shroud.shape[0]}"
-    ax.imshow(shroud.T, aspect=aspect, cmap='gray', **kwargs)
+    ax.imshow(shroud.T, aspect=aspect, cmap='gray', origin='lower', **kwargs)
     if signals is not None:
         signal_palette = sns.color_palette('colorblind', n_colors=signals.shape[0])
         for i, s in enumerate(signals):
-            # Normalise signal to shroud height.
-            # s = (s - np.min(s)) / (np.max(s) - np.min(s)) * shroud.shape[1]
-            ax.plot(s, color=signal_palette[i], linewidth=2)
-            # ax.scatter(range(len(s)), s, color=signal_palette[i], linewidth=2)
+            if signals_normalise:
+                s = (s - np.min(s)) / (np.max(s) - np.min(s)) * (shroud.shape[1] - 1)
+            ax.plot(s, color=signal_palette[i], linewidth=2, label=f'Signal {i + 1}')
+        if signals.shape[0] > 1:
+            ax.legend(loc='upper right', fontsize=8, framealpha=0.6)
     # Plot scatter points at the top for each frame if provided
     if frames is not None and len(frames) > 0:
         cb_palette = sns.color_palette('colorblind')
@@ -383,7 +402,7 @@ def plot_arc_shroud(
     if show:
         plt.show()
 
-def plot_fraction_shrouds(
+def plot_tiff_fraction_shrouds(
     shrouds: List[Image2D],
     infos: List[Dict[str, Any]],
     aspect: float = 0.1,
@@ -401,7 +420,7 @@ def plot_fraction_shrouds(
         show = False
     for i, s in enumerate(shrouds):
         signal = signals[i] if signals is not None else None
-        plot_arc_shroud(s, aspect=aspect, ax=axs[i, 0], signals=signal, **kwargs)
+        plot_tiff_arc_shroud(s, aspect=aspect, ax=axs[i, 0], signals=signal, **kwargs)
         if i < len(shrouds) - 1:
             axs[i, 0].tick_params(axis='x', which='both', bottom=False, labelbottom=False)
         axs[i, 0].tick_params(axis='y', which='both', left=False, labelleft=False)
@@ -417,30 +436,32 @@ def create_tiff_arc_shroud(
     fraction_path: DirPath,
     arc: int,
     hist_eq: bool = True,
+    invert_intensity: bool = True,
     n_frames: int | None = None,
-    raw: bool = False,
+    processed: bool = True,
     show_progress: bool = True,
+    **kwargs,
     ) -> None:
-    if raw:
-        data, _ = load_tiff_arc(fraction_path, arc, n_frames=n_frames, raw=True, show_progress=show_progress)
+    if processed:
+        data, _ = load_tiff_arc(fraction_path, arc, invert_intensity=invert_intensity, n_frames=n_frames, **kwargs)
     else:
-        data, _ = load_tiff_arc(fraction_path, arc, n_frames=n_frames)
+        data, _ = load_tiff_arc(fraction_path, arc, invert_intensity=invert_intensity, n_frames=n_frames, processed=False, show_progress=show_progress, **kwargs)
     n_frames = data.shape[0]
     # Histogram equalisation so that frames are more consistent across the arc.
     if hist_eq:
         for i in tqdm(range(n_frames), desc=f"Normalising frames", disable=not show_progress):
             data[i] = hist_eq_fn(data[i])
     shroud = data.mean(axis=1)
-    if raw:
-        if hist_eq:
-            filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud.npz')
-        else:
-            filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud_nohist.npz')
-    else:
+    if processed:
         if hist_eq:
             filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_shroud.npz')
         else:
             filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_shroud_nohist.npz')
+    else:
+        if hist_eq:
+            filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud.npz')
+        else:
+            filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud_nohist.npz')
     save_numpy(shroud, filepath)
 
 def load_tiff_arc_shroud(
@@ -448,19 +469,19 @@ def load_tiff_arc_shroud(
     arc: int,
     hist_eq: bool = True,
     load_data: bool = True,
-    raw: bool = False,
+    processed: bool = True,
     ) -> Tuple[Image2D | None, Dict[str, Any]]:
     if load_data:
-        if raw:
-            if hist_eq:
-                filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud.npz')
-            else:
-                filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud_nohist.npz')
-        else:
+        if processed:
             if hist_eq:
                 filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_shroud.npz')
             else:
                 filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_shroud_nohist.npz')
+        else:
+            if hist_eq:
+                filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud.npz')
+            else:
+                filepath = os.path.join(fraction_path, 'kV_proc', f'raw_arc_{arc}_shroud_nohist.npz')
         data = load_numpy(filepath)
     else:
         data = None
@@ -472,26 +493,14 @@ def load_tiff_arc(
     fraction_path: DirPath,
     arc: int,
     load_data: bool = True,
+    invert_intensity: bool = False,
+    metadata: Dict[str, Any] | None = None,
     n_frames: int | None = None,
-    raw: bool = False,
+    processed: bool = True,
     show_progress: bool = True,
     **kwargs,
     ) -> Tuple[BatchImage2D | None, pd.DataFrame]:
-    if raw:
-        filepaths = list_tiff(fraction_path, arc=arc)
-        if n_frames is not None:
-            filepaths = filepaths[:n_frames]
-        datas, infos = [], []
-        for f in tqdm(filepaths, desc=f"Loading raw frames", disable=not show_progress):
-            try: 
-                data, info = load_tiff(f, **kwargs)
-            except PIL.UnidentifiedImageError as e:
-                logger.warn(f"Couldn't load frame '{f}'. Skipping. Error: {e}")
-                continue
-            datas.append(data)
-            infos.append(info)
-        datas = np.stack(datas, axis=0)
-    else:
+    if processed:
         if load_data:
             filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}.npz')
             datas = load_numpy(filepath).astype(np.float32)
@@ -502,23 +511,54 @@ def load_tiff_arc(
         if n_frames is not None:
             datas = datas[:n_frames]
             infos = infos.iloc[:n_frames]
+
+        # Processed info was saved without the metadata overrides (see 'load_tiff'), so apply
+        # them here. Wrap sequences so that tuple values (e.g. 'det-spacing') aren't unpacked.
+        if metadata is not None:
+            infos = infos.copy()
+            for k, v in metadata.items():
+                if isinstance(v, (list, tuple, np.ndarray)):
+                    infos[k] = pd.Series([v] * len(infos), index=infos.index, dtype=object)
+                else:
+                    infos[k] = v
+    else:
+        filepaths = list_tiff(fraction_path, arc=arc)
+        if n_frames is not None:
+            filepaths = filepaths[:n_frames]
+        datas, infos = [], []
+        for f in tqdm(filepaths, desc=f"Loading raw frames", disable=not show_progress):
+            try: 
+                data, info = load_tiff(f, metadata=metadata, **kwargs)
+            except PIL.UnidentifiedImageError as e:
+                logger.warn(f"Couldn't load frame '{f}'. Skipping. Error: {e}")
+                continue
+            datas.append(data)
+            infos.append(info)
+        datas = np.stack(datas, axis=0)
+
+    if invert_intensity and datas is not None:
+        for i in range(datas.shape[0]):
+            datas[i] = np.max(datas[i]) - datas[i]
+
     return datas, infos
 
 def process_tiff_arc(
     fraction_path: DirPath,
     arc: int,
     n_frames: int | None = None,
+    save_data: bool = True,
     show_progress: bool = True,
     **kwargs,
     ) -> Tuple[BatchImage2D, List[Dict[str, Any]]]:
-    data, info = load_tiff_arc(fraction_path, arc, n_frames=n_frames, raw=True, show_progress=show_progress, **kwargs)
+    data, info = load_tiff_arc(fraction_path, arc, n_frames=n_frames, processed=False, show_progress=show_progress, **kwargs)
 
     # Apply histogram equalisation.
     n_frames = data.shape[0]
     # for i in tqdm(range(n_frames), desc=f"Frames", disable=not show_progress):
     #     data[i] = hist_eq_fn(data[i])
-    filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}.npz')
-    save_numpy(data, filepath)
+    if save_data:
+        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}.npz')
+        save_numpy(data, filepath)
 
     # Filter out 'image'.
     remove_keys = ['image']
@@ -536,6 +576,49 @@ def process_tiff_arc(
 
     filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_info.csv')
     save_csv(df, filepath)
+
+def join_tiff_arcs(
+    fraction_path: DirPath,
+    arcs: List[int],
+    remove_sources: bool = True,
+    show_progress: bool = True,
+    ) -> int:
+    """Join multiple already-processed arcs (i.e. 'arc_{arc}.npz'/'arc_{arc}_info.csv' under 'kV_proc')
+    into a single arc, concatenating the projections and info frames in the order given by 'arcs'.
+    The joined arc is saved using the first arc number in 'arcs' (overwriting any existing data for
+    that arc). Useful when a single physical arc was mistakenly split into multiple arc numbers.
+    If 'remove_sources=True', the source arc files (other than the first) are deleted afterwards."""
+    assert len(arcs) > 1, f"Need at least 2 arcs to join, got: {arcs}."
+    new_arc = arcs[0]
+
+    datas, infos = [], []
+    for arc in tqdm(arcs, desc="Loading arcs", disable=not show_progress):
+        data, info = load_tiff_arc(fraction_path, arc)
+        datas.append(data)
+        infos.append(info)
+
+    # Projections must share a detector/image shape to be concatenated along the frame axis.
+    shapes = [d.shape[1:] for d in datas]
+    assert len(set(shapes)) == 1, f"Arcs {arcs} have mismatched projection shapes: {shapes}."
+
+    joined_data = np.concatenate(datas, axis=0)
+    joined_info = pd.concat(infos, axis=0, ignore_index=True)
+    joined_info['arc'] = new_arc
+
+    filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{new_arc}.npz')
+    save_numpy(joined_data, filepath)
+    filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{new_arc}_info.csv')
+    save_csv(joined_info, filepath)
+    logger.info(f"Joined arcs {arcs} ({joined_data.shape[0]} frames) into arc {new_arc} at '{fraction_path}'.")
+
+    if remove_sources:
+        for arc in arcs[1:]:
+            for filename in [f'arc_{arc}.npz', f'arc_{arc}_info.csv']:
+                filepath = os.path.join(fraction_path, 'kV_proc', filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+
+    return new_arc
 
 def load_tiff_patient_shrouds(
     pat_path: DirPath,
@@ -589,30 +672,30 @@ def plot_tiff_closest_to(
 def load_tiff_fraction(
     fraction_path: DirPath,
     arc: int | List[int] | Literal['all'] = 'all',
-    raw: bool = False,
+    processed: bool = True,
     show_progress: bool = True,
     **kwargs,
     ) -> Tuple[List[BatchImage2D], List[pd.DataFrame]]:
-    if raw:
-        kv_dirpath = get_kv_path(fraction_path)
-
-        # Load all arcs in the fraction.
-        arcs = arg_to_list(arc, int, literals={'all': lambda: list_raw_arcs(fraction_path)})
-        datas, infos = [], []
-        for a in tqdm(arcs, desc=f"Loading raw arcs", disable=not show_progress):
-            data, info = load_tiff_arc(fraction_path, a, raw=True, show_progress=False, **kwargs)
-            datas.append(data)
-            infos.append(info)
-    else:
+    if processed:
         arcs = arg_to_list(arc, int, literals={'all': lambda: list_tiff_arcs(fraction_path)})
         datas, infos = [], []
         for a in arcs:
             data, info = load_tiff_arc(fraction_path, a, **kwargs)
             datas.append(data)
             infos.append(info)
+    else:
+        kv_dirpath = get_kv_path(fraction_path)
+
+        # Load all arcs in the fraction.
+        arcs = arg_to_list(arc, int, literals={'all': lambda: list_raw_arcs(fraction_path)})
+        datas, infos = [], []
+        for a in tqdm(arcs, desc=f"Loading raw arcs", disable=not show_progress):
+            data, info = load_tiff_arc(fraction_path, a, processed=False, show_progress=False, **kwargs)
+            datas.append(data)
+            infos.append(info)
     return datas, infos
 
-def process_fraction(
+def process_tiff_fraction(
     fraction_path: DirPath,
     arc: int | List[int] | Literal['all'] = 'all',
     show_progress: bool = True,
@@ -652,7 +735,7 @@ def process_tiff_patient(
     fractions = arg_to_list(fraction, int, literals={'all': lambda: list_tiff_fractions(pat_path)})
     for fx in tqdm(fractions, desc="Processing raw fractions", disable=not show_progress):
         fx_dirpath = os.path.join(pat_path, f"Fx{fx:02d}")
-        process_fraction(fx_dirpath, show_progress=show_progress, **kwargs)
+        process_tiff_fraction(fx_dirpath, show_progress=show_progress, **kwargs)
 
 # Returns image metadata and pixel data.
 # For tiff files, the gantry angle is encoded in the filename.
@@ -669,9 +752,10 @@ def load_tiff(
     # like we're standing at the detector, looking toward the source, but
     # KIM convention is from source -> detector so let's go with that.
     flip_lr: bool = False,
-    invert_intensity: bool = True,
+    invert_intensity: bool = False,
     load_data: bool = True,
     machine: Literal['elekta', 'varian'] | None = None,
+    metadata: Dict[str, Any] | None = None,
     scale: Literal['IEC61217', 'VARIAN_IEC', 'VARIAN_STANDARD'] = 'IEC61217',
     ) -> Tuple[Image2D | None, pd.Series]:
     # with run_once():
@@ -732,6 +816,12 @@ def load_tiff(
     info['kv-detector-angle'] = convert_angles(info['filename-angle'], filename_angle, 'kv-detector', machine)
     info['mv-source-angle'] = convert_angles(info['filename-angle'], filename_angle, 'mv-source', machine)
     info['mv-detector-angle'] = convert_angles(info['filename-angle'], filename_angle, 'mv-detector', machine)
+
+    # Override/add info values (e.g. 'sid', 'sdd', 'det-spacing', 'det-offset') - useful for e.g.
+    # 'blank' CDOG images (see 'infer_cdog_version') where the geometry can't be read from the
+    # tiff metadata and must be supplied manually.
+    if metadata is not None:
+        info.update(metadata)
 
     if not load_data:
         return None, info
@@ -836,7 +926,7 @@ def load_timestamp(
 
     return precise_timestamp
 
-def plot_fraction_rings(
+def plot_tiff_fraction_rings(
     arc_infos: List[pd.DataFrame],
     arrow_spacing: float = 0.1,
     ax: mpl.axes.Axes | None = None,
@@ -860,15 +950,20 @@ def plot_fraction_rings(
             if ang != unique_angles[-1]:
                 unique_angles.append(ang)
 
+        # Signed angular step wrapped to (-180, 180] - avoids treating a 0/360 crossing
+        # (e.g. 359.78 -> 0.64, a +0.86 deg CW step) as a direction reversal.
+        def angle_step(a: float, b: float) -> float:
+            return (b - a + 180) % 360 - 180
+
         # Split into sub-arcs at direction changes.
         sub_arcs = []
         if len(unique_angles) >= 2:
             sub_start = unique_angles[0]
-            prev_cw = unique_angles[1] > unique_angles[0]
+            prev_cw = angle_step(unique_angles[0], unique_angles[1]) > 0
             for j in range(2, len(unique_angles)):
                 if unique_angles[j] == unique_angles[j - 1]:
                     continue
-                curr_cw = unique_angles[j] > unique_angles[j - 1]
+                curr_cw = angle_step(unique_angles[j - 1], unique_angles[j]) > 0
                 if curr_cw != prev_cw:
                     sub_arcs.append((sub_start, unique_angles[j - 1], prev_cw))
                     sub_start = unique_angles[j - 1]
@@ -882,7 +977,8 @@ def plot_fraction_rings(
         while merged:
             merged = False
             for i in range(len(sub_arcs)):
-                span = abs(sub_arcs[i][1] - sub_arcs[i][0])
+                start_angle, end_angle, clockwise = sub_arcs[i]
+                span = (end_angle - start_angle) % 360 if clockwise else (start_angle - end_angle) % 360
                 if span < min_sub_arc_deg and len(sub_arcs) > 1:
                     if i + 1 < len(sub_arcs):
                         nxt = sub_arcs[i + 1]
@@ -1023,7 +1119,7 @@ def plot_tiff_patient_rings(
     for i, arc_infos in enumerate(info):
         row, col = divmod(i, n_cols)
         ax = axes[row, col]
-        plot_fraction_rings(arc_infos, ax=ax, **kwargs)
+        plot_tiff_fraction_rings(arc_infos, ax=ax, **kwargs)
 
     # Hide unused axes.
     for i in range(n_fractions, n_rows * n_cols):
@@ -1041,7 +1137,7 @@ def plot_tiff_patient_shrouds(
     ) -> None:
     for i in range(len(shrouds)):
         signal = signals[i] if signals is not None else None
-        plot_fraction_shrouds(shrouds[i], infos[i], signals=signal, **kwargs)
+        plot_tiff_fraction_shrouds(shrouds[i], infos[i], signals=signal, **kwargs)
 
 def plot_tiff_breath(
     info: pd.Series,
@@ -1258,7 +1354,7 @@ def create_tiff_arc_video(
     data, info = load_tiff_arc(fraction_path, arc, n_frames=n_frames)
     n_frames = data.shape[0]
     if projections:
-        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video_proj_{proj_method}.apng')
+        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video_proj_{proj_method}.mp4')
         # Load projection labels.
         set = ds.load('VALKIM-PP')
         pat_i = int(fraction_path.split('\\')[-2].replace('Patient', ''))
@@ -1273,13 +1369,13 @@ def create_tiff_arc_video(
         labelpath = os.path.join(projpath, f'labels_proj_{proj_method}.npz')
         labels = load_numpy(labelpath)
     else:
-        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video.apng')
+        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video.mp4')
         labels = None
         drrs = None
     plot_args = [(data[i], info.iloc[i]) for i in range(n_frames)]
     plot_kwargs = [dict(all_info=info, hist_eq=hist_eq, drr=drrs[i] if drrs is not None else None, labels=labels[i] if labels is not None else None, **kwargs) for i in range(n_frames)]
     test = plot_args[0][1]['det-spacing']
-    plot_gif(plot_projection, plot_args, plot_kwargs, overwrite=True, savepath=filepath, show=False, show_progress=show_progress, **kwargs)
+    play_video(plot_projection, plot_args, plot_kwargs, overwrite=True, savepath=filepath, show=False, show_progress=show_progress, **kwargs)
 
 def plot_tiff_arc_video(
     fraction_path: DirPath,
@@ -1290,12 +1386,12 @@ def plot_tiff_arc_video(
     **kwargs,
     ) -> None:
     if projections:
-        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video_proj.apng')
+        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video_proj.mp4')
     else:
-        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video.apng')
+        filepath = os.path.join(fraction_path, 'kV_proc', f'arc_{arc}_video.mp4')
     if overwrite or not os.path.exists(filepath):
         create_tiff_arc_video(fraction_path, arc, figsize=figsize, projections=projections, **kwargs)
-    plot_gif(savepath=filepath, **kwargs)
+    play_video(savepath=filepath, **kwargs)
 
 def to_4dct_phase(
     if_phase: float,
@@ -1316,23 +1412,34 @@ def get_kv_path(fraction_path: DirPath) -> DirPath:
             return kv_dirpath
     raise ValueError(f"No kV subfolder found in '{fraction_path}'. Expected one of: {KV_FOLDERS}")
 
+# Make sure that arc frames are continuous. If they're not continuous in 
+# frame number, then allow it if the angle changes by less than 'max_angle_jump'.
 def assert_arc_no_jumps(
     fraction_path: DirPath,
+    max_angle_jump: float = 1.0,
     ) -> None:
     # Get processed arc splits.
     kv_dirpath = get_kv_path(fraction_path)
     tiff_files = [f for f in os.listdir(kv_dirpath) if f.endswith('.tiff')]
     arcs = [int(f.split('_')[1]) for f in tiff_files]
     frames = [int(f.split('_')[2]) for f in tiff_files]
-    tiff_files, arcs, frames = sort_lists([tiff_files, arcs, frames], key=lambda taf: taf[2])
+    # Filename format is e.g. 'Ch1_1_2288_283.94.tiff'.
+    angles = [float(f.split('_')[-1].replace('.tiff', '')) for f in tiff_files]
+    tiff_files, arcs, frames, angles = sort_lists(tiff_files, arcs, frames, angles, key=lambda tafa: tafa[2])
 
     # Get non-consecutive frames.
     arcs_diff = np.diff(arcs)
     frames_diff = np.diff(frames)
 
-    # Assert that arcs jump where frames jump.
+    # Angle differences are circular, e.g. 359.5 -> 0.5 is a 1 degree change.
+    angles_diff = np.abs((np.diff(angles) + 180) % 360 - 180)
+
+    # Assert that arcs jump where frames jump and the angle changes significantly.
     jump_idxs = np.argwhere(frames_diff != 1).flatten()
 
     for i in jump_idxs:
-        if arcs_diff[i] == 0:
-            raise ValueError(f"Got non-consecutive frames without arc jump at file '{tiff_files[i + 1]}' in '{fraction_path}'.")
+        if arcs_diff[i] != 0:
+            continue
+        if angles_diff[i] > max_angle_jump:
+            raise ValueError(f"Got non-consecutive frames without arc jump at file '{tiff_files[i + 1]}' in '{fraction_path}' (angle change {angles_diff[i]:.2f} > {max_angle_jump} degrees).")
+        logger.warn(f"Got non-consecutive frames without arc jump at file '{tiff_files[i + 1]}' in '{fraction_path}', but angle change ({angles_diff[i]:.2f} degrees) is within {max_angle_jump} degrees.")

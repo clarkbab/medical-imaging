@@ -1,5 +1,5 @@
 from dicomset.typing import *
-from dicomset.utils import hist_eq as hist_eq_fn
+from dicomset.utils import hist_eq as hist_eq_fn, save_csv, save_numpy
 from dataclasses import dataclass, field
 import numpy as np
 import os
@@ -7,6 +7,7 @@ import pandas as pd
 from pathlib import Path
 import pylinac as plc
 import struct
+from tqdm.auto import tqdm
 from typing import Dict, List, Literal, Tuple
 from xml.etree import ElementTree
 
@@ -59,7 +60,7 @@ class HisInfo:
 @dataclass
 class HisFrameInfo:
     """Per-frame metadata from ``_Frames.xml``."""
-    seq: int = 0                  # 1-based sequence number (matches .his filename prefix).
+    frame: int = 0                  # 1-based frame number (matches .his filename prefix).
     mv_source_angle: float = 0.0    # Gantry angle in degrees.
     u_centre: float = 0.0        # Detector U (lateral) offset in mm — large value = half-fan.
     v_centre: float = 0.0        # Detector V (longitudinal) offset in mm.
@@ -197,16 +198,16 @@ def load_his(
             logger.warning(f"No '_Frames.xml' found at '{xml_path}' — angle metadata will be missing.")
         else:
             all_frames = load_his_frames_xml(xml_path)
-            seq = _seq_from_filename(filepath.name)
-            if seq is None:
-                logger.warning(f"Could not extract sequence number from filename '{filepath.name}' — angle metadata will be missing.")
+            frame = _frame_from_filename(filepath.name)
+            if frame is None:
+                logger.warning(f"Could not extract frame number from filename '{filepath.name}' — angle metadata will be missing.")
             else:
                 for f in all_frames:
-                    if f.seq == seq:
+                    if f.frame == frame:
                         frame_info = f
                         break
                 if frame_info is None:
-                    logger.warning(f"No frame with seq={seq} found in '{xml_path}' — angle metadata will be missing.")
+                    logger.warning(f"No frame with frame={frame} found in '{xml_path}' — angle metadata will be missing.")
 
     if frame_info is not None:
         mv_source_angle = float(np.round(frame_info.mv_source_angle % 360, decimals=3))
@@ -223,6 +224,7 @@ def load_his(
         metadata['kv-source-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-source', machine='elekta')
         metadata['kv-detector-angle'] = convert_angles(mv_source_angle, from_='mv-source', to='kv-detector', machine='elekta')
         metadata['det-offset'] = (frame_info.u_centre, frame_info.v_centre)
+        metadata['start-time-s'] = frame_info.delta_ms / 1000.0
         metadata['frame-info'] = frame_info
 
     if pixel_data is not None:
@@ -238,27 +240,7 @@ def load_his(
 
 def load_his_frames_xml(
     filepath: str | Path,
-) -> List[HisFrameInfo]:
-    """Load per-frame projection geometry from an Elekta XVI ``_Frames.xml``.
-
-    The .his file itself contains no projection geometry. Elekta XVI stores
-    per-projection metadata in an XML file that sits alongside the .his files.
-
-    Each ``<Frame>`` element contains:
-      - ``Seq``          – 1-based index matching the .his filename prefix
-                           (e.g. Seq=1 → ``00001.*.his``).
-      - ``GantryAngle``  – gantry angle in degrees.
-      - ``UCentre``      – detector lateral (U) offset in mm.
-                           A large value (~115 mm) indicates half-fan mode.
-      - ``VCentre``      – detector longitudinal (V) offset in mm.
-      - ``DeltaMs``      – time since the first frame in ms.
-      - ``Exposed``      – whether the X-ray was on.
-      - ``MVOn``         – whether the MV beam was on.
-      - ``Inactive``     – whether the frame is flagged inactive.
-
-    Returns a list of :class:`HisFrameInfo`, one per ``<Frame>``, sorted by
-    ``Seq``.
-    """
+    ) -> List[HisFrameInfo]:
     logger.info(f"Loading frame metadata from '{filepath}'...")
     filepath = Path(filepath)
     tree = ElementTree.parse(filepath)
@@ -267,7 +249,7 @@ def load_his_frames_xml(
     frames: List[HisFrameInfo] = []
     for frame_el in root.iter("Frame"):
         f = HisFrameInfo()
-        f.seq = int(_xml_text(frame_el, "Seq", "0"))
+        f.frame = int(_xml_text(frame_el, "Seq", "0"))
         f.mv_source_angle = float(_xml_text(frame_el, "GantryAngle", "0"))
         f.u_centre = float(_xml_text(frame_el, "UCentre", "0"))
         f.v_centre = float(_xml_text(frame_el, "VCentre", "0"))
@@ -279,7 +261,7 @@ def load_his_frames_xml(
         f.pixel_factor = float(_xml_text(frame_el, "PixelFactor", "0"))
         frames.append(f)
 
-    frames.sort(key=lambda x: x.seq)
+    frames.sort(key=lambda x: x.frame)
     return frames
 
 def load_his_angles_and_files(
@@ -291,13 +273,6 @@ def load_his_angles_and_files(
     sort_by_angle: bool = True,
     start: int = 0,
     ) -> Tuple[Dict[float, str], Dict[str, 'HisFrameInfo']]:
-    """Returns (angles_files, frame_info_by_filename).
-
-    angles_files maps gantry angle → .his filename (basename).
-    frame_info_by_filename maps .his filename (basename) → HisFrameInfo so
-    callers can pass frame_info directly to load_his, avoiding a repeated
-    _Frames.xml parse on each call.
-    """
     dirpath = Path(dirpath)
     closest_to = arg_to_list(closest_to, (int, float))
 
@@ -309,21 +284,22 @@ def load_his_angles_and_files(
         )
     frame_infos = load_his_frames_xml(xml_path)
 
-    # Build seq → filename lookup from .his files on disk.
-    his_files = sorted(f for f in os.listdir(dirpath) if f.endswith(".his"))
-    seq_to_file: Dict[int, str] = {}
+    # Build frame → filename lookup from .his files on disk.
+    his_files = list(f for f in os.listdir(dirpath) if f.endswith(".his"))
+    frame_to_file: Dict[int, str] = {}
     for fname in his_files:
-        seq = _seq_from_filename(fname)
-        if seq is not None:
-            seq_to_file[seq] = fname
+        print(fname)
+        frame = _frame_from_filename(fname)
+        print(frame)
+        frame_to_file[frame] = fname
 
     # Build angle → filename dict and filename → HisFrameInfo dict.
     angles_files: Dict[float, str] = {}
     fi_by_name: Dict[str, HisFrameInfo] = {}
     for f in frame_infos:
-        if f.seq not in seq_to_file:
+        if f.frame not in frame_to_file:
             continue
-        f.filename = seq_to_file[f.seq]
+        f.filename = frame_to_file[f.frame]
         mv_angle = float(np.round(f.mv_source_angle % 360, decimals=3))
         if scale != 'IEC61217':
             mv_angle, _, _ = plc.core.scale.convert(
@@ -364,6 +340,208 @@ def load_his_angles_and_files(
 
     return angles_files, frame_info_by_file
 
+def load_his_session(
+    session_path: str | Path,
+    load_data: bool = True,
+    n_frames: int | None = None,
+    raw: bool = False,
+    show_progress: bool = True,
+    ) -> Tuple[BatchImage2D | None, pd.DataFrame]:
+    from dicomset.utils import load_csv, load_numpy
+    session_path = Path(session_path)
+    proc_path = Path(str(session_path) + '_proc')
+
+    if raw:
+        # No need for the angle-based filtering/sorting of 'load_his_angles_and_files' here —
+        # frames are re-sorted by 'start-time-s' below anyway, and every .his file in the
+        # folder is loaded regardless of its gantry angle.
+        xml_path = session_path / "_Frames.xml"
+        if not xml_path.exists():
+            raise FileNotFoundError(f"No _Frames.xml found in '{session_path}'. Cannot determine frame metadata.")
+        frame_info_by_num = {f.frame: f for f in load_his_frames_xml(xml_path)}
+        files = sorted(
+            (f for f in os.listdir(session_path) if f.endswith(".his")),
+            key=lambda f: _frame_from_filename(f),
+        )
+        if n_frames is not None:
+            files = files[:n_frames]
+        images, rows = [], []
+        for fname in tqdm(files, desc='Loading HIS frames', disable=not show_progress):
+            frame = _frame_from_filename(fname)
+            fi = frame_info_by_num.get(frame)
+            img, info = load_his(session_path / fname, frame_info=fi, load_pixel_data=load_data)
+            images.append(img)
+            rows.append(info)
+        images = np.stack(images, axis=0) if load_data else None
+        infos = pd.DataFrame(rows)
+        # Default of filename sorting doesn't work for HIS.
+        infos = infos.sort_values(by='start-time-s').reset_index(drop=True)
+    else:
+        if load_data:
+            images = load_numpy(str(proc_path / 'images.npz')).astype(np.float32)
+        else:
+            images = None
+        infos = load_csv(str(proc_path / 'info.csv'), eval_cols=['det-size', 'det-spacing', 'det-offset'])
+        if n_frames is not None:
+            if images is not None:
+                images = images[:n_frames]
+            infos = infos.iloc[:n_frames]
+
+    return images, infos
+
+def create_his_patient_videos(
+    pat_path: str | Path,
+    fraction: 'int | List[int] | Literal["all"]' = 'all',
+    show_progress: bool = True,
+    **kwargs,
+    ) -> None:
+    from glob import glob
+    pat_path = str(pat_path)
+    if fraction == 'all':
+        fractions = sorted(
+            int(os.path.basename(p).upper().replace('FX', ''))
+            for p in glob(os.path.join(pat_path, 'FX*'))
+            if os.path.isdir(p)
+        )
+    else:
+        fractions = arg_to_list(fraction, int)
+    for f in tqdm(fractions, desc='Fraction videos', disable=not show_progress):
+        frac_path = os.path.join(pat_path, f'FX{f}')
+        create_his_fraction_videos(frac_path, show_progress=show_progress, **kwargs)
+
+def create_his_fraction_videos(
+    frac_path: str | Path,
+    show_progress: bool = True,
+    **kwargs,
+    ) -> None:
+    from glob import glob
+    pattern = os.path.join(str(frac_path), 'CBCT', 'CBCT*', 'CBCT Projections', 'XVI', '*')
+    session_paths = sorted(p for p in glob(pattern) if os.path.isdir(p) and not p.endswith('_proc'))
+    for session_path in tqdm(session_paths, desc='Session videos', disable=not show_progress):
+        create_his_session_video(session_path, show_progress=show_progress, **kwargs)
+
+def create_his_session_video(
+    session_path: str | Path,
+    hist_eq: bool = True,
+    show_progress: bool = True,
+    ) -> None:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from dicomset.utils import load_numpy, hist_eq as hist_eq_fn
+    from mymi.utils.plotting import play_video
+    import PIL.Image
+    import io as _io
+
+    proc_path = str(session_path) + '_proc'
+    images_path = os.path.join(proc_path, 'images.npz')
+    if not os.path.exists(images_path):
+        logger.warning(f"No images.npz at '{images_path}' — run process_his_session first.")
+        return
+
+    images = load_numpy(images_path)   # (n_frames, H, W)
+    n_frames = images.shape[0]
+
+    def _plot_frame(frame_data: np.ndarray) -> PIL.Image.Image:
+        d = frame_data.astype(np.float64)
+        if hist_eq:
+            d = hist_eq_fn(d)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.imshow(d.T, cmap='gray', origin='lower', aspect='auto')
+        ax.axis('off')
+        fig.tight_layout(pad=0)
+        buf = _io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+        buf.seek(0)
+        return PIL.Image.open(buf).copy()
+
+    plot_args = [(images[i],) for i in range(n_frames)]
+    savepath = os.path.join(proc_path, 'video.mp4')
+    play_video(_plot_frame, plot_args, overwrite=True, savepath=savepath,
+               show=False, show_progress=show_progress)
+    logger.info(f"Saved video to '{savepath}'.")
+
+def create_his_patient_shrouds(
+    pat_path: str | Path,
+    fraction: 'int | List[int] | Literal["all"]' = 'all',
+    show_progress: bool = True,
+    **kwargs,
+    ) -> None:
+    from glob import glob
+    pat_path = str(pat_path)
+    if fraction == 'all':
+        fractions = sorted(
+            int(os.path.basename(p).upper().replace('FX', ''))
+            for p in glob(os.path.join(pat_path, 'FX*'))
+            if os.path.isdir(p)
+        )
+    else:
+        fractions = arg_to_list(fraction, int)
+    for f in tqdm(fractions, desc='Fraction shrouds', disable=not show_progress):
+        frac_path = os.path.join(pat_path, f'FX{f}')
+        create_his_fraction_shrouds(frac_path, show_progress=show_progress, **kwargs)
+
+def create_his_fraction_shrouds(
+    frac_path: str | Path,
+    show_progress: bool = True,
+    **kwargs,
+    ) -> None:
+    from glob import glob
+    pattern = os.path.join(str(frac_path), 'CBCT', 'CBCT*', 'CBCT Projections', 'XVI', '*')
+    session_paths = sorted(p for p in glob(pattern) if os.path.isdir(p) and not p.endswith('_proc'))
+    for session_path in tqdm(session_paths, desc='Session shrouds', disable=not show_progress):
+        create_his_session_shroud(session_path, show_progress=show_progress, **kwargs)
+
+def create_his_session_shroud(
+    session_path: str | Path,
+    show_progress: bool = True,
+    ) -> None:
+    from dicomset.utils import load_numpy
+    proc_path = str(session_path) + '_proc'
+    images_path = os.path.join(proc_path, 'images.npz')
+    if not os.path.exists(images_path):
+        logger.warning(f"No images.npz found at '{images_path}' — run process_his_session first.")
+        return
+    images = load_numpy(images_path)   # (n_frames, H, W)
+    for i in tqdm(range(images.shape[0]), desc='Normalising frames', disable=not show_progress):
+        images[i] = hist_eq_fn(images[i])
+    shroud = images.mean(axis=1)       # (n_frames, W)
+    save_numpy(shroud, os.path.join(proc_path, 'shroud.npz'))
+    logger.info(f"Saved shroud to '{proc_path}'.")
+
+def process_his_fraction(
+    fracpath: str | Path,
+    show_progress: bool = True,
+    ) -> None:
+    """Process all CBCT HIS sessions found under a fraction directory.
+
+    Expected layout: <fracpath>/CBCT/CBCT*/CBCT Projections/XVI/*/
+    """
+    from glob import glob
+    pattern = os.path.join(str(fracpath), 'CBCT', 'CBCT*', 'CBCT Projections', 'XVI', '*')
+    session_paths = sorted(p for p in glob(pattern) if os.path.isdir(p) and not p.endswith('_proc'))
+    if not session_paths:
+        logger.warning(f"No HIS session directories found under '{fracpath}'.")
+        return
+    for session_path in tqdm(session_paths, desc='CBCT sessions', disable=not show_progress):
+        process_his_session(session_path, show_progress=show_progress)
+
+def process_his_session(
+    dirpath: str | Path,
+    show_progress: bool = True,
+    ) -> None:
+    dirpath = Path(dirpath)
+    images, infos = load_his_session(dirpath, raw=True, show_progress=show_progress)
+
+    proc_dirpath = str(dirpath) + '_proc'
+    os.makedirs(proc_dirpath, exist_ok=True)
+
+    logger.info(f"Saving processed HIS session to '{proc_dirpath}'.")
+    save_numpy(images, os.path.join(proc_dirpath, 'images.npz'))
+    infos = infos.drop(columns=['his-info', 'frame-info'], errors='ignore')
+    save_csv(infos, os.path.join(proc_dirpath, 'info.csv'))
+
 def plot_his_closest_to(
     dirpath: str | Path,
     angle: Literal['kv-detector', 'kv-source', 'mv-source'] = 'kv-source',
@@ -391,8 +569,7 @@ def _xml_text(parent, tag: str, default: str = "") -> str:
         return el.text.strip()
     return default
 
-def _seq_from_filename(filename: str) -> int | None:
-    """Extract the sequence number from a .his filename prefix (e.g. '00001.*.his' → 1)."""
+def _frame_from_filename(filename: str) -> int | None:
     prefix = filename.split(".")[0]
     try:
         return int(prefix)

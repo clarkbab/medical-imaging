@@ -1,4 +1,7 @@
 from dicomset import NiftiDataset
+from dicomset.utils import load_nifti, save_nifti, load_nrrd, regions_to_list, logger
+from dicomset.typing import *
+import numpy as np
 import os
 import shutil
 import subprocess
@@ -6,37 +9,30 @@ import tempfile
 from tqdm import tqdm
 from typing import *
 
-from mymi import logging
-from mymi.regions import regions_to_list
-from mymi.typing import *
-from mymi.utils.io import load_nifti
-from mymi.utils.nifti import save_nifti
-from mymi.utils.nrrd import load_nrrd
-
 def create_totalseg_predictions(
     dataset: str,
     # Currently only totalseg groupings are supported, e.g. 'lung'.
     # See options: https://github.com/wasserth/TotalSegmentator/blob/211c2bd73386a0a48847d70678315bb326dbcd54/totalsegmentator/bin/totalseg_combine_masks.py#L34
     combine_regions: Dict[str, RegionID] = {},
     ct_series: SeriesID = 'series_0',
-    dry_run: bool = True,
+    makeitso: bool = False,
     overwrite_labels: bool = False,
-    pat: PatientIDs = 'all',
+    patient_ids: PatientID | List[PatientID] | Literal['all'] = 'all',
     regions_series: SeriesID = 'series_0',
     rename_regions: Union[Dict[RegionID, RegionID], Callable[[RegionID], RegionID]] = {},
     save_as_labels: bool = False,
-    study: StudyIDs = 'all',
+    study_ids: StudyID | List[StudyID] | Literal['all'] = 'all',
     task_regions: Dict[str, Union[str, List[str], Literal['all']]] = {},
     ) -> None:
     roi_subset_tasks = ['total', 'total_mr']
 
     # Load patient IDs.
     set = NiftiDataset(dataset)
-    pat_ids = set.list_patients(patient_id=pat)
+    pat_ids = set.list_patients(patient_ids=patient_ids)
 
     for p in tqdm(pat_ids):
         pat = set.patient(p)
-        pat_studys = pat.list_studies(study_id=study)
+        pat_studys = pat.list_studies(study_ids=study_ids)
         for s in tqdm(pat_studys, leave=False):
             study = pat.study(s)
             input_series = study.ct_series(ct_series)
@@ -62,7 +58,7 @@ def create_totalseg_predictions(
                     if input_filepath.endswith('.nrrd'):
                         d, a = load_nrrd(input_filepath)
                         dest_filepath = os.path.join(output_dir, input_filepath.split('/')[-1].replace('.nrrd', '.nii.gz'))
-                        logging.info(f"Copying NRRD to NIFTI: {input_filepath} -> {dest_filepath}")
+                        logger.info(f"Copying NRRD to NIFTI: {input_filepath} -> {dest_filepath}")
                         save_nifti(d, a, dest_filepath)
                         input_filepath = dest_filepath
 
@@ -82,18 +78,23 @@ def create_totalseg_predictions(
                         '-o', output_dir,
                         '--output_type', 'nifti',
                     ]
+                    if 'TOTALSEG_LICENCE' in os.environ:
+                        command += ['-l', os.environ['TOTALSEG_LICENCE']]
                     # Predict subset of regions if possible.
                     if task in roi_subset_tasks and regions != 'all':
                         command += ['--roi_subset'] + regions
-                    logging.info(command)
+                    logger.info(command)
                     subprocess.run(command)
 
+                    # Remove temp input files.
                     if input_series.filepath.endswith('.nrrd'):
                         # Remove temp nifti file.
-                        logging.info(f"Removing temporary NIFTI input file: {input_filepath}")
+                        logger.info(f"Removing temporary NIFTI input file: {input_filepath}")
                         os.remove(input_filepath)
+                    os.remove(temp_input_filepath) 
 
                     # Remove unwanted regions, if subset predictions wasn't possible.
+                    print('regions:', regions)
                     if task not in roi_subset_tasks and regions != 'all':
                         files = os.listdir(output_dir)
                         print(files)
@@ -101,7 +102,7 @@ def create_totalseg_predictions(
                             region = f.replace('.nii.gz', '')
                             if region not in regions:
                                 filepath = os.path.join(output_dir, f)
-                                logging.info(f"Removing {task}:{region}. Filepath: {filepath}")
+                                logger.info(f"Removing {task}:{region}. Filepath: {filepath}")
                                 os.remove(filepath)
 
                     # # Combine regions.
@@ -113,7 +114,7 @@ def create_totalseg_predictions(
                     #         '-o', filepath,
                     #         '-m', c
                     #     ]
-                    #     logging.info(command)
+                    #     logger.info(command)
                     #     subprocess.run(command)
 
                     # Rename regions.
@@ -124,14 +125,14 @@ def create_totalseg_predictions(
                             oldpath = os.path.join(output_dir, f'{region}.nii.gz')
                             newname = rename_regions(region)
                             newpath = os.path.join(output_dir, f'{newname}.nii.gz')
-                            logging.info(f'Renaming {oldpath} to {newpath}')
+                            logger.info(f'Renaming {oldpath} to {newpath}')
                             os.rename(oldpath, newpath)
                     elif isinstance(rename_regions, dict):
                         for o, n in rename_regions.items():
                             oldpath = os.path.join(output_dir, f'{o}.nii.gz')
                             if os.path.exists(oldpath):
                                 newpath = os.path.join(output_dir, f'{n}.nii.gz')
-                                logging.info(f'Renaming {oldpath} to {newpath}')
+                                logger.info(f'Renaming {oldpath} to {newpath}')
                                 os.rename(oldpath, newpath)
 
                     # Convert from RAS to LPS.
@@ -147,8 +148,8 @@ def create_totalseg_predictions(
                     for f in files:
                         oldpath = os.path.join(output_dir, f)
                         newpath = os.path.join(save_dir, f)
-                        logging.info(f'Copying {oldpath} to {newpath}')
-                        if not dry_run:
+                        logger.info(f'Copying {oldpath} to {newpath}')
+                        if makeitso:
                             os.makedirs(os.path.dirname(newpath), exist_ok=True)
                             if save_as_labels and not overwrite_labels and os.path.exists(newpath):
                                 raise ValueError(f"File {newpath} already exists. Use 'overwrite_labels=True' to overwrite existing labels.")

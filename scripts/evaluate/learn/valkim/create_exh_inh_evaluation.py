@@ -7,7 +7,8 @@ import pandas as pd
 from tqdm import tqdm
 
 # Compare methods.
-methods = ['affine', 'corrfield', 'plastimatch', 'rigid', 'unigradicon', 'unigradicon-io']
+methods = ['affine', 'corrfield', 'deeds', 'plastimatch', 'rigid',
+    'unigradicon', 'unigradicon-io']
 
 cols = {
     'patient-id': str,
@@ -29,10 +30,10 @@ for p in tqdm(pat_ids):
     pat = set.patient(p)
     inh_ct = pat.ct_series(inh_series).data
     inh_affine = pat.ct_series(inh_series).affine
-    inh_labels = pat.regions_series(inh_series).data(r=regions)
+    inh_labels = pat.regions_series(inh_series).data(r=regions, rr=False)
     exh_ct = pat.ct_series(exh_series).data
     exh_affine = pat.ct_series(exh_series).affine
-    exh_labels = pat.regions_series(exh_series).data(r=regions)
+    exh_labels = pat.regions_series(exh_series).data(r=regions, rr=False)
     
     # Add moving -> fixed error.
     dices = dice(exh_labels, inh_labels)
@@ -70,7 +71,7 @@ for p in tqdm(pat_ids):
             df = append_row(df, data)    
     
     for m in methods:
-        moved_labels, _ = load_registered_regions(dataset, pat.id, m, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
+        _, moved_labels, _ = load_registered_regions(dataset, pat.id, m, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=inh_series, moving_series_id=exh_series)
         dices = dice(moved_labels, inh_labels)
         for r, d in zip(regions, dices):
             data = {

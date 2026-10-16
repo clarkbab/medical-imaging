@@ -1,4 +1,4 @@
-from dicomset.dicom.utils import from_ct_dicom, from_rtstruct_dicom, list_rtstruct_regions
+from dicomset.utils import from_ct_dicom, from_rtstruct_dicom, list_rtstruct_regions
 from dicomset.utils import affine_spacing, centre_of_mass, foreground_fov, foreground_fov_centre, volume
 import streamlit as st
 import streamlit.components.v1 as components

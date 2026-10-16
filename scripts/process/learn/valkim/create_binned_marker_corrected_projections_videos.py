@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from mymi.utils.cdog import load_tiff_arc, list_tiff_arcs, list_tiff_fractions
 from mymi.utils.io import load_numpy
-from mymi.utils.plotting import plot_gif
+from mymi.utils.plotting import play_video
 from mymi.utils.projections import plot_projection
 
 dataset = 'VALKIM-PP'
@@ -47,5 +47,5 @@ for p in tqdm(pat_ids):
             n_frames = len(arc_info)
             plot_args = [(arc_data[i], arc_info.iloc[i]) for i in range(n_frames)]
             plot_kwargs = [{'all_info': arc_info, 'drr': ct_proj[i], 'labels': labels_proj[i]} for i in range(n_frames)]
-            filepath = os.path.join(projpath, f'projections_binned_marker_corrected.apng')
-            plot_gif(plot_projection, plot_args, plot_kwargs, n_frames=frames, savepath=filepath, show=False, overwrite=True)
+            filepath = os.path.join(projpath, f'projections_binned_marker_corrected.mp4')
+            play_video(plot_projection, plot_args, plot_kwargs, n_frames=frames, savepath=filepath, show=False, overwrite=True)

@@ -1,5 +1,6 @@
 import imageio
 import io
+import numpy as np
 import os
 import PIL
 import tempfile
@@ -8,9 +9,19 @@ from IPython.display import Image as IPythonImage, display
 from tqdm import tqdm
 from typing import *
 
+from mymi import logging
 from mymi.typing import *
 
-def plot_gif(
+_VIDEO_EXTS = ('.mp4', '.mov', '.mkv', '.avi', '.webm')
+
+def _is_video_ext(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in _VIDEO_EXTS
+
+def _to_rgb_array(frame: Any) -> np.ndarray:
+    img = frame if isinstance(frame, PIL.Image.Image) else PIL.Image.fromarray(frame)
+    return np.array(img.convert('RGB'))
+
+def play_video(
     plot_fn: Callable[..., PIL.Image.Image] | None = None,
     plot_args: List[Tuple[Any, ...]] | None = None,
     plot_kwargs: List[Dict[str, Any]] | None = None,
@@ -211,11 +222,20 @@ def plot_gif(
         png_image = plot_fn(*frame_args, **frame_kwargs, return_image=True)
         png_images.append(png_image)
 
-    # Save animated PNG (avoids GIF's 256-colour palette limitation).
+    # Save frames as a video/animation. MP4 (H.264) plays in standard media players (Windows Media
+    # Player, VLC, etc.); APNG only has solid, consistent support in browsers.
     frames = png_images
     frames_per_second = 1 / frame_time
     frames = frames + [frames[-1]] * int(pause_time / frame_time)
-    imageio.mimsave(savepath, frames, fps=frames_per_second, loop=0 if loop else None)
+    if _is_video_ext(savepath):
+        if loop:
+            logging.info("'loop' has no effect for video formats (e.g. .mp4) - looping is a media-player setting, not encoded in the file.")
+        # H.264 requires an RGB (no alpha) frame with even width/height.
+        frames = [_to_rgb_array(f) for f in frames]
+        frames = [f[:f.shape[0] - f.shape[0] % 2, :f.shape[1] - f.shape[1] % 2] for f in frames]
+        imageio.mimsave(savepath, frames, fps=frames_per_second, codec='libx264', quality=8)
+    else:
+        imageio.mimsave(savepath, frames, fps=frames_per_second, loop=0 if loop else None)
 
     if show:
         if player:

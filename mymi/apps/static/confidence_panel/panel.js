@@ -164,6 +164,11 @@ window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='streamlit:render')return;
   _rendered=true;
   var a=e.data.args;
+  // Show or hide the whole panel based on the 'visible' arg (default true).
+  var panel=window.parent.document.getElementById('_ca_conf_panel');
+  var visible=a.visible===undefined?true:!!a.visible;
+  if(panel){panel.style.display=visible?'':'none';}
+  if(!visible)return;
   _updatePanel(a.confidence||0,!!a.clinical,a.offset_x||0,a.offset_y||0,
                a.ox_min!==undefined?a.ox_min:-500,a.ox_max!==undefined?a.ox_max:500,
                a.oy_min!==undefined?a.oy_min:-500,a.oy_max!==undefined?a.oy_max:500,

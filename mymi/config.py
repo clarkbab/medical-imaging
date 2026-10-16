@@ -112,5 +112,6 @@ class Regions:
         return 0
 
 directories = Directories()
+dirs = directories   # Alias used throughout the codebase (e.g. config.dirs.models).
 formatting = Formatting()
 regions = Regions()

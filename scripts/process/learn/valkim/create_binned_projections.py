@@ -1,5 +1,5 @@
 import dicomset as ds
-from dicomset.utils import arg_to_list, logger, save_numpy
+from dicomset.utils import arg_to_list, logger, save_numpy, save_csv
 from dicomset.dicom.utils import from_rtplan_dicom
 import numpy as np
 import os
@@ -113,6 +113,8 @@ for p in tqdm(pat_ids):
             logger.info(f'Saving projections for PAT{p} Fx{f:02d} Arc{a:02d}')
             dirpath = os.path.join(set.path, 'data', 'projections', pat.id, f'Fx{f:02d}', f'Arc{a:02d}')
             os.makedirs(dirpath, exist_ok=True)
+            save_numpy(kv_source_angles, os.path.join(dirpath, 'kv_source_angles_binned.npz'))
             save_numpy(data, os.path.join(dirpath, 'treatment_binned.npz'))
+            save_csv(info, os.path.join(dirpath, 'treatment_info_binned.csv'))
             save_numpy(ct_proj, os.path.join(dirpath, 'ct_proj_binned.npz'))
             save_numpy(labels_proj, os.path.join(dirpath, 'labels_proj_binned.npz'))

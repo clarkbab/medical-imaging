@@ -2,10 +2,8 @@ from augmed import Pipeline, RandomAffine
 from augmed.utils import save_json
 from dicomset.nifti.utils import load_dataset as load_nifti_dataset
 from dicomset.training.utils import create_dataset as create_ds_training_dataset
-from dicomset.utils.conversion import to_numpy, to_tensor
-from dicomset.dicom.utils import from_rtplan_dicom
-from dicomset.utils.io import load_json, load_nifti, save_nifti, save_numpy
-from dicomset.utils.logging import logger
+from dicomset.utils import load_json, load_nifti, save_nifti, save_numpy, save_csv, logger, to_numpy, \
+    to_tensor, from_rtplan_dicom
 import numpy as np
 import os
 import shutil
@@ -15,11 +13,11 @@ from tqdm.auto import tqdm
 
 _TARGET_SIZE = (512, 512)
 
-from mymi.utils.cdog import load_raw_frame
+from mymi.utils.cdog import load_tiff
 from mymi.utils.projections import project_ctorch
 
-
 def create_training_dataset(
+    create_train_landmarks: bool = True,
     create_train_volumes: bool = True,
     create_val_projections: bool = True,
     create_val_volumes: bool = True,
@@ -31,7 +29,7 @@ def create_training_dataset(
     ) -> None:
     logger.log_method()
     dataset = 'VALKIM-PP'
-    dest_dataset = 'VALKIM-PP'
+    dest_dataset = 'VALKIM-LM'
     inh_series = 'series_0'
     exh_series = 'series_5'
     min_angle = 0
@@ -39,7 +37,7 @@ def create_training_dataset(
     nifti_set = load_nifti_dataset(dataset)
     training_set = create_ds_training_dataset(dest_dataset, recreate=recreate)
     pat_ids = nifti_set.list_patients()
-    pat_ids = pat_ids[:2]
+    pat_ids = pat_ids[0:1]
     regions = ['GTV', 'ts_Lung']
     info = nifti_set.params['patient-info']
 
@@ -81,7 +79,24 @@ def create_training_dataset(
             filepath = os.path.join(volpath, f"exh_label_names.json")
             save_json(exh_label_names, filepath, overwrite=True)
 
-    # Create augmentation pipeline.
+    # Add the training landmarks.
+    if create_train_landmarks: 
+        for p in tqdm(pat_ids, desc="Creating training volumes for patients"):
+            trainpath = os.path.join(training_set.path, 'data', 'training', p)
+            lmpath = os.path.join(trainpath, 'landmarks')
+
+            # Load volumes.
+            pat = nifti_set.patient(p)
+            inhale_series = pat.study('study_0').ct_series(inh_series)
+            exhale_series = pat.study('study_0').ct_series(exh_series)
+            inh_lm_series = pat.study('study_0').landmarks_series(inh_series)
+            exh_lm_series = pat.study('study_0').landmarks_series(exh_series)
+            filepath = os.path.join(lmpath, f"inh_landmarks.csv")
+            save_csv(inh_lm_series.data, filepath)
+            filepath = os.path.join(lmpath, f"exh_landmarks.csv")
+            save_csv(exh_lm_series.data, filepath)
+
+    # Create augmentation pipeline - for validation data.
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     pipeline = Pipeline([
         RandomAffine(r=10, s=[0.8, 1.2], t=20),
@@ -159,7 +174,7 @@ def create_training_dataset(
 
             # Load other projection geometry from .tiff files.
             filepath = info[p]['treatment-image']
-            _, tiff_info = load_raw_frame(filepath)
+            _, tiff_info = load_tiff(filepath)
 
             # Set projection parameters.
             isocentre = plan_info['isocentre']
@@ -209,7 +224,7 @@ def create_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=inh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 inh_ct_proj = F.interpolate(inh_ct_proj.unsqueeze(1).float(), size=_TARGET_SIZE, mode='bilinear', align_corners=False).squeeze(1)
                 inh_labels_proj = F.interpolate(inh_labels_proj.float(), size=_TARGET_SIZE, mode='nearest')
@@ -225,7 +240,7 @@ def create_training_dataset(
                     det_offset,
                     kv_source_angles,
                     labels=exh_labels.astype(np.float32),
-                    threshold_labels=False,
+                    labels_output='density',
                 )
                 exh_ct_proj = F.interpolate(exh_ct_proj.unsqueeze(1).float(), size=_TARGET_SIZE, mode='bilinear', align_corners=False).squeeze(1)
                 exh_labels_proj = F.interpolate(exh_labels_proj.float(), size=_TARGET_SIZE, mode='nearest')
@@ -248,9 +263,12 @@ def create_training_dataset(
 if __name__ == '__main__':
     create_training_dataset(
         create_train_volumes=True,
+        create_train_landmarks=True,
         create_val_volumes=True,
         create_val_projections=True,
-        n_val_angles=100,
-        n_val_volumes=10,
+        # Train angles/volumes are generated on-the-fly during training,
+        # after data augmentation has been applied.
+        n_val_volumes=3,
+        n_val_angles=10,
         recreate=True,
     )

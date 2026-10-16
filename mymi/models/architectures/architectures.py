@@ -3,6 +3,7 @@ import torch
 from dicomset.utils import append_row, logger
 from dicomset.typing import *
 
+from .cgan.pix2pix2d import Pix2PixModel
 from .mednext import create_mednext_v1
 from .unet import UNet2D, UNet3D
 
@@ -29,18 +30,34 @@ def get_model(
     elif arch == 'unet3d:xl':
         logger.info(f"Using UNet3D (XL) with {n_output_channels} channels.")
         return UNet3D(n_output_channels, n_features=128, **kwargs)
-    elif arch == 'mednext:s':
-        logger.info(f"Using MedNeXt (S) with {n_output_channels} channels.")
+    elif arch == 'mednext2d:s':
+        logger.info(f"Using MedNeXt2D (S) with {n_output_channels} channels.")
+        return create_mednext_v1(1, n_output_channels, 'S', dim='2d', **kwargs)
+    elif arch == 'mednext2d:b':
+        logger.info(f"Using MedNeXt2D (B) with {n_output_channels} channels.")
+        return create_mednext_v1(1, n_output_channels, 'B', dim='2d', **kwargs)
+    elif arch == 'mednext2d:m':
+        logger.info(f"Using MedNeXt2D (M) with {n_output_channels} channels.")
+        return create_mednext_v1(1, n_output_channels, 'M', dim='2d', **kwargs)
+    elif arch == 'mednext2d:l':
+        logger.info(f"Using MedNeXt2D (L) with {n_output_channels} channels.")
+        return create_mednext_v1(1, n_output_channels, 'L', dim='2d', **kwargs)
+    elif arch == 'mednext3d:s':
+        logger.info(f"Using MedNeXt3D (S) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'S', **kwargs)
-    elif arch == 'mednext:b':
-        logger.info(f"Using MedNeXt (B) with {n_output_channels} channels.")
+    elif arch == 'mednext3d:b':
+        logger.info(f"Using MedNeXt3D (B) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'B', **kwargs)
-    elif arch == 'mednext:m':
-        logger.info(f"Using MedNeXt (M) with {n_output_channels} channels.")
+    elif arch == 'mednext3d:m':
+        logger.info(f"Using MedNeXt3D (M) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'M', **kwargs)
-    elif arch == 'mednext:l':
-        logger.info(f"Using MedNeXt (L) with {n_output_channels} channels.")
+    elif arch == 'mednext3d:l':
+        logger.info(f"Using MedNeXt3D (L) with {n_output_channels} channels.")
         return create_mednext_v1(1, n_output_channels, 'L', **kwargs)
+    elif arch.startswith('pix2pix:'):
+        opt = kwargs['opt']
+        logger.info(f"Using Pix2Pix (netG='{opt.netG}', isTrain={opt.isTrain}).")
+        return Pix2PixModel(opt)
     else:
         raise ValueError(f"Unknown architecture '{arch}'.")
 

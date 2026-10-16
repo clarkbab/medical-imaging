@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     pat_id = 'PAT1'
     arch = 'unet2d:m'
-    version = '007'
+    version = '008'
     model = f"{arch.replace(':', '_')}-{pat_id}-{version}"
 
     train_unet2d_static(
@@ -321,7 +321,7 @@ if __name__ == '__main__':
         n_val_volumes=10,
         num_workers=4,
         random_seed=42,
-        resume=False,
+        resume=True,
         threshold_labels=True,
         train_image_interval='step:400',
         val_image_interval='step:epoch_start',

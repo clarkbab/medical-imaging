@@ -4,11 +4,10 @@ from tqdm.auto import tqdm
 from mymi.utils.cdog import create_tiff_patient_videos
 
 pat_ids = [1, 2, 3, 4]
-pat_ids = [1]
+pat_ids = [3]
 fractions = 'all'
 fractions = [1]
 arcs = 'all'
-arcs = [1]
 projections = False
 proj_method = 'interp'
 n_frames = None

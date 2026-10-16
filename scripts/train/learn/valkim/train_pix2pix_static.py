@@ -22,7 +22,7 @@ from types import SimpleNamespace
 from dicomset.utils.metrics import dice as dice_metric
 
 from mymi.loaders.mlm import StaticLoader
-from mymi.models.architectures.cgan.pix2pix2d import Pix2PixModel
+from mymi.models import get_model
 from mymi.training.utils.lr_find import run_lr_find_pix2pix
 from mymi.utils.cdog import load_tiff
 from mymi.utils.interval import interval_matches
@@ -68,6 +68,9 @@ def train_pix2pix_static(
     resume_ckpt: str = 'last',
     use_logger: bool = True,
     val_image_interval: str = 'epoch:5',
+    n_epochs_const_lr: int = 10,
+    n_epochs_decay_lr: int = 90,
+    lr_policy: str = 'linear',
     ) -> None:
     logger.log_method('Training VALKIM pix2pix model')
     model_name = model  # Use model for actual model.
@@ -155,8 +158,14 @@ def train_pix2pix_static(
         lr=lr_init,
         beta1=beta1,
         lambda_L1=lambda_L1,
+        lr_policy=lr_policy,
+        n_epochs_const_lr=n_epochs_const_lr,
+        n_epochs_decay_lr=n_epochs_decay_lr,
+        start_epoch=0,
+        continue_train=False,
+        verbose=False,
     )
-    model = Pix2PixModel(opt)
+    model = get_model(f'pix2pix:{netG}', output_nc, opt=opt)
     ckpt_info = {}
     if resume:
         logger.info(f"Restoring model from checkpoint '{resume_ckpt}'.")
@@ -206,6 +215,8 @@ def train_pix2pix_static(
     # Checkpoints are saved at the end of the epoch/step, so need to increment values by 1.
     start_epoch = ckpt_info['epoch'] + 1 if resume else 0
     step = ckpt_info['step'] + 1 if resume else 0
+    opt.start_epoch = start_epoch
+    model.setup(opt)
     val_dices = ckpt_info.get('val-dices', []) if resume else []
     max_val_dice = ckpt_info.get('max-val-dice', -np.inf) if resume else -np.inf
     val_dice_smoothing = 1
@@ -384,16 +395,17 @@ def train_pix2pix_static(
         torch.save(ckpt_data, filepath)
         filepath = os.path.join(ckpt_path, f'epoch={e:04d}.ckpt')
         torch.save(ckpt_data, filepath)
+        model.update_learning_rate()
 
 if __name__ == '__main__':
     pat_id = 'PAT1'
-    version = '008'
+    version = '010'
     train_pix2pix_static(
         dataset='VALKIM-PP-STATIC',
         pat=pat_id,
         project='MLM-VALKIM',
         model=f'pix2pix2d-static-{pat_id}-{version}',
-        n_epochs=100,
+        n_epochs=30,
         # lr_init=5e-5,   # Based on LR find result.
         lr_init=2e-4,   # Default pix2pix LR.
         batch_size=32,
@@ -410,6 +422,8 @@ if __name__ == '__main__':
         lr_find_min_lr=1e-7,
         lr_find_max_lr=1,
         lr_find_n_iter=100,
+        n_epochs_const_lr=3,
+        n_epochs_decay_lr=27,
         n_train_angles=361,
         n_train_volumes=100,
         n_val_angles=100,

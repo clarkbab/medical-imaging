@@ -11,7 +11,7 @@ from mymi.typing import *
 LAST_CKPT_REGEX = r'^last(-v([0-9]+))?$'
 
 def load_model(
-    module: torch.nn.Module,
+    module: torch.nn.Module,    # The instantiated model (e.g. UNet2D).
     project: str,
     model: ModelName,
     ckpt: ModelCheckpoint,
@@ -22,21 +22,21 @@ def load_model(
     # Create model.
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    loaded_model = module(**kwargs)
+    # loaded_model = module(**kwargs)
 
     # Load model state.
     ckpt = replace_ckpt_alias(project, model, ckpt)
     filepath = os.path.join(config.dirs.models, project, model, f'{ckpt}.ckpt')
     ckpt_data = torch.load(filepath, map_location=device)
     logging.info(f"Loading model {project}/{model} ({module}) from epoch={ckpt_data['epoch']}.")
-    loaded_model.load_state_dict(ckpt_data['model'])
-    loaded_model.to(device)
-    loaded_model.train() if state == 'train' else loaded_model.eval()
+    module.load_state_dict(ckpt_data['model'])
+    module.to(device)
+    module.train() if state == 'train' else module.eval()
 
     # Return other info for rest of code to use.
     del ckpt_data['model']
 
-    return loaded_model, device, ckpt_data
+    return module, device, ckpt_data
 
 def replace_ckpt_alias(
     project: str,

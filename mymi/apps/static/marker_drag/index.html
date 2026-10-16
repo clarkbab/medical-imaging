@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; overflow: hidden; font-family: sans-serif; }
+    #status {
+      font-size: 11px; color: #aaa; padding: 3px 6px;
+      background: #111; border-bottom: 1px solid #333;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #status { display: none; }
+    #canvas-wrap { width: 100%; overflow: hidden; display: block; position: relative; }
+    canvas { display: block; cursor: crosshair; }
+    #swap-popup {
+      position: absolute; display: none; z-index: 10;
+      background: #222; border: 1px solid #888; border-radius: 4px;
+      padding: 4px 6px; font-family: sans-serif;
+    }
+    #swap-popup-label { font-size: 11px; color: #fff; margin-bottom: 2px; white-space: nowrap; }
+    #swap-input { width: 64px; font-size: 28px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="status">Load files to begin.</div>
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="swap-popup">
+      <div id="swap-popup-label"></div>
+      <input id="swap-input" type="text" inputmode="numeric" maxlength="2">
+    </div>
+  </div>
+  <script src="marker_drag.js"></script>
+</body>
+</html>

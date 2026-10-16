@@ -1,15 +1,17 @@
 import dicomset as ds
-from dicomset.nifti.utils import create_registration_transform, create_registered_regions, create_registered_image
+from dicomset.nifti.utils import create_registration_transform, create_registration_moved_regions, create_registration_moved_image
 from dicomset.utils import create_box_label, combine_boxes, foreground_fov
 from tqdm import tqdm
 
-from mymi.predictions.registration import register_affine, register_corrfield, register_linear, register_plastimatch, register_rigid, register_unigradicon
+from mymi.predictions.registration import register_affine, register_corrfield, register_linear, register_plastimatch, register_rigid, register_unigradicon, \
+    register_deeds
 from mymi.transforms import resample
 
 # methods = ['corrfield', 'plastimatch', 'unigradicon', 'unigradicon-io']
 # methods = ['corrfield', 'linear']
 # methods = ['unigradicon', 'unigradicon-io']
 methods = ['rigid', 'affine']
+methods = ['deeds']
 
 dataset = 'VALKIM-PP'
 # other_series = ['series_1', 'series_2', 'series_3', 'series_4']
@@ -26,16 +28,13 @@ other_regions = ['ts_Lung']    # No GTV label for intermediate phases - yet...
 
 for p in tqdm(pat_ids):
     pat = set.patient(p)
-    inh_ct = pat.ct_series(inh_series).data
-    inh_affine = pat.ct_series(inh_series).affine
-    inh_labels = pat.regions_series(inh_series).data(r=regions)
-    exh_ct = pat.ct_series(exh_series).data
-    exh_affine = pat.ct_series(exh_series).affine
-    exh_labels = pat.regions_series(exh_series).data(r=regions)
+    inh_ct, inh_affine = pat.ct_series(inh_series).image
+    inh_labels = pat.regions_series(inh_series).data(r=regions, rr=False)
+    exh_ct, exh_affine = pat.ct_series(exh_series).image
+    exh_labels = pat.regions_series(exh_series).data(r=regions, rr=False)
     for s, t in tqdm(zip(other_series, t_vals), leave=False): 
-        other_ct = pat.ct_series(s).data
-        other_affine = pat.ct_series(s).affine
-        other_labels = pat.regions_series(s).data(r=other_regions)
+        other_ct, other_affine = pat.ct_series(s).image
+        other_labels = pat.regions_series(s).data(r=other_regions, rr=False)
 
         # Register exhale -> inhale using <method>.
         fixed_ct = other_ct
@@ -59,9 +58,15 @@ for p in tqdm(pat_ids):
             elif m == 'corrfield':
                 assert other_regions[0] == 'ts_Lung', "Currently hardcoded to use the first region as the lung mask for corrfield registration."
                 assert regions[1] == 'ts_Lung', "Currently hardcoded to use the second region as the lung mask for corrfield registration."                
-                fixed_lung_mask = other_labels[0]
+                fixed_lung_mask = other_labels
                 moving_lung_mask = exh_labels[1]
                 transform = register_corrfield(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_lung_mask=fixed_lung_mask, moving_lung_mask=moving_lung_mask)
+            elif m == 'deeds':
+                assert other_regions[0] == 'ts_Lung', "Currently hardcoded to use the first region as the lung mask for corrfield registration."
+                assert regions[1] == 'ts_Lung', "Currently hardcoded to use the second region as the lung mask for corrfield registration."                
+                fixed_lung_mask = other_labels
+                moving_lung_mask = exh_labels[1]
+                transform = register_deeds(fixed_ct, moving_ct, fixed_affine, moving_affine, fixed_lung_mask=fixed_lung_mask, moving_lung_mask=moving_lung_mask)
             elif m == 'linear':
                 assert regions[0] == 'GTV', "Currently hardcoded to use the first region as the GTV for linear registration." 
                 inh_gtv = inh_labels[0]
@@ -80,8 +85,8 @@ for p in tqdm(pat_ids):
             if m != 'linear':
                 create_registration_transform(dataset, pat.id, m, transform, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
                 moved_ct = resample(exh_ct, affine=exh_affine, output_affine=other_affine, transform=transform)
-                create_registered_image(dataset, pat.id, m, moved_ct, fixed_affine, 'ct', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
+                create_registration_moved_image(dataset, pat.id, m, moved_ct, fixed_affine, 'ct', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
                 moved_labels = resample(exh_labels, affine=exh_affine, output_affine=other_affine, transform=transform)
-                create_registered_regions(dataset, pat.id, m, moved_labels, fixed_affine, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
+                create_registration_moved_regions(dataset, pat.id, m, moved_labels, fixed_affine, regions, fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
             else:
-                create_registered_regions(dataset, pat.id, m, moved_gtv, fixed_affine, 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
+                create_registration_moved_regions(dataset, pat.id, m, moved_gtv, fixed_affine, 'GTV', fixed_study_id='study_0', moving_study_id='study_0', fixed_series_id=s, moving_series_id=exh_series)
